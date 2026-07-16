@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.medication-video-platform.invalid/capture-session-metadata-v1.schema.json",
+  "title": "Capture Session Metadata V1",
+  "description": "Metadata object uploaded by an RK3588 edge integration for one medication preparation capture session. Server-side CameraSet configuration remains authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capture_session_id",
+    "device_id",
+    "camera_set_id",
+    "expected_camera_count",
+    "camera_layout_version",
+    "sync_group_id",
+    "device_time_utc",
+    "device_timezone",
+    "streams"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "capture-session-metadata-v1"
+    },
+    "capture_session_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "camera_set_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Exact immutable CameraSet version provisioned by the platform to the edge integration."
+    },
+    "expected_camera_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "description": "Edge observation that must equal the enabled-member count in the server CameraSet."
+    },
+    "camera_layout_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "sync_group_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "device_time_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Device UTC time declared when the metadata manifest was produced; it is not a substitute for media PTS."
+    },
+    "device_timezone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_+./:-]{0,63}$",
+      "description": "IANA or fixed-offset ZoneId validated by the platform, for example Asia/Shanghai or UTC+08:00."
+    },
+    "streams": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/stream"
+      }
+    }
+  },
+  "$defs": {
+    "stream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client_file_id",
+        "camera_channel_id",
+        "camera_index",
+        "enabled",
+        "record_start_utc",
+        "time_offset_ms",
+        "sync_status"
+      ],
+      "properties": {
+        "client_file_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Client file ID of one VIDEO entry in the same completed upload batch."
+        },
+        "camera_channel_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Immutable logical channel ID provisioned by the platform."
+        },
+        "camera_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Must be true and match an enabled member of the immutable server CameraSet for an uploaded video stream."
+        },
+        "record_start_utc": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Edge-declared recording start time. Media probing later records authoritative container and stream timing."
+        },
+        "time_offset_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Signed edge-declared offset observation. It does not become a verified synchronization revision automatically."
+        },
+        "sync_status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "PASS",
+            "WARNING",
+            "REJECT"
+          ],
+          "description": "Edge-declared synchronization observation, retained separately from later platform quality decisions."
+        }
+      }
+    }
+  }
+}
