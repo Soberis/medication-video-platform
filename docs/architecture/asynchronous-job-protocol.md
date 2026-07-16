@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > 适用范围：媒体探测/转码/抽帧、隐私处理、清洗、数据集导出；P1 AI 复用同一协议  
-> 最后更新：2026-07-14
+> 最后更新：2026-07-16
 
 ## 1. 核心决策
 
@@ -57,7 +57,7 @@ sequenceDiagram
     participant S as S3-compatible storage
 
     U->>A: Create job (Idempotency-Key)
-    A->>DB: TX: job REQUESTED + outbox event
+    A->>DB: TX: job QUEUED + attempt + outbox event
     A-->>U: 202 job_id + status_url
     R->>DB: claim outbox
     R->>Q: publish JobEnvelope
@@ -74,40 +74,37 @@ sequenceDiagram
 
 如果 Worker 无法调用 Core API，可使用版本化结果消息；Core API 消费者仍必须执行相同的 Inbox 去重、租约检查、对象验证和领域提交。两种回传方式不能在同一环境中无规则混用。
 
-## 4. JobEnvelope V1
+## 4. MediaProbeJobEnvelope V1
 
-正式字段进入 `contracts/events/` 后冻结。计划最小结构：
+首个正式任务消息已经冻结在 `contracts/events/media-probe-job-v1.schema.json`。它只携带
+定位业务输入所需的标识、摘要、批准配方和当前 attempt 的一次性租约令牌，不携带对象 key、
+存储端点或预签名 URL：
 
 ```json
 {
-  "schema_version": "job-envelope.v1",
+  "schema_version": "media-probe-job.v1",
   "message_id": "uuid",
   "job_id": "uuid",
   "job_type": "MEDIA_PROBE",
   "attempt": 1,
   "lease_token": "opaque-random-token",
-  "tenant_id": "uuid",
   "project_id": "uuid",
-  "input": {
-    "object_ref": "opaque-object-id",
-    "asset_variant_id": "uuid",
-    "sha256": "hex",
-    "size_bytes": 123
-  },
-  "parameters": {},
-  "parameter_digest": "hex",
-  "output_prefix": "temporary/opaque-prefix",
-  "requested_at": "RFC3339 UTC",
-  "trace_id": "string"
+  "clip_asset_id": "uuid",
+  "input_sha256": "hex",
+  "input_size_bytes": 123,
+  "content_type": "video/mp4",
+  "probe_profile_key": "media-probe-baseline-v1",
+  "recipe_digest": "hex",
+  "requested_at": "RFC3339 UTC"
 }
 ```
 
 规则：
 
-- 消息只传对象引用、摘要、版本和短期参数，不传视频字节、预签名 URL、令牌或患者标识。
-- Worker 通过受控凭证交换接口取得短期对象权限。
-- `output_prefix` 只能写本 job/attempt 的临时范围。
-- `parameter_digest` 使用规范化 JSON 计算，防止字段顺序造成不同幂等键。
+- 消息只传业务标识、摘要、批准版本和租约令牌，不传视频字节、对象位置、预签名 URL、患者或配药人员标识。
+- 原始租约令牌只存在于受访问控制的 broker 消息中；数据库只保存 SHA-256，应用日志必须脱敏。
+- Worker 同时使用独立服务身份和租约令牌，通过 Core API 换取 job-scoped、短期只读对象权限。
+- `recipe_digest` 来自服务器批准且规范化的 profile，调用方不能提交任意探测参数。
 - 任务类型和 schema version 必须采用 allowlist，未知类型进入不可重试失败。
 
 ## 5. JobResult V1
@@ -243,16 +240,15 @@ RUNNING → CANCEL_REQUESTED → CANCELLED
 
 ## 10. RabbitMQ 拓扑
 
-计划队列：
+当前 P0 首个切片只启用：
 
 ```text
-media_cpu
-privacy_high_priority
-export_cpu
-ai_cpu        # P1
-ai_gpu        # 未来
-dead_letter
+platform.media.probe.v1
+platform.media.dead-letter.v1
 ```
+
+只有在形成第二类真实负载、优先级或资源隔离证据后才增加队列；不提前预建
+`privacy`、`export`、`ai_cpu` 或 `ai_gpu` 队列。
 
 要求：
 

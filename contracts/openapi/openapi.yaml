@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.11.1
+  version: 0.12.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -35,12 +35,11 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Media Jobs
     description: >-
-      Project-scoped media probe job lifecycle owned by the mediaprivacy module. This slice
-      freezes the request, idempotency and input-digest contract and creates jobs in REQUESTED
-      state. Real probe execution, status transitions to SUCCEEDED/FAILED, Outbox/RabbitMQ
-      dispatch and a minimal Media Worker are introduced in the slice that enables the first
-      cross-process time-consuming task; the API does not return 202 Accepted while no Worker
-      consumes the job.
+      Project-scoped media probe job lifecycle owned by the mediaprivacy module. Creation freezes
+      the input and approved recipe, persists attempt 1 and a versioned dispatch envelope through
+      the Transactional Outbox, and returns QUEUED. RabbitMQ is a delivery mechanism rather than
+      the business state store; successful completion still requires a lease-matched Worker result
+      to be validated and committed by the Core API.
 paths:
   /upload/init:
     post:
@@ -1183,14 +1182,16 @@ paths:
         - Media Jobs
       summary: Create a media probe job for a verified uploaded clip asset
       description: >-
-        Persists a media job in REQUESTED state for the authenticated project. The job is uniquely
+        Persists a media job, attempt 1 and an Outbox dispatch envelope atomically for the
+        authenticated project, then returns the durable QUEUED state. The job is uniquely
         identified by the (project_id, job_type, clip_asset_id, input_digest, recipe_digest)
         tuple; the server binds it to the approved media-probe-baseline-v1 profile and returns an
         existing job with the same tuple idempotently. Callers cannot supply arbitrary probe
         recipes. The same Idempotency-Key reused with a different request body is rejected with
-        IDEMPOTENCY_KEY_REUSED. This slice intentionally does not return 202 Accepted, because no
-        Worker has been enabled to consume the job yet. The future Worker result contract is
-        frozen separately in contracts/events/media-probe-result-v1.schema.json.
+        IDEMPOTENCY_KEY_REUSED. The dispatch envelope contains only project/asset identities,
+        digests, approved profile identity and the attempt lease token; it does not expose object
+        storage locations or signed URLs. Its contract is media-probe-job-v1.schema.json and the
+        Worker result contract is media-probe-result-v1.schema.json.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -1200,8 +1201,8 @@ paths:
             schema:
               $ref: "#/components/schemas/MediaJobRequest"
       responses:
-        "201":
-          description: Job created or returned idempotently in REQUESTED state.
+        "202":
+          description: Job durably queued through the Transactional Outbox or returned idempotently.
           headers:
             Cache-Control:
               schema:
@@ -1255,9 +1256,9 @@ paths:
         - Media Jobs
       summary: Read a media probe job by id
       description: >-
-        Returns the persisted job for the authenticated project. Does not dispatch, retry or
-        transition the job; status changes are introduced in the slice that enables a real
-        Worker.
+        Returns the persisted job for the authenticated project. This read operation does not
+        dispatch, retry or transition the job. Worker-driven RUNNING and terminal transitions
+        are introduced with the worker result slice.
       parameters:
         - name: media_job_id
           in: path
@@ -2677,8 +2678,9 @@ components:
       type: string
       additionalProperties: false
       description: >-
-        Lifecycle state of a media job. This slice writes only REQUESTED; later slices add
-        QUEUED, RUNNING, SUCCEEDED, FAILED and the cancel transitions.
+        Lifecycle state of a media job. Creation normally returns QUEUED after the job, first
+        attempt and Outbox event commit atomically. RUNNING and terminal states require a
+        lease-matched Worker interaction.
       enum:
         - REQUESTED
         - QUEUED

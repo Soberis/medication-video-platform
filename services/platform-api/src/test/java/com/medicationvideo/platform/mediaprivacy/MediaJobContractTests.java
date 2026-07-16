@@ -40,12 +40,14 @@ class MediaJobContractTests {
 
 	@BeforeEach
 	void clearState() {
+		this.jdbcTemplate.update("DELETE FROM outbox_event");
+		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM media_report");
 		this.jdbcTemplate.update("DELETE FROM media_job");
 	}
 
 	@Test
-	void createsRequestedJobAndReplaysIdempotently() throws Exception {
+	void queuesJobAttemptAndOutboxAtomicallyAndReplaysIdempotently() throws Exception {
 		var clipAssetId = insertUploadedClipAsset(UUID.fromString(PROJECT_ID), "video/mp4",
 				"UPLOADED", Instant.parse("2026-07-15T01:00:00Z"));
 		var body = mediaProbeBody(clipAssetId);
@@ -55,10 +57,10 @@ class MediaJobContractTests {
 				.header("Idempotency-Key", IDEMPOTENCY_KEY)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body))
-				.andExpect(status().isCreated())
+				.andExpect(status().isAccepted())
 				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(header().exists("Location"))
-				.andExpect(jsonPath("$.status").value("REQUESTED"))
+				.andExpect(jsonPath("$.status").value("QUEUED"))
 				.andExpect(jsonPath("$.job_type").value("MEDIA_PROBE"))
 				.andExpect(jsonPath("$.input_digest").value(SHA256))
 				.andExpect(jsonPath("$.input_size_bytes").value(1234))
@@ -71,15 +73,38 @@ class MediaJobContractTests {
 				.getContentAsString();
 
 		var firstJobId = readField(first, "media_job_id");
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1 AND status = 'QUEUED'",
+				Integer.class,
+				UUID.fromString(firstJobId)));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ? AND published_at IS NULL",
+				Integer.class,
+				UUID.fromString(firstJobId)));
+		assertEquals(0, this.jdbcTemplate.queryForObject("""
+				SELECT count(*) FROM outbox_event
+				WHERE aggregate_id = ?
+				  AND (jsonb_exists(payload_json, 'object_key')
+				       OR jsonb_exists(payload_json, 'upload_url')
+				       OR jsonb_exists(payload_json, 'storage_bucket'))
+				""", Integer.class, UUID.fromString(firstJobId)));
 
 		mockMvc.perform(post("/api/v1/media-jobs")
 				.header("Authorization", "Bearer " + TOKEN)
 				.header("Idempotency-Key", IDEMPOTENCY_KEY)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body))
-				.andExpect(status().isCreated())
+				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.media_job_id").value(firstJobId))
-				.andExpect(jsonPath("$.status").value("REQUESTED"));
+				.andExpect(jsonPath("$.status").value("QUEUED"));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM media_job_attempt WHERE media_job_id = ?",
+				Integer.class,
+				UUID.fromString(firstJobId)));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ?",
+				Integer.class,
+				UUID.fromString(firstJobId)));
 	}
 
 	@Test
@@ -94,7 +119,7 @@ class MediaJobContractTests {
 				.header("Idempotency-Key", IDEMPOTENCY_KEY)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(mediaProbeBody(clipAssetA)))
-				.andExpect(status().isCreated());
+				.andExpect(status().isAccepted());
 
 		mockMvc.perform(post("/api/v1/media-jobs")
 				.header("Authorization", "Bearer " + TOKEN)
@@ -116,7 +141,7 @@ class MediaJobContractTests {
 				.header("Idempotency-Key", "idem-first-key-123456789012")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body))
-				.andExpect(status().isCreated())
+				.andExpect(status().isAccepted())
 				.andReturn()
 				.getResponse()
 				.getContentAsString();
@@ -127,9 +152,9 @@ class MediaJobContractTests {
 				.header("Idempotency-Key", "idem-second-key-12345678901")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body))
-				.andExpect(status().isCreated())
+				.andExpect(status().isAccepted())
 				.andExpect(jsonPath("$.media_job_id").value(firstJobId))
-				.andExpect(jsonPath("$.status").value("REQUESTED"));
+				.andExpect(jsonPath("$.status").value("QUEUED"));
 	}
 
 	@Test
@@ -141,6 +166,9 @@ class MediaJobContractTests {
 				.content(mediaProbeBody(UUID.randomUUID())))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job", Integer.class));
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job_attempt", Integer.class));
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM outbox_event", Integer.class));
 	}
 
 	@Test
@@ -180,7 +208,7 @@ class MediaJobContractTests {
 				.header("Idempotency-Key", IDEMPOTENCY_KEY)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(mediaProbeBody(clipAssetId)))
-				.andExpect(status().isCreated())
+				.andExpect(status().isAccepted())
 				.andReturn()
 				.getResponse()
 				.getContentAsString();
@@ -191,7 +219,7 @@ class MediaJobContractTests {
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(jsonPath("$.media_job_id").value(jobId))
-				.andExpect(jsonPath("$.status").value("REQUESTED"))
+				.andExpect(jsonPath("$.status").value("QUEUED"))
 				.andExpect(jsonPath("$.job_type").value("MEDIA_PROBE"));
 	}
 
@@ -241,6 +269,14 @@ class MediaJobContractTests {
 				      'input_digest_verified', 'warning_codes')
 				""", Integer.class);
 		assertEquals(20, reportColumns);
+
+		var dispatchTables = this.jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				FROM information_schema.tables
+				WHERE table_schema = 'public'
+				  AND table_name IN ('media_job_attempt', 'outbox_event')
+				""", Integer.class);
+		assertEquals(2, dispatchTables);
 	}
 
 	private static String mediaProbeBody(UUID clipAssetId) {

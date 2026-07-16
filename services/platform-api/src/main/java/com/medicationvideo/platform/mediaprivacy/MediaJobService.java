@@ -3,8 +3,10 @@ package com.medicationvideo.platform.mediaprivacy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
@@ -21,10 +23,19 @@ import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
 class MediaJobService {
 
 	private final MediaJobRepository repository;
+	private final MediaJobAttemptRepository attemptRepository;
+	private final MediaJobDispatchPort dispatchPort;
 	private final AssetCatalogQueryService assetCatalog;
+	private final SecureRandom secureRandom = new SecureRandom();
 
-	MediaJobService(MediaJobRepository repository, AssetCatalogQueryService assetCatalog) {
+	MediaJobService(
+			MediaJobRepository repository,
+			MediaJobAttemptRepository attemptRepository,
+			MediaJobDispatchPort dispatchPort,
+			AssetCatalogQueryService assetCatalog) {
 		this.repository = repository;
+		this.attemptRepository = attemptRepository;
+		this.dispatchPort = dispatchPort;
 		this.assetCatalog = assetCatalog;
 	}
 
@@ -67,7 +78,31 @@ class MediaJobService {
 				now);
 
 		try {
-			return this.repository.saveAndFlush(job);
+			job = this.repository.saveAndFlush(job);
+			var messageId = UUID.randomUUID();
+			var leaseToken = leaseToken();
+			this.attemptRepository.save(MediaJobAttempt.queue(
+					job.getMediaJobId(),
+					messageId,
+					sha256(leaseToken),
+					now));
+			job.queue(now);
+			this.dispatchPort.enqueue(new MediaProbeJobEnvelope(
+					"media-probe-job.v1",
+					messageId,
+					job.getMediaJobId(),
+					job.getJobType(),
+					1,
+					leaseToken,
+					job.getProjectId(),
+					job.getClipAssetId(),
+					job.getInputDigest(),
+					job.getInputSizeBytes(),
+					job.getContentType(),
+					job.getProbeProfileKey(),
+					job.getRecipeDigest(),
+					now));
+			return job;
 		}
 		catch (DataIntegrityViolationException exception) {
 			var concurrentByIdem = this.repository
@@ -86,6 +121,22 @@ class MediaJobService {
 				return requireSameRequest(concurrentByNatural.get(), fingerprint);
 			}
 			throw exception;
+		}
+	}
+
+	private String leaseToken() {
+		var bytes = new byte[32];
+		this.secureRandom.nextBytes(bytes);
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+	}
+
+	private static String sha256(String value) {
+		try {
+			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+					.digest(value.getBytes(StandardCharsets.US_ASCII)));
+		}
+		catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
 		}
 	}
 

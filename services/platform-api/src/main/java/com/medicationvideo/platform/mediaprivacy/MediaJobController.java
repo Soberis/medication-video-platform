@@ -43,7 +43,7 @@ class MediaJobController {
 		var job = this.service.create(actor.projectId(), idempotencyKey, request);
 		var body = MediaJobResponse.from(job);
 		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
-		return ResponseEntity.status(HttpStatus.CREATED)
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
 				.cacheControl(CacheControl.noStore())
 				.location(location)
 				.body(body);

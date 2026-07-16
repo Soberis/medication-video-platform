@@ -38,6 +38,7 @@ $requiredFiles = @(
     'package.json',
     'pnpm-workspace.yaml',
     'contracts/schemas/capture-session-metadata-v1.schema.json',
+    'contracts/events/media-probe-job-v1.schema.json',
     'contracts/events/media-probe-result-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
     'tools/synthetic-upload-client/index.mjs',
@@ -83,6 +84,15 @@ try {
 }
 catch {
     Add-Failure "Capture session metadata JSON Schema is invalid: $($_.Exception.Message)"
+}
+
+try {
+    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-probe-job-v1.schema.json') -Raw |
+        ConvertFrom-Json | Out-Null
+    Add-Pass 'Media probe job JSON Schema is valid JSON'
+}
+catch {
+    Add-Failure "Media probe job JSON Schema is invalid: $($_.Exception.Message)"
 }
 
 try {
@@ -249,11 +259,11 @@ if (Test-Path -LiteralPath $composeFile -PathType Leaf) {
             if ($LASTEXITCODE -ne 0) {
                 Add-Failure "Docker Compose service listing exited with code $LASTEXITCODE"
             }
-            elseif ($actualComposeServices -ne 'postgres,s3') {
-                Add-Failure "Stage 0 Compose must contain only postgres and s3; found: $($composeServices -join ', ')"
+            elseif ($actualComposeServices -ne 'postgres,rabbitmq,s3') {
+                Add-Failure "Media stage Compose must contain postgres, rabbitmq and s3; found: $($composeServices -join ', ')"
             }
             else {
-                Add-Pass 'Docker Compose config contains only postgres and s3'
+                Add-Pass 'Docker Compose config contains PostgreSQL, RabbitMQ and S3'
             }
         }
     }

@@ -12,9 +12,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * Media job aggregate root. This slice only persists {@link MediaJobStatus#REQUESTED}; the
- * Worker-driven transitions and {@code media_job_attempt} table are introduced in the slice
- * that enables the first real probe execution.
+ * Media job aggregate root. A durable Outbox entry moves a new job from REQUESTED to QUEUED in
+ * the same transaction. Worker-driven RUNNING and terminal transitions require the current
+ * attempt and lease token.
  */
 @Entity
 @Table(name = "media_job")
@@ -126,6 +126,14 @@ class MediaJob {
 				idempotencyKey,
 				requestFingerprint,
 				createdAt);
+	}
+
+	void queue(Instant changedAt) {
+		if (this.status != MediaJobStatus.REQUESTED) {
+			throw new IllegalStateException("Only a requested media job can be queued.");
+		}
+		this.status = MediaJobStatus.QUEUED;
+		this.updatedAt = changedAt;
 	}
 
 	UUID getMediaJobId() {
