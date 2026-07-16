@@ -277,10 +277,10 @@ dead-letter；Worker 使用 publisher confirm 向死信 exchange 显式发布
 当前首个媒体探测切片已经实现任务 Outbox、publisher confirm、单一业务队列/DLQ、独立
 Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、可重试结果的有限退避与
 新 attempt、结果 Inbox 去重、稳定错误、状态提交、不可变 MediaReport 和脱敏死信诊断，并用
-合成 MP4 完成真实队列闭环。尚未完成
-的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消尚未实现，受控 DLQ
-重放已完成后端契约和合同测试但尚未进行真实 broker 运维演练，不能把首个闭环等同于完整
-异步作业平台。
+合成 MP4 完成真实队列闭环。2026-07-16 的本地合成演练还验证了业务队列无 DLX 参数、
+错误 Worker 身份产生脱敏诊断、管理员创建新 attempt/Outbox/审计记录，以及正确 Worker 完成
+重放 attempt 和 MediaReport 入库。尚未完成的可靠性证据包括真实长任务心跳联调、更多故障
+注入和恢复容量测试；取消尚未实现，不能把首个闭环等同于完整异步作业平台。
 
 要求：
 

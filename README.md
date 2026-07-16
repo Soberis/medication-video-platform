@@ -88,4 +88,4 @@ pnpm run api:test
 
 ## Next Step
 
-`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession 和 ClipAsset；Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。下一步经人工确认重建本地空业务队列以移除旧 DLX 参数，并做真实 broker 死信/重放运维演练；随后完成上传 Abort/过期清理、事件日志索引和 2GB 中断恢复验收。这些可靠性能力完成前不进入隐私业务切片。
+`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession 和 ClipAsset；Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。2026-07-16 已在本地合成环境完成真实 broker 死信/受控重放演练：业务队列移除旧 DLX 参数，错误 Worker 身份产生脱敏诊断，管理员重放生成新 attempt/Outbox/审计记录，正确 Worker 最终完成探测并写入 MediaReport。下一步完成上传 Abort/过期清理、事件日志索引和 2GB 中断恢复验收；这些可靠性能力完成前不进入隐私业务切片。
