@@ -1,0 +1,40 @@
+meta {
+  name: Reject Controlled Replay Without Admin Role
+  type: http
+  seq: 5
+  tags: [
+    MediaJobs
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/media-jobs/99999999-9999-9999-9999-999999999999/replays
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: bruno-media-replay-non-admin
+  X-Request-Id: bruno-media-replay-non-admin
+}
+
+body:json {
+  {
+    "dead_letter_id": "b682e7d9-a8ab-5ca1-80c6-7308a617be4e",
+    "source_message_id": "10000000-0000-0000-0000-000000000001",
+    "source_attempt": 1,
+    "dead_letter_reason": "MEDIA_JOB_ACQUIRE_REJECTED",
+    "body_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "operator_reason_code": "CONFIGURATION_FIXED",
+    "change_reference": "bruno-synthetic-check"
+  }
+}
+
+tests {
+  test("requires the administrator role before resolving the job", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(403);
+    expect(body.error_code).to.equal("PROJECT_ACCESS_DENIED");
+    expect(body.retryable).to.equal(false);
+  });
+}

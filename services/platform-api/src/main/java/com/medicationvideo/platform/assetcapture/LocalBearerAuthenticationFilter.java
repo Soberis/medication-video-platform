@@ -20,11 +20,20 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 
 	private static final String BEARER_PREFIX = "Bearer ";
 
-	private final byte[] expectedToken;
+	private final byte[] expectedUploaderToken;
+	private final byte[] expectedAdminToken;
 	private final UUID projectId;
 
-	LocalBearerAuthenticationFilter(String expectedToken, UUID projectId) {
-		this.expectedToken = expectedToken.getBytes(StandardCharsets.UTF_8);
+	LocalBearerAuthenticationFilter(
+			String expectedUploaderToken,
+			String expectedAdminToken,
+			UUID projectId) {
+		if (!expectedAdminToken.isEmpty() && expectedAdminToken.equals(expectedUploaderToken)) {
+			throw new IllegalArgumentException(
+					"Local uploader and administrator bearer tokens must be different.");
+		}
+		this.expectedUploaderToken = expectedUploaderToken.getBytes(StandardCharsets.UTF_8);
+		this.expectedAdminToken = expectedAdminToken.getBytes(StandardCharsets.UTF_8);
 		this.projectId = projectId;
 	}
 
@@ -39,21 +48,29 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 			HttpServletResponse response,
 			FilterChain filterChain) throws ServletException, IOException {
 		var authorization = request.getHeader("Authorization");
-		if (authorization == null
-				|| !authorization.startsWith(BEARER_PREFIX)
-				|| this.expectedToken.length == 0
-				|| !MessageDigest.isEqual(
-						authorization.substring(BEARER_PREFIX.length()).getBytes(StandardCharsets.UTF_8),
-						this.expectedToken)) {
+		if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
 			unauthorized(response);
 			return;
 		}
 
-		var actor = new UploadActor(this.projectId, "local-synthetic-uploader");
+		var presentedToken = authorization.substring(BEARER_PREFIX.length())
+				.getBytes(StandardCharsets.UTF_8);
+		var admin = this.expectedAdminToken.length > 0
+				&& MessageDigest.isEqual(presentedToken, this.expectedAdminToken);
+		var uploader = this.expectedUploaderToken.length > 0
+				&& MessageDigest.isEqual(presentedToken, this.expectedUploaderToken);
+		if (!admin && !uploader) {
+			unauthorized(response);
+			return;
+		}
+
+		var actor = new UploadActor(
+				this.projectId,
+				admin ? "local-synthetic-admin" : "local-synthetic-uploader");
 		var authentication = new UsernamePasswordAuthenticationToken(
 				actor,
 				null,
-				List.of(new SimpleGrantedAuthority("ROLE_UPLOADER")));
+				List.of(new SimpleGrantedAuthority(admin ? "ROLE_ADMIN" : "ROLE_UPLOADER")));
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		filterChain.doFilter(request, response);
 	}

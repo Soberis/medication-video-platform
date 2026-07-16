@@ -278,8 +278,9 @@ dead-letter；Worker 使用 publisher confirm 向死信 exchange 显式发布
 Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、可重试结果的有限退避与
 新 attempt、结果 Inbox 去重、稳定错误、状态提交、不可变 MediaReport 和脱敏死信诊断，并用
 合成 MP4 完成真实队列闭环。尚未完成
-的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消与受控 DLQ 重放也尚未
-实现，不能把首个闭环等同于完整异步作业平台。
+的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消尚未实现，受控 DLQ
+重放已完成后端契约和合同测试但尚未进行真实 broker 运维演练，不能把首个闭环等同于完整
+异步作业平台。
 
 要求：
 
@@ -316,6 +317,25 @@ DLQ 不自动无限重放。重放流程：
 这里的“原 DLQ 消息”指不可变的 `media-dead-letter.v1` 脱敏诊断，不是原始媒体任务 envelope。
 受控重放必须回到 Core API 校验当前 job/项目/策略状态，生成新的 attempt、capability 和
 message ID；禁止把 DLQ body 直接投回业务队列。
+
+当前受控媒体重放接口为 `POST /api/v1/media-jobs/{media_job_id}/replays`，规则如下：
+
+- 仅项目管理员可调用；local/test 使用与边端上传令牌分离的管理员令牌，生产仍等待真实 IdP；
+- 请求只复制脱敏诊断的 `dead_letter_id`、source message/attempt、稳定原因和 body SHA-256，
+  不提交原消息 body、lease token、URL 或对象信息；
+- 服务端按与 Worker 一致的 UUIDv5 规则复核 `dead_letter_id`，并要求 source message/attempt
+  正好是当前 `QUEUED`/`RUNNING` attempt；无可信 job 身份的契约错误不得重放；
+- 操作者必须提交枚举原因码和不含敏感信息的 ticket/deployment/commit reference；
+- 同一事务终止旧 attempt，生成新 attempt、新 capability、新 message ID、Outbox、幂等重放记录
+  和追加式审计事件；原 ClipAsset 继续保持 `UPLOADED` 或 `INGESTING`，不回退原始资产；
+- 默认每个 job 最多 2 次人工重放，配置硬上限为 10；超限后需要人工调查而不是绕过熔断；
+- 相同 Idempotency-Key 和完全相同请求返回原 replay；不同请求冲突；同一 dead letter 只能使用一次；
+- `audit_event` 由 PostgreSQL trigger 阻止 UPDATE/DELETE，记录 actor、项目、原因、request ID、
+  旧/新 attempt、dead letter 和变更引用。
+
+UUIDv5 校验能够发现抄录错误并绑定稳定诊断身份，但不是签名。当前流程的真实性边界仍是
+管理员从受控 RabbitMQ 管理面读取保留诊断并接受审计；若未来需要无人值守重放，必须先增加
+签名诊断或受信 DLQ Inbox，不能把本接口改为自动消费后直接重试。
 
 ## 12. 对象输出与原子发布
 
@@ -378,6 +398,7 @@ temporary/{job_id}/{attempt}/...
 - [x] lease 过期后旧 attempt 迟到结果被拒绝。
 - [ ] 运行中取消能停止并清理临时输出。
 - [x] non-retryable 输入不会进入重试风暴。
-- [ ] DLQ 重放创建新 attempt 并保留审计。
+- [x] 受控 DLQ 重放创建新 attempt、新 capability/message ID 并保留追加式审计；真实 broker
+  运维演练仍待完成。
 - [ ] 对象摘要、输入摘要或参数摘要变化会阻断提交。
 - [ ] Worker 无数据库写权限、无默认公网出站权限。

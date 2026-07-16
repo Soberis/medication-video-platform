@@ -222,7 +222,8 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru',
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',
         'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru'
+        'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru',
+        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
     )
     foreach ($relativePath in $requiredBrunoRequests) {
         if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {

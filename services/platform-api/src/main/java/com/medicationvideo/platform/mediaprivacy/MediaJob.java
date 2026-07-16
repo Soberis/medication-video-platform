@@ -173,6 +173,16 @@ class MediaJob {
 		this.status = MediaJobStatus.QUEUED;
 	}
 
+	void requeueAfterDeadLetter(Instant changedAt) {
+		if (this.status != MediaJobStatus.QUEUED && this.status != MediaJobStatus.RUNNING) {
+			throw new MediaJobReplayException(
+					"MEDIA_JOB_REPLAY_STATE_CONFLICT",
+					"Only a queued or running dead-lettered media job can be replayed.");
+		}
+		this.status = MediaJobStatus.QUEUED;
+		this.updatedAt = changedAt;
+	}
+
 	private void transitionFromRunning(MediaJobStatus target, Instant changedAt) {
 		if (this.status != MediaJobStatus.RUNNING) {
 			throw new MediaJobExecutionException(

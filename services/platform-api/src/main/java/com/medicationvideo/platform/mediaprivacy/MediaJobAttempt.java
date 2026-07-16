@@ -178,6 +178,22 @@ class MediaJobAttempt {
 		this.updatedAt = now;
 	}
 
+	void deadLetter(MediaDeadLetterReason reason, Instant now) {
+		if (this.status != MediaJobAttemptStatus.QUEUED
+				&& this.status != MediaJobAttemptStatus.RUNNING) {
+			throw new MediaJobReplayException(
+					"MEDIA_JOB_REPLAY_STALE",
+					"The dead-lettered media job attempt is no longer current.");
+		}
+		this.status = MediaJobAttemptStatus.FAILED;
+		this.errorClass = "NON_RETRYABLE_POLICY";
+		this.errorCode = reason.name();
+		this.safeErrorMessage = "The media job delivery was rejected and retained for review.";
+		this.errorRetryable = false;
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
 	boolean isRecoverableAt(Instant cutoff) {
 		return this.status == MediaJobAttemptStatus.RUNNING
 				&& this.leaseUntil != null

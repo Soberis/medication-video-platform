@@ -219,6 +219,11 @@ previous_event_hash（如启用链式完整性）
 
 审计只追加。高价值审计定期导出到独立受控存储或 SIEM，并验证完整性。审计日志本身也可能含个人信息，需分级、最小化和保留控制。
 
+当前首个落地场景是媒体 DLQ 受控重放：`audit_event` 使用数据库 trigger 阻止 UPDATE/DELETE，
+记录独立管理员 actor、项目、稳定原因、request ID、旧/新 attempt、dead-letter ID 和非敏感
+变更引用。该实现只证明应用写入和数据库追加约束；独立 SIEM/WORM 导出、真实 OIDC 角色映射、
+失败认证审计和数据库职责分离仍属于后续安全验收项。
+
 ## 12. 保留、legal hold 与销毁
 
 ### 12.1 原则

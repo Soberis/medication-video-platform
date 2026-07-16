@@ -44,4 +44,5 @@ Worker 在处理期间按服务端返回的 heartbeat interval 后台续租；�
 Worker 提交的 retryable 失败由 Core API 使用 Outbox 延迟创建新 attempt；当前消息在结果被
 接受后 ACK，Worker 不在消费者进程内 sleep 或重复旧 attempt。永久拒绝消息只生成稳定原因码、
 安全摘要、原 body 摘要/大小和安全 job 标识；若该诊断未获 broker 确认，原消息重新入队且
-Worker 失败退出，交由监督器退避重启。受控 DLQ 人工重放仍未实现，禁止直接重投 DLQ body。
+Worker 失败退出，交由监督器退避重启。Core API 已提供管理员受控重放：只读取脱敏诊断身份，
+校验当前 job/attempt 后创建新 capability 和消息并写追加式审计；仍禁止直接重投 DLQ body。

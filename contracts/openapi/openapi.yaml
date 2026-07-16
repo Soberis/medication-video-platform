@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.15.0
+  version: 0.16.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -14,7 +14,8 @@ info:
     cursor pagination, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
-    MediaReport facts. The API never proxies upload bytes through the Core API, exposes storage
+    MediaReport facts, and let an administrator create an audited new attempt from a retained
+    sanitized dead-letter diagnostic. The API never proxies upload bytes through the Core API, exposes storage
     locations through catalog reads, controls or probes edge hardware, or performs media processing
     synchronously inside a user request.
   license:
@@ -1288,6 +1289,83 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: The media job was not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /media-jobs/{media_job_id}/replays:
+    post:
+      operationId: replayDeadLetteredMediaJob
+      tags:
+        - Media Jobs
+      summary: Create an audited new attempt from a retained sanitized dead-letter diagnostic
+      description: >-
+        Administrator-only recovery command. The caller copies only the safe identity fields from
+        a retained media-dead-letter.v1 diagnostic. The server verifies the deterministic
+        dead_letter_id, current job/message/attempt identity, project boundary, replay limit and
+        idempotency key; it then marks the old attempt failed and atomically creates a new attempt,
+        lease capability, message ID, Outbox event, replay record and append-only audit event. The
+        DLQ body is never republished, and the original diagnostic remains immutable evidence.
+        Invalid-contract diagnostics without a trusted job identity cannot be replayed through this
+        endpoint.
+      parameters:
+        - $ref: "#/components/parameters/MediaJobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          description: Optional caller correlation id copied into the audit event.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9._:-]+$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaJobReplayRequest"
+      responses:
+        "202":
+          description: New attempt queued, or the exact command replayed idempotently.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaJobReplayResponse"
+        "400":
+          description: The diagnostic fields, change reference or idempotency key are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller is not an administrator for the current project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The media job was not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            The diagnostic does not match the current attempt, the replay limit or job state was
+            reached, or the idempotency key/dead-letter identity conflicts with another command.
           content:
             application/problem+json:
               schema:
@@ -2976,6 +3054,88 @@ components:
           description: Identifier of a previously completed and verified uploaded clip asset.
         job_type:
           $ref: "#/components/schemas/MediaJobType"
+    MediaJobReplayRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - dead_letter_id
+        - source_message_id
+        - source_attempt
+        - dead_letter_reason
+        - body_sha256
+        - operator_reason_code
+        - change_reference
+      properties:
+        dead_letter_id:
+          type: string
+          format: uuid
+          description: Deterministic UUIDv5 from the sanitized diagnostic reason and body digest.
+        source_message_id:
+          type: string
+          format: uuid
+        source_attempt:
+          type: integer
+          minimum: 1
+        dead_letter_reason:
+          type: string
+          enum:
+            - MEDIA_JOB_ACQUIRE_REJECTED
+            - MEDIA_JOB_LEASE_REJECTED
+            - MEDIA_JOB_RESULT_REJECTED
+          description: >-
+            Stable reason from media-dead-letter.v1. MEDIA_JOB_CONTRACT_INVALID is intentionally
+            excluded because it has no trusted job identity.
+        body_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+          description: SHA-256 from the sanitized diagnostic, never the original message body.
+        operator_reason_code:
+          type: string
+          enum:
+            - CONFIGURATION_FIXED
+            - WORKER_DEPLOYMENT_FIXED
+            - AUTHORIZATION_FIXED
+            - OTHER_APPROVED
+        change_reference:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:/#-]+$
+          description: Non-sensitive ticket, deployment or commit reference supporting the replay.
+    MediaJobReplayResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - replay_id
+        - media_job_id
+        - dead_letter_id
+        - source_attempt
+        - new_attempt
+        - resulting_job_status
+        - created_at
+      properties:
+        replay_id:
+          type: string
+          format: uuid
+        media_job_id:
+          type: string
+          format: uuid
+        dead_letter_id:
+          type: string
+          format: uuid
+        source_attempt:
+          type: integer
+          minimum: 1
+        new_attempt:
+          type: integer
+          minimum: 2
+        resulting_job_status:
+          type: string
+          const: QUEUED
+          description: State committed by the original replay command, not a live job-status read.
+        created_at:
+          type: string
+          format: date-time
     MediaJobResponse:
       type: object
       additionalProperties: false

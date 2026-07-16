@@ -22,6 +22,7 @@ import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 
 @RestControllerAdvice(assignableTypes = {
 		MediaJobController.class,
+		MediaJobReplayController.class,
 		MediaWorkerController.class,
 		MediaReportController.class
 })
@@ -51,6 +52,11 @@ class MediaJobExceptionHandler {
 	@ExceptionHandler(MediaJobIdempotencyConflictException.class)
 	ResponseEntity<ApiErrorResponse> idempotencyConflict(MediaJobIdempotencyConflictException exception) {
 		return error(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", exception.getMessage(), false);
+	}
+
+	@ExceptionHandler(MediaJobReplayException.class)
+	ResponseEntity<ApiErrorResponse> replayConflict(MediaJobReplayException exception) {
+		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage(), false);
 	}
 
 	@ExceptionHandler(MediaJobNotFoundException.class)

@@ -21,8 +21,10 @@ class UploadSecurityConfiguration {
 	SecurityFilterChain uploadSecurityFilterChain(
 			HttpSecurity http,
 			@Value("${platform.security.local-bearer-token:}") String bearerToken,
+			@Value("${platform.security.local-admin-bearer-token:}") String adminBearerToken,
 			@Value("${platform.security.local-project-id}") UUID projectId) throws Exception {
-		var localBearerFilter = new LocalBearerAuthenticationFilter(bearerToken, projectId);
+		var localBearerFilter = new LocalBearerAuthenticationFilter(
+				bearerToken, adminBearerToken, projectId);
 		return http
 				.csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

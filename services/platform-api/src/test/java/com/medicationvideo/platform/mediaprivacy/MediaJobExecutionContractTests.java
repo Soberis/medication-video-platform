@@ -2,6 +2,7 @@ package com.medicationvideo.platform.mediaprivacy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -15,10 +16,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -32,6 +35,7 @@ import com.jayway.jsonpath.JsonPath;
 class MediaJobExecutionContractTests {
 
 	private static final String USER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
 	private static final String WORKER_TOKEN = "synthetic-media-worker-bearer-token-do-not-reuse";
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	private static final String SHA256 = "a".repeat(64);
@@ -49,11 +53,136 @@ class MediaJobExecutionContractTests {
 
 	@BeforeEach
 	void clearMediaState() {
+		this.jdbcTemplate.update("DELETE FROM media_job_manual_replay");
 		this.jdbcTemplate.update("DELETE FROM inbox_message");
 		this.jdbcTemplate.update("DELETE FROM outbox_event");
 		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM media_report");
 		this.jdbcTemplate.update("DELETE FROM media_job");
+	}
+
+	@AfterEach
+	void clearReplayState() {
+		this.jdbcTemplate.update("DELETE FROM media_job_manual_replay");
+	}
+
+	@Test
+	void administratorReplaysRetainedDiagnosticWithNewAttemptAndAppendOnlyAudit()
+			throws Exception {
+		var created = createQueuedJob();
+		acquire(created).andExpect(status().isOk());
+		var bodySha256 = "d".repeat(64);
+		var deadLetterId = UUID.fromString("b682e7d9-a8ab-5ca1-80c6-7308a617be4e");
+		assertEquals(
+				deadLetterId,
+				MediaDeadLetterIdentity.from(
+						MediaDeadLetterReason.MEDIA_JOB_ACQUIRE_REJECTED,
+						bodySha256));
+		var request = replayRequest(created, deadLetterId, bodySha256);
+		var idempotencyKey = "media-replay-" + UUID.randomUUID();
+
+		this.mockMvc.perform(post("/api/v1/media-jobs/{jobId}/replays", created.jobId())
+				.header("Authorization", "Bearer " + USER_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		var response = this.mockMvc.perform(post(
+				"/api/v1/media-jobs/{jobId}/replays", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "replay-contract-request-1")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+				.andExpect(status().isAccepted())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.media_job_id").value(created.jobId().toString()))
+				.andExpect(jsonPath("$.source_attempt").value(1))
+				.andExpect(jsonPath("$.new_attempt").value(2))
+				.andExpect(jsonPath("$.resulting_job_status").value("QUEUED"))
+				.andReturn().getResponse().getContentAsString();
+		var replayId = JsonPath.<String>read(response, "$.replay_id");
+
+		this.mockMvc.perform(post("/api/v1/media-jobs/{jobId}/replays", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "replay-contract-request-1")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.replay_id").value(replayId));
+
+		assertEquals("FAILED", this.jdbcTemplate.queryForObject("""
+				SELECT status FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = 1
+				""", String.class, created.jobId()));
+		assertEquals("MEDIA_JOB_ACQUIRE_REJECTED", this.jdbcTemplate.queryForObject("""
+				SELECT error_code FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = 1
+				""", String.class, created.jobId()));
+		assertEquals("QUEUED", this.jdbcTemplate.queryForObject("""
+				SELECT status FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = 2
+				""", String.class, created.jobId()));
+		assertEquals("QUEUED", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals("INGESTING", scalar(
+				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?",
+				created.clipAssetId()));
+		assertEquals(1, count(
+				"SELECT count(*) FROM media_job_manual_replay WHERE media_job_id = ?",
+				created.jobId()));
+		assertEquals(2, count(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+		var replayedAttempt = loadAttempt(created, 2);
+		acquire(replayedAttempt).andExpect(status().isOk());
+		assertEquals("RUNNING", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+
+		var auditEventId = this.jdbcTemplate.queryForObject("""
+				SELECT event_id FROM audit_event
+				WHERE action = 'MEDIA_JOB_MANUAL_REPLAY' AND object_id = ?
+				ORDER BY occurred_at_utc DESC LIMIT 1
+				""", UUID.class, created.jobId().toString());
+		assertEquals("local-synthetic-admin", this.jdbcTemplate.queryForObject("""
+				SELECT actor_id FROM audit_event WHERE event_id = ?
+				""", String.class, auditEventId));
+		assertEquals("replay-contract-request-1", this.jdbcTemplate.queryForObject("""
+				SELECT request_id FROM audit_event WHERE event_id = ?
+				""", String.class, auditEventId));
+		assertThrows(DataAccessException.class, () -> this.jdbcTemplate.update(
+				"UPDATE audit_event SET action = 'TAMPERED' WHERE event_id = ?", auditEventId));
+		assertThrows(DataAccessException.class, () -> this.jdbcTemplate.update(
+				"DELETE FROM audit_event WHERE event_id = ?", auditEventId));
+	}
+
+	@Test
+	void rejectsForgedDeadLetterIdentityWithoutChangingTheCurrentAttempt() throws Exception {
+		var created = createQueuedJob();
+		var request = replayRequest(
+				created,
+				UUID.fromString("99999999-9999-5999-8999-999999999999"),
+				"d".repeat(64));
+
+		this.mockMvc.perform(post("/api/v1/media-jobs/{jobId}/replays", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-replay-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code")
+						.value("MEDIA_JOB_REPLAY_DIAGNOSTIC_MISMATCH"));
+
+		assertEquals("QUEUED", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals(1, count(
+				"SELECT count(*) FROM media_job_attempt WHERE media_job_id = ?",
+				created.jobId()));
+		assertEquals(0, count(
+				"SELECT count(*) FROM media_job_manual_replay WHERE media_job_id = ?",
+				created.jobId()));
 	}
 
 	@Test
@@ -635,6 +764,24 @@ class MediaJobExecutionContractTests {
 				""".formatted(
 				created.messageId(), created.jobId(), created.attempt(), created.leaseToken(), SHA256,
 				MediaProbeProfile.RECIPE_DIGEST, SOFTWARE_DIGEST, startedAt, completedAt);
+	}
+
+	private String replayRequest(CreatedJob created, UUID deadLetterId, String bodySha256) {
+		return """
+				{
+				  "dead_letter_id":"%s",
+				  "source_message_id":"%s",
+				  "source_attempt":%d,
+				  "dead_letter_reason":"MEDIA_JOB_ACQUIRE_REJECTED",
+				  "body_sha256":"%s",
+				  "operator_reason_code":"CONFIGURATION_FIXED",
+				  "change_reference":"commit-1ce0b03"
+				}
+				""".formatted(
+				deadLetterId,
+				created.messageId(),
+				created.attempt(),
+				bodySha256);
 	}
 
 	private int count(String sql, Object... arguments) {
