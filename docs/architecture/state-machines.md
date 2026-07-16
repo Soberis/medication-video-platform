@@ -274,7 +274,9 @@ REQUESTED → QUEUED → RUNNING → SUCCEEDED
 规则：
 
 - `SUCCEEDED` 只表示业务模块已验证并提交结果，不以 Worker 进程退出码代替。
-- lease 超时不直接判定原 attempt 失败；先标记失联并防止迟到结果覆盖新 attempt。
+- job 状态与 attempt 状态分离；attempt 使用 `QUEUED/RUNNING/SUCCEEDED/FAILED/LOST/CANCELLED`，job 不使用 `LOST`。
+- lease 超时不直接判定业务 job 失败；超过 grace period 后原 attempt 记为 `LOST`，未达上限时创建新 attempt 并让 job 回到 `QUEUED`。
+- 新 attempt 必须生成新的 message ID 和 lease capability；旧 attempt 的心跳与迟到结果永久拒绝。
 - 只有 retryable 错误进入 RETRY_WAIT；验证失败、权限失败和 schema 不兼容默认不重试。
 - CANCEL_REQUESTED 是协作取消；Worker 必须在安全检查点停止并清理临时输出。
 - 迟到结果必须按 job ID、attempt 和 lease token 拒绝。

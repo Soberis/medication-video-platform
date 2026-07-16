@@ -9,6 +9,8 @@ record MediaLeaseResponse(
 		int attempt,
 		URI inputUrl,
 		Instant expiresAt,
+		Instant leaseUntil,
+		long heartbeatIntervalSeconds,
 		String inputSha256,
 		long inputSizeBytes,
 		String contentType) {

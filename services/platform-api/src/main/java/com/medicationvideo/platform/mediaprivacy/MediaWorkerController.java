@@ -43,6 +43,20 @@ class MediaWorkerController {
 				.body(this.service.acquire(mediaJobId, attempt, leaseToken, request));
 	}
 
+	@PostMapping("/{mediaJobId}/attempts/{attempt}/heartbeat")
+	ResponseEntity<MediaHeartbeatResponse> heartbeat(
+			@PathVariable UUID mediaJobId,
+			@PathVariable @Min(1) int attempt,
+			@RequestHeader(name = "X-Media-Lease-Token")
+			@Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
+			@RequestBody @Valid MediaLeaseRequest request,
+			Authentication authentication) {
+		requireWorker(authentication);
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(this.service.heartbeat(mediaJobId, attempt, leaseToken, request));
+	}
+
 	@PutMapping("/{mediaJobId}/attempts/{attempt}/result")
 	ResponseEntity<MediaResultAcceptedResponse> acceptResult(
 			@PathVariable UUID mediaJobId,

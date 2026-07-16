@@ -203,12 +203,21 @@ last_heartbeat_at
 ```
 
 - 心跳只延长同一 attempt 的租约，不能改变参数。
+- 心跳必须同时匹配独立 Worker 身份、当前 attempt、`worker_id` 和不可预测 lease capability；
+  仅 broker delivery 不能续租。
+- 心跳只接受尚未过期的租约，并把 `lease_until` 设置为服务器当前时间加 lease duration；
+  不从旧截止时间累加，也不允许复活已过期或 `LOST` 的 attempt。
 - 租约过期后，调度器经过 grace period 才允许新 attempt。
-- 新 attempt 创建后，旧 lease token 永久失效。
+- grace period 后，平台在同一数据库事务内把旧 attempt 标记为 `LOST`；未达到上限时，
+  为下一 attempt 生成新的 message ID、lease capability 和 Outbox 事件，业务 job 保持非终态。
+- 新 attempt 创建后，旧 lease token、旧 heartbeat 和旧结果永久失效。
+- 达到 max attempts 后，平台把 job 和资产入库状态提交为失败，不再创建消息。
 - Worker 不能仅凭 broker delivery tag 证明自己仍持有业务租约。
 - 同一 job 的并发结果以数据库唯一约束和当前 attempt 守卫裁决。
 
-具体 lease、heartbeat 和 grace 时长按 job profile 配置并在负载测试后冻结。
+当前媒体探测默认 lease duration 为 30 分钟、heartbeat interval 为 5 分钟、grace period
+为 5 分钟、max attempts 为 3，恢复扫描默认每 30 秒处理最多 20 个候选。它们是可配置的
+首个切片运行值，后续必须根据长视频、弱网和 Worker 故障注入测试冻结容量基线。
 
 ## 8. 重试和错误分类
 
@@ -257,9 +266,10 @@ platform.media.dead-letter.v1
 先流式复核大小和 SHA-256，再提取容器/流/时间轴事实并使用 FFmpeg 对主视频流完整解码。
 
 当前首个媒体探测切片已经实现任务 Outbox、publisher confirm、单一业务队列/DLQ、独立
-Worker 身份、attempt 租约、短期输入授权、结果 Inbox 去重、稳定错误、状态提交和不可变
-MediaReport，并用合成 MP4 完成真实端到端验证。尚未实现的是 heartbeat/租约续期、失联
-回收、新 attempt 调度、取消和受控 DLQ 重放，不能把首个闭环等同于完整异步作业平台。
+Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、新 attempt、结果 Inbox
+去重、稳定错误、状态提交和不可变 MediaReport，并用合成 MP4 完成真实队列闭环。尚未完成
+的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消与受控 DLQ 重放也尚未
+实现，不能把首个闭环等同于完整异步作业平台。
 
 要求：
 
@@ -344,7 +354,7 @@ temporary/{job_id}/{attempt}/...
 - [ ] Worker 处理完成但 ack 前崩溃，重投不生成重复业务产物。
 - [ ] Worker 写完临时对象但结果提交失败，可以安全重试。
 - [x] 结果提交成功但响应丢失，重复提交返回原结果。
-- [ ] lease 过期后旧 attempt 迟到结果被拒绝。
+- [x] lease 过期后旧 attempt 迟到结果被拒绝。
 - [ ] 运行中取消能停止并清理临时输出。
 - [x] non-retryable 输入不会进入重试风暴。
 - [ ] DLQ 重放创建新 attempt 并保留审计。

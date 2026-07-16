@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
-from medication_media_worker.api import CoreApiClient, InputDigestMismatchError, LeaseGrant
+from medication_media_worker.api import (
+    CoreApiClient,
+    InputDigestMismatchError,
+    LeaseGrant,
+    LeaseMonitor,
+)
 from medication_media_worker.probe import MediaProber
 from medication_media_worker.processor import DeliveryDisposition, JobProcessor
 
@@ -16,7 +21,12 @@ class FakeClient:
 
     def acquire_input(self, job: object) -> LeaseGrant:
         del job
-        return LeaseGrant("http://object.test/input", datetime(2026, 7, 16, tzinfo=UTC))
+        now = datetime.now(UTC)
+        return LeaseGrant("http://object.test/input", now + timedelta(minutes=15), now, 300)
+
+    def maintain_lease(self, job: object, grant: LeaseGrant) -> LeaseMonitor:
+        del job, grant
+        return cast(LeaseMonitor, NoopLeaseMonitor())
 
     def download_input(self, grant: LeaseGrant, job: object, target: Path) -> None:
         del grant, job
@@ -33,6 +43,14 @@ class FakeProber:
     def probe(self, input_path: Path) -> dict[str, object]:
         assert input_path.read_bytes() == b"synthetic"
         return {"decode_verified": True, "input_digest_verified": True}
+
+
+class NoopLeaseMonitor:
+    def __enter__(self) -> NoopLeaseMonitor:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        del args
 
 
 def test_submits_success_before_ack(job_body: bytes, tmp_path: Path) -> None:

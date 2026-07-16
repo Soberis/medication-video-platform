@@ -1,6 +1,8 @@
 package com.medicationvideo.platform.mediaprivacy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -34,13 +36,16 @@ class MediaJobExecutionContractTests {
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	private static final String SHA256 = "a".repeat(64);
 	private static final String SOFTWARE_DIGEST =
-			"sha256:70a21ff3417284610935fd3a530cabadb063660666df4e9cf12ea57e76cf78fc";
+			"sha256:16eb4967618323b560c64cdfeaa1d9369fc332951904dd7f415c7077aeedf2ce";
 
 	@Autowired
 	private MockMvc mockMvc;
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private MediaJobRecoveryService recoveryService;
 
 	@BeforeEach
 	void clearMediaState() {
@@ -60,6 +65,8 @@ class MediaJobExecutionContractTests {
 				.andExpect(jsonPath("$.job_id").value(created.jobId().toString()))
 				.andExpect(jsonPath("$.attempt").value(1))
 				.andExpect(jsonPath("$.input_url").isString())
+				.andExpect(jsonPath("$.lease_until").isString())
+				.andExpect(jsonPath("$.heartbeat_interval_seconds").value(300))
 				.andExpect(jsonPath("$.input_sha256").value(SHA256));
 
 		assertEquals("RUNNING", scalar(
@@ -105,6 +112,91 @@ class MediaJobExecutionContractTests {
 				.andExpect(jsonPath("$.warning_codes[0]").value("AUDIO_PRESENT"))
 				.andExpect(jsonPath("$.input_url").doesNotExist())
 				.andExpect(jsonPath("$.object_key").doesNotExist());
+	}
+
+	@Test
+	void renewsOnlyTheCurrentWorkersActiveLease() throws Exception {
+		var created = createQueuedJob();
+		var initialLeaseUntil = JsonPath.<String>read(acquire(created)
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString(), "$.lease_until");
+
+		var renewedLeaseUntil = JsonPath.<String>read(heartbeat(created, "media-worker-test")
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.job_id").value(created.jobId().toString()))
+				.andExpect(jsonPath("$.attempt").value(1))
+				.andExpect(jsonPath("$.heartbeat_interval_seconds").value(300))
+				.andReturn().getResponse().getContentAsString(), "$.lease_until");
+		assertTrue(Instant.parse(renewedLeaseUntil).isAfter(Instant.parse(initialLeaseUntil)));
+
+		heartbeat(created, "different-worker")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_LEASE_CONFLICT"));
+
+		expireAttempt(created, Instant.now());
+		heartbeat(created, "media-worker-test")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_LEASE_EXPIRED"));
+	}
+
+	@Test
+	void recoversExpiredLeaseWithNewAttemptCapabilityAndOutboxMessage() throws Exception {
+		var original = createQueuedJob();
+		acquire(original).andExpect(status().isOk());
+		var now = Instant.now();
+		expireAttempt(original, now);
+
+		assertEquals(1, this.recoveryService.recoverExpiredAttempts(now));
+		var retried = loadAttempt(original, 2);
+		assertNotEquals(original.messageId(), retried.messageId());
+		assertNotEquals(original.leaseToken(), retried.leaseToken());
+		assertEquals("LOST", scalar(
+				"SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1",
+				original.jobId()));
+		assertEquals("QUEUED", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", original.jobId()));
+		assertEquals("INGESTING", scalar(
+				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?",
+				original.clipAssetId()));
+		assertEquals(2, count(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", original.jobId()));
+
+		acquire(retried).andExpect(status().isOk());
+		submitResult(original, successResult(original, SOFTWARE_DIGEST))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_LEASE_EXPIRED"));
+		this.mockMvc.perform(get("/api/v1/media-jobs/{jobId}", original.jobId())
+				.header("Authorization", "Bearer " + USER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("RUNNING"))
+				.andExpect(jsonPath("$.current_attempt.attempt").value(2))
+				.andExpect(jsonPath("$.current_attempt.status").value("RUNNING"));
+	}
+
+	@Test
+	void failsJobAndAssetAfterLeaseRecoveryAttemptsAreExhausted() throws Exception {
+		var attempt = createQueuedJob();
+		for (var attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
+			acquire(attempt).andExpect(status().isOk());
+			var now = Instant.now();
+			expireAttempt(attempt, now);
+			assertEquals(1, this.recoveryService.recoverExpiredAttempts(now));
+			if (attemptNumber < 3) {
+				attempt = loadAttempt(attempt, attemptNumber + 1);
+			}
+		}
+
+		assertEquals("FAILED", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", attempt.jobId()));
+		assertEquals("LOST", scalar(
+				"SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 3",
+				attempt.jobId()));
+		assertEquals("INGEST_FAILED", scalar(
+				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?",
+				attempt.clipAssetId()));
+		assertEquals(3, count(
+				"SELECT count(*) FROM media_job_attempt WHERE media_job_id = ?", attempt.jobId()));
 	}
 
 	@Test
@@ -236,17 +328,30 @@ class MediaJobExecutionContractTests {
 	private org.springframework.test.web.servlet.ResultActions acquire(CreatedJob created)
 			throws Exception {
 		return this.mockMvc.perform(post(
-				"/api/v1/internal/media-jobs/{jobId}/attempts/1/lease", created.jobId())
+				"/api/v1/internal/media-jobs/{jobId}/attempts/{attempt}/lease",
+				created.jobId(), created.attempt())
 				.header("Authorization", "Bearer " + WORKER_TOKEN)
 				.header("X-Media-Lease-Token", created.leaseToken())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"worker_id\":\"media-worker-test\"}"));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions heartbeat(
+			CreatedJob created, String workerId) throws Exception {
+		return this.mockMvc.perform(post(
+				"/api/v1/internal/media-jobs/{jobId}/attempts/{attempt}/heartbeat",
+				created.jobId(), created.attempt())
+				.header("Authorization", "Bearer " + WORKER_TOKEN)
+				.header("X-Media-Lease-Token", created.leaseToken())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"worker_id\":\"" + workerId + "\"}"));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions submitResult(
 			CreatedJob created, String result) throws Exception {
 		return this.mockMvc.perform(put(
-				"/api/v1/internal/media-jobs/{jobId}/attempts/1/result", created.jobId())
+				"/api/v1/internal/media-jobs/{jobId}/attempts/{attempt}/result",
+				created.jobId(), created.attempt())
 				.header("Authorization", "Bearer " + WORKER_TOKEN)
 				.header("X-Media-Lease-Token", created.leaseToken())
 				.contentType(MediaType.APPLICATION_JSON)
@@ -278,7 +383,30 @@ class MediaJobExecutionContractTests {
 				SELECT message_id FROM media_job_attempt
 				WHERE media_job_id = ? AND attempt = 1
 				""", UUID.class, jobId);
-		return new CreatedJob(jobId, clipAssetId, messageId, leaseToken);
+		return new CreatedJob(jobId, clipAssetId, messageId, leaseToken, 1);
+	}
+
+	private CreatedJob loadAttempt(CreatedJob job, int attemptNumber) {
+		var messageId = this.jdbcTemplate.queryForObject("""
+				SELECT message_id FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = ?
+				""", UUID.class, job.jobId(), attemptNumber);
+		var leaseToken = this.jdbcTemplate.queryForObject("""
+				SELECT payload_json ->> 'lease_token'
+				FROM outbox_event
+				WHERE aggregate_id = ? AND (payload_json ->> 'attempt')::integer = ?
+				""", String.class, job.jobId(), attemptNumber);
+		return new CreatedJob(
+				job.jobId(), job.clipAssetId(), messageId, leaseToken, attemptNumber);
+	}
+
+	private void expireAttempt(CreatedJob job, Instant now) {
+		this.jdbcTemplate.update("""
+				UPDATE media_job_attempt
+				SET lease_started_at = ?, last_heartbeat_at = ?, lease_until = ?
+				WHERE media_job_id = ? AND attempt = ?
+				""", Timestamp.from(now.minusSeconds(3)), Timestamp.from(now.minusSeconds(3)),
+				Timestamp.from(now.minusSeconds(2)), job.jobId(), job.attempt());
 	}
 
 	private UUID insertUploadedClipAsset() {
@@ -332,7 +460,7 @@ class MediaJobExecutionContractTests {
 				  "schema_version":"media-probe-result.v1",
 				  "message_id":"%s",
 				  "job_id":"%s",
-				  "attempt":1,
+				  "attempt":%d,
 				  "lease_token":"%s",
 				  "status":"SUCCEEDED",
 				  "input_sha256":"%s",
@@ -375,7 +503,7 @@ class MediaJobExecutionContractTests {
 				  "error":null
 				}
 				""".formatted(
-				created.messageId(), created.jobId(), created.leaseToken(), SHA256,
+				created.messageId(), created.jobId(), created.attempt(), created.leaseToken(), SHA256,
 				MediaProbeProfile.RECIPE_DIGEST, softwareDigest, startedAt, completedAt);
 	}
 
@@ -387,7 +515,7 @@ class MediaJobExecutionContractTests {
 				  "schema_version":"media-probe-result.v1",
 				  "message_id":"%s",
 				  "job_id":"%s",
-				  "attempt":1,
+				  "attempt":%d,
 				  "lease_token":"%s",
 				  "status":"FAILED",
 				  "input_sha256":"%s",
@@ -404,18 +532,23 @@ class MediaJobExecutionContractTests {
 				  }
 				}
 				""".formatted(
-				created.messageId(), created.jobId(), created.leaseToken(), SHA256,
+				created.messageId(), created.jobId(), created.attempt(), created.leaseToken(), SHA256,
 				MediaProbeProfile.RECIPE_DIGEST, SOFTWARE_DIGEST, startedAt, completedAt);
 	}
 
-	private int count(String sql) {
-		return this.jdbcTemplate.queryForObject(sql, Integer.class);
+	private int count(String sql, Object... arguments) {
+		return this.jdbcTemplate.queryForObject(sql, Integer.class, arguments);
 	}
 
 	private String scalar(String sql, UUID id) {
 		return this.jdbcTemplate.queryForObject(sql, String.class, id);
 	}
 
-	private record CreatedJob(UUID jobId, UUID clipAssetId, UUID messageId, String leaseToken) {
+	private record CreatedJob(
+			UUID jobId,
+			UUID clipAssetId,
+			UUID messageId,
+			String leaseToken,
+			int attempt) {
 	}
 }

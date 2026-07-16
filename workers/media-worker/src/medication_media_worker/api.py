@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event, Lock, Thread
+from types import TracebackType
+from typing import Self
 
 import httpx
 
@@ -35,6 +38,81 @@ class InputDigestMismatchError(RuntimeError):
 class LeaseGrant:
     input_url: str
     expires_at: datetime
+    lease_until: datetime
+    heartbeat_interval_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class HeartbeatGrant:
+    lease_until: datetime
+    heartbeat_interval_seconds: float
+
+
+class LeaseMonitor:
+    def __init__(
+        self,
+        job: MediaProbeJob,
+        initial_grant: LeaseGrant,
+        renew: Callable[[MediaProbeJob], HeartbeatGrant],
+    ) -> None:
+        self._job = job
+        self._renew = renew
+        self._stop = Event()
+        self._lock = Lock()
+        self._lease_until = initial_grant.lease_until
+        self._interval = initial_grant.heartbeat_interval_seconds
+        self._failure: StaleDeliveryError | PermanentDeliveryError | None = None
+        self._thread = Thread(
+            target=self._run,
+            name=f"media-lease-{job.attempt}",
+            daemon=True,
+        )
+
+    def __enter__(self) -> Self:
+        self._thread.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_value, traceback
+        self._stop.set()
+        self._thread.join()
+        if exc_type is None:
+            self.ensure_current()
+
+    def ensure_current(self) -> None:
+        with self._lock:
+            failure = self._failure
+        if failure is not None:
+            raise failure
+
+    def _run(self) -> None:
+        delay = self._interval
+        while not self._stop.wait(delay):
+            try:
+                grant = self._renew(self._job)
+            except RetryableDeliveryError:
+                with self._lock:
+                    remaining = (self._lease_until - datetime.now(UTC)).total_seconds()
+                    if remaining <= 0:
+                        self._failure = StaleDeliveryError(
+                            "Media job lease expired while the Core API was unavailable"
+                        )
+                        return
+                delay = max(0.1, min(5.0, remaining / 2))
+            except (StaleDeliveryError, PermanentDeliveryError) as exc:
+                with self._lock:
+                    self._failure = exc
+                return
+            else:
+                with self._lock:
+                    self._lease_until = grant.lease_until
+                    self._interval = grant.heartbeat_interval_seconds
+                delay = grant.heartbeat_interval_seconds
 
 
 class CoreApiClient:
@@ -71,13 +149,50 @@ class CoreApiClient:
             body = response.json()
             input_url = body["input_url"]
             expires_at = datetime.fromisoformat(body["expires_at"].replace("Z", "+00:00"))
+            lease_until = datetime.fromisoformat(body["lease_until"].replace("Z", "+00:00"))
+            heartbeat_interval = _positive_number(body["heartbeat_interval_seconds"])
         except (KeyError, TypeError, ValueError) as exc:
             raise PermanentDeliveryError("Core API returned an invalid lease grant") from exc
         if not isinstance(input_url, str) or not input_url.startswith(("http://", "https://")):
             raise PermanentDeliveryError("Core API returned an invalid lease grant")
-        if expires_at.tzinfo is None:
+        if expires_at.tzinfo is None or lease_until.tzinfo is None:
             raise PermanentDeliveryError("Core API returned an invalid lease grant")
-        return LeaseGrant(input_url=input_url, expires_at=expires_at)
+        return LeaseGrant(
+            input_url=input_url,
+            expires_at=expires_at,
+            lease_until=lease_until,
+            heartbeat_interval_seconds=heartbeat_interval,
+        )
+
+    def maintain_lease(self, job: MediaProbeJob, grant: LeaseGrant) -> LeaseMonitor:
+        return LeaseMonitor(job, grant, self.renew_lease)
+
+    def renew_lease(self, job: MediaProbeJob) -> HeartbeatGrant:
+        try:
+            response = self._client.post(
+                f"/api/v1/internal/media-jobs/{job.job_id}/attempts/{job.attempt}/heartbeat",
+                headers={"X-Media-Lease-Token": job.lease_token},
+                json={"worker_id": self._worker_id},
+            )
+        except httpx.RequestError as exc:
+            raise RetryableDeliveryError("Core API heartbeat is temporarily unavailable") from exc
+        if response.status_code in {404, 409}:
+            raise StaleDeliveryError("Media job lease is no longer current")
+        if response.status_code in {401, 403}:
+            raise PermanentDeliveryError("Worker service identity was rejected")
+        if response.status_code >= 500:
+            raise RetryableDeliveryError("Core API heartbeat is temporarily unavailable")
+        if response.status_code != 200:
+            raise PermanentDeliveryError("Core API rejected the media job heartbeat")
+        try:
+            body = response.json()
+            lease_until = datetime.fromisoformat(body["lease_until"].replace("Z", "+00:00"))
+            heartbeat_interval = _positive_number(body["heartbeat_interval_seconds"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PermanentDeliveryError("Core API returned an invalid heartbeat grant") from exc
+        if lease_until.tzinfo is None:
+            raise PermanentDeliveryError("Core API returned an invalid heartbeat grant")
+        return HeartbeatGrant(lease_until, heartbeat_interval)
 
     def download_input(self, grant: LeaseGrant, job: MediaProbeJob, target: Path) -> None:
         digest = hashlib.sha256()
@@ -128,3 +243,9 @@ def _bounded_chunks(chunks: Iterator[bytes], expected_size: int) -> Iterator[byt
         if observed > expected_size:
             raise InputDigestMismatchError("Downloaded input exceeds the frozen size")
         yield chunk
+
+
+def _positive_number(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise ValueError("Expected a positive number")
+    return float(value)

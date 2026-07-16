@@ -2,12 +2,10 @@ package com.medicationvideo.platform.mediaprivacy;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,6 +25,7 @@ class MediaJobExecutionService {
 	private final MediaResultInboxPort inbox;
 	private final ClipAssetMediaIngestService assetIngest;
 	private final Duration leaseDuration;
+	private final Duration heartbeatInterval;
 	private final Duration inputAuthorizationLifetime;
 	private final Duration resultClockSkew;
 	private final Set<String> approvedSoftwareDigests;
@@ -38,6 +37,7 @@ class MediaJobExecutionService {
 			MediaResultInboxPort inbox,
 			ClipAssetMediaIngestService assetIngest,
 			@Value("${platform.media-probe.lease-duration:PT30M}") Duration leaseDuration,
+			@Value("${platform.media-probe.heartbeat-interval:PT5M}") Duration heartbeatInterval,
 			@Value("${platform.media-probe.input-authorization-ttl:PT15M}")
 			Duration inputAuthorizationLifetime,
 			@Value("${platform.media-probe.result-clock-skew:PT5M}") Duration resultClockSkew,
@@ -49,6 +49,7 @@ class MediaJobExecutionService {
 		this.inbox = inbox;
 		this.assetIngest = assetIngest;
 		this.leaseDuration = requirePositive(leaseDuration, "Media probe lease duration");
+		this.heartbeatInterval = requireHeartbeatInterval(heartbeatInterval, this.leaseDuration);
 		this.inputAuthorizationLifetime = requirePositive(
 				inputAuthorizationLifetime, "Media input authorization lifetime");
 		this.resultClockSkew = requirePositive(resultClockSkew, "Media result clock skew");
@@ -77,9 +78,33 @@ class MediaJobExecutionService {
 				attempt.getAttempt(),
 				grant.inputUrl(),
 				grant.expiresAt(),
+				attempt.getLeaseUntil(),
+				this.heartbeatInterval.toSeconds(),
 				job.getInputDigest(),
 				job.getInputSizeBytes(),
 				job.getContentType());
+	}
+
+	@Transactional
+	MediaHeartbeatResponse heartbeat(
+			UUID mediaJobId,
+			int attemptNumber,
+			String leaseToken,
+			MediaLeaseRequest request) {
+		var now = now();
+		var job = lockJob(mediaJobId);
+		var attempt = lockAttempt(mediaJobId, attemptNumber);
+		requireLease(attempt, leaseToken);
+		if (job.getStatus() != MediaJobStatus.RUNNING) {
+			throw new MediaJobExecutionException(
+					"STALE_ATTEMPT", "The media job is no longer running.", false);
+		}
+		attempt.heartbeat(request.workerId(), now, this.leaseDuration);
+		return new MediaHeartbeatResponse(
+				job.getMediaJobId(),
+				attempt.getAttempt(),
+				attempt.getLeaseUntil(),
+				this.heartbeatInterval.toSeconds());
 	}
 
 	@Transactional
@@ -201,7 +226,7 @@ class MediaJobExecutionService {
 	}
 
 	private static void requireLease(MediaJobAttempt attempt, String leaseToken) {
-		if (!attempt.matchesLeaseHash(sha256(leaseToken))) {
+		if (!attempt.matchesLeaseHash(MediaLeaseCapabilityFactory.hash(leaseToken))) {
 			throw new MediaJobExecutionException(
 					"MEDIA_JOB_LEASE_INVALID", "The media job lease token is invalid.", false);
 		}
@@ -252,20 +277,19 @@ class MediaJobExecutionService {
 		return value;
 	}
 
+	private static Duration requireHeartbeatInterval(Duration value, Duration leaseDuration) {
+		requirePositive(value, "Media probe heartbeat interval");
+		if (value.toSeconds() < 1 || value.compareTo(leaseDuration) >= 0) {
+			throw new IllegalArgumentException(
+					"Media probe heartbeat interval must be at least one second and shorter than the lease.");
+		}
+		return value;
+	}
+
 	private static boolean constantTimeEquals(String first, String second) {
 		return MessageDigest.isEqual(
 				first.getBytes(StandardCharsets.US_ASCII),
 				second.getBytes(StandardCharsets.US_ASCII));
-	}
-
-	private static String sha256(String value) {
-		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(value.getBytes(StandardCharsets.US_ASCII)));
-		}
-		catch (NoSuchAlgorithmException exception) {
-			throw new IllegalStateException("SHA-256 is unavailable in this Java runtime.", exception);
-		}
 	}
 
 	private static Instant now() {

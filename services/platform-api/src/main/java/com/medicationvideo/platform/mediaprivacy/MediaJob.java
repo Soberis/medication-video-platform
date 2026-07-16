@@ -156,6 +156,16 @@ class MediaJob {
 		transitionFromRunning(MediaJobStatus.FAILED, changedAt);
 	}
 
+	void requeueAfterLostAttempt(Instant changedAt) {
+		if (this.status != MediaJobStatus.RUNNING) {
+			throw new MediaJobExecutionException(
+					"STALE_ATTEMPT", "The media job is no longer running.", false);
+		}
+		this.status = MediaJobStatus.RETRY_WAIT;
+		this.updatedAt = changedAt;
+		this.status = MediaJobStatus.QUEUED;
+	}
+
 	private void transitionFromRunning(MediaJobStatus target, Instant changedAt) {
 		if (this.status != MediaJobStatus.RUNNING) {
 			throw new MediaJobExecutionException(

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.13.0
+  version: 0.14.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -1387,6 +1387,65 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Object storage could not issue the read grant.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/media-jobs/{media_job_id}/attempts/{attempt}/heartbeat:
+    post:
+      operationId: renewMediaJobLease
+      tags:
+        - Media Jobs
+      summary: Renew the current Worker's active attempt lease
+      description: >-
+        Internal Worker endpoint. The service identity, opaque lease capability, current attempt,
+        worker ID and unexpired lease must all match. A successful heartbeat sets lease_until to
+        the current server time plus the configured lease duration; it never revives an expired or
+        lost attempt and never accumulates lease time from the previous deadline.
+      security:
+        - workerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MediaJobId"
+        - $ref: "#/components/parameters/MediaJobAttempt"
+        - $ref: "#/components/parameters/MediaLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaLeaseRequest"
+      responses:
+        "200":
+          description: The current Worker's active lease was renewed.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaHeartbeatResponse"
+        "400":
+          description: The path, header or request body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The media job or attempt was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt, Worker ownership or lease is stale, expired or terminal.
           content:
             application/problem+json:
               schema:
@@ -2888,6 +2947,19 @@ components:
         - FAILED
         - CANCEL_REQUESTED
         - CANCELLED
+    MediaJobAttemptStatus:
+      type: string
+      additionalProperties: false
+      description: >-
+        Lifecycle state of one execution attempt. LOST records a previously running attempt whose
+        lease expired beyond the grace period; it does not mean the business job is terminal.
+      enum:
+        - QUEUED
+        - RUNNING
+        - SUCCEEDED
+        - FAILED
+        - LOST
+        - CANCELLED
     MediaJobRequest:
       type: object
       additionalProperties: false
@@ -2964,6 +3036,8 @@ components:
       required:
         - attempt
         - status
+        - lease_until
+        - last_heartbeat_at
         - started_at
         - completed_at
         - error
@@ -2972,7 +3046,17 @@ components:
           type: integer
           minimum: 1
         status:
-          $ref: "#/components/schemas/MediaJobStatus"
+          $ref: "#/components/schemas/MediaJobAttemptStatus"
+        lease_until:
+          type:
+            - string
+            - "null"
+          format: date-time
+        last_heartbeat_at:
+          type:
+            - string
+            - "null"
+          format: date-time
         started_at:
           type:
             - string
@@ -3014,6 +3098,7 @@ components:
             - MEDIA_DECODE_FAILED
             - MEDIA_TIMELINE_INVALID
             - MEDIA_PROBE_INTERNAL
+            - WORKER_LEASE_LOST
         safe_message:
           type: string
           minLength: 1
@@ -3039,6 +3124,8 @@ components:
         - attempt
         - input_url
         - expires_at
+        - lease_until
+        - heartbeat_interval_seconds
         - input_sha256
         - input_size_bytes
         - content_type
@@ -3056,6 +3143,15 @@ components:
         expires_at:
           type: string
           format: date-time
+        lease_until:
+          type: string
+          format: date-time
+          description: Server-authoritative deadline for this attempt lease.
+        heartbeat_interval_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Maximum normal interval between Worker heartbeats for this lease.
         input_sha256:
           type: string
           pattern: "^[a-f0-9]{64}$"
@@ -3065,6 +3161,28 @@ components:
           minimum: 1
         content_type:
           type: string
+    MediaHeartbeatResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - job_id
+        - attempt
+        - lease_until
+        - heartbeat_interval_seconds
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        lease_until:
+          type: string
+          format: date-time
+        heartbeat_interval_seconds:
+          type: integer
+          format: int64
+          minimum: 1
     MediaResultAcceptedResponse:
       type: object
       additionalProperties: false

@@ -4,7 +4,9 @@ import java.time.Instant;
 
 record MediaJobAttemptResponse(
 		int attempt,
-		MediaJobStatus status,
+		MediaJobAttemptStatus status,
+		Instant leaseUntil,
+		Instant lastHeartbeatAt,
 		Instant startedAt,
 		Instant completedAt,
 		MediaJobErrorResponse error) {
@@ -21,6 +23,8 @@ record MediaJobAttemptResponse(
 		return new MediaJobAttemptResponse(
 				attempt.getAttempt(),
 				attempt.getStatus(),
+				attempt.getLeaseUntil(),
+				attempt.getLastHeartbeatAt(),
 				attempt.getStartedAt(),
 				attempt.getCompletedAt(),
 				error);

@@ -3,10 +3,8 @@ package com.medicationvideo.platform.mediaprivacy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
@@ -26,17 +24,19 @@ class MediaJobService {
 	private final MediaJobAttemptRepository attemptRepository;
 	private final MediaJobDispatchPort dispatchPort;
 	private final AssetCatalogQueryService assetCatalog;
-	private final SecureRandom secureRandom = new SecureRandom();
+	private final MediaLeaseCapabilityFactory capabilityFactory;
 
 	MediaJobService(
 			MediaJobRepository repository,
 			MediaJobAttemptRepository attemptRepository,
 			MediaJobDispatchPort dispatchPort,
-			AssetCatalogQueryService assetCatalog) {
+			AssetCatalogQueryService assetCatalog,
+			MediaLeaseCapabilityFactory capabilityFactory) {
 		this.repository = repository;
 		this.attemptRepository = attemptRepository;
 		this.dispatchPort = dispatchPort;
 		this.assetCatalog = assetCatalog;
+		this.capabilityFactory = capabilityFactory;
 	}
 
 	@Transactional
@@ -80,11 +80,12 @@ class MediaJobService {
 		try {
 			job = this.repository.saveAndFlush(job);
 			var messageId = UUID.randomUUID();
-			var leaseToken = leaseToken();
+			var capability = this.capabilityFactory.create();
 			this.attemptRepository.save(MediaJobAttempt.queue(
 					job.getMediaJobId(),
+					1,
 					messageId,
-					sha256(leaseToken),
+					capability.tokenHash(),
 					now));
 			job.queue(now);
 			this.dispatchPort.enqueue(new MediaProbeJobEnvelope(
@@ -93,7 +94,7 @@ class MediaJobService {
 					job.getMediaJobId(),
 					job.getJobType(),
 					1,
-					leaseToken,
+					capability.token(),
 					job.getProjectId(),
 					job.getClipAssetId(),
 					job.getInputDigest(),
@@ -121,22 +122,6 @@ class MediaJobService {
 				return requireSameRequest(concurrentByNatural.get(), fingerprint);
 			}
 			throw exception;
-		}
-	}
-
-	private String leaseToken() {
-		var bytes = new byte[32];
-		this.secureRandom.nextBytes(bytes);
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-	}
-
-	private static String sha256(String value) {
-		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(value.getBytes(StandardCharsets.US_ASCII)));
-		}
-		catch (NoSuchAlgorithmException exception) {
-			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
 		}
 	}
 

@@ -11,6 +11,7 @@ from medication_media_worker.api import (
     CoreApiClient,
     InputDigestMismatchError,
     LeaseGrant,
+    LeaseMonitor,
     ObjectDownloadError,
     PermanentDeliveryError,
     RetryableDeliveryError,
@@ -32,6 +33,8 @@ class ProbeClient(Protocol):
     def acquire_input(self, job: MediaProbeJob) -> LeaseGrant: ...
 
     def download_input(self, grant: LeaseGrant, job: MediaProbeJob, target: Path) -> None: ...
+
+    def maintain_lease(self, job: MediaProbeJob, grant: LeaseGrant) -> LeaseMonitor: ...
 
     def submit_result(self, job: MediaProbeJob, result: dict[str, object]) -> None: ...
 
@@ -74,62 +77,70 @@ class JobProcessor:
             LOGGER.error("Worker identity or lease request was rejected for job_id=%s", job.job_id)
             return DeliveryDisposition.REJECT
 
-        started_at = datetime.now(UTC)
         try:
-            with tempfile.TemporaryDirectory(
-                dir=self._temp_dir, prefix="media-probe-"
-            ) as directory:
-                input_path = Path(directory) / "input.media"
-                self._client.download_input(grant, job, input_path)
-                report = self._prober.probe(input_path)
-            result = self._success_result(job, started_at, report)
-        except InputDigestMismatchError:
-            result = self._failure_result(
-                job,
-                started_at,
-                ProbeFailure(
-                    "NON_RETRYABLE_INPUT",
-                    "MEDIA_INPUT_DIGEST_MISMATCH",
-                    "Downloaded input does not match the frozen SHA-256 and size",
-                    retryable=False,
-                ),
-            )
-        except ObjectDownloadError:
-            result = self._failure_result(
-                job,
-                started_at,
-                ProbeFailure(
-                    "RETRYABLE_TRANSIENT",
-                    "OBJECT_STORAGE_UNAVAILABLE",
-                    "Approved media input could not be read from object storage",
-                    retryable=True,
-                ),
-            )
-        except ProbeFailure as failure:
-            result = self._failure_result(job, started_at, failure)
-        except OSError:
-            result = self._failure_result(
-                job,
-                started_at,
-                ProbeFailure(
-                    "RETRYABLE_RESOURCE",
-                    "MEDIA_PROBE_TIMEOUT",
-                    "Worker temporary storage is unavailable",
-                    retryable=True,
-                ),
-            )
-        except Exception:
-            LOGGER.error("Unexpected media probe failure job_id=%s", job.job_id)
-            result = self._failure_result(
-                job,
-                started_at,
-                ProbeFailure(
-                    "INTERNAL_BUG",
-                    "MEDIA_PROBE_INTERNAL",
-                    "Media probe failed because of an internal error",
-                    retryable=True,
-                ),
-            )
+            with self._client.maintain_lease(job, grant):
+                started_at = datetime.now(UTC)
+                try:
+                    with tempfile.TemporaryDirectory(
+                        dir=self._temp_dir, prefix="media-probe-"
+                    ) as directory:
+                        input_path = Path(directory) / "input.media"
+                        self._client.download_input(grant, job, input_path)
+                        report = self._prober.probe(input_path)
+                    result = self._success_result(job, started_at, report)
+                except InputDigestMismatchError:
+                    result = self._failure_result(
+                        job,
+                        started_at,
+                        ProbeFailure(
+                            "NON_RETRYABLE_INPUT",
+                            "MEDIA_INPUT_DIGEST_MISMATCH",
+                            "Downloaded input does not match the frozen SHA-256 and size",
+                            retryable=False,
+                        ),
+                    )
+                except ObjectDownloadError:
+                    result = self._failure_result(
+                        job,
+                        started_at,
+                        ProbeFailure(
+                            "RETRYABLE_TRANSIENT",
+                            "OBJECT_STORAGE_UNAVAILABLE",
+                            "Approved media input could not be read from object storage",
+                            retryable=True,
+                        ),
+                    )
+                except ProbeFailure as failure:
+                    result = self._failure_result(job, started_at, failure)
+                except OSError:
+                    result = self._failure_result(
+                        job,
+                        started_at,
+                        ProbeFailure(
+                            "RETRYABLE_RESOURCE",
+                            "MEDIA_PROBE_TIMEOUT",
+                            "Worker temporary storage is unavailable",
+                            retryable=True,
+                        ),
+                    )
+                except Exception:
+                    LOGGER.error("Unexpected media probe failure job_id=%s", job.job_id)
+                    result = self._failure_result(
+                        job,
+                        started_at,
+                        ProbeFailure(
+                            "INTERNAL_BUG",
+                            "MEDIA_PROBE_INTERNAL",
+                            "Media probe failed because of an internal error",
+                            retryable=True,
+                        ),
+                    )
+        except StaleDeliveryError:
+            return DeliveryDisposition.ACK
+        except RetryableDeliveryError:
+            return DeliveryDisposition.REQUEUE
+        except PermanentDeliveryError:
+            return DeliveryDisposition.REJECT
 
         try:
             self._client.submit_result(job, result)
