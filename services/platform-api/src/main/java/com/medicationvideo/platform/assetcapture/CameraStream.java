@@ -147,6 +147,17 @@ class CameraStream {
 		return this.qualityStatus;
 	}
 
+	void completeMediaIngest(boolean succeeded, Instant changedAt) {
+		if (this.streamStatus != CameraStreamStatus.BOUND) {
+			throw new ClipAssetMediaIngestException(
+					"CAMERA_STREAM_INGEST_STATE_CONFLICT",
+					"The camera stream is not awaiting media ingest.",
+					false);
+		}
+		this.streamStatus = succeeded ? CameraStreamStatus.INGESTED : CameraStreamStatus.INGEST_FAILED;
+		this.updatedAt = changedAt;
+	}
+
 	private static CameraStreamStatus initialStatus(ClipAssetStatus assetStatus) {
 		return switch (assetStatus) {
 			case UPLOADED, INGESTING -> CameraStreamStatus.BOUND;

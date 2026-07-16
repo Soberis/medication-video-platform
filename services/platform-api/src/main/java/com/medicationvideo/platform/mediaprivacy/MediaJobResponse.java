@@ -14,10 +14,11 @@ record MediaJobResponse(
 		String contentType,
 		String probeProfileKey,
 		String recipeDigest,
+		MediaJobAttemptResponse currentAttempt,
 		Instant createdAt,
 		Instant updatedAt) {
 
-	static MediaJobResponse from(MediaJob job) {
+	static MediaJobResponse from(MediaJob job, MediaJobAttempt attempt) {
 		return new MediaJobResponse(
 				job.getMediaJobId(),
 				job.getProjectId(),
@@ -29,6 +30,7 @@ record MediaJobResponse(
 				job.getContentType(),
 				job.getProbeProfileKey(),
 				job.getRecipeDigest(),
+				MediaJobAttemptResponse.from(attempt),
 				job.getCreatedAt(),
 				job.getUpdatedAt());
 	}

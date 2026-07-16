@@ -9,6 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,7 +20,11 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 
-@RestControllerAdvice(assignableTypes = MediaJobController.class)
+@RestControllerAdvice(assignableTypes = {
+		MediaJobController.class,
+		MediaWorkerController.class,
+		MediaReportController.class
+})
 class MediaJobExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(MediaJobExceptionHandler.class);
@@ -31,6 +36,7 @@ class MediaJobExceptionHandler {
 			MethodArgumentNotValidException.class,
 			HandlerMethodValidationException.class,
 			MissingRequestHeaderException.class,
+			HttpMessageNotReadableException.class,
 			IllegalArgumentException.class
 	})
 	ResponseEntity<ApiErrorResponse> invalidRequest(Exception exception) {
@@ -55,6 +61,35 @@ class MediaJobExceptionHandler {
 	@ExceptionHandler(ClipAssetNotProbeableException.class)
 	ResponseEntity<ApiErrorResponse> notProbeable(ClipAssetNotProbeableException exception) {
 		return error(HttpStatus.CONFLICT, "CLIP_ASSET_NOT_PROBEABLE", exception.getMessage(), false);
+	}
+
+	@ExceptionHandler(MediaJobExecutionException.class)
+	ResponseEntity<ApiErrorResponse> executionConflict(MediaJobExecutionException exception) {
+		var status = switch (exception.getErrorCode()) {
+			case "MEDIA_REPORT_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+			case "MEDIA_WORKER_SOFTWARE_UNAPPROVED" -> HttpStatus.FORBIDDEN;
+			default -> HttpStatus.CONFLICT;
+		};
+		return error(
+				status,
+				exception.getErrorCode(),
+				exception.getMessage(),
+				exception.isRetryable());
+	}
+
+	@ExceptionHandler(com.medicationvideo.platform.assetcapture.ClipAssetMediaIngestException.class)
+	ResponseEntity<ApiErrorResponse> assetIngestError(
+			com.medicationvideo.platform.assetcapture.ClipAssetMediaIngestException exception) {
+		var status = exception.isRetryable()
+				? HttpStatus.SERVICE_UNAVAILABLE
+				: "CLIP_ASSET_NOT_FOUND".equals(exception.getErrorCode())
+						? HttpStatus.NOT_FOUND
+						: HttpStatus.CONFLICT;
+		return error(
+				status,
+				exception.getErrorCode(),
+				exception.getMessage(),
+				exception.isRetryable());
 	}
 
 	@ExceptionHandler(AssetCatalogQueryException.class)

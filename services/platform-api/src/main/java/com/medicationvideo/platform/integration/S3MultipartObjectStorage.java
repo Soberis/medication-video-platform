@@ -29,6 +29,7 @@ import software.amazon.awssdk.services.s3.model.ListPartsRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
 
 @Component
@@ -85,6 +86,25 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not authorize the upload part.", exception);
+		}
+	}
+
+	@Override
+	public URI authorizeRead(ObjectReference object, Duration lifetime) {
+		try {
+			var request = GetObjectRequest.builder()
+					.bucket(object.bucket())
+					.key(object.objectKey())
+					.build();
+			return URI.create(this.presigner.presignGetObject(GetObjectPresignRequest.builder()
+					.signatureDuration(lifetime)
+					.getObjectRequest(request)
+					.build())
+					.url()
+					.toExternalForm());
+		}
+		catch (SdkException exception) {
+			throw failure("Object storage did not authorize the completed object.", exception);
 		}
 	}
 

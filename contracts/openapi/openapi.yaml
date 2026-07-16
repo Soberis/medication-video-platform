@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.12.0
+  version: 0.13.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -12,9 +12,11 @@ info:
     assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
     metadata object, query project-scoped CaptureSession and ClipAsset read models with bounded
     cursor pagination, and create and read project-scoped media probe jobs that freeze the input
-    digest and size of an uploaded clip asset. The API never proxies upload bytes through the
-    Core API, exposes storage locations through catalog reads, controls or probes edge hardware, or
-    performs media processing synchronously inside a request.
+    digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
+    short-lived read grant, accept an idempotent media probe result, and query immutable successful
+    MediaReport facts. The API never proxies upload bytes through the Core API, exposes storage
+    locations through catalog reads, controls or probes edge hardware, or performs media processing
+    synchronously inside a user request.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -38,8 +40,8 @@ tags:
       Project-scoped media probe job lifecycle owned by the mediaprivacy module. Creation freezes
       the input and approved recipe, persists attempt 1 and a versioned dispatch envelope through
       the Transactional Outbox, and returns QUEUED. RabbitMQ is a delivery mechanism rather than
-      the business state store; successful completion still requires a lease-matched Worker result
-      to be validated and committed by the Core API.
+      the business state store; successful completion requires a lease-matched, approved Worker
+      result to be validated and committed by the Core API.
 paths:
   /upload/init:
     post:
@@ -1257,8 +1259,8 @@ paths:
       summary: Read a media probe job by id
       description: >-
         Returns the persisted job for the authenticated project. This read operation does not
-        dispatch, retry or transition the job. Worker-driven RUNNING and terminal transitions
-        are introduced with the worker result slice.
+        dispatch, retry or transition the job. The current attempt exposes safe terminal diagnostics
+        but never exposes lease tokens, Worker identifiers or storage locations.
       parameters:
         - name: media_job_id
           in: path
@@ -1290,6 +1292,171 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /media-jobs/{media_job_id}/report:
+    get:
+      operationId: getMediaReport
+      tags:
+        - Media Jobs
+      summary: Read the immutable successful media probe report
+      description: >-
+        Returns a report only after the current project job succeeded with independently verified
+        input SHA-256 and a full video-stream decode. Failed or unfinished jobs have no MediaReport.
+      parameters:
+        - $ref: "#/components/parameters/MediaJobId"
+      responses:
+        "200":
+          description: Immutable media facts accepted from an approved Worker.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaReportResponse"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project-scoped job or its successful report was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/media-jobs/{media_job_id}/attempts/{attempt}/lease:
+    post:
+      operationId: acquireMediaJobLease
+      tags:
+        - Media Jobs
+      summary: Exchange the current attempt capability for a short-lived input grant
+      description: >-
+        Internal Worker endpoint. Verifies the independent Worker service identity and the
+        SHA-256-backed attempt lease token, moves the job and asset to RUNNING/INGESTING atomically,
+        and returns a short-lived read-only URL. The URL is never persisted or logged by the platform.
+      security:
+        - workerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MediaJobId"
+        - $ref: "#/components/parameters/MediaJobAttempt"
+        - $ref: "#/components/parameters/MediaLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaLeaseRequest"
+      responses:
+        "200":
+          description: The current attempt owns an active lease and received a read grant.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaLeaseResponse"
+        "400":
+          description: The path, header or request body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The media job or clip asset was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt or lease is stale, invalid, active elsewhere or terminal.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Object storage could not issue the read grant.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/media-jobs/{media_job_id}/attempts/{attempt}/result:
+    put:
+      operationId: acceptMediaProbeResult
+      tags:
+        - Media Jobs
+      summary: Idempotently accept the current media probe attempt result
+      description: >-
+        Internal Worker endpoint. Validates the service identity, lease, job/attempt/message IDs,
+        input/recipe/software digests, timestamps and the frozen media-probe-result.v1 contract.
+        A successful result creates one immutable MediaReport and marks the asset INGESTED. A failed
+        result stores stable attempt diagnostics and marks the asset INGEST_FAILED without creating
+        a report. Inbox deduplication absorbs an exact replay.
+      security:
+        - workerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MediaJobId"
+        - $ref: "#/components/parameters/MediaJobAttempt"
+        - $ref: "#/components/parameters/MediaLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../events/media-probe-result-v1.schema.json"
+      responses:
+        "200":
+          description: Result accepted, or the exact previously accepted result replayed.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaResultAcceptedResponse"
+        "400":
+          description: The result violates the frozen request contract.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The Worker software digest is not approved.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The media job or clip asset was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt/result is stale, mismatched, expired or reuses a message ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   parameters:
     IdempotencyKey:
@@ -1302,6 +1469,30 @@ components:
         minLength: 16
         maxLength: 128
         pattern: ^[A-Za-z0-9._:-]+$
+    MediaJobId:
+      name: media_job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MediaJobAttempt:
+      name: attempt
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    MediaLeaseToken:
+      name: X-Media-Lease-Token
+      in: header
+      required: true
+      description: Opaque capability from the current restricted broker envelope; never log it.
+      schema:
+        type: string
+        minLength: 43
+        maxLength: 128
+        pattern: ^[A-Za-z0-9_-]+$
   securitySchemes:
     bearerAuth:
       type: http
@@ -1310,6 +1501,13 @@ components:
       description: >-
         OAuth 2.0/OIDC access token in shared environments. Local development uses a synthetic
         bearer adapter and must never reuse hospital or production credentials.
+    workerBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ServiceToken
+      description: >-
+        Independent Worker service identity. It is not a user/project bearer token and is accepted
+        only by the internal media job endpoints.
   schemas:
     UploadBatchInitRequest:
       type: object
@@ -2717,6 +2915,7 @@ components:
         - content_type
         - probe_profile_key
         - recipe_digest
+        - current_attempt
         - created_at
         - updated_at
       properties:
@@ -2751,9 +2950,348 @@ components:
           type: string
           pattern: "^[a-f0-9]{64}$"
           description: SHA-256 identity of the exact approved probe recipe.
+        current_attempt:
+          $ref: "#/components/schemas/MediaJobAttemptResponse"
         created_at:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+    MediaJobAttemptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - attempt
+        - status
+        - started_at
+        - completed_at
+        - error
+      properties:
+        attempt:
+          type: integer
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/MediaJobStatus"
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        completed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/MediaJobErrorResponse"
+            - type: "null"
+    MediaJobErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error_class
+        - error_code
+        - safe_message
+        - retryable
+      properties:
+        error_class:
+          type: string
+          enum:
+            - RETRYABLE_TRANSIENT
+            - RETRYABLE_RESOURCE
+            - NON_RETRYABLE_INPUT
+            - INTERNAL_BUG
+        error_code:
+          type: string
+          enum:
+            - OBJECT_STORAGE_UNAVAILABLE
+            - MEDIA_PROBE_TIMEOUT
+            - MEDIA_INPUT_DIGEST_MISMATCH
+            - MEDIA_CONTAINER_UNSUPPORTED
+            - MEDIA_VIDEO_STREAM_MISSING
+            - MEDIA_DECODE_FAILED
+            - MEDIA_TIMELINE_INVALID
+            - MEDIA_PROBE_INTERNAL
+        safe_message:
+          type: string
+          minLength: 1
+          maxLength: 512
+        retryable:
+          type: boolean
+    MediaLeaseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - worker_id
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+    MediaLeaseResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - job_id
+        - attempt
+        - input_url
+        - expires_at
+        - input_sha256
+        - input_size_bytes
+        - content_type
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        input_url:
+          type: string
+          format: uri
+          description: Ephemeral job-scoped read grant; must not be logged or persisted.
+        expires_at:
+          type: string
+          format: date-time
+        input_sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        input_size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        content_type:
+          type: string
+    MediaResultAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message_id
+        - job_id
+        - attempt
+        - status
+        - accepted_at
+      properties:
+        message_id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+            - SUCCEEDED
+            - FAILED
+        accepted_at:
+          type: string
+          format: date-time
+    MediaReportResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - media_report_id
+        - media_job_id
+        - project_id
+        - clip_asset_id
+        - report_schema_version
+        - input_digest
+        - recipe_digest
+        - software_digest
+        - container_format
+        - duration_microseconds
+        - container_start_time_microseconds
+        - video_stream_count
+        - primary_video_stream_index
+        - video_codec
+        - video_profile
+        - width
+        - height
+        - pixel_format
+        - color_space
+        - primary_video_bitrate_bps
+        - has_b_frames
+        - stream_start_time_microseconds
+        - time_base_numerator
+        - time_base_denominator
+        - first_pts
+        - last_pts
+        - nominal_frame_rate_numerator
+        - nominal_frame_rate_denominator
+        - average_frame_rate_numerator
+        - average_frame_rate_denominator
+        - frame_count
+        - variable_frame_rate
+        - audio_stream_count
+        - sample_aspect_ratio_numerator
+        - sample_aspect_ratio_denominator
+        - decode_verified
+        - input_digest_verified
+        - warning_codes
+        - created_at
+      properties:
+        media_report_id:
+          type: string
+          format: uuid
+        media_job_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        report_schema_version:
+          type: string
+          const: media-report.v1
+        input_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        recipe_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        software_digest:
+          type: string
+          pattern: "^sha256:[a-f0-9]{64}$"
+        container_format:
+          type: string
+          minLength: 1
+          maxLength: 64
+        duration_microseconds:
+          type: integer
+          format: int64
+          minimum: 0
+        container_start_time_microseconds:
+          type:
+            - integer
+            - "null"
+          format: int64
+        video_stream_count:
+          type: integer
+          minimum: 1
+        primary_video_stream_index:
+          type: integer
+          minimum: 0
+        video_codec:
+          type: string
+          minLength: 1
+          maxLength: 64
+        video_profile:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        pixel_format:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        color_space:
+          type:
+            - string
+            - "null"
+          maxLength: 64
+        primary_video_bitrate_bps:
+          type:
+            - integer
+            - "null"
+          format: int64
+          minimum: 0
+        has_b_frames:
+          type:
+            - boolean
+            - "null"
+        stream_start_time_microseconds:
+          type:
+            - integer
+            - "null"
+          format: int64
+        time_base_numerator:
+          type: integer
+          minimum: 1
+        time_base_denominator:
+          type: integer
+          minimum: 1
+        first_pts:
+          type:
+            - integer
+            - "null"
+          format: int64
+        last_pts:
+          type:
+            - integer
+            - "null"
+          format: int64
+        nominal_frame_rate_numerator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        nominal_frame_rate_denominator:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        average_frame_rate_numerator:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        average_frame_rate_denominator:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        frame_count:
+          type:
+            - integer
+            - "null"
+          format: int64
+          minimum: 0
+        variable_frame_rate:
+          type: boolean
+        audio_stream_count:
+          type: integer
+          minimum: 0
+        sample_aspect_ratio_numerator:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        sample_aspect_ratio_denominator:
+          type:
+            - integer
+            - "null"
+          minimum: 1
+        decode_verified:
+          const: true
+        input_digest_verified:
+          const: true
+        warning_codes:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - PTS_MISSING
+              - PTS_NON_MONOTONIC
+              - FRAME_COUNT_UNAVAILABLE
+              - DURATION_MISMATCH
+              - VFR_DETECTED
+              - AUDIO_PRESENT
+        created_at:
           type: string
           format: date-time

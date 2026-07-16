@@ -104,6 +104,14 @@ class S3MultipartCompatibilityTests {
 							storage.readCompletedObject(
 									new ObjectReference(BUCKET, key),
 									syntheticPart.length));
+					var readRequest = HttpRequest.newBuilder(storage.authorizeRead(
+							new ObjectReference(BUCKET, key), Duration.ofMinutes(5)))
+							.GET()
+							.build();
+					var readResponse = HttpClient.newHttpClient()
+							.send(readRequest, HttpResponse.BodyHandlers.ofByteArray());
+					assertEquals(200, readResponse.statusCode());
+					assertArrayEquals(syntheticPart, readResponse.body());
 				}
 				finally {
 					if (!completed) {

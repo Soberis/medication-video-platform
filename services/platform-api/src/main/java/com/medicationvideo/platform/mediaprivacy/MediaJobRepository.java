@@ -5,9 +5,16 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
 interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT job FROM MediaJob job WHERE job.mediaJobId = :mediaJobId")
+	Optional<MediaJob> findForUpdate(@Param("mediaJobId") UUID mediaJobId);
 
 	@Query("""
 			SELECT job FROM MediaJob job

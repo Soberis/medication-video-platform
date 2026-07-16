@@ -60,10 +60,25 @@ class OutboxEventStore {
 	void markPublished(UUID outboxEventId, UUID claimToken, Instant publishedAt) {
 		var updated = this.jdbcTemplate.update("""
 				UPDATE outbox_event
-				SET published_at = ?, claim_token = NULL, claimed_until = NULL, last_error_code = NULL
+				SET published_at = ?,
+				    payload_json = CASE
+				        WHEN schema_version = 'media-probe-job.v1'
+				        THEN payload_json - 'lease_token'
+				        ELSE payload_json
+				    END,
+				    payload_redacted_at = CASE
+				        WHEN schema_version = 'media-probe-job.v1' THEN ?
+				        ELSE payload_redacted_at
+				    END,
+				    claim_token = NULL,
+				    claimed_until = NULL,
+				    last_error_code = NULL
 				WHERE outbox_event_id = ? AND claim_token = ? AND published_at IS NULL
 				""",
-				Timestamp.from(publishedAt), outboxEventId, claimToken);
+				Timestamp.from(publishedAt),
+				Timestamp.from(publishedAt),
+				outboxEventId,
+				claimToken);
 		if (updated != 1) {
 			throw new IllegalStateException("The Outbox publish claim is no longer current.");
 		}

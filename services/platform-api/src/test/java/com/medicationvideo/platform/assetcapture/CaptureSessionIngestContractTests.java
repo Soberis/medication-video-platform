@@ -517,6 +517,11 @@ class CaptureSessionIngestContractTests {
 		}
 
 		@Override
+		public URI authorizeRead(ObjectReference object, Duration lifetime) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public Optional<StoredPart> findPart(CreatedUpload upload, int partNumber) {
 			throw new UnsupportedOperationException();
 		}

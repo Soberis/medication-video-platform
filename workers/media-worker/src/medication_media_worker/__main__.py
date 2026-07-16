@@ -10,10 +10,7 @@ from medication_media_worker.processor import JobProcessor
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    _configure_logging()
     settings = Settings.from_environment()
     client = CoreApiClient(
         settings.platform_api_base_url,
@@ -30,6 +27,17 @@ def main() -> None:
         MediaJobConsumer(settings.rabbitmq_url, settings.queue_name, processor).run()
     finally:
         client.close()
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    # httpx logs complete request targets at INFO, including job-scoped presigned URLs.
+    # Keep request internals below the operational log level so capabilities never reach logs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 if __name__ == "__main__":

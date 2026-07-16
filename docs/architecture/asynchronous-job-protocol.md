@@ -102,7 +102,9 @@ sequenceDiagram
 规则：
 
 - 消息只传业务标识、摘要、批准版本和租约令牌，不传视频字节、对象位置、预签名 URL、患者或配药人员标识。
-- 原始租约令牌只存在于受访问控制的 broker 消息中；数据库只保存 SHA-256，应用日志必须脱敏。
+- attempt 事实表只保存租约 SHA-256。Transactional Outbox 在发布确认前会短暂保存原始租约能力，
+  因此 Outbox 必须限制数据库角色访问；publisher confirm 成功后同一事务立即从已发布 payload
+  删除 `lease_token` 并记录脱敏时间。应用日志不得记录原始令牌。
 - Worker 同时使用独立服务身份和租约令牌，通过 Core API 换取 job-scoped、短期只读对象权限。
 - `recipe_digest` 来自服务器批准且规范化的 profile，调用方不能提交任意探测参数。
 - 任务类型和 schema version 必须采用 allowlist，未知类型进入不可重试失败。
@@ -254,6 +256,11 @@ platform.media.dead-letter.v1
 只有 Core API/结果接口的短暂不可用才允许 broker 重投。Worker 不持有数据库凭据，输入媒体
 先流式复核大小和 SHA-256，再提取容器/流/时间轴事实并使用 FFmpeg 对主视频流完整解码。
 
+当前首个媒体探测切片已经实现任务 Outbox、publisher confirm、单一业务队列/DLQ、独立
+Worker 身份、attempt 租约、短期输入授权、结果 Inbox 去重、稳定错误、状态提交和不可变
+MediaReport，并用合成 MP4 完成真实端到端验证。尚未实现的是 heartbeat/租约续期、失联
+回收、新 attempt 调度、取消和受控 DLQ 重放，不能把首个闭环等同于完整异步作业平台。
+
 要求：
 
 - 持久 exchange、queue 和 persistent message；
@@ -336,10 +343,10 @@ temporary/{job_id}/{attempt}/...
 - [ ] relay 重复发布被 Worker/Core API 幂等吸收。
 - [ ] Worker 处理完成但 ack 前崩溃，重投不生成重复业务产物。
 - [ ] Worker 写完临时对象但结果提交失败，可以安全重试。
-- [ ] 结果提交成功但响应丢失，重复提交返回原结果。
+- [x] 结果提交成功但响应丢失，重复提交返回原结果。
 - [ ] lease 过期后旧 attempt 迟到结果被拒绝。
 - [ ] 运行中取消能停止并清理临时输出。
-- [ ] non-retryable 输入不会进入重试风暴。
+- [x] non-retryable 输入不会进入重试风暴。
 - [ ] DLQ 重放创建新 attempt 并保留审计。
 - [ ] 对象摘要、输入摘要或参数摘要变化会阻断提交。
 - [ ] Worker 无数据库写权限、无默认公网出站权限。

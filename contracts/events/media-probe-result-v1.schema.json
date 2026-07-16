@@ -25,7 +25,8 @@
     },
     "message_id": {
       "type": "string",
-      "format": "uuid"
+      "format": "uuid",
+      "description": "Must equal the current dispatch envelope message_id for this attempt."
     },
     "job_id": {
       "type": "string",
@@ -37,8 +38,9 @@
     },
     "lease_token": {
       "type": "string",
-      "minLength": 32,
-      "maxLength": 256
+      "minLength": 43,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
     },
     "status": {
       "type": "string",

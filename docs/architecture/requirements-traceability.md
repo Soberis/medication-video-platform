@@ -56,13 +56,13 @@
 当前 `I`/`PI` 证据和边界：
 
 - FR-001：UploadBatch 初始化、不可变 UploadFile 清单、Complete Batch、VIDEO 到最小 RAW ClipAsset 的幂等绑定、严格 METADATA 解析、CaptureSession/CameraSetSnapshot/CameraStream 原子组装、项目隔离的批次/文件只读进度查询和 Vue `/uploads` 只读进度页已有 OpenAPI、Flyway、合同测试与前端测试；EVENT_LOG 索引和媒体探测入库尚未闭合。
-- FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob `QUEUED` 状态、批准配方摘要、任务/结果 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。Worker 已对合成 MP4 完成独立摘要复核、FFprobe 事实提取和 FFmpeg 完整解码测试；Core API 租约交换、真实队列消费、Inbox 去重和 MediaReport 实际入库尚未实现，因此仍为 `PI`。
+- FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；损坏媒体矩阵、租约失联恢复和 UAT 尚未完成，因此仍为 `PI`。
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File 和 Complete Batch 已有实现；标准 S3/SeaweedFS 8 MiB 合成 Part 已完成真实 Multipart Complete 和完整文件 SHA-256 校验。Abort、过期清理和 2GB 中断恢复验收尚未完成。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。场景、科室、隐私、标注、清洗筛选、性能基准、预览 variant、状态历史和审计日志尚未完成，因此整条仍保持 `D1`，不能宣布需求验收通过。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、批准的媒体探测 profile、Flyway V1～V12、资产/上传/MediaJob/Outbox 合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、Vue 页面测试和 Bruno 控制面场景；合成客户端已真实完成 VIDEO/METADATA/EVENT_LOG 的 Multipart 直传、Complete、CaptureSession 组装和 ClipAsset 查询，并验证媒体任务从数据库 Outbox 发布到 RabbitMQ，但这些证据不能替代真实 Worker 执行、结果入库、性能测试或 UAT。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、批准的媒体探测 profile、Flyway V1～V13、资产/上传/MediaJob/Outbox/Inbox 合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成客户端与 Worker 已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，但这些证据不能替代 2GB/弱网/失联恢复性能测试或 UAT。
 
-接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。EVENT_LOG 索引、媒体探测实际入库、Abort 和 2GB 中断恢复验收尚未闭合，因此相关需求仍为 `PI`。
+接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测实际入库已经闭合；EVENT_LOG 索引、Abort、过期清理和 2GB 中断恢复验收仍未闭合，因此相关需求仍为 `PI`。
 
 测试入口说明：正式生产入口仍是 RK3588 等边端自动上传。P0 已建立一个复用相同协议、仅处理合成数据的自动化上传客户端，作为开发、回归、CI 和批量造数证据；客户端稳定后可以增加仅在 local/dev/test 启用的 Web 受控手动导入，用于人工演示和交互检查。Web 测试入口不属于 2GB 生产上传验收证据，不能替代 FR-003 的边端中断恢复、容量和 UAT 验证；三种入口不得通过私有接口、直接插库或绕过后端权限和状态守卫。
 

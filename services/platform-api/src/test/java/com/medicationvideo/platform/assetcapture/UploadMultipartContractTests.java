@@ -641,6 +641,11 @@ class UploadMultipartContractTests {
 		}
 
 		@Override
+		public URI authorizeRead(ObjectReference object, Duration lifetime) {
+			return URI.create("https://storage.invalid/read?signature=synthetic");
+		}
+
+		@Override
 		public Optional<StoredPart> findPart(CreatedUpload upload, int partNumber) {
 			if (this.failInspect) {
 				throw new MultipartObjectStorageException("Synthetic inspect failure.", null);

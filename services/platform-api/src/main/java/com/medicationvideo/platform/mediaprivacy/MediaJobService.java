@@ -151,6 +151,13 @@ class MediaJobService {
 		return job;
 	}
 
+	@Transactional(readOnly = true)
+	MediaJobAttempt currentAttempt(MediaJob job) {
+		return this.attemptRepository.findTopByMediaJobIdOrderByAttemptDesc(job.getMediaJobId())
+				.orElseThrow(() -> new IllegalStateException(
+						"The media job has no current attempt."));
+	}
+
 	private static void ensureProbeable(ClipAssetInputSummary summary) {
 		if (!summary.contentType().toLowerCase(Locale.ROOT).startsWith("video/")) {
 			throw new ClipAssetNotProbeableException(

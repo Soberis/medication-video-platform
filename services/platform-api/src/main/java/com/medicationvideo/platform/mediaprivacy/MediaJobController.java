@@ -41,7 +41,7 @@ class MediaJobController {
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var job = this.service.create(actor.projectId(), idempotencyKey, request);
-		var body = MediaJobResponse.from(job);
+		var body = MediaJobResponse.from(job, this.service.currentAttempt(job));
 		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
 				.cacheControl(CacheControl.noStore())
@@ -55,7 +55,9 @@ class MediaJobController {
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var job = this.service.get(actor.projectId(), mediaJobId);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(MediaJobResponse.from(job));
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(MediaJobResponse.from(job, this.service.currentAttempt(job)));
 	}
 
 	private static UploadActor requireActor(Authentication authentication) {

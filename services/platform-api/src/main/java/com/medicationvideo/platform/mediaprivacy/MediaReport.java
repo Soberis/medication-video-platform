@@ -145,4 +145,214 @@ class MediaReport {
 
 	protected MediaReport() {
 	}
+
+	private MediaReport(MediaJob job, MediaReportPayload payload, String softwareDigest, Instant createdAt) {
+		this.mediaReportId = UUID.randomUUID();
+		this.mediaJobId = job.getMediaJobId();
+		this.projectId = job.getProjectId();
+		this.clipAssetId = job.getClipAssetId();
+		this.reportSchemaVersion = "media-report.v1";
+		this.inputDigest = job.getInputDigest();
+		this.recipeDigest = job.getRecipeDigest();
+		this.softwareDigest = softwareDigest;
+		this.containerFormat = payload.containerFormat();
+		this.durationMicroseconds = payload.durationMicroseconds();
+		this.containerStartTimeMicroseconds = payload.containerStartTimeMicroseconds();
+		this.videoStreamCount = payload.videoStreamCount();
+		this.primaryVideoStreamIndex = payload.primaryVideoStreamIndex();
+		this.videoCodec = payload.videoCodec();
+		this.videoProfile = payload.videoProfile();
+		this.width = payload.width();
+		this.height = payload.height();
+		this.pixelFormat = payload.pixelFormat();
+		this.colorSpace = payload.colorSpace();
+		this.primaryVideoBitrateBps = payload.primaryVideoBitrateBps();
+		this.hasBFrames = payload.hasBFrames();
+		this.streamStartTimeMicroseconds = payload.streamStartTimeMicroseconds();
+		this.timeBaseNumerator = payload.timeBaseNumerator();
+		this.timeBaseDenominator = payload.timeBaseDenominator();
+		this.firstPts = payload.firstPts();
+		this.lastPts = payload.lastPts();
+		this.nominalFrameRateNumerator = payload.nominalFrameRateNumerator();
+		this.nominalFrameRateDenominator = payload.nominalFrameRateDenominator();
+		this.averageFrameRateNumerator = payload.averageFrameRateNumerator();
+		this.averageFrameRateDenominator = payload.averageFrameRateDenominator();
+		this.frameCount = payload.frameCount();
+		this.variableFrameRate = payload.variableFrameRate();
+		this.audioStreamCount = payload.audioStreamCount();
+		this.sampleAspectRatioNumerator = payload.sampleAspectRatioNumerator();
+		this.sampleAspectRatioDenominator = payload.sampleAspectRatioDenominator();
+		this.decodeVerified = payload.decodeVerified();
+		this.inputDigestVerified = payload.inputDigestVerified();
+		this.warningCodes = payload.warningCodes().stream().map(Enum::name).toList();
+		this.createdAt = createdAt;
+	}
+
+	static MediaReport accept(
+			MediaJob job, MediaReportPayload payload, String softwareDigest, Instant createdAt) {
+		if (!Boolean.TRUE.equals(payload.decodeVerified())
+				|| !Boolean.TRUE.equals(payload.inputDigestVerified())) {
+			throw new MediaJobExecutionException(
+					"MEDIA_REPORT_VERIFICATION_REQUIRED",
+					"A successful media report must prove digest and full decode verification.",
+					false);
+		}
+		return new MediaReport(job, payload, softwareDigest, createdAt);
+	}
+
+	UUID getMediaReportId() {
+		return this.mediaReportId;
+	}
+
+	UUID getMediaJobId() {
+		return this.mediaJobId;
+	}
+
+	UUID getProjectId() {
+		return this.projectId;
+	}
+
+	UUID getClipAssetId() {
+		return this.clipAssetId;
+	}
+
+	String getReportSchemaVersion() {
+		return this.reportSchemaVersion;
+	}
+
+	String getInputDigest() {
+		return this.inputDigest;
+	}
+
+	String getRecipeDigest() {
+		return this.recipeDigest;
+	}
+
+	String getSoftwareDigest() {
+		return this.softwareDigest;
+	}
+
+	String getContainerFormat() {
+		return this.containerFormat;
+	}
+
+	long getDurationMicroseconds() {
+		return this.durationMicroseconds;
+	}
+
+	Long getContainerStartTimeMicroseconds() {
+		return this.containerStartTimeMicroseconds;
+	}
+
+	int getVideoStreamCount() {
+		return this.videoStreamCount;
+	}
+
+	int getPrimaryVideoStreamIndex() {
+		return this.primaryVideoStreamIndex;
+	}
+
+	String getVideoCodec() {
+		return this.videoCodec;
+	}
+
+	String getVideoProfile() {
+		return this.videoProfile;
+	}
+
+	int getWidth() {
+		return this.width;
+	}
+
+	int getHeight() {
+		return this.height;
+	}
+
+	String getPixelFormat() {
+		return this.pixelFormat;
+	}
+
+	String getColorSpace() {
+		return this.colorSpace;
+	}
+
+	Long getPrimaryVideoBitrateBps() {
+		return this.primaryVideoBitrateBps;
+	}
+
+	Boolean getHasBFrames() {
+		return this.hasBFrames;
+	}
+
+	Long getStreamStartTimeMicroseconds() {
+		return this.streamStartTimeMicroseconds;
+	}
+
+	int getTimeBaseNumerator() {
+		return this.timeBaseNumerator;
+	}
+
+	int getTimeBaseDenominator() {
+		return this.timeBaseDenominator;
+	}
+
+	Long getFirstPts() {
+		return this.firstPts;
+	}
+
+	Long getLastPts() {
+		return this.lastPts;
+	}
+
+	Integer getNominalFrameRateNumerator() {
+		return this.nominalFrameRateNumerator;
+	}
+
+	Integer getNominalFrameRateDenominator() {
+		return this.nominalFrameRateDenominator;
+	}
+
+	Integer getAverageFrameRateNumerator() {
+		return this.averageFrameRateNumerator;
+	}
+
+	Integer getAverageFrameRateDenominator() {
+		return this.averageFrameRateDenominator;
+	}
+
+	Long getFrameCount() {
+		return this.frameCount;
+	}
+
+	boolean isVariableFrameRate() {
+		return this.variableFrameRate;
+	}
+
+	int getAudioStreamCount() {
+		return this.audioStreamCount;
+	}
+
+	Integer getSampleAspectRatioNumerator() {
+		return this.sampleAspectRatioNumerator;
+	}
+
+	Integer getSampleAspectRatioDenominator() {
+		return this.sampleAspectRatioDenominator;
+	}
+
+	boolean isDecodeVerified() {
+		return this.decodeVerified;
+	}
+
+	boolean isInputDigestVerified() {
+		return this.inputDigestVerified;
+	}
+
+	List<String> getWarningCodes() {
+		return List.copyOf(this.warningCodes);
+	}
+
+	Instant getCreatedAt() {
+		return this.createdAt;
+	}
 }

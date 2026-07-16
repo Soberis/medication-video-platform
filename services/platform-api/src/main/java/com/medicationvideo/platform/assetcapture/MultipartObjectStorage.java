@@ -12,6 +12,8 @@ public interface MultipartObjectStorage {
 
 	URI authorizePart(CreatedUpload upload, int partNumber, Duration lifetime);
 
+	URI authorizeRead(ObjectReference object, Duration lifetime);
+
 	Optional<StoredPart> findPart(CreatedUpload upload, int partNumber);
 
 	List<StoredPart> listParts(CreatedUpload upload);

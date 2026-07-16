@@ -133,4 +133,33 @@ class ClipAsset {
 	Instant getUpdatedAt() {
 		return this.updatedAt;
 	}
+
+	MultipartObjectStorage.ObjectReference getObjectReference() {
+		return new MultipartObjectStorage.ObjectReference(this.storageBucket, this.objectKey);
+	}
+
+	void beginMediaIngest(Instant changedAt) {
+		if (this.status == ClipAssetStatus.INGESTING) {
+			return;
+		}
+		if (this.status != ClipAssetStatus.UPLOADED) {
+			throw new ClipAssetMediaIngestException(
+					"CLIP_ASSET_NOT_PROBEABLE",
+					"The clip asset is not available for media ingest.",
+					false);
+		}
+		this.status = ClipAssetStatus.INGESTING;
+		this.updatedAt = changedAt;
+	}
+
+	void completeMediaIngest(boolean succeeded, Instant changedAt) {
+		if (this.status != ClipAssetStatus.INGESTING) {
+			throw new ClipAssetMediaIngestException(
+					"CLIP_ASSET_INGEST_STATE_CONFLICT",
+					"The clip asset is not currently ingesting.",
+					false);
+		}
+		this.status = succeeded ? ClipAssetStatus.INGESTED : ClipAssetStatus.INGEST_FAILED;
+		this.updatedAt = changedAt;
+	}
 }

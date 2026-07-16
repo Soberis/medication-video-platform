@@ -34,5 +34,7 @@ uv run media-worker
 - `MEDIA_WORKER_TEMP_DIR`：可选受控临时目录；
 - `MEDIA_WORKER_SOFTWARE_DIGEST`：可选，格式为 `sha256:<64 hex>`。
 
-当前本地 Core API 的租约与结果接口在下一切片实现；在此之前只运行质量门禁和单元测试，
-不要启动常驻消费者。
+本地 Core API 已提供受独立 Worker 身份和 attempt 租约保护的输入授权与结果接口。启动常驻
+消费者前，平台必须把 Worker 当前软件摘要加入准确 allowlist；只允许在 local/dev/test 使用
+合成视频联调。租约续期、自动新 attempt 和 DLQ 人工重放尚未实现，因此单个探测必须能在
+当前租约期限内完成。
