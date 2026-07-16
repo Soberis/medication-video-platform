@@ -250,6 +250,10 @@ platform.media.dead-letter.v1
 只有在形成第二类真实负载、优先级或资源隔离证据后才增加队列；不提前预建
 `privacy`、`export`、`ai_cpu` 或 `ai_gpu` 队列。
 
+首个 Python Worker 固定 `prefetch=1` 和 manual ack。无效或未知契约消息拒绝并进入 DLQ；
+只有 Core API/结果接口的短暂不可用才允许 broker 重投。Worker 不持有数据库凭据，输入媒体
+先流式复核大小和 SHA-256，再提取容器/流/时间轴事实并使用 FFmpeg 对主视频流完整解码。
+
 要求：
 
 - 持久 exchange、queue 和 persistent message；
