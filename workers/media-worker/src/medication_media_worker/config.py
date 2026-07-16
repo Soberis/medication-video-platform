@@ -18,6 +18,8 @@ class Settings:
     rabbitmq_url: str
     worker_id: str
     queue_name: str
+    dead_letter_exchange: str
+    dead_letter_routing_key: str
     ffmpeg_path: str
     ffprobe_path: str
     probe_timeout_seconds: int
@@ -68,6 +70,8 @@ class Settings:
             rabbitmq_url=rabbitmq_url,
             worker_id=worker_id,
             queue_name="platform.media.probe.v1",
+            dead_letter_exchange="platform.dead-letter.v1",
+            dead_letter_routing_key="media.dead-letter.v1",
             ffmpeg_path=values.get("FFMPEG_PATH", "ffmpeg"),
             ffprobe_path=values.get("FFPROBE_PATH", "ffprobe"),
             probe_timeout_seconds=timeout,

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/media-dead-letter-v1.schema.json",
+  "title": "MediaDeadLetterV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dead_letter_id",
+    "observed_at",
+    "reason_code",
+    "safe_summary",
+    "body_sha256",
+    "body_size_bytes"
+  ],
+  "properties": {
+    "schema_version": { "const": "media-dead-letter.v1" },
+    "dead_letter_id": { "type": "string", "format": "uuid" },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "reason_code": {
+      "enum": [
+        "MEDIA_JOB_CONTRACT_INVALID",
+        "MEDIA_JOB_ACQUIRE_REJECTED",
+        "MEDIA_JOB_LEASE_REJECTED",
+        "MEDIA_JOB_RESULT_REJECTED"
+      ]
+    },
+    "safe_summary": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "body_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "body_size_bytes": { "type": "integer", "minimum": 0 },
+    "message_id": { "type": "string", "format": "uuid" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "attempt": { "type": "integer", "minimum": 1 }
+  },
+  "oneOf": [
+    { "required": ["message_id", "job_id", "attempt"] },
+    {
+      "not": {
+        "anyOf": [
+          { "required": ["message_id"] },
+          { "required": ["job_id"] },
+          { "required": ["attempt"] }
+        ]
+      }
+    }
+  ]
+}

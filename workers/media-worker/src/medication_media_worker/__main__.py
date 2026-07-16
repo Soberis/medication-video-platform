@@ -24,7 +24,13 @@ def main() -> None:
             settings.probe_timeout_seconds,
         )
         processor = JobProcessor(client, prober, settings.software_digest, settings.temp_dir)
-        MediaJobConsumer(settings.rabbitmq_url, settings.queue_name, processor).run()
+        MediaJobConsumer(
+            settings.rabbitmq_url,
+            settings.queue_name,
+            settings.dead_letter_exchange,
+            settings.dead_letter_routing_key,
+            processor,
+        ).run()
     finally:
         client.close()
 

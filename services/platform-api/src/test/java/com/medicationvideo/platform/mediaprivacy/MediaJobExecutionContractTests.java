@@ -36,7 +36,7 @@ class MediaJobExecutionContractTests {
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	private static final String SHA256 = "a".repeat(64);
 	private static final String SOFTWARE_DIGEST =
-			"sha256:16eb4967618323b560c64cdfeaa1d9369fc332951904dd7f415c7077aeedf2ce";
+			"sha256:207391c770bee4a8dfe3530ef5f31af07904950f9bc2dcb822fedb086222164a";
 
 	@Autowired
 	private MockMvc mockMvc;

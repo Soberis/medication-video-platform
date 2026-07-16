@@ -90,12 +90,7 @@ class RabbitOutboxRelayTests {
 
 		assertTrue(probeQueue.isDurable());
 		assertTrue(deadLetterQueue.isDurable());
-		assertEquals(
-				MediaMessagingTopology.DEAD_LETTER_EXCHANGE,
-				probeQueue.getArguments().get("x-dead-letter-exchange"));
-		assertEquals(
-				MediaMessagingTopology.DEAD_LETTER_ROUTING_KEY,
-				probeQueue.getArguments().get("x-dead-letter-routing-key"));
+		assertTrue(probeQueue.getArguments().isEmpty());
 	}
 
 	private static OutboxEventStore.ClaimedOutboxEvent event() {

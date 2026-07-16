@@ -268,13 +268,16 @@ platform.media.dead-letter.v1
 只有在形成第二类真实负载、优先级或资源隔离证据后才增加队列；不提前预建
 `privacy`、`export`、`ai_cpu` 或 `ai_gpu` 队列。
 
-首个 Python Worker 固定 `prefetch=1` 和 manual ack。无效或未知契约消息拒绝并进入 DLQ；
-只有 Core API/结果接口的短暂不可用才允许 broker 重投。Worker 不持有数据库凭据，输入媒体
+首个 Python Worker 固定 `prefetch=1` 和 manual ack。无效或未知契约消息不会由 broker 原样
+dead-letter；Worker 使用 publisher confirm 向死信 exchange 显式发布
+`media-dead-letter.v1` 脱敏诊断，确认成功后才 ACK 原消息。只有 Core API/结果接口的短暂不可用
+才允许 broker 重投。Worker 不持有数据库凭据，输入媒体
 先流式复核大小和 SHA-256，再提取容器/流/时间轴事实并使用 FFmpeg 对主视频流完整解码。
 
 当前首个媒体探测切片已经实现任务 Outbox、publisher confirm、单一业务队列/DLQ、独立
 Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、可重试结果的有限退避与
-新 attempt、结果 Inbox 去重、稳定错误、状态提交和不可变 MediaReport，并用合成 MP4 完成真实队列闭环。尚未完成
+新 attempt、结果 Inbox 去重、稳定错误、状态提交、不可变 MediaReport 和脱敏死信诊断，并用
+合成 MP4 完成真实队列闭环。尚未完成
 的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消与受控 DLQ 重放也尚未
 实现，不能把首个闭环等同于完整异步作业平台。
 
@@ -287,6 +290,13 @@ Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联�
 - 按 job type 设置最大消息大小和 allowlist；
 - 重试使用延迟/重试队列或调度器，不在消费者进程中长时间 sleep；
 - DLQ 消息包含 job/message ID 和安全错误摘要，不复制敏感 payload。
+
+业务队列不得配置会复制原消息的 `x-dead-letter-exchange`。媒体任务包含短期 lease capability，
+所以 DLQ 只能保存稳定原因码、安全摘要、原消息 SHA-256/大小，以及契约有效时解析出的
+job/message ID 和 attempt；不得保存原始 body、lease token、签名 URL、对象 key、输入摘要、
+异常文本或堆栈。脱敏诊断发布未获确认时，Worker 重新入队原消息并以失败退出，由进程监督器
+退避重启，避免 ACK 后丢失证据或在消费者内形成无等待热循环。相同原消息和原因使用确定性
+`dead_letter_id`，下游仍必须按该 ID 幂等处理，因为发布成功但 ACK 丢失时可能重复投递。
 
 RabbitMQ 只保存传递状态，不是最终业务事实数据库。
 
@@ -302,6 +312,10 @@ DLQ 不自动无限重放。重放流程：
 6. 观察重复失败阈值并触发熔断。
 
 原 DLQ 消息作为诊断证据保留到策略期限，不直接修改后重新入队。
+
+这里的“原 DLQ 消息”指不可变的 `media-dead-letter.v1` 脱敏诊断，不是原始媒体任务 envelope。
+受控重放必须回到 Core API 校验当前 job/项目/策略状态，生成新的 attempt、capability 和
+message ID；禁止把 DLQ body 直接投回业务队列。
 
 ## 12. 对象输出与原子发布
 

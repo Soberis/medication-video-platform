@@ -1,7 +1,5 @@
 package com.medicationvideo.platform.integration;
 
-import java.util.Map;
-
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
@@ -28,14 +26,7 @@ class RabbitMediaTopologyConfiguration {
 
 	@Bean
 	Queue mediaProbeQueue() {
-		return new Queue(
-				MediaMessagingTopology.PROBE_QUEUE,
-				true,
-				false,
-				false,
-				Map.of(
-						"x-dead-letter-exchange", MediaMessagingTopology.DEAD_LETTER_EXCHANGE,
-						"x-dead-letter-routing-key", MediaMessagingTopology.DEAD_LETTER_ROUTING_KEY));
+		return new Queue(MediaMessagingTopology.PROBE_QUEUE, true, false, false);
 	}
 
 	@Bean

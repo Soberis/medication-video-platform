@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Protocol
+from uuid import UUID
 
 from medication_media_worker.api import (
     CoreApiClient,
@@ -27,6 +29,37 @@ class DeliveryDisposition(Enum):
     ACK = "ACK"
     REJECT = "REJECT"
     REQUEUE = "REQUEUE"
+
+
+class DeadLetterReason(Enum):
+    CONTRACT_INVALID = "MEDIA_JOB_CONTRACT_INVALID"
+    ACQUIRE_REJECTED = "MEDIA_JOB_ACQUIRE_REJECTED"
+    LEASE_REJECTED = "MEDIA_JOB_LEASE_REJECTED"
+    RESULT_REJECTED = "MEDIA_JOB_RESULT_REJECTED"
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessingOutcome:
+    disposition: DeliveryDisposition
+    dead_letter_reason: DeadLetterReason | None = None
+    message_id: UUID | None = None
+    job_id: UUID | None = None
+    attempt: int | None = None
+
+    @classmethod
+    def for_job(
+        cls,
+        disposition: DeliveryDisposition,
+        job: MediaProbeJob,
+        dead_letter_reason: DeadLetterReason | None = None,
+    ) -> ProcessingOutcome:
+        return cls(
+            disposition,
+            dead_letter_reason,
+            job.message_id,
+            job.job_id,
+            job.attempt,
+        )
 
 
 class ProbeClient(Protocol):
@@ -56,12 +89,15 @@ class JobProcessor:
         self._software_digest = software_digest
         self._temp_dir = temp_dir
 
-    def process(self, body: bytes) -> DeliveryDisposition:
+    def process(self, body: bytes) -> ProcessingOutcome:
         try:
             job = MediaProbeJob.from_bytes(body)
         except ContractError:
             LOGGER.warning("Rejected a media message that failed contract validation")
-            return DeliveryDisposition.REJECT
+            return ProcessingOutcome(
+                DeliveryDisposition.REJECT,
+                DeadLetterReason.CONTRACT_INVALID,
+            )
 
         try:
             grant = self._client.acquire_input(job)
@@ -69,13 +105,17 @@ class JobProcessor:
             LOGGER.info(
                 "Acknowledged stale media attempt job_id=%s attempt=%d", job.job_id, job.attempt
             )
-            return DeliveryDisposition.ACK
+            return ProcessingOutcome.for_job(DeliveryDisposition.ACK, job)
         except RetryableDeliveryError:
             LOGGER.warning("Core API unavailable while acquiring media job_id=%s", job.job_id)
-            return DeliveryDisposition.REQUEUE
+            return ProcessingOutcome.for_job(DeliveryDisposition.REQUEUE, job)
         except PermanentDeliveryError:
             LOGGER.error("Worker identity or lease request was rejected for job_id=%s", job.job_id)
-            return DeliveryDisposition.REJECT
+            return ProcessingOutcome.for_job(
+                DeliveryDisposition.REJECT,
+                job,
+                DeadLetterReason.ACQUIRE_REJECTED,
+            )
 
         try:
             with self._client.maintain_lease(job, grant):
@@ -136,21 +176,29 @@ class JobProcessor:
                         ),
                     )
         except StaleDeliveryError:
-            return DeliveryDisposition.ACK
+            return ProcessingOutcome.for_job(DeliveryDisposition.ACK, job)
         except RetryableDeliveryError:
-            return DeliveryDisposition.REQUEUE
+            return ProcessingOutcome.for_job(DeliveryDisposition.REQUEUE, job)
         except PermanentDeliveryError:
-            return DeliveryDisposition.REJECT
+            return ProcessingOutcome.for_job(
+                DeliveryDisposition.REJECT,
+                job,
+                DeadLetterReason.LEASE_REJECTED,
+            )
 
         try:
             self._client.submit_result(job, result)
         except StaleDeliveryError:
-            return DeliveryDisposition.ACK
+            return ProcessingOutcome.for_job(DeliveryDisposition.ACK, job)
         except RetryableDeliveryError:
-            return DeliveryDisposition.REQUEUE
+            return ProcessingOutcome.for_job(DeliveryDisposition.REQUEUE, job)
         except PermanentDeliveryError:
-            return DeliveryDisposition.REJECT
-        return DeliveryDisposition.ACK
+            return ProcessingOutcome.for_job(
+                DeliveryDisposition.REJECT,
+                job,
+                DeadLetterReason.RESULT_REJECTED,
+            )
+        return ProcessingOutcome.for_job(DeliveryDisposition.ACK, job)
 
     def _success_result(
         self, job: MediaProbeJob, started_at: datetime, report: dict[str, object]

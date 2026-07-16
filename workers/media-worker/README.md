@@ -7,8 +7,10 @@
 安全与运行边界：
 
 - 只允许合成测试视频；不得处理真实医院视频或生产凭据；
-- RabbitMQ 使用 manual ack 和 `prefetch=1`；无效消息拒绝并进入 DLQ；
-- 不记录 broker URL、服务令牌、租约令牌、签名 URL、对象 key 或 FFmpeg 原始错误；
+- RabbitMQ 使用 manual ack、`prefetch=1` 和 publisher confirm；永久拒绝只向 DLQ 发布
+  `media-dead-letter.v1` 脱敏诊断，确认后才 ACK 原消息；
+- 不记录或复制 broker URL、服务令牌、租约令牌、签名 URL、对象 key、原任务 body 或
+  FFmpeg 原始错误到 DLQ；
 - 临时文件使用随机名称，完成或失败后删除；
 - Worker 不写 PostgreSQL，所有状态和 MediaReport 只能由 Core API 落库；
 - 软件摘要默认由 Worker Python 源码、`uv.lock` 和批准 profile 的原始字节计算；部署时可用
@@ -40,4 +42,6 @@ Worker 在处理期间按服务端返回的 heartbeat interval 后台续租；�
 创建带新 capability 的 attempt，达到 attempt 上限才终止业务 job。启动常驻消费者前，平台
 必须把 Worker 当前软件摘要加入准确 allowlist；只允许在 local/dev/test 使用合成视频联调。
 Worker 提交的 retryable 失败由 Core API 使用 Outbox 延迟创建新 attempt；当前消息在结果被
-接受后 ACK，Worker 不在消费者进程内 sleep 或重复旧 attempt。受控 DLQ 人工重放仍未实现。
+接受后 ACK，Worker 不在消费者进程内 sleep 或重复旧 attempt。永久拒绝消息只生成稳定原因码、
+安全摘要、原 body 摘要/大小和安全 job 标识；若该诊断未获 broker 确认，原消息重新入队且
+Worker 失败退出，交由监督器退避重启。受控 DLQ 人工重放仍未实现，禁止直接重投 DLQ body。

@@ -40,6 +40,7 @@ $requiredFiles = @(
     'contracts/schemas/capture-session-metadata-v1.schema.json',
     'contracts/events/media-probe-job-v1.schema.json',
     'contracts/events/media-probe-result-v1.schema.json',
+    'contracts/events/media-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
@@ -108,6 +109,15 @@ try {
 }
 catch {
     Add-Failure "Media probe result JSON Schema is invalid: $($_.Exception.Message)"
+}
+
+try {
+    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-dead-letter-v1.schema.json') -Raw |
+        ConvertFrom-Json | Out-Null
+    Add-Pass 'Media dead-letter JSON Schema is valid JSON'
+}
+catch {
+    Add-Failure "Media dead-letter JSON Schema is invalid: $($_.Exception.Message)"
 }
 
 try {
