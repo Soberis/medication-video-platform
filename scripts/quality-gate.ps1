@@ -38,6 +38,12 @@ $requiredFiles = @(
     'package.json',
     'pnpm-workspace.yaml',
     'contracts/schemas/capture-session-metadata-v1.schema.json',
+    'contracts/events/media-probe-result-v1.schema.json',
+    'contracts/profiles/media-probe-baseline-v1.json',
+    'tools/synthetic-upload-client/index.mjs',
+    'tools/synthetic-upload-client/upload-client.mjs',
+    'tools/synthetic-upload-client/upload-client.test.mjs',
+    'tools/synthetic-upload-client/README.md',
     'docs/requirements/README.md',
     'docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx',
     'docs/architecture/README.md',
@@ -77,6 +83,33 @@ try {
 }
 catch {
     Add-Failure "Capture session metadata JSON Schema is invalid: $($_.Exception.Message)"
+}
+
+try {
+    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-probe-result-v1.schema.json') -Raw |
+        ConvertFrom-Json | Out-Null
+    Add-Pass 'Media probe result JSON Schema is valid JSON'
+}
+catch {
+    Add-Failure "Media probe result JSON Schema is invalid: $($_.Exception.Message)"
+}
+
+try {
+    $mediaProbeProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/media-probe-baseline-v1.json') -Raw).TrimEnd("`r", "`n")
+    $mediaProbeProfileContent | ConvertFrom-Json | Out-Null
+    Add-Pass 'Media probe baseline profile is valid JSON'
+
+    $profileBytes = [System.Text.Encoding]::UTF8.GetBytes($mediaProbeProfileContent)
+    $profileDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($profileBytes)).ToLowerInvariant()
+    if ($profileDigest -eq '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765') {
+        Add-Pass 'Media probe baseline profile digest matches the server contract'
+    }
+    else {
+        Add-Failure "Media probe baseline profile digest changed unexpectedly: $profileDigest"
+    }
+}
+catch {
+    Add-Failure "Media probe baseline profile is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {
@@ -159,7 +192,10 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru',
         'api-tests/bruno/medication-platform/Asset Catalog/01 List Capture Sessions.bru',
-        'api-tests/bruno/medication-platform/Asset Catalog/02 List Clip Assets.bru'
+        'api-tests/bruno/medication-platform/Asset Catalog/02 List Clip Assets.bru',
+        'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru',
+        'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',
+        'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru'
     )
     foreach ($relativePath in $requiredBrunoRequests) {
         if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {
@@ -266,6 +302,20 @@ if (Test-Path -LiteralPath $webPackage) {
 }
 else {
     Add-Skip 'Web gates: Vue skeleton has not been generated yet'
+}
+
+$syntheticUploadClient = Join-Path $root 'tools/synthetic-upload-client/index.mjs'
+if (Test-Path -LiteralPath $syntheticUploadClient -PathType Leaf) {
+    & pnpm --dir $root run synthetic-upload:test
+    if ($LASTEXITCODE -eq 0) {
+        Add-Pass 'Synthetic upload client unit tests'
+    }
+    else {
+        Add-Failure "Synthetic upload client unit tests exited with code $LASTEXITCODE"
+    }
+}
+else {
+    Add-Skip 'Synthetic upload client has not been generated yet'
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
