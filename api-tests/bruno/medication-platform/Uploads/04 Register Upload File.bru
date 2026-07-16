@@ -1,0 +1,44 @@
+meta {
+  name: Register Upload File
+  type: http
+  seq: 4
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: {{fileIdempotencyKey}}
+}
+
+body:json {
+  {
+    "file_kind": "VIDEO",
+    "content_type": "video/mp4",
+    "size_bytes": 2147483649,
+    "sha256": "{{manifestSha256}}",
+    "part_size_bytes": 67108864
+  }
+}
+
+script:pre-request {
+  bru.setVar("fileIdempotencyKey", `bruno-file-${Date.now()}`);
+}
+
+tests {
+  test("registers a large immutable file manifest entry", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(201);
+    expect(body.batch_id).to.equal(bru.getVar("initialBatchId"));
+    expect(body.client_file_id).to.equal(bru.getEnvVar("clientFileId"));
+    expect(body.size_bytes).to.equal(2147483649);
+    expect(body.total_parts).to.equal(33);
+    expect(body.status).to.equal("REGISTERED");
+  });
+}

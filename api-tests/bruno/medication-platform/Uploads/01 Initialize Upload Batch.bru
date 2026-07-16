@@ -1,0 +1,51 @@
+meta {
+  name: Initialize Upload Batch
+  type: http
+  seq: 1
+  tags: [
+    Uploads
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/upload/init
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: {{idempotencyKey}}
+}
+
+body:json {
+  {
+    "project_id": "{{projectId}}",
+    "device_id": "{{deviceId}}",
+    "file_count": 1,
+    "total_size_bytes": 2147483649,
+    "manifest_sha256": "{{manifestSha256}}"
+  }
+}
+
+script:pre-request {
+  bru.setVar("idempotencyKey", `bruno-upload-${Date.now()}`);
+  bru.deleteVar("initialBatchId");
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("initialBatchId", res.getBody().batch_id);
+  }
+}
+
+tests {
+  test("creates an initialized batch", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(201);
+    expect(body.batch_id).to.be.a("string").and.not.empty;
+    expect(body.project_id).to.equal(bru.getEnvVar("projectId"));
+    expect(body.device_id).to.equal(bru.getEnvVar("deviceId"));
+    expect(body.status).to.equal("INITIATED");
+    expect(body.manifest_sha256).to.equal(bru.getEnvVar("manifestSha256"));
+  });
+}

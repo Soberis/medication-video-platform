@@ -1,0 +1,348 @@
+# 领域模型与数据所有权
+
+> 文档状态：P0 详细设计（评审稿）  
+> Java 根包：`com.medicationvideo.platform`  
+> 最后更新：2026-07-14
+
+## 1. 目标与边界
+
+本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
+
+P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
+
+```text
+com.medicationvideo.platform
+├── iamproject
+├── assetcapture
+├── mediaprivacy
+├── annotationreview
+├── qualitycleaning
+├── datasetexport
+├── aicandidate
+├── governance
+└── integration
+```
+
+`integration` 是端口、适配器和投递技术设施，不拥有资产、正式标注、清洗结论或冻结数据集等业务真值。
+
+## 2. 通用持久化规则
+
+### 2.1 标识与时间
+
+- 业务主键使用不含业务含义的稳定 ID；是否采用 UUIDv7 在数据库基线冻结时决定。
+- 外部系统 ID 必须与适配器、租户和外部系统实例共同限定唯一性。
+- 时间点使用 UTC `timestamptz`；展示时区由用户或项目配置决定。
+- 视频内时间使用整数毫秒；帧定位以 PTS 对应的 stream timestamp 为主，frame index 为辅。
+- 低熵医院、患者、操作者、医嘱和任务标识不得裸哈希，使用 tenant scoped HMAC 或令牌服务。
+
+### 2.2 版本与审计字段
+
+可变聚合至少包含：
+
+```text
+created_at
+created_by
+updated_at
+updated_by
+row_version
+```
+
+不可变记录不提供通用 update 接口；更正通过新 revision/run/version 表达。高风险操作另写追加式 `audit_event`，业务表的更新时间不能替代审计日志。
+
+### 2.3 JSONB 使用边界
+
+可稳定查询、约束、关联和排序的字段必须结构化。JSONB 只用于：
+
+- 外部系统原始 payload；
+- 算法原始输出；
+- 版本化但变化较快的参数快照；
+- 不参与核心守卫的扩展属性。
+
+任何进入准入规则、权限判断、任务队列或常用筛选的 JSONB 字段必须抽取为结构化列。
+
+### 2.4 跨模块数据库引用
+
+- 模块只能通过自己的 Repository 写本模块表。
+- 跨模块只保存稳定 ID 和必要摘要，不复制可变业务真值。
+- 默认禁止跨模块级联更新和级联删除。
+- 跨模块物理外键仅在父对象生命周期稳定、不会阻断独立迁移且经 ADR 批准时使用；无外键时必须有应用守卫和一致性巡检。
+- 查询需要跨模块组合时，使用公开查询接口或只读投影，不在 Web 控制器中拼装多个内部 Repository。
+
+## 3. 模块依赖与事实流
+
+```mermaid
+flowchart LR
+    IAM["iamproject"] --> ASSET["assetcapture"]
+    ASSET --> MEDIA["mediaprivacy"]
+    MEDIA --> ANNO["annotationreview"]
+    ANNO --> CLEAN["qualitycleaning"]
+    CLEAN --> DATASET["datasetexport"]
+    MEDIA --> AI["aicandidate (P1)"]
+    AI --> ANNO
+    GOV["governance"] -. "审批/审计门禁" .-> ASSET
+    GOV -. "审批/审计门禁" .-> MEDIA
+    GOV -. "审批/审计门禁" .-> ANNO
+    GOV -. "审批/审计门禁" .-> CLEAN
+    GOV -. "审批/审计门禁" .-> DATASET
+```
+
+箭头表示允许的公开能力依赖方向，不表示下游可写上游表。具体 `allowedDependencies` 必须在模块声明中显式配置并由 `ApplicationModules.verify()` 测试。
+
+## 4. `iamproject`
+
+### 4.1 所有权
+
+| 聚合/实体 | 表 | 说明 |
+| --- | --- | --- |
+| Tenant | tenant | 医院或批准的数据隔离域；具体含义需在部署前冻结 |
+| Project | project | 数据处理目的、范围和策略绑定单元 |
+| Membership | membership | 用户在 tenant/project 中的成员关系 |
+| RoleBinding | role_binding | RBAC 角色和 ABAC 条件引用 |
+| PurposeGrant | purpose_grant | 数据用途、有效期和授权范围 |
+
+### 4.2 不变量
+
+- 用户有系统身份不等于拥有任何项目数据权限。
+- 权限判断至少包含 tenant、project、classification、purpose、expiry 和 task assignment。
+- 角色变更不能追溯性改变历史审计中的当时授权上下文。
+- 项目关闭后禁止创建新任务和新导出，但保留按策略授权的历史查询。
+
+## 5. `assetcapture`
+
+### 5.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| UploadBatch | upload_batch、upload_file、upload_part | 批次配额、文件清单、分片会话、幂等、完成/中止和临时对象清理 |
+| CameraChannel | camera_channel、camera_alias | 稳定通道 ID 与带生效期的临时/正式别名 |
+| CameraSet | camera_set、camera_set_member | 可生效的相机组配置 |
+| CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
+| ClipAsset | clip_asset、asset_tag | 不可变媒体对象身份、摘要、存储引用和业务标签 |
+| CaptureEventLog | capture_event_log | 边端事件日志对象索引及时间基准，不解析硬件控制逻辑 |
+
+### 5.2 UploadBatch 不变量
+
+- 开始 multipart 前，`upload_file` 数量和大小总和必须与批次声明完全一致。
+- 对象键由 project、batch 和内部 upload file ID 生成，不接受客户端路径，不包含任何身份或医疗明文。
+- `storage_upload_id` 只用于服务端恢复、完成和中止，不通过控制面响应直接暴露。
+- `upload_part` 保存 part number、期望字节数、期望 SHA-256、状态和授权到期时间，不保存预签名 URL。
+- 同一文件只能有一个活动 multipart 会话；同一 `(upload_file_id, part_number)` 只能有一个不可变期望摘要。
+- Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset；METADATA 和 EVENT_LOG 不伪装成视频资产。
+- `CameraSetSnapshot` 与 `CaptureSession` 同事务创建，只能由服务器现行 CameraSet 冻结；RK3588 只上报稳定标识和观测元数据，不能覆盖服务器相机配置真值。
+
+### 5.3 CameraChannel 与 CameraSet 不变量
+
+- `camera_channel_id` 由平台生成且不可变；当前 `provisioning_key` 只作为 project 内唯一的非敏感部署对接键，不是展示别名、密钥或硬件地址。
+- CameraSet 以 `(project_id, camera_set_key, configuration_version)` 标识不可变版本；相同内容重复 PUT 返回原资源，不同内容不得覆盖既有版本。
+- 同一 CameraSet 版本内 CameraChannel 与 `camera_index` 分别唯一，`camera_index` 范围为 0～63，至少一个成员 enabled。
+- CameraSet 只能引用同一 project 的 CameraChannel；跨 project 引用按不存在处理，避免泄露其他项目标识。
+- 配置由管理或部署流程创建并将精确 `camera_set_id` 配置给 RK3588。平台不通过该配置接口发现、探测或控制硬件，RK3588 也不能反向修改服务器配置。
+- 当前 P0 用精确不可变版本建立后续 snapshot；定时生效、展示别名和自动设备发现只有出现批准需求时才增加。
+
+### 5.4 CaptureSession 不变量
+
+- `camera_set_snapshot` 在 session 创建时冻结；后续 CameraSet 变更不改历史。
+- CaptureSession、CameraSetSnapshot、snapshot member 和首批 CameraStream 必须在同一数据库事务创建；任一对账或约束失败不得留下半成品。
+- 每个完成批次必须恰好包含一个受支持且已验证的 METADATA 对象；平台重新核验读取结果的大小与 SHA-256，并按严格版本化 Schema 解析。
+- 同一 session 中 `(camera_channel_id)` 唯一；同一 snapshot 中 `camera_index` 唯一。
+- `expected_camera_count` 由 snapshot 中 `enabled=true` 的成员计算，不接受边端覆盖。
+- `received_camera_count` 只统计已经 `INGESTED` 且通道唯一的 stream。
+- 同一完成批次的每个 VIDEO ClipAsset 必须绑定一次且只能绑定一次；初始 `BOUND` 不等于 `INGESTED`。
+- 边端同步状态和 offset 只作为来源明确的观测值保存，后续平台同步结论使用不可变 StreamSyncRevision，不覆盖原始观测。
+- session 是 Step 标注、最低泄漏分组和数据集组织单元，但数据集必须额外冻结实际纳入的 stream/variant。
+
+### 5.5 ClipAsset 不变量
+
+- raw 内容一经摘要确认不可原地替换。
+- 相同业务 ID、不同摘要必须返回冲突，不可覆盖。
+- 对象路径只使用内部 ID，不包含姓名、病历号、处方号、工号或科室明文。
+- 逻辑不可变不等于永久保留；批准销毁通过治理流程创建 tombstone 和销毁证明，不通过 update 改写媒体内容。
+
+## 6. `mediaprivacy`
+
+### 6.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| MediaJob | media_job、media_job_attempt | 探测、转码、缩略图、抽帧和质量指标作业 |
+| AssetVariant | asset_variant、variant_lineage | PREVIEW、THUMBNAIL、DEIDENTIFIED、TRIMMED、DATASET_FRAME 等派生资产 |
+| MediaReport | media_report | 容器、编码、解码、画质、音轨和时间基准报告 |
+| PrivacyAssessment | privacy_assessment、privacy_finding | 自动/人工隐私风险及证据 |
+| DeidentifyRun | deidentify_run | 不可变脱敏运行、配方、输入/输出摘要和验证结论 |
+| PrivacyRelease | privacy_release_decision | 用途、variant、有效期和批准范围绑定的放行决定 |
+
+### 6.2 不变量
+
+- 每个 variant 必须递归追溯到 raw，并保存输入摘要、配方版本、软件/镜像摘要。
+- `privacy_release_decision` 必须绑定具体 variant digest、purpose、project 和有效期；不能只给整个 session 一个永久通行标志。
+- 标注员和 AI Worker 默认只读取已批准的 `DEIDENTIFIED` variant。
+- Worker 不直接写上述表；结果经 Core API 验证和提交。
+- 自动隐私检测不能直接产生内部导出许可，必须经过策略允许的人工门禁。
+
+## 7. `annotationreview`
+
+### 7.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| LabelSchema | label_schema、label_definition、label_attribute_definition | 标签、属性、互斥/重叠规则和版本摘要 |
+| AnnotationProject | annotation_project、annotation_guideline_version | 项目范围、工具、schema 和指南版本 |
+| AnnotationTask | annotation_task、task_assignment、external_task_mapping | session Step、stream Object、隐私和质量任务 |
+| AnnotationRevision | annotation_revision、step_segment、object_annotation、observable_event_annotation、privacy_region_annotation | 一次不可变提交 |
+| Review | review_record、adjudication_record | 通过、退回和裁决，不覆盖原 revision |
+| ValidationResult | annotation_validation_result | 时间、标签、几何、必填属性和隐私规则检查 |
+
+### 7.2 LabelSchema 不变量
+
+- schema 发布后不可原地改变标签含义；修改创建新版本和新 digest。
+- 标签 ID 稳定，显示名可本地化；删除用 deprecated 状态和映射表达。
+- `privacy_region` 属于独立标注层，不进入普通对象检测类别。
+- `primary_step` 同一 session 时间点最多一个；secondary activity、observable event 和 quality interval 可重叠。
+- revision 同时绑定 schema digest 和 guideline digest。
+
+### 7.3 AnnotationRevision 不变量
+
+- revision 创建后不可更新标注内容。
+- Step 使用统一 session 时间轴和 `[start_ms, end_ms)`。
+- Object 同时保存 stream PTS 时间、session 时间和 frame index；不能只用 `frame_index/fps` 推导。
+- 人工不确定性使用明确字段，例如 `annotator_certainty` 或原因标签；不得与算法 score 混用。
+- 复核员需要修正时，必须退回或创建裁决 revision，并保留来源链。
+
+## 8. `qualitycleaning`
+
+### 8.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| CleaningRuleSet | cleaning_rule_set、cleaning_rule | 版本化规则、阈值和适用范围 |
+| CleaningRun | cleaning_run、cleaning_result | 对冻结输入执行的不可变运行 |
+| DuplicateGroup | duplicate_group、duplicate_member | 完全重复和近重复证据 |
+| Quarantine | quarantine_record | 隔离范围、原因、来源和解除状态 |
+| AdmissionOverride | admission_override | warning/例外准入的批准人、理由、期限和版本范围 |
+
+### 8.2 不变量
+
+- 自动规则可产生 PASS、WARNING、REJECT、HUMAN_REVIEW 或 QUARANTINE，但不得自动物理删除。
+- 完全重复以内容摘要为证据；近重复以版本化视频指纹/关键帧算法为证据，两者不能混为同一结论。
+- CleaningRun 冻结输入集合、规则摘要和软件摘要；重跑创建新 run。
+- override 不改变原始清洗结论，只在特定数据集构建中作为附加批准证据。
+
+## 9. `datasetexport`
+
+### 9.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_assignment | 选择、准入、防泄漏、验证和冻结 |
+| ExportProfile | export_profile | 格式、采样、目录和字段版本 |
+| DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
+
+### 9.2 DatasetVersion 冻结内容
+
+必须保存：
+
+- session 成员；
+- 每个 session 实际纳入的 stream；
+- 每个 stream 使用的 asset variant ID 和 digest；
+- AnnotationRevision ID 和 digest；
+- LabelSchema、CleaningRuleSet 和 PrivacyRelease 决定；
+- split policy、leakage group、seed 和实际分配结果；
+- export/sampling profile；
+- 构建软件和镜像摘要。
+
+### 9.3 不变量
+
+- `dataset_member_session` 决定组织和 split；`dataset_member_stream` 决定实际训练输入，不能只记录 session 而遗漏被排除的流。
+- 同一 `leakage_group_id` 不得跨 split。
+- VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
+- FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
+- 导出只读取 FROZEN 快照；导出失败不改变冻结版本。
+
+## 10. `aicandidate`（P1）
+
+### 10.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| AlgorithmRegistry | algorithm_registry | 算法、模型、镜像、输入/输出 schema 和审批状态 |
+| AIJob | ai_job、ai_job_attempt | 不可覆盖的推理运行 |
+| CandidateAnnotation | candidate_annotation、candidate_review_record | 候选几何、明确 score 语义和人工处置 |
+| AIEvaluation | ai_evaluation、ai_evaluation_metric | 对照试验设计和结果 |
+
+### 10.2 不变量
+
+- AI 结果只能进入 CandidateAnnotation。
+- handedness score 不能作为 bbox confidence。
+- 接受或修改候选时创建新的 AnnotationRevision，并保存候选来源。
+- 模型、输入 variant、参数或 sampling profile 任一变化都产生新 AIJob。
+- AI 停用不得破坏人工 P0 闭环。
+
+## 11. `governance`
+
+### 11.1 所有权
+
+| 聚合根 | 子实体/表 | 关键职责 |
+| --- | --- | --- |
+| ApprovalRequest | approval_request、approval_decision | 隔离解除、raw 访问、导出、冻结和删除审批 |
+| AuditEvent | audit_event | 追加式安全和业务审计 |
+| RetentionPolicy | retention_policy、legal_hold | 保留、到期、暂停销毁和适用范围 |
+| DestructionCase | destruction_case、destruction_certificate | 逻辑删除、对象/备份处理和证明 |
+
+### 11.2 不变量
+
+- 申请人与审批人分离；紧急例外必须事后复核。
+- 审批决定绑定对象版本、用途、范围和有效期，不是通用永久授权。
+- `audit_event` 只追加；修正通过补充事件，不原地改历史。
+- legal hold 优先于普通保留到期；解除 legal hold 必须有授权记录。
+- 销毁完成必须覆盖对象存储、数据库可识别映射、临时文件、搜索索引和备份处置状态。
+
+## 12. Worker 与表所有权
+
+Python Worker 只能：
+
+1. 使用短期、最小权限凭证读取批准的输入对象；
+2. 将输出写入指定临时前缀；
+3. 计算并返回摘要、大小、媒体属性和结果清单；
+4. 通过版本化结果契约向 Core API 提交结果。
+
+Python Worker 禁止：
+
+- 连接或直接写 PostgreSQL 业务表；
+- 把 AI 输出写成正式 AnnotationRevision；
+- 把未验证临时对象发布为正式 variant/export；
+- 修改冻结数据集；
+- 在日志中输出视频帧、敏感标识或预签名 URL。
+
+## 13. 事务边界和跨模块流程
+
+单模块命令在一个数据库事务内完成聚合变更和 Outbox 写入。跨模块流程使用显式编排器：
+
+```text
+读取必要公开快照
+→ 调用拥有模块的应用服务
+→ 每个步骤写自己的状态和审计
+→ 失败时依据流程状态重试或补偿
+```
+
+编排器不得持有“万能 Repository”，也不得通过一个大事务直接更新多个模块的表。
+
+高风险流程至少包括：
+
+- 隐私放行；
+- 隔离解除；
+- AI 候选转正式 revision；
+- DatasetVersion freeze；
+- 数据集导出授权；
+- raw 访问和物理销毁。
+
+## 14. 数据模型验收清单
+
+- [ ] 每张表有唯一所属模块和 Flyway 迁移。
+- [ ] 每个可变聚合有乐观锁或等价并发控制。
+- [ ] 每个不可变对象没有通用覆盖更新路径。
+- [ ] 常用守卫字段结构化并有必要索引。
+- [ ] 跨模块无 Repository 注入和级联删除。
+- [ ] DatasetVersion 冻结到 stream、variant 和 revision 摘要。
+- [ ] LabelSchema、AnnotationProject、作业和审批实体已进入契约与测试。
+- [ ] Worker 结果只能经 Core API 提交。
+- [ ] Spring Modulith 结构验证在 CI 中执行。

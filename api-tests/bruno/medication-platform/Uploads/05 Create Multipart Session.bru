@@ -1,0 +1,27 @@
+meta {
+  name: Create Multipart Session
+  type: http
+  seq: 5
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/multipart
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("creates one recoverable storage session without exposing its upload id", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(201);
+    expect(body.batch_id).to.equal(bru.getVar("initialBatchId"));
+    expect(body.client_file_id).to.equal(bru.getEnvVar("clientFileId"));
+    expect(body.total_parts).to.equal(33);
+    expect(body.status).to.equal("SESSION_CREATED");
+    expect(body).not.to.have.property("storage_upload_id");
+    expect(body).not.to.have.property("object_key");
+  });
+}

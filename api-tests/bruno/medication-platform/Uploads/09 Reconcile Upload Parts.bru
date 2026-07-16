@@ -1,0 +1,25 @@
+meta {
+  name: Reconcile Upload Parts
+  type: http
+  seq: 9
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/parts/reconciliation
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("keeps an authorized but missing storage part unconfirmed", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.total_parts).to.equal(33);
+    expect(body.tracked_parts).to.equal(1);
+    expect(body.uploaded_parts).to.equal(0);
+    expect(body.parts[0].status).to.equal("AUTHORIZED");
+  });
+}

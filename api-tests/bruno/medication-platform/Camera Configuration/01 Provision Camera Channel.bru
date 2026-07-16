@@ -1,0 +1,35 @@
+meta {
+  name: Provision Camera Channel
+  type: http
+  seq: 1
+  tags: [
+    CameraConfiguration
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/camera-channels/cabinet.overview-01
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  bru.deleteVar("cameraChannelId");
+}
+
+script:post-response {
+  if (res.getStatus() === 201) {
+    bru.setVar("cameraChannelId", res.getBody().camera_channel_id);
+  }
+}
+
+tests {
+  test("provisions a stable logical camera channel", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getHeader("cache-control")).to.equal("no-store");
+    expect(body.camera_channel_id).to.be.a("string").and.not.empty;
+    expect(body.project_id).to.equal(bru.getEnvVar("projectId"));
+    expect(body.provisioning_key).to.equal("cabinet.overview-01");
+  });
+}

@@ -1,0 +1,43 @@
+meta {
+  name: Configure Camera Set
+  type: http
+  seq: 2
+  tags: [
+    CameraConfiguration
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/projects/{{projectId}}/camera-sets/cabinet-a/versions/1
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "layout_version": "layout-2026-01",
+    "members": [
+      {
+        "camera_channel_id": "{{cameraChannelId}}",
+        "camera_index": 0,
+        "camera_role": "OVERVIEW",
+        "mount_position": "front-center",
+        "enabled": true
+      }
+    ]
+  }
+}
+
+tests {
+  test("creates an immutable server-side camera set version", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getHeader("cache-control")).to.equal("no-store");
+    expect(body.camera_set_id).to.be.a("string").and.not.empty;
+    expect(body.project_id).to.equal(bru.getEnvVar("projectId"));
+    expect(body.camera_set_key).to.equal("cabinet-a");
+    expect(body.configuration_version).to.equal(1);
+    expect(body.enabled_camera_count).to.equal(1);
+    expect(body.members[0].camera_channel_id).to.equal(bru.getVar("cameraChannelId"));
+  });
+}

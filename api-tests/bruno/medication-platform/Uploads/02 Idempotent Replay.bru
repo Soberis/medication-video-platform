@@ -1,0 +1,36 @@
+meta {
+  name: Idempotent Replay
+  type: http
+  seq: 2
+  tags: [
+    Uploads
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/upload/init
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: {{idempotencyKey}}
+}
+
+body:json {
+  {
+    "project_id": "{{projectId}}",
+    "device_id": "{{deviceId}}",
+    "file_count": 1,
+    "total_size_bytes": 2147483649,
+    "manifest_sha256": "{{manifestSha256}}"
+  }
+}
+
+tests {
+  test("replays the original batch", function() {
+    expect(res.getStatus()).to.equal(201);
+    expect(bru.getVar("initialBatchId")).to.be.a("string").and.not.empty;
+    expect(res.getBody().batch_id).to.equal(bru.getVar("initialBatchId"));
+  });
+}

@@ -1,0 +1,38 @@
+meta {
+  name: Idempotency Conflict
+  type: http
+  seq: 3
+  tags: [
+    Uploads
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/upload/init
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: {{idempotencyKey}}
+}
+
+body:json {
+  {
+    "project_id": "{{projectId}}",
+    "device_id": "{{deviceId}}-conflict",
+    "file_count": 1,
+    "total_size_bytes": 2147483649,
+    "manifest_sha256": "{{manifestSha256}}"
+  }
+}
+
+tests {
+  test("rejects changed content under the same idempotency key", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(409);
+    expect(body.error_code).to.equal("IDEMPOTENCY_KEY_REUSED");
+    expect(body.retryable).to.equal(false);
+    expect(body.request_id).to.be.a("string").and.not.empty;
+  });
+}

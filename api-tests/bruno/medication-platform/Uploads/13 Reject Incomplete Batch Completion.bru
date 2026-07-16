@@ -1,0 +1,23 @@
+meta {
+  name: Reject Incomplete Batch Completion
+  type: http
+  seq: 13
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/completion
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("does not complete a batch until every file is verified", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(409);
+    expect(body.error_code).to.equal("UPLOAD_BATCH_FILES_INCOMPLETE");
+    expect(body.retryable).to.equal(false);
+  });
+}

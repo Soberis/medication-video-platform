@@ -1,0 +1,31 @@
+meta {
+  name: List Upload File Progress
+  type: http
+  seq: 12
+  tags: [
+    Uploads
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("lists file progress and stable completion error state", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.batch_id).to.equal(bru.getVar("initialBatchId"));
+    expect(body.registered_file_count).to.equal(1);
+    expect(body.files).to.have.lengthOf(1);
+    expect(body.files[0].client_file_id).to.equal(bru.getEnvVar("clientFileId"));
+    expect(body.files[0].status).to.equal("UPLOADING");
+    expect(body.files[0].total_parts).to.equal(33);
+    expect(body.files[0].tracked_parts).to.equal(1);
+    expect(body.files[0].uploaded_parts).to.equal(0);
+    expect(body.files[0].uploaded_size_bytes).to.equal(0);
+    expect(body.files[0].completion_error_code).to.equal(null);
+  });
+}

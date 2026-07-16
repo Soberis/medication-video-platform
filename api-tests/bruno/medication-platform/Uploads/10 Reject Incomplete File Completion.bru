@@ -1,0 +1,23 @@
+meta {
+  name: Reject Incomplete File Completion
+  type: http
+  seq: 10
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/completion
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("does not complete a file with missing storage parts", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(409);
+    expect(body.error_code).to.equal("UPLOAD_FILE_PARTS_INCOMPLETE");
+    expect(body.retryable).to.equal(false);
+  });
+}

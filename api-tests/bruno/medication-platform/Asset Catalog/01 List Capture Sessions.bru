@@ -1,0 +1,24 @@
+meta {
+  name: List Capture Sessions
+  type: http
+  seq: 1
+  tags: [
+    AssetCatalog
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/v1/capture-sessions?limit=20
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("lists only the authenticated project's capture sessions", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.items).to.be.an("array");
+    expect(body.items.length).to.be.at.most(20);
+    expect(body).to.have.property("next_cursor");
+  });
+}

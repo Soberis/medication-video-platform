@@ -1,0 +1,23 @@
+meta {
+  name: Reject Missing Part Confirmation
+  type: http
+  seq: 8
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/parts/1/confirmation
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("does not trust a confirmation when object storage has no part", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(409);
+    expect(body.error_code).to.equal("UPLOAD_PART_NOT_FOUND_IN_STORAGE");
+    expect(body.retryable).to.equal(false);
+  });
+}

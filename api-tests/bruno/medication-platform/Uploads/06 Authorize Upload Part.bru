@@ -1,0 +1,34 @@
+meta {
+  name: Authorize Upload Part
+  type: http
+  seq: 6
+  tags: [
+    Uploads
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/parts/1/authorization
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "sha256": "{{partSha256}}"
+  }
+}
+
+tests {
+  test("issues a short-lived direct-upload authorization", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getHeader("cache-control")).to.equal("no-store");
+    expect(body.batch_id).to.equal(bru.getVar("initialBatchId"));
+    expect(body.part_number).to.equal(1);
+    expect(body.expected_size_bytes).to.equal(67108864);
+    expect(body.sha256).to.equal(bru.getEnvVar("partSha256"));
+    expect(body.status).to.equal("AUTHORIZED");
+    expect(body.expires_at).to.be.a("string").and.not.empty;
+  });
+}

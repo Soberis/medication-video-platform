@@ -1,0 +1,28 @@
+meta {
+  name: Get Upload Part Progress
+  type: http
+  seq: 7
+  tags: [
+    Uploads
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/files/{{clientFileId}}/parts
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("returns fresh persisted progress without exposing credentials", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getHeader("cache-control")).to.equal("no-store");
+    expect(body.total_parts).to.equal(33);
+    expect(body.tracked_parts).to.equal(1);
+    expect(body.uploaded_parts).to.equal(0);
+    expect(body.parts[0].part_number).to.equal(1);
+    expect(body.parts[0].status).to.equal("AUTHORIZED");
+    expect(body.parts[0]).not.to.have.property("upload_url");
+  });
+}

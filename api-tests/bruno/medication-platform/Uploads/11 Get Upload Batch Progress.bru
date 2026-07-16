@@ -1,0 +1,31 @@
+meta {
+  name: Get Upload Batch Progress
+  type: http
+  seq: 11
+  tags: [
+    Uploads
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("reads persisted batch progress without changing upload state", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.batch_id).to.equal(bru.getVar("initialBatchId"));
+    expect(body.file_count).to.equal(1);
+    expect(body.registered_file_count).to.equal(1);
+    expect(body.uploaded_file_count).to.equal(0);
+    expect(body.failed_file_count).to.equal(0);
+    expect(body.total_size_bytes).to.equal(2147483649);
+    expect(body.uploaded_size_bytes).to.equal(0);
+    expect(body.tracked_part_count).to.equal(1);
+    expect(body.uploaded_part_count).to.equal(0);
+    expect(body.status).to.equal("UPLOADING");
+  });
+}

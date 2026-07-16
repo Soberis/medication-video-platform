@@ -1,0 +1,23 @@
+meta {
+  name: Reject Session Ingest Before Batch Completion
+  type: http
+  seq: 14
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/capture-session
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("does not assemble a session before the upload batch is complete", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(409);
+    expect(body.error_code).to.equal("CAPTURE_SESSION_BATCH_NOT_COMPLETED");
+    expect(body.retryable).to.equal(false);
+  });
+}
