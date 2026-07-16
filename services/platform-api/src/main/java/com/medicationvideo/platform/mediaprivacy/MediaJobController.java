@@ -59,7 +59,8 @@ class MediaJobController {
 	}
 
 	private static UploadActor requireActor(Authentication authentication) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
+		if (authentication == null
+				|| !(authentication.getPrincipal() instanceof UploadActor actor)) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;

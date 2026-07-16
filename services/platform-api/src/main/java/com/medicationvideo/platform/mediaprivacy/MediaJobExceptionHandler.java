@@ -1,9 +1,12 @@
 package com.medicationvideo.platform.mediaprivacy;
 
+import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +14,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
@@ -19,6 +24,9 @@ import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 class MediaJobExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(MediaJobExceptionHandler.class);
+
+	private static final String REQUEST_ID_ATTRIBUTE = "medication.requestId";
+	private static final String TRACE_ID_KEY = "traceId";
 
 	@ExceptionHandler({
 			MethodArgumentNotValidException.class,
@@ -72,6 +80,37 @@ class MediaJobExceptionHandler {
 		return ResponseEntity.status(status)
 				.contentType(MediaType.APPLICATION_JSON)
 				.cacheControl(org.springframework.http.CacheControl.noStore())
-				.body(new ApiErrorResponse(code, message, retryable, UUID.randomUUID().toString(), null));
+				.body(new ApiErrorResponse(code, message, retryable, resolveRequestId(), resolveTraceId()));
+	}
+
+	/**
+	 * Stable per-request correlation id. Echoes an inbound {@code X-Request-Id} when present,
+	 * otherwise mints one and caches it on the request so every error in the same request shares
+	 * it. Falls back to a fresh id only when no request context is available (e.g. async).
+	 */
+	private static String resolveRequestId() {
+		var attributes = RequestContextHolder.getRequestAttributes();
+		if (attributes instanceof ServletRequestAttributes servletAttributes) {
+			var request = servletAttributes.getRequest();
+			var existing = (String) request.getAttribute(REQUEST_ID_ATTRIBUTE);
+			if (existing != null) {
+				return existing;
+			}
+			var generated = Optional.ofNullable(request.getHeader("X-Request-Id"))
+					.filter(header -> !header.isBlank())
+					.orElseGet(() -> UUID.randomUUID().toString());
+			request.setAttribute(REQUEST_ID_ATTRIBUTE, generated);
+			MDC.put(REQUEST_ID_ATTRIBUTE, generated);
+			return generated;
+		}
+		return UUID.randomUUID().toString();
+	}
+
+	/**
+	 * Distributed-trace id from the logging MDC. Populated only when a tracing subsystem
+	 * (e.g. Micrometer Tracing) is on the classpath and active; otherwise null.
+	 */
+	private static String resolveTraceId() {
+		return MDC.get(TRACE_ID_KEY);
 	}
 }

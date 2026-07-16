@@ -6,13 +6,13 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 import com.medicationvideo.platform.assetcapture.ClipAssetInputSummary;
 import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
@@ -91,7 +91,7 @@ class MediaJobService {
 	}
 
 	private static void ensureProbeable(ClipAssetInputSummary summary) {
-		if (!summary.contentType().toLowerCase().startsWith("video/")) {
+		if (!summary.contentType().toLowerCase(Locale.ROOT).startsWith("video/")) {
 			throw new ClipAssetNotProbeableException(
 					"The clip asset content type is not a probeable video.");
 		}
@@ -124,11 +124,5 @@ class MediaJobService {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
 		}
-	}
-
-	// Used by tests to assert that the underlying asset catalog exception is propagated
-	// without rewriting its stable error code.
-	static Class<? extends RuntimeException> clipAssetMissingExceptionType() {
-		return AssetCatalogQueryException.class;
 	}
 }

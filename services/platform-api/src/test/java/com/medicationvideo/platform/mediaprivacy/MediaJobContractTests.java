@@ -10,6 +10,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -221,9 +222,7 @@ class MediaJobContractTests {
 	}
 
 	private static String readField(String json, String field) {
-		var search = "\"" + field + "\":\"";
-		var start = json.indexOf(search) + search.length();
-		return json.substring(start, json.indexOf("\"", start));
+		return (String) JsonPath.read(json, "$." + field);
 	}
 
 	private UUID insertUploadedClipAsset(UUID projectId, String contentType, String status,
