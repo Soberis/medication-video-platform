@@ -1,0 +1,95 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+
+# Java / Maven
+**/target/
+/build/generated-spring-modulith/
+.mvn/timing.properties
+dependency-reduced-pom.xml
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node / Vue
+node_modules/
+**/dist/
+**/.vite/
+**/.nuxt/
+**/coverage/
+*.tsbuildinfo
+.pnpm-store/
+
+# Python / uv
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Office lock files (Word/Excel temp files)
+~$*
+
+# Logs and reports
+*.log
+logs/
+reports/
+test-results/
+playwright-report/
+blob-report/
+
+# Local infrastructure state
+.docker-data/
+docker-data/
+storage/
+tmp/
+temp/
+
+# Medical media and model artifacts must not enter Git
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.wav
+*.dcm
+*.onnx
+*.tflite
+*.task
+*.pt
+*.pth
+*.safetensors
+*.bin
+
+# Generated exports and datasets
+datasets/
+exports/
+frames/
+SHA256SUMS.generated
+
+# Local tooling state (local only, not shared)
+.workbuddy/
+.playwright-cli/
