@@ -25,7 +25,11 @@ class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 	}
 
 	@Override
-	public void enqueue(MediaProbeJobEnvelope envelope) {
+	public void enqueue(MediaProbeJobEnvelope envelope, Instant availableAt) {
+		if (availableAt.isBefore(envelope.requestedAt())) {
+			throw new IllegalArgumentException(
+					"An Outbox event cannot be available before it was requested.");
+		}
 		try {
 			this.jdbcTemplate.update("""
 					INSERT INTO outbox_event (
@@ -41,7 +45,7 @@ class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 					MediaMessagingTopology.PROBE_ROUTING_KEY,
 					this.objectMapper.writeValueAsString(envelope),
 					Timestamp.from(envelope.requestedAt()),
-					Timestamp.from(envelope.requestedAt()));
+					Timestamp.from(availableAt));
 		}
 		catch (JacksonException exception) {
 			throw new IllegalStateException("The media probe job envelope could not be serialized.", exception);

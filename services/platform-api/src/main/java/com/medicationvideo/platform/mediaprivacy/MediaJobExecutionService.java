@@ -24,6 +24,8 @@ class MediaJobExecutionService {
 	private final MediaReportRepository reportRepository;
 	private final MediaResultInboxPort inbox;
 	private final ClipAssetMediaIngestService assetIngest;
+	private final MediaJobAttemptQueueService attemptQueue;
+	private final MediaJobRetryPolicy retryPolicy;
 	private final Duration leaseDuration;
 	private final Duration heartbeatInterval;
 	private final Duration inputAuthorizationLifetime;
@@ -36,6 +38,8 @@ class MediaJobExecutionService {
 			MediaReportRepository reportRepository,
 			MediaResultInboxPort inbox,
 			ClipAssetMediaIngestService assetIngest,
+			MediaJobAttemptQueueService attemptQueue,
+			MediaJobRetryPolicy retryPolicy,
 			@Value("${platform.media-probe.lease-duration:PT30M}") Duration leaseDuration,
 			@Value("${platform.media-probe.heartbeat-interval:PT5M}") Duration heartbeatInterval,
 			@Value("${platform.media-probe.input-authorization-ttl:PT15M}")
@@ -48,6 +52,8 @@ class MediaJobExecutionService {
 		this.reportRepository = reportRepository;
 		this.inbox = inbox;
 		this.assetIngest = assetIngest;
+		this.attemptQueue = attemptQueue;
+		this.retryPolicy = retryPolicy;
 		this.leaseDuration = requirePositive(leaseDuration, "Media probe lease duration");
 		this.heartbeatInterval = requireHeartbeatInterval(heartbeatInterval, this.leaseDuration);
 		this.inputAuthorizationLifetime = requirePositive(
@@ -157,9 +163,19 @@ class MediaJobExecutionService {
 			this.assetIngest.complete(job.getProjectId(), job.getClipAssetId(), true, now);
 		}
 		else {
-			attempt.fail(request.error(), now);
-			job.fail(now);
-			this.assetIngest.complete(job.getProjectId(), job.getClipAssetId(), false, now);
+			var error = request.error();
+			attempt.fail(error, now);
+			if (this.retryPolicy.shouldRetry(error, attempt.getAttempt())) {
+				var nextAttempt = attempt.getAttempt() + 1;
+				var availableAt = this.retryPolicy.nextAvailableAt(
+						job.getMediaJobId(), nextAttempt, now);
+				job.waitForRetry(now);
+				this.attemptQueue.enqueue(job, nextAttempt, now, availableAt);
+			}
+			else {
+				job.fail(now);
+				this.assetIngest.complete(job.getProjectId(), job.getClipAssetId(), false, now);
+			}
 		}
 		return response(receipt);
 	}

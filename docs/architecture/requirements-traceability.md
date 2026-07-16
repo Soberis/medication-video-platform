@@ -56,7 +56,7 @@
 当前 `I`/`PI` 证据和边界：
 
 - FR-001：UploadBatch 初始化、不可变 UploadFile 清单、Complete Batch、VIDEO 到最小 RAW ClipAsset 的幂等绑定、严格 METADATA 解析、CaptureSession/CameraSetSnapshot/CameraStream 原子组装、媒体探测入库、项目隔离的批次/文件只读进度查询和 Vue `/uploads` 只读进度页已有 OpenAPI、Flyway、合同测试与前端测试；EVENT_LOG 索引、上传过期清理和 UAT 尚未闭合。
-- FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；Worker 心跳、grace 后失联回收、新 attempt/新 capability、旧结果拒绝和 max-attempts 终止已有合同测试。损坏媒体矩阵、真实长任务心跳联调和 UAT 尚未完成，因此仍为 `PI`。
+- FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；Worker 心跳、grace 后失联回收、retryable 结果的 `RETRY_WAIT`/Outbox 有限退避、新 attempt/新 capability、旧结果拒绝和 max-attempts 终止已有合同测试。损坏媒体矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File 和 Complete Batch 已有实现；标准 S3/SeaweedFS 8 MiB 合成 Part 已完成真实 Multipart Complete 和完整文件 SHA-256 校验。Abort、过期清理和 2GB 中断恢复验收尚未完成。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。场景、科室、隐私、标注、清洗筛选、性能基准、预览 variant、状态历史和审计日志尚未完成，因此整条仍保持 `D1`，不能宣布需求验收通过。

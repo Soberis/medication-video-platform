@@ -140,6 +140,9 @@ class MediaJob {
 		if (this.status == MediaJobStatus.RUNNING) {
 			return;
 		}
+		if (this.status == MediaJobStatus.RETRY_WAIT) {
+			this.status = MediaJobStatus.QUEUED;
+		}
 		if (this.status != MediaJobStatus.QUEUED) {
 			throw new MediaJobExecutionException(
 					"STALE_ATTEMPT", "The media job is not queued for this attempt.", false);
@@ -154,6 +157,10 @@ class MediaJob {
 
 	void fail(Instant changedAt) {
 		transitionFromRunning(MediaJobStatus.FAILED, changedAt);
+	}
+
+	void waitForRetry(Instant changedAt) {
+		transitionFromRunning(MediaJobStatus.RETRY_WAIT, changedAt);
 	}
 
 	void requeueAfterLostAttempt(Instant changedAt) {

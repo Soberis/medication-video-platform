@@ -17,39 +17,33 @@ class MediaJobRecoveryService {
 
 	private final MediaJobRepository jobRepository;
 	private final MediaJobAttemptRepository attemptRepository;
-	private final MediaJobDispatchPort dispatchPort;
-	private final MediaLeaseCapabilityFactory capabilityFactory;
+	private final MediaJobAttemptQueueService attemptQueue;
+	private final MediaJobRetryPolicy retryPolicy;
 	private final ClipAssetMediaIngestService assetIngest;
 	private final TransactionTemplate transactionTemplate;
 	private final Duration leaseGrace;
-	private final int maxAttempts;
 	private final int batchSize;
 
 	MediaJobRecoveryService(
 			MediaJobRepository jobRepository,
 			MediaJobAttemptRepository attemptRepository,
-			MediaJobDispatchPort dispatchPort,
-			MediaLeaseCapabilityFactory capabilityFactory,
+			MediaJobAttemptQueueService attemptQueue,
+			MediaJobRetryPolicy retryPolicy,
 			ClipAssetMediaIngestService assetIngest,
 			PlatformTransactionManager transactionManager,
 			@Value("${platform.media-probe.lease-grace:PT5M}") Duration leaseGrace,
-			@Value("${platform.media-probe.max-attempts:3}") int maxAttempts,
 			@Value("${platform.media-probe.recovery-batch-size:20}") int batchSize) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
-		this.dispatchPort = dispatchPort;
-		this.capabilityFactory = capabilityFactory;
+		this.attemptQueue = attemptQueue;
+		this.retryPolicy = retryPolicy;
 		this.assetIngest = assetIngest;
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.leaseGrace = requirePositive(leaseGrace, "Media probe lease grace");
-		if (maxAttempts < 1) {
-			throw new IllegalArgumentException("Media probe max attempts must be positive.");
-		}
 		if (batchSize < 1 || batchSize > 1000) {
 			throw new IllegalArgumentException(
 					"Media probe recovery batch size must be between 1 and 1000.");
 		}
-		this.maxAttempts = maxAttempts;
 		this.batchSize = batchSize;
 	}
 
@@ -81,37 +75,15 @@ class MediaJobRecoveryService {
 		}
 
 		attempt.lose(now);
-		if (attempt.getAttempt() >= this.maxAttempts) {
+		if (!this.retryPolicy.hasAttemptsRemaining(attempt.getAttempt())) {
 			job.fail(now);
 			this.assetIngest.complete(job.getProjectId(), job.getClipAssetId(), false, now);
 			return true;
 		}
 
 		var nextAttemptNumber = attempt.getAttempt() + 1;
-		var messageId = UUID.randomUUID();
-		var capability = this.capabilityFactory.create();
-		this.attemptRepository.save(MediaJobAttempt.queue(
-				job.getMediaJobId(),
-				nextAttemptNumber,
-				messageId,
-				capability.tokenHash(),
-				now));
 		job.requeueAfterLostAttempt(now);
-		this.dispatchPort.enqueue(new MediaProbeJobEnvelope(
-				"media-probe-job.v1",
-				messageId,
-				job.getMediaJobId(),
-				job.getJobType(),
-				nextAttemptNumber,
-				capability.token(),
-				job.getProjectId(),
-				job.getClipAssetId(),
-				job.getInputDigest(),
-				job.getInputSizeBytes(),
-				job.getContentType(),
-				job.getProbeProfileKey(),
-				job.getRecipeDigest(),
-				now));
+		this.attemptQueue.enqueue(job, nextAttemptNumber, now, now);
 		return true;
 	}
 

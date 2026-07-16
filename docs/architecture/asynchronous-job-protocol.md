@@ -232,6 +232,13 @@ last_heartbeat_at
 
 错误响应只包含稳定 `error_code`、安全摘要和 `retryable`，不得包含堆栈、签名 URL、对象内部地址或敏感数据。
 
+当前媒体探测收到 `retryable=true` 的有效 Worker 结果时，在同一事务内完成 Inbox 记录、旧
+attempt `FAILED`、job `RETRY_WAIT`、新 attempt/新 capability 和 Outbox 写入。Outbox 的
+`occurred_at` 保留实际发生时间，`available_at` 使用有上限的指数退避和按 job/attempt 分散的
+确定性抖动；默认 base delay 为 5 秒、max delay 为 5 分钟。Worker 接受结果响应后 ACK 当前
+消息，不在消费者进程中 sleep 或重复执行旧 attempt。不可重试错误或第 3 次 attempt 失败时，
+job 与资产入库状态才进入终态失败。
+
 ## 9. 取消协议
 
 ### 9.1 状态
@@ -266,8 +273,8 @@ platform.media.dead-letter.v1
 先流式复核大小和 SHA-256，再提取容器/流/时间轴事实并使用 FFmpeg 对主视频流完整解码。
 
 当前首个媒体探测切片已经实现任务 Outbox、publisher confirm、单一业务队列/DLQ、独立
-Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、新 attempt、结果 Inbox
-去重、稳定错误、状态提交和不可变 MediaReport，并用合成 MP4 完成真实队列闭环。尚未完成
+Worker 身份、attempt 租约与心跳、短期输入授权、grace 后失联回收、可重试结果的有限退避与
+新 attempt、结果 Inbox 去重、稳定错误、状态提交和不可变 MediaReport，并用合成 MP4 完成真实队列闭环。尚未完成
 的可靠性证据包括真实长任务心跳联调、故障注入和恢复容量测试；取消与受控 DLQ 重放也尚未
 实现，不能把首个闭环等同于完整异步作业平台。
 

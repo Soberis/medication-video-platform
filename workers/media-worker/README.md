@@ -39,4 +39,5 @@ Worker 在处理期间按服务端返回的 heartbeat interval 后台续租；�
 到期前重试，租约失效或 attempt 被回收后停止提交旧结果。平台在 lease grace period 后自动
 创建带新 capability 的 attempt，达到 attempt 上限才终止业务 job。启动常驻消费者前，平台
 必须把 Worker 当前软件摘要加入准确 allowlist；只允许在 local/dev/test 使用合成视频联调。
-受控 DLQ 人工重放仍未实现。
+Worker 提交的 retryable 失败由 Core API 使用 Outbox 延迟创建新 attempt；当前消息在结果被
+接受后 ACK，Worker 不在消费者进程内 sleep 或重复旧 attempt。受控 DLQ 人工重放仍未实现。

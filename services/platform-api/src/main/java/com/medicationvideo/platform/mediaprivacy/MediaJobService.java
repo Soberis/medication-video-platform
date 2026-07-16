@@ -22,21 +22,18 @@ class MediaJobService {
 
 	private final MediaJobRepository repository;
 	private final MediaJobAttemptRepository attemptRepository;
-	private final MediaJobDispatchPort dispatchPort;
 	private final AssetCatalogQueryService assetCatalog;
-	private final MediaLeaseCapabilityFactory capabilityFactory;
+	private final MediaJobAttemptQueueService attemptQueue;
 
 	MediaJobService(
 			MediaJobRepository repository,
 			MediaJobAttemptRepository attemptRepository,
-			MediaJobDispatchPort dispatchPort,
 			AssetCatalogQueryService assetCatalog,
-			MediaLeaseCapabilityFactory capabilityFactory) {
+			MediaJobAttemptQueueService attemptQueue) {
 		this.repository = repository;
 		this.attemptRepository = attemptRepository;
-		this.dispatchPort = dispatchPort;
 		this.assetCatalog = assetCatalog;
-		this.capabilityFactory = capabilityFactory;
+		this.attemptQueue = attemptQueue;
 	}
 
 	@Transactional
@@ -79,30 +76,8 @@ class MediaJobService {
 
 		try {
 			job = this.repository.saveAndFlush(job);
-			var messageId = UUID.randomUUID();
-			var capability = this.capabilityFactory.create();
-			this.attemptRepository.save(MediaJobAttempt.queue(
-					job.getMediaJobId(),
-					1,
-					messageId,
-					capability.tokenHash(),
-					now));
 			job.queue(now);
-			this.dispatchPort.enqueue(new MediaProbeJobEnvelope(
-					"media-probe-job.v1",
-					messageId,
-					job.getMediaJobId(),
-					job.getJobType(),
-					1,
-					capability.token(),
-					job.getProjectId(),
-					job.getClipAssetId(),
-					job.getInputDigest(),
-					job.getInputSizeBytes(),
-					job.getContentType(),
-					job.getProbeProfileKey(),
-					job.getRecipeDigest(),
-					now));
+			this.attemptQueue.enqueue(job, 1, now, now);
 			return job;
 		}
 		catch (DataIntegrityViolationException exception) {

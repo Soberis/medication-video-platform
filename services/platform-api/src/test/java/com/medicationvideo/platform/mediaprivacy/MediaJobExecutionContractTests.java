@@ -234,6 +234,78 @@ class MediaJobExecutionContractTests {
 	}
 
 	@Test
+	void retriesRetryableWorkerFailureWithDelayedNewAttempt() throws Exception {
+		var original = createQueuedJob();
+		acquire(original).andExpect(status().isOk());
+
+		submitResult(original, retryableFailedResult(original))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("FAILED"));
+
+		var retried = loadAttempt(original, 2);
+		assertNotEquals(original.messageId(), retried.messageId());
+		assertNotEquals(original.leaseToken(), retried.leaseToken());
+		assertEquals("FAILED", this.jdbcTemplate.queryForObject("""
+				SELECT status FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = 1
+				""", String.class, original.jobId()));
+		assertEquals("OBJECT_STORAGE_UNAVAILABLE", this.jdbcTemplate.queryForObject("""
+				SELECT error_code FROM media_job_attempt
+				WHERE media_job_id = ? AND attempt = 1
+				""", String.class, original.jobId()));
+		assertEquals("RETRY_WAIT", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", original.jobId()));
+		assertEquals("INGESTING", scalar(
+				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?",
+				original.clipAssetId()));
+		assertEquals(2, count(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", original.jobId()));
+		var retryDelaySeconds = this.jdbcTemplate.queryForObject("""
+				SELECT EXTRACT(EPOCH FROM (available_at - occurred_at))
+				FROM outbox_event
+				WHERE aggregate_id = ? AND (payload_json ->> 'attempt')::integer = 2
+				""", Double.class, original.jobId());
+		assertTrue(retryDelaySeconds >= 1.0 && retryDelaySeconds <= 1.25);
+
+		this.mockMvc.perform(get("/api/v1/media-jobs/{jobId}", original.jobId())
+				.header("Authorization", "Bearer " + USER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("RETRY_WAIT"))
+				.andExpect(jsonPath("$.current_attempt.attempt").value(2))
+				.andExpect(jsonPath("$.current_attempt.status").value("QUEUED"));
+
+		acquire(retried).andExpect(status().isOk());
+		assertEquals("RUNNING", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", original.jobId()));
+	}
+
+	@Test
+	void failsJobAndAssetAfterRetryableWorkerResultsExhaustAttempts() throws Exception {
+		var attempt = createQueuedJob();
+		for (var attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
+			acquire(attempt).andExpect(status().isOk());
+			submitResult(attempt, retryableFailedResult(attempt))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.status").value("FAILED"));
+			if (attemptNumber < 3) {
+				assertEquals("RETRY_WAIT", scalar(
+						"SELECT status FROM media_job WHERE media_job_id = ?", attempt.jobId()));
+				attempt = loadAttempt(attempt, attemptNumber + 1);
+			}
+		}
+
+		assertEquals("FAILED", scalar(
+				"SELECT status FROM media_job WHERE media_job_id = ?", attempt.jobId()));
+		assertEquals("INGEST_FAILED", scalar(
+				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?",
+				attempt.clipAssetId()));
+		assertEquals(3, count(
+				"SELECT count(*) FROM media_job_attempt WHERE media_job_id = ?", attempt.jobId()));
+		assertEquals(3, count(
+				"SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", attempt.jobId()));
+	}
+
+	@Test
 	void rejectsUnapprovedWorkerSoftwareWithoutAcceptingResult() throws Exception {
 		var created = createQueuedJob();
 		acquire(created).andExpect(status().isOk());
@@ -529,6 +601,35 @@ class MediaJobExecutionContractTests {
 				    "error_code":"MEDIA_DECODE_FAILED",
 				    "safe_message":"Synthetic video failed complete decode verification",
 				    "retryable":false
+				  }
+				}
+				""".formatted(
+				created.messageId(), created.jobId(), created.attempt(), created.leaseToken(), SHA256,
+				MediaProbeProfile.RECIPE_DIGEST, SOFTWARE_DIGEST, startedAt, completedAt);
+	}
+
+	private String retryableFailedResult(CreatedJob created) {
+		var startedAt = Instant.now().minusSeconds(2);
+		var completedAt = Instant.now().minusSeconds(1);
+		return """
+				{
+				  "schema_version":"media-probe-result.v1",
+				  "message_id":"%s",
+				  "job_id":"%s",
+				  "attempt":%d,
+				  "lease_token":"%s",
+				  "status":"FAILED",
+				  "input_sha256":"%s",
+				  "recipe_digest":"%s",
+				  "software_digest":"%s",
+				  "started_at":"%s",
+				  "completed_at":"%s",
+				  "report":null,
+				  "error":{
+				    "error_class":"RETRYABLE_TRANSIENT",
+				    "error_code":"OBJECT_STORAGE_UNAVAILABLE",
+				    "safe_message":"Synthetic object storage is temporarily unavailable",
+				    "retryable":true
 				  }
 				}
 				""".formatted(

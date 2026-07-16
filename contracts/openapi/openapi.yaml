@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.14.0
+  version: 0.15.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -1459,9 +1459,11 @@ paths:
       description: >-
         Internal Worker endpoint. Validates the service identity, lease, job/attempt/message IDs,
         input/recipe/software digests, timestamps and the frozen media-probe-result.v1 contract.
-        A successful result creates one immutable MediaReport and marks the asset INGESTED. A failed
-        result stores stable attempt diagnostics and marks the asset INGEST_FAILED without creating
-        a report. Inbox deduplication absorbs an exact replay.
+        A successful result creates one immutable MediaReport and marks the asset INGESTED. A
+        retryable failed result stores stable attempt diagnostics, keeps the asset INGESTING and
+        schedules a new attempt with bounded backoff; a non-retryable or exhausted failure marks
+        the asset INGEST_FAILED. Failed attempts never create a report. Inbox deduplication absorbs
+        an exact replay.
       security:
         - workerBearerAuth: []
       parameters:
@@ -2936,8 +2938,9 @@ components:
       additionalProperties: false
       description: >-
         Lifecycle state of a media job. Creation normally returns QUEUED after the job, first
-        attempt and Outbox event commit atomically. RUNNING and terminal states require a
-        lease-matched Worker interaction.
+        attempt and Outbox event commit atomically. RETRY_WAIT means a retryable attempt result was
+        accepted and the next attempt is delayed by Outbox available_at. RUNNING and terminal
+        states require a lease-matched Worker interaction.
       enum:
         - REQUESTED
         - QUEUED
@@ -3204,6 +3207,7 @@ components:
           minimum: 1
         status:
           type: string
+          description: Accepted attempt result status; the business job may be RETRY_WAIT after FAILED.
           enum:
             - SUCCEEDED
             - FAILED
