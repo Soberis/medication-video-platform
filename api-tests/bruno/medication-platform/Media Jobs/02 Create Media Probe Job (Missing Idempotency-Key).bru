@@ -1,0 +1,27 @@
+meta {
+  name: Create Media Probe Job (Missing Idempotency-Key)
+  type: http
+  seq: 2
+  tags: [
+    MediaJobs
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/media-jobs
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "clipAssetId": "99999999-9999-9999-9999-999999999999",
+    "jobType": "MEDIA_PROBE"
+  }
+}
+
+tests {
+  test("rejects missing Idempotency-Key header with 400", function() {
+    expect(res.getStatus()).to.equal(400);
+  });
+}

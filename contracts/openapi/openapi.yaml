@@ -1,18 +1,20 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.10.0
+  version: 0.11.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
     issue short-lived part upload authorizations, confirm storage-backed parts, recover upload
     progress, complete a file with final size and SHA-256 verification, complete a verified batch
     with minimal raw ClipAsset bindings, read batch/file upload progress for operator visibility,
-    provision immutable server-side CameraChannel and CameraSet configuration identities, and
-    atomically assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified
-    uploaded metadata object, and query project-scoped CaptureSession and ClipAsset read models
-    with bounded cursor pagination. The API never proxies upload bytes through the Core API,
-    exposes storage locations through catalog reads, or controls or probes edge hardware.
+    provision immutable server-side CameraChannel and CameraSet configuration identities, atomically
+    assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
+    metadata object, query project-scoped CaptureSession and ClipAsset read models with bounded
+    cursor pagination, and create and read project-scoped media probe jobs that freeze the input
+    digest and size of an uploaded clip asset. The API never proxies upload bytes through the
+    Core API, exposes storage locations through catalog reads, controls or probes edge hardware, or
+    performs media processing synchronously inside a request.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
@@ -31,6 +33,14 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
+  - name: Media Jobs
+    description: >-
+      Project-scoped media probe job lifecycle owned by the mediaprivacy module. This slice
+      freezes the request, idempotency and input-digest contract and creates jobs in REQUESTED
+      state. Real probe execution, status transitions to SUCCEEDED/FAILED, Outbox/RabbitMQ
+      dispatch and a minimal Media Worker are introduced in the slice that enables the first
+      cross-process time-consuming task; the API does not return 202 Accepted while no Worker
+      consumes the job.
 paths:
   /upload/init:
     post:
@@ -1162,6 +1172,116 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: ClipAsset not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /media-jobs:
+    post:
+      operationId: createMediaJob
+      tags:
+        - Media Jobs
+      summary: Create a media probe job for a verified uploaded clip asset
+      description: >-
+        Persists a media job in REQUESTED state for the authenticated project. The job is uniquely
+        identified by the (project_id, job_type, clip_asset_id, input_digest) tuple; an existing
+        job with the same tuple is returned idempotently. The same Idempotency-Key reused with a
+        different request body is rejected with IDEMPOTENCY_KEY_REUSED. This slice intentionally
+        does not return 202 Accepted, because no Worker has been enabled to consume the job yet.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaJobRequest"
+      responses:
+        "201":
+          description: Job created or returned idempotently in REQUESTED state.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+              description: Canonical URL of the created job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaJobResponse"
+        "400":
+          description: The request body or Idempotency-Key is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller is not authorized for the current project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The referenced clip asset was not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            The Idempotency-Key was reused with a different request body, or the clip asset is
+            not in a probeable state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /media-jobs/{media_job_id}:
+    get:
+      operationId: getMediaJob
+      tags:
+        - Media Jobs
+      summary: Read a media probe job by id
+      description: >-
+        Returns the persisted job for the authenticated project. Does not dispatch, retry or
+        transition the job; status changes are introduced in the slice that enables a real
+        Worker.
+      parameters:
+        - name: media_job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Media job detail.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaJobResponse"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The media job was not found in the authenticated project.
           content:
             application/problem+json:
               schema:
@@ -2543,3 +2663,88 @@ components:
             - string
             - "null"
           description: Optional distributed trace identifier.
+    MediaJobType:
+      type: string
+      additionalProperties: false
+      description: >-
+        Allowlist of media job types. Unknown values are rejected at the API boundary.
+      enum:
+        - MEDIA_PROBE
+    MediaJobStatus:
+      type: string
+      additionalProperties: false
+      description: >-
+        Lifecycle state of a media job. This slice writes only REQUESTED; later slices add
+        QUEUED, RUNNING, SUCCEEDED, FAILED and the cancel transitions.
+      enum:
+        - REQUESTED
+        - QUEUED
+        - RUNNING
+        - RETRY_WAIT
+        - SUCCEEDED
+        - FAILED
+        - CANCEL_REQUESTED
+        - CANCELLED
+    MediaJobRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - clip_asset_id
+        - job_type
+      properties:
+        clip_asset_id:
+          type: string
+          format: uuid
+          description: Identifier of a previously completed and verified uploaded clip asset.
+        job_type:
+          $ref: "#/components/schemas/MediaJobType"
+        recipe_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: >-
+            Optional 64-character lowercase hex digest of the recipe parameters. Reserved for
+            future use; this slice ignores it for natural-key uniqueness.
+    MediaJobResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - media_job_id
+        - project_id
+        - clip_asset_id
+        - job_type
+        - status
+        - input_digest
+        - input_size_bytes
+        - content_type
+        - created_at
+        - updated_at
+      properties:
+        media_job_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        job_type:
+          $ref: "#/components/schemas/MediaJobType"
+        status:
+          $ref: "#/components/schemas/MediaJobStatus"
+        input_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: SHA-256 of the input bytes as verified at upload completion.
+        input_size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        content_type:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
