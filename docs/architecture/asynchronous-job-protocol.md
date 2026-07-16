@@ -112,6 +112,12 @@ sequenceDiagram
 
 ## 5. JobResult V1
 
+`MEDIA_PROBE` 的首个正式专用结果契约已经冻结在
+`contracts/events/media-probe-result-v1.schema.json`，批准的输入配方位于
+`contracts/profiles/media-probe-baseline-v1.json`。通用示例仍用于其他 job type 的后续设计，
+不得覆盖专用契约。成功结果必须同时证明完整解码和输入 SHA-256 复核；失败结果只能携带
+allowlist 中的错误分类、稳定错误码和安全摘要，不创建 MediaReport。
+
 ```json
 {
   "schema_version": "job-result.v1",

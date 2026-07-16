@@ -24,10 +24,12 @@ interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
 			  AND job.jobType = :jobType
 			  AND job.clipAssetId = :clipAssetId
 			  AND job.inputDigest = :inputDigest
+			  AND job.recipeDigest = :recipeDigest
 			""")
-	Optional<MediaJob> findByProjectIdAndJobTypeAndClipAssetIdAndInputDigest(
+	Optional<MediaJob> findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
 			@Param("projectId") UUID projectId,
 			@Param("jobType") MediaJobType jobType,
 			@Param("clipAssetId") UUID clipAssetId,
-			@Param("inputDigest") String inputDigest);
+			@Param("inputDigest") String inputDigest,
+			@Param("recipeDigest") String recipeDigest);
 }

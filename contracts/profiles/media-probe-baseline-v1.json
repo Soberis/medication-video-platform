@@ -1,0 +1,1 @@
+{"decode_verification":"FULL_STREAM","input_digest_algorithm":"SHA-256","profile_key":"media-probe-baseline-v1","require_video_stream":true,"schema_version":"media-probe-profile.v1","timing_fields":["container_start_time","stream_start_time","time_base","first_pts","last_pts","nominal_frame_rate","average_frame_rate"]}

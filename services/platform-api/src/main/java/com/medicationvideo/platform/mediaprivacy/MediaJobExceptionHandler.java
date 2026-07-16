@@ -3,7 +3,6 @@ package com.medicationvideo.platform.mediaprivacy;
 import java.util.Optional;
 import java.util.UUID;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -78,7 +77,7 @@ class MediaJobExceptionHandler {
 	private static ResponseEntity<ApiErrorResponse> error(
 			HttpStatus status, String code, String message, boolean retryable) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_JSON)
+				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
 				.cacheControl(org.springframework.http.CacheControl.noStore())
 				.body(new ApiErrorResponse(code, message, retryable, resolveRequestId(), resolveTraceId()));
 	}
@@ -97,10 +96,9 @@ class MediaJobExceptionHandler {
 				return existing;
 			}
 			var generated = Optional.ofNullable(request.getHeader("X-Request-Id"))
-					.filter(header -> !header.isBlank())
+					.filter(header -> header.matches("^[A-Za-z0-9._:-]{1,128}$"))
 					.orElseGet(() -> UUID.randomUUID().toString());
 			request.setAttribute(REQUEST_ID_ATTRIBUTE, generated);
-			MDC.put(REQUEST_ID_ATTRIBUTE, generated);
 			return generated;
 		}
 		return UUID.randomUUID().toString();

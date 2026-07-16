@@ -42,8 +42,12 @@ class MediaJobService {
 		var summary = this.assetCatalog.getClipAssetInputSummary(projectId, request.clipAssetId());
 		ensureProbeable(summary);
 
-		var natural = this.repository.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigest(
-				projectId, request.jobType(), summary.clipAssetId(), summary.inputDigest());
+		var natural = this.repository.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
+				projectId,
+				request.jobType(),
+				summary.clipAssetId(),
+				summary.inputDigest(),
+				MediaProbeProfile.RECIPE_DIGEST);
 		if (natural.isPresent()) {
 			return requireSameRequest(natural.get(), fingerprint);
 		}
@@ -56,6 +60,8 @@ class MediaJobService {
 				summary.inputDigest(),
 				summary.inputSizeBytes(),
 				summary.contentType(),
+				MediaProbeProfile.PROFILE_KEY,
+				MediaProbeProfile.RECIPE_DIGEST,
 				idempotencyKey,
 				fingerprint,
 				now);
@@ -70,8 +76,12 @@ class MediaJobService {
 				return requireSameRequest(concurrentByIdem.get(), fingerprint);
 			}
 			var concurrentByNatural = this.repository
-					.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigest(
-							projectId, request.jobType(), summary.clipAssetId(), summary.inputDigest());
+					.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
+							projectId,
+							request.jobType(),
+							summary.clipAssetId(),
+							summary.inputDigest(),
+							MediaProbeProfile.RECIPE_DIGEST);
 			if (concurrentByNatural.isPresent()) {
 				return requireSameRequest(concurrentByNatural.get(), fingerprint);
 			}
@@ -116,7 +126,8 @@ class MediaJobService {
 				projectId.toString(),
 				request.jobType().name(),
 				request.clipAssetId().toString(),
-				request.recipeDigest() == null ? "" : request.recipeDigest());
+				MediaProbeProfile.PROFILE_KEY,
+				MediaProbeProfile.RECIPE_DIGEST);
 		try {
 			var digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
 			return HexFormat.of().formatHex(digest);

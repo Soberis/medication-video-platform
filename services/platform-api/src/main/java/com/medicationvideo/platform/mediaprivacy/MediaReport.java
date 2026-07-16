@@ -1,19 +1,25 @@
 package com.medicationvideo.platform.mediaprivacy;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+
+import org.hibernate.annotations.Immutable;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 
 /**
- * Structure-frozen MediaReport table. The schema is finalised in this slice but no rows are
- * written until a Worker (with a real probe execution) is introduced. The fields are nullable
- * to support the partial and failed-probe shapes the Worker will eventually emit.
+ * Immutable accepted media-probe report. Failed probe diagnostics belong to the job attempt and
+ * result envelope; a MediaReport exists only after input digest and full-stream decode checks have
+ * succeeded. Timing fields preserve rational media time instead of deriving timestamps from a
+ * floating-point FPS value.
  */
+@Immutable
 @Entity
 @Table(name = "media_report")
 class MediaReport {
@@ -25,75 +31,117 @@ class MediaReport {
 	@Column(name = "media_job_id", nullable = false, updatable = false)
 	private UUID mediaJobId;
 
-	@Column(name = "container_format", length = 64, updatable = false)
+	@Column(name = "project_id", nullable = false, updatable = false)
+	private UUID projectId;
+
+	@Column(name = "clip_asset_id", nullable = false, updatable = false)
+	private UUID clipAssetId;
+
+	@Column(name = "report_schema_version", nullable = false, length = 64, updatable = false)
+	private String reportSchemaVersion;
+
+	@Column(name = "input_digest", nullable = false, length = 64, updatable = false)
+	private String inputDigest;
+
+	@Column(name = "recipe_digest", nullable = false, length = 64, updatable = false)
+	private String recipeDigest;
+
+	@Column(name = "software_digest", nullable = false, length = 71, updatable = false)
+	private String softwareDigest;
+
+	@Column(name = "container_format", nullable = false, length = 64, updatable = false)
 	private String containerFormat;
 
-	@Column(name = "video_codec", length = 64, updatable = false)
+	@Column(name = "duration_microseconds", nullable = false, updatable = false)
+	private long durationMicroseconds;
+
+	@Column(name = "container_start_time_microseconds", updatable = false)
+	private Long containerStartTimeMicroseconds;
+
+	@Column(name = "video_stream_count", nullable = false, updatable = false)
+	private int videoStreamCount;
+
+	@Column(name = "primary_video_stream_index", nullable = false, updatable = false)
+	private int primaryVideoStreamIndex;
+
+	@Column(name = "video_codec", nullable = false, length = 64, updatable = false)
 	private String videoCodec;
 
-	@Column(name = "audio_codec", length = 64, updatable = false)
-	private String audioCodec;
+	@Column(name = "video_profile", length = 64, updatable = false)
+	private String videoProfile;
 
-	@Column(name = "has_audio", updatable = false)
-	private Boolean hasAudio;
+	@Column(name = "width", nullable = false, updatable = false)
+	private int width;
 
-	@Column(name = "duration_microseconds", updatable = false)
-	private Long durationMicroseconds;
+	@Column(name = "height", nullable = false, updatable = false)
+	private int height;
 
-	@Column(name = "width", updatable = false)
-	private Integer width;
-
-	@Column(name = "height", updatable = false)
-	private Integer height;
-
-	@Column(name = "frame_rate_numerator", updatable = false)
-	private Integer frameRateNumerator;
-
-	@Column(name = "frame_rate_denominator", updatable = false)
-	private Integer frameRateDenominator;
-
-	@Column(name = "bitrate_bps", updatable = false)
-	private Long bitrateBps;
+	@Column(name = "pixel_format", length = 64, updatable = false)
+	private String pixelFormat;
 
 	@Column(name = "color_space", length = 64, updatable = false)
 	private String colorSpace;
 
+	@Column(name = "primary_video_bitrate_bps", updatable = false)
+	private Long primaryVideoBitrateBps;
+
 	@Column(name = "has_b_frames", updatable = false)
 	private Boolean hasBFrames;
 
-	@Column(name = "sample_aspect_ratio", length = 16, updatable = false)
-	private String sampleAspectRatio;
+	@Column(name = "stream_start_time_microseconds", updatable = false)
+	private Long streamStartTimeMicroseconds;
 
-	@Column(name = "creation_time_rfc3339", length = 64, updatable = false)
-	private String creationTimeRfc3339;
+	@Column(name = "time_base_numerator", nullable = false, updatable = false)
+	private int timeBaseNumerator;
 
-	@Column(name = "timebase_reference", length = 128, updatable = false)
-	private String timebaseReference;
+	@Column(name = "time_base_denominator", nullable = false, updatable = false)
+	private int timeBaseDenominator;
 
-	@Column(name = "soft_hash", length = 64, updatable = false)
-	private String softHash;
+	@Column(name = "first_pts", updatable = false)
+	private Long firstPts;
 
-	@Column(name = "error_class", length = 64, updatable = false)
-	private String errorClass;
+	@Column(name = "last_pts", updatable = false)
+	private Long lastPts;
 
-	@Column(name = "error_code", length = 64, updatable = false)
-	private String errorCode;
+	@Column(name = "nominal_frame_rate_numerator", updatable = false)
+	private Integer nominalFrameRateNumerator;
 
-	@Column(name = "error_message", length = 512, updatable = false)
-	private String errorMessage;
+	@Column(name = "nominal_frame_rate_denominator", updatable = false)
+	private Integer nominalFrameRateDenominator;
 
-	@Column(name = "error_retryable", updatable = false)
-	private Boolean errorRetryable;
+	@Column(name = "average_frame_rate_numerator", updatable = false)
+	private Integer averageFrameRateNumerator;
+
+	@Column(name = "average_frame_rate_denominator", updatable = false)
+	private Integer averageFrameRateDenominator;
+
+	@Column(name = "frame_count", updatable = false)
+	private Long frameCount;
+
+	@Column(name = "variable_frame_rate", nullable = false, updatable = false)
+	private boolean variableFrameRate;
+
+	@Column(name = "audio_stream_count", nullable = false, updatable = false)
+	private int audioStreamCount;
+
+	@Column(name = "sample_aspect_ratio_numerator", updatable = false)
+	private Integer sampleAspectRatioNumerator;
+
+	@Column(name = "sample_aspect_ratio_denominator", updatable = false)
+	private Integer sampleAspectRatioDenominator;
+
+	@Column(name = "decode_verified", nullable = false, updatable = false)
+	private boolean decodeVerified;
+
+	@Column(name = "input_digest_verified", nullable = false, updatable = false)
+	private boolean inputDigestVerified;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "warning_codes", nullable = false, columnDefinition = "jsonb", updatable = false)
+	private List<String> warningCodes;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
-
-	@Column(name = "updated_at", nullable = false)
-	private Instant updatedAt;
-
-	@Version
-	@Column(name = "version", nullable = false)
-	private long version;
 
 	protected MediaReport() {
 	}

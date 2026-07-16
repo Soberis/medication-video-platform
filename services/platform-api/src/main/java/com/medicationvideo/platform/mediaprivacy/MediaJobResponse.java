@@ -12,6 +12,8 @@ record MediaJobResponse(
 		String inputDigest,
 		long inputSizeBytes,
 		String contentType,
+		String probeProfileKey,
+		String recipeDigest,
 		Instant createdAt,
 		Instant updatedAt) {
 
@@ -25,6 +27,8 @@ record MediaJobResponse(
 				job.getInputDigest(),
 				job.getInputSizeBytes(),
 				job.getContentType(),
+				job.getProbeProfileKey(),
+				job.getRecipeDigest(),
 				job.getCreatedAt(),
 				job.getUpdatedAt());
 	}

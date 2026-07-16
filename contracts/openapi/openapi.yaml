@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.11.0
+  version: 0.11.1
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -1184,10 +1184,13 @@ paths:
       summary: Create a media probe job for a verified uploaded clip asset
       description: >-
         Persists a media job in REQUESTED state for the authenticated project. The job is uniquely
-        identified by the (project_id, job_type, clip_asset_id, input_digest) tuple; an existing
-        job with the same tuple is returned idempotently. The same Idempotency-Key reused with a
-        different request body is rejected with IDEMPOTENCY_KEY_REUSED. This slice intentionally
-        does not return 202 Accepted, because no Worker has been enabled to consume the job yet.
+        identified by the (project_id, job_type, clip_asset_id, input_digest, recipe_digest)
+        tuple; the server binds it to the approved media-probe-baseline-v1 profile and returns an
+        existing job with the same tuple idempotently. Callers cannot supply arbitrary probe
+        recipes. The same Idempotency-Key reused with a different request body is rejected with
+        IDEMPOTENCY_KEY_REUSED. This slice intentionally does not return 202 Accepted, because no
+        Worker has been enabled to consume the job yet. The future Worker result contract is
+        frozen separately in contracts/events/media-probe-result-v1.schema.json.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -2698,12 +2701,6 @@ components:
           description: Identifier of a previously completed and verified uploaded clip asset.
         job_type:
           $ref: "#/components/schemas/MediaJobType"
-        recipe_digest:
-          type: string
-          pattern: "^[a-f0-9]{64}$"
-          description: >-
-            Optional 64-character lowercase hex digest of the recipe parameters. Reserved for
-            future use; this slice ignores it for natural-key uniqueness.
     MediaJobResponse:
       type: object
       additionalProperties: false
@@ -2716,6 +2713,8 @@ components:
         - input_digest
         - input_size_bytes
         - content_type
+        - probe_profile_key
+        - recipe_digest
         - created_at
         - updated_at
       properties:
@@ -2742,6 +2741,14 @@ components:
           minimum: 1
         content_type:
           type: string
+        probe_profile_key:
+          type: string
+          const: media-probe-baseline-v1
+          description: Server-approved immutable probe profile selected for this job.
+        recipe_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: SHA-256 identity of the exact approved probe recipe.
         created_at:
           type: string
           format: date-time

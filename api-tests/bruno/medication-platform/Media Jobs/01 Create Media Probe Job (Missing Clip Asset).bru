@@ -11,15 +11,16 @@ post {
   url: {{baseUrl}}/api/v1/media-jobs
   body: json
   auth: inherit
-  headers {
-    Idempotency-Key: bruno-media-probe-missing-1234567890
-  }
+}
+
+headers {
+  Idempotency-Key: bruno-media-probe-missing-1234567890
 }
 
 body:json {
   {
-    "clipAssetId": "99999999-9999-9999-9999-999999999999",
-    "jobType": "MEDIA_PROBE"
+    "clip_asset_id": "99999999-9999-9999-9999-999999999999",
+    "job_type": "MEDIA_PROBE"
   }
 }
 

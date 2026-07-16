@@ -43,6 +43,12 @@ class MediaJob {
 	@Column(name = "content_type", nullable = false, length = 128, updatable = false)
 	private String contentType;
 
+	@Column(name = "probe_profile_key", nullable = false, length = 64, updatable = false)
+	private String probeProfileKey;
+
+	@Column(name = "recipe_digest", nullable = false, length = 64, updatable = false)
+	private String recipeDigest;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 32)
 	private MediaJobStatus status;
@@ -74,6 +80,8 @@ class MediaJob {
 			String inputDigest,
 			long inputSizeBytes,
 			String contentType,
+			String probeProfileKey,
+			String recipeDigest,
 			String idempotencyKey,
 			String requestFingerprint,
 			Instant createdAt) {
@@ -84,6 +92,8 @@ class MediaJob {
 		this.inputDigest = inputDigest;
 		this.inputSizeBytes = inputSizeBytes;
 		this.contentType = contentType;
+		this.probeProfileKey = probeProfileKey;
+		this.recipeDigest = recipeDigest;
 		this.status = MediaJobStatus.REQUESTED;
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
@@ -98,6 +108,8 @@ class MediaJob {
 			String inputDigest,
 			long inputSizeBytes,
 			String contentType,
+			String probeProfileKey,
+			String recipeDigest,
 			String idempotencyKey,
 			String requestFingerprint,
 			Instant createdAt) {
@@ -109,6 +121,8 @@ class MediaJob {
 				inputDigest,
 				inputSizeBytes,
 				contentType,
+				probeProfileKey,
+				recipeDigest,
 				idempotencyKey,
 				requestFingerprint,
 				createdAt);
@@ -140,6 +154,14 @@ class MediaJob {
 
 	String getContentType() {
 		return this.contentType;
+	}
+
+	String getProbeProfileKey() {
+		return this.probeProfileKey;
+	}
+
+	String getRecipeDigest() {
+		return this.recipeDigest;
 	}
 
 	MediaJobStatus getStatus() {

@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/media-probe-result-v1.schema.json",
+  "title": "MediaProbeResultV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_id",
+    "job_id",
+    "attempt",
+    "lease_token",
+    "status",
+    "input_sha256",
+    "recipe_digest",
+    "software_digest",
+    "started_at",
+    "completed_at",
+    "report",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "media-probe-result.v1"
+    },
+    "message_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lease_token": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 256
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCEEDED", "FAILED"]
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recipe_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "software_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "report": {
+      "oneOf": [
+        { "$ref": "#/$defs/media_report" },
+        { "type": "null" }
+      ]
+    },
+    "error": {
+      "oneOf": [
+        { "$ref": "#/$defs/probe_error" },
+        { "type": "null" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "SUCCEEDED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "report": { "$ref": "#/$defs/media_report" },
+          "error": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "FAILED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "report": { "type": "null" },
+          "error": { "$ref": "#/$defs/probe_error" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nullable_integer": {
+      "type": ["integer", "null"]
+    },
+    "nullable_non_negative_integer": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "nullable_positive_integer": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "nullable_string": {
+      "type": ["string", "null"],
+      "maxLength": 64
+    },
+    "media_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "nominal_frame_rate_numerator": { "type": "integer", "minimum": 0 },
+                "nominal_frame_rate_denominator": { "type": "integer", "minimum": 1 }
+              }
+            },
+            {
+              "properties": {
+                "nominal_frame_rate_numerator": { "type": "null" },
+                "nominal_frame_rate_denominator": { "type": "null" }
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "average_frame_rate_numerator": { "type": "integer", "minimum": 0 },
+                "average_frame_rate_denominator": { "type": "integer", "minimum": 1 }
+              }
+            },
+            {
+              "properties": {
+                "average_frame_rate_numerator": { "type": "null" },
+                "average_frame_rate_denominator": { "type": "null" }
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "sample_aspect_ratio_numerator": { "type": "integer", "minimum": 1 },
+                "sample_aspect_ratio_denominator": { "type": "integer", "minimum": 1 }
+              }
+            },
+            {
+              "properties": {
+                "sample_aspect_ratio_numerator": { "type": "null" },
+                "sample_aspect_ratio_denominator": { "type": "null" }
+              }
+            }
+          ]
+        }
+      ],
+      "required": [
+        "container_format",
+        "duration_microseconds",
+        "container_start_time_microseconds",
+        "video_stream_count",
+        "primary_video_stream_index",
+        "video_codec",
+        "video_profile",
+        "width",
+        "height",
+        "pixel_format",
+        "color_space",
+        "primary_video_bitrate_bps",
+        "has_b_frames",
+        "stream_start_time_microseconds",
+        "time_base_numerator",
+        "time_base_denominator",
+        "first_pts",
+        "last_pts",
+        "nominal_frame_rate_numerator",
+        "nominal_frame_rate_denominator",
+        "average_frame_rate_numerator",
+        "average_frame_rate_denominator",
+        "frame_count",
+        "variable_frame_rate",
+        "audio_stream_count",
+        "sample_aspect_ratio_numerator",
+        "sample_aspect_ratio_denominator",
+        "decode_verified",
+        "input_digest_verified",
+        "warning_codes"
+      ],
+      "properties": {
+        "container_format": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "duration_microseconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "container_start_time_microseconds": {
+          "$ref": "#/$defs/nullable_integer"
+        },
+        "video_stream_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "primary_video_stream_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video_codec": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "video_profile": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pixel_format": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "color_space": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "primary_video_bitrate_bps": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "has_b_frames": {
+          "type": ["boolean", "null"]
+        },
+        "stream_start_time_microseconds": {
+          "$ref": "#/$defs/nullable_integer"
+        },
+        "time_base_numerator": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "time_base_denominator": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "first_pts": {
+          "$ref": "#/$defs/nullable_integer"
+        },
+        "last_pts": {
+          "$ref": "#/$defs/nullable_integer"
+        },
+        "nominal_frame_rate_numerator": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "nominal_frame_rate_denominator": {
+          "$ref": "#/$defs/nullable_positive_integer"
+        },
+        "average_frame_rate_numerator": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "average_frame_rate_denominator": {
+          "$ref": "#/$defs/nullable_positive_integer"
+        },
+        "frame_count": {
+          "$ref": "#/$defs/nullable_non_negative_integer"
+        },
+        "variable_frame_rate": {
+          "type": "boolean"
+        },
+        "audio_stream_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_aspect_ratio_numerator": {
+          "$ref": "#/$defs/nullable_positive_integer"
+        },
+        "sample_aspect_ratio_denominator": {
+          "$ref": "#/$defs/nullable_positive_integer"
+        },
+        "decode_verified": {
+          "const": true
+        },
+        "input_digest_verified": {
+          "const": true
+        },
+        "warning_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "PTS_MISSING",
+              "PTS_NON_MONOTONIC",
+              "FRAME_COUNT_UNAVAILABLE",
+              "DURATION_MISMATCH",
+              "VFR_DETECTED",
+              "AUDIO_PRESENT"
+            ]
+          }
+        }
+      }
+    },
+    "probe_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "error_class": { "const": "RETRYABLE_TRANSIENT" },
+            "error_code": { "const": "OBJECT_STORAGE_UNAVAILABLE" },
+            "retryable": { "const": true }
+          }
+        },
+        {
+          "properties": {
+            "error_class": { "const": "RETRYABLE_RESOURCE" },
+            "error_code": { "const": "MEDIA_PROBE_TIMEOUT" },
+            "retryable": { "const": true }
+          }
+        },
+        {
+          "properties": {
+            "error_class": { "const": "NON_RETRYABLE_INPUT" },
+            "error_code": {
+              "enum": [
+                "MEDIA_INPUT_DIGEST_MISMATCH",
+                "MEDIA_CONTAINER_UNSUPPORTED",
+                "MEDIA_VIDEO_STREAM_MISSING",
+                "MEDIA_DECODE_FAILED",
+                "MEDIA_TIMELINE_INVALID"
+              ]
+            },
+            "retryable": { "const": false }
+          }
+        },
+        {
+          "properties": {
+            "error_class": { "const": "INTERNAL_BUG" },
+            "error_code": { "const": "MEDIA_PROBE_INTERNAL" },
+            "retryable": { "const": true }
+          }
+        }
+      ],
+      "required": ["error_class", "error_code", "safe_message", "retryable"],
+      "properties": {
+        "error_class": {
+          "type": "string",
+          "enum": [
+            "RETRYABLE_TRANSIENT",
+            "RETRYABLE_RESOURCE",
+            "NON_RETRYABLE_INPUT",
+            "INTERNAL_BUG"
+          ]
+        },
+        "error_code": {
+          "type": "string",
+          "enum": [
+            "OBJECT_STORAGE_UNAVAILABLE",
+            "MEDIA_PROBE_TIMEOUT",
+            "MEDIA_INPUT_DIGEST_MISMATCH",
+            "MEDIA_CONTAINER_UNSUPPORTED",
+            "MEDIA_VIDEO_STREAM_MISSING",
+            "MEDIA_DECODE_FAILED",
+            "MEDIA_TIMELINE_INVALID",
+            "MEDIA_PROBE_INTERNAL"
+          ]
+        },
+        "safe_message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

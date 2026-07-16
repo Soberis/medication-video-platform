@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -62,6 +63,8 @@ class MediaJobContractTests {
 				.andExpect(jsonPath("$.input_digest").value(SHA256))
 				.andExpect(jsonPath("$.input_size_bytes").value(1234))
 				.andExpect(jsonPath("$.content_type").value("video/mp4"))
+				.andExpect(jsonPath("$.probe_profile_key").value("media-probe-baseline-v1"))
+				.andExpect(jsonPath("$.recipe_digest").value(MediaProbeProfile.RECIPE_DIGEST))
 				.andExpect(jsonPath("$.project_id").value(PROJECT_ID))
 				.andReturn()
 				.getResponse()
@@ -210,6 +213,34 @@ class MediaJobContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(mediaProbeBody(clipAssetId)))
 				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void migrationFreezesRecipeIdentityAndScientificMediaReportFields() {
+		var recipeColumns = this.jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				FROM information_schema.columns
+				WHERE table_schema = 'public'
+				  AND table_name = 'media_job'
+				  AND column_name IN ('probe_profile_key', 'recipe_digest')
+				""", Integer.class);
+		assertEquals(2, recipeColumns);
+
+		var reportColumns = this.jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				FROM information_schema.columns
+				WHERE table_schema = 'public'
+				  AND table_name = 'media_report'
+				  AND column_name IN (
+				      'report_schema_version', 'input_digest', 'recipe_digest', 'software_digest',
+				      'video_stream_count', 'primary_video_stream_index', 'pixel_format',
+				      'time_base_numerator', 'time_base_denominator', 'first_pts', 'last_pts',
+				      'nominal_frame_rate_numerator', 'nominal_frame_rate_denominator',
+				      'average_frame_rate_numerator', 'average_frame_rate_denominator',
+				      'frame_count', 'variable_frame_rate', 'decode_verified',
+				      'input_digest_verified', 'warning_codes')
+				""", Integer.class);
+		assertEquals(20, reportColumns);
 	}
 
 	private static String mediaProbeBody(UUID clipAssetId) {
