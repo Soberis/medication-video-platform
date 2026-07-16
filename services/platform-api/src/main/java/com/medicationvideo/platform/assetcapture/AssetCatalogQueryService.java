@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class AssetCatalogQueryService {
+public class AssetCatalogQueryService {
 
 	private static final String SESSION_CURSOR_KIND = "capture-session";
 	private static final String ASSET_CURSOR_KIND = "clip-asset";
@@ -27,7 +27,7 @@ class AssetCatalogQueryService {
 	private final CameraStreamRepository streamRepository;
 	private final ClipAssetRepository clipAssetRepository;
 
-	AssetCatalogQueryService(
+	public AssetCatalogQueryService(
 			NamedParameterJdbcTemplate jdbcTemplate,
 			CaptureSessionRepository sessionRepository,
 			CameraSetSnapshotRepository snapshotRepository,
@@ -261,6 +261,28 @@ class AssetCatalogQueryService {
 				asset.getSha256(),
 				asset.getStatus(),
 				binding,
+				asset.getCreatedAt(),
+				asset.getUpdatedAt());
+	}
+
+	/**
+	 * Cross-module read-only entry point. Returns a frozen snapshot of the fields a downstream
+	 * module (e.g. mediaprivacy) needs to schedule work against a clip asset. Does not leak
+	 * storage locations, ETag or batch identifiers.
+	 */
+	@Transactional(readOnly = true)
+	public ClipAssetInputSummary getClipAssetInputSummary(UUID projectId, UUID clipAssetId) {
+		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
+				.orElseThrow(() -> new AssetCatalogQueryException(
+						"CLIP_ASSET_NOT_FOUND",
+						"The clip asset was not found in the current project."));
+		return new ClipAssetInputSummary(
+				asset.getClipAssetId(),
+				asset.getProjectId(),
+				asset.getContentType(),
+				asset.getSizeBytes(),
+				asset.getSha256(),
+				asset.getStatus(),
 				asset.getCreatedAt(),
 				asset.getUpdatedAt());
 	}
