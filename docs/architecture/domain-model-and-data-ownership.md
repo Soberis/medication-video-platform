@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-14
+> 最后更新：2026-07-16
 
 ## 1. 目标与边界
 
@@ -113,7 +113,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| UploadBatch | upload_batch、upload_file、upload_part | 批次配额、文件清单、分片会话、幂等、完成/中止和临时对象清理 |
+| UploadBatch | upload_batch、upload_file、upload_part、upload_cleanup_task | 批次配额、文件清单、分片会话、幂等、完成/中止和临时对象清理 |
 | CameraChannel | camera_channel、camera_alias | 稳定通道 ID 与带生效期的临时/正式别名 |
 | CameraSet | camera_set、camera_set_member | 可生效的相机组配置 |
 | CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
@@ -127,6 +127,10 @@ flowchart LR
 - `storage_upload_id` 只用于服务端恢复、完成和中止，不通过控制面响应直接暴露。
 - `upload_part` 保存 part number、期望字节数、期望 SHA-256、状态和授权到期时间，不保存预签名 URL。
 - 同一文件只能有一个活动 multipart 会话；同一 `(upload_file_id, part_number)` 只能有一个不可变期望摘要。
+- Abort 仅允许批次发起人或项目管理员；TTL 到期必须记录 `EXPIRED`，不能降格成用户 `ABORTED`。
+- 批次/文件终态、逐文件清理任务和追加式审计必须原子提交；对象存储 Abort/Delete 不占用该数据库事务。
+- `upload_cleanup_task` 对每个 UploadFile 唯一，使用 claim lease 和有限重试；终态 `FAILED` 必须告警，不得假定对象已清理。
+- 清理任务保留服务端对象引用能力但任何查询响应、日志和指标不得暴露对象 key、upload ID 或预签名 URL。
 - Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset；METADATA 和 EVENT_LOG 不伪装成视频资产。
 - `CameraSetSnapshot` 与 `CaptureSession` 同事务创建，只能由服务器现行 CameraSet 冻结；RK3588 只上报稳定标识和观测元数据，不能覆盖服务器相机配置真值。
 

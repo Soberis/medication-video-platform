@@ -80,6 +80,15 @@ class UploadBatchExceptionHandler {
 		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage());
 	}
 
+	@ExceptionHandler(UploadBatchTerminationException.class)
+	ResponseEntity<ApiErrorResponse> batchTerminationConflict(UploadBatchTerminationException exception) {
+		return error(
+				HttpStatus.CONFLICT,
+				exception.getErrorCode(),
+				exception.getMessage(),
+				exception.isRetryable());
+	}
+
 	@ExceptionHandler(CameraConfigurationException.class)
 	ResponseEntity<ApiErrorResponse> cameraConfigurationConflict(CameraConfigurationException exception) {
 		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage());

@@ -182,6 +182,7 @@ class UploadFileContractTests {
 				"other-project-key-0001",
 				SHA256_A,
 				"synthetic-device-02",
+				"synthetic-test-actor",
 				1,
 				10L,
 				SHA256_A,

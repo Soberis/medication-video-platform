@@ -358,6 +358,25 @@ class UploadFile {
 		return this.completionErrorCode;
 	}
 
+	void terminate(UploadFileStatus terminalStatus, Instant changedAt) {
+		if (terminalStatus != UploadFileStatus.ABORTED
+				&& terminalStatus != UploadFileStatus.EXPIRED) {
+			throw new IllegalArgumentException("Upload file termination status is invalid.");
+		}
+		if (this.status == terminalStatus) {
+			return;
+		}
+		this.status = terminalStatus;
+		this.completionAttemptId = null;
+		this.completionStartedAt = null;
+		this.completionLeaseExpiresAt = null;
+		this.completionFinishedAt = null;
+		this.verifiedSha256 = null;
+		this.completedStorageEtag = null;
+		this.completionErrorCode = null;
+		this.updatedAt = changedAt;
+	}
+
 	void requireCompletionAttempt(UUID attemptId) {
 		if (this.status != UploadFileStatus.COMPLETING || !attemptId.equals(this.completionAttemptId)) {
 			throw new IllegalStateException("Upload file completion attempt is no longer active.");

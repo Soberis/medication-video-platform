@@ -8,11 +8,11 @@
 
 - Core API、八个领域模块和一个集成模块的边界声明已建立，Java 21 下的模块测试、启动测试和打包已通过。
 - Vue 3 管理端已启用 `/sessions`、`/sessions/:id`、`/assets`、`/assets/:id` 和 `/uploads`。默认入口按一次护士配药操作展示多相机 Session，再下钻到单路视频资产；Element Plus 2.14.3 只用于当前真实列表、筛选和详情，Pinia 仍未注册或建立 Store。
-- OpenAPI 3.1（当前 0.16.0）和 Redocly lint 已建立；当前契约覆盖上传控制面、项目隔离的 Session/ClipAsset 查询、媒体探测作业、内部租约/心跳/结果提交、MediaReport 查询和管理员受控重放。媒体探测使用服务器批准的 `media-probe-baseline-v1` 配方，任务、Worker 结果和脱敏死信诊断分别由 `media-probe-job.v1`、`media-probe-result.v1`、`media-dead-letter.v1` JSON Schema 约束。
+- OpenAPI 3.1（当前 0.17.0）和 Redocly lint 已建立；当前契约覆盖上传控制面、批次终止与清理进度、项目隔离的 Session/ClipAsset 查询、媒体探测作业、内部租约/心跳/结果提交、MediaReport 查询和管理员受控重放。媒体探测使用服务器批准的 `media-probe-baseline-v1` 配方，任务、Worker 结果和脱敏死信诊断分别由 `media-probe-job.v1`、`media-probe-result.v1`、`media-dead-letter.v1` JSON Schema 约束。
 - Sprint 0 严格质量门禁已通过；最小 Python 3.12 Media Worker 工程已建立并启用 uv lock、Ruff、mypy、pytest 门禁，AI Plugin 仍按后续阶段 deferred。
-- 上传控制面、最小相机配置、Session 组装、项目隔离的 Session/ClipAsset 只读目录、MediaJob/MediaReport、append-only AuditEvent、受控重放和 Flyway V1～V16 已建立。创建媒体作业会在同一数据库事务内写入 attempt 和 Outbox，再由带 publisher confirm 的 relay 投递到单一媒体业务队列；发布确认后 Outbox 会删除一次性 lease capability。Worker 使用独立身份换取短期输入 URL，处理期间按服务端节奏续租，流式复核大小/SHA-256，执行 FFprobe 与 FFmpeg 完整解码，再由 Core API 通过租约、软件摘要 allowlist 和 Inbox 幂等守卫提交状态与不可变 MediaReport。租约超过 grace period 后，平台会原子标记旧 attempt 为 `LOST`，以新 capability 和 Outbox 消息创建下一 attempt；有效的 retryable Worker 失败会进入 `RETRY_WAIT`，通过 Outbox 有限退避生成下一 attempt；达到上限后才终止业务 job。管理员可用独立身份从保留的脱敏诊断创建新 attempt，旧诊断不会被直接重投，审计表由数据库阻止更新和删除。本地合成视频真实队列闭环已验证。
+- 上传控制面、最小相机配置、Session 组装、项目隔离的 Session/ClipAsset 只读目录、MediaJob/MediaReport、append-only AuditEvent、受控重放和 Flyway V1～V17 已建立。未完成批次可由发起人或项目管理员终止；过期判定、文件终态、清理任务和审计原子落库，再以租约和有限重试异步执行 Multipart Abort 或遗留对象删除。创建媒体作业会在同一数据库事务内写入 attempt 和 Outbox，再由带 publisher confirm 的 relay 投递到单一媒体业务队列；发布确认后 Outbox 会删除一次性 lease capability。Worker 使用独立身份换取短期输入 URL，处理期间按服务端节奏续租，流式复核大小/SHA-256，执行 FFprobe 与 FFmpeg 完整解码，再由 Core API 通过租约、软件摘要 allowlist 和 Inbox 幂等守卫提交状态与不可变 MediaReport。租约超过 grace period 后，平台会原子标记旧 attempt 为 `LOST`，以新 capability 和 Outbox 消息创建下一 attempt；有效的 retryable Worker 失败会进入 `RETRY_WAIT`，通过 Outbox 有限退避生成下一 attempt；达到上限后才终止业务 job。管理员可用独立身份从保留的脱敏诊断创建新 attempt，旧诊断不会被直接重投，审计表由数据库阻止更新和删除。本地合成视频真实队列闭环已验证。
 - 本地 PostgreSQL、S3 兼容对象存储和 RabbitMQ 已由三服务 Compose 启动并通过健康与连通性检查；RabbitMQ 当前仅建立一个媒体探测队列和一个 DLQ。业务队列不使用会复制 lease capability 的 broker 原样死信，Worker 只在 publisher confirm 后写入脱敏诊断；Redis 和 CVAT 尚未启用。
-- FR-001～FR-003 仍是部分实现：媒体探测入库已闭合，但尚缺 Abort/过期清理、2GB 中断恢复验收和事件日志索引。FR-004 的 `capture-session-metadata-v1` 必填字段、服务器 CameraSet 对账和原子 Session 组装已达到实现态，但尚未进入 UAT。
+- FR-001～FR-003 仍是部分实现：媒体探测入库、Abort 和过期清理代码路径已闭合，但尚缺 2GB 中断恢复验收、事件日志索引和清理运行告警的环境验收。FR-004 的 `capture-session-metadata-v1` 必填字段、服务器 CameraSet 对账和原子 Session 组装已达到实现态，但尚未进入 UAT。
 - MediaPipe 属于 P1 试点，不进入 P0 关键路径。
 
 ## Architecture Summary
@@ -88,4 +88,4 @@ pnpm run api:test
 
 ## Next Step
 
-`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession 和 ClipAsset；Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。2026-07-16 已在本地合成环境完成真实 broker 死信/受控重放演练：业务队列移除旧 DLX 参数，错误 Worker 身份产生脱敏诊断，管理员重放生成新 attempt/Outbox/审计记录，正确 Worker 最终完成探测并写入 MediaReport。下一步完成上传 Abort/过期清理、事件日志索引和 2GB 中断恢复验收；这些可靠性能力完成前不进入隐私业务切片。
+`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession 和 ClipAsset；Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。2026-07-16 已在本地合成环境完成真实 broker 死信/受控重放演练：业务队列移除旧 DLX 参数，错误 Worker 身份产生脱敏诊断，管理员重放生成新 attempt/Outbox/审计记录，正确 Worker 最终完成探测并写入 MediaReport。上传 Abort/过期判定及持久化清理任务已实现，破坏性调度默认关闭并需要环境负责人显式启用。下一步完成 EVENT_LOG 索引与查询，再执行 2GB 中断恢复、清理积压告警和 UAT 环境验收；这些可靠性能力完成前不进入隐私业务切片。

@@ -181,7 +181,16 @@ class UploadFileCompletionStateService {
 	private UploadFile requireAttempt(UUID uploadFileId, UUID attemptId) {
 		var file = this.fileRepository.findForCompletion(uploadFileId)
 				.orElseThrow(UploadFileNotFoundException::new);
-		file.requireCompletionAttempt(attemptId);
+		try {
+			file.requireCompletionAttempt(attemptId);
+		}
+		catch (IllegalStateException exception) {
+			if (file.getStatus() == UploadFileStatus.ABORTED
+					|| file.getStatus() == UploadFileStatus.EXPIRED) {
+				throw new UploadFileCompletionSupersededException();
+			}
+			throw exception;
+		}
 		return file;
 	}
 

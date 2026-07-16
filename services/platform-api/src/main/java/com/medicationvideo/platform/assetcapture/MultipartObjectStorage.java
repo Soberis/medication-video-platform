@@ -28,6 +28,8 @@ public interface MultipartObjectStorage {
 
 	void abort(CreatedUpload upload);
 
+	void delete(ObjectReference object);
+
 	record ObjectReference(String bucket, String objectKey) {
 
 		public ObjectReference {

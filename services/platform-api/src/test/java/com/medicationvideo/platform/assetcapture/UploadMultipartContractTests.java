@@ -698,6 +698,11 @@ class UploadMultipartContractTests {
 		public void abort(CreatedUpload upload) {
 		}
 
+		@Override
+		public void delete(ObjectReference object) {
+			this.completedObject = null;
+		}
+
 		void storePart(int partNumber, long sizeBytes, String eTag) {
 			this.storedParts.put(partNumber, new StoredPart(partNumber, sizeBytes, eTag));
 		}

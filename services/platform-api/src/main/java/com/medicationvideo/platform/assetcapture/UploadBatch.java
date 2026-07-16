@@ -31,6 +31,9 @@ class UploadBatch {
 	@Column(name = "device_id", nullable = false, length = 128, updatable = false)
 	private String deviceId;
 
+	@Column(name = "initiated_by_actor_id", nullable = false, length = 128, updatable = false)
+	private String initiatedByActorId;
+
 	@Column(name = "file_count", nullable = false, updatable = false)
 	private int fileCount;
 
@@ -59,6 +62,12 @@ class UploadBatch {
 	@Column(name = "completed_at")
 	private Instant completedAt;
 
+	@Column(name = "terminated_at")
+	private Instant terminatedAt;
+
+	@Column(name = "termination_reason_code", length = 64)
+	private String terminationReasonCode;
+
 	@Version
 	@Column(name = "version", nullable = false)
 	private long version;
@@ -72,6 +81,7 @@ class UploadBatch {
 			String idempotencyKey,
 			String requestFingerprint,
 			String deviceId,
+			String initiatedByActorId,
 			int fileCount,
 			long totalSizeBytes,
 			String manifestSha256,
@@ -82,6 +92,7 @@ class UploadBatch {
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
 		this.deviceId = deviceId;
+		this.initiatedByActorId = initiatedByActorId;
 		this.fileCount = fileCount;
 		this.totalSizeBytes = totalSizeBytes;
 		this.manifestSha256 = manifestSha256;
@@ -96,6 +107,7 @@ class UploadBatch {
 			String idempotencyKey,
 			String requestFingerprint,
 			String deviceId,
+			String initiatedByActorId,
 			int fileCount,
 			long totalSizeBytes,
 			String manifestSha256,
@@ -107,6 +119,7 @@ class UploadBatch {
 				idempotencyKey,
 				requestFingerprint,
 				deviceId,
+				initiatedByActorId,
 				fileCount,
 				totalSizeBytes,
 				manifestSha256,
@@ -128,6 +141,10 @@ class UploadBatch {
 
 	String getDeviceId() {
 		return this.deviceId;
+	}
+
+	String getInitiatedByActorId() {
+		return this.initiatedByActorId;
 	}
 
 	int getFileCount() {
@@ -162,6 +179,14 @@ class UploadBatch {
 		return this.completedAt;
 	}
 
+	Instant getTerminatedAt() {
+		return this.terminatedAt;
+	}
+
+	String getTerminationReasonCode() {
+		return this.terminationReasonCode;
+	}
+
 	void markUploading(Instant changedAt) {
 		if (this.status == UploadBatchStatus.INITIATED) {
 			this.status = UploadBatchStatus.UPLOADING;
@@ -183,6 +208,24 @@ class UploadBatch {
 		this.verifiedManifestSha256 = verifiedManifestSha256;
 		this.completedAt = changedAt;
 		this.status = UploadBatchStatus.COMPLETED;
+		this.updatedAt = changedAt;
+	}
+
+	void terminate(UploadBatchStatus terminalStatus, String reasonCode, Instant changedAt) {
+		if (terminalStatus != UploadBatchStatus.ABORTED
+				&& terminalStatus != UploadBatchStatus.EXPIRED) {
+			throw new IllegalArgumentException("Upload batch termination status is invalid.");
+		}
+		if (this.status == terminalStatus) {
+			return;
+		}
+		if (this.status != UploadBatchStatus.INITIATED
+				&& this.status != UploadBatchStatus.UPLOADING) {
+			throw new IllegalStateException("Upload batch cannot terminate from its current state.");
+		}
+		this.status = terminalStatus;
+		this.terminatedAt = changedAt;
+		this.terminationReasonCode = reasonCode;
 		this.updatedAt = changedAt;
 	}
 }

@@ -16,14 +16,17 @@ class UploadProgressQueryService {
 	private final UploadBatchRepository batchRepository;
 	private final UploadFileRepository fileRepository;
 	private final UploadPartRepository partRepository;
+	private final UploadCleanupTaskStore cleanupStore;
 
 	UploadProgressQueryService(
 			UploadBatchRepository batchRepository,
 			UploadFileRepository fileRepository,
-			UploadPartRepository partRepository) {
+			UploadPartRepository partRepository,
+			UploadCleanupTaskStore cleanupStore) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.partRepository = partRepository;
+		this.cleanupStore = cleanupStore;
 	}
 
 	UploadBatchProgressResponse getBatch(UUID batchId, UploadActor actor) {
@@ -31,7 +34,8 @@ class UploadProgressQueryService {
 		return UploadBatchProgressResponse.from(
 				snapshot.batch(),
 				snapshot.files(),
-				snapshot.partProgress().values());
+				snapshot.partProgress().values(),
+				this.cleanupStore.summarize(batchId));
 	}
 
 	UploadFileProgressListResponse getFiles(UUID batchId, UploadActor actor) {

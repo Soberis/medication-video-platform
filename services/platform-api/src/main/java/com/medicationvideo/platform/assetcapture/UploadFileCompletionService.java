@@ -7,12 +7,15 @@ class UploadFileCompletionService {
 
 	private final UploadFileCompletionStateService stateService;
 	private final MultipartObjectStorage objectStorage;
+	private final UploadCleanupTaskStore cleanupStore;
 
 	UploadFileCompletionService(
 			UploadFileCompletionStateService stateService,
-			MultipartObjectStorage objectStorage) {
+			MultipartObjectStorage objectStorage,
+			UploadCleanupTaskStore cleanupStore) {
 		this.stateService = stateService;
 		this.objectStorage = objectStorage;
+		this.cleanupStore = cleanupStore;
 	}
 
 	UploadFileCompletionResponse complete(
@@ -58,6 +61,12 @@ class UploadFileCompletionService {
 		catch (MultipartObjectStorageException exception) {
 			this.stateService.releaseLease(attempt.uploadFileId(), attempt.attemptId());
 			throw new UploadStorageUnavailableException(exception);
+		}
+		catch (UploadFileCompletionSupersededException exception) {
+			this.cleanupStore.reactivate(attempt.uploadFileId(), java.time.Instant.now());
+			throw new UploadMultipartException(
+					"UPLOAD_FILE_COMPLETION_SUPERSEDED",
+					"The upload batch terminated before file completion committed.");
 		}
 	}
 }

@@ -29,16 +29,19 @@ class UploadBatchController {
 	private final UploadProgressQueryService progressQueryService;
 	private final UploadBatchCompletionService completionService;
 	private final CaptureSessionIngestService captureSessionIngestService;
+	private final UploadBatchTerminationService terminationService;
 
 	UploadBatchController(
 			UploadBatchService service,
 			UploadProgressQueryService progressQueryService,
 			UploadBatchCompletionService completionService,
-			CaptureSessionIngestService captureSessionIngestService) {
+			CaptureSessionIngestService captureSessionIngestService,
+			UploadBatchTerminationService terminationService) {
 		this.service = service;
 		this.progressQueryService = progressQueryService;
 		this.completionService = completionService;
 		this.captureSessionIngestService = captureSessionIngestService;
+		this.terminationService = terminationService;
 	}
 
 	@PostMapping("/init")
@@ -52,8 +55,23 @@ class UploadBatchController {
 				|| !actor.projectId().equals(request.projectId())) {
 			throw new UploadBatchAuthorizationException();
 		}
-		var batch = this.service.initialize(idempotencyKey, request);
+		var batch = this.service.initialize(actor, idempotencyKey, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadBatchResponse.from(batch));
+	}
+
+	@PutMapping("/{batchId}/abort")
+	ResponseEntity<UploadBatchTerminationResponse> abortBatch(
+			@PathVariable UUID batchId,
+			@RequestHeader("X-Request-Id")
+			@Size(min = 1, max = 128)
+			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String requestId,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		var administrator = authentication.getAuthorities().stream()
+				.anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+		var response = this.terminationService.abort(
+				actor.projectId(), actor.actorId(), administrator, batchId, requestId);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/{batchId}")

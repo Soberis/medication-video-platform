@@ -6,5 +6,7 @@ enum UploadFileStatus {
 	UPLOADING,
 	COMPLETING,
 	UPLOADED,
-	FAILED
+	FAILED,
+	ABORTED,
+	EXPIRED
 }

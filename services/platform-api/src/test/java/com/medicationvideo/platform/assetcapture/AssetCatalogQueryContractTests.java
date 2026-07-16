@@ -340,9 +340,10 @@ class AssetCatalogQueryContractTests {
 		this.jdbcTemplate.update("""
 				INSERT INTO upload_batch (
 				    batch_id, project_id, idempotency_key, request_fingerprint, device_id,
+				    initiated_by_actor_id,
 				    file_count, total_size_bytes, manifest_sha256, status, expires_at,
 				    created_at, updated_at, verified_manifest_sha256, completed_at)
-				VALUES (?, ?, ?, ?, ?, 2, 101, ?, 'COMPLETED', ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, 'synthetic-test-actor', 2, 101, ?, 'COMPLETED', ?, ?, ?, ?, ?)
 				""",
 				batchId, projectId, "catalog-batch-" + batchId, SHA256, deviceId, SHA256,
 				Timestamp.from(createdAt.plusSeconds(3600)), Timestamp.from(createdAt),

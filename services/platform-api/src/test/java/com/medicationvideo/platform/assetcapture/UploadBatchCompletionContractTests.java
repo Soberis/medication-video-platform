@@ -218,6 +218,7 @@ class UploadBatchCompletionContractTests {
 				"batch-complete-key-" + UUID.randomUUID(),
 				SHA256_A,
 				"synthetic-edge-01",
+				"synthetic-test-actor",
 				entries.size(),
 				totalSize,
 				declaredManifestSha256,

@@ -112,6 +112,14 @@ class S3MultipartCompatibilityTests {
 							.send(readRequest, HttpResponse.BodyHandlers.ofByteArray());
 					assertEquals(200, readResponse.statusCode());
 					assertArrayEquals(syntheticPart, readResponse.body());
+
+					storage.delete(new ObjectReference(BUCKET, key));
+					assertFalse(storage.findCompletedObject(created).isPresent());
+
+					var abandoned = storage.create(
+							"synthetic/abandoned-compatibility.bin", "application/octet-stream");
+					storage.abort(abandoned);
+					storage.abort(abandoned);
 				}
 				finally {
 					if (!completed) {

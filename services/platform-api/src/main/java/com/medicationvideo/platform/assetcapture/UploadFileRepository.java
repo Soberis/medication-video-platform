@@ -21,6 +21,10 @@ interface UploadFileRepository extends JpaRepository<UploadFile, UUID> {
 
 	List<UploadFile> findAllByBatchIdOrderByCreatedAtAscUploadFileIdAsc(UUID batchId);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select file from UploadFile file where file.batchId = :batchId order by file.createdAt, file.uploadFileId")
+	List<UploadFile> findAllForTermination(@Param("batchId") UUID batchId);
+
 	@Query("select coalesce(sum(file.sizeBytes), 0) from UploadFile file where file.batchId = :batchId")
 	long sumSizeBytesByBatchId(@Param("batchId") UUID batchId);
 

@@ -1,7 +1,7 @@
 # 状态机与领域守卫
 
 > 文档状态：P0 详细设计（评审稿）  
-> 最后更新：2026-07-14
+> 最后更新：2026-07-16
 
 ## 1. 原则
 
@@ -12,7 +12,7 @@
 1. 通过拥有模块的应用服务和领域守卫；
 2. 携带期望 `row_version` 或等价条件；
 3. 记录 actor、reason、request/trace ID 和授权上下文；
-4. 同事务写业务状态与 Outbox；
+4. 同事务写业务状态、审计和所需 Outbox 事件或持久化工作项；
 5. 对重复命令返回第一次成功结果；
 6. 对非法迁移返回稳定错误码和 HTTP 409；
 7. 禁止后台 SQL 绕过守卫。
@@ -39,7 +39,8 @@ INITIATED → UPLOADING → COMPLETING → COMPLETED
      │           │             └→ FAILED
      │           ├→ EXPIRED
      │           └→ ABORTED
-     └→ ABORTED
+     ├→ ABORTED
+     └→ EXPIRED
 ```
 
 | 迁移 | 守卫 | 主要副作用 |
@@ -52,6 +53,10 @@ INITIATED → UPLOADING → COMPLETING → COMPLETED
 | INITIATED/UPLOADING → EXPIRED | 超过策略 TTL 且无活跃提交 | 中止并清理；写审计 |
 
 文件清单注册只创建 `upload_file` 并校验批次声明的文件数与总大小上限，不改变 `UploadBatch` 状态。开始 multipart 前，已注册文件数与总字节数必须和批次声明完全一致。对象存储会话创建后只将文件置为 `SESSION_CREATED`；首次短期 part 上传权限签发成功后，文件和批次才进入 `UPLOADING`，避免数据库宣称可上传而对象存储或凭证尚未就绪。预签名 URL 不入库、不写日志，授权到期时间和期望 part 摘要入库。
+
+Abort/过期清理采用“先提交业务终态，再异步执行幂等存储副作用”。`PUT /api/v1/upload/{batch_id}/abort` 仅允许同 project 的批次发起人或项目管理员；若服务端 TTL 已经过期，记录 `EXPIRED` 而不是伪装成用户 `ABORTED`。批次终态、文件终态、逐文件 `upload_cleanup_task` 和追加式审计在一个数据库事务中提交；活动的 Complete File 租约会阻止终止。清理任务以 `PENDING → RUNNING → SUCCEEDED/FAILED` 表达，有独立 claim lease 和有限重试：未完成 multipart 执行 Abort，已完成但批次未提交的遗留对象执行 Delete。迟到的完成请求若在终止后产生对象，会重新激活同一清理任务。`FAILED` 不回滚已经成立的批次终态，必须进入运维处置并保持可观察。
+
+对象删除是破坏性副作用，因此调度器默认由 `UPLOAD_CLEANUP_ENABLED=false` 关闭；只有环境负责人确认 bucket、权限、告警和运行手册后才显式启用。关闭调度不会丢失数据库中的终态和清理任务，也不得通过后台 SQL 或直接修改状态绕过守卫。
 
 P0 的 Complete Batch 是 RK3588 边端上传程序自动调用的幂等控制面命令，不是 Web 人工按钮。它只完成传输清单和最小 RAW ClipAsset 建档；媒体探测、CameraSetSnapshot、CaptureSession 和 CameraStream 绑定属于后续入库状态，不反向改变已经成功的上传传输结论。
 

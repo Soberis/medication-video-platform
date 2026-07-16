@@ -167,6 +167,7 @@ class CaptureSessionIngestContractTests {
 				"capture-incomplete-" + UUID.randomUUID(),
 				VIDEO_SHA_ONE,
 				"synthetic-edge-01",
+				"synthetic-test-actor",
 				1,
 				12,
 				VIDEO_SHA_ONE,
@@ -364,6 +365,7 @@ class CaptureSessionIngestContractTests {
 				"capture-complete-" + UUID.randomUUID(),
 				VIDEO_SHA_ONE,
 				"synthetic-edge-01",
+				"synthetic-test-actor",
 				manifestEntries.size(),
 				manifestEntries.stream().mapToLong(ManifestEntry::sizeBytes).sum(),
 				manifestSha256(manifestEntries),
@@ -557,6 +559,11 @@ class CaptureSessionIngestContractTests {
 
 		@Override
 		public void abort(CreatedUpload upload) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void delete(ObjectReference object) {
 			throw new UnsupportedOperationException();
 		}
 

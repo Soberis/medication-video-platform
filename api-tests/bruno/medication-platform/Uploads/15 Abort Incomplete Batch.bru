@@ -1,0 +1,29 @@
+meta {
+  name: Abort Incomplete Batch
+  type: http
+  seq: 15
+  tags: [
+    Uploads
+  ]
+}
+
+put {
+  url: {{baseUrl}}/api/v1/upload/{{initialBatchId}}/abort
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-Request-Id: bruno-abort-incomplete-batch
+}
+
+tests {
+  test("terminates the incomplete batch and exposes durable cleanup state", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.status).to.equal("ABORTED");
+    expect(body.termination_reason_code).to.equal("USER_REQUESTED");
+    expect(["NOT_REQUIRED", "PENDING", "IN_PROGRESS", "SUCCEEDED"])
+      .to.include(body.cleanup_status);
+  });
+}

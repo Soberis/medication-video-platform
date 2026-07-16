@@ -215,6 +215,7 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Uploads/12 List Upload File Progress.bru',
         'api-tests/bruno/medication-platform/Uploads/13 Reject Incomplete Batch Completion.bru',
         'api-tests/bruno/medication-platform/Uploads/14 Reject Session Ingest Before Batch Completion.bru',
+        'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru',
         'api-tests/bruno/medication-platform/Asset Catalog/01 List Capture Sessions.bru',

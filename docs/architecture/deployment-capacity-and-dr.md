@@ -1,7 +1,7 @@
 # 部署、容量与灾难恢复
 
 > 文档状态：P0 运行设计（评审稿）  
-> 最后更新：2026-07-14
+> 最后更新：2026-07-16
 
 ## 1. 决策边界
 
@@ -206,6 +206,8 @@ required_workers = worker_hours_day / effective_worker_hours_day
 - S3 API 能力测试：multipart、checksum、versioning、object lock、lifecycle、SSE/KMS、range GET、并发和错误语义。
 - 原始、工作、隔离和导出对象有独立生命周期策略。
 - 未完成 multipart 和 job 临时前缀有清理任务及积压告警。
+- 上传过期扫描和对象清理属于破坏性调度，默认关闭；每个环境须在隔离 bucket、最小权限、告警 owner 和运行手册确认后显式启用 `UPLOAD_CLEANUP_ENABLED=true`。
+- 调度关闭或 API 重启时，已提交的 `upload_cleanup_task` 必须保留；claim lease 到期后允许其他实例恢复，达到有限重试上限后进入可告警的 `FAILED`，不得静默丢弃。
 - 正式对象记录 version ID、size、SHA-256 和 storage class。
 - 容量告警覆盖逻辑容量、物理容量、增长速率和清理失败。
 - 不将单节点对象存储宣称为备份；副本、纠删码和备份是不同保护层。
@@ -302,7 +304,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 ### 14.1 指标
 
 - API：请求量、错误率、P50/P95/P99、连接池和线程/内存；
-- 上传：init/complete 成功率、checksum 冲突、未完成 multipart；
+- 上传：init/complete/abort 成功率、checksum 冲突、过期批次、未完成 multipart、清理 PENDING 年龄和 FAILED 数量；
 - Session：assembling 年龄、missing stream、sync warning；
 - Worker：queue wait、运行/验证/提交时长、失败、重试、取消、lease 过期、临时盘；
 - PostgreSQL：连接、锁、慢查询、WAL、复制/备份、磁盘和 vacuum；

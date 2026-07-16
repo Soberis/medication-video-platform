@@ -28,7 +28,7 @@ class UploadBatchService {
 		this.batchTtl = batchTtl;
 	}
 
-	UploadBatch initialize(String idempotencyKey, UploadBatchInitRequest request) {
+	UploadBatch initialize(UploadActor actor, String idempotencyKey, UploadBatchInitRequest request) {
 		var fingerprint = fingerprint(request);
 		var existing = this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey);
 		if (existing.isPresent()) {
@@ -41,6 +41,7 @@ class UploadBatchService {
 				idempotencyKey,
 				fingerprint,
 				request.deviceId(),
+				actor.actorId(),
 				request.fileCount(),
 				request.totalSizeBytes(),
 				request.manifestSha256(),

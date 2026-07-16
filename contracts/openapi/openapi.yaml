@@ -1,13 +1,14 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.16.0
+  version: 0.17.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
     issue short-lived part upload authorizations, confirm storage-backed parts, recover upload
-    progress, complete a file with final size and SHA-256 verification, complete a verified batch
-    with minimal raw ClipAsset bindings, read batch/file upload progress for operator visibility,
+    progress, complete a file with final size and SHA-256 verification, abort or expire an incomplete
+    batch through durable bounded cleanup, complete a verified batch with minimal raw ClipAsset
+    bindings, read batch/file upload progress and cleanup state for operator visibility,
     provision immutable server-side CameraChannel and CameraSet configuration identities, atomically
     assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
     metadata object, query project-scoped CaptureSession and ClipAsset read models with bounded
@@ -138,6 +139,81 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch does not exist in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /upload/{batch_id}/abort:
+    put:
+      operationId: abortUploadBatch
+      tags:
+        - Uploads
+      summary: Terminate an incomplete upload batch and durably schedule storage cleanup
+      description: >-
+        Idempotently terminates an INITIATED or UPLOADING batch. Only the recorded batch
+        initiator or a project administrator may call this command. If the server TTL has already
+        elapsed, the command records EXPIRED rather than incorrectly recording a user abort.
+        Batch and file terminal states, cleanup tasks and an append-only audit event commit in one
+        database transaction; S3 Multipart Abort or deletion of an already completed abandoned
+        object happens asynchronously through bounded, leased retries. An active file completion
+        lease blocks termination. The command never returns storage identifiers or signed URLs.
+      parameters:
+        - name: batch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Request-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+      responses:
+        "200":
+          description: >-
+            Batch is ABORTED or EXPIRED and cleanup is either unnecessary, pending, running,
+            successful or terminally failed after bounded retry.
+          headers:
+            Cache-Control:
+              description: Prevents storage of mutable cleanup state.
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadBatchTermination"
+        "400":
+          description: Path or request ID validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Caller is neither the batch initiator nor a project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Batch does not exist in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            Batch is completed or otherwise not abortable, or a file completion lease is active.
           content:
             application/problem+json:
               schema:
@@ -1735,6 +1811,58 @@ components:
         - FAILED
         - ABORTED
         - EXPIRED
+    UploadCleanupStatus:
+      type: string
+      enum:
+        - NOT_REQUIRED
+        - PENDING
+        - IN_PROGRESS
+        - SUCCEEDED
+        - FAILED
+      description: >-
+        Durable cleanup projection. FAILED means the bounded retry limit was reached and requires
+        operator intervention; it never changes the already committed batch terminal state.
+    UploadBatchTermination:
+      type: object
+      additionalProperties: false
+      required:
+        - batch_id
+        - status
+        - termination_reason_code
+        - terminated_at
+        - cleanup_status
+        - cleanup_task_count
+        - completed_cleanup_task_count
+        - failed_cleanup_task_count
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - ABORTED
+            - EXPIRED
+        termination_reason_code:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]{1,63}$
+        terminated_at:
+          type: string
+          format: date-time
+        cleanup_status:
+          $ref: "#/components/schemas/UploadCleanupStatus"
+        cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
+        completed_cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
+        failed_cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
     UploadBatchCompletion:
       type: object
       additionalProperties: false
@@ -1836,6 +1964,12 @@ components:
         - tracked_part_count
         - uploaded_part_count
         - status
+        - cleanup_status
+        - cleanup_task_count
+        - completed_cleanup_task_count
+        - failed_cleanup_task_count
+        - terminated_at
+        - termination_reason_code
         - expires_at
         - created_at
       properties:
@@ -1886,6 +2020,30 @@ components:
           minimum: 0
         status:
           $ref: "#/components/schemas/UploadBatchStatus"
+        cleanup_status:
+          $ref: "#/components/schemas/UploadCleanupStatus"
+        cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
+        completed_cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
+        failed_cleanup_task_count:
+          type: integer
+          format: int32
+          minimum: 0
+        terminated_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        termination_reason_code:
+          type:
+            - string
+            - "null"
+          pattern: ^[A-Z][A-Z0-9_]{1,63}$
         expires_at:
           type: string
           format: date-time
@@ -1986,6 +2144,8 @@ components:
         - COMPLETING
         - UPLOADED
         - FAILED
+        - ABORTED
+        - EXPIRED
     UploadFileProgressList:
       type: object
       additionalProperties: false

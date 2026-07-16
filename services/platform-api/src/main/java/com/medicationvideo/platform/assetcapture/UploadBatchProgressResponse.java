@@ -18,13 +18,20 @@ record UploadBatchProgressResponse(
 		long trackedPartCount,
 		long uploadedPartCount,
 		UploadBatchStatus status,
+		UploadCleanupStatus cleanupStatus,
+		int cleanupTaskCount,
+		int completedCleanupTaskCount,
+		int failedCleanupTaskCount,
+		Instant terminatedAt,
+		String terminationReasonCode,
 		Instant expiresAt,
 		Instant createdAt) {
 
 	static UploadBatchProgressResponse from(
 			UploadBatch batch,
 			List<UploadFile> files,
-			Collection<UploadPartProgressSummary> partProgress) {
+			Collection<UploadPartProgressSummary> partProgress,
+			UploadCleanupSummary cleanup) {
 		var uploadedFileCount = Math.toIntExact(files.stream()
 				.filter(file -> file.getStatus() == UploadFileStatus.UPLOADED)
 				.count());
@@ -53,6 +60,12 @@ record UploadBatchProgressResponse(
 				trackedPartCount,
 				uploadedPartCount,
 				batch.getStatus(),
+				cleanup.status(),
+				cleanup.taskCount(),
+				cleanup.completedTaskCount(),
+				cleanup.failedTaskCount(),
+				batch.getTerminatedAt(),
+				batch.getTerminationReasonCode(),
 				batch.getExpiresAt(),
 				batch.getCreatedAt());
 	}

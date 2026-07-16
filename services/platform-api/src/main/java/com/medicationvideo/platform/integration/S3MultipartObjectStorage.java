@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
 import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListPartsRequest;
@@ -285,8 +286,27 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 					.uploadId(upload.uploadId())
 					.build());
 		}
+		catch (S3Exception exception) {
+			if (exception.statusCode() == 404) {
+				return;
+			}
+			throw failure("Object storage did not abort the multipart upload.", exception);
+		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not abort the multipart upload.", exception);
+		}
+	}
+
+	@Override
+	public void delete(ObjectReference object) {
+		try {
+			this.s3Client.deleteObject(DeleteObjectRequest.builder()
+					.bucket(object.bucket())
+					.key(object.objectKey())
+					.build());
+		}
+		catch (SdkException exception) {
+			throw failure("Object storage did not delete the abandoned upload object.", exception);
 		}
 	}
 
