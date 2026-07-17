@@ -61,8 +61,8 @@
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。FR-008 已有媒体探测作业和报告，但尚未生成可播放 Variant。场景、科室、隐私、标注、清洗筛选、性能基准、预览 Variant、状态历史和完整审计尚未完成，因此三条均为 `PI`，不能宣布需求验收通过。
-- FR-010 当前完成活动隔离的第一段：`QUARANTINE_REQUIRED` 的人工隐私评估通过 `qualitycleaning` 公开应用服务在同一事务内幂等建立 `quarantine_record` 和追加式审计；管理员可按项目查询资产的活动隔离记录，普通用户和跨项目查询被拒绝，`NONE` 不被误判为隐私放行，后续重新评估也不会自动解除既有隔离。尚未实现隔离复核、批准解除、销毁申请，以及标注/AI/数据集各入口的统一隔离守卫，因此仍为 `PI`。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V20、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
+- FR-010 当前完成活动隔离的第一段：`QUARANTINE_REQUIRED` 的人工隐私评估通过 `qualitycleaning` 公开应用服务在同一事务内幂等建立 `quarantine_record` 和追加式审计；并发相同命令只产生一份评估、隔离及对应审计，数据库以项目/资产和评估来源复合外键拒绝跨项目、伪造来源或错误版本。管理员可按项目查询资产的活动隔离记录，普通用户和跨项目查询被拒绝，`NONE` 不被误判为隐私放行，后续重新评估也不会自动解除既有隔离。尚未实现隔离复核、批准解除、销毁申请，以及标注/AI/数据集各入口的统一隔离守卫，因此仍为 `PI`。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V21、V19→V21 历史升级与约束测试、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离及并发合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -104,11 +104,11 @@ FR-025 当前 `PI` 证据和边界：
 
 - V19 已建立 `privacy_assessment` 和 `privacy_finding` 所有权表；人工评估绑定 project、已
   `INGESTED` ClipAsset、平台验证 SHA-256、固定策略 key/digest、操作者和请求证据。
-- OpenAPI 0.20.0 提供管理员创建、按 ID 查询、ClipAsset 当前隐私投影和活动隔离查询；未评估返回
+- OpenAPI 0.20.1 提供管理员创建、按 ID 查询、ClipAsset 当前隐私投影和活动隔离查询；未评估返回
   `UNKNOWN/BLOCKED`，所有评估结论仍为 `BLOCKED`，不会因 `NONE` 自动开放标注或导出。
 - `NONE` 必须无 finding 且只进入 release review；`SUSPECTED` 必须隔离复核；`CONFIRMED`
-  必须有固定 finding 并进入脱敏或隔离。重复命令幂等，重新评估显式 supersede 当前版本，旧证据和
-  追加式审计保留。
+  必须有固定 finding 并进入脱敏或隔离。重复命令在并发下保持幂等，重新评估显式 supersede 当前
+  版本，旧证据和追加式审计保留；V21 以复合外键固定项目、资产、摘要、来源和版本。
 - 自动隐私检测属于 P2；P0 已有 `QUARANTINE_REQUIRED` 到活动隔离记录的最小编排，但尚缺隔离复核/解除、DeidentifyRun/DEIDENTIFIED variant、PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
   FR-025 或隐私闭环完成。
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.20.0
+  version: 0.20.1
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -1824,6 +1824,12 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: The clip asset was not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "500":
+          description: The quarantine status could not be evaluated due to an unexpected internal error.
           content:
             application/problem+json:
               schema:

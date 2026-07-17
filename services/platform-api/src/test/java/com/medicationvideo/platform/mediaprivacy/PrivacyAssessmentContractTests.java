@@ -1,6 +1,10 @@
 package com.medicationvideo.platform.mediaprivacy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mockingDetails;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,10 +13,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,9 +28,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.medicationvideo.platform.governance.AuditEventCommand;
+import com.medicationvideo.platform.governance.AuditEventRecorder;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -40,6 +51,12 @@ class PrivacyAssessmentContractTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@MockitoSpyBean
+	private PrivacyAssessmentRepository privacyAssessmentRepository;
+
+	@MockitoSpyBean
+	private AuditEventRecorder auditRecorder;
 
 	@BeforeEach
 	void clearAssessments() {
@@ -159,6 +176,146 @@ class PrivacyAssessmentContractTests {
 				"SELECT count(*) FROM privacy_assessment WHERE clip_asset_id = ?",
 				Integer.class,
 				clipAssetId));
+	}
+
+	@Test
+	void concurrentIdenticalAssessmentsCreateOneAtomicQuarantineDecision() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED");
+		var body = quarantinedBody(clipAssetId);
+		var writesReady = new CountDownLatch(2);
+		var writeAttempts = new AtomicInteger();
+		var repositoryDelegate = mockingDetails(this.privacyAssessmentRepository)
+				.getMockCreationSettings()
+				.getDefaultAnswer();
+		doAnswer(invocation -> {
+			writeAttempts.incrementAndGet();
+			writesReady.countDown();
+			if (!writesReady.await(10, TimeUnit.SECONDS)) {
+				throw new IllegalStateException(
+						"Both concurrent assessments did not reach the write boundary.");
+			}
+			return repositoryDelegate.answer(invocation);
+		}).when(this.privacyAssessmentRepository)
+				.saveAndFlush(any(PrivacyAssessment.class));
+		var ready = new CountDownLatch(2);
+		var start = new CountDownLatch(1);
+		String firstResponse;
+		String secondResponse;
+		try (var executor = Executors.newFixedThreadPool(2)) {
+			var first = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(10, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("Concurrent privacy request did not start.");
+				}
+				return assess(
+						ADMIN_TOKEN,
+						"privacy-concurrent-idem-0001",
+						"privacy-concurrent-request-0001",
+						body)
+						.andExpect(status().isCreated())
+						.andReturn()
+						.getResponse()
+						.getContentAsString();
+			});
+			var second = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(10, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("Concurrent privacy request did not start.");
+				}
+				return assess(
+						ADMIN_TOKEN,
+						"privacy-concurrent-idem-0001",
+						"privacy-concurrent-request-0002",
+						body)
+						.andExpect(status().isCreated())
+						.andReturn()
+						.getResponse()
+						.getContentAsString();
+			});
+
+			assertTrue(ready.await(10, TimeUnit.SECONDS));
+			start.countDown();
+			firstResponse = first.get(20, TimeUnit.SECONDS);
+			secondResponse = second.get(20, TimeUnit.SECONDS);
+		}
+
+		var firstAssessmentId = UUID.fromString(
+				JsonPath.read(firstResponse, "$.privacy_assessment_id"));
+		var secondAssessmentId = UUID.fromString(
+				JsonPath.read(secondResponse, "$.privacy_assessment_id"));
+		assertEquals(firstAssessmentId, secondAssessmentId);
+		assertEquals(2, writeAttempts.get());
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM privacy_assessment WHERE project_id = ? AND clip_asset_id = ?",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM quarantine_record WHERE project_id = ? AND clip_asset_id = ?",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*) FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'PRIVACY_ASSESSMENT_RECORDED'
+				  AND details_json ->> 'clip_asset_id' = ?
+				""",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId.toString()));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*) FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'QUARANTINE_ACTIVATED'
+				  AND details_json ->> 'clip_asset_id' = ?
+				""",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId.toString()));
+	}
+
+	@Test
+	void quarantineAuditFailureRollsBackTheWholePrivacyDecision() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED");
+		var auditCalls = new AtomicInteger();
+		doAnswer(invocation -> {
+			if (auditCalls.incrementAndGet() == 2) {
+				throw new IllegalStateException("Synthetic quarantine audit failure.");
+			}
+			return invocation.callRealMethod();
+		}).when(this.auditRecorder).record(any(AuditEventCommand.class));
+
+		assess(
+				ADMIN_TOKEN,
+				"privacy-audit-rollback-0001",
+				"privacy-audit-rollback-request-0001",
+				quarantinedBody(clipAssetId))
+				.andExpect(status().isInternalServerError());
+
+		assertEquals(2, auditCalls.get());
+		assertEquals(0, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM privacy_assessment WHERE project_id = ? AND clip_asset_id = ?",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId));
+		assertEquals(0, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM quarantine_record WHERE project_id = ? AND clip_asset_id = ?",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId));
+		assertEquals(0, this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*) FROM audit_event
+				WHERE project_id = ?
+				  AND details_json ->> 'clip_asset_id' = ?
+				  AND action IN ('PRIVACY_ASSESSMENT_RECORDED', 'QUARANTINE_ACTIVATED')
+				""",
+				Integer.class,
+				PROJECT_ID,
+				clipAssetId.toString()));
 	}
 
 	@Test
@@ -310,6 +467,18 @@ class PrivacyAssessmentContractTests {
 						? ""
 						: "\"supersedes_assessment_id\": \""
 								+ supersedesAssessmentId + "\",\n  ");
+	}
+
+	private static String quarantinedBody(UUID clipAssetId) {
+		return """
+				{
+				  "clip_asset_id": "%s",
+				  "risk_level": "SUSPECTED",
+				  "required_action": "QUARANTINE_REQUIRED",
+				  "reason_code": "RISK_REQUIRES_ISOLATION",
+				  "finding_types": ["FACE"]
+				}
+				""".formatted(clipAssetId);
 	}
 
 	private UUID insertClipAsset(UUID projectId, String status) {

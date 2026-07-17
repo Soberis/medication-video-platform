@@ -1,6 +1,9 @@
 package com.medicationvideo.platform.qualitycleaning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,7 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +27,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
@@ -39,6 +48,12 @@ class QuarantineContractTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private QuarantineCommandService quarantineCommandService;
+
+	@MockitoSpyBean
+	private QuarantineRecordWriter quarantineRecordWriter;
 
 	@BeforeEach
 	void clearQuarantineEvidence() {
@@ -100,6 +115,78 @@ class QuarantineContractTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.privacy_assessment_id").value(assessmentId.toString()));
 
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM quarantine_record WHERE source_id = ?",
+				Integer.class,
+				assessmentId));
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'QUARANTINE_ACTIVATED'
+				  AND details_json ->> 'source_id' = ?
+				""",
+				Integer.class,
+				assessmentId.toString()));
+	}
+
+	@Test
+	void concurrentActivationOfTheSameSourceCreatesOneRecordAndAudit() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED");
+		var assessmentId = UUID.randomUUID();
+		insertPrivacyAssessmentSource(clipAssetId, assessmentId);
+		var command = QuarantineActivationCommand.forPrivacyAssessment(
+				PROJECT_ID,
+				clipAssetId,
+				SHA256,
+				assessmentId,
+				1,
+				"synthetic-quarantine-concurrency",
+				"quarantine-concurrency-request",
+				null);
+		var concurrency = 8;
+		var insertReady = new CountDownLatch(concurrency);
+		var insertOutcomes = new ConcurrentLinkedQueue<Boolean>();
+		doAnswer(invocation -> {
+			insertReady.countDown();
+			if (!insertReady.await(10, TimeUnit.SECONDS)) {
+				throw new IllegalStateException(
+						"All concurrent activations did not reach the insert boundary.");
+			}
+			var inserted = (boolean) invocation.callRealMethod();
+			insertOutcomes.add(inserted);
+			return inserted;
+		}).when(this.quarantineRecordWriter)
+				.insertIfAbsent(any(QuarantineRecord.class));
+		var ready = new CountDownLatch(concurrency);
+		var start = new CountDownLatch(1);
+		var executor = Executors.newFixedThreadPool(concurrency);
+		try {
+			var futures = new ArrayList<java.util.concurrent.Future<Void>>();
+			for (var index = 0; index < concurrency; index++) {
+				futures.add(executor.submit(() -> {
+					ready.countDown();
+					if (!start.await(10, TimeUnit.SECONDS)) {
+						throw new IllegalStateException("Concurrent activation did not start in time.");
+					}
+					this.quarantineCommandService.activate(command);
+					return null;
+				}));
+			}
+			assertTrue(ready.await(10, TimeUnit.SECONDS));
+			start.countDown();
+			for (var future : futures) {
+				future.get(20, TimeUnit.SECONDS);
+			}
+		}
+		finally {
+			executor.shutdownNow();
+		}
+
+		assertEquals(concurrency, insertOutcomes.size());
+		assertEquals(1L, insertOutcomes.stream().filter(Boolean::booleanValue).count());
+		assertEquals(
+				concurrency - 1L,
+				insertOutcomes.stream().filter(inserted -> !inserted).count());
 		assertEquals(1, this.jdbcTemplate.queryForObject(
 				"SELECT count(*) FROM quarantine_record WHERE source_id = ?",
 				Integer.class,
@@ -239,6 +326,32 @@ class QuarantineContractTests {
 						? ""
 						: "\"supersedes_assessment_id\": \""
 								+ supersedesAssessmentId + "\",\n  ");
+	}
+
+	private void insertPrivacyAssessmentSource(UUID clipAssetId, UUID assessmentId) {
+		var assessedAt = Timestamp.from(Instant.parse("2026-07-17T02:05:00Z"));
+		this.jdbcTemplate.update("""
+				INSERT INTO privacy_assessment (
+				    privacy_assessment_id, project_id, clip_asset_id, input_digest,
+				    assessment_version, assessment_method, policy_key, policy_digest,
+				    risk_level, required_action, reason_code, assessed_by,
+				    supersedes_assessment_id, idempotency_key, request_fingerprint,
+				    assessed_at)
+				VALUES (?, ?, ?, ?, 1, 'HUMAN_REVIEW', 'privacy-assessment-policy-v1', ?,
+				        'SUSPECTED', 'QUARANTINE_REQUIRED', 'RISK_REQUIRES_ISOLATION',
+				        'synthetic-quarantine-concurrency', NULL, ?, ?, ?)
+				""",
+				assessmentId,
+				PROJECT_ID,
+				clipAssetId,
+				SHA256,
+				"d5d18c436d401a223832f1c85b6ff076de01a9dddeecb879268ff89bc5719517",
+				"quarantine-source-" + assessmentId,
+				"e".repeat(64),
+				assessedAt);
+		this.jdbcTemplate.update(
+				"INSERT INTO privacy_finding (privacy_assessment_id, finding_type) VALUES (?, 'FACE')",
+				assessmentId);
 	}
 
 	private UUID insertClipAsset(UUID projectId, String statusValue) {

@@ -10,9 +10,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
@@ -30,19 +34,24 @@ class PrivacyAssessmentService {
 	private final AssetCatalogQueryService assetCatalog;
 	private final AuditEventRecorder auditRecorder;
 	private final QuarantineCommandService quarantineService;
+	private final TransactionTemplate assessmentTransaction;
+	private final TransactionTemplate idempotencyResolutionTransaction;
 
 	PrivacyAssessmentService(
 			PrivacyAssessmentRepository repository,
 			AssetCatalogQueryService assetCatalog,
 			AuditEventRecorder auditRecorder,
-			QuarantineCommandService quarantineService) {
+			QuarantineCommandService quarantineService,
+			PlatformTransactionManager transactionManager) {
 		this.repository = repository;
 		this.assetCatalog = assetCatalog;
 		this.auditRecorder = auditRecorder;
 		this.quarantineService = quarantineService;
+		this.assessmentTransaction = requiresNewTransaction(transactionManager, false);
+		this.idempotencyResolutionTransaction = requiresNewTransaction(
+				transactionManager, true);
 	}
 
-	@Transactional
 	PrivacyAssessment assess(
 			UUID projectId,
 			String actorId,
@@ -52,6 +61,42 @@ class PrivacyAssessmentService {
 			PrivacyAssessmentRequest request) {
 		validateDecision(request);
 		var requestFingerprint = fingerprint(projectId, request);
+		try {
+			var assessment = this.assessmentTransaction.execute(status -> assessAtomically(
+					projectId,
+					actorId,
+					idempotencyKey,
+					requestId,
+					traceId,
+					request,
+					requestFingerprint));
+			if (assessment == null) {
+				throw new IllegalStateException(
+						"Privacy assessment transaction returned no result.");
+			}
+			return assessment;
+		}
+		catch (ConcurrentAssessmentWriteException exception) {
+			var assessment = this.idempotencyResolutionTransaction.execute(status ->
+					this.repository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey)
+							.map(existing -> requireSameRequest(existing, requestFingerprint))
+							.orElseThrow(PrivacyAssessmentService::staleAssessment));
+			if (assessment == null) {
+				throw new IllegalStateException(
+						"Privacy idempotency resolution transaction returned no result.");
+			}
+			return assessment;
+		}
+	}
+
+	private PrivacyAssessment assessAtomically(
+			UUID projectId,
+			String actorId,
+			String idempotencyKey,
+			String requestId,
+			String traceId,
+			PrivacyAssessmentRequest request,
+			String requestFingerprint) {
 		var byIdempotency = this.repository.findByProjectIdAndIdempotencyKey(
 				projectId, idempotencyKey);
 		if (byIdempotency.isPresent()) {
@@ -101,17 +146,38 @@ class PrivacyAssessmentService {
 			assessment = this.repository.saveAndFlush(assessment);
 		}
 		catch (DataIntegrityViolationException exception) {
-			var concurrentByIdempotency = this.repository.findByProjectIdAndIdempotencyKey(
-					projectId, idempotencyKey);
-			if (concurrentByIdempotency.isPresent()) {
-				return requireSameRequest(concurrentByIdempotency.get(), requestFingerprint);
+			if (!isConcurrentAssessmentWrite(exception)) {
+				throw exception;
 			}
-			throw staleAssessment();
+			throw new ConcurrentAssessmentWriteException(exception);
 		}
 
 		recordAudit(assessment, requestId, traceId);
 		activateRequiredQuarantine(assessment, requestId, traceId);
 		return assessment;
+	}
+
+	private static TransactionTemplate requiresNewTransaction(
+			PlatformTransactionManager transactionManager, boolean readOnly) {
+		var transaction = new TransactionTemplate(transactionManager);
+		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		transaction.setReadOnly(readOnly);
+		return transaction;
+	}
+
+	private static boolean isConcurrentAssessmentWrite(
+			DataIntegrityViolationException exception) {
+		Throwable cause = exception;
+		while (cause != null) {
+			if (cause instanceof ConstraintViolationException violation) {
+				var constraintName = violation.getConstraintName();
+				return "uk_privacy_assessment_project_idempotency".equals(constraintName)
+						|| "uk_privacy_assessment_asset_version".equals(constraintName)
+						|| "uk_privacy_assessment_supersedes".equals(constraintName);
+			}
+			cause = cause.getCause();
+		}
+		return false;
 	}
 
 	private void activateRequiredQuarantine(
@@ -262,5 +328,14 @@ class PrivacyAssessmentService {
 				"PRIVACY_ASSESSMENT_STALE",
 				"The assessment does not supersede the current assessment version.",
 				409);
+	}
+
+	private static final class ConcurrentAssessmentWriteException extends RuntimeException {
+
+		private static final long serialVersionUID = 1L;
+
+		private ConcurrentAssessmentWriteException(DataIntegrityViolationException cause) {
+			super(cause);
+		}
 	}
 }

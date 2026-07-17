@@ -18,14 +18,17 @@ import com.medicationvideo.platform.governance.AuditOutcome;
 public class QuarantineCommandService {
 
 	private final QuarantineRecordRepository repository;
+	private final QuarantineRecordWriter writer;
 	private final AssetCatalogQueryService assetCatalog;
 	private final AuditEventRecorder auditRecorder;
 
 	QuarantineCommandService(
 			QuarantineRecordRepository repository,
+			QuarantineRecordWriter writer,
 			AssetCatalogQueryService assetCatalog,
 			AuditEventRecorder auditRecorder) {
 		this.repository = repository;
+		this.writer = writer;
 		this.assetCatalog = assetCatalog;
 		this.auditRecorder = auditRecorder;
 	}
@@ -51,8 +54,20 @@ public class QuarantineCommandService {
 		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var record = this.repository.saveAndFlush(QuarantineRecord.activate(command, now));
-		recordAudit(record, command.requestId(), command.traceId());
+		var record = QuarantineRecord.activate(command, now);
+		if (this.writer.insertIfAbsent(record)) {
+			recordAudit(record, command.requestId(), command.traceId());
+			return;
+		}
+
+		var concurrent = this.repository.findByProjectIdAndSourceTypeAndSourceId(
+				command.projectId(), command.sourceType(), command.sourceId())
+				.orElseThrow(() -> new IllegalStateException(
+						"A conflicting quarantine source could not be reloaded."));
+		if (!concurrent.matches(command)) {
+			throw new IllegalStateException(
+					"A quarantine source cannot be rebound to another asset or reason.");
+		}
 	}
 
 	private void recordAudit(QuarantineRecord record, String requestId, String traceId) {

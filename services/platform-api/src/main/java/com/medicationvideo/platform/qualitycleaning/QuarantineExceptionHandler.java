@@ -57,9 +57,9 @@ class QuarantineExceptionHandler {
 		}
 		log.warn("Unhandled asset catalog error code: {}", exception.getErrorCode());
 		return error(
-				HttpStatus.BAD_GATEWAY,
-				"ASSET_CATALOG_UNAVAILABLE",
-				"The asset catalog rejected the request.",
+				HttpStatus.INTERNAL_SERVER_ERROR,
+				"INTERNAL_ERROR",
+				"The quarantine service encountered an unexpected error.",
 				true);
 	}
 
