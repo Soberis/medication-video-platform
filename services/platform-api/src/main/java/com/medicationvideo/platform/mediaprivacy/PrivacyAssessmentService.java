@@ -20,6 +20,8 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+import com.medicationvideo.platform.qualitycleaning.QuarantineActivationCommand;
+import com.medicationvideo.platform.qualitycleaning.QuarantineCommandService;
 
 @Service
 class PrivacyAssessmentService {
@@ -27,14 +29,17 @@ class PrivacyAssessmentService {
 	private final PrivacyAssessmentRepository repository;
 	private final AssetCatalogQueryService assetCatalog;
 	private final AuditEventRecorder auditRecorder;
+	private final QuarantineCommandService quarantineService;
 
 	PrivacyAssessmentService(
 			PrivacyAssessmentRepository repository,
 			AssetCatalogQueryService assetCatalog,
-			AuditEventRecorder auditRecorder) {
+			AuditEventRecorder auditRecorder,
+			QuarantineCommandService quarantineService) {
 		this.repository = repository;
 		this.assetCatalog = assetCatalog;
 		this.auditRecorder = auditRecorder;
+		this.quarantineService = quarantineService;
 	}
 
 	@Transactional
@@ -105,7 +110,24 @@ class PrivacyAssessmentService {
 		}
 
 		recordAudit(assessment, requestId, traceId);
+		activateRequiredQuarantine(assessment, requestId, traceId);
 		return assessment;
+	}
+
+	private void activateRequiredQuarantine(
+			PrivacyAssessment assessment, String requestId, String traceId) {
+		if (assessment.getRequiredAction() != PrivacyRequiredAction.QUARANTINE_REQUIRED) {
+			return;
+		}
+		this.quarantineService.activate(QuarantineActivationCommand.forPrivacyAssessment(
+				assessment.getProjectId(),
+				assessment.getClipAssetId(),
+				assessment.getInputDigest(),
+				assessment.getPrivacyAssessmentId(),
+				assessment.getAssessmentVersion(),
+				assessment.getAssessedBy(),
+				requestId,
+				traceId));
 	}
 
 	@Transactional(readOnly = true)

@@ -153,7 +153,9 @@ request/approval reference
 - 撤销通过禁用业务授权、对象策略/版本和短期 TTL 组合实现；不能宣称已签发 URL 可被普遍即时撤回。
 - Web 响应使用适当的 `Referrer-Policy`、缓存和内容处置头。
 
-播放 URL 只针对已批准的具体 Variant，签发前检查项目成员、purpose、PrivacyReleaseDecision、Quarantine 和 `deleted_at`；`PrivacyAssessment=NONE` 不能代替放行决定。普通用户不得取得 raw URL。
+普通 `PLAYBACK` URL 只针对已批准的具体 `PREVIEW`/`DEIDENTIFIED` Variant，签发前检查项目成员、purpose、PrivacyReleaseDecision、Quarantine 和 `deleted_at`；`PrivacyAssessment=NONE` 不能代替放行决定。普通用户不得取得 raw URL。
+
+隐私复核确需查看 raw 时使用独立的 `PRIVACY_REVIEW` 授权：绑定复核人、ClipAsset 和对象版本、审批/任务依据、最短 TTL 与请求 ID，并完整审计。管理员角色本身不授予该能力，`PRIVACY_REVIEW` 地址不得复用于普通播放、标注、下载或导出，也不构成 PrivacyReleaseDecision。
 
 平台本地上传的上传 URL 绑定用户、项目、文件大小、类型和 checksum 条件。开发、测试和 CI 环境只允许合成数据。
 

@@ -1,7 +1,7 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`  
+> 当前需求基线：`docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`
 > 继承需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-07-17
@@ -52,7 +52,7 @@
 | FR-007 资产详情、预览和状态历史 | P0 | `assetcapture`、`mediaprivacy`、`governance` | clip/session detail；preview grant | clip_asset、asset_variant、audit_event | 只能预览有权限的批准 variant；状态历史完整 | PI |
 | FR-008 裁剪、抽帧、预览和媒体预处理 | P0 | `mediaprivacy` | media job API；`MediaJobRequestedV1`/result | media_job、asset_variant、media_report | 派生资产可追溯到 raw 摘要、配方和软件摘要 | PI |
 | FR-009 批量业务标签 | P0 | `assetcapture` | asset tag command API | asset_tag、audit_event | 幂等添加/移除；跨项目和越权操作被拒绝 | D1 |
-| FR-010 隔离区 | P0 | `qualitycleaning`、`governance` | quarantine command/query | quarantine_record、approval_request | 隔离数据默认不可标注、不可导出；解除需要批准 | D1 |
+| FR-010 隔离区 | P0 | `qualitycleaning`、`governance` | quarantine command/query | quarantine_record、approval_request | 隔离数据默认不可标注、不可导出；解除需要批准 | PI |
 
 当前 `I`/`PI` 证据和边界：
 
@@ -61,7 +61,8 @@
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。FR-008 已有媒体探测作业和报告，但尚未生成可播放 Variant。场景、科室、隐私、标注、清洗筛选、性能基准、预览 Variant、状态历史和完整审计尚未完成，因此三条均为 `PI`，不能宣布需求验收通过。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V19、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
+- FR-010 当前完成活动隔离的第一段：`QUARANTINE_REQUIRED` 的人工隐私评估通过 `qualitycleaning` 公开应用服务在同一事务内幂等建立 `quarantine_record` 和追加式审计；管理员可按项目查询资产的活动隔离记录，普通用户和跨项目查询被拒绝，`NONE` 不被误判为隐私放行，后续重新评估也不会自动解除既有隔离。尚未实现隔离复核、批准解除、销毁申请，以及标注/AI/数据集各入口的统一隔离守卫，因此仍为 `PI`。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V20、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -103,13 +104,12 @@ FR-025 当前 `PI` 证据和边界：
 
 - V19 已建立 `privacy_assessment` 和 `privacy_finding` 所有权表；人工评估绑定 project、已
   `INGESTED` ClipAsset、平台验证 SHA-256、固定策略 key/digest、操作者和请求证据。
-- OpenAPI 0.19.0 提供管理员创建、按 ID 查询和 ClipAsset 当前隐私投影；未评估返回
+- OpenAPI 0.20.0 提供管理员创建、按 ID 查询、ClipAsset 当前隐私投影和活动隔离查询；未评估返回
   `UNKNOWN/BLOCKED`，所有评估结论仍为 `BLOCKED`，不会因 `NONE` 自动开放标注或导出。
 - `NONE` 必须无 finding 且只进入 release review；`SUSPECTED` 必须隔离复核；`CONFIRMED`
   必须有固定 finding 并进入脱敏或隔离。重复命令幂等，重新评估显式 supersede 当前版本，旧证据和
   追加式审计保留。
-- 自动隐私检测属于 P2；P0 尚缺 DeidentifyRun/DEIDENTIFIED variant、实际 Quarantine 编排、
-  PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
+- 自动隐私检测属于 P2；P0 已有 `QUARANTINE_REQUIRED` 到活动隔离记录的最小编排，但尚缺隔离复核/解除、DeidentifyRun/DEIDENTIFIED variant、PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
   FR-025 或隐私闭环完成。
 
 ### 3.4 V1.2 新增需求
@@ -187,7 +187,7 @@ V1.2 新增需求归一化：
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |
 | 医院远端上传和平台本地上传 | 两种入口复用 Upload/Multipart/Complete、项目权限和入库校验 | 入口不同，入库规则一致 |
-| 上传视频可以播放 | 入库后生成获准 Variant，再按 project、privacy 和 quarantine 签发短期播放授权 | 上传成功不等于已经具备播放条件 |
+| 上传视频可以播放 | 入库后生成获准 Variant，再按 project、privacy 和 quarantine 签发短期 `PLAYBACK` 授权；raw 隐私复核使用不可复用的独立 `PRIVACY_REVIEW` 授权 | 上传成功不等于具备播放条件，管理员身份也不自动获得 raw 权限 |
 | 无用或不合格视频可以删除 | 删除目标视频并保留权限、引用和审计守卫 | 满足数据整理需求且不破坏受控结果 |
 | 项目下不同文件夹 | 一层 AssetFolder，按视频归类，不承载权限或对象路径 | 满足简单分类需求 |
 | 只有管理员和普通用户 | 两级界面模板映射细粒度权限；高风险职责分离和标注禁止自审仍保留 | 简化 UI 不降低安全边界 |

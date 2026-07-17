@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,8 +43,32 @@ class PrivacyAssessmentContractTests {
 
 	@BeforeEach
 	void clearAssessments() {
+		clearSyntheticPrivacyData();
+	}
+
+	@AfterEach
+	void removeSyntheticPrivacyData() {
+		clearSyntheticPrivacyData();
+	}
+
+	private void clearSyntheticPrivacyData() {
+		this.jdbcTemplate.update("DELETE FROM quarantine_record");
 		this.jdbcTemplate.update("DELETE FROM privacy_finding");
 		this.jdbcTemplate.update("DELETE FROM privacy_assessment");
+		this.jdbcTemplate.update("""
+				DELETE FROM clip_asset
+				WHERE batch_id IN (
+				    SELECT batch_id FROM upload_batch
+				    WHERE device_id = 'synthetic-privacy-device')
+				""");
+		this.jdbcTemplate.update("""
+				DELETE FROM upload_file
+				WHERE batch_id IN (
+				    SELECT batch_id FROM upload_batch
+				    WHERE device_id = 'synthetic-privacy-device')
+				""");
+		this.jdbcTemplate.update(
+				"DELETE FROM upload_batch WHERE device_id = 'synthetic-privacy-device'");
 	}
 
 	@Test

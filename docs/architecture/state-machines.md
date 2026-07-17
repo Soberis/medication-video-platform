@@ -237,6 +237,7 @@ NONE → ACTIVE → REVIEW_PENDING → RELEASED
 ```
 
 - ACTIVE 时禁止新标注、AI、数据集准入和普通预览。
+- ACTIVE 数据仅可在独立批准的 `PRIVACY_REVIEW`/隔离复核用途下短时访问 raw；不得将复核授权复用于普通播放或导出。
 - RELEASED 只解除指定原因和范围；若仍有其他 active 原因，整体仍隔离。
 - 隔离解除必须重新评估已经过期的隐私或质量结论。
 
