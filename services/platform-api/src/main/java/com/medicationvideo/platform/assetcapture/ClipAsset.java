@@ -49,6 +49,9 @@ class ClipAsset {
 	@Column(name = "storage_etag", nullable = false, length = 2048, updatable = false)
 	private String storageEtag;
 
+	@Column(name = "folder_id")
+	private UUID folderId;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "asset_status", nullable = false, length = 32)
 	private ClipAssetStatus status;
@@ -122,6 +125,10 @@ class ClipAsset {
 		return this.sha256;
 	}
 
+	UUID getFolderId() {
+		return this.folderId;
+	}
+
 	ClipAssetStatus getStatus() {
 		return this.status;
 	}
@@ -132,6 +139,10 @@ class ClipAsset {
 
 	Instant getUpdatedAt() {
 		return this.updatedAt;
+	}
+
+	long getVersion() {
+		return this.version;
 	}
 
 	MultipartObjectStorage.ObjectReference getObjectReference() {
@@ -160,6 +171,11 @@ class ClipAsset {
 					false);
 		}
 		this.status = succeeded ? ClipAssetStatus.INGESTED : ClipAssetStatus.INGEST_FAILED;
+		this.updatedAt = changedAt;
+	}
+
+	void classify(UUID newFolderId, Instant changedAt) {
+		this.folderId = newFolderId;
 		this.updatedAt = changedAt;
 	}
 }

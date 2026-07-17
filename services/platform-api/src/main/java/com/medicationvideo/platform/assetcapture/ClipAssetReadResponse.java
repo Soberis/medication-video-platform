@@ -12,6 +12,7 @@ record ClipAssetReadResponse(
 		long sizeBytes,
 		String sha256,
 		ClipAssetStatus status,
+		UUID folderId,
 		ClipAssetSessionBindingResponse sessionBinding,
 		Instant createdAt,
 		Instant updatedAt) {

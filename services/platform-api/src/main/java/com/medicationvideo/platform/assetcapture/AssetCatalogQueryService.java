@@ -167,6 +167,7 @@ public class AssetCatalogQueryService {
 				       asset.size_bytes,
 				       asset.sha256,
 				       asset.asset_status,
+				       asset.folder_id,
 				       asset.created_at,
 				       asset.updated_at,
 				       stream.capture_session_id,
@@ -264,6 +265,7 @@ public class AssetCatalogQueryService {
 				asset.getSizeBytes(),
 				asset.getSha256(),
 				asset.getStatus(),
+				asset.getFolderId(),
 				binding,
 				asset.getCreatedAt(),
 				asset.getUpdatedAt());
@@ -413,6 +415,7 @@ public class AssetCatalogQueryService {
 				resultSet.getLong("size_bytes"),
 				resultSet.getString("sha256"),
 				ClipAssetStatus.valueOf(resultSet.getString("asset_status")),
+				resultSet.getObject("folder_id", UUID.class),
 				binding,
 				instant(resultSet, "created_at"),
 				instant(resultSet, "updated_at"));

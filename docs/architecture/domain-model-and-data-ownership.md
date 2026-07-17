@@ -191,6 +191,8 @@ flowchart LR
 - 移动视频只更新 `folder_id`，不移动对象、不改 project、不复制媒体，也不修改入库、隐私、标注、清洗或数据集事实。
 - 删除文件夹时将其中视频改为“未分类”，不得级联删除视频。
 
+当前实现：Flyway V23 使用 `(project_id, folder_id)` 复合外键固定 AssetFolder 与 ClipAsset 的同项目关系，表结构不含父文件夹字段；管理和视频分类命令通过 `iamproject` 公开 Membership 查询端口校验项目内 `ACTIVE ADMIN`。删除文件夹、批量取消分类、追加式审计和幂等命令证据在同一事务提交，故障注入测试证明审计失败不会留下部分取消分类。
+
 ### 5.8 视频删除不变量
 
 - ClipAsset 使用可空的 `deleted_at`、`deleted_by` 和 `delete_reason` 表示视频已在平台删除，不创建独立处置聚合或状态机。

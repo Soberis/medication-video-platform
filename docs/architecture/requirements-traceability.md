@@ -62,7 +62,7 @@
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。FR-008 已有媒体探测作业和报告，但尚未生成可播放 Variant。场景、科室、隐私、标注、清洗筛选、性能基准、预览 Variant、状态历史和完整审计尚未完成，因此三条均为 `PI`，不能宣布需求验收通过。
 - FR-010 当前完成活动隔离的第一段：`QUARANTINE_REQUIRED` 的人工隐私评估通过 `qualitycleaning` 公开应用服务在同一事务内幂等建立 `quarantine_record` 和追加式审计；并发相同命令只产生一份评估、隔离及对应审计，数据库以项目/资产和评估来源复合外键拒绝跨项目、伪造来源或错误版本。管理员可按项目查询资产的活动隔离记录，普通用户和跨项目查询被拒绝，`NONE` 不被误判为隐私放行，后续重新评估也不会自动解除既有隔离。尚未实现隔离复核、批准解除、销毁申请，以及标注/AI/数据集各入口的统一隔离守卫，因此仍为 `PI`。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V21、V19→V21 历史升级与约束测试、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离及并发合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V23、V19→V21 历史升级与约束测试、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离及并发合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -131,7 +131,8 @@ FR-033/FR-036 当前 `PI` 证据和边界：
 
 - OpenAPI 0.21.0、Flyway V22 和 `ProjectMembershipContractTests` 已覆盖项目幂等创建、首个 ADMIN 原子建立、ADMIN/MEMBER 成员授权/改角/移除、普通成员只见授权项目、最后管理员保护、并发单写和审计失败全事务回滚。
 - 数据库只接受 `ADMIN`/`MEMBER` 和 `ACTIVE`/`REMOVED`，移除成员保留历史；变更命令保存原响应快照并使用追加式审计，重放不会重复产生业务变更或审计。
-- 本切片没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。既有资产/上传接口仍使用其原项目上下文守卫，尚未统一查询 Membership；AssetFolder、视频项目内移动、真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant 和项目关闭也未实现，因此两项需求仍为 `PI`。
+- OpenAPI 0.22.0、Flyway V23 和 `AssetFolderContractTests` 已覆盖一层文件夹创建/重命名/删除、成员只读、管理员写入、视频同项目分类/未分类、大小写重名、跨项目复合外键、并发单写和审计失败回滚。删除文件夹只清空 `clip_asset.folder_id` 并递增资产版本，不删除视频或移动对象。
+- 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹和分类 API 已使用 Membership 守卫，但既有上传、相机配置和资产目录接口尚未统一接入；视频列表的文件夹筛选、真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 也未完成，因此两项需求仍为 `PI`。
 
 ## 4. 非功能需求追踪
 
