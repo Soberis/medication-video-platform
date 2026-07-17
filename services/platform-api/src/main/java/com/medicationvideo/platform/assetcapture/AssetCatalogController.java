@@ -105,6 +105,40 @@ class AssetCatalogController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
+	@GetMapping("/capture-event-logs")
+	ResponseEntity<CaptureEventLogListResponse> listCaptureEventLogs(
+			@RequestParam(name = "batch_id", required = false) UUID batchId,
+			@RequestParam(name = "device_id", required = false)
+			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
+			@RequestParam(name = "indexed_from", required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedFrom,
+			@RequestParam(name = "indexed_before", required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedBefore,
+			@RequestParam(required = false) @Size(max = 512) String cursor,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		var response = this.service.listCaptureEventLogs(
+				actor.projectId(),
+				batchId,
+				deviceId,
+				indexedFrom,
+				indexedBefore,
+				cursor,
+				limit);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	@GetMapping("/capture-event-logs/{captureEventLogId}")
+	ResponseEntity<CaptureEventLogReadResponse> getCaptureEventLog(
+			@PathVariable UUID captureEventLogId,
+			Authentication authentication) {
+		var response = this.service.getCaptureEventLog(
+				requireActor(authentication).projectId(),
+				captureEventLogId);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
 	private static UploadActor requireActor(Authentication authentication) {
 		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
 			throw new UploadBatchAuthorizationException();

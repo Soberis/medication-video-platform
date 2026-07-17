@@ -167,6 +167,58 @@ class AssetCatalogQueryContractTests {
 	}
 
 	@Test
+	void listsAndReadsImmutableEventLogObjectsWithoutExposingStorageOrInterpretingPayloads() throws Exception {
+		var earlier = insertEventLogObject(
+				PROJECT_ID,
+				"device-own",
+				Instant.parse("2026-07-15T01:00:00Z"));
+		var later = insertEventLogObject(
+				PROJECT_ID,
+				"device-own",
+				Instant.parse("2026-07-15T02:00:00Z"));
+		var hidden = insertEventLogObject(
+				OTHER_PROJECT_ID,
+				"device-hidden",
+				Instant.parse("2026-07-15T03:00:00Z"));
+
+		var firstPage = authorizedGet("/api/v1/capture-event-logs?device_id=device-own&limit=1")
+				.andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.items[0].capture_event_log_id").value(later.captureEventLogId().toString()))
+				.andExpect(jsonPath("$.items[0].content_type").value("application/x-ndjson"))
+				.andExpect(jsonPath("$.items[0].storage_bucket").doesNotExist())
+				.andExpect(jsonPath("$.items[0].object_key").doesNotExist())
+				.andExpect(jsonPath("$.items[0].storage_etag").doesNotExist())
+				.andExpect(jsonPath("$.items[0].events").doesNotExist())
+				.andReturn();
+		var cursor = this.objectMapper
+				.readTree(firstPage.getResponse().getContentAsString())
+				.get("next_cursor")
+				.asText();
+
+		authorizedGet("/api/v1/capture-event-logs?device_id=device-own&limit=1&cursor=" + cursor)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.items[0].capture_event_log_id").value(earlier.captureEventLogId().toString()))
+				.andExpect(jsonPath("$.next_cursor").doesNotExist());
+
+		authorizedGet("/api/v1/capture-event-logs?batch_id=" + later.batchId())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1));
+
+		authorizedGet("/api/v1/capture-event-logs/" + later.captureEventLogId())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.capture_event_log_id").value(later.captureEventLogId().toString()))
+				.andExpect(jsonPath("$.sha256").value(SHA256));
+
+		authorizedGet("/api/v1/capture-event-logs/" + hidden.captureEventLogId())
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("CAPTURE_EVENT_LOG_NOT_FOUND"));
+	}
+
+	@Test
 	void rejectsInvalidCursorTimeRangeAndEnumWithStableErrors() throws Exception {
 		authorizedGet("/api/v1/capture-sessions?cursor=not-a-cursor")
 				.andExpect(status().isBadRequest())
@@ -177,9 +229,25 @@ class AssetCatalogQueryContractTests {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("INVALID_TIME_RANGE"));
 
-		authorizedGet("/api/v1/capture-sessions?assembly_status=finished")
+		 authorizedGet("/api/v1/capture-sessions?assembly_status=finished")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	void appliesCaptureEventLogObjectIndexMigration() {
+		var migrationCount = this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM flyway_schema_history WHERE version = '18' AND success = true",
+				Integer.class);
+		var indexCount = this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM pg_indexes WHERE indexname IN "
+						+ "('ix_capture_event_log_project_indexed', "
+						+ "'ix_capture_event_log_project_batch_indexed', "
+						+ "'ix_capture_event_log_project_device_indexed')",
+				Integer.class);
+
+		assertEquals(1, migrationCount);
+		assertEquals(3, indexCount);
 	}
 
 	@Test
@@ -336,6 +404,33 @@ class AssetCatalogQueryContractTests {
 		return clipAssetId;
 	}
 
+	private EventLogObject insertEventLogObject(UUID projectId, String deviceId, Instant indexedAt) {
+		var batchId = UUID.randomUUID();
+		var uploadFileId = UUID.randomUUID();
+		var clientFileId = UUID.randomUUID();
+		var captureEventLogId = UUID.randomUUID();
+		insertCompletedBatch(batchId, projectId, deviceId, indexedAt);
+		insertUploadedFile(
+				uploadFileId,
+				batchId,
+				clientFileId,
+				UploadFileKind.EVENT_LOG,
+				"application/x-ndjson",
+				12,
+				indexedAt);
+		this.jdbcTemplate.update("""
+				INSERT INTO capture_event_log (
+				    capture_event_log_id, project_id, batch_id, source_upload_file_id,
+				    client_file_id, device_id, content_type, size_bytes, sha256,
+				    storage_bucket, object_key, storage_etag, indexed_at)
+				VALUES (?, ?, ?, ?, ?, ?, 'application/x-ndjson', 12, ?,
+				        'synthetic-bucket', ?, 'synthetic-etag', ?)
+				""",
+				captureEventLogId, projectId, batchId, uploadFileId, clientFileId, deviceId,
+				SHA256, "uploads/" + uploadFileId, Timestamp.from(indexedAt));
+		return new EventLogObject(captureEventLogId, batchId);
+	}
+
 	private void insertCompletedBatch(UUID batchId, UUID projectId, String deviceId, Instant createdAt) {
 		this.jdbcTemplate.update("""
 				INSERT INTO upload_batch (
@@ -384,6 +479,7 @@ class AssetCatalogQueryContractTests {
 		this.jdbcTemplate.update("DELETE FROM camera_set_snapshot");
 		this.jdbcTemplate.update("DELETE FROM capture_session");
 		this.jdbcTemplate.update("DELETE FROM clip_asset");
+		this.jdbcTemplate.update("DELETE FROM capture_event_log");
 		this.jdbcTemplate.update("DELETE FROM upload_part");
 		this.jdbcTemplate.update("DELETE FROM upload_file");
 		this.jdbcTemplate.update("DELETE FROM upload_batch");
@@ -404,5 +500,8 @@ class AssetCatalogQueryContractTests {
 			UUID snapshotId,
 			UUID snapshotMemberId,
 			UUID cameraStreamId) {
+	}
+
+	private record EventLogObject(UUID captureEventLogId, UUID batchId) {
 	}
 }

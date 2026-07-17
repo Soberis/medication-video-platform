@@ -131,7 +131,7 @@ flowchart LR
 - 批次/文件终态、逐文件清理任务和追加式审计必须原子提交；对象存储 Abort/Delete 不占用该数据库事务。
 - `upload_cleanup_task` 对每个 UploadFile 唯一，使用 claim lease 和有限重试；终态 `FAILED` 必须告警，不得假定对象已清理。
 - 清理任务保留服务端对象引用能力但任何查询响应、日志和指标不得暴露对象 key、upload ID 或预签名 URL。
-- Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset；METADATA 和 EVENT_LOG 不伪装成视频资产。
+- Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset，并为每个已验证 EVENT_LOG UploadFile 创建唯一的不可变 CaptureEventLog 对象索引；METADATA 和 EVENT_LOG 均不伪装成视频资产。
 - `CameraSetSnapshot` 与 `CaptureSession` 同事务创建，只能由服务器现行 CameraSet 冻结；RK3588 只上报稳定标识和观测元数据，不能覆盖服务器相机配置真值。
 
 ### 5.3 CameraChannel 与 CameraSet 不变量
@@ -161,6 +161,14 @@ flowchart LR
 - 相同业务 ID、不同摘要必须返回冲突，不可覆盖。
 - 对象路径只使用内部 ID，不包含姓名、病历号、处方号、工号或科室明文。
 - 逻辑不可变不等于永久保留；批准销毁通过治理流程创建 tombstone 和销毁证明，不通过 update 改写媒体内容。
+
+### 5.6 CaptureEventLog 不变量
+
+- 每个已完成批次中的 EVENT_LOG UploadFile 至多形成一个索引，以 `source_upload_file_id` 和 `(batch_id, client_file_id)` 双重唯一约束防止重复绑定。
+- 索引只保存项目、批次、设备、对象摘要、媒体类型、大小和服务端索引时间；内部存储引用不得通过目录 API、日志或指标暴露。
+- `indexed_at` 是平台完成批次时的索引时间，不是边端事件发生时间，也不能替代设备时间基准。
+- 当前切片不解析日志负载、不推断相机或工控机动作，也不把边端声明直接升级为平台事实；事件 Schema、逐事件索引和时间基准校验必须通过后续版本化契约引入。
+- 列表与详情只能使用认证身份中的 project 范围；跨项目详情按不存在处理。
 
 ## 6. `mediaprivacy`
 

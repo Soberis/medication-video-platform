@@ -14,14 +14,17 @@ class UploadBatchCompletionService {
 	private final UploadBatchRepository batchRepository;
 	private final UploadFileRepository fileRepository;
 	private final ClipAssetRepository clipAssetRepository;
+	private final CaptureEventLogRepository captureEventLogRepository;
 
 	UploadBatchCompletionService(
 			UploadBatchRepository batchRepository,
 			UploadFileRepository fileRepository,
-			ClipAssetRepository clipAssetRepository) {
+			ClipAssetRepository clipAssetRepository,
+			CaptureEventLogRepository captureEventLogRepository) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.clipAssetRepository = clipAssetRepository;
+		this.captureEventLogRepository = captureEventLogRepository;
 	}
 
 	@Transactional
@@ -55,7 +58,12 @@ class UploadBatchCompletionService {
 		if (assets.isEmpty()) {
 			throw failure("UPLOAD_BATCH_VIDEO_REQUIRED", "The upload batch contains no video file.");
 		}
+		var eventLogs = files.stream()
+				.filter(file -> file.getFileKind() == UploadFileKind.EVENT_LOG)
+				.map(file -> CaptureEventLog.fromUploadedFile(batch, file, now))
+				.toList();
 		this.clipAssetRepository.saveAllAndFlush(assets);
+		this.captureEventLogRepository.saveAllAndFlush(eventLogs);
 		batch.markCompleted(verifiedManifestSha256, now);
 		this.batchRepository.saveAndFlush(batch);
 		return UploadBatchCompletionResponse.from(batch, assets);

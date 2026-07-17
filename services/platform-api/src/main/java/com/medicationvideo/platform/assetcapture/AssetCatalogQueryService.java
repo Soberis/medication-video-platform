@@ -19,6 +19,7 @@ public class AssetCatalogQueryService {
 
 	private static final String SESSION_CURSOR_KIND = "capture-session";
 	private static final String ASSET_CURSOR_KIND = "clip-asset";
+	private static final String EVENT_LOG_CURSOR_KIND = "capture-event-log";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 	private final CaptureSessionRepository sessionRepository;
@@ -26,6 +27,7 @@ public class AssetCatalogQueryService {
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
 	private final CameraStreamRepository streamRepository;
 	private final ClipAssetRepository clipAssetRepository;
+	private final CaptureEventLogRepository captureEventLogRepository;
 
 	public AssetCatalogQueryService(
 			NamedParameterJdbcTemplate jdbcTemplate,
@@ -33,13 +35,15 @@ public class AssetCatalogQueryService {
 			CameraSetSnapshotRepository snapshotRepository,
 			CameraSetSnapshotMemberRepository snapshotMemberRepository,
 			CameraStreamRepository streamRepository,
-			ClipAssetRepository clipAssetRepository) {
+			ClipAssetRepository clipAssetRepository,
+			CaptureEventLogRepository captureEventLogRepository) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.sessionRepository = sessionRepository;
 		this.snapshotRepository = snapshotRepository;
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
 		this.clipAssetRepository = clipAssetRepository;
+		this.captureEventLogRepository = captureEventLogRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -52,7 +56,7 @@ public class AssetCatalogQueryService {
 			Instant recordedBefore,
 			String cursor,
 			int limit) {
-		validateTimeRange(recordedFrom, recordedBefore);
+		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
 		var decodedCursor = decodeCursor(SESSION_CURSOR_KIND, cursor);
 		var sql = new StringBuilder("""
 				SELECT session.capture_session_id,
@@ -151,7 +155,7 @@ public class AssetCatalogQueryService {
 			Instant recordedBefore,
 			String cursor,
 			int limit) {
-		validateTimeRange(recordedFrom, recordedBefore);
+		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
 		var decodedCursor = decodeCursor(ASSET_CURSOR_KIND, cursor);
 		var recordedAtExpression = "COALESCE(stream.record_start_utc, asset.created_at)";
 		var sql = new StringBuilder("""
@@ -265,6 +269,80 @@ public class AssetCatalogQueryService {
 				asset.getUpdatedAt());
 	}
 
+	@Transactional(readOnly = true)
+	CaptureEventLogListResponse listCaptureEventLogs(
+			UUID projectId,
+			UUID batchId,
+			String deviceId,
+			Instant indexedFrom,
+			Instant indexedBefore,
+			String cursor,
+			int limit) {
+		validateTimeRange(indexedFrom, indexedBefore, "indexed_from", "indexed_before");
+		var decodedCursor = decodeCursor(EVENT_LOG_CURSOR_KIND, cursor);
+		var sql = new StringBuilder("""
+				SELECT capture_event_log_id,
+				       batch_id,
+				       source_upload_file_id,
+				       client_file_id,
+				       device_id,
+				       content_type,
+				       size_bytes,
+				       sha256,
+				       indexed_at
+				FROM capture_event_log
+				WHERE project_id = :projectId
+				""");
+		var parameters = new MapSqlParameterSource("projectId", projectId);
+		if (batchId != null) {
+			sql.append(" AND batch_id = :batchId\n");
+			parameters.addValue("batchId", batchId);
+		}
+		if (deviceId != null) {
+			sql.append(" AND device_id = :deviceId\n");
+			parameters.addValue("deviceId", deviceId);
+		}
+		if (indexedFrom != null) {
+			sql.append(" AND indexed_at >= :indexedFrom\n");
+			parameters.addValue("indexedFrom", Timestamp.from(indexedFrom));
+		}
+		if (indexedBefore != null) {
+			sql.append(" AND indexed_at < :indexedBefore\n");
+			parameters.addValue("indexedBefore", Timestamp.from(indexedBefore));
+		}
+		if (decodedCursor != null) {
+			sql.append("""
+					 AND (indexed_at < :cursorIndexedAt
+					      OR (indexed_at = :cursorIndexedAt
+					          AND capture_event_log_id < :cursorId))
+					""");
+			parameters.addValue("cursorIndexedAt", Timestamp.from(decodedCursor.recordedAt()));
+			parameters.addValue("cursorId", decodedCursor.id());
+		}
+		sql.append(" ORDER BY indexed_at DESC, capture_event_log_id DESC LIMIT :fetchLimit");
+		parameters.addValue("fetchLimit", limit + 1);
+
+		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapCaptureEventLog);
+		var page = boundedPage(rows, limit);
+		var nextCursor = rows.size() > limit
+				? AssetCatalogCursor.encode(
+						EVENT_LOG_CURSOR_KIND,
+						page.getLast().indexedAt(),
+						page.getLast().captureEventLogId())
+				: null;
+		return new CaptureEventLogListResponse(page, nextCursor);
+	}
+
+	@Transactional(readOnly = true)
+	CaptureEventLogReadResponse getCaptureEventLog(UUID projectId, UUID captureEventLogId) {
+		return this.captureEventLogRepository
+				.findByCaptureEventLogIdAndProjectId(captureEventLogId, projectId)
+				.map(CaptureEventLogReadResponse::from)
+				.orElseThrow(() -> new AssetCatalogQueryException(
+						"CAPTURE_EVENT_LOG_NOT_FOUND",
+						"The capture event log was not found in the current project."));
+	}
+
 	/**
 	 * Cross-module read-only entry point. Returns a frozen snapshot of the fields a downstream
 	 * module (e.g. mediaprivacy) needs to schedule work against a clip asset. Does not leak
@@ -341,6 +419,20 @@ public class AssetCatalogQueryService {
 		return new ClipAssetRow(response, instant(resultSet, "recorded_at"));
 	}
 
+	private CaptureEventLogReadResponse mapCaptureEventLog(ResultSet resultSet, int rowNumber)
+			throws SQLException {
+		return new CaptureEventLogReadResponse(
+				resultSet.getObject("capture_event_log_id", UUID.class),
+				resultSet.getObject("batch_id", UUID.class),
+				resultSet.getObject("source_upload_file_id", UUID.class),
+				resultSet.getObject("client_file_id", UUID.class),
+				resultSet.getString("device_id"),
+				resultSet.getString("content_type"),
+				resultSet.getLong("size_bytes"),
+				resultSet.getString("sha256"),
+				instant(resultSet, "indexed_at"));
+	}
+
 	private static ClipAssetSessionBindingResponse binding(
 			CameraStream stream,
 			CameraSetSnapshotMember member) {
@@ -367,11 +459,15 @@ public class AssetCatalogQueryService {
 		return cursor == null ? null : AssetCatalogCursor.decode(kind, cursor);
 	}
 
-	private static void validateTimeRange(Instant recordedFrom, Instant recordedBefore) {
-		if (recordedFrom != null && recordedBefore != null && !recordedFrom.isBefore(recordedBefore)) {
+	private static void validateTimeRange(
+			Instant from,
+			Instant before,
+			String fromParameter,
+			String beforeParameter) {
+		if (from != null && before != null && !from.isBefore(before)) {
 			throw new AssetCatalogQueryException(
 					"INVALID_TIME_RANGE",
-					"recorded_from must be earlier than recorded_before.");
+					fromParameter + " must be earlier than " + beforeParameter + ".");
 		}
 	}
 

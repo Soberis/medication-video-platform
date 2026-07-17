@@ -102,7 +102,8 @@ class UploadBatchExceptionHandler {
 	@ExceptionHandler(AssetCatalogQueryException.class)
 	ResponseEntity<ApiErrorResponse> assetCatalogQueryFailure(AssetCatalogQueryException exception) {
 		var status = switch (exception.getErrorCode()) {
-			case "CAPTURE_SESSION_NOT_FOUND", "CLIP_ASSET_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+			case "CAPTURE_SESSION_NOT_FOUND", "CLIP_ASSET_NOT_FOUND", "CAPTURE_EVENT_LOG_NOT_FOUND" ->
+				HttpStatus.NOT_FOUND;
 			default -> HttpStatus.BAD_REQUEST;
 		};
 		return error(status, exception.getErrorCode(), exception.getMessage());

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.17.0
+  version: 0.18.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -277,8 +277,9 @@ paths:
         Called automatically by the edge uploader after every declared file has completed final
         object size and full-file SHA-256 verification. The command locks the batch, checks exact
         file count and total bytes, verifies the upload-file-manifest-v1 digest, and creates one
-        immutable minimal RAW ClipAsset binding for each VIDEO file. METADATA and EVENT_LOG objects
-        remain uploaded source objects for later session ingestion and do not become ClipAssets.
+        immutable minimal RAW ClipAsset binding for each VIDEO file and one immutable CaptureEventLog
+        object index for each EVENT_LOG file. METADATA remains an uploaded source object for session
+        ingestion. EVENT_LOG payloads are not interpreted and do not become ClipAssets.
         The natural-resource PUT is idempotent: a replay returns the persisted completion and never
         creates duplicate assets. It does not perform media probing or create a CaptureSession.
       parameters:
@@ -1250,6 +1251,121 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: ClipAsset not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /capture-event-logs:
+    get:
+      operationId: listCaptureEventLogs
+      tags:
+        - Asset Catalog
+      summary: List immutable edge event-log object indexes in the authenticated project
+      description: >-
+        Returns a bounded keyset page ordered by indexed_at and capture_event_log_id descending.
+        Each item identifies one verified EVENT_LOG upload object. The service does not parse event
+        records, infer hardware actions, expose object-storage locations or return download URLs.
+        Project scope comes only from the bearer identity.
+      parameters:
+        - name: batch_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: device_id
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
+        - name: indexed_from
+          in: query
+          description: Inclusive lower bound on server-side indexed_at.
+          schema:
+            type: string
+            format: date-time
+        - name: indexed_before
+          in: query
+          description: Exclusive upper bound on server-side indexed_at.
+          schema:
+            type: string
+            format: date-time
+        - name: cursor
+          in: query
+          description: Opaque cursor returned by the preceding CaptureEventLog page.
+          schema:
+            type: string
+            maxLength: 512
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Project-scoped page of immutable event-log object indexes.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureEventLogList"
+        "400":
+          description: Invalid filter, time range, limit or cursor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /capture-event-logs/{capture_event_log_id}:
+    get:
+      operationId: getCaptureEventLog
+      tags:
+        - Asset Catalog
+      summary: Get one immutable event-log object index
+      description: >-
+        Returns only persisted object metadata when the index belongs to the authenticated project.
+        An index in another project is hidden as not found. Event payload records and storage
+        addresses are intentionally excluded.
+      parameters:
+        - name: capture_event_log_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: CaptureEventLog object index detail.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureEventLogRead"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Event-log object index not found in the authenticated project.
           content:
             application/problem+json:
               schema:
@@ -2866,6 +2982,68 @@ components:
         quality_status:
           $ref: "#/components/schemas/CaptureQualityStatus"
         created_at:
+          type: string
+          format: date-time
+    CaptureEventLogList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CaptureEventLogRead"
+        next_cursor:
+          anyOf:
+            - type: string
+              maxLength: 512
+            - type: "null"
+    CaptureEventLogRead:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_event_log_id
+        - batch_id
+        - source_upload_file_id
+        - client_file_id
+        - device_id
+        - content_type
+        - size_bytes
+        - sha256
+        - indexed_at
+      properties:
+        capture_event_log_id:
+          type: string
+          format: uuid
+        batch_id:
+          type: string
+          format: uuid
+        source_upload_file_id:
+          type: string
+          format: uuid
+        client_file_id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 128
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        indexed_at:
           type: string
           format: date-time
     ClipAssetList:

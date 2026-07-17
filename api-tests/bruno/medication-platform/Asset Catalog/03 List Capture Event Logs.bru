@@ -1,0 +1,30 @@
+meta {
+  name: List Capture Event Logs
+  type: http
+  seq: 3
+  tags: [
+    AssetCatalog
+  ]
+}
+
+get {
+  url: {{baseUrl}}/api/v1/capture-event-logs?limit=20
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("lists safe event-log object indexes without storage locations or parsed events", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(200);
+    expect(body.items).to.be.an("array");
+    expect(body.items.length).to.be.at.most(20);
+    expect(body).to.have.property("next_cursor");
+    for (const item of body.items) {
+      expect(item).not.to.have.property("storage_bucket");
+      expect(item).not.to.have.property("object_key");
+      expect(item).not.to.have.property("storage_etag");
+      expect(item).not.to.have.property("events");
+    }
+  });
+}

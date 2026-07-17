@@ -37,6 +37,7 @@ class UploadBatchCompletionContractTests {
 	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 	private static final UUID VIDEO_CLIENT_FILE_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
 	private static final UUID METADATA_CLIENT_FILE_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
+	private static final UUID EVENT_LOG_CLIENT_FILE_ID = UUID.fromString("10000000-0000-0000-0000-000000000003");
 	private static final String SHA256_A = "a".repeat(64);
 	private static final String SHA256_B = "b".repeat(64);
 	private static final long PART_SIZE = 8_388_608L;
@@ -57,10 +58,14 @@ class UploadBatchCompletionContractTests {
 	private ClipAssetRepository clipAssetRepository;
 
 	@Autowired
+	private CaptureEventLogRepository captureEventLogRepository;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void clearUploads() {
+		this.captureEventLogRepository.deleteAll();
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();
 		this.fileRepository.deleteAll();
@@ -99,6 +104,13 @@ class UploadBatchCompletionContractTests {
 						"application/json",
 						5L,
 						SHA256_B,
+						PART_SIZE),
+				new ManifestEntry(
+						EVENT_LOG_CLIENT_FILE_ID,
+						UploadFileKind.EVENT_LOG,
+						"application/x-ndjson",
+						6L,
+						SHA256_A,
 						PART_SIZE));
 		var batch = uploadedBatch(PROJECT_ID, entries);
 
@@ -109,8 +121,8 @@ class UploadBatchCompletionContractTests {
 				.andExpect(jsonPath("$.batch_id").value(batch.getBatchId().toString()))
 				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
 				.andExpect(jsonPath("$.status").value("COMPLETED"))
-				.andExpect(jsonPath("$.file_count").value(2))
-				.andExpect(jsonPath("$.total_size_bytes").value(17))
+				.andExpect(jsonPath("$.file_count").value(3))
+				.andExpect(jsonPath("$.total_size_bytes").value(23))
 				.andExpect(jsonPath("$.manifest_sha256").value(batch.getManifestSha256()))
 				.andExpect(jsonPath("$.verified_manifest_sha256").value(batch.getManifestSha256()))
 				.andExpect(jsonPath("$.clip_asset_count").value(1))
@@ -127,6 +139,11 @@ class UploadBatchCompletionContractTests {
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.clipAssetRepository.count());
+		assertEquals(1, this.captureEventLogRepository.count());
+		var eventLog = this.captureEventLogRepository.findAll().getFirst();
+		assertEquals(EVENT_LOG_CLIENT_FILE_ID, eventLog.getClientFileId());
+		assertEquals("synthetic-edge-01", eventLog.getDeviceId());
+		assertEquals("application/x-ndjson", eventLog.getContentType());
 		assertEquals(
 				UploadBatchStatus.COMPLETED,
 				this.batchRepository.findById(batch.getBatchId()).orElseThrow().getStatus());
@@ -144,6 +161,7 @@ class UploadBatchCompletionContractTests {
 				.andExpect(jsonPath("$.retryable").value(false));
 
 		assertEquals(0, this.clipAssetRepository.count());
+		assertEquals(0, this.captureEventLogRepository.count());
 		assertEquals(UploadBatchStatus.UPLOADING, this.batchRepository.findById(batch.getBatchId()).orElseThrow().getStatus());
 	}
 
