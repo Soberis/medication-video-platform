@@ -58,9 +58,11 @@ Abort/过期清理采用“先提交业务终态，再异步执行幂等存储�
 
 对象删除是破坏性副作用，因此调度器默认由 `UPLOAD_CLEANUP_ENABLED=false` 关闭；只有环境负责人确认 bucket、权限、告警和运行手册后才显式启用。关闭调度不会丢失数据库中的终态和清理任务，也不得通过后台 SQL 或直接修改状态绕过守卫。
 
-P0 的 Complete Batch 是 RK3588 边端上传程序自动调用的幂等控制面命令，不是 Web 人工按钮。它只完成传输清单和最小 RAW ClipAsset 建档；媒体探测、CameraSetSnapshot、CaptureSession 和 CameraStream 绑定属于后续入库状态，不反向改变已经成功的上传传输结论。
+P0 的 Complete Batch 是医院远端上传客户端和平台本地上传流程共用的幂等控制面命令。它只完成传输清单和最小 RAW ClipAsset 建档；媒体探测、CameraSetSnapshot、CaptureSession 和 CameraStream 绑定属于后续入库状态，不反向改变已经成功的上传传输结论。
 
 Complete Batch 后的 CaptureSession Ingest 读取批次内唯一已验证 METADATA，原子创建 session、服务器配置快照和 stream 绑定。此时未探测视频的 CameraStream 为 `BOUND`，不计入 `received_camera_count`；媒体探测成功后才转为 `INGESTED`。因此上传 `COMPLETED`、stream `BOUND` 和 session `ASSEMBLING` 可以同时成立，彼此不矛盾。
+
+UploadBatch 在 `INITIATED` 时冻结 project 和 `upload_source_type`。第一版只使用 `HOSPITAL_REMOTE` 与 `PLATFORM_LOCAL`；越权或不符合上传规则的请求在创建批次前拒绝。开发、测试和 CI 只允许合成数据。Complete Batch 后不得通过状态迁移更换 project。
 
 ### 3.2 UploadFile
 
@@ -87,13 +89,14 @@ UPLOADED → INGESTING → INGESTED
 INGEST_FAILED → INGESTING   （显式重试且输入摘要不变）
 ```
 
-`ARCHIVED`、`DESTRUCTION_PENDING` 和 `DESTROYED` 属于保留/销毁维度，不与 ingest 状态混为一列。
+视频删除不改变上述入库状态。`deleted_at` 非空表示视频已在平台删除；这是可用性标记，不再建立一套删除状态机。
 
 守卫：
 
 - INGESTED 必须具有受支持的容器/视频流、可验证摘要和 MediaReport。
 - 重试只允许复用相同输入摘要；输入变化必须创建新 ClipAsset。
-- `REJECT`、`QUARANTINE` 和 `DESTROYED` 不是 ingest 失败的同义词。
+- `REJECT`、`QUARANTINE` 和“已删除”不是 ingest 失败的同义词。
+- 删除要求管理员权限、明确目标视频、受控引用检查和审计；删除多路 session 中的一路视频不得级联删除其他视频。
 
 ## 4. CaptureSession 和 stream 质量状态
 
@@ -320,12 +323,14 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 操作 | 必须满足 |
 | --- | --- |
 | 创建标注任务 | asset INGESTED；允许的 session/stream 质量；privacy ALLOWED_ANNOTATION；quarantine NONE |
+| 播放视频 | 可播放 variant 已就绪；有效 PrivacyRelease；项目/用途授权；quarantine NONE；`deleted_at IS NULL` |
 | 提交 revision | task 可提交；schema/guideline 未变化；时间和几何基础校验通过 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
 | 数据集冻结 | session/stream 准入、privacy ALLOWED_INTERNAL_EXPORT、review PASS、post-clean PASS 或批准 override、quarantine NONE |
 | 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |
 | AI 作业 | P1 已启用；DEIDENTIFIED variant；privacy ALLOWED_ANNOTATION；quarantine NONE；算法版本已批准 |
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |
+| 移动项目内文件夹 | folder 与 asset 同 project；只更新 `folder_id` |
 
 ## 12. 事件与测试要求
 

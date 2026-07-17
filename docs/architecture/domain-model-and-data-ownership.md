@@ -8,6 +8,8 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
+当前业务事实来源仍是 V1.1.13；本文同时记录 V1.2-RC1 中医院远端上传与平台本地上传、视频播放与删除、项目内文件夹、两级角色和视频标注的候选领域边界。候选需求批准前不得仅凭本文开放生产能力。
+
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
 ```text
@@ -106,6 +108,7 @@ flowchart LR
 - 权限判断至少包含 tenant、project、classification、purpose、expiry 和 task assignment。
 - 角色变更不能追溯性改变历史审计中的当时授权上下文。
 - 项目关闭后禁止创建新任务和新导出，但保留按策略授权的历史查询。
+- P0 的界面角色只有 `ADMIN` 和 `MEMBER`，它们是细粒度权限项的模板，不是绕过 purpose、project、privacy、task assignment 或审批守卫的通行证。
 
 ## 5. `assetcapture`
 
@@ -119,6 +122,7 @@ flowchart LR
 | CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
 | ClipAsset | clip_asset、asset_tag | 不可变媒体对象身份、摘要、存储引用和业务标签 |
 | CaptureEventLog | capture_event_log | 边端事件日志对象索引及时间基准，不解析硬件控制逻辑 |
+| AssetFolder | asset_folder、clip_asset.folder_id | 项目内一层视频分类；不承载权限、不映射对象存储目录 |
 
 ### 5.2 UploadBatch 不变量
 
@@ -133,6 +137,9 @@ flowchart LR
 - 清理任务保留服务端对象引用能力但任何查询响应、日志和指标不得暴露对象 key、upload ID 或预签名 URL。
 - Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset，并为每个已验证 EVENT_LOG UploadFile 创建唯一的不可变 CaptureEventLog 对象索引；METADATA 和 EVENT_LOG 均不伪装成视频资产。
 - `CameraSetSnapshot` 与 `CaptureSession` 同事务创建，只能由服务器现行 CameraSet 冻结；RK3588 只上报稳定标识和观测元数据，不能覆盖服务器相机配置真值。
+- UploadBatch 创建时冻结 project 和 `upload_source_type`；第一版只有 `HOSPITAL_REMOTE` 和 `PLATFORM_LOCAL`，不单独建来源表。
+- Complete Batch 后不允许直接修改资产或 session 的 project；错误归属在完成前中止，完成后删除错误视频并重新上传。
+- `PLATFORM_LOCAL` 表示用户在平台页面选择本机视频上传。生产环境按项目权限和上传规则开放；开发、测试和 CI 仍只使用合成数据。
 
 ### 5.3 CameraChannel 与 CameraSet 不变量
 
@@ -169,6 +176,23 @@ flowchart LR
 - `indexed_at` 是平台完成批次时的索引时间，不是边端事件发生时间，也不能替代设备时间基准。
 - 当前切片不解析日志负载、不推断相机或工控机动作，也不把边端声明直接升级为平台事实；事件 Schema、逐事件索引和时间基准校验必须通过后续版本化契约引入。
 - 列表与详情只能使用认证身份中的 project 范围；跨项目详情按不存在处理。
+
+### 5.7 AssetFolder 不变量
+
+- AssetFolder 与 ClipAsset 必须属于同一 project；禁止嵌套和跨项目归类。
+- `clip_asset.folder_id` 可空；一个 ClipAsset 当前最多属于一个文件夹，不需要单独的归类历史表。
+- “未分类”是查询投影，不创建可删除的系统文件夹记录。
+- 移动视频只更新 `folder_id`，不移动对象、不改 project、不复制媒体，也不修改入库、隐私、标注、清洗或数据集事实。
+- 删除文件夹时将其中视频改为“未分类”，不得级联删除视频。
+
+### 5.8 视频删除不变量
+
+- ClipAsset 使用可空的 `deleted_at`、`deleted_by` 和 `delete_reason` 表示视频已在平台删除，不创建独立处置聚合或状态机。
+- 删除命令必须校验项目权限、目标视频和受控下游引用，并向既有 AuditEvent 写入结果。
+- 已删除视频从普通查询、播放、新标注任务和新数据集候选中排除。
+- 删除不得改写上传完整性、历史标注、冻结数据集引用或审计。
+- 删除多视频 CaptureSession 中的一路视频时保留 session 和其他视频，并将 session 投影为缺流/不可用；不得级联删除。
+- 对象和备份的最终销毁继续由 governance 按保留规则处理，不扩展为新的用户功能。
 
 ## 6. `mediaprivacy`
 
@@ -228,6 +252,7 @@ flowchart LR
 - Object 同时保存 stream PTS 时间、session 时间和 frame index；不能只用 `frame_index/fps` 推导。
 - 人工不确定性使用明确字段，例如 `annotator_certainty` 或原因标签；不得与算法 score 混用。
 - 复核员需要修正时，必须退回或创建裁决 revision，并保留来源链。
+- 标注提交者不得复核自己的 revision；两级界面角色不会取消该职责分离守卫。
 
 ## 8. `qualitycleaning`
 
@@ -307,7 +332,7 @@ flowchart LR
 | ApprovalRequest | approval_request、approval_decision | 隔离解除、raw 访问、导出、冻结和删除审批 |
 | AuditEvent | audit_event | 追加式安全和业务审计 |
 | RetentionPolicy | retention_policy、legal_hold | 保留、到期、暂停销毁和适用范围 |
-| DestructionCase | destruction_case、destruction_certificate | 逻辑删除、对象/备份处理和证明 |
+| DestructionCase | destruction_case、destruction_certificate | 对象/备份处理和证明 |
 
 ### 11.2 不变量
 

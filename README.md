@@ -82,10 +82,13 @@ pnpm run api:test
 ## Source Documents
 
 - [配药视频数据管理平台需求文档 V1.1.13](./docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx)
+- [V1.2-RC1 新增需求评审稿](./docs/requirements/drafts/V1.2/配药视频数据管理平台需求文档_V1.2.md)：新增医院远端上传与平台本地上传、视频播放与删除、项目内一层文件夹、ADMIN/MEMBER 两级角色，并统一视频标注口径；批准前不替代 V1.1.13。
 - [配药平台技术设计](./docs/architecture/配药平台技术设计.md)
 - [架构详细设计索引](./docs/architecture/README.md)
 - [ADR-0001：技术基线与构建边界](./docs/adr/0001-technology-baseline.md)
 
 ## Next Step
 
-首个隐私业务切片已建立：管理员可针对已 `INGESTED` 的合成 ClipAsset 记录版本化人工 `PrivacyAssessment`，固定人脸、姓名、病历号、屏幕、工牌、医嘱/标签文本、语音等 finding 类别，并得到放行复核、待脱敏或待隔离的后续动作要求；策略、输入摘要、操作者、请求和旧/新版本均可追溯。当前所有隐私投影仍默认 `BLOCKED`，`QUARANTINE_REQUIRED` 尚不等于实际隔离记录。下一步只做 `qualitycleaning` 所属的 Quarantine 最小编排与只读状态，再做 DeidentifyRun/AssetVariant，最后才做有职责分离的 PrivacyReleaseDecision；不先开发自动人脸检测或 MediaPipe。
+首个隐私业务切片已建立：管理员可针对已 `INGESTED` 的合成 ClipAsset 记录版本化人工 `PrivacyAssessment`，固定人脸、姓名、病历号、屏幕、工牌、医嘱/标签文本、语音等 finding 类别，并得到放行复核、待脱敏或待隔离的后续动作要求；策略、输入摘要、操作者、请求和旧/新版本均可追溯。当前所有隐私投影仍默认 `BLOCKED`，`QUARANTINE_REQUIRED` 尚不等于实际隔离记录。
+
+下一步先闭合 `qualitycleaning` 所属的 Quarantine 最小编排与只读状态。V1.2-RC1 批准后，再把项目/文件夹、平台本地上传、播放和视频删除作为最小资产切片接入既有流程；批准前不预建接口、状态机或未来导入能力。MediaPipe 仍不进入 P0 关键路径。

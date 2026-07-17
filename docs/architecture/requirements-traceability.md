@@ -2,6 +2,7 @@
 
 > 文档状态：P0 设计基线（评审稿）  
 > 需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`  
+> 新增需求候选：`docs/requirements/drafts/V1.2/配药视频数据管理平台需求文档_V1.2.md`（V1.2-RC1，未批准）
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-07-17
 
@@ -20,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在进行 Sprint 1 的上传与资产纵向闭环。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0，正在进行 Sprint 1 上传/资产纵向闭环，并已开始不会绕过默认阻断的首个人工隐私评估切片。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -47,9 +48,9 @@
 | FR-003 分片上传和断点续传 | P0 | `assetcapture` | upload init/files/multipart/part authorization/confirmation/reconciliation/Complete File/Complete Batch/abort | upload_batch、upload_file、upload_part | 标准 S3 multipart 兼容性；2GB 合成文件中断续传；重复文件、重复 part 和重复 complete 幂等 | PI |
 | FR-004 元数据必填校验 | P0 | `assetcapture` | `capture-session-metadata-v1`；CaptureSession ingest | capture_session、camera_set_snapshot、camera_stream | 缺字段阻断；服务器 CameraSet 对账；原子建档 | I |
 | FR-005 上传批次批量状态变更 | P0 | `assetcapture` | batch command API | upload_batch、audit_event | 部分失败返回逐项结果，不允许静默跳过 | D1 |
-| FR-006 资产列表和常用筛选 | P0 | `assetcapture`、只读投影 | asset/session query API | 资产检索投影 | 规定数据量与并发下第一页 P95 不超过 3 秒 | D1 |
-| FR-007 资产详情、预览和状态历史 | P0 | `assetcapture`、`mediaprivacy`、`governance` | clip/session detail；preview grant | clip_asset、asset_variant、audit_event | 只能预览有权限的批准 variant；状态历史完整 | D1 |
-| FR-008 裁剪、抽帧、预览和媒体预处理 | P0 | `mediaprivacy` | media job API；`MediaJobRequestedV1`/result | media_job、asset_variant、media_report | 派生资产可追溯到 raw 摘要、配方和软件摘要 | D1 |
+| FR-006 资产列表和常用筛选 | P0 | `assetcapture`、只读投影 | asset/session query API | 资产检索投影 | 规定数据量与并发下第一页 P95 不超过 3 秒 | PI |
+| FR-007 资产详情、预览和状态历史 | P0 | `assetcapture`、`mediaprivacy`、`governance` | clip/session detail；preview grant | clip_asset、asset_variant、audit_event | 只能预览有权限的批准 variant；状态历史完整 | PI |
+| FR-008 裁剪、抽帧、预览和媒体预处理 | P0 | `mediaprivacy` | media job API；`MediaJobRequestedV1`/result | media_job、asset_variant、media_report | 派生资产可追溯到 raw 摘要、配方和软件摘要 | PI |
 | FR-009 批量业务标签 | P0 | `assetcapture` | asset tag command API | asset_tag、audit_event | 幂等添加/移除；跨项目和越权操作被拒绝 | D1 |
 | FR-010 隔离区 | P0 | `qualitycleaning`、`governance` | quarantine command/query | quarantine_record、approval_request | 隔离数据默认不可标注、不可导出；解除需要批准 | D1 |
 
@@ -59,12 +60,12 @@
 - FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果/脱敏死信 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；Worker 心跳、grace 后失联回收、retryable 结果的 `RETRY_WAIT`/Outbox 有限退避、新 attempt/新 capability、旧结果拒绝、max-attempts 终止、不复制 lease capability 的脱敏死信路径，以及独立管理员令牌、幂等受控重放和数据库追加式审计已有合同测试。2026-07-16 的本地合成演练进一步验证了真实 broker 上的错误身份拒绝、脱敏 DLQ、管理员重放、新 attempt/Outbox/审计和最终 MediaReport 闭环；损坏媒体矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
-- FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。场景、科室、隐私、标注、清洗筛选、性能基准、预览 variant、状态历史和审计日志尚未完成，因此整条仍保持 `D1`，不能宣布需求验收通过。
+- FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。FR-008 已有媒体探测作业和报告，但尚未生成可播放 Variant。场景、科室、隐私、标注、清洗筛选、性能基准、预览 Variant、状态历史和完整审计尚未完成，因此三条均为 `PI`，不能宣布需求验收通过。
 - 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V19、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
-测试入口说明：正式生产入口仍是 RK3588 等边端自动上传。P0 已建立一个复用相同协议、仅处理合成数据的自动化上传客户端，作为开发、回归、CI 和批量造数证据；客户端稳定后可以增加仅在 local/dev/test 启用的 Web 受控手动导入，用于人工演示和交互检查。Web 测试入口不属于 2GB 生产上传验收证据，不能替代 FR-003 的边端中断恢复、容量和 UAT 验证；三种入口不得通过私有接口、直接插库或绕过后端权限和状态守卫。
+上传入口说明：生产支持医院侧设备或系统远端上传，也支持用户在平台页面上传本机视频。开发、回归和 CI 使用复用相同协议且只处理合成数据的自动化上传客户端。三种入口不得通过私有接口、直接插库或绕过后端权限和状态守卫；平台本地上传的格式、容量、浏览器和中断恢复范围由目标环境 UAT 确认。
 
 ### 3.2 标注与复核
 
@@ -111,6 +112,21 @@ FR-025 当前 `PI` 证据和边界：
   PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
   FR-025 或隐私闭环完成。
 
+### 3.4 V1.2-RC1 新增需求候选
+
+以下四项是相对 V1.1.13 的新增需求，不得倒填成原始需求。当前只记录最小实现映射；在 V1.2 获得正式批准前不改变需求基线，也不在 OpenAPI 中预建空接口。
+
+| 需求 | 候选优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| FR-033 数据项目、成员与项目内一层文件夹 | P0 | `iamproject`、`assetcapture` | projects/memberships；asset folders；video folder move | project、membership、asset_folder、clip_asset.folder_id、audit_event | 普通用户仅见成员项目；不同视频可归入不同文件夹；删除文件夹不删除视频；跨项目移动被拒绝 | D1 |
+| FR-034 平台本地上传 | P0 | `assetcapture`、Web | 复用 upload/multipart/complete | upload_batch.upload_source_type 及现有上传表 | 页面选择本机视频完成上传和入库；越权或不符合上传规则的请求被拒绝 | D1 |
+| FR-035 视频删除 | P0 | `assetcapture`、`governance` | delete video；reference guard | clip_asset.deleted_at/deleted_by/delete_reason、audit_event | 管理员可删除无用或不合格视频；不级联删除其他视频；操作可审计；受控引用守卫生效 | D1 |
+| FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | D1 |
+
+“上传后可播放”由既有 FR-007/FR-008 细化，“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环，不创建重复 FR。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
+
+项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
+
 ## 4. 非功能需求追踪
 
 | 编号 | 基线要求 | 设计归属 | 验收方法 | 当前状态 |
@@ -153,9 +169,9 @@ AI 启用决策前必须冻结：
 
 ### 5.3 需求基线归一化决策
 
-V1.1.13 是不可覆盖的业务需求基线。下表记录 TD-V1.3 的实现归一化口径，不修改原始 DOCX；如果涉及业务范围、验收标准或责任边界变化，仍须发布经批准的新需求版本。
+V1.1.13 是当前不可覆盖的业务需求基线。下表记录 TD-V1.4 的实现归一化口径，不修改原始 DOCX；V1.2-RC1 明确作为新增需求评审稿，只有批准并形成自包含的 V1.2 基线文档、更新当前指针和摘要后才可替代当前基线。新基线可以使用 Markdown，不要求继续生成 DOCX。
 
-| V1.1.13 表述 | TD-V1.3 实现口径 | 原因 |
+| V1.1.13 表述 | TD-V1.4 实现口径 | 原因 |
 | --- | --- | --- |
 | 通用 `confidence` | 人工标注使用明确的确定性/不确定性字段；AI 分数必须记录任务、来源和语义版本 | 不同来源的分数不可直接比较 |
 | 秒或 0.01 秒粒度 | UI 可显示秒，小数输入在边界转换；存储和契约统一使用整数毫秒 | 避免浮点累计误差和跨语言歧义 |
@@ -165,6 +181,17 @@ V1.1.13 是不可覆盖的业务需求基线。下表记录 TD-V1.3 的实现归
 | 默认 70/15/15 划分 | 小样本验收采用 pilot/holdout；正式比例由样本设计批准，并按 session/操作者/批次等泄漏组隔离 | 固定比例不等于科学抽样 |
 | 隐私漏检为 0 | 仅表示批准样本经最终人工检查后观察到 0 个漏检，不外推为总体风险绝对为零 | 避免统计结论越界 |
 | 护士配药视频默认无敏感信息 | 未经评估的 raw 视频先按待隐私评估处理；确认不含人脸、声音、工牌、屏幕、标签或环境标识后可按批准规则降级 | 拍摄对象不是患者也不代表视频天然无个人或机构敏感信息 |
+
+V1.2-RC1 新增需求归一化：
+
+| 新增业务表达 | 技术/验收口径 | 原因 |
+| --- | --- | --- |
+| 医院远端上传和平台本地上传 | 两种入口复用 Upload/Multipart/Complete、项目权限和入库校验 | 入口不同，入库规则一致 |
+| 上传视频可以播放 | 入库后生成获准 Variant，再按 project、privacy 和 quarantine 签发短期播放授权 | 上传成功不等于已经具备播放条件 |
+| 无用或不合格视频可以删除 | 删除目标视频并保留权限、引用和审计守卫 | 满足数据整理需求且不破坏受控结果 |
+| 项目下不同文件夹 | 一层 AssetFolder，按视频归类，不承载权限或对象路径 | 满足简单分类需求 |
+| 只有管理员和普通用户 | 两级界面模板映射细粒度权限；高风险职责分离和标注禁止自审仍保留 | 简化 UI 不降低安全边界 |
+| 标定数据 | 解释为视频内容 annotation；camera calibration 仅在内外参需求出现时使用 | 避免领域、API 和用户理解歧义 |
 
 ## 6. 变更规则
 

@@ -58,6 +58,16 @@ allow =
   AND not quarantined/revoked/expired
 ```
 
+#### 4.2.1 MVP 两级界面角色
+
+V1.2-RC1 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
+
+- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除，但查看 raw、隐私放行和正式导出仍需单独权限/审批；
+- `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放已批准的 PREVIEW/DEIDENTIFIED，并编辑分配给自己的任务；
+- 平台本地上传必须同时满足角色、项目和上传规则；开发、测试和 CI 仍只使用合成数据；
+- AssetFolder 不参与授权计算，不能用“移动到文件夹”授予或撤销数据权限；
+- 后续增加复核员或质检员只调整权限模板，不改变 project、purpose、privacy 和 task assignment 守卫。
+
 ### 4.3 职责分离
 
 以下操作申请人与审批人分离：
@@ -71,6 +81,8 @@ allow =
 - 权限提升和密钥管理。
 
 紧急访问必须限时、明确原因、增强审计并事后复核。
+
+标注复核同样要求提交者与复核者不同。即使两人界面上都显示为管理员，也不能由同一主体完成提交和通过。
 
 ## 5. 隐私处理流程
 
@@ -141,6 +153,10 @@ request/approval reference
 - 撤销通过禁用业务授权、对象策略/版本和短期 TTL 组合实现；不能宣称已签发 URL 可被普遍即时撤回。
 - Web 响应使用适当的 `Referrer-Policy`、缓存和内容处置头。
 
+播放 URL 只针对已批准的具体 Variant，签发前检查项目成员、purpose、PrivacyReleaseDecision、Quarantine 和 `deleted_at`；`PrivacyAssessment=NONE` 不能代替放行决定。普通用户不得取得 raw URL。
+
+平台本地上传的上传 URL 绑定用户、项目、文件大小、类型和 checksum 条件。开发、测试和 CI 环境只允许合成数据。
+
 ### 7.3 完整性
 
 - 正式资产使用 SHA-256；multipart ETag 不作为完整文件摘要。
@@ -203,6 +219,8 @@ request/approval reference
 - 标注提交、退回、裁决和 schema 变更；
 - 清洗 override 和隔离解除；
 - 数据集 freeze、export、download 和过期；
+- 项目/成员和 AssetFolder 创建、重命名、删除及视频移动；
+- 视频删除；
 - retention、legal hold 和销毁；
 - 管理配置、密钥引用和安全策略变更。
 
@@ -236,6 +254,8 @@ previous_event_hash（如启用链式完整性）
 
 “不可变”表示在批准的保留期内不能覆盖内容，不表示永不销毁。生命周期：
 
+用户删除视频后，该视频退出普通查询和新业务候选。该操作不代表对象、备份和下游引用已经全部销毁，也不得改写历史入库、标注和数据集事实。
+
 ```text
 ACTIVE
 → RETENTION_EXPIRED
@@ -248,6 +268,8 @@ ACTIVE
 ```
 
 legal hold 存在时暂停普通到期销毁。
+
+生产物理销毁只有在冻结数据集、有效导出、保留期、legal hold、外部副本和备份处置均可检查后才启用；申请人与审批人必须不同。
 
 ### 12.2 销毁范围
 
@@ -326,11 +348,14 @@ certificate digest
 - [ ] 数据处理目的、部署地域、责任主体和审批流程。
 - [ ] 系统安全等级及对应测评/测试要求。
 - [ ] S4/S3/S2 分级映射和角色权限矩阵。
+- [ ] ADMIN/MEMBER 到细粒度权限项的映射、标注自审拒绝和高风险职责分离。
 - [ ] OIDC 提供方、服务身份和紧急访问流程。
 - [ ] S3 产品、bucket/密钥隔离、对象锁和生命周期能力。
 - [ ] TLS、KMS、轮换、备份密钥和 crypto-shredding 方案。
 - [ ] 隐私检测/人工复核范围，含画面文本、人脸、工牌和语音。
 - [ ] 保留期、legal hold、销毁和备份到期策略。
+- [ ] 平台本地上传的项目权限、文件规则、目标环境 UAT 和测试合成数据限制。
+- [ ] 可播放视频格式、目标浏览器、播放授权 TTL、Range/seek 和 raw 访问策略。
 - [ ] 审计保留、完整性、SIEM 和事件响应流程。
 - [ ] CVAT/AI Worker 网络边界和外部副本销毁责任。
 - [ ] 安全测试、漏洞扫描、越权测试和恢复演练证据。
