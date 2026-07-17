@@ -10,6 +10,7 @@
     "web:build": "pnpm --filter @medication-video-platform/web build",
     "web:check": "pnpm run web:lint && pnpm run web:type-check && pnpm run web:test && pnpm run web:build",
     "synthetic-upload": "node tools/synthetic-upload-client/index.mjs",
+    "synthetic-upload:2gb": "node tools/synthetic-upload-client/large-upload-acceptance.mjs",
     "synthetic-upload:test": "node --test tools/synthetic-upload-client/*.test.mjs",
     "contract:lint": "redocly lint contracts/openapi/openapi.yaml",
     "api:test": "node scripts/run-bruno.mjs"

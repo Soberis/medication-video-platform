@@ -119,10 +119,19 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 					.partNumberMarker(partNumber - 1)
 					.maxParts(1)
 					.build());
-			return response.parts().stream()
+			var exactMatch = response.parts().stream()
 					.filter(part -> part.partNumber() == partNumber)
 					.findFirst()
 					.map(S3MultipartObjectStorage::storedPart);
+			if (exactMatch.isPresent()) {
+				return exactMatch;
+			}
+			// SeaweedFS 4.29 can return an empty page for partNumberMarker + maxParts=1
+			// once a multipart upload has more than two parts. Fall back to the fully
+			// paginated authoritative list instead of accepting client-supplied metadata.
+			return listParts(upload).stream()
+					.filter(part -> part.partNumber() == partNumber)
+					.findFirst();
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not inspect the upload part.", exception);

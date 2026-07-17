@@ -33,3 +33,9 @@ pnpm run synthetic-upload
 - 不打印、不持久化预签名 URL；
 - 临时 MP4 在完成或失败后都会删除；
 - 该工具不是生产 RK3588 客户端，不证明 2GB、中断恢复、弱网或真实硬件验收通过。
+
+## 2 GiB 中断恢复验收
+
+常规 `synthetic-upload` 仍只负责小型功能闭环。独立的 opt-in 工具 `large-upload-acceptance.mjs` 用两个 Node 进程验证准确 2 GiB 的 Multipart 中断恢复，不接收源文件、不保存签名 URL，并在结束时 Abort 和清理自己创建的合成对象。
+
+执行条件、环境授权、冻结口径和通过标准见 [`docs/runbooks/large-upload-resume-acceptance.md`](../../docs/runbooks/large-upload-resume-acceptance.md)。该耗时测试不进入日常 `quality-gate`，必须显式设置 `RUN_LARGE_UPLOAD_ACCEPTANCE=true`。

@@ -12,7 +12,7 @@
 - Sprint 0 严格质量门禁已通过；最小 Python 3.12 Media Worker 工程已建立并启用 uv lock、Ruff、mypy、pytest 门禁，AI Plugin 仍按后续阶段 deferred。
 - 上传控制面、最小相机配置、Session 组装、项目隔离的 Session/ClipAsset/CaptureEventLog 只读目录、MediaJob/MediaReport、append-only AuditEvent、受控重放和 Flyway V1～V18 已建立。Complete Batch 在同一事务中为 VIDEO 建立 ClipAsset、为 EVENT_LOG 建立不可变对象索引；事件负载尚不解析。未完成批次可由发起人或项目管理员终止；过期判定、文件终态、清理任务和审计原子落库，再以租约和有限重试异步执行 Multipart Abort 或遗留对象删除。创建媒体作业会在同一数据库事务内写入 attempt 和 Outbox，再由带 publisher confirm 的 relay 投递到单一媒体业务队列；发布确认后 Outbox 会删除一次性 lease capability。Worker 使用独立身份换取短期输入 URL，处理期间按服务端节奏续租，流式复核大小/SHA-256，执行 FFprobe 与 FFmpeg 完整解码，再由 Core API 通过租约、软件摘要 allowlist 和 Inbox 幂等守卫提交状态与不可变 MediaReport。租约超过 grace period 后，平台会原子标记旧 attempt 为 `LOST`，以新 capability 和 Outbox 消息创建下一 attempt；有效的 retryable Worker 失败会进入 `RETRY_WAIT`，通过 Outbox 有限退避生成下一 attempt；达到上限后才终止业务 job。管理员可用独立身份从保留的脱敏诊断创建新 attempt，旧诊断不会被直接重投，审计表由数据库阻止更新和删除。本地合成视频真实队列闭环已验证。
 - 本地 PostgreSQL、S3 兼容对象存储和 RabbitMQ 已由三服务 Compose 启动并通过健康与连通性检查；RabbitMQ 当前仅建立一个媒体探测队列和一个 DLQ。业务队列不使用会复制 lease capability 的 broker 原样死信，Worker 只在 publisher confirm 后写入脱敏诊断；Redis 和 CVAT 尚未启用。
-- FR-001～FR-003 仍是部分实现：媒体探测入库、EVENT_LOG 对象索引、Abort 和过期清理代码路径已闭合，但尚缺 2GB 中断恢复、清理运行告警和 UAT 环境验收。FR-004 的 `capture-session-metadata-v1` 必填字段、服务器 CameraSet 对账和原子 Session 组装已达到实现态，但尚未进入 UAT。
+- FR-001～FR-003 仍是部分实现：媒体探测入库、EVENT_LOG 对象索引、2 GiB 本机双进程中断恢复、Abort 和过期清理代码路径已闭合，但尚缺弱网/并发、清理运行告警和 UAT 环境验收。FR-004 的 `capture-session-metadata-v1` 必填字段、服务器 CameraSet 对账和原子 Session 组装已达到实现态，但尚未进入 UAT。
 - MediaPipe 属于 P1 试点，不进入 P0 关键路径。
 
 ## Architecture Summary
@@ -88,4 +88,4 @@ pnpm run api:test
 
 ## Next Step
 
-`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession、ClipAsset 和 EVENT_LOG 上传对象；Complete Batch 已为 EVENT_LOG 建立项目隔离、不可变且不解析负载的对象索引。Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。2026-07-16 已在本地合成环境完成真实 broker 死信/受控重放演练。上传 Abort/过期判定及持久化清理任务已实现，破坏性调度默认关闭并需要环境负责人显式启用。下一步执行 2GB 中断恢复验收，再验证清理积压告警；这些可靠性能力完成前不进入隐私业务切片。
+`tools/synthetic-upload-client` 已通过与 RK3588 一致的 Upload/Multipart/Complete/CaptureSession 协议生成合成 CaptureSession、ClipAsset 和 EVENT_LOG 上传对象；Complete Batch 已为 EVENT_LOG 建立项目隔离、不可变且不解析负载的对象索引。2026-07-17 又在固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双 Node 进程中断恢复，未确认 Part、最终完整 SHA-256、重复 Complete 和合成对象清理均通过；该结果不替代弱网、并发或 UAT。Transactional Outbox、RabbitMQ 媒体队列/DLQ、最小 Media Worker、租约输入授权与心跳、失联恢复、retryable 结果有限退避、新 attempt、结果 Inbox 去重、状态提交、MediaReport 查询、脱敏死信诊断、追加式审计和管理员受控重放均已有实现与合同测试。上传 Abort/过期判定及持久化清理任务已实现，破坏性调度默认关闭并需要环境负责人显式启用。下一步验证清理积压告警；该可靠性门禁完成前不进入隐私业务切片。

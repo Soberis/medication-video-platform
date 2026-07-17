@@ -45,6 +45,8 @@ $requiredFiles = @(
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
+    'tools/synthetic-upload-client/large-upload-acceptance.mjs',
+    'tools/synthetic-upload-client/large-upload-acceptance.test.mjs',
     'tools/synthetic-upload-client/README.md',
     'workers/media-worker/pyproject.toml',
     'workers/media-worker/uv.lock',
@@ -63,7 +65,8 @@ $requiredFiles = @(
     'docs/architecture/timebase-and-multicamera-sync.md',
     'docs/architecture/security-privacy-retention.md',
     'docs/architecture/deployment-capacity-and-dr.md',
-    'docs/architecture/web-ux-and-frontend-guidelines.md'
+    'docs/architecture/web-ux-and-frontend-guidelines.md',
+    'docs/runbooks/large-upload-resume-acceptance.md'
 )
 
 foreach ($relativePath in $requiredFiles) {

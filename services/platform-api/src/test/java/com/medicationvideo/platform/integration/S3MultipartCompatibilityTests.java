@@ -10,7 +10,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
@@ -78,32 +80,41 @@ class S3MultipartCompatibilityTests {
 				var completed = false;
 
 				try {
-					var syntheticPart = new byte[8 * 1024 * 1024];
-					var request = HttpRequest.newBuilder(storage.authorizePart(created, 1, Duration.ofMinutes(5)))
-							.PUT(HttpRequest.BodyPublishers.ofByteArray(syntheticPart))
-							.build();
-					var response = HttpClient.newHttpClient()
-							.send(request, HttpResponse.BodyHandlers.discarding());
-					assertEquals(200, response.statusCode());
+					var syntheticParts = List.of(
+							filledPart(1),
+							filledPart(2),
+							filledPart(3));
+					for (var index = 0; index < syntheticParts.size(); index++) {
+						var partNumber = index + 1;
+						var syntheticPart = syntheticParts.get(index);
+						var request = HttpRequest.newBuilder(storage.authorizePart(
+								created, partNumber, Duration.ofMinutes(5)))
+								.PUT(HttpRequest.BodyPublishers.ofByteArray(syntheticPart))
+								.build();
+						var response = HttpClient.newHttpClient()
+								.send(request, HttpResponse.BodyHandlers.discarding());
+						assertEquals(200, response.statusCode());
 
-					var part = storage.findPart(created, 1).orElseThrow();
-					assertEquals(1, part.partNumber());
-					assertEquals(syntheticPart.length, part.sizeBytes());
+						var part = storage.findPart(created, partNumber).orElseThrow();
+						assertEquals(partNumber, part.partNumber());
+						assertEquals(syntheticPart.length, part.sizeBytes());
+					}
 					var storedParts = storage.listParts(created);
-					assertEquals(1, storedParts.size());
+					assertEquals(3, storedParts.size());
+					var syntheticObject = concatenate(syntheticParts);
 
 					var completedObject = storage.complete(created, storedParts);
 					completed = true;
-					assertEquals(syntheticPart.length, completedObject.sizeBytes());
+					assertEquals(syntheticObject.length, completedObject.sizeBytes());
 					assertEquals(completedObject, storage.findCompletedObject(created).orElseThrow());
 					assertEquals(
-							HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(syntheticPart)),
+							HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(syntheticObject)),
 							storage.calculateSha256(created));
 					assertArrayEquals(
-							syntheticPart,
+							syntheticObject,
 							storage.readCompletedObject(
 									new ObjectReference(BUCKET, key),
-									syntheticPart.length));
+									syntheticObject.length));
 					var readRequest = HttpRequest.newBuilder(storage.authorizeRead(
 							new ObjectReference(BUCKET, key), Duration.ofMinutes(5)))
 							.GET()
@@ -111,7 +122,7 @@ class S3MultipartCompatibilityTests {
 					var readResponse = HttpClient.newHttpClient()
 							.send(readRequest, HttpResponse.BodyHandlers.ofByteArray());
 					assertEquals(200, readResponse.statusCode());
-					assertArrayEquals(syntheticPart, readResponse.body());
+					assertArrayEquals(syntheticObject, readResponse.body());
 
 					storage.delete(new ObjectReference(BUCKET, key));
 					assertFalse(storage.findCompletedObject(created).isPresent());
@@ -128,5 +139,22 @@ class S3MultipartCompatibilityTests {
 				}
 			}
 		}
+	}
+
+	private static byte[] filledPart(int value) {
+		var part = new byte[8 * 1024 * 1024];
+		Arrays.fill(part, (byte) value);
+		return part;
+	}
+
+	private static byte[] concatenate(List<byte[]> parts) {
+		var size = parts.stream().mapToInt(part -> part.length).sum();
+		var result = new byte[size];
+		var offset = 0;
+		for (var part : parts) {
+			System.arraycopy(part, 0, result, offset, part.length);
+			offset += part.length;
+		}
+		return result;
 	}
 }
