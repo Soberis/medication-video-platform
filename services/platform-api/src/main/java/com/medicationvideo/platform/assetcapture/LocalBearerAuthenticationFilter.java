@@ -70,7 +70,7 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 		var authentication = new UsernamePasswordAuthenticationToken(
 				actor,
 				null,
-				List.of(new SimpleGrantedAuthority(admin ? "ROLE_ADMIN" : "ROLE_UPLOADER")));
+				List.of(new SimpleGrantedAuthority(admin ? "ROLE_ADMIN" : "ROLE_MEMBER")));
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		filterChain.doFilter(request, response);
 	}

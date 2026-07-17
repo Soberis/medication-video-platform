@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在进行 Sprint 1 上传/资产纵向闭环，并已开始不会绕过默认阻断的首个人工隐私评估切片。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0，正在进行 Sprint 1 上传/资产纵向闭环，并已建立不会绕过默认阻断的首个人工隐私评估切片和最小数据项目/成员权限切片。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -118,14 +118,20 @@ FR-025 当前 `PI` 证据和边界：
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| FR-033 数据项目、成员与项目内一层文件夹 | P0 | `iamproject`、`assetcapture` | projects/memberships；asset folders；video folder move | project、membership、asset_folder、clip_asset.folder_id、audit_event | 普通用户仅见成员项目；不同视频可归入不同文件夹；删除文件夹不删除视频；跨项目移动被拒绝 | D1 |
+| FR-033 数据项目、成员与项目内一层文件夹 | P0 | `iamproject`、`assetcapture` | projects/memberships；asset folders；video folder move | project、membership、asset_folder、clip_asset.folder_id、audit_event | 普通用户仅见成员项目；不同视频可归入不同文件夹；删除文件夹不删除视频；跨项目移动被拒绝 | PI |
 | FR-034 平台本地上传 | P0 | `assetcapture`、Web | 复用 upload/multipart/complete | upload_batch.upload_source_type 及现有上传表 | 页面选择本机视频完成上传和入库；越权或不符合上传规则的请求被拒绝 | D1 |
 | FR-035 视频删除 | P0 | `assetcapture`、`governance` | delete video；reference guard | clip_asset.deleted_at/deleted_by/delete_reason、audit_event | 管理员可删除无用或不合格视频；不级联删除其他视频；操作可审计；受控引用守卫生效 | D1 |
-| FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | D1 |
+| FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | PI |
 
 “上传后可播放”由既有 FR-007/FR-008 细化，“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环，不创建重复 FR。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
+
+FR-033/FR-036 当前 `PI` 证据和边界：
+
+- OpenAPI 0.21.0、Flyway V22 和 `ProjectMembershipContractTests` 已覆盖项目幂等创建、首个 ADMIN 原子建立、ADMIN/MEMBER 成员授权/改角/移除、普通成员只见授权项目、最后管理员保护、并发单写和审计失败全事务回滚。
+- 数据库只接受 `ADMIN`/`MEMBER` 和 `ACTIVE`/`REMOVED`，移除成员保留历史；变更命令保存原响应快照并使用追加式审计，重放不会重复产生业务变更或审计。
+- 本切片没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。既有资产/上传接口仍使用其原项目上下文守卫，尚未统一查询 Membership；AssetFolder、视频项目内移动、真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant 和项目关闭也未实现，因此两项需求仍为 `PI`。
 
 ## 4. 非功能需求追踪
 

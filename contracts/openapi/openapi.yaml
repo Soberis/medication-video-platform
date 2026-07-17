@@ -1,9 +1,11 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.20.1
+  version: 0.21.0
   description: >-
-    P0 contract for the medication video data platform. Active capabilities initialize an upload
+    P0 contract for the medication video data platform. Active capabilities create data projects,
+    manage their ADMIN/MEMBER memberships, list only projects visible to the authenticated member,
+    initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
     issue short-lived part upload authorizations, confirm storage-backed parts, recover upload
     progress, complete a file with final size and SHA-256 verification, abort or expire an incomplete
@@ -31,6 +33,10 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Projects
+    description: >-
+      Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Membership
+      changes are project-scoped, administrator-controlled, idempotent and append-only audited.
   - name: Uploads
     description: Upload batch lifecycle owned by the assetcapture module.
   - name: Camera Configuration
@@ -56,6 +62,281 @@ tags:
       Administrator-only, project-scoped read model for active clip-asset quarantine records. This
       contract does not expose quarantine creation, release or destruction commands.
 paths:
+  /projects:
+    post:
+      operationId: createProject
+      tags:
+        - Projects
+      summary: Create a data project
+      description: >-
+        Creates an ACTIVE project and grants the authenticated provisioning administrator its first
+        ADMIN membership in one transaction. Reusing the Idempotency-Key with the same request
+        returns the original project; different content returns a conflict.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectCreateRequest"
+      responses:
+        "201":
+          description: Project created, or the original project returned for an idempotent replay.
+          headers:
+            Location:
+              description: Canonical project resource path.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Request, request ID or idempotency key validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Provisioning administrator authority is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The idempotency key was already used with a different request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    get:
+      operationId: listProjects
+      tags:
+        - Projects
+      summary: List projects visible to the authenticated member
+      description: Returns only ACTIVE projects with an ACTIVE membership for the authenticated actor.
+      responses:
+        "200":
+          description: Authorized projects, ordered deterministically.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectList"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}:
+    get:
+      operationId: getProject
+      tags:
+        - Projects
+      summary: Read an authorized project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Authorized project and the caller's current role.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: The project identifier is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist or is not visible to the authenticated actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/memberships:
+    get:
+      operationId: listProjectMemberships
+      tags:
+        - Projects
+      summary: List project memberships
+      description: Requires an ACTIVE ADMIN membership in the project.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: ACTIVE membership records ordered deterministically.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMembershipList"
+        "400":
+          description: The project identifier is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/memberships/{actor_id}:
+    put:
+      operationId: upsertProjectMembership
+      tags:
+        - Projects
+      summary: Grant, reactivate or change a project membership
+      description: >-
+        Requires an ACTIVE ADMIN membership. The command is idempotent per project, administrator
+        and Idempotency-Key. Demoting the final ACTIVE administrator is rejected.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ActorId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectMembershipRequest"
+      responses:
+        "200":
+          description: Membership state after the command, including an idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMembership"
+        "400":
+          description: Request, path, request ID or idempotency key validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            The idempotency key conflicts with another command, or the command would remove the
+            final ACTIVE administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: removeProjectMembership
+      tags:
+        - Projects
+      summary: Remove a project membership
+      description: >-
+        Requires an ACTIVE ADMIN membership. Removal preserves the membership record and audit
+        history. Removing the final ACTIVE administrator is rejected.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ActorId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "200":
+          description: Removed membership state, including an idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMembership"
+        "400":
+          description: Path, request ID or idempotency key validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or target membership does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: >-
+            The idempotency key conflicts with another command, or the command would remove the
+            final ACTIVE administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /upload/init:
     post:
       operationId: initializeUploadBatch
@@ -2027,6 +2308,32 @@ paths:
                 $ref: "#/components/schemas/ApiError"
 components:
   parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ActorId:
+      name: actor_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
+    OptionalRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Optional caller-generated correlation identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: ^[A-Za-z0-9._:-]+$
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2076,7 +2383,123 @@ components:
       description: >-
         Independent Worker service identity. It is not a user/project bearer token and is accepted
         only by the internal media job endpoints.
+  headers:
+    NoStore:
+      description: Prevents clients and intermediaries from retaining authorization-sensitive data.
+      schema:
+        type: string
+        const: no-store
   schemas:
+    ProjectCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - display_name
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[^\x00-\x1F\x7F]+$
+    ProjectRole:
+      type: string
+      enum:
+        - ADMIN
+        - MEMBER
+    ProjectStatus:
+      type: string
+      enum:
+        - ACTIVE
+    MembershipStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - REMOVED
+    Project:
+      type: object
+      additionalProperties: false
+      required:
+        - project_id
+        - display_name
+        - status
+        - current_role
+        - created_at
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        current_role:
+          $ref: "#/components/schemas/ProjectRole"
+        created_at:
+          type: string
+          format: date-time
+    ProjectList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+    ProjectMembershipRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+    ProjectMembership:
+      type: object
+      additionalProperties: false
+      required:
+        - membership_id
+        - project_id
+        - actor_id
+        - role
+        - status
+        - version
+        - updated_at
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        status:
+          $ref: "#/components/schemas/MembershipStatus"
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        updated_at:
+          type: string
+          format: date-time
+    ProjectMembershipList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectMembership"
     UploadBatchInitRequest:
       type: object
       additionalProperties: false

@@ -110,6 +110,12 @@ flowchart LR
 - 项目关闭后禁止创建新任务和新导出，但保留按策略授权的历史查询。
 - P0 的界面角色只有 `ADMIN` 和 `MEMBER`，它们是细粒度权限项的模板，不是绕过 purpose、project、privacy、task assignment 或审批守卫的通行证。
 
+### 4.3 当前实现边界
+
+- Flyway V22 已实现 `project`、`membership` 和幂等成员命令证据；项目创建原子建立首个 `ADMIN`，成员变更按 project 行锁串行并写追加式审计。
+- 普通用户只能列出和读取其 `ACTIVE` Membership 对应的 Project；成员清单和变更要求项目内 `ACTIVE ADMIN`，且最后一个活动管理员不可移除或降级。
+- 当前没有从既有 UploadBatch、ClipAsset 或审计活动反推 Membership。既有资产 API 接入 Membership、Tenant 语义、RoleBinding、PurposeGrant、项目关闭和真实 OIDC 用户生命周期属于后续经批准切片。
+
 ## 5. `assetcapture`
 
 ### 5.1 所有权
