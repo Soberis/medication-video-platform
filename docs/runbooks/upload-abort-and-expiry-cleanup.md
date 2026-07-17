@@ -1,7 +1,7 @@
 # 上传终止与过期清理
 
 > 适用范围：当前 P0 实现；默认只在合成数据环境验证。
-> 最后更新：2026-07-16
+> 最后更新：2026-07-17
 
 ## 1. 目的与安全边界
 
@@ -48,6 +48,30 @@ X-Request-Id: <traceable request id>
 
 批次 `ABORTED/EXPIRED` 与清理状态是两个事实：前者说明业务上不再接纳上传，后者说明对象存储副作用是否完成。不得因清理失败把批次改回上传态。
 
+### 4.1 积压指标
+
+清理积压监测与破坏性清理调度解耦：`UPLOAD_CLEANUP_ENABLED=false` 时仍可保持 `UPLOAD_CLEANUP_ALERT_ENABLED=true`，用于发现已经持久化但未被处理的任务。当前指标只使用固定状态和严重度标签，不包含 project、batch、对象 key、upload ID 或其他高基数字段：
+
+| Micrometer 指标 | 含义 |
+| --- | --- |
+| `platform.upload.cleanup.tasks{status=pending\|running\|failed}` | 各持久化状态的当前任务数 |
+| `platform.upload.cleanup.oldest.actionable.age` | 最老 `PENDING/RUNNING` 任务从创建到当前的端到端年龄，单位秒 |
+| `platform.upload.cleanup.alert.transitions{severity=none\|warning\|critical}` | 进程生命周期内实际发生的告警状态跃迁次数 |
+
+Core API 默认不通过公共 HTTP 暴露 `/actuator/metrics`；只有 health 端点可公开访问。生产环境应通过独立、受认证且网络隔离的 management/exporter 通道采集 Micrometer 指标。未完成该部署接线和通知演练时，只能声明“应用内判定与日志已验证”，不能声明生产告警已上线。
+
+### 4.2 严重度与恢复
+
+| 条件 | 状态 | 默认处置 |
+| --- | --- | --- |
+| `FAILED > 0` | `CRITICAL` | `platform-operations` 立即按第 5 节定位；不得直接改库或重复手工删除 |
+| 无 FAILED，且最老 `PENDING/RUNNING` 年龄达到阈值 | `WARNING` | 检查清理开关、调度实例、claim lease、S3 可用性和权限 |
+| 上述条件均不成立 | `NONE` | 从 WARNING/CRITICAL 恢复时记录一次恢复跃迁 |
+
+默认 `UPLOAD_CLEANUP_ALERT_PENDING_AGE=PT5M` 是 local/P0 合成环境基线，相当于默认 30 秒轮询的十个周期；它不是未经测量即可复制到生产的 SLA。每个环境必须根据任务到达率、正常 S3 延迟、重试窗口和运维响应目标批准该阈值。重复轮询同一严重度不会重复增加跃迁计数或刷同类日志。
+
+告警 owner 为 `platform-operations`，升级路径为平台负责人和数据平台负责人。只有存在真实数据误删、越权访问或隐私泄露迹象时，才同时进入隐私/数据事件流程。积压不会直接改变 API readiness；让实例因积压退出服务可能减少处理能力并扩大积压。
+
 ## 5. FAILED 处置
 
 1. 记录 batch ID、请求/trace ID、失败数量、首次和最近发生时间；不要复制存储标识或凭证；
@@ -60,8 +84,8 @@ X-Request-Id: <traceable request id>
 
 ## 6. 当前可执行验证
 
-- `UploadBatchTerminationContractTests`：权限、幂等、TTL 判定、活动完成租约、删除/Abort 分支、有限重试和审计；
+- `UploadBatchTerminationContractTests`：权限、幂等、TTL 判定、活动完成租约、删除/Abort 分支、有限重试、审计，以及 `WARNING → CRITICAL → NONE` 的低基数指标和状态跃迁；
 - `S3MultipartCompatibilityTests`：SeaweedFS 上真实 Multipart Complete、完整摘要、对象 Delete 与重复 Abort；
 - OpenAPI/Bruno：终止命令、稳定错误码和清理进度契约。
 
-这些合成证据不替代生产 S3 产品的权限演练、清理积压告警、备份恢复和 UAT。
+这些合成证据只验证应用内判定、恢复和日志，不替代生产 S3 产品的权限演练、受控指标采集、通知路由、值班升级、备份恢复和 UAT。生产验收至少要人为制造一个隔离 bucket 内的过龄合成任务和一个可恢复失败，观察 WARNING、CRITICAL、恢复通知各一次，并核对没有对象标识或凭证进入指标与通知。

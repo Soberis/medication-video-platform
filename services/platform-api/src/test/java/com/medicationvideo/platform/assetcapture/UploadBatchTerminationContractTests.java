@@ -36,6 +36,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -234,6 +236,77 @@ class UploadBatchTerminationContractTests {
 		assertEquals(UploadCleanupStatus.FAILED, this.cleanupStore.summarize(batch.getBatchId()).status());
 	}
 
+	@Test
+	void exposesLowCardinalityBacklogMetricsAndStableAlertTransitions() {
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var batch = directBatch("local-synthetic-uploader", now.minusSeconds(60));
+		var file = directFile(batch, now.minusSeconds(120));
+		assertTrue(this.terminationService.expireNextDue());
+		this.jdbcTemplate.update(
+				"UPDATE upload_cleanup_task SET created_at = ? WHERE batch_id = ?",
+				java.sql.Timestamp.from(now.minus(Duration.ofMinutes(10))),
+				batch.getBatchId());
+
+		{
+			var registry = new SimpleMeterRegistry();
+			var monitor = new UploadCleanupBacklogMonitor(
+					new UploadCleanupBacklogStore(this.jdbcTemplate),
+					registry,
+					Duration.ofMinutes(5));
+
+			assertEquals(UploadCleanupAlertSeverity.WARNING, monitor.evaluate(now));
+			assertEquals(1.0, taskGauge(registry, "pending"));
+			assertEquals(0.0, taskGauge(registry, "failed"));
+			assertTrue(registry.get("platform.upload.cleanup.oldest.actionable.age").gauge().value() >= 600);
+			assertEquals(UploadCleanupAlertSeverity.WARNING, monitor.evaluate(now.plusMillis(500)));
+			assertEquals(
+					1.0,
+					registry.get("platform.upload.cleanup.alert.transitions")
+							.tag("severity", "warning")
+							.counter()
+							.count());
+
+			this.objectStorage.failCleanup = true;
+			var oneAttemptProcessor = new UploadCleanupProcessor(
+					this.cleanupStore,
+					this.objectStorage,
+					1,
+					1,
+					Duration.ofMinutes(1),
+					Duration.ofSeconds(1));
+			oneAttemptProcessor.processAvailable();
+			assertEquals(UploadCleanupAlertSeverity.CRITICAL, monitor.evaluate(now.plusSeconds(1)));
+			assertEquals(0.0, taskGauge(registry, "pending"));
+			assertEquals(1.0, taskGauge(registry, "failed"));
+
+			this.objectStorage.failCleanup = false;
+			this.cleanupStore.reactivate(file.getUploadFileId(), Instant.now().minusSeconds(1));
+			this.cleanupProcessor.processAvailable();
+			assertEquals(UploadCleanupAlertSeverity.NONE, monitor.evaluate(now.plusSeconds(3)));
+			assertEquals(0.0, taskGauge(registry, "pending"));
+			assertEquals(0.0, taskGauge(registry, "running"));
+			assertEquals(0.0, taskGauge(registry, "failed"));
+			assertEquals(
+					1.0,
+					registry.get("platform.upload.cleanup.alert.transitions")
+							.tag("severity", "warning")
+							.counter()
+							.count());
+			assertEquals(
+					1.0,
+					registry.get("platform.upload.cleanup.alert.transitions")
+							.tag("severity", "critical")
+							.counter()
+							.count());
+			assertEquals(
+					1.0,
+					registry.get("platform.upload.cleanup.alert.transitions")
+							.tag("severity", "none")
+							.counter()
+							.count());
+		}
+	}
+
 	private UUID initializeBatch() throws Exception {
 		var response = this.mockMvc.perform(post("/api/v1/upload/init")
 					.header("Authorization", "Bearer " + USER_TOKEN)
@@ -355,6 +428,10 @@ class UploadBatchTerminationContractTests {
 				"SELECT attempt_count FROM upload_cleanup_task WHERE batch_id = ?",
 				Integer.class,
 				batchId);
+	}
+
+	private static double taskGauge(SimpleMeterRegistry registry, String status) {
+		return registry.get("platform.upload.cleanup.tasks").tag("status", status).gauge().value();
 	}
 
 	private String batchStatus(UUID batchId) {
