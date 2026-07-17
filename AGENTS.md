@@ -10,7 +10,7 @@
 
 按以下顺序理解需求和实现：
 
-1. `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`：业务需求基线。
+1. `docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`：当前业务需求基线；未变更条款继承 `V1.1.13` DOCX。
 2. `docs/architecture/配药平台技术设计.md`：总体架构、技术选型、模块边界和实施顺序。
 3. `docs/adr/`：已经冻结的技术决策。
 4. `docs/architecture/` 中由主技术设计链接的专题详细设计。

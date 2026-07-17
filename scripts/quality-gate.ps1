@@ -56,6 +56,7 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
     'docs/requirements/README.md',
+    'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md',
     'docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx',
     'docs/architecture/README.md',
     'docs/architecture/配药平台技术设计.md',

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.19.0
+  version: 0.20.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
@@ -16,8 +16,9 @@ info:
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
-    sanitized dead-letter diagnostic, and record versioned human privacy assessments against an immutable
-    ingested clip digest without granting annotation or export access. The API never proxies upload bytes through the Core API, exposes storage
+    sanitized dead-letter diagnostic, record versioned human privacy assessments against an immutable
+    ingested clip digest without granting annotation or export access, and let an administrator read
+    the active project-scoped quarantine state derived from those assessments. The API never proxies upload bytes through the Core API, exposes storage
     locations through catalog reads, controls or probes edge hardware, or performs media processing
     synchronously inside a user request.
   license:
@@ -50,6 +51,10 @@ tags:
       Project-scoped, administrator-controlled human risk assessments. An assessment is append-only,
       binds the ingested clip digest and an approved policy digest, and always leaves privacy release
       BLOCKED until a separate release decision is implemented and approved.
+  - name: Quarantines
+    description: >-
+      Administrator-only, project-scoped read model for active clip-asset quarantine records. This
+      contract does not expose quarantine creation, release or destruction commands.
 paths:
   /upload/init:
     post:
@@ -1768,6 +1773,61 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /quarantines:
+    get:
+      operationId: getClipAssetQuarantineStatus
+      tags:
+        - Quarantines
+      summary: Read the active quarantine status for a clip asset
+      description: >-
+        Administrator-only safe read. Returns the current active quarantine records for an ingested
+        clip asset in the authenticated project. NONE means no active quarantine record exists; it
+        does not constitute a privacy release decision. This operation never creates, releases,
+        destroys or physically moves media.
+      parameters:
+        - name: clip_asset_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current project-scoped quarantine status for the clip asset.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+              description: Prevents clients from displaying stale quarantine state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuarantineStatusResponse"
+        "400":
+          description: The required clip asset identifier is missing or malformed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller is not an administrator for the current project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The clip asset was not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /internal/media-jobs/{media_job_id}/attempts/{attempt}/lease:
     post:
       operationId: acquireMediaJobLease
@@ -2253,6 +2313,70 @@ components:
         - LABEL_TEXT
         - VOICE
         - OTHER
+    QuarantineStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - clip_asset_id
+        - input_digest
+        - quarantine_status
+        - active_records
+      properties:
+        clip_asset_id:
+          type: string
+          format: uuid
+        input_digest:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Platform-verified SHA-256 digest of the immutable clip input.
+        quarantine_status:
+          type: string
+          enum:
+            - NONE
+            - ACTIVE
+        active_records:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuarantineRecordResponse"
+    QuarantineRecordResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - quarantine_record_id
+        - reason_code
+        - source_type
+        - source_id
+        - source_version
+        - activated_by
+        - activated_at
+      properties:
+        quarantine_record_id:
+          type: string
+          format: uuid
+        reason_code:
+          type: string
+          enum:
+            - PRIVACY_RISK
+            - BAD_FILE
+            - NON_TARGET_SCENE
+            - DUPLICATE
+        source_type:
+          type: string
+          enum:
+            - PRIVACY_ASSESSMENT
+        source_id:
+          type: string
+          format: uuid
+        source_version:
+          type: integer
+          minimum: 1
+        activated_by:
+          type: string
+          minLength: 1
+          maxLength: 128
+        activated_at:
+          type: string
+          format: date-time
     UploadBatchStatus:
       type: string
       enum:
