@@ -60,7 +60,7 @@
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成的是第一段只读能力：项目隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 列表/详情。场景、科室、隐私、标注、清洗筛选、性能基准、预览 variant、状态历史和审计日志尚未完成，因此整条仍保持 `D1`，不能宣布需求验收通过。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测 profile、Flyway V1～V18、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环，但这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V19、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -89,7 +89,7 @@
 | FR-022 创建清洗任务 | P0 | `qualitycleaning` | cleaning runs | cleaning_run、cleaning_rule_set | 输入筛选条件冻结；重跑产生新 run | D1 |
 | FR-023 视频质量自动检测 | P0 | `mediaprivacy`、`qualitycleaning` | media metrics/result | media_report、cleaning_result | 指标算法、阈值、软件摘要和输入摘要可追溯 | D1 |
 | FR-024 完全重复和近重复检测 | P0 | `qualitycleaning` | duplicate detection job/result | duplicate_group、cleaning_result | SHA-256 完全重复与视频指纹近重复分开报告；不自动物理删除 | D1 |
-| FR-025 隐私风险标记 | P0 | `mediaprivacy` | privacy assessment/review | privacy_assessment、deidentify_run | 人脸、屏幕、工牌、文本和语音风险有人工复核路径 | D1 |
+| FR-025 隐私风险标记 | P0 | `mediaprivacy` | privacy assessment/review | privacy_assessment、deidentify_run | 人脸、屏幕、工牌、文本和语音风险有人工复核路径 | PI |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
 | FR-027 创建数据集版本 | P0 | `datasetexport` | dataset versions | dataset_version | 选择规则、标签/清洗规则、创建人和时间冻结 | D1 |
 | FR-028 数据集准入 | P0 | `datasetexport` | dataset validation | dataset_member_session、dataset_member_stream | 未复核、未放行、警告未批准或摘要变化均阻断冻结 | D1 |
@@ -97,6 +97,19 @@
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | export jobs | dataset_export、export_artifact | manifest、action segments、COCO、schema、split、README 和 SHA256SUMS 一致 | D1 |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze command/approval | dataset_version、approval_request | FROZEN 后成员、revision、split 和规则不可修改 | D1 |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
+
+FR-025 当前 `PI` 证据和边界：
+
+- V19 已建立 `privacy_assessment` 和 `privacy_finding` 所有权表；人工评估绑定 project、已
+  `INGESTED` ClipAsset、平台验证 SHA-256、固定策略 key/digest、操作者和请求证据。
+- OpenAPI 0.19.0 提供管理员创建、按 ID 查询和 ClipAsset 当前隐私投影；未评估返回
+  `UNKNOWN/BLOCKED`，所有评估结论仍为 `BLOCKED`，不会因 `NONE` 自动开放标注或导出。
+- `NONE` 必须无 finding 且只进入 release review；`SUSPECTED` 必须隔离复核；`CONFIRMED`
+  必须有固定 finding 并进入脱敏或隔离。重复命令幂等，重新评估显式 supersede 当前版本，旧证据和
+  追加式审计保留。
+- 自动隐私检测属于 P2；P0 尚缺 DeidentifyRun/DEIDENTIFIED variant、实际 Quarantine 编排、
+  PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
+  FR-025 或隐私闭环完成。
 
 ## 4. 非功能需求追踪
 

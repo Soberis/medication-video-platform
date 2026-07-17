@@ -1,7 +1,7 @@
 # 状态机与领域守卫
 
 > 文档状态：P0 详细设计（评审稿）  
-> 最后更新：2026-07-16
+> 最后更新：2026-07-17
 
 ## 1. 原则
 
@@ -133,6 +133,21 @@ UNKNOWN → NONE
 ```
 
 `NONE` 表示在指定 assessment/version 下未发现风险，不表示永久或绝对无风险。
+
+当前首个 P0 切片把“尚无 assessment”解释为 `UNKNOWN`，并把 release 投影保持为
+`BLOCKED`。人工评估以追加版本保存；同一 ClipAsset 和输入摘要已有当前版本时，新命令必须
+显式引用 `supersedes_assessment_id`，不能覆盖旧证据。固定策略
+`privacy-assessment-policy-v1` 的最小分流为：
+
+| risk | findings | required action | 当前 release |
+| --- | --- | --- | --- |
+| `NONE` | 空 | `RELEASE_REVIEW_REQUIRED` | `BLOCKED` |
+| `SUSPECTED` | 非空 | `QUARANTINE_REQUIRED` | `BLOCKED` |
+| `CONFIRMED` | 非空 | `DEIDENTIFICATION_REQUIRED` 或 `QUARANTINE_REQUIRED` | `BLOCKED` |
+
+`QUARANTINE_REQUIRED` 是评估结论要求的后续动作，不等同于 `qualitycleaning` 已经创建
+`quarantine_record`；`RELEASE_REVIEW_REQUIRED` 也不等同于已经放行。后续编排必须调用各自
+拥有模块的应用服务，不能由 `mediaprivacy` 直接写隔离表。
 
 ### 5.2 DeidentifyRun
 

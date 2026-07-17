@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-16
+> 最后更新：2026-07-17
 
 ## 1. 目标与边界
 
@@ -190,6 +190,15 @@ flowchart LR
 - 标注员和 AI Worker 默认只读取已批准的 `DEIDENTIFIED` variant。
 - Worker 不直接写上述表；结果经 Core API 验证和提交。
 - 自动隐私检测不能直接产生内部导出许可，必须经过策略允许的人工门禁。
+- `PrivacyAssessment` 绑定 project、ClipAsset、平台验证的输入摘要和不可变策略摘要；重新评估创建
+  新版本并显式引用当前版本，不覆盖旧结论。
+- 没有 assessment 时风险投影为 `UNKNOWN`；任何 assessment 结论在没有独立
+  `PrivacyReleaseDecision` 前仍为 `BLOCKED`。`NONE` 只表示在指定策略和本次人工检查中未观察到
+  已列风险，不表示总体风险绝对为零。
+- finding 使用固定类别而不是可能含敏感信息的自由文本；当前 P0 类别覆盖人脸、姓名、病历号、
+  屏幕、工牌、医嘱文本、标签文本、语音和其他风险。
+- `QUARANTINE_REQUIRED` 是跨模块后续动作要求，不是 `quarantine_record` 的替代事实；
+  `mediaprivacy` 不得直接写 `qualitycleaning` 表。
 
 ## 7. `annotationreview`
 

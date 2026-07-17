@@ -1,0 +1,38 @@
+meta {
+  name: Reject Assessment Without Admin Role
+  type: http
+  seq: 1
+  tags: [
+    Privacy
+  ]
+}
+
+post {
+  url: {{baseUrl}}/api/v1/privacy-assessments
+  body: json
+  auth: inherit
+}
+
+headers {
+  Idempotency-Key: bruno-privacy-non-admin-0001
+  X-Request-Id: bruno-privacy-non-admin-0001
+}
+
+body:json {
+  {
+    "clip_asset_id": "99999999-9999-9999-9999-999999999999",
+    "risk_level": "NONE",
+    "required_action": "RELEASE_REVIEW_REQUIRED",
+    "reason_code": "NO_IDENTIFIABLE_INFORMATION_OBSERVED",
+    "finding_types": []
+  }
+}
+
+tests {
+  test("requires an administrator before resolving the asset", function() {
+    const body = res.getBody();
+    expect(res.getStatus()).to.equal(403);
+    expect(body.error_code).to.equal("PROJECT_ACCESS_DENIED");
+    expect(body.retryable).to.equal(false);
+  });
+}
