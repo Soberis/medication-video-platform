@@ -39,6 +39,11 @@ const router = createRouter({
       name: 'upload-progress',
       component: () => import('@/views/UploadProgressView.vue'),
     },
+    {
+      path: '/uploads/new',
+      name: 'local-upload',
+      component: () => import('@/views/LocalUploadView.vue'),
+    },
   ],
 })
 

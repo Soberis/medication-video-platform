@@ -28,6 +28,7 @@ const assetsRoute = computed(() =>
         <RouterLink :to="{ name: 'project-list' }">项目</RouterLink>
         <RouterLink :to="sessionsRoute">配药操作</RouterLink>
         <RouterLink :to="assetsRoute">视频资产</RouterLink>
+        <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
       </nav>
     </header>

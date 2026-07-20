@@ -92,4 +92,4 @@ pnpm run api:test
 
 首个隐私与隔离切片已建立：管理员可针对已 `INGESTED` 的合成 ClipAsset 记录版本化人工 `PrivacyAssessment`；`QUARANTINE_REQUIRED` 通过 `qualitycleaning` 的公开应用服务在同一事务内建立活动隔离记录，绑定资产摘要、评估来源和版本，并提供项目隔离、管理员只读、`no-store` 的查询。相同命令在真实并发下仍只产生一份评估、隔离和对应审计；V19→V21 升级测试证明历史隔离回填可保留，并由数据库拒绝跨项目、伪造来源和错误版本。后续评估为 `NONE` 也不会自动解除既有隔离。当前仍未实现隔离复核/解除、脱敏和 `PrivacyReleaseDecision`。
 
-资产目录显式项目上下文、Membership 隔离及视频文件夹/未分类筛选已经闭合，Web 默认入口也已改为授权项目列表。下一步只做平台本地上传：增加 `HOSPITAL_REMOTE`/`PLATFORM_LOCAL` 来源事实，复用现有 Upload/Multipart/Complete 协议，并让每个本地视频独立形成单视角 CaptureSession；完成后才进入可播放 Variant/播放授权和视频软删除。MediaPipe 仍不进入 P0 关键路径。
+资产目录显式项目上下文、Membership 隔离及视频文件夹/未分类筛选已经闭合，Web 默认入口也已改为授权项目列表。平台本地上传现已复用既有 Upload/Multipart/Complete 协议：浏览器按视频建立独立 `PLATFORM_LOCAL` 批次、分块计算摘要并在完成校验后建立单视角 CaptureSession。当前下一步是可播放 Variant 与播放授权；随后才是视频软删除。MediaPipe 仍不进入 P0 关键路径。

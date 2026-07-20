@@ -14,8 +14,10 @@ pnpm --dir apps/web build
 
 开发服务器默认监听 `http://127.0.0.1:4173`，并把 `/api` 代理到 `http://localhost:8080`。本地 API 使用开发认证时，应在启动 Vite 的进程环境中提供与后端一致的合成 `DEV_BEARER_TOKEN`；Vite 只在服务端代理请求中注入该令牌，不将它编译到浏览器代码。不得使用医院、生产或真实用户令牌。
 
-根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。进入项目后，`/projects/:projectId/sessions` 以一次护士配药操作为主对象展示多相机完整性、组装和质量状态，`/projects/:projectId/assets` 用于单路视频及项目内一层文件夹/未分类筛选；详情路由保持同一项目上下文。`/uploads` 继续只读展示批次和文件进度。当前页面不会上传视频、自动协调对象存储或改变业务状态，也不会在浏览器分页后伪造聚合工作台。
+根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。进入项目后，`/projects/:projectId/sessions` 以一次护士配药操作为主对象展示多相机完整性、组装和质量状态，`/projects/:projectId/assets` 用于单路视频及项目内一层文件夹/未分类筛选；详情路由保持同一项目上下文。`/uploads` 继续只读展示批次和文件进度，`/uploads/new` 用于平台本地上传。
 
-Element Plus 2.14.3 已在首个真实 Session/资产列表阶段启用，页面按路由懒加载。当前仍不包含 OIDC、视频播放器、生产级浏览器大文件上传器或 Complete Batch 页面操作；Complete Batch 由 RK3588 边端上传程序或复用同一协议的合成上传客户端自动调用，Web 只读展示结果。自动化客户端稳定后可增加仅 local/dev/test 启用的 `/import` 受控手动导入，但不得绕过后端环境、权限、项目、审计和大小策略。媒体处理、隐私评估和预览授权完成前，资产详情明确说明预览尚未开放，不请求对象存储定位或预签名 URL。
+`/uploads/new` 已启用平台本地上传：用户选择已加入的项目、可选的一层文件夹和一个或多个本机视频；每个视频使用独立 `PLATFORM_LOCAL` 批次，浏览器先在 Web Worker 中分块计算 SHA-256，再复用 Upload/Multipart/Complete/CaptureSession 协议直传对象存储。页面只显示运行期批次 ID，不记录或输出预签名 URL；多视频按顺序执行，避免误组装为同一次多相机拍摄。
+
+当前仍不包含 OIDC、视频播放器、跨浏览器/医院网络的容量 UAT、上传中断后继续同一批次的页面恢复，以及播放、删除功能。媒体处理、隐私评估和预览授权完成前，资产详情明确说明预览尚未开放，不请求对象存储定位或预签名 URL。
 
 Pinia 已锁定技术选型和准确版本，但尚未注册，也没有 Store；出现登录会话或跨页面共享状态后再启用。

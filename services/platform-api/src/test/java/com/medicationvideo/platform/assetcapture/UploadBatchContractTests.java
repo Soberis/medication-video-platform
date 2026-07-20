@@ -112,6 +112,52 @@ class UploadBatchContractTests {
 	}
 
 	@Test
+	void initializesOnePlatformLocalVideoBatch() throws Exception {
+		var request = """
+				{
+				  "project_id": "%s",
+				  "device_id": "PLATFORM_LOCAL",
+				  "upload_source_type": "PLATFORM_LOCAL",
+				  "file_count": 1,
+				  "total_size_bytes": 8388608,
+				  "manifest_sha256": "%s"
+				}
+				""".formatted(PROJECT_ID, MANIFEST_SHA256);
+
+		this.mockMvc.perform(post("/api/v1/upload/init")
+					.header("Authorization", "Bearer " + TOKEN)
+					.header("Idempotency-Key", "platform-local-init-0001")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.device_id").value("PLATFORM_LOCAL"))
+				.andExpect(jsonPath("$.upload_source_type").value("PLATFORM_LOCAL"))
+				.andExpect(jsonPath("$.file_count").value(1));
+	}
+
+	@Test
+	void rejectsMultipleFilesInOnePlatformLocalBatch() throws Exception {
+		var request = """
+				{
+				  "project_id": "%s",
+				  "device_id": "PLATFORM_LOCAL",
+				  "upload_source_type": "PLATFORM_LOCAL",
+				  "file_count": 2,
+				  "total_size_bytes": 16777216,
+				  "manifest_sha256": "%s"
+				}
+				""".formatted(PROJECT_ID, MANIFEST_SHA256);
+
+		this.mockMvc.perform(post("/api/v1/upload/init")
+					.header("Authorization", "Bearer " + TOKEN)
+					.header("Idempotency-Key", "platform-local-init-0002")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED"));
+	}
+
+	@Test
 	void rejectsReusingAnIdempotencyKeyForDifferentContent() throws Exception {
 		this.mockMvc.perform(post("/api/v1/upload/init")
 					.header("Authorization", "Bearer " + TOKEN)

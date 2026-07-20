@@ -35,6 +35,21 @@ describe('App', () => {
           name: 'session-list',
           component: { template: '<div>Session list</div>' },
         },
+        {
+          path: '/projects/:projectId/assets',
+          name: 'asset-list',
+          component: { template: '<div>Asset list</div>' },
+        },
+        {
+          path: '/uploads',
+          name: 'upload-progress',
+          component: { template: '<div>Upload progress</div>' },
+        },
+        {
+          path: '/uploads/new',
+          name: 'local-upload',
+          component: { template: '<div>Local upload</div>' },
+        },
       ],
     })
 

@@ -385,6 +385,8 @@ class UploadBatchTerminationContractTests {
 				"termination-direct-" + UUID.randomUUID(),
 				SHA256,
 				"synthetic-edge-termination",
+				UploadSourceType.HOSPITAL_REMOTE,
+				null,
 				actorId,
 				1,
 				PART_SIZE,

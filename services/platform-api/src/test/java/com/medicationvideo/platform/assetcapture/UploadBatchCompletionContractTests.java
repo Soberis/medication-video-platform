@@ -239,6 +239,8 @@ class UploadBatchCompletionContractTests {
 				"batch-complete-key-" + UUID.randomUUID(),
 				SHA256_A,
 				"synthetic-edge-01",
+				UploadSourceType.HOSPITAL_REMOTE,
+				null,
 				"synthetic-test-actor",
 				entries.size(),
 				totalSize,
