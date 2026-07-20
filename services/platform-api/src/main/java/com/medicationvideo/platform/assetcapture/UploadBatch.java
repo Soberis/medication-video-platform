@@ -31,6 +31,13 @@ class UploadBatch {
 	@Column(name = "device_id", nullable = false, length = 128, updatable = false)
 	private String deviceId;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "upload_source_type", nullable = false, length = 32, updatable = false)
+	private UploadSourceType uploadSourceType;
+
+	@Column(name = "asset_folder_id", updatable = false)
+	private UUID assetFolderId;
+
 	@Column(name = "initiated_by_actor_id", nullable = false, length = 128, updatable = false)
 	private String initiatedByActorId;
 
@@ -81,6 +88,8 @@ class UploadBatch {
 			String idempotencyKey,
 			String requestFingerprint,
 			String deviceId,
+			UploadSourceType uploadSourceType,
+			UUID assetFolderId,
 			String initiatedByActorId,
 			int fileCount,
 			long totalSizeBytes,
@@ -92,6 +101,8 @@ class UploadBatch {
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
 		this.deviceId = deviceId;
+		this.uploadSourceType = uploadSourceType;
+		this.assetFolderId = assetFolderId;
 		this.initiatedByActorId = initiatedByActorId;
 		this.fileCount = fileCount;
 		this.totalSizeBytes = totalSizeBytes;
@@ -107,6 +118,8 @@ class UploadBatch {
 			String idempotencyKey,
 			String requestFingerprint,
 			String deviceId,
+			UploadSourceType uploadSourceType,
+			UUID assetFolderId,
 			String initiatedByActorId,
 			int fileCount,
 			long totalSizeBytes,
@@ -119,6 +132,8 @@ class UploadBatch {
 				idempotencyKey,
 				requestFingerprint,
 				deviceId,
+				uploadSourceType,
+				assetFolderId,
 				initiatedByActorId,
 				fileCount,
 				totalSizeBytes,
@@ -141,6 +156,14 @@ class UploadBatch {
 
 	String getDeviceId() {
 		return this.deviceId;
+	}
+
+	UploadSourceType getUploadSourceType() {
+		return this.uploadSourceType;
+	}
+
+	UUID getAssetFolderId() {
+		return this.assetFolderId;
 	}
 
 	String getInitiatedByActorId() {

@@ -78,7 +78,7 @@ public class AssetCatalogQueryService {
 				       session.server_receive_time,
 				       session.assembly_status,
 				       session.quality_status,
-				       session.created_at
+					   session.created_at
 				FROM capture_session session
 				JOIN camera_set_snapshot snapshot
 				  ON snapshot.capture_session_id = session.capture_session_id
@@ -107,14 +107,14 @@ public class AssetCatalogQueryService {
 		}
 		if (decodedCursor != null) {
 			sql.append("""
-					 AND (session.device_time_utc < :cursorRecordedAt
-					      OR (session.device_time_utc = :cursorRecordedAt
+					 AND (COALESCE(session.device_time_utc, session.server_receive_time) < :cursorRecordedAt
+					      OR (COALESCE(session.device_time_utc, session.server_receive_time) = :cursorRecordedAt
 					          AND session.capture_session_id < :cursorId))
 					""");
 			parameters.addValue("cursorRecordedAt", Timestamp.from(decodedCursor.recordedAt()));
 			parameters.addValue("cursorId", decodedCursor.id());
 		}
-		sql.append(" ORDER BY session.device_time_utc DESC, session.capture_session_id DESC LIMIT :fetchLimit");
+		sql.append(" ORDER BY COALESCE(session.device_time_utc, session.server_receive_time) DESC, session.capture_session_id DESC LIMIT :fetchLimit");
 		parameters.addValue("fetchLimit", limit + 1);
 
 		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapCaptureSession);
@@ -122,10 +122,14 @@ public class AssetCatalogQueryService {
 		var nextCursor = rows.size() > limit
 				? AssetCatalogCursor.encode(
 						SESSION_CURSOR_KIND,
-						page.getLast().deviceTimeUtc(),
+						catalogSortTime(page.getLast()),
 						page.getLast().captureSessionId())
 				: null;
 		return new CaptureSessionListResponse(page, nextCursor);
+	}
+
+	private static Instant catalogSortTime(CaptureSessionListItemResponse session) {
+		return session.deviceTimeUtc() == null ? session.serverReceiveTime() : session.deviceTimeUtc();
 	}
 
 	@Transactional(readOnly = true)

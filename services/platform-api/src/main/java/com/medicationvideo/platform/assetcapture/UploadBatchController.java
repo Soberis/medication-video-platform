@@ -31,6 +31,7 @@ class UploadBatchController {
 	private final UploadProgressQueryService progressQueryService;
 	private final UploadBatchCompletionService completionService;
 	private final CaptureSessionIngestService captureSessionIngestService;
+	private final PlatformLocalCaptureSessionService platformLocalCaptureSessionService;
 	private final UploadBatchTerminationService terminationService;
 	private final AssetCaptureProjectAuthorizer authorizer;
 
@@ -39,12 +40,14 @@ class UploadBatchController {
 			UploadProgressQueryService progressQueryService,
 			UploadBatchCompletionService completionService,
 			CaptureSessionIngestService captureSessionIngestService,
+			PlatformLocalCaptureSessionService platformLocalCaptureSessionService,
 			UploadBatchTerminationService terminationService,
 			AssetCaptureProjectAuthorizer authorizer) {
 		this.service = service;
 		this.progressQueryService = progressQueryService;
 		this.completionService = completionService;
 		this.captureSessionIngestService = captureSessionIngestService;
+		this.platformLocalCaptureSessionService = platformLocalCaptureSessionService;
 		this.terminationService = terminationService;
 		this.authorizer = authorizer;
 	}
@@ -113,7 +116,10 @@ class UploadBatchController {
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
-		var response = this.captureSessionIngestService.ingest(access.projectId(), batchId);
+		var batch = this.progressQueryService.getBatch(batchId, access.projectId());
+		var response = batch.uploadSourceType() == UploadSourceType.PLATFORM_LOCAL
+				? this.platformLocalCaptureSessionService.ingest(access.projectId(), batchId)
+				: this.captureSessionIngestService.ingest(access.projectId(), batchId);
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.cacheControl(CacheControl.noStore())
 				.body(response);

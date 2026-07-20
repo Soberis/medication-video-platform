@@ -31,13 +31,13 @@ class CaptureSession {
 	@Column(name = "camera_set_id", nullable = false, updatable = false)
 	private UUID cameraSetId;
 
-	@Column(name = "metadata_upload_file_id", nullable = false, updatable = false)
+	@Column(name = "metadata_upload_file_id", updatable = false)
 	private UUID metadataUploadFileId;
 
-	@Column(name = "metadata_schema_version", nullable = false, length = 64, updatable = false)
+	@Column(name = "metadata_schema_version", length = 64, updatable = false)
 	private String metadataSchemaVersion;
 
-	@Column(name = "metadata_sha256", nullable = false, length = 64, updatable = false)
+	@Column(name = "metadata_sha256", length = 64, updatable = false)
 	private String metadataSha256;
 
 	@Column(name = "expected_camera_count", nullable = false, updatable = false)
@@ -46,13 +46,13 @@ class CaptureSession {
 	@Column(name = "received_camera_count", nullable = false)
 	private int receivedCameraCount;
 
-	@Column(name = "sync_group_id", nullable = false, length = 128, updatable = false)
+	@Column(name = "sync_group_id", length = 128, updatable = false)
 	private String syncGroupId;
 
-	@Column(name = "device_time_utc", nullable = false, updatable = false)
+	@Column(name = "device_time_utc", updatable = false)
 	private Instant deviceTimeUtc;
 
-	@Column(name = "device_timezone", nullable = false, length = 64, updatable = false)
+	@Column(name = "device_timezone", length = 64, updatable = false)
 	private String deviceTimezone;
 
 	@Column(name = "server_receive_time", nullable = false, updatable = false)
@@ -122,6 +122,39 @@ class CaptureSession {
 				metadata,
 				receivedCameraCount,
 				createdAt);
+	}
+
+	static CaptureSession importLocal(
+			UUID projectId,
+			UploadBatch batch,
+			CameraSetConfiguration cameraSet,
+			Instant createdAt) {
+		var session = new CaptureSession(
+				projectId,
+				batch.getBatchId(),
+				cameraSet,
+				createdAt);
+		return session;
+	}
+
+	private CaptureSession(
+			UUID projectId,
+			UUID batchId,
+			CameraSetConfiguration cameraSet,
+			Instant createdAt) {
+		this.captureSessionId = UUID.randomUUID();
+		this.projectId = projectId;
+		this.batchId = batchId;
+		this.deviceId = "PLATFORM_LOCAL";
+		this.cameraSetId = cameraSet.getCameraSetId();
+		this.metadataSchemaVersion = "platform-local-upload-v1";
+		this.expectedCameraCount = 1;
+		this.receivedCameraCount = 1;
+		this.serverReceiveTime = createdAt;
+		this.assemblyStatus = CaptureSessionAssemblyStatus.COMPLETE;
+		this.qualityStatus = CaptureQualityStatus.PENDING;
+		this.createdAt = createdAt;
+		this.updatedAt = createdAt;
 	}
 
 	UUID getCaptureSessionId() {

@@ -81,6 +81,7 @@ class ClipAsset {
 		this.storageBucket = file.getStorageBucket();
 		this.objectKey = file.getObjectKey();
 		this.storageEtag = file.getCompletedStorageEtag();
+		this.folderId = batch.getAssetFolderId();
 		this.status = ClipAssetStatus.UPLOADED;
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;

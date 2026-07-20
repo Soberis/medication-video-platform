@@ -37,7 +37,7 @@ class CameraStream {
 	@Column(name = "client_file_id", nullable = false, updatable = false)
 	private UUID clientFileId;
 
-	@Column(name = "record_start_utc", nullable = false, updatable = false)
+	@Column(name = "record_start_utc", updatable = false)
 	private Instant recordStartUtc;
 
 	@Column(name = "time_offset_ms", nullable = false, updatable = false)
@@ -97,6 +97,28 @@ class CameraStream {
 			CaptureSessionMetadataV1.Stream metadata,
 			Instant createdAt) {
 		return new CameraStream(captureSessionId, snapshotMember, clipAsset, metadata, createdAt);
+	}
+
+	static CameraStream importLocal(
+			UUID captureSessionId,
+			CameraSetSnapshotMember snapshotMember,
+			ClipAsset clipAsset,
+			Instant createdAt) {
+		var stream = new CameraStream();
+		stream.cameraStreamId = UUID.randomUUID();
+		stream.captureSessionId = captureSessionId;
+		stream.cameraSetSnapshotMemberId = snapshotMember.getCameraSetSnapshotMemberId();
+		stream.cameraChannelId = snapshotMember.getCameraChannelId();
+		stream.cameraIndex = snapshotMember.getCameraIndex();
+		stream.clipAssetId = clipAsset.getClipAssetId();
+		stream.clientFileId = clipAsset.getClientFileId();
+		stream.timeOffsetMs = 0;
+		stream.declaredSyncStatus = DeclaredSyncStatus.UNKNOWN;
+		stream.streamStatus = initialStatus(clipAsset.getStatus());
+		stream.qualityStatus = CaptureQualityStatus.PENDING;
+		stream.createdAt = createdAt;
+		stream.updatedAt = createdAt;
+		return stream;
 	}
 
 	UUID getCameraStreamId() {

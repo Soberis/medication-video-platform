@@ -22,8 +22,8 @@ export interface CaptureSessionListItem {
   bound_stream_count: number
   received_camera_count: number
   ingest_failed_stream_count: number
-  sync_group_id: string
-  device_time_utc: string
+  sync_group_id: string | null
+  device_time_utc: string | null
   server_receive_time: string
   assembly_status: CaptureSessionAssemblyStatus
   quality_status: CaptureQualityStatus
@@ -56,7 +56,7 @@ export interface CameraStream {
   camera_index: number
   camera_role: string
   mount_position: string
-  record_start_utc: string
+  record_start_utc: string | null
   time_offset_ms: number
   sync_status: DeclaredSyncStatus
   stream_status: CameraStreamStatus
@@ -68,14 +68,14 @@ export interface CaptureSessionDetail {
   project_id: string
   batch_id: string
   device_id: string
-  metadata_upload_file_id: string
+  metadata_upload_file_id: string | null
   metadata_schema_version: string
-  metadata_sha256: string
+  metadata_sha256: string | null
   expected_camera_count: number
   received_camera_count: number
-  sync_group_id: string
-  device_time_utc: string
-  device_timezone: string
+  sync_group_id: string | null
+  device_time_utc: string | null
+  device_timezone: string | null
   server_receive_time: string
   assembly_status: CaptureSessionAssemblyStatus
   quality_status: CaptureQualityStatus
@@ -91,7 +91,7 @@ export interface ClipAssetSessionBinding {
   camera_index: number
   camera_role: string
   mount_position: string
-  record_start_utc: string
+  record_start_utc: string | null
   time_offset_ms: number
   declared_sync_status: DeclaredSyncStatus
   stream_status: CameraStreamStatus

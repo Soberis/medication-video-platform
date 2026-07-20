@@ -51,6 +51,11 @@ class UploadBatchExceptionHandler {
 		return error(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", exception.getMessage());
 	}
 
+	@ExceptionHandler(UploadBatchInputException.class)
+	ResponseEntity<ApiErrorResponse> batchInput(UploadBatchInputException exception) {
+		return error(HttpStatus.BAD_REQUEST, exception.getErrorCode(), exception.getMessage());
+	}
+
 	@ExceptionHandler(UploadBatchNotFoundException.class)
 	ResponseEntity<ApiErrorResponse> notFound(UploadBatchNotFoundException exception) {
 		return error(HttpStatus.NOT_FOUND, "UPLOAD_BATCH_NOT_FOUND", exception.getMessage());

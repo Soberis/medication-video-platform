@@ -959,7 +959,7 @@ paths:
         - Uploads
       summary: Assemble one capture session from verified uploaded metadata
       description: >-
-        Called automatically after Complete Batch. The platform locates exactly one uploaded
+        For HOSPITAL_REMOTE batches, this operation locates exactly one uploaded
         METADATA file with application/json content type, enforces a 1 MiB safety limit, reads it
         from object storage, verifies its already-recorded size and SHA-256 again, and parses the
         strict capture-session-metadata-v1 schema. It then validates device_id against the batch,
@@ -971,7 +971,9 @@ paths:
         verified sync revision. Newly uploaded, unprobed assets produce BOUND streams and are not
         counted in received_camera_count until later media ingest. A natural-resource replay returns
         the original assembly without rereading object storage. The operation does not control the
-        RK3588 device or accept video bytes through the Core API.
+        RK3588 device or accept video bytes through the Core API. For PLATFORM_LOCAL batches,
+        it creates one server-defined single-view CaptureSession for the one verified VIDEO asset;
+        no edge metadata, capture time, or multi-camera relationship is inferred.
       parameters:
         - name: batch_id
           in: path
@@ -1653,7 +1655,8 @@ paths:
         - Asset Catalog
       summary: List medication-preparation capture sessions in one authorized project
       description: >-
-        Returns a bounded keyset page ordered by device_time_utc and capture_session_id descending.
+        Returns a bounded keyset page ordered by device_time_utc when available, otherwise
+        server_receive_time, then capture_session_id descending.
         bound_stream_count means a ClipAsset is associated with a CameraStream; received_camera_count
         only counts media that reached INGESTED. The authenticated actor must hold an ACTIVE
         Membership in the explicit project path.
@@ -3040,7 +3043,17 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9._:-]+$
-          description: Stable non-personal identifier of the uploading edge device.
+          description: >-
+            Stable non-personal identifier of the uploading edge device. PLATFORM_LOCAL is required
+            when upload_source_type is PLATFORM_LOCAL.
+        upload_source_type:
+          $ref: "#/components/schemas/UploadSourceType"
+          default: HOSPITAL_REMOTE
+          description: Immutable upload-entry provenance. Omitted requests remain HOSPITAL_REMOTE for compatibility.
+        asset_folder_id:
+          type: [string, "null"]
+          format: uuid
+          description: Optional project folder for a PLATFORM_LOCAL video; never an object-storage path or permission boundary.
         file_count:
           type: integer
           format: int32
@@ -3066,6 +3079,7 @@ components:
         - batch_id
         - project_id
         - device_id
+        - upload_source_type
         - file_count
         - total_size_bytes
         - manifest_sha256
@@ -3081,6 +3095,11 @@ components:
           format: uuid
         device_id:
           type: string
+        upload_source_type:
+          $ref: "#/components/schemas/UploadSourceType"
+        asset_folder_id:
+          type: [string, "null"]
+          format: uuid
         file_count:
           type: integer
           format: int32
@@ -3327,6 +3346,11 @@ components:
         activated_at:
           type: string
           format: date-time
+    UploadSourceType:
+      type: string
+      enum:
+        - HOSPITAL_REMOTE
+        - PLATFORM_LOCAL
     UploadBatchStatus:
       type: string
       enum:
@@ -3481,6 +3505,7 @@ components:
         - batch_id
         - project_id
         - device_id
+        - upload_source_type
         - file_count
         - registered_file_count
         - uploaded_file_count
@@ -3507,6 +3532,11 @@ components:
           format: uuid
         device_id:
           type: string
+        upload_source_type:
+          $ref: "#/components/schemas/UploadSourceType"
+        asset_folder_id:
+          type: [string, "null"]
+          format: uuid
         file_count:
           type: integer
           format: int32
@@ -4068,14 +4098,9 @@ components:
         - project_id
         - batch_id
         - device_id
-        - metadata_upload_file_id
         - metadata_schema_version
-        - metadata_sha256
         - expected_camera_count
         - received_camera_count
-        - sync_group_id
-        - device_time_utc
-        - device_timezone
         - server_receive_time
         - assembly_status
         - quality_status
@@ -4097,13 +4122,15 @@ components:
           minLength: 1
           maxLength: 128
         metadata_upload_file_id:
-          type: string
+          type: [string, "null"]
           format: uuid
         metadata_schema_version:
           type: string
-          const: capture-session-metadata-v1
+          enum:
+            - capture-session-metadata-v1
+            - platform-local-upload-v1
         metadata_sha256:
-          type: string
+          type: [string, "null"]
           pattern: ^[a-f0-9]{64}$
         expected_camera_count:
           type: integer
@@ -4118,14 +4145,14 @@ components:
           maximum: 64
           description: Unique bound streams whose ClipAsset has reached INGESTED; upload alone does not count.
         sync_group_id:
-          type: string
+          type: [string, "null"]
           minLength: 1
           maxLength: 128
         device_time_utc:
-          type: string
+          type: [string, "null"]
           format: date-time
         device_timezone:
-          type: string
+          type: [string, "null"]
           minLength: 1
           maxLength: 64
         server_receive_time:

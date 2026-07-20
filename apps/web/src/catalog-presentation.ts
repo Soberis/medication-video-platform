@@ -58,7 +58,8 @@ export function statusLabel(labels: Record<string, string>, status: string) {
   return labels[status] ?? status
 }
 
-export function formatDateTime(value: string) {
+export function formatDateTime(value: string | null | undefined) {
+  if (!value) return '未提供'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return '—'

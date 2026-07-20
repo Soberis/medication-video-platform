@@ -54,6 +54,12 @@ class UploadFileService {
 					"UPLOAD_BATCH_NOT_ACCEPTING_FILES",
 					"The upload batch no longer accepts file manifest entries.");
 		}
+		if (batch.getUploadSourceType() == UploadSourceType.PLATFORM_LOCAL
+				&& request.fileKind() != UploadFileKind.VIDEO) {
+			throw new UploadFileRegistrationException(
+					"PLATFORM_LOCAL_VIDEO_REQUIRED",
+					"A platform-local upload batch accepts exactly one VIDEO file.");
+		}
 
 		var registeredCount = this.fileRepository.countByBatchId(batchId);
 		var registeredSize = this.fileRepository.sumSizeBytesByBatchId(batchId);
