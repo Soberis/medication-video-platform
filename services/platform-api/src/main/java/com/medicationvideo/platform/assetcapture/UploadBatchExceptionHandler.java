@@ -12,6 +12,8 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.medicationvideo.platform.iamproject.ProjectAccessException;
+
 @RestControllerAdvice(assignableTypes = {
 		UploadBatchController.class,
 		UploadFileController.class,
@@ -34,6 +36,14 @@ class UploadBatchExceptionHandler {
 	@ExceptionHandler(UploadBatchAuthorizationException.class)
 	ResponseEntity<ApiErrorResponse> forbidden(UploadBatchAuthorizationException exception) {
 		return error(HttpStatus.FORBIDDEN, "PROJECT_ACCESS_DENIED", exception.getMessage());
+	}
+
+	@ExceptionHandler(ProjectAccessException.class)
+	ResponseEntity<ApiErrorResponse> projectAccess(ProjectAccessException exception) {
+		return error(
+				HttpStatus.valueOf(exception.getStatusCode()),
+				exception.getErrorCode(),
+				exception.getMessage());
 	}
 
 	@ExceptionHandler(UploadBatchConflictException.class)

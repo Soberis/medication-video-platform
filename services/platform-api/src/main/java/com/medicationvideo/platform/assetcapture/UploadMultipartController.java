@@ -28,16 +28,19 @@ class UploadMultipartController {
 	private final UploadPartAuthorizationService authorizationService;
 	private final UploadPartReconciliationService reconciliationService;
 	private final UploadFileCompletionService completionService;
+	private final AssetCaptureProjectAuthorizer authorizer;
 
 	UploadMultipartController(
 			UploadMultipartService multipartService,
 			UploadPartAuthorizationService authorizationService,
 			UploadPartReconciliationService reconciliationService,
-			UploadFileCompletionService completionService) {
+			UploadFileCompletionService completionService,
+			AssetCaptureProjectAuthorizer authorizer) {
 		this.multipartService = multipartService;
 		this.authorizationService = authorizationService;
 		this.reconciliationService = reconciliationService;
 		this.completionService = completionService;
+		this.authorizer = authorizer;
 	}
 
 	@PutMapping("/multipart")
@@ -46,7 +49,8 @@ class UploadMultipartController {
 			@PathVariable UUID clientFileId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var file = this.multipartService.start(actor.projectId(), batchId, clientFileId);
+		var projectId = requireProject(batchId, actor);
+		var file = this.multipartService.start(projectId, batchId, clientFileId);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadMultipartSessionResponse.from(file));
 	}
 
@@ -58,8 +62,9 @@ class UploadMultipartController {
 			@Valid @RequestBody UploadPartAuthorizationRequest request,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		var projectId = requireProject(batchId, actor);
 		var authorized = this.authorizationService.authorize(
-				actor.projectId(),
+				projectId,
 				batchId,
 				clientFileId,
 				partNumber,
@@ -79,7 +84,8 @@ class UploadMultipartController {
 			@PathVariable @Min(1) @Max(10_000) int partNumber,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var part = this.reconciliationService.confirm(actor.projectId(), batchId, clientFileId, partNumber);
+		var projectId = requireProject(batchId, actor);
+		var part = this.reconciliationService.confirm(projectId, batchId, clientFileId, partNumber);
 		return ResponseEntity.ok(UploadPartResponse.from(part));
 	}
 
@@ -89,10 +95,11 @@ class UploadMultipartController {
 			@PathVariable UUID clientFileId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		var projectId = requireProject(batchId, actor);
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
 				.body(this.reconciliationService.getProgress(
-						actor.projectId(),
+						projectId,
 						batchId,
 						clientFileId));
 	}
@@ -103,8 +110,9 @@ class UploadMultipartController {
 			@PathVariable UUID clientFileId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		var projectId = requireProject(batchId, actor);
 		return ResponseEntity.ok(this.reconciliationService.reconcile(
-				actor.projectId(),
+				projectId,
 				batchId,
 				clientFileId));
 	}
@@ -115,8 +123,9 @@ class UploadMultipartController {
 			@PathVariable UUID clientFileId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		var projectId = requireProject(batchId, actor);
 		return ResponseEntity.ok(this.completionService.complete(
-				actor.projectId(),
+				projectId,
 				batchId,
 				clientFileId));
 	}
@@ -126,5 +135,9 @@ class UploadMultipartController {
 			throw new UploadBatchAuthorizationException();
 		}
 		return actor;
+	}
+
+	private UUID requireProject(UUID batchId, UploadActor actor) {
+		return this.authorizer.requireBatchMember(batchId, actor.actorId()).projectId();
 	}
 }

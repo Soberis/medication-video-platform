@@ -38,6 +38,8 @@ import com.jayway.jsonpath.JsonPath;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -79,6 +81,7 @@ class UploadBatchTerminationContractTests {
 
 	@BeforeEach
 	void resetStorage() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.objectStorage.reset();
 	}
 
@@ -143,6 +146,18 @@ class UploadBatchTerminationContractTests {
 		abort(batch.getBatchId(), USER_TOKEN, "abort-request-unauthorized")
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		this.jdbcTemplate.update(
+				"UPDATE membership SET role = 'MEMBER' WHERE project_id = ? AND actor_id = ?",
+				PROJECT_ID,
+				ProjectMembershipTestData.ADMIN_ACTOR);
+		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-global-admin-denied")
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		this.jdbcTemplate.update(
+				"UPDATE membership SET role = 'ADMIN' WHERE project_id = ? AND actor_id = ?",
+				PROJECT_ID,
+				ProjectMembershipTestData.ADMIN_ACTOR);
 
 		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-admin")
 				.andExpect(status().isOk())

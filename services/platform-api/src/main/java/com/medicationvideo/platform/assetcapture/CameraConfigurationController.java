@@ -26,10 +26,15 @@ class CameraConfigurationController {
 
 	private final CameraChannelService channelService;
 	private final CameraSetService cameraSetService;
+	private final AssetCaptureProjectAuthorizer authorizer;
 
-	CameraConfigurationController(CameraChannelService channelService, CameraSetService cameraSetService) {
+	CameraConfigurationController(
+			CameraChannelService channelService,
+			CameraSetService cameraSetService,
+			AssetCaptureProjectAuthorizer authorizer) {
 		this.channelService = channelService;
 		this.cameraSetService = cameraSetService;
+		this.authorizer = authorizer;
 	}
 
 	@PutMapping("/camera-channels/{provisioningKey}")
@@ -39,7 +44,7 @@ class CameraConfigurationController {
 			@Size(min = 1, max = 128)
 			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String provisioningKey,
 			Authentication authentication) {
-		requireProject(authentication, projectId);
+		requireAdministrator(authentication, projectId);
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.cacheControl(CacheControl.noStore())
 				.body(this.channelService.provision(projectId, provisioningKey));
@@ -54,7 +59,7 @@ class CameraConfigurationController {
 			@PathVariable @Min(1) @Max(Integer.MAX_VALUE) int configurationVersion,
 			@Valid @RequestBody CameraSetRequest request,
 			Authentication authentication) {
-		requireProject(authentication, projectId);
+		requireAdministrator(authentication, projectId);
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.cacheControl(CacheControl.noStore())
 				.body(this.cameraSetService.configure(
@@ -64,10 +69,10 @@ class CameraConfigurationController {
 						request));
 	}
 
-	private static void requireProject(Authentication authentication, UUID projectId) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)
-				|| !actor.projectId().equals(projectId)) {
+	private void requireAdministrator(Authentication authentication, UUID projectId) {
+		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
+		this.authorizer.requireAdministrator(projectId, actor.actorId());
 	}
 }

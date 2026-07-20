@@ -36,6 +36,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -99,6 +101,7 @@ class CaptureSessionIngestContractTests {
 
 	@BeforeEach
 	void clearState() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		deleteAllState();
 		this.objectStorage.reset();
 	}

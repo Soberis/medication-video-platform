@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.json.JsonMapper;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -56,6 +58,7 @@ class UploadBatchContractTests {
 
 	@BeforeEach
 	void clearUploadBatches() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, java.util.UUID.fromString(PROJECT_ID));
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();
 		this.fileRepository.deleteAll();
@@ -145,10 +148,31 @@ class UploadBatchContractTests {
 					.header("Idempotency-Key", "batch-init-key-0004")
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(validRequest(OTHER_PROJECT_ID, 1L)))
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 
 		assertEquals(0, this.repository.count());
+	}
+
+	@Test
+	void acceptsAnExplicitProjectMembershipInsteadOfTheTokenDefaultProject() throws Exception {
+		var authorizedProjectId = java.util.UUID.fromString(
+				"00000000-0000-0000-0000-000000000003");
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, authorizedProjectId);
+		try {
+			this.mockMvc.perform(post("/api/v1/upload/init")
+						.header("Authorization", "Bearer " + TOKEN)
+						.header("Idempotency-Key", "batch-other-project-0001")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(validRequest(authorizedProjectId.toString(), 1L)))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.project_id").value(authorizedProjectId.toString()));
+		}
+		finally {
+			this.repository.deleteAll();
+			this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", authorizedProjectId);
+			this.jdbcTemplate.update("DELETE FROM project WHERE project_id = ?", authorizedProjectId);
+		}
 	}
 
 	@Test

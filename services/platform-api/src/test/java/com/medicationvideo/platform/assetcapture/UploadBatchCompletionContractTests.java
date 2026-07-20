@@ -27,6 +27,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -65,6 +67,7 @@ class UploadBatchCompletionContractTests {
 
 	@BeforeEach
 	void clearUploads() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.captureEventLogRepository.deleteAll();
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();

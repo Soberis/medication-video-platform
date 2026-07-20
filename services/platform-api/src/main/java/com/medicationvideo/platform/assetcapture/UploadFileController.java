@@ -23,9 +23,11 @@ import jakarta.validation.constraints.Size;
 class UploadFileController {
 
 	private final UploadFileService service;
+	private final AssetCaptureProjectAuthorizer authorizer;
 
-	UploadFileController(UploadFileService service) {
+	UploadFileController(UploadFileService service, AssetCaptureProjectAuthorizer authorizer) {
 		this.service = service;
+		this.authorizer = authorizer;
 	}
 
 	@PutMapping("/{clientFileId}")
@@ -40,7 +42,8 @@ class UploadFileController {
 		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
-		var file = this.service.register(actor.projectId(), batchId, clientFileId, idempotencyKey, request);
+		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var file = this.service.register(access.projectId(), batchId, clientFileId, idempotencyKey, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadFileResponse.from(file));
 	}
 }

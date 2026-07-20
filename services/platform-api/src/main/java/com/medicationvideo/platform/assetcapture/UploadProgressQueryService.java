@@ -29,8 +29,8 @@ class UploadProgressQueryService {
 		this.cleanupStore = cleanupStore;
 	}
 
-	UploadBatchProgressResponse getBatch(UUID batchId, UploadActor actor) {
-		var snapshot = load(batchId, actor);
+	UploadBatchProgressResponse getBatch(UUID batchId, UUID projectId) {
+		var snapshot = load(batchId, projectId);
 		return UploadBatchProgressResponse.from(
 				snapshot.batch(),
 				snapshot.files(),
@@ -38,8 +38,8 @@ class UploadProgressQueryService {
 				this.cleanupStore.summarize(batchId));
 	}
 
-	UploadFileProgressListResponse getFiles(UUID batchId, UploadActor actor) {
-		var snapshot = load(batchId, actor);
+	UploadFileProgressListResponse getFiles(UUID batchId, UUID projectId) {
+		var snapshot = load(batchId, projectId);
 		var responses = snapshot.files().stream()
 				.map(file -> UploadFileProgressResponse.from(
 						file,
@@ -48,8 +48,8 @@ class UploadProgressQueryService {
 		return new UploadFileProgressListResponse(batchId, responses.size(), responses);
 	}
 
-	private ProgressSnapshot load(UUID batchId, UploadActor actor) {
-		var batch = this.batchRepository.findByBatchIdAndProjectId(batchId, actor.projectId())
+	private ProgressSnapshot load(UUID batchId, UUID projectId) {
+		var batch = this.batchRepository.findByBatchIdAndProjectId(batchId, projectId)
 				.orElseThrow(UploadBatchNotFoundException::new);
 		var files = this.fileRepository.findAllByBatchIdOrderByCreatedAtAscUploadFileIdAsc(batchId);
 		if (files.isEmpty()) {

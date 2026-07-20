@@ -132,7 +132,7 @@ FR-033/FR-036 当前 `PI` 证据和边界：
 - OpenAPI 0.21.0、Flyway V22 和 `ProjectMembershipContractTests` 已覆盖项目幂等创建、首个 ADMIN 原子建立、ADMIN/MEMBER 成员授权/改角/移除、普通成员只见授权项目、最后管理员保护、并发单写和审计失败全事务回滚。
 - 数据库只接受 `ADMIN`/`MEMBER` 和 `ACTIVE`/`REMOVED`，移除成员保留历史；变更命令保存原响应快照并使用追加式审计，重放不会重复产生业务变更或审计。
 - OpenAPI 0.22.0、Flyway V23 和 `AssetFolderContractTests` 已覆盖一层文件夹创建/重命名/删除、成员只读、管理员写入、视频同项目分类/未分类、大小写重名、跨项目复合外键、并发单写和审计失败回滚。删除文件夹只清空 `clip_asset.folder_id` 并递增资产版本，不删除视频或移动对象。
-- 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹和分类 API 已使用 Membership 守卫，但既有上传、相机配置和资产目录接口尚未统一接入；视频列表的文件夹筛选、真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 也未完成，因此两项需求仍为 `PI`。
+- 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹/分类、全部上传入口和 Camera 配置已使用 Membership 守卫；项目成员可上传，Camera 配置要求项目 ADMIN，批次 Abort 的管理员判断来自项目 Membership。资产目录仍需显式项目上下文和 Membership 接入，视频列表的文件夹筛选、真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 也未完成，因此两项需求仍为 `PI`。
 
 ## 4. 非功能需求追踪
 

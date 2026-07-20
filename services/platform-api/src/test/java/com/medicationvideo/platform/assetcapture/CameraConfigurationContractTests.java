@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,12 +22,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CameraConfigurationContractTests {
 
-	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+	private static final String TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
+	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
@@ -47,9 +51,19 @@ class CameraConfigurationContractTests {
 
 	@BeforeEach
 	void clearCameraConfiguration() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.memberRepository.deleteAll();
 		this.configurationRepository.deleteAll();
 		this.channelRepository.deleteAll();
+	}
+
+	@AfterEach
+	void clearAdditionalProject() {
+		this.memberRepository.deleteAll();
+		this.configurationRepository.deleteAll();
+		this.channelRepository.deleteAll();
+		this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", OTHER_PROJECT_ID);
+		this.jdbcTemplate.update("DELETE FROM project WHERE project_id = ?", OTHER_PROJECT_ID);
 	}
 
 	@Test
@@ -137,6 +151,19 @@ class CameraConfigurationContractTests {
 	@Test
 	void enforcesProjectScopeForConfigurationAndMembers() throws Exception {
 		provisionChannel(OTHER_PROJECT_ID, "other-project-channel")
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
+		provisionChannel(OTHER_PROJECT_ID, "other-authorized-channel")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.project_id").value(OTHER_PROJECT_ID.toString()));
+
+		this.mockMvc.perform(put(
+				"/api/v1/projects/{projectId}/camera-channels/{provisioningKey}",
+				PROJECT_ID,
+				"member-denied-channel")
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 

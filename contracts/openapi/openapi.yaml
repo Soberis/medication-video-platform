@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.22.0
+  version: 0.23.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     manage their ADMIN/MEMBER memberships, list only projects visible to the authenticated member,
     manage one-level project folders and classify ClipAssets without changing media ownership,
-    initialize an upload
+    require an ACTIVE project membership for every upload command and an ACTIVE ADMIN membership
+    for server-side camera configuration, initialize an upload
     batch, register its immutable file manifest, create an S3-compatible multipart session,
     issue short-lived part upload authorizations, confirm storage-backed parts, recover upload
     progress, complete a file with final size and SHA-256 verification, abort or expire an incomplete
@@ -39,7 +40,10 @@ tags:
       Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Membership
       changes are project-scoped, administrator-controlled, idempotent and append-only audited.
   - name: Uploads
-    description: Upload batch lifecycle owned by the assetcapture module.
+    description: >-
+      Upload batch lifecycle owned by the assetcapture module. Every command and read requires an
+      ACTIVE membership in the owning project; a batch outside that scope is hidden as
+      UPLOAD_BATCH_NOT_FOUND.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -668,9 +672,10 @@ paths:
         - Uploads
       summary: Initialize an upload batch
       description: >-
-        Creates a durable upload batch identity without proxying file bytes or starting multipart
-        upload. Reusing the same Idempotency-Key in the same project with an identical request
-        returns the original result. Reusing it with different content returns a conflict.
+        Requires an ACTIVE ADMIN or MEMBER membership in project_id. Creates a durable upload batch
+        identity without proxying file bytes or starting multipart upload. Reusing the same
+        Idempotency-Key in the same project with an identical request returns the original result.
+        Reusing it with different content returns a conflict.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -699,8 +704,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The authenticated identity cannot write to the requested project.
+        "404":
+          description: The project does not exist in the caller's ACTIVE membership scope.
           content:
             application/problem+json:
               schema:
@@ -718,7 +723,8 @@ paths:
         - Uploads
       summary: Read upload batch progress
       description: >-
-        Returns the current project-scoped batch summary derived from persisted platform state.
+        Requires an ACTIVE membership in the batch's owning project and returns the current
+        project-scoped batch summary derived from persisted platform state.
         This safe read does not list or mutate object storage. Uploaded Part and byte totals may
         therefore lag a direct upload until the client explicitly confirms or reconciles Parts.
       parameters:
@@ -766,8 +772,9 @@ paths:
         - Uploads
       summary: Terminate an incomplete upload batch and durably schedule storage cleanup
       description: >-
-        Idempotently terminates an INITIATED or UPLOADING batch. Only the recorded batch
-        initiator or a project administrator may call this command. If the server TTL has already
+        Idempotently terminates an INITIATED or UPLOADING batch. Only the recorded batch initiator
+        with an ACTIVE membership or an ACTIVE project ADMIN may call this command. A local token's
+        global authority is not treated as project administration. If the server TTL has already
         elapsed, the command records EXPIRED rather than incorrectly recording a user abort.
         Batch and file terminal states, cleanup tasks and an append-only audit event commit in one
         database transaction; S3 Multipart Abort or deletion of an already completed abandoned
@@ -1492,7 +1499,8 @@ paths:
         - Camera Configuration
       summary: Provision a stable logical camera channel
       description: >-
-        Administrative or deployment-time operation that maps a project-scoped, non-secret
+        Requires an ACTIVE ADMIN membership. This administrative or deployment-time operation maps
+        a project-scoped, non-secret
         provisioning key to an immutable platform CameraChannel ID. Repeating the same natural-key
         PUT returns the original resource. The provisioning key is a technical integration key,
         not a user-facing alias or hardware credential. This operation does not contact or control
@@ -1538,7 +1546,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The authenticated identity cannot configure the requested project.
+          description: The caller is an ACTIVE project MEMBER but not an ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist in the caller's ACTIVE membership scope.
           content:
             application/problem+json:
               schema:
@@ -1550,7 +1564,8 @@ paths:
         - Camera Configuration
       summary: Create an immutable CameraSet configuration version
       description: >-
-        Administrative or deployment-time operation that creates an immutable, project-scoped
+        Requires an ACTIVE ADMIN membership. This administrative or deployment-time operation
+        creates an immutable, project-scoped
         CameraSet version from previously provisioned logical channels. Member order in the request
         is insignificant; camera_index defines canonical order. Repeating the same natural-key PUT
         with equivalent content returns the original resource, while changed content for an existing
@@ -1611,7 +1626,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The authenticated identity cannot configure the requested project.
+          description: The caller is an ACTIVE project MEMBER but not an ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist in the caller's ACTIVE membership scope.
           content:
             application/problem+json:
               schema:
