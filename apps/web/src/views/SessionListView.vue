@@ -13,7 +13,8 @@ import {
   ElTableColumn,
   ElTag,
 } from 'element-plus'
-import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   CatalogApiError,
@@ -34,6 +35,8 @@ import {
 
 defineOptions({ name: 'SessionListView' })
 
+const route = useRoute()
+const projectId = computed(() => String(route.params.projectId ?? ''))
 const deviceId = ref('')
 const assemblyStatus = ref<CaptureSessionAssemblyStatus | ''>('')
 const qualityStatus = ref<CaptureQualityStatus | ''>('')
@@ -59,6 +62,7 @@ async function loadPage(append = false) {
   requestId.value = null
   try {
     const page = await listCaptureSessions(
+      projectId.value,
       activeFilters.value,
       append ? nextCursor.value : null,
       request.signal,
@@ -105,7 +109,15 @@ function resetFilters() {
   applyFilters()
 }
 
-onMounted(() => void loadPage())
+watch(
+  projectId,
+  () => {
+    items.value = []
+    nextCursor.value = null
+    void loadPage()
+  },
+  { immediate: true },
+)
 onUnmounted(() => activeRequest?.abort())
 </script>
 
@@ -208,7 +220,15 @@ onUnmounted(() => activeRequest?.abort())
       </ElTableColumn>
       <ElTableColumn label="操作" width="100" fixed="right">
         <template #default="{ row }">
-          <RouterLink class="text-link" :to="`/sessions/${row.capture_session_id}`">查看详情</RouterLink>
+          <RouterLink
+            class="text-link"
+            :to="{
+              name: 'session-detail',
+              params: { projectId, id: row.capture_session_id },
+            }"
+          >
+            查看详情
+          </RouterLink>
         </template>
       </ElTableColumn>
     </ElTable>

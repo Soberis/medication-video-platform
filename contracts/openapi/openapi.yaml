@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.23.0
+  version: 0.24.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     manage their ADMIN/MEMBER memberships, list only projects visible to the authenticated member,
@@ -15,8 +15,9 @@ info:
     bindings, read batch/file upload progress and cleanup state for operator visibility,
     provision immutable server-side CameraChannel and CameraSet configuration identities, atomically
     assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
-    metadata object, query project-scoped CaptureSession and ClipAsset read models with bounded
-    cursor pagination, and create and read project-scoped media probe jobs that freeze the input
+    metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
+    models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
+    filters, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -1645,18 +1646,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /capture-sessions:
+  /projects/{project_id}/capture-sessions:
     get:
       operationId: listCaptureSessions
       tags:
         - Asset Catalog
-      summary: List medication-preparation capture sessions in the authenticated project
+      summary: List medication-preparation capture sessions in one authorized project
       description: >-
         Returns a bounded keyset page ordered by device_time_utc and capture_session_id descending.
         bound_stream_count means a ClipAsset is associated with a CameraStream; received_camera_count
-        only counts media that reached INGESTED. The project scope comes from the bearer identity and
-        cannot be supplied or overridden by query parameters.
+        only counts media that reached INGESTED. The authenticated actor must hold an ACTIVE
+        Membership in the explicit project path.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: device_id
           in: query
           schema:
@@ -1722,7 +1724,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /capture-sessions/{capture_session_id}:
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The requested project does not exist, is inactive or is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/capture-sessions/{capture_session_id}:
     get:
       operationId: getCaptureSession
       tags:
@@ -1730,8 +1744,10 @@ paths:
       summary: Get one capture session and its frozen multi-camera structure
       description: >-
         Returns the CameraSetSnapshot and CameraStreams only when the session belongs to the
-        authenticated project. A session in another project is hidden as not found.
+        requested project. The actor must hold an ACTIVE Membership in that project; a session in
+        another project is hidden as not found.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: capture_session_id
           in: path
           required: true
@@ -1756,24 +1772,32 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-        "404":
-          description: Session not found in the authenticated project.
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /clip-assets:
+        "404":
+          description: Requested project or session not found in the actor's visible scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets:
     get:
       operationId: listClipAssets
       tags:
         - Asset Catalog
-      summary: List single-camera video assets in the authenticated project
+      summary: List single-camera video assets in one authorized project
       description: >-
         Returns a bounded keyset page ordered by record_start_utc when bound, otherwise asset
         created_at, then clip_asset_id descending. session_binding is null for a verified asset that
         has not yet been assembled into a CaptureSession. Storage addresses, credentials and preview
-        URLs are intentionally excluded.
+        URLs are intentionally excluded. folder_id selects one real project folder; unclassified=true
+        selects the null-folder query projection. They cannot be combined.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: capture_session_id
           in: query
           schema:
@@ -1802,6 +1826,18 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/ClipAssetStatus"
+        - name: folder_id
+          in: query
+          description: Return only assets classified in this project folder.
+          schema:
+            type: string
+            format: uuid
+        - name: unclassified
+          in: query
+          description: Return only assets whose folder_id is null. Cannot be true with folder_id.
+          schema:
+            type: boolean
+            default: false
         - name: recorded_from
           in: query
           description: Inclusive lower bound on record_start_utc or unbound asset created_at.
@@ -1852,16 +1888,29 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /clip-assets/{clip_asset_id}:
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The requested project does not exist, is inactive or is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}:
     get:
       operationId: getClipAsset
       tags:
         - Asset Catalog
       summary: Get one video asset and its optional session binding
       description: >-
-        Returns only persisted catalog metadata in the authenticated project. This endpoint does not
+        Returns only persisted catalog metadata in the requested authorized project. This endpoint does not
         authorize raw/deidentified preview, return a download URL or expose object-storage location.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: clip_asset_id
           in: path
           required: true
@@ -1886,24 +1935,31 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-        "404":
-          description: ClipAsset not found in the authenticated project.
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /capture-event-logs:
+        "404":
+          description: Requested project or ClipAsset not found in the actor's visible scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/capture-event-logs:
     get:
       operationId: listCaptureEventLogs
       tags:
         - Asset Catalog
-      summary: List immutable edge event-log object indexes in the authenticated project
+      summary: List immutable edge event-log object indexes in one authorized project
       description: >-
         Returns a bounded keyset page ordered by indexed_at and capture_event_log_id descending.
         Each item identifies one verified EVENT_LOG upload object. The service does not parse event
         records, infer hardware actions, expose object-storage locations or return download URLs.
-        Project scope comes only from the bearer identity.
+        The authenticated actor must hold an ACTIVE Membership in the explicit project path.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: batch_id
           in: query
           schema:
@@ -1966,17 +2022,30 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /capture-event-logs/{capture_event_log_id}:
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The requested project does not exist, is inactive or is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/capture-event-logs/{capture_event_log_id}:
     get:
       operationId: getCaptureEventLog
       tags:
         - Asset Catalog
       summary: Get one immutable event-log object index
       description: >-
-        Returns only persisted object metadata when the index belongs to the authenticated project.
+        Returns only persisted object metadata when the index belongs to the requested authorized project.
         An index in another project is hidden as not found. Event payload records and storage
         addresses are intentionally excluded.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: capture_event_log_id
           in: path
           required: true
@@ -2001,8 +2070,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
-          description: Event-log object index not found in the authenticated project.
+          description: Requested project or event-log index not found in the actor's visible scope.
           content:
             application/problem+json:
               schema:

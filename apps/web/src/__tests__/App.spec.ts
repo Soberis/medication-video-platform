@@ -3,18 +3,38 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/App.vue'
-import SessionListView from '@/views/SessionListView.vue'
+import ProjectListView from '@/views/ProjectListView.vue'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('App', () => {
-  it('uses capture sessions as the default business entry', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ items: [], next_cursor: null })))
+  it('uses the authorized project list as the explicit business entry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              project_id: '30000000-0000-4000-8000-000000000001',
+              display_name: '合成测试项目',
+              status: 'ACTIVE',
+              current_role: 'ADMIN',
+              created_at: '2026-07-20T00:00:00Z',
+            },
+          ],
+        }),
+      ),
+    )
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
-        { path: '/', redirect: '/sessions' },
-        { path: '/sessions', component: SessionListView },
+        { path: '/', redirect: '/projects' },
+        { path: '/projects', name: 'project-list', component: ProjectListView },
+        {
+          path: '/projects/:projectId/sessions',
+          name: 'session-list',
+          component: { template: '<div>Session list</div>' },
+        },
       ],
     })
 
@@ -29,9 +49,9 @@ describe('App', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('配药视频数据管理平台')
-    expect(wrapper.text()).toContain('配药操作记录')
-    expect(wrapper.text()).toContain('数据由边端自动上传')
-    expect(router.currentRoute.value.path).toBe('/sessions')
+    expect(wrapper.text()).toContain('授权项目')
+    expect(wrapper.text()).toContain('合成测试项目')
+    expect(router.currentRoute.value.path).toBe('/projects')
   })
 })
 

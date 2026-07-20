@@ -3,8 +3,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AssetDetailView from '@/views/AssetDetailView.vue'
+import AssetListView from '@/views/AssetListView.vue'
 import SessionListView from '@/views/SessionListView.vue'
 
+const projectId = '30000000-0000-4000-8000-000000000001'
 const sessionId = '40000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 
@@ -41,7 +43,11 @@ describe('catalog views', () => {
         }),
       ),
     )
-    const router = testRouter('/sessions', SessionListView)
+    const router = testRouter(
+      `/projects/${projectId}/sessions`,
+      '/projects/:projectId/sessions',
+      SessionListView,
+    )
     await router.isReady()
     const wrapper = mount(SessionListView, { global: { plugins: [router] } })
     await flushPromises()
@@ -50,6 +56,10 @@ describe('catalog views', () => {
     expect(wrapper.text()).toContain('已入库 0')
     expect(wrapper.text()).toContain('待检测')
     expect(wrapper.text()).toContain('组装中')
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/v1/projects/${projectId}/capture-sessions`),
+      expect.any(Object),
+    )
   })
 
   it('explains why preview is unavailable without rendering a player or storage location', async () => {
@@ -65,13 +75,18 @@ describe('catalog views', () => {
           size_bytes: 8_388_608,
           sha256: 'a'.repeat(64),
           status: 'UPLOADED',
+          folder_id: null,
           session_binding: null,
           created_at: '2026-07-15T01:03:03Z',
           updated_at: '2026-07-15T01:03:03Z',
         }),
       ),
     )
-    const router = testRouter(`/assets/${assetId}`, AssetDetailView)
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
     await router.isReady()
     const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
     await flushPromises()
@@ -79,16 +94,106 @@ describe('catalog views', () => {
     expect(wrapper.text()).toContain('视频预览尚未开放')
     expect(wrapper.text()).toContain('媒体处理、隐私评估和预览授权')
     expect(wrapper.text()).toContain('尚未绑定到 CaptureSession')
+    expect(wrapper.text()).toContain('未分类')
     expect(wrapper.find('video').exists()).toBe(false)
     expect(wrapper.html()).not.toContain('object_key')
     expect(wrapper.html()).not.toContain('storage_bucket')
   })
+
+  it('loads project folders and renders the asset classification in the explicit project scope', async () => {
+    const folderId = 'a0000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.includes('/asset-folders')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                folder_id: folderId,
+                project_id: projectId,
+                display_name: '待标注',
+                version: 0,
+                created_at: '2026-07-15T01:03:03Z',
+                updated_at: '2026-07-15T01:03:03Z',
+              },
+            ],
+          }),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              clip_asset_id: assetId,
+              batch_id: '60000000-0000-4000-8000-000000000001',
+              source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+              client_file_id: '90000000-0000-4000-8000-000000000001',
+              content_type: 'video/mp4',
+              size_bytes: 8_388_608,
+              sha256: 'a'.repeat(64),
+              status: 'UPLOADED',
+              folder_id: folderId,
+              session_binding: null,
+              created_at: '2026-07-15T01:03:03Z',
+              updated_at: '2026-07-15T01:03:03Z',
+            },
+          ],
+          next_cursor: null,
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = testRouter(
+      `/projects/${projectId}/assets`,
+      '/projects/:projectId/assets',
+      AssetListView,
+    )
+    await router.isReady()
+    const wrapper = mount(AssetListView, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('待标注')
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/v1/projects/${projectId}/clip-assets`),
+      expect.any(Object),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/asset-folders`,
+      expect.any(Object),
+    )
+  })
 })
 
-function testRouter(path: string, component: typeof SessionListView | typeof AssetDetailView) {
+function testRouter(
+  path: string,
+  routePath: string,
+  component: typeof SessionListView | typeof AssetDetailView | typeof AssetListView,
+) {
+  const EmptyView = { template: '<div />' }
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: path.includes(':') ? path : path.replace(assetId, ':id'), component }],
+    routes: [
+      {
+        path: '/projects/:projectId/sessions',
+        name: 'session-list',
+        component: routePath === '/projects/:projectId/sessions' ? component : EmptyView,
+      },
+      {
+        path: '/projects/:projectId/sessions/:id',
+        name: 'session-detail',
+        component: EmptyView,
+      },
+      {
+        path: '/projects/:projectId/assets',
+        name: 'asset-list',
+        component: routePath === '/projects/:projectId/assets' ? component : EmptyView,
+      },
+      {
+        path: '/projects/:projectId/assets/:id',
+        name: 'asset-detail',
+        component: routePath === '/projects/:projectId/assets/:id' ? component : EmptyView,
+      },
+    ],
   })
   void router.push(path)
   return router

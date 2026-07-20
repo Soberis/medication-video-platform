@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.medicationvideo.platform.iamproject.ProjectAccessException;
+import com.medicationvideo.platform.iamproject.ProjectActor;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -21,17 +24,22 @@ import jakarta.validation.constraints.Size;
 
 @Validated
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/projects/{projectId}")
 class AssetCatalogController {
 
 	private final AssetCatalogQueryService service;
+	private final AssetCaptureProjectAuthorizer authorizer;
 
-	AssetCatalogController(AssetCatalogQueryService service) {
+	AssetCatalogController(
+			AssetCatalogQueryService service,
+			AssetCaptureProjectAuthorizer authorizer) {
 		this.service = service;
+		this.authorizer = authorizer;
 	}
 
 	@GetMapping("/capture-sessions")
 	ResponseEntity<CaptureSessionListResponse> listCaptureSessions(
+			@PathVariable UUID projectId,
 			@RequestParam(name = "device_id", required = false)
 			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
 			@RequestParam(name = "assembly_status", required = false)
@@ -46,8 +54,9 @@ class AssetCatalogController {
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.listCaptureSessions(
-				actor.projectId(),
+				projectId,
 				deviceId,
 				assemblyStatus,
 				qualityStatus,
@@ -60,14 +69,18 @@ class AssetCatalogController {
 
 	@GetMapping("/capture-sessions/{captureSessionId}")
 	ResponseEntity<CaptureSessionResponse> getCaptureSession(
+			@PathVariable UUID projectId,
 			@PathVariable UUID captureSessionId,
 			Authentication authentication) {
-		var response = this.service.getCaptureSession(requireActor(authentication).projectId(), captureSessionId);
+		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
+		var response = this.service.getCaptureSession(projectId, captureSessionId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/clip-assets")
 	ResponseEntity<ClipAssetListResponse> listClipAssets(
+			@PathVariable UUID projectId,
 			@RequestParam(name = "capture_session_id", required = false) UUID captureSessionId,
 			@RequestParam(name = "batch_id", required = false) UUID batchId,
 			@RequestParam(name = "device_id", required = false)
@@ -75,6 +88,8 @@ class AssetCatalogController {
 			@RequestParam(name = "camera_role", required = false)
 			@Pattern(regexp = "^[A-Z][A-Z0-9_]{0,63}$") String cameraRole,
 			@RequestParam(required = false) ClipAssetStatus status,
+			@RequestParam(name = "folder_id", required = false) UUID folderId,
+			@RequestParam(defaultValue = "false") boolean unclassified,
 			@RequestParam(name = "recorded_from", required = false)
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
 			@RequestParam(name = "recorded_before", required = false)
@@ -83,13 +98,16 @@ class AssetCatalogController {
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.listClipAssets(
-				actor.projectId(),
+				projectId,
 				captureSessionId,
 				batchId,
 				deviceId,
 				cameraRole,
 				status,
+				folderId,
+				unclassified,
 				recordedFrom,
 				recordedBefore,
 				cursor,
@@ -99,14 +117,18 @@ class AssetCatalogController {
 
 	@GetMapping("/clip-assets/{clipAssetId}")
 	ResponseEntity<ClipAssetReadResponse> getClipAsset(
+			@PathVariable UUID projectId,
 			@PathVariable UUID clipAssetId,
 			Authentication authentication) {
-		var response = this.service.getClipAsset(requireActor(authentication).projectId(), clipAssetId);
+		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
+		var response = this.service.getClipAsset(projectId, clipAssetId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/capture-event-logs")
 	ResponseEntity<CaptureEventLogListResponse> listCaptureEventLogs(
+			@PathVariable UUID projectId,
 			@RequestParam(name = "batch_id", required = false) UUID batchId,
 			@RequestParam(name = "device_id", required = false)
 			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
@@ -118,8 +140,9 @@ class AssetCatalogController {
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.listCaptureEventLogs(
-				actor.projectId(),
+				projectId,
 				batchId,
 				deviceId,
 				indexedFrom,
@@ -131,17 +154,24 @@ class AssetCatalogController {
 
 	@GetMapping("/capture-event-logs/{captureEventLogId}")
 	ResponseEntity<CaptureEventLogReadResponse> getCaptureEventLog(
+			@PathVariable UUID projectId,
 			@PathVariable UUID captureEventLogId,
 			Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.getCaptureEventLog(
-				requireActor(authentication).projectId(),
+				projectId,
 				captureEventLogId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
-	private static UploadActor requireActor(Authentication authentication) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
-			throw new UploadBatchAuthorizationException();
+	private static ProjectActor requireActor(Authentication authentication) {
+		if (authentication == null
+				|| !(authentication.getPrincipal() instanceof ProjectActor actor)) {
+			throw new ProjectAccessException(
+					"PROJECT_ACCESS_DENIED",
+					"An authenticated project actor is required.",
+					403);
 		}
 		return actor;
 	}

@@ -1,6 +1,8 @@
 package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static com.medicationvideo.platform.support.ProjectMembershipTestData.MEMBER_ACTOR;
+import static com.medicationvideo.platform.support.ProjectMembershipTestData.ensureProject;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -49,6 +51,14 @@ class AssetCatalogQueryContractTests {
 	@BeforeEach
 	void clearState() {
 		deleteAllState();
+		ensureProject(this.jdbcTemplate, PROJECT_ID);
+		ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
+		this.jdbcTemplate.update(
+				"UPDATE membership SET status = 'REMOVED', removed_by = ?, removed_at = now() "
+						+ "WHERE project_id = ? AND actor_id = ?",
+				"local-synthetic-admin",
+				OTHER_PROJECT_ID,
+				MEMBER_ACTOR);
 	}
 
 	@AfterEach
@@ -74,7 +84,7 @@ class AssetCatalogQueryContractTests {
 				"OVERVIEW",
 				Instant.parse("2026-07-15T03:00:00Z"));
 
-		var firstPage = authorizedGet("/api/v1/capture-sessions?limit=1")
+		var firstPage = authorizedProjectGet("/capture-sessions?limit=1")
 				.andExpect(status().isOk())
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -91,13 +101,13 @@ class AssetCatalogQueryContractTests {
 				.get("next_cursor")
 				.asText();
 
-		authorizedGet("/api/v1/capture-sessions?limit=1&cursor=" + cursor)
+		authorizedProjectGet("/capture-sessions?limit=1&cursor=" + cursor)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
 				.andExpect(jsonPath("$.items[0].capture_session_id").value(earlier.captureSessionId().toString()))
 				.andExpect(jsonPath("$.next_cursor").doesNotExist());
 
-		authorizedGet("/api/v1/capture-sessions?device_id=device-earlier")
+		authorizedProjectGet("/capture-sessions?device_id=device-earlier")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
 				.andExpect(jsonPath("$.items[0].capture_session_id").value(earlier.captureSessionId().toString()));
@@ -116,7 +126,7 @@ class AssetCatalogQueryContractTests {
 				"OVERVIEW",
 				Instant.parse("2026-07-15T03:00:00Z"));
 
-		authorizedGet("/api/v1/capture-sessions/" + own.captureSessionId())
+		authorizedProjectGet("/capture-sessions/" + own.captureSessionId())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.capture_session_id").value(own.captureSessionId().toString()))
 				.andExpect(jsonPath("$.camera_set_snapshot.layout_version").value("layout-v1"))
@@ -125,7 +135,7 @@ class AssetCatalogQueryContractTests {
 				.andExpect(jsonPath("$.streams[0].camera_role").value("HANDS"))
 				.andExpect(jsonPath("$.streams[0].sync_status").value("WARNING"));
 
-		authorizedGet("/api/v1/capture-sessions/" + hidden.captureSessionId())
+		authorizedProjectGet("/capture-sessions/" + hidden.captureSessionId())
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error_code").value("CAPTURE_SESSION_NOT_FOUND"));
 	}
@@ -143,27 +153,55 @@ class AssetCatalogQueryContractTests {
 				"device-hidden",
 				"HANDS",
 				Instant.parse("2026-07-15T03:00:00Z"));
+		var folderId = insertFolder(PROJECT_ID, "Ready for review");
+		this.jdbcTemplate.update(
+				"UPDATE clip_asset SET folder_id = ? WHERE clip_asset_id = ?",
+				folderId,
+				own.clipAssetId());
 
-		authorizedGet("/api/v1/clip-assets?camera_role=HANDS")
+		authorizedProjectGet("/clip-assets?camera_role=HANDS")
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
 				.andExpect(jsonPath("$.items[0].clip_asset_id").value(own.clipAssetId().toString()))
 				.andExpect(jsonPath("$.items[0].session_binding.capture_session_id")
 						.value(own.captureSessionId().toString()))
 				.andExpect(jsonPath("$.items[0].session_binding.declared_sync_status").value("WARNING"))
+				.andExpect(jsonPath("$.items[0].folder_id").value(folderId.toString()))
 				.andExpect(jsonPath("$.items[0].storage_bucket").doesNotExist())
 				.andExpect(jsonPath("$.items[0].object_key").doesNotExist())
 				.andExpect(jsonPath("$.items[0].storage_etag").doesNotExist())
 				.andExpect(jsonPath("$.items[0].preview_url").doesNotExist());
 
-		authorizedGet("/api/v1/clip-assets/" + unbound)
+		authorizedProjectGet("/clip-assets/" + unbound)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.clip_asset_id").value(unbound.toString()))
 				.andExpect(jsonPath("$.session_binding").doesNotExist());
 
-		authorizedGet("/api/v1/clip-assets/" + hidden.clipAssetId())
+		authorizedProjectGet("/clip-assets/" + hidden.clipAssetId())
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+
+		authorizedProjectGet("/clip-assets?folder_id=" + folderId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.items[0].clip_asset_id").value(own.clipAssetId().toString()));
+
+		authorizedProjectGet("/clip-assets?unclassified=true")
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.items[0].clip_asset_id").value(unbound.toString()))
+				.andExpect(jsonPath("$.items[0].folder_id").doesNotExist());
+
+		authorizedProjectGet("/clip-assets?folder_id=" + folderId + "&unclassified=true")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("INVALID_FOLDER_FILTER"));
+	}
+
+	@Test
+	void requiresAnActiveMembershipForEveryExplicitProjectCatalog() throws Exception {
+		authorizedGet("/api/v1/projects/" + OTHER_PROJECT_ID + "/capture-sessions")
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 	}
 
 	@Test
@@ -181,7 +219,7 @@ class AssetCatalogQueryContractTests {
 				"device-hidden",
 				Instant.parse("2026-07-15T03:00:00Z"));
 
-		var firstPage = authorizedGet("/api/v1/capture-event-logs?device_id=device-own&limit=1")
+		var firstPage = authorizedProjectGet("/capture-event-logs?device_id=device-own&limit=1")
 				.andExpect(status().isOk())
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -198,38 +236,38 @@ class AssetCatalogQueryContractTests {
 				.get("next_cursor")
 				.asText();
 
-		authorizedGet("/api/v1/capture-event-logs?device_id=device-own&limit=1&cursor=" + cursor)
+		authorizedProjectGet("/capture-event-logs?device_id=device-own&limit=1&cursor=" + cursor)
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
 				.andExpect(jsonPath("$.items[0].capture_event_log_id").value(earlier.captureEventLogId().toString()))
 				.andExpect(jsonPath("$.next_cursor").doesNotExist());
 
-		authorizedGet("/api/v1/capture-event-logs?batch_id=" + later.batchId())
+		authorizedProjectGet("/capture-event-logs?batch_id=" + later.batchId())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1));
 
-		authorizedGet("/api/v1/capture-event-logs/" + later.captureEventLogId())
+		authorizedProjectGet("/capture-event-logs/" + later.captureEventLogId())
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.capture_event_log_id").value(later.captureEventLogId().toString()))
 				.andExpect(jsonPath("$.sha256").value(SHA256));
 
-		authorizedGet("/api/v1/capture-event-logs/" + hidden.captureEventLogId())
+		authorizedProjectGet("/capture-event-logs/" + hidden.captureEventLogId())
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error_code").value("CAPTURE_EVENT_LOG_NOT_FOUND"));
 	}
 
 	@Test
 	void rejectsInvalidCursorTimeRangeAndEnumWithStableErrors() throws Exception {
-		authorizedGet("/api/v1/capture-sessions?cursor=not-a-cursor")
+		authorizedProjectGet("/capture-sessions?cursor=not-a-cursor")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
 
-		authorizedGet("/api/v1/clip-assets?recorded_from=2026-07-16T00:00:00Z"
+		authorizedProjectGet("/clip-assets?recorded_from=2026-07-16T00:00:00Z"
 				+ "&recorded_before=2026-07-15T00:00:00Z")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("INVALID_TIME_RANGE"));
 
-		 authorizedGet("/api/v1/capture-sessions?assembly_status=finished")
+		 authorizedProjectGet("/capture-sessions?assembly_status=finished")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("INVALID_REQUEST"));
 	}
@@ -404,6 +442,20 @@ class AssetCatalogQueryContractTests {
 		return clipAssetId;
 	}
 
+	private UUID insertFolder(UUID projectId, String displayName) {
+		var folderId = UUID.randomUUID();
+		this.jdbcTemplate.update("""
+				INSERT INTO asset_folder (
+				    folder_id, project_id, display_name, created_by, created_at,
+				    updated_by, updated_at, row_version)
+				VALUES (?, ?, ?, 'local-synthetic-admin', now(), 'local-synthetic-admin', now(), 0)
+				""",
+				folderId,
+				projectId,
+				displayName);
+		return folderId;
+	}
+
 	private EventLogObject insertEventLogObject(UUID projectId, String deviceId, Instant indexedAt) {
 		var batchId = UUID.randomUUID();
 		var uploadFileId = UUID.randomUUID();
@@ -473,6 +525,10 @@ class AssetCatalogQueryContractTests {
 		return this.mockMvc.perform(get(path).header("Authorization", "Bearer " + TOKEN));
 	}
 
+	private ResultActions authorizedProjectGet(String path) throws Exception {
+		return authorizedGet("/api/v1/projects/" + PROJECT_ID + path);
+	}
+
 	private void deleteAllState() {
 		this.jdbcTemplate.update("DELETE FROM camera_stream");
 		this.jdbcTemplate.update("DELETE FROM camera_set_snapshot_member");
@@ -486,6 +542,10 @@ class AssetCatalogQueryContractTests {
 		this.jdbcTemplate.update("DELETE FROM camera_set_member");
 		this.jdbcTemplate.update("DELETE FROM camera_set");
 		this.jdbcTemplate.update("DELETE FROM camera_channel");
+		this.jdbcTemplate.update("DELETE FROM asset_classification_command");
+		this.jdbcTemplate.update("DELETE FROM asset_folder");
+		this.jdbcTemplate.update("DELETE FROM membership");
+		this.jdbcTemplate.update("DELETE FROM project");
 	}
 
 	private record SessionGraph(

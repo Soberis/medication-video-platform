@@ -153,7 +153,10 @@ class AssetFolderContractTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.version").value(1));
 
-		this.mockMvc.perform(get("/api/v1/clip-assets/{clipAssetId}", clipAssetId)
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}",
+					PROJECT_ID,
+					clipAssetId)
 					.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.folder_id").value(folderId.toString()));

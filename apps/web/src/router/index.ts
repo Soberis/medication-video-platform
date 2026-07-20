@@ -5,28 +5,35 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/sessions',
+      redirect: '/projects',
     },
     {
-      path: '/sessions',
+      path: '/projects',
+      name: 'project-list',
+      component: () => import('@/views/ProjectListView.vue'),
+    },
+    {
+      path: '/projects/:projectId/sessions',
       name: 'session-list',
       component: () => import('@/views/SessionListView.vue'),
     },
     {
-      path: '/sessions/:id',
+      path: '/projects/:projectId/sessions/:id',
       name: 'session-detail',
       component: () => import('@/views/SessionDetailView.vue'),
     },
     {
-      path: '/assets',
+      path: '/projects/:projectId/assets',
       name: 'asset-list',
       component: () => import('@/views/AssetListView.vue'),
     },
     {
-      path: '/assets/:id',
+      path: '/projects/:projectId/assets/:id',
       name: 'asset-detail',
       component: () => import('@/views/AssetDetailView.vue'),
     },
+    { path: '/sessions', redirect: '/projects' },
+    { path: '/assets', redirect: '/projects' },
     {
       path: '/uploads',
       name: 'upload-progress',

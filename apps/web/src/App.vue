@@ -1,5 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const projectId = computed(() => String(route.params.projectId ?? ''))
+const sessionsRoute = computed(() =>
+  projectId.value
+    ? { name: 'session-list', params: { projectId: projectId.value } }
+    : { name: 'project-list' },
+)
+const assetsRoute = computed(() =>
+  projectId.value
+    ? { name: 'asset-list', params: { projectId: projectId.value } }
+    : { name: 'project-list' },
+)
 </script>
 
 <template>
@@ -10,8 +25,9 @@ import { RouterLink, RouterView } from 'vue-router'
         <h1>配药视频数据管理平台</h1>
       </div>
       <nav class="primary-nav" aria-label="主导航">
-        <RouterLink to="/sessions">配药操作</RouterLink>
-        <RouterLink to="/assets">视频资产</RouterLink>
+        <RouterLink :to="{ name: 'project-list' }">项目</RouterLink>
+        <RouterLink :to="sessionsRoute">配药操作</RouterLink>
+        <RouterLink :to="assetsRoute">视频资产</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
       </nav>
     </header>

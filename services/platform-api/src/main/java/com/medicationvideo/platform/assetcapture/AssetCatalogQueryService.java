@@ -151,11 +151,18 @@ public class AssetCatalogQueryService {
 			String deviceId,
 			String cameraRole,
 			ClipAssetStatus status,
+			UUID folderId,
+			boolean unclassified,
 			Instant recordedFrom,
 			Instant recordedBefore,
 			String cursor,
 			int limit) {
 		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
+		if (folderId != null && unclassified) {
+			throw new AssetCatalogQueryException(
+					"INVALID_FOLDER_FILTER",
+					"folder_id and unclassified=true cannot be combined.");
+		}
 		var decodedCursor = decodeCursor(ASSET_CURSOR_KIND, cursor);
 		var recordedAtExpression = "COALESCE(stream.record_start_utc, asset.created_at)";
 		var sql = new StringBuilder("""
@@ -209,6 +216,13 @@ public class AssetCatalogQueryService {
 		if (status != null) {
 			sql.append(" AND asset.asset_status = :assetStatus\n");
 			parameters.addValue("assetStatus", status.name());
+		}
+		if (folderId != null) {
+			sql.append(" AND asset.folder_id = :folderId\n");
+			parameters.addValue("folderId", folderId);
+		}
+		else if (unclassified) {
+			sql.append(" AND asset.folder_id IS NULL\n");
 		}
 		if (recordedFrom != null) {
 			sql.append(" AND ").append(recordedAtExpression).append(" >= :recordedFrom\n");

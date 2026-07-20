@@ -17,6 +17,7 @@ import {
 defineOptions({ name: 'AssetDetailView' })
 
 const route = useRoute()
+const projectId = computed(() => String(route.params.projectId ?? ''))
 const assetId = computed(() => String(route.params.id ?? ''))
 const detail = shallowRef<ClipAssetRead | null>(null)
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
@@ -30,7 +31,7 @@ async function loadDetail() {
   activeRequest = request
   loadState.value = 'loading'
   try {
-    detail.value = await getClipAsset(assetId.value, request.signal)
+    detail.value = await getClipAsset(projectId.value, assetId.value, request.signal)
     if (activeRequest === request) loadState.value = 'success'
   } catch (error) {
     if (request.signal.aborted || activeRequest !== request) return
@@ -44,13 +45,13 @@ async function loadDetail() {
   }
 }
 
-watch(assetId, () => void loadDetail(), { immediate: true })
+watch([projectId, assetId], () => void loadDetail(), { immediate: true })
 onUnmounted(() => activeRequest?.abort())
 </script>
 
 <template>
   <nav class="breadcrumb" aria-label="面包屑">
-    <RouterLink to="/assets">视频资产</RouterLink>
+    <RouterLink :to="{ name: 'asset-list', params: { projectId } }">视频资产</RouterLink>
     <span aria-hidden="true">/</span>
     <span>详情</span>
   </nav>
@@ -85,6 +86,10 @@ onUnmounted(() => activeRequest?.abort())
       <ElDescriptions :column="2" border>
         <ElDescriptionsItem label="内容类型">{{ detail.content_type }}</ElDescriptionsItem>
         <ElDescriptionsItem label="文件大小">{{ formatBytes(detail.size_bytes) }}</ElDescriptionsItem>
+        <ElDescriptionsItem label="文件夹">
+          <code v-if="detail.folder_id">{{ detail.folder_id }}</code>
+          <span v-else>未分类</span>
+        </ElDescriptionsItem>
         <ElDescriptionsItem label="批次 ID"><code>{{ detail.batch_id }}</code></ElDescriptionsItem>
         <ElDescriptionsItem label="源上传文件 ID"><code>{{ detail.source_upload_file_id }}</code></ElDescriptionsItem>
         <ElDescriptionsItem label="SHA-256" :span="2"><code class="mono-wrap">{{ detail.sha256 }}</code></ElDescriptionsItem>
@@ -97,7 +102,13 @@ onUnmounted(() => activeRequest?.abort())
       <template #header><strong>Session 与相机绑定</strong></template>
       <ElDescriptions v-if="detail.session_binding" :column="2" border>
         <ElDescriptionsItem label="所属 Session">
-          <RouterLink class="text-link" :to="`/sessions/${detail.session_binding.capture_session_id}`">
+          <RouterLink
+            class="text-link"
+            :to="{
+              name: 'session-detail',
+              params: { projectId, id: detail.session_binding.capture_session_id },
+            }"
+          >
             {{ detail.session_binding.capture_session_id }}
           </RouterLink>
         </ElDescriptionsItem>

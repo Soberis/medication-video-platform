@@ -25,6 +25,7 @@ import {
 defineOptions({ name: 'SessionDetailView' })
 
 const route = useRoute()
+const projectId = computed(() => String(route.params.projectId ?? ''))
 const sessionId = computed(() => String(route.params.id ?? ''))
 const detail = shallowRef<CaptureSessionDetail | null>(null)
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
@@ -38,7 +39,7 @@ async function loadDetail() {
   activeRequest = request
   loadState.value = 'loading'
   try {
-    detail.value = await getCaptureSession(sessionId.value, request.signal)
+    detail.value = await getCaptureSession(projectId.value, sessionId.value, request.signal)
     if (activeRequest === request) loadState.value = 'success'
   } catch (error) {
     if (request.signal.aborted || activeRequest !== request) return
@@ -52,13 +53,13 @@ async function loadDetail() {
   }
 }
 
-watch(sessionId, () => void loadDetail(), { immediate: true })
+watch([projectId, sessionId], () => void loadDetail(), { immediate: true })
 onUnmounted(() => activeRequest?.abort())
 </script>
 
 <template>
   <nav class="breadcrumb" aria-label="面包屑">
-    <RouterLink to="/sessions">配药操作记录</RouterLink>
+    <RouterLink :to="{ name: 'session-list', params: { projectId } }">配药操作记录</RouterLink>
     <span aria-hidden="true">/</span>
     <span>详情</span>
   </nav>
@@ -155,7 +156,12 @@ onUnmounted(() => activeRequest?.abort())
         </ElTableColumn>
         <ElTableColumn label="视频资产" width="100" fixed="right">
           <template #default="{ row }">
-            <RouterLink class="text-link" :to="`/assets/${row.clip_asset_id}`">查看资产</RouterLink>
+            <RouterLink
+              class="text-link"
+              :to="{ name: 'asset-detail', params: { projectId, id: row.clip_asset_id } }"
+            >
+              查看资产
+            </RouterLink>
           </template>
         </ElTableColumn>
       </ElTable>

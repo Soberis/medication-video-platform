@@ -107,6 +107,7 @@ export interface ClipAssetRead {
   size_bytes: number
   sha256: string
   status: ClipAssetStatus
+  folder_id: string | null
   session_binding: ClipAssetSessionBinding | null
   created_at: string
   updated_at: string
@@ -131,6 +132,8 @@ export interface ClipAssetFilters {
   deviceId?: string
   cameraRole?: string
   status?: ClipAssetStatus
+  folderId?: string
+  unclassified?: boolean
   recordedFrom?: string
   recordedBefore?: string
 }
@@ -145,8 +148,10 @@ interface ApiErrorBody {
 const errorMessages: Record<string, string> = {
   INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
   INVALID_TIME_RANGE: '拍摄时间范围无效，开始时间必须早于结束时间。',
+  INVALID_FOLDER_FILTER: '文件夹和未分类筛选不能同时使用。',
   CAPTURE_SESSION_NOT_FOUND: '未找到该配药操作记录，或它不属于当前项目。',
   CLIP_ASSET_NOT_FOUND: '未找到该视频资产，或它不属于当前项目。',
+  PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -171,6 +176,7 @@ export class CatalogApiError extends Error {
 }
 
 export function listCaptureSessions(
+  projectId: string,
   filters: CaptureSessionFilters,
   cursor: string | null,
   signal?: AbortSignal,
@@ -183,19 +189,24 @@ export function listCaptureSessions(
   add(query, 'recorded_before', filters.recordedBefore)
   add(query, 'cursor', cursor ?? undefined)
   return readJson<CatalogPage<CaptureSessionListItem>>(
-    `/api/v1/capture-sessions?${query.toString()}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions?${query.toString()}`,
     signal,
   )
 }
 
-export function getCaptureSession(captureSessionId: string, signal?: AbortSignal) {
+export function getCaptureSession(
+  projectId: string,
+  captureSessionId: string,
+  signal?: AbortSignal,
+) {
   return readJson<CaptureSessionDetail>(
-    `/api/v1/capture-sessions/${encodeURIComponent(captureSessionId)}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions/${encodeURIComponent(captureSessionId)}`,
     signal,
   )
 }
 
 export function listClipAssets(
+  projectId: string,
   filters: ClipAssetFilters,
   cursor: string | null,
   signal?: AbortSignal,
@@ -206,14 +217,22 @@ export function listClipAssets(
   add(query, 'device_id', filters.deviceId)
   add(query, 'camera_role', filters.cameraRole)
   add(query, 'status', filters.status)
+  add(query, 'folder_id', filters.folderId)
+  if (filters.unclassified) query.set('unclassified', 'true')
   add(query, 'recorded_from', filters.recordedFrom)
   add(query, 'recorded_before', filters.recordedBefore)
   add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<ClipAssetRead>>(`/api/v1/clip-assets?${query.toString()}`, signal)
+  return readJson<CatalogPage<ClipAssetRead>>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets?${query.toString()}`,
+    signal,
+  )
 }
 
-export function getClipAsset(clipAssetId: string, signal?: AbortSignal) {
-  return readJson<ClipAssetRead>(`/api/v1/clip-assets/${encodeURIComponent(clipAssetId)}`, signal)
+export function getClipAsset(projectId: string, clipAssetId: string, signal?: AbortSignal) {
+  return readJson<ClipAssetRead>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
+    signal,
+  )
 }
 
 async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {

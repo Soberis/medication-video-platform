@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ElAlert,
   ElButton,
   ElCard,
   ElDatePicker,
@@ -13,7 +14,8 @@ import {
   ElTableColumn,
   ElTag,
 } from 'element-plus'
-import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   CatalogApiError,
@@ -22,6 +24,7 @@ import {
   type ClipAssetRead,
   type ClipAssetStatus,
 } from '@/api/catalog'
+import { listAssetFolders, type AssetFolder } from '@/api/projects'
 import {
   assetStatusLabels,
   formatBytes,
@@ -32,11 +35,17 @@ import {
 
 defineOptions({ name: 'AssetListView' })
 
+const UNCLASSIFIED = '__unclassified__'
+const route = useRoute()
+const projectId = computed(() => String(route.params.projectId ?? ''))
 const captureSessionId = ref('')
 const batchId = ref('')
 const deviceId = ref('')
 const cameraRole = ref('')
 const assetStatus = ref<ClipAssetStatus | ''>('')
+const folderSelection = ref('')
+const folders = shallowRef<AssetFolder[]>([])
+const folderNames = computed(() => new Map(folders.value.map((folder) => [folder.folder_id, folder.display_name])))
 const recordedRange = shallowRef<[Date, Date] | null>(null)
 const activeFilters = shallowRef<ClipAssetFilters>({})
 const items = shallowRef<ClipAssetRead[]>([])
@@ -47,7 +56,7 @@ const errorCode = ref('')
 const errorMessage = ref('')
 let activeRequest: AbortController | null = null
 
-async function loadPage(append = false) {
+async function loadPage(append = false, refreshFolders = false) {
   activeRequest?.abort()
   const request = new AbortController()
   activeRequest = request
@@ -56,12 +65,18 @@ async function loadPage(append = false) {
   errorCode.value = ''
   errorMessage.value = ''
   try {
-    const page = await listClipAssets(
+    const pageRequest = listClipAssets(
+      projectId.value,
       activeFilters.value,
       append ? nextCursor.value : null,
       request.signal,
     )
+    const folderRequest = refreshFolders
+      ? listAssetFolders(projectId.value, request.signal)
+      : Promise.resolve(folders.value)
+    const [page, projectFolders] = await Promise.all([pageRequest, folderRequest])
     if (activeRequest !== request) return
+    folders.value = projectFolders
     items.value = append ? [...items.value, ...page.items] : page.items
     nextCursor.value = page.next_cursor
     loadState.value = 'success'
@@ -88,6 +103,11 @@ function applyFilters() {
     deviceId: deviceId.value.trim() || undefined,
     cameraRole: cameraRole.value.trim().toUpperCase() || undefined,
     status: assetStatus.value || undefined,
+    folderId:
+      folderSelection.value && folderSelection.value !== UNCLASSIFIED
+        ? folderSelection.value
+        : undefined,
+    unclassified: folderSelection.value === UNCLASSIFIED || undefined,
     recordedFrom: recordedRange.value?.[0].toISOString(),
     recordedBefore: recordedRange.value?.[1].toISOString(),
   }
@@ -102,11 +122,21 @@ function resetFilters() {
   deviceId.value = ''
   cameraRole.value = ''
   assetStatus.value = ''
+  folderSelection.value = ''
   recordedRange.value = null
   applyFilters()
 }
 
-onMounted(() => void loadPage())
+watch(
+  projectId,
+  () => {
+    folders.value = []
+    items.value = []
+    nextCursor.value = null
+    void loadPage(false, true)
+  },
+  { immediate: true },
+)
 onUnmounted(() => activeRequest?.abort())
 </script>
 
@@ -117,7 +147,7 @@ onUnmounted(() => activeRequest?.abort())
       <h2 id="assets-title">视频资产</h2>
       <p>用于跨 Session 排查单路视频状态；日常数据管理仍以一次配药操作为主。</p>
     </div>
-    <ElButton :loading="loadState === 'loading'" @click="loadPage(false)">刷新</ElButton>
+    <ElButton :loading="loadState === 'loading'" @click="loadPage(false, true)">刷新</ElButton>
   </section>
 
   <ElCard class="filter-card" shadow="never">
@@ -138,6 +168,18 @@ onUnmounted(() => activeRequest?.abort())
           />
         </ElSelect>
       </ElFormItem>
+      <ElFormItem label="文件夹">
+        <ElSelect v-model="folderSelection" placeholder="全部视频">
+          <ElOption label="全部视频" value="" />
+          <ElOption label="未分类" :value="UNCLASSIFIED" />
+          <ElOption
+            v-for="folder in folders"
+            :key="folder.folder_id"
+            :label="folder.display_name"
+            :value="folder.folder_id"
+          />
+        </ElSelect>
+      </ElFormItem>
       <ElFormItem label="拍摄时间">
         <ElDatePicker
           v-model="recordedRange"
@@ -154,6 +196,13 @@ onUnmounted(() => activeRequest?.abort())
       </div>
     </ElForm>
   </ElCard>
+
+  <ElAlert
+    title="文件夹只用于当前项目内的一层分类，不改变项目权限或对象存储位置。"
+    type="info"
+    :closable="false"
+    show-icon
+  />
 
   <div v-if="loadState === 'loading'" class="catalog-notice" role="status">正在读取视频资产…</div>
   <div v-else-if="loadState === 'error'" class="catalog-error" role="alert">
@@ -173,7 +222,13 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="Session / 视角" min-width="180">
         <template #default="{ row }">
           <template v-if="row.session_binding">
-            <RouterLink class="text-link" :to="`/sessions/${row.session_binding.capture_session_id}`">
+            <RouterLink
+              class="text-link"
+              :to="{
+                name: 'session-detail',
+                params: { projectId, id: row.session_binding.capture_session_id },
+              }"
+            >
               {{ row.session_binding.camera_role }} · #{{ row.session_binding.camera_index }}
             </RouterLink>
             <span class="cell-secondary">{{ formatDateTime(row.session_binding.record_start_utc) }}</span>
@@ -186,6 +241,11 @@ onUnmounted(() => activeRequest?.abort())
           <ElTag :type="statusTone(row.status)">
             {{ statusLabel(assetStatusLabels, row.status) }}
           </ElTag>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn label="文件夹" min-width="130">
+        <template #default="{ row }">
+          {{ row.folder_id ? (folderNames.get(row.folder_id) ?? '未知文件夹') : '未分类' }}
         </template>
       </ElTableColumn>
       <ElTableColumn label="流 / 质量" min-width="150">
@@ -202,7 +262,12 @@ onUnmounted(() => activeRequest?.abort())
       </ElTableColumn>
       <ElTableColumn label="操作" width="100" fixed="right">
         <template #default="{ row }">
-          <RouterLink class="text-link" :to="`/assets/${row.clip_asset_id}`">查看详情</RouterLink>
+          <RouterLink
+            class="text-link"
+            :to="{ name: 'asset-detail', params: { projectId, id: row.clip_asset_id } }"
+          >
+            查看详情
+          </RouterLink>
         </template>
       </ElTableColumn>
     </ElTable>
