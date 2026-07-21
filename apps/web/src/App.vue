@@ -7,6 +7,7 @@ const route = useRoute()
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const sessionsRoute = computed(() => ({ name: 'session-list', params: { projectId: projectId.value } }))
 const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: projectId.value } }))
+const foldersRoute = computed(() => ({ name: 'folder-management', params: { projectId: projectId.value } }))
 </script>
 
 <template>
@@ -22,6 +23,8 @@ const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: p
         <span v-else class="nav-unavailable" title="请先选择项目">配药操作</span>
         <RouterLink v-if="projectId" :to="assetsRoute">视频资产</RouterLink>
         <span v-else class="nav-unavailable" title="请先选择项目">视频资产</span>
+        <RouterLink v-if="projectId" :to="foldersRoute">文件夹</RouterLink>
+        <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
       </nav>

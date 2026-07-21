@@ -66,7 +66,7 @@ describe('App', () => {
     expect(wrapper.text()).toContain('配药视频数据管理平台')
     expect(wrapper.text()).toContain('授权项目')
     expect(wrapper.text()).toContain('合成测试项目')
-    expect(wrapper.findAll('.nav-unavailable')).toHaveLength(2)
+    expect(wrapper.findAll('.nav-unavailable')).toHaveLength(3)
     expect(wrapper.findAll('.router-link-active')).toHaveLength(1)
     expect(router.currentRoute.value.path).toBe('/projects')
   })

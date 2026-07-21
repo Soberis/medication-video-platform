@@ -518,6 +518,17 @@ code {
   gap: 12px;
 }
 
+.asset-classification-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.asset-classification-actions .el-select {
+  width: min(100%, 380px);
+}
+
 .heading-tags {
   display: flex;
   gap: 8px;
@@ -715,9 +726,14 @@ code {
   }
 
   .local-upload-actions,
+  .asset-classification-actions,
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .asset-classification-actions .el-select {
+    width: 100%;
   }
 
   .summary-heading,

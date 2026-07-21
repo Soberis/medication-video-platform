@@ -147,6 +147,75 @@ describe('catalog views', () => {
     expect(wrapper.findAll('button').some((button) => button.text() === '删除视频')).toBe(false)
   })
 
+  it('shows the existing project folders to an administrator classifying a video', async () => {
+    const folderId = 'a0000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            project_id: projectId,
+            display_name: '合成测试项目',
+            status: 'ACTIVE',
+            current_role: 'ADMIN',
+            created_at: '2026-07-15T01:03:03Z',
+          }),
+        )
+      }
+      if (url.endsWith('/asset-folders')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                folder_id: folderId,
+                project_id: projectId,
+                display_name: '待标注',
+                version: 0,
+                created_at: '2026-07-15T01:03:03Z',
+                updated_at: '2026-07-15T01:03:03Z',
+              },
+            ],
+          }),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          clip_asset_id: assetId,
+          batch_id: '60000000-0000-4000-8000-000000000001',
+          source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+          client_file_id: '90000000-0000-4000-8000-000000000001',
+          content_type: 'video/mp4',
+          size_bytes: 8_388_608,
+          sha256: 'a'.repeat(64),
+          status: 'UPLOADED',
+          folder_id: null,
+          session_binding: null,
+          created_at: '2026-07-15T01:03:03Z',
+          updated_at: '2026-07-15T01:03:03Z',
+        }),
+      )
+    })
+    vi.stubGlobal(
+      'fetch',
+      fetchMock,
+    )
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
+    await router.isReady()
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('视频分类')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/asset-folders`,
+      expect.any(Object),
+    )
+    expect(wrapper.findAll('button').some((button) => button.text() === '更新分类')).toBe(true)
+  })
+
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
     const folderId = 'a0000000-0000-4000-8000-000000000001'
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {

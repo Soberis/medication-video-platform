@@ -32,6 +32,11 @@ const router = createRouter({
       name: 'asset-detail',
       component: () => import('@/views/AssetDetailView.vue'),
     },
+    {
+      path: '/projects/:projectId/folders',
+      name: 'folder-management',
+      component: () => import('@/views/FolderManagementView.vue'),
+    },
     { path: '/sessions', redirect: '/projects' },
     { path: '/assets', redirect: '/projects' },
     {

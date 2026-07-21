@@ -1,10 +1,28 @@
 <script setup lang="ts">
-import { ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElMessage, ElMessageBox, ElTag } from 'element-plus'
+import {
+  ElAlert,
+  ElButton,
+  ElCard,
+  ElDescriptions,
+  ElDescriptionsItem,
+  ElMessage,
+  ElMessageBox,
+  ElOption,
+  ElSelect,
+  ElTag,
+} from 'element-plus'
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { CatalogApiError, deleteClipAsset, getClipAsset, type ClipAssetRead } from '@/api/catalog'
-import { getProject, type ProjectRole } from '@/api/projects'
+import {
+  assignClipAssetFolder,
+  getProject,
+  listAssetFolders,
+  unclassifyClipAsset,
+  type AssetFolder,
+  type ProjectRole,
+} from '@/api/projects'
 import {
   assetStatusLabels,
   declaredSyncStatusLabels,
@@ -29,10 +47,14 @@ const actionErrorCode = ref('')
 const actionErrorMessage = ref('')
 const isDeleting = ref(false)
 const projectRole = ref<ProjectRole | null>(null)
+const folders = shallowRef<AssetFolder[]>([])
+const selectedFolderId = ref('')
+const isClassifying = ref(false)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
+const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 
 async function loadDetail() {
   activeRequest?.abort()
@@ -41,7 +63,10 @@ async function loadDetail() {
   loadState.value = 'loading'
   try {
     detail.value = await getClipAsset(projectId.value, assetId.value, request.signal)
-    if (activeRequest === request) loadState.value = 'success'
+    if (activeRequest === request) {
+      selectedFolderId.value = detail.value.folder_id ?? ''
+      loadState.value = 'success'
+    }
   } catch (error) {
     if (request.signal.aborted || activeRequest !== request) return
     detail.value = null
@@ -61,7 +86,17 @@ async function loadProjectRole() {
   projectRole.value = null
   try {
     const project = await getProject(projectId.value, request.signal)
-    if (activeRoleRequest === request) projectRole.value = project.current_role
+    if (activeRoleRequest !== request) return
+    projectRole.value = project.current_role
+    if (project.current_role !== 'ADMIN') {
+      folders.value = []
+      return
+    }
+    try {
+      folders.value = await listAssetFolders(projectId.value, request.signal)
+    } catch {
+      if (!request.signal.aborted && activeRoleRequest === request) folders.value = []
+    }
   } catch {
     // Fail closed for destructive UI. The API remains the final authorization boundary.
     if (!request.signal.aborted && activeRoleRequest === request) projectRole.value = null
@@ -110,6 +145,28 @@ async function confirmDelete() {
     actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '视频删除未完成，请稍后重试。'
   } finally {
     isDeleting.value = false
+  }
+}
+
+async function updateClassification() {
+  if (!detail.value || !canDelete.value || !classificationChanged.value || isClassifying.value) return
+  isClassifying.value = true
+  actionErrorCode.value = ''
+  actionErrorMessage.value = ''
+  try {
+    if (selectedFolderId.value) {
+      await assignClipAssetFolder(projectId.value, assetId.value, selectedFolderId.value)
+      ElMessage.success('视频已归类到所选文件夹。')
+    } else {
+      await unclassifyClipAsset(projectId.value, assetId.value)
+      ElMessage.success('视频已取消分类。')
+    }
+    await loadDetail()
+  } catch (error) {
+    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'CLIP_ASSET_CLASSIFICATION_FAILED'
+    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '视频分类未更新，请稍后重试。'
+  } finally {
+    isClassifying.value = false
   }
 }
 </script>
@@ -169,6 +226,25 @@ async function confirmDelete() {
       :closable="false"
       show-icon
     />
+
+    <ElCard v-if="canDelete" class="detail-card" shadow="never">
+      <template #header><strong>视频分类</strong></template>
+      <p class="form-hint">仅在当前项目内归类；取消分类不会删除视频，也不会改变项目权限。</p>
+      <div class="asset-classification-actions">
+        <ElSelect v-model="selectedFolderId" aria-label="视频文件夹">
+          <ElOption label="未分类" value="" />
+          <ElOption
+            v-for="folder in folders"
+            :key="folder.folder_id"
+            :label="folder.display_name"
+            :value="folder.folder_id"
+          />
+        </ElSelect>
+        <ElButton type="primary" :disabled="!classificationChanged" :loading="isClassifying" @click="updateClassification">
+          更新分类
+        </ElButton>
+      </div>
+    </ElCard>
 
     <ElCard class="detail-card" shadow="never">
       <template #header><strong>资产事实</strong></template>
