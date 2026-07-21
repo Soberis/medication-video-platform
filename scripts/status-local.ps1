@@ -1,0 +1,91 @@
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSScriptRoot
+$envFile = Join-Path $root '.env'
+if (-not (Test-Path -LiteralPath $envFile)) {
+    $envFile = Join-Path $root '.env.example'
+}
+
+function Import-LocalEnvironment {
+    param([string]$Path)
+
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
+        $parts = $trimmed.Split('=', 2)
+        if ($parts.Count -eq 2 -and $parts[0]) {
+            [Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1], 'Process')
+        }
+    }
+}
+
+function Test-TcpPortInUse {
+    param([int]$Port)
+
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $connect = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
+        if (-not $connect.AsyncWaitHandle.WaitOne(500)) {
+            return $false
+        }
+        $client.EndConnect($connect)
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
+function Show-Listener {
+    param([string]$Name, [int]$Port)
+
+    if (-not (Test-TcpPortInUse $Port)) {
+        Write-Host "${Name}: not listening on $Port" -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "${Name}: listening on $Port" -ForegroundColor Green
+}
+
+Import-LocalEnvironment $envFile
+$composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
+$logDirectory = Join-Path $root 'logs/local'
+$runtimeFile = Join-Path $logDirectory 'managed-processes.json'
+
+Write-Host 'Infrastructure:' -ForegroundColor Cyan
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+    & docker compose --env-file $envFile -f $composeFile ps
+}
+else {
+    Write-Host 'Docker CLI is unavailable.' -ForegroundColor Yellow
+}
+
+Write-Host "`nApplications:" -ForegroundColor Cyan
+Show-Listener 'Core API' ([int]($env:PLATFORM_API_PORT ?? '8080'))
+Show-Listener 'Web app' ([int]($env:WEB_PORT ?? '5173'))
+
+if (Test-Path -LiteralPath $runtimeFile) {
+    Write-Host "`nProcesses started by start-local.ps1:" -ForegroundColor Cyan
+    try {
+        $managedProcesses = Get-Content -LiteralPath $runtimeFile -Raw | ConvertFrom-Json -AsHashtable
+        foreach ($key in $managedProcesses.Keys) {
+            $entry = $managedProcesses[$key]
+            $running = $null -ne (Get-Process -Id $entry.processId -ErrorAction SilentlyContinue)
+            $state = if ($running) { 'running' } else { 'stale record' }
+            Write-Host "- $($entry.name): $state (PID $($entry.processId)); log: $($entry.log)"
+        }
+    }
+    catch {
+        Write-Warning "Cannot read local process record: $runtimeFile"
+    }
+}
+else {
+    Write-Host "`nNo managed background process record exists." -ForegroundColor Yellow
+}
+
+Write-Host "`nLogs: $logDirectory" -ForegroundColor DarkGray

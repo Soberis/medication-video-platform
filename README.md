@@ -44,13 +44,33 @@ docs/                          需求、设计、ADR 和运行手册
 
 要求 Java 21、Node.js 22、pnpm 11、Python 3.12、uv 和 Docker Desktop。准确依赖版本由构建文件和 lockfile 冻结。
 
+后端和前端使用独立终端，便于查看日志和单独停止。Docker 只运行 PostgreSQL、RabbitMQ 和 S3；脚本以 Spring `local` profile 通过 Maven 启动 Core API。
+
+终端 A：启动基础设施与后端。
+
 ```powershell
 cd C:\Dev\Projects\medication-video-platform
-pnpm install --frozen-lockfile
 .\scripts\start-local.ps1
 ```
 
-Web 默认地址为 `http://localhost:5173/projects`，Core API 健康检查为 `http://localhost:8080/actuator/health`。本地日志位于 `logs/local/`。
+终端 B：首次先安装依赖，之后启动前端。
+
+```powershell
+cd C:\Dev\Projects\medication-video-platform
+pnpm install --frozen-lockfile
+pnpm run web:dev
+```
+
+Web 默认地址为 `http://localhost:5173/projects`，Core API 健康检查为 `http://localhost:8080/actuator/health`。前端在终端 B 用 `Ctrl+C` 停止；后端日志位于 `logs/local/`。
+
+```powershell
+.\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
+.\scripts\stop-local.ps1                # 停止脚本启动的后端/Worker 和本地容器，保留数据卷
+.\scripts\stop-local.ps1 -KeepInfrastructure
+.\scripts\start-local.ps1 -Worker       # 需要媒体处理时才启动 Worker
+```
+
+如果 8080 或 5173 是此前手工启动的进程，先用 `status-local.ps1` 确认；只有明确要结束它时才执行 `stop-local.ps1 -IncludeListeningApps`。
 
 ## 验证
 

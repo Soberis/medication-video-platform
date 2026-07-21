@@ -1,16 +1,9 @@
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
-const configuredWebPort = Number(process.env.WEB_PORT?.trim() || '5173')
-if (!Number.isInteger(configuredWebPort) || configuredWebPort < 1024 || configuredWebPort > 65535) {
-  throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
-}
-
-// Tokens remain in the development proxy. The browser can select only a synthetic role cookie.
-const memberBearerToken = process.env.DEV_BEARER_TOKEN?.trim()
-const adminBearerToken = process.env.DEV_ADMIN_BEARER_TOKEN?.trim()
+const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url))
 
 function selectedDevelopmentRole(cookieHeader: string | undefined) {
   return cookieHeader?.split(';').some((value) => value.trim() === 'mvp_dev_role=admin')
@@ -18,28 +11,47 @@ function selectedDevelopmentRole(cookieHeader: string | undefined) {
     : 'member'
 }
 
-export default defineConfig({
-  plugins: [vue()],
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+export default defineConfig(({ mode }) => {
+  // Load the repository .env for the development proxy only. Values without
+  // the VITE_ prefix remain unavailable to browser code. A fresh checkout
+  // falls back to .env.example, matching the local backend script.
+  const localEnvironment = loadEnv(mode, workspaceRoot, '')
+  const exampleEnvironment = loadEnv('example', workspaceRoot, '')
+  const environmentValue = (name: string) =>
+    process.env[name]?.trim() || localEnvironment[name]?.trim() || exampleEnvironment[name]?.trim()
+
+  const configuredWebPort = Number(environmentValue('WEB_PORT') || '5173')
+  if (!Number.isInteger(configuredWebPort) || configuredWebPort < 1024 || configuredWebPort > 65535) {
+    throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
+  }
+
+  const memberBearerToken = environmentValue('DEV_BEARER_TOKEN')
+  const adminBearerToken = environmentValue('DEV_ADMIN_BEARER_TOKEN')
+
+  return {
+    envDir: workspaceRoot,
+    plugins: [vue()],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
     },
-  },
-  server: {
-    host: '127.0.0.1',
-    port: configuredWebPort,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyRequest, request) => {
-            const role = selectedDevelopmentRole(request.headers.cookie)
-            const token = role === 'admin' ? adminBearerToken : memberBearerToken
-            if (token) proxyRequest.setHeader('Authorization', `Bearer ${token}`)
-          })
+    server: {
+      host: '127.0.0.1',
+      port: configuredWebPort,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyRequest, request) => {
+              const role = selectedDevelopmentRole(request.headers.cookie)
+              const token = role === 'admin' ? adminBearerToken : memberBearerToken
+              if (token) proxyRequest.setHeader('Authorization', `Bearer ${token}`)
+            })
+          },
         },
       },
     },
-  },
+  }
 })
