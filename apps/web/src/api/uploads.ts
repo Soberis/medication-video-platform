@@ -16,6 +16,15 @@ export type UploadFileStatus =
   | 'FAILED'
 
 export type UploadFileKind = 'VIDEO' | 'METADATA' | 'EVENT_LOG'
+export type UploadSourceType = 'HOSPITAL_REMOTE' | 'PLATFORM_LOCAL'
+
+export interface UploadBatchInit {
+  batch_id: string
+  project_id: string
+  upload_source_type: UploadSourceType
+}
+
+export interface UploadPartAuthorization { upload_url: string }
 
 export interface UploadBatchProgress {
   batch_id: string
@@ -110,6 +119,35 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     body.retryable === true,
     typeof body.request_id === 'string' ? body.request_id : null,
   )
+}
+
+async function command<T>(path: string, method: 'POST' | 'PUT', body?: unknown, idempotencyKey?: string): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  })
+  if (response.ok) return (await response.json()) as T
+  throw await uploadError(response)
+}
+
+async function uploadError(response: Response) {
+  let body: ApiErrorBody = {}
+  try { body = (await response.json()) as ApiErrorBody } catch { /* safe fallback */ }
+  return new UploadApiError(
+    typeof body.error_message === 'string' ? body.error_message : '上传请求失败，请稍后重试。',
+    typeof body.error_code === 'string' ? body.error_code : 'UPLOAD_REQUEST_FAILED',
+    body.retryable === true,
+    typeof body.request_id === 'string' ? body.request_id : null,
+  )
+}
+
+export function createLocalBatch(projectId: string, folderId: string | null, sizeBytes: number, manifestSha256: string, idempotencyKey: string) {
+  return command<UploadBatchInit>('/api/v1/upload/init', 'POST', {
+    project_id: projectId, device_id: 'PLATFORM_LOCAL', upload_source_type: 'PLATFORM_LOCAL',
+    asset_folder_id: folderId, file_count: 1, total_size_bytes: sizeBytes, manifest_sha256: manifestSha256,
+  }, idempotencyKey)
 }
 
 export function getUploadBatchProgress(batchId: string, signal?: AbortSignal) {
