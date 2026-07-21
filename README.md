@@ -1,21 +1,20 @@
 # Medication Video Platform
 
-配药舱多相机视频数据管理平台，用于视频入库、资产与元数据管理、标注复核、前后置清洗、数据集版本化和标准化导出。
+护士配药多相机视频数据管理平台，用于视频入库、资产管理、标注复核、清洗和数据集导出。
 
-## Current Status
+## 当前阶段
 
-当前已完成 **Sprint 0 最小工程与契约底座**，正在进行 **Sprint 1：P0 上传与资产**。
+Sprint 0 已完成，正在交付 P0 上传与资产闭环。
 
-- Core API、八个领域模块和一个集成模块的边界声明已建立，Java 21 下的模块测试、启动测试和打包已通过。
-- Vue 3 管理端已启用 `/projects`、显式项目范围的 Session/资产列表与详情，以及 `/uploads`。用户先选择已加入项目，再查看多相机 Session 和单路视频资产；资产列表支持真实一层文件夹与“未分类”筛选。Element Plus 2.14.3 只用于当前真实列表、筛选和详情，Pinia 仍未注册或建立 Store。
-- OpenAPI 3.1（当前 0.24.0）和 Redocly lint 已建立；当前契约覆盖数据项目和 ADMIN/MEMBER 成员关系、项目内一层 AssetFolder 与视频分类、使用 Membership 守卫的上传控制面和管理员 Camera 配置、批次终止与清理进度、显式项目上下文和 Membership 隔离的 Session/ClipAsset/CaptureEventLog 查询、视频文件夹/未分类筛选、媒体探测作业、内部租约/心跳/结果提交、MediaReport 查询、管理员受控重放、人工 PrivacyAssessment 创建/查询与默认阻断的资产隐私投影，以及活动 Quarantine 只读查询。媒体探测使用服务器批准的 `media-probe-baseline-v1` 配方；人工评估使用固定摘要的 `privacy-assessment-policy-v1`；任务、Worker 结果和脱敏死信诊断分别由 `media-probe-job.v1`、`media-probe-result.v1`、`media-dead-letter.v1` JSON Schema 约束。
-- Sprint 0 严格质量门禁已通过；最小 Python 3.12 Media Worker 工程已建立并启用 uv lock、Ruff、mypy、pytest 门禁，AI Plugin 仍按后续阶段 deferred。
-- 数据项目、ADMIN/MEMBER 成员关系、一层 AssetFolder、上传控制面、最小相机配置、Session 组装、项目隔离的 Session/ClipAsset/CaptureEventLog 只读目录、MediaJob/MediaReport、人工 PrivacyAssessment、活动 Quarantine 只读投影、append-only AuditEvent、受控重放和 Flyway V1～V23 已建立。项目创建会原子建立首个 ADMIN 成员和审计；成员授权、改角和移除按项目串行、幂等并保留历史，普通用户只列出 ACTIVE 成员项目，最后一个 ACTIVE ADMIN 不可移除或降级。文件夹/视频分类、全部上传入口、Camera 配置和资产目录均使用 Membership 服务端守卫；项目成员可上传和读取显式项目目录，Camera 配置要求项目 ADMIN，Abort 的管理员判断不信任 token 全局角色。同项目复合外键阻止跨项目分类，删除文件夹会原子将视频变为未分类但不删除视频；未加入的项目统一隐藏为 `PROJECT_NOT_FOUND`。媒体和隐私接口尚未全部改为显式项目上下文，OIDC、Tenant/RoleBinding/PurposeGrant 和项目关闭也尚未实现。Complete Batch 在同一事务中为 VIDEO 建立 ClipAsset、为 EVENT_LOG 建立不可变对象索引；事件负载尚不解析。未完成批次可由发起人或项目管理员终止；过期判定、文件终态、清理任务和审计原子落库，再以租约和有限重试异步执行 Multipart Abort 或遗留对象删除。创建媒体作业会在同一数据库事务内写入 attempt 和 Outbox，再由带 publisher confirm 的 relay 投递到单一媒体业务队列；发布确认后 Outbox 会删除一次性 lease capability。Worker 使用独立身份换取短期输入 URL，处理期间按服务端节奏续租，流式复核大小/SHA-256，执行 FFprobe 与 FFmpeg 完整解码，再由 Core API 通过租约、软件摘要 allowlist 和 Inbox 幂等守卫提交状态与不可变 MediaReport。租约超过 grace period 后，平台会原子标记旧 attempt 为 `LOST`，以新 capability 和 Outbox 消息创建下一 attempt；有效的 retryable Worker 失败会进入 `RETRY_WAIT`，通过 Outbox 有限退避生成下一 attempt；达到上限后才终止业务 job。管理员可用独立身份从保留的脱敏诊断创建新 attempt，旧诊断不会被直接重投，审计表由数据库阻止更新和删除。本地合成视频真实队列闭环已验证。人工隐私评估绑定 INGESTED 资产摘要和策略摘要；`QUARANTINE_REQUIRED` 会在同一事务内幂等建立隔离证据并审计，V21 以项目/资产复合外键和隐私评估来源复合外键阻止跨项目或伪造绑定，但任何评估仍默认 BLOCKED，自动检测、脱敏、隔离复核/解除和隐私放行尚未实现。
-- 本地 PostgreSQL、S3 兼容对象存储和 RabbitMQ 已由三服务 Compose 启动并通过健康与连通性检查；RabbitMQ 当前仅建立一个媒体探测队列和一个 DLQ。业务队列不使用会复制 lease capability 的 broker 原样死信，Worker 只在 publisher confirm 后写入脱敏诊断；Redis 和 CVAT 尚未启用。
-- FR-001～FR-003 仍是部分实现：媒体探测入库、EVENT_LOG 对象索引、2 GiB 本机双进程中断恢复、Abort、过期清理代码路径和应用内清理积压判定已闭合，但尚缺弱网/并发、目标环境监控通知和 UAT 验收。FR-004 的 `capture-session-metadata-v1` 必填字段、服务器 CameraSet 对账和原子 Session 组装已达到实现态，但尚未进入 UAT。
-- MediaPipe 属于 P1 试点，不进入 P0 关键路径。
+- Core API 是 Java 21、Spring Boot 和 Spring Modulith 模块化单体；
+- Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
+- PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
+- Redis、CVAT、真实 OIDC、Export Worker 和 AI 插件尚未启用；
+- 下一纵向切片是可播放 Variant 与播放授权，随后实现视频软删除。
 
-## Architecture Summary
+详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
+
+## 架构
 
 ```text
 Vue 3 Web
@@ -23,73 +22,56 @@ Vue 3 Web
 Java 21 + Spring Boot + Spring Modulith Core API
     ├── PostgreSQL
     ├── S3 Compatible Object Storage
-    ├── CVAT / OIDC adapters
-    └── Transactional Outbox → RabbitMQ
-                                  ↓
-                         Python 3.12 Workers
+    └── Outbox → RabbitMQ → Python Media Worker
 ```
 
-核心平台是模块化单体。媒体处理、导出和 AI 以异步 Worker 运行；第三方工具通过适配器接入。
+核心业务保持一个 Core API。只有耗时、跨进程或需要重试的任务才进入 Worker；其他基础设施按阶段启用。
 
-## Repository Layout
+## 目录
 
 ```text
 apps/web/                       Vue 管理端
-services/platform-api/         单个 Spring Boot/Modulith Core API
-workers/                       媒体、导出和 AI Worker
-plugins/                       AI Plugin SDK、Mock 和 MediaPipe 插件
+services/platform-api/         Core API
+workers/                       按阶段启用的异步 Worker
+plugins/                       P1 AI 插件
 contracts/                     OpenAPI、事件和 JSON Schema
-api-tests/bruno/               本地优先的 API 调试集合
-infra/docker-compose/          本地与 UAT 基础设施
-tests/                         跨工程合同、集成、E2E 和安全测试
-docs/                          ADR、架构说明和运行手册
+api-tests/bruno/               真实服务核心场景
+infra/docker-compose/          本地基础设施
+docs/                          需求、设计、ADR 和运行手册
 ```
 
-## Required Toolchain
+## 本地开发
 
-| Tool | Baseline |
-|---|---|
-| Java | 21 LTS |
-| Node.js | 22.22.2 |
-| pnpm | 11.11.0 |
-| Python | 3.12 |
-| Python manager | uv |
-| Containers | Docker Desktop + WSL2 |
-
-Spring Boot、PostgreSQL 和其他服务的准确补丁版本在构建文件或容器摘要中冻结，不使用 `latest`。
-
-## Local Checks
-
-在 PowerShell 中执行：
+要求 Java 21、Node.js 22、pnpm 11、Python 3.12、uv 和 Docker Desktop。准确依赖版本由构建文件和 lockfile 冻结。
 
 ```powershell
 cd C:\Dev\Projects\medication-video-platform
+pnpm install --frozen-lockfile
+.\scripts\start-local.ps1
+```
+
+Web 默认地址为 `http://localhost:5173/projects`，Core API 健康检查为 `http://localhost:8080/actuator/health`。本地日志位于 `logs/local/`。
+
+## 验证
+
+```powershell
 .\scripts\check-environment.ps1
-.\scripts\quality-gate.ps1
 .\scripts\quality-gate.ps1 -Strict
 pnpm run api:test
 ```
 
-`check-environment.ps1` 检查本机工具链。默认质量门禁用于仓库基础检查；`-Strict` 用于完整检查当前已激活组件。`pnpm run api:test` 使用 Bruno CLI 对正在运行的本地 API 执行上传、CameraSet、资产目录和 MediaJob 控制面场景，需要先启动 PostgreSQL、S3、RabbitMQ 和后端 `local` profile，并提供合成开发令牌。Node 启动器只向 Bruno 映射运行时令牌，不把令牌写入集合。Media Worker 只能使用独立服务令牌，且其当前软件摘要必须被平台准确批准；本地联调只允许合成视频。
+`api:test` 需要本地基础设施和 Core API 已启动，并且只能使用合成开发身份和合成视频。
 
-## Data Safety
+## 数据安全
 
-- 本仓库只允许合成测试数据。
-- 不得提交真实患者视频、个人身份信息、生产 URL、账号、令牌、私钥和模型大文件。
-- `.env.example` 只包含本地占位值；真实本地配置放在被忽略的 `.env` 中。
-- AI 结果只能作为候选标注，不能自动成为训练真值。
+- 仓库、开发环境和 CI 只使用合成数据；
+- 不提交真实视频、身份信息、生产地址、账号、令牌、私钥或预签名 URL；
+- AI 输出只能作为候选标注，不能直接成为训练真值。
 
-## Source Documents
+## 文档入口
 
-- [配药视频数据管理平台需求基线 V1.2](./docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md)：新增医院远端上传与平台本地上传、视频播放与删除、项目内一层文件夹、ADMIN/MEMBER 两级角色，并统一视频标注口径；未变更条款继承 V1.1.13。
-- [V1.1.13 历史基线](./docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx)
-- [配药平台技术设计](./docs/architecture/配药平台技术设计.md)
-- [架构详细设计索引](./docs/architecture/README.md)
-- [ADR-0001：技术基线与构建边界](./docs/adr/0001-technology-baseline.md)
-- [ADR-0002：ClipAsset 证据记录使用受限外键](./docs/adr/0002-clip-asset-evidence-foreign-keys.md)
-
-## Next Step
-
-首个隐私与隔离切片已建立：管理员可针对已 `INGESTED` 的合成 ClipAsset 记录版本化人工 `PrivacyAssessment`；`QUARANTINE_REQUIRED` 通过 `qualitycleaning` 的公开应用服务在同一事务内建立活动隔离记录，绑定资产摘要、评估来源和版本，并提供项目隔离、管理员只读、`no-store` 的查询。相同命令在真实并发下仍只产生一份评估、隔离和对应审计；V19→V21 升级测试证明历史隔离回填可保留，并由数据库拒绝跨项目、伪造来源和错误版本。后续评估为 `NONE` 也不会自动解除既有隔离。当前仍未实现隔离复核/解除、脱敏和 `PrivacyReleaseDecision`。
-
-资产目录显式项目上下文、Membership 隔离及视频文件夹/未分类筛选已经闭合，Web 默认入口也已改为授权项目列表。平台本地上传现已复用既有 Upload/Multipart/Complete 协议：浏览器按视频建立独立 `PLATFORM_LOCAL` 批次、分块计算摘要并在完成校验后建立单视角 CaptureSession。当前下一步是可播放 Variant 与播放授权；随后才是视频软删除。MediaPipe 仍不进入 P0 关键路径。
+- [需求基线索引](./docs/requirements/README.md)
+- [总体技术设计](./docs/architecture/配药平台技术设计.md)
+- [架构与专题设计索引](./docs/architecture/README.md)
+- [Web 设计简报](./docs/design.md)
+- [项目开发规则](./AGENTS.md)

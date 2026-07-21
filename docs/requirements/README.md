@@ -16,12 +16,21 @@ V1.2 Markdown 的 SHA-256 为：
 
 ## 历史继承基线
 
-- [配药视频数据管理平台需求文档 V1.1.13](./baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx)
+- [配药视频数据管理平台需求文档 V1.1.13（正式 DOCX）](./baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx)
+- [V1.1.13 Markdown 阅读副本](./baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md)
+
+Markdown 仅用于全文检索、代码助手阅读和需求追踪，不是独立需求基线；与 DOCX 不一致时以 DOCX 为准并重新生成 Markdown。
 
 V1.1.13 DOCX 的 SHA-256 为：
 
 ```text
 C78D2F3BB69C38E878D5D0E75342D94AE7E3B01B3428D734DC92DB73989F1DAB
+```
+
+V1.1.13 Markdown 阅读副本的 SHA-256 为：
+
+```text
+64111C77EA8608D1E99BB24F5F6DE7B0382A8C406F2696D3B9CB1F05DDB8784E
 ```
 
 ## 管理规则
