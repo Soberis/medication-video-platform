@@ -554,6 +554,32 @@ code {
   margin-top: 20px;
 }
 
+.login-page {
+  display: grid;
+  place-items: center;
+  min-height: 48vh;
+}
+
+.login-card {
+  width: min(100%, 560px);
+}
+
+.login-card h2 {
+  margin: 8px 0 0;
+  font-size: 30px;
+}
+
+.login-card p:not(.app-eyebrow) {
+  color: #5c687b;
+  line-height: 1.65;
+}
+
+.login-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
 .local-upload-form {
   display: grid;
   gap: 10px;

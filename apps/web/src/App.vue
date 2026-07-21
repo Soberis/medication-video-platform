@@ -27,6 +27,7 @@ const foldersRoute = computed(() => ({ name: 'folder-management', params: { proj
         <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
+        <RouterLink v-if="import.meta.env.DEV" :to="{ name: 'local-login' }">切换身份</RouterLink>
       </nav>
     </header>
 

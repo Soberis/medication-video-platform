@@ -8,9 +8,15 @@ if (!Number.isInteger(configuredWebPort) || configuredWebPort < 1024 || configur
   throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
 }
 
-// This value is read only by the Vite development proxy. It is never exposed to browser code.
-const devBearerToken =
-  process.env.DEV_WEB_BEARER_TOKEN?.trim() || process.env.DEV_BEARER_TOKEN?.trim()
+// Tokens remain in the development proxy. The browser can select only a synthetic role cookie.
+const memberBearerToken = process.env.DEV_BEARER_TOKEN?.trim()
+const adminBearerToken = process.env.DEV_ADMIN_BEARER_TOKEN?.trim()
+
+function selectedDevelopmentRole(cookieHeader: string | undefined) {
+  return cookieHeader?.split(';').some((value) => value.trim() === 'mvp_dev_role=admin')
+    ? 'admin'
+    : 'member'
+}
 
 export default defineConfig({
   plugins: [vue()],
@@ -26,13 +32,13 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        ...(devBearerToken
-          ? {
-              headers: {
-                Authorization: `Bearer ${devBearerToken}`,
-              },
-            }
-          : {}),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyRequest, request) => {
+            const role = selectedDevelopmentRole(request.headers.cookie)
+            const token = role === 'admin' ? adminBearerToken : memberBearerToken
+            if (token) proxyRequest.setHeader('Authorization', `Bearer ${token}`)
+          })
+        },
       },
     },
   },

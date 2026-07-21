@@ -5,7 +5,12 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/projects',
+      redirect: '/login',
+    },
+    {
+      path: '/login',
+      name: 'local-login',
+      component: () => import('@/views/LocalLoginView.vue'),
     },
     {
       path: '/projects',
