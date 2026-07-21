@@ -87,6 +87,14 @@ code {
   background: #e8efff;
 }
 
+.primary-nav .nav-unavailable {
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #98a2b3;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
 .app-eyebrow,
 .status-label {
   margin: 0;
