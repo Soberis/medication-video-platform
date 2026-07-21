@@ -13,7 +13,7 @@
 2. Core API 使用 Java 21、Spring Boot 4.1.0 和 Spring Modulith 2.1.0，构建方式为 Maven Wrapper。
 3. Core API 是一个 Spring Boot 应用，项目 Java 根包冻结为 `com.medicationvideo.platform`，八个领域模块按 Java 包和表所有权隔离。
 4. 外部系统通过 `integration` 端口和适配器接入；MVP 不创建独立适配器服务。
-5. 数据库使用 PostgreSQL 18 系列或医院批准的 17 系列，结构变更只通过 Flyway。
+5. 数据库使用 PostgreSQL 18 系列或目标部署批准的 17 系列，结构变更只通过 Flyway。
 6. 大文件使用 S3 Compatible API；业务层不依赖 MinIO 专有 API。
 7. 异步任务使用 Transactional Outbox 和 RabbitMQ；Redis 只用于缓存、短锁、限流和短期进度。
 8. 媒体、导出和 AI 使用 Python 3.12 Linux Worker；依赖由 uv 和 lockfile 管理。
@@ -36,6 +36,6 @@
 
 ## 尚待冻结
 
-- PostgreSQL 17/18 的院内批准版本与高可用方案。
+- PostgreSQL 17/18 的目标部署批准版本与高可用方案。
 - S3 兼容对象存储的实际产品及许可证结论。
 - 外部 IdP 是否需要以及接入方式（如未来出现统一身份集成需求）。

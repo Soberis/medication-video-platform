@@ -1,14 +1,14 @@
 # 部署、容量与灾难恢复
 
 > 文档状态：P0 运行设计（评审稿）  
-> 最后更新：2026-07-17
+> 最后更新：2026-07-21
 
 ## 1. 决策边界
 
 - 需要本地基础设施时使用一个小型 Docker Compose；服务增多且存在可选组合后再引入 profile。
-- P0 不预建 Kubernetes；生产是否采用 Kubernetes、虚拟机容器或医院平台由 SLA、运维能力、合规隔离和独立扩容证据决定。
+- P0 不预建 Kubernetes；生产是否采用 Kubernetes、虚拟机容器或其他受控部署平台由 SLA、运维能力、合规隔离和独立扩容证据决定。
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
-- 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与医院基础设施确认后冻结。
+- 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
 
 ## 2. 工作负载
@@ -58,7 +58,7 @@ Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流�
 | Local | 仅合成 | 本地容器/Mock | 开发和快速测试 |
 | CI | 仅合成、短生命周期 | 默认无公网或最小依赖镜像源 | 构建、测试、契约和安全门禁 |
 | UAT | 合成或明确批准的隔离样本 | 平台账号会话/S3/CVAT | 端到端验收、容量和恢复演练 |
-| Production | 经批准的真实数据 | 医院批准系统 | 正式运行 |
+| Production | 经批准的真实数据 | 受控边端、对象存储和内部管理网络 | 正式运行 |
 
 环境间禁止共享数据库、bucket、密钥、会话密钥、RabbitMQ vhost 和服务账号。生产数据不得回流开发/CI。
 
@@ -66,8 +66,8 @@ Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流�
 
 ```mermaid
 flowchart TB
-    U["Hospital user"] --> RP["TLS reverse proxy / WAF"]
-    E["Edge uploader"] --> RP
+    U["Internal platform operator"] --> RP["TLS reverse proxy / WAF"]
+    E["Hospital edge uploader"] --> RP
     RP --> WEB["Vue Web"]
     RP --> API["Core API"]
     API --> PG[(PostgreSQL)]
@@ -93,7 +93,7 @@ flowchart TB
 - 数据区：按阶段启用 PostgreSQL、对象存储、RabbitMQ，以及可选 Redis；
 - 管理区：监控、备份、堡垒/运维入口。
 
-具体区划服从医院网络架构和安全等级要求。
+具体区划服从平台运营方、数据授权方与目标部署环境的网络和安全要求。医院边端只通过受控上传入口接入，不使用 Web 管理端。
 
 ## 5. 容量模型
 

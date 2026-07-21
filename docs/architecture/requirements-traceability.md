@@ -141,7 +141,7 @@ FR-034 当前 `PI` 证据和边界：
 
 - Flyway V24、OpenAPI 0.24.0 和 `UploadBatchContractTests` 已覆盖 `PLATFORM_LOCAL` 来源、固定来源标识和“一批次恰好一个 VIDEO”守卫；错误的多文件批次返回稳定错误码。
 - Vue `/uploads/new` 加载授权项目和项目内一层文件夹。每个用户选择的视频独立计算完整文件与 Part SHA-256，独立初始化/登记/Multipart/Part 授权与确认/Complete File/Complete Batch/CaptureSession；Web 单元测试覆盖该控制面调用顺序和多文件顺序队列，浏览器不会记录预签名 URL。
-- 本地 SeaweedFS 的浏览器 `PUT` 预检允许该开发场景；真实医院网络、目标浏览器、支持格式与容量、弱网/断点恢复页面体验以及 UAT 仍未完成，因此不能称为需求验收完成。
+- 本地 SeaweedFS 的浏览器 `PUT` 预检允许该开发场景；真实边端网络、目标内部浏览器、支持格式与容量、弱网/断点恢复页面体验以及 UAT 仍未完成，因此不能称为需求验收完成。
 
 ## 4. 非功能需求追踪
 
@@ -159,7 +159,7 @@ FR-034 当前 `PI` 证据和边界：
 | NFR-MAINT-001 | 标签、清洗和准入规则版本化 | `annotationreview`、`qualitycleaning`、`datasetexport` | 冻结版本不可覆盖；旧数据可重建 | D1 |
 | NFR-MAINT-002 | 提供迁移、备份和恢复 | Flyway、部署设计 | 空库迁移、升级迁移、PITR、对象恢复和一致性核验 | PENDING |
 
-`PENDING` 项必须在 UAT 计划冻结前补充数据规模、并发、浏览器、RPO/RTO、对象存储产品和医院网络条件，不能在代码中写成未经批准的常量。
+`PENDING` 项必须在 UAT 计划冻结前补充数据规模、并发、内部管理浏览器、RPO/RTO、对象存储产品和边端网络条件，不能在代码中写成未经批准的常量。
 
 ## 5. 科学性与验收口径
 
