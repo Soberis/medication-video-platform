@@ -180,6 +180,14 @@ class CameraStream {
 		this.updatedAt = changedAt;
 	}
 
+	void markAssetUnavailable(Instant changedAt) {
+		if (this.streamStatus == CameraStreamStatus.UNAVAILABLE) {
+			return;
+		}
+		this.streamStatus = CameraStreamStatus.UNAVAILABLE;
+		this.updatedAt = changedAt;
+	}
+
 	private static CameraStreamStatus initialStatus(ClipAssetStatus assetStatus) {
 		return switch (assetStatus) {
 			case UPLOADED, INGESTING -> CameraStreamStatus.BOUND;

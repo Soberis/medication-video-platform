@@ -199,6 +199,7 @@ public class AssetCatalogQueryService {
 				LEFT JOIN camera_set_snapshot_member member
 				  ON member.camera_set_snapshot_member_id = stream.camera_set_snapshot_member_id
 				WHERE asset.project_id = :projectId
+				  AND asset.deleted_at IS NULL
 				""");
 		var parameters = new MapSqlParameterSource("projectId", projectId);
 		if (captureSessionId != null) {
@@ -262,6 +263,7 @@ public class AssetCatalogQueryService {
 	@Transactional(readOnly = true)
 	ClipAssetReadResponse getClipAsset(UUID projectId, UUID clipAssetId) {
 		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
+				.filter(existing -> !existing.isDeleted())
 				.orElseThrow(() -> new AssetCatalogQueryException(
 						"CLIP_ASSET_NOT_FOUND",
 						"The clip asset was not found in the current project."));
@@ -371,6 +373,7 @@ public class AssetCatalogQueryService {
 	@Transactional(readOnly = true)
 	public ClipAssetInputSummary getClipAssetInputSummary(UUID projectId, UUID clipAssetId) {
 		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
+				.filter(existing -> !existing.isDeleted())
 				.orElseThrow(() -> new AssetCatalogQueryException(
 						"CLIP_ASSET_NOT_FOUND",
 						"The clip asset was not found in the current project."));

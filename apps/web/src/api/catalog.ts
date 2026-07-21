@@ -6,7 +6,7 @@ export type CaptureSessionAssemblyStatus =
   | 'CLOSED'
 
 export type CaptureQualityStatus = 'PENDING' | 'PASS' | 'WARNING' | 'REJECT'
-export type CameraStreamStatus = 'BOUND' | 'INGESTED' | 'INGEST_FAILED'
+export type CameraStreamStatus = 'BOUND' | 'INGESTED' | 'INGEST_FAILED' | 'UNAVAILABLE'
 export type DeclaredSyncStatus = 'UNKNOWN' | 'PASS' | 'WARNING' | 'REJECT'
 export type ClipAssetStatus = 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
 
@@ -235,6 +235,24 @@ export function getClipAsset(projectId: string, clipAssetId: string, signal?: Ab
   )
 }
 
+export async function deleteClipAsset(projectId: string, clipAssetId: string, reason: string) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({ reason }),
+      cache: 'no-store',
+    },
+  )
+  if (response.status === 204) return
+  throw await toCatalogError(response)
+}
+
 async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     method: 'GET',
@@ -247,6 +265,10 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     return (await response.json()) as T
   }
 
+  throw await toCatalogError(response)
+}
+
+async function toCatalogError(response: Response) {
   let body: ApiErrorBody = {}
   try {
     body = (await response.json()) as ApiErrorBody

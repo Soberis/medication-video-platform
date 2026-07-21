@@ -25,6 +25,7 @@ export const streamStatusLabels: Record<CameraStreamStatus, string> = {
   BOUND: '已绑定，待入库',
   INGESTED: '已入库',
   INGEST_FAILED: '入库失败',
+  UNAVAILABLE: '视频已删除，不可用',
 }
 
 export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
@@ -48,7 +49,7 @@ export function statusTone(status: string): 'success' | 'warning' | 'danger' | '
   if (status === 'WARNING' || status === 'ASSEMBLING' || status === 'INGESTING') {
     return 'warning'
   }
-  if (status === 'REJECT' || status === 'INCOMPLETE' || status === 'INGEST_FAILED') {
+  if (status === 'REJECT' || status === 'INCOMPLETE' || status === 'INGEST_FAILED' || status === 'UNAVAILABLE') {
     return 'danger'
   }
   return status === 'BOUND' || status === 'UPLOADED' ? 'primary' : 'info'

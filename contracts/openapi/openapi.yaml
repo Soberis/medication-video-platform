@@ -1950,6 +1950,52 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteClipAsset
+      tags:
+        - Asset Catalog
+      summary: Soft-delete one selected video asset
+      description: >-
+        Requires ACTIVE ADMIN membership in the explicit project. The command never deletes the
+        underlying object synchronously and never deletes sibling streams or historical evidence.
+        It hides the asset from ordinary catalog reads and marks its bound stream unavailable; a
+        repeated deletion is a no-op and does not add another audit event.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClipAssetDeletionRequest"
+      responses:
+        "204":
+          description: The video is deleted or was already deleted by an earlier request.
+        "400":
+          description: The deletion reason or headers are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or active video asset is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/capture-event-logs:
     get:
       operationId: listCaptureEventLogs
@@ -4555,6 +4601,17 @@ components:
         updated_at:
           type: string
           format: date-time
+    ClipAssetDeletionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: User-entered reason retained in the append-only deletion audit event.
     ClipAssetSessionBinding:
       type: object
       additionalProperties: false
@@ -4613,6 +4670,7 @@ components:
             - BOUND
             - INGESTED
             - INGEST_FAILED
+            - UNAVAILABLE
         quality_status:
           $ref: "#/components/schemas/CaptureQualityStatus"
     ClipAssetStatus:

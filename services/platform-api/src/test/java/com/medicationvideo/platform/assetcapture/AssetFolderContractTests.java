@@ -206,6 +206,49 @@ class AssetFolderContractTests {
 	}
 
 	@Test
+	void administratorSoftDeletesAnAssetIdempotentlyAndCatalogHidesIt() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID);
+
+		deleteClipAsset(clipAssetId, ADMIN_TOKEN, "clip-delete-idem-0001", "Uploaded by mistake")
+				.andExpect(status().isNoContent())
+				.andExpect(header().string("Cache-Control", "no-store"));
+
+		assertEquals(1, count("""
+				SELECT count(*) FROM clip_asset
+				WHERE clip_asset_id = ?
+				  AND deleted_at IS NOT NULL
+				  AND deleted_by = ?
+				  AND delete_reason = ?
+				""", clipAssetId, ADMIN_ACTOR, "Uploaded by mistake"));
+		assertEquals(1, countAudit("clip-delete-idem-0001-request", "CLIP_ASSET_DELETED"));
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/clip-assets/{clipAssetId}", PROJECT_ID, clipAssetId)
+					.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/clip-assets", PROJECT_ID)
+					.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(0));
+
+		deleteClipAsset(clipAssetId, ADMIN_TOKEN, "clip-delete-idem-0002", "A different retry reason")
+				.andExpect(status().isNoContent());
+		assertEquals(1, count("SELECT count(*) FROM audit_event WHERE project_id = ? AND action = ?", PROJECT_ID,
+				"CLIP_ASSET_DELETED"));
+	}
+
+	@Test
+	void memberCannotSoftDeleteAnAsset() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID);
+
+		deleteClipAsset(clipAssetId, MEMBER_TOKEN, "clip-delete-member-0001", "No longer needed")
+				.andExpect(status().isForbidden());
+
+		assertEquals(1, count("SELECT count(*) FROM clip_asset WHERE clip_asset_id = ? AND deleted_at IS NULL",
+				clipAssetId));
+	}
+
+	@Test
 	void databaseRejectsCrossProjectClassificationAndModelHasNoParentFolder() throws Exception {
 		var otherFolderId = createFolderId(
 				OTHER_PROJECT_ID, "folder-db-other-0001", "Other Database Folder");
@@ -375,6 +418,24 @@ class AssetFolderContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", idempotencyKey + "-request"));
+	}
+
+	private ResultActions deleteClipAsset(
+			UUID clipAssetId,
+			String token,
+			String idempotencyKey,
+			String reason) throws Exception {
+		return this.mockMvc.perform(delete(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}",
+					PROJECT_ID,
+					clipAssetId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", idempotencyKey + "-request")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"reason":"%s"}
+						""".formatted(reason)));
 	}
 
 	private void insertProject(UUID projectId, String displayName, String idempotencyKey) {

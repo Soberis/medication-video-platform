@@ -239,6 +239,11 @@ class CaptureSessionIngestService {
 		}
 
 		var assets = this.clipAssetRepository.findAllByBatchIdOrderByClientFileIdAsc(batchId);
+		if (assets.stream().anyMatch(ClipAsset::isDeleted)) {
+			throw failure(
+					"CAPTURE_SESSION_CLIP_ASSET_UNAVAILABLE",
+					"A deleted clip asset cannot be bound to a capture session.");
+		}
 		var assetsByClientId = assets.stream().collect(Collectors.toUnmodifiableMap(
 				ClipAsset::getClientFileId,
 				Function.identity()));

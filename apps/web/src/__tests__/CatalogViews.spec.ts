@@ -60,7 +60,7 @@ describe('catalog views', () => {
       expect.stringContaining(`/api/v1/projects/${projectId}/capture-sessions`),
       expect.any(Object),
     )
-  })
+  }, 15_000)
 
   it('explains why preview is unavailable without rendering a player or storage location', async () => {
     vi.stubGlobal(

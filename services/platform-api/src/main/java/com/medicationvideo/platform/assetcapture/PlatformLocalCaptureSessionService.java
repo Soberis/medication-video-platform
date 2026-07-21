@@ -70,6 +70,11 @@ class PlatformLocalCaptureSessionService {
 					"PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED",
 					"A platform-local batch must have exactly one uploaded video asset.");
 		}
+		if (assets.getFirst().isDeleted()) {
+			throw new CaptureSessionIngestException(
+					"CAPTURE_SESSION_CLIP_ASSET_UNAVAILABLE",
+					"A deleted clip asset cannot be bound to a capture session.");
+		}
 
 		var now = Instant.now();
 		var channel = CameraChannel.provision(projectId, "platform-local:" + batchId, now);

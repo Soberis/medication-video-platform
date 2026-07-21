@@ -257,6 +257,12 @@ class AssetFolderService {
 						"CLIP_ASSET_NOT_FOUND",
 						"The clip asset was not found in the project.",
 						404));
+		if (asset.isDeleted()) {
+			throw new AssetFolderException(
+					"CLIP_ASSET_NOT_FOUND",
+					"The clip asset was not found in the project.",
+					404);
+		}
 		var oldFolderId = asset.getFolderId();
 		var now = now();
 		if (!java.util.Objects.equals(oldFolderId, folderId)) {

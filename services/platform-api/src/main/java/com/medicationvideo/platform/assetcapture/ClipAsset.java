@@ -52,6 +52,15 @@ class ClipAsset {
 	@Column(name = "folder_id")
 	private UUID folderId;
 
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
+	@Column(name = "deleted_by", length = 128)
+	private String deletedBy;
+
+	@Column(name = "delete_reason", length = 500)
+	private String deleteReason;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "asset_status", nullable = false, length = 32)
 	private ClipAssetStatus status;
@@ -142,6 +151,10 @@ class ClipAsset {
 		return this.updatedAt;
 	}
 
+	boolean isDeleted() {
+		return this.deletedAt != null;
+	}
+
 	long getVersion() {
 		return this.version;
 	}
@@ -151,6 +164,7 @@ class ClipAsset {
 	}
 
 	void beginMediaIngest(Instant changedAt) {
+		requireNotDeleted();
 		if (this.status == ClipAssetStatus.INGESTING) {
 			return;
 		}
@@ -165,6 +179,7 @@ class ClipAsset {
 	}
 
 	void completeMediaIngest(boolean succeeded, Instant changedAt) {
+		requireNotDeleted();
 		if (this.status != ClipAssetStatus.INGESTING) {
 			throw new ClipAssetMediaIngestException(
 					"CLIP_ASSET_INGEST_STATE_CONFLICT",
@@ -178,5 +193,24 @@ class ClipAsset {
 	void classify(UUID newFolderId, Instant changedAt) {
 		this.folderId = newFolderId;
 		this.updatedAt = changedAt;
+	}
+
+	void markDeleted(String actorId, String reason, Instant changedAt) {
+		if (isDeleted()) {
+			return;
+		}
+		this.deletedAt = changedAt;
+		this.deletedBy = actorId;
+		this.deleteReason = reason;
+		this.updatedAt = changedAt;
+	}
+
+	private void requireNotDeleted() {
+		if (isDeleted()) {
+			throw new ClipAssetMediaIngestException(
+					"CLIP_ASSET_DELETED",
+					"The clip asset has been deleted and is unavailable for media processing.",
+					false);
+		}
 	}
 }

@@ -504,6 +504,12 @@ code {
   align-items: flex-end;
 }
 
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .heading-tags {
   display: flex;
   gap: 8px;
@@ -653,6 +659,11 @@ code {
   .page-heading,
   .detail-heading,
   .catalog-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .detail-actions {
     align-items: flex-start;
     flex-direction: column;
   }

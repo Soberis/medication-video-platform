@@ -21,7 +21,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = AssetFolderController.class)
+@RestControllerAdvice(assignableTypes = { AssetFolderController.class, ClipAssetDeletionController.class })
 class AssetFolderExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(AssetFolderExceptionHandler.class);
@@ -61,13 +61,22 @@ class AssetFolderExceptionHandler {
 				false);
 	}
 
+	@ExceptionHandler(ClipAssetDeletionException.class)
+	ResponseEntity<ApiErrorResponse> clipAssetDeletion(ClipAssetDeletionException exception) {
+		return error(
+				HttpStatus.valueOf(exception.getStatusCode()),
+				exception.getErrorCode(),
+				exception.getMessage(),
+				false);
+	}
+
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ApiErrorResponse> unexpected(Exception exception) {
-		log.error("Unexpected asset folder service error", exception);
+		log.error("Unexpected asset capture command error", exception);
 		return error(
 				HttpStatus.INTERNAL_SERVER_ERROR,
 				"INTERNAL_ERROR",
-				"The asset folder service encountered an unexpected error.",
+				"The asset capture command encountered an unexpected error.",
 				true);
 	}
 

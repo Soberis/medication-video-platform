@@ -224,4 +224,12 @@ class CaptureSession {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
+	void markStreamUnavailable(Instant changedAt) {
+		if (this.assemblyStatus == CaptureSessionAssemblyStatus.INCOMPLETE) {
+			return;
+		}
+		this.assemblyStatus = CaptureSessionAssemblyStatus.INCOMPLETE;
+		this.updatedAt = changedAt;
+	}
 }

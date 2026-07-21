@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElMessage, ElMessageBox, ElTag } from 'element-plus'
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
-import { CatalogApiError, getClipAsset, type ClipAssetRead } from '@/api/catalog'
+import { CatalogApiError, deleteClipAsset, getClipAsset, type ClipAssetRead } from '@/api/catalog'
 import {
   assetStatusLabels,
   declaredSyncStatusLabels,
@@ -17,12 +17,16 @@ import {
 defineOptions({ name: 'AssetDetailView' })
 
 const route = useRoute()
+const router = useRouter()
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const assetId = computed(() => String(route.params.id ?? ''))
 const detail = shallowRef<ClipAssetRead | null>(null)
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
 const errorCode = ref('')
 const errorMessage = ref('')
+const actionErrorCode = ref('')
+const actionErrorMessage = ref('')
+const isDeleting = ref(false)
 let activeRequest: AbortController | null = null
 
 async function loadDetail() {
@@ -47,6 +51,36 @@ async function loadDetail() {
 
 watch([projectId, assetId], () => void loadDetail(), { immediate: true })
 onUnmounted(() => activeRequest?.abort())
+
+async function confirmDelete() {
+  if (!detail.value || isDeleting.value) return
+  actionErrorCode.value = ''
+  actionErrorMessage.value = ''
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `将从项目中隐藏视频 ${detail.value.client_file_id}。不会立即物理删除对象或影响其他视频；请输入删除原因。`,
+      '确认删除视频',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+        inputPattern: /\S/,
+        inputErrorMessage: '请填写删除原因。',
+        inputPlaceholder: '例如：上传错误、无用或质量不合格',
+      },
+    )
+    isDeleting.value = true
+    await deleteClipAsset(projectId.value, assetId.value, value.trim())
+    ElMessage.success('视频已删除，并已从普通视频列表中隐藏。')
+    await router.replace({ name: 'asset-list', params: { projectId: projectId.value } })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'CLIP_ASSET_DELETE_FAILED'
+    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '视频删除未完成，请稍后重试。'
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -70,8 +104,21 @@ onUnmounted(() => activeRequest?.abort())
         <h2 id="asset-detail-title">{{ detail.client_file_id }}</h2>
         <p class="mono-wrap">ClipAsset ID：{{ detail.clip_asset_id }}</p>
       </div>
-      <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
+      <div class="detail-actions">
+        <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
+        <ElButton type="danger" plain :loading="isDeleting" @click="confirmDelete">删除（仅管理员）</ElButton>
+      </div>
     </section>
+
+    <ElAlert
+      v-if="actionErrorMessage"
+      class="catalog-alert"
+      type="error"
+      :title="actionErrorCode"
+      :description="actionErrorMessage"
+      show-icon
+      :closable="false"
+    />
 
     <ElAlert
       title="视频预览尚未开放"
