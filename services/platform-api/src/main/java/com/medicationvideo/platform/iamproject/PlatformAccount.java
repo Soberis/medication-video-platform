@@ -87,4 +87,24 @@ class PlatformAccount {
 	boolean isEnabled() {
 		return this.enabled;
 	}
+
+	void changeEnabled(boolean enabled, Instant now) {
+		if (this.enabled == enabled) {
+			return;
+		}
+		this.enabled = enabled;
+		this.updatedAt = now;
+	}
+
+	Instant getCreatedAt() {
+		return this.createdAt;
+	}
+
+	Instant getUpdatedAt() {
+		return this.updatedAt;
+	}
+
+	long getRowVersion() {
+		return this.rowVersion;
+	}
 }

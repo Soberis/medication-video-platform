@@ -1,11 +1,12 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.25.0
+  version: 0.26.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
-    authenticate internal platform accounts with an HttpOnly session, manage their ADMIN/MEMBER
-    memberships, list only projects visible to the authenticated member,
+    authenticate internal platform accounts with an HttpOnly session, create and manage internal
+    MEMBER accounts, manage their ADMIN/MEMBER project memberships, list only projects visible to
+    the authenticated member,
     manage one-level project folders and classify ClipAssets without changing media ownership,
     require an ACTIVE project membership for every upload command and an ACTIVE ADMIN membership
     for server-side camera configuration, initialize an upload
@@ -42,6 +43,10 @@ tags:
     description: >-
       Internal platform-account password login, session inspection and logout. Hospital edge devices
       do not use these endpoints; they retain their service credentials for automated uploads.
+  - name: Platform Accounts
+    description: >-
+      Internal account directory. Only a global ADMIN may create MEMBER accounts, list accounts or
+      enable and disable MEMBER accounts. This directory never exposes password hashes.
   - name: Projects
     description: >-
       Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Membership
@@ -153,6 +158,140 @@ paths:
               $ref: "#/components/headers/NoStore"
         "401":
           description: No authenticated session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/accounts:
+    get:
+      operationId: listPlatformAccounts
+      tags:
+        - Platform Accounts
+      summary: List internal platform accounts
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Account directory without credentials.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformAccountList"
+        "401":
+          description: No authenticated session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Global administrator authority is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createPlatformAccount
+      tags:
+        - Platform Accounts
+      summary: Create an internal MEMBER account
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformAccountCreateRequest"
+      responses:
+        "201":
+          description: New enabled MEMBER account.
+          headers:
+            Location:
+              schema:
+                type: string
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformAccount"
+        "400":
+          description: The account request is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Global administrator authority is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The username is already in use.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/accounts/{username}/enabled:
+    patch:
+      operationId: changePlatformAccountEnabled
+      tags:
+        - Platform Accounts
+      summary: Enable or disable an internal MEMBER account
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 128
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformAccountEnabledRequest"
+      responses:
+        "200":
+          description: Account state after the command.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformAccount"
+        "400":
+          description: The account request is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Global administrator authority is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The account does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The bootstrap administrator is immutable through this endpoint.
           content:
             application/problem+json:
               schema:
@@ -3003,7 +3142,76 @@ components:
         username:
           type: string
         role:
-          $ref: "#/components/schemas/ProjectRole"
+          $ref: "#/components/schemas/PlatformAccountRole"
+    PlatformAccountRole:
+      type: string
+      enum:
+        - ADMIN
+        - MEMBER
+    PlatformAccountCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$
+        password:
+          type: string
+          minLength: 12
+          maxLength: 72
+          writeOnly: true
+    PlatformAccountEnabledRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+    PlatformAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - role
+        - enabled
+        - version
+        - created_at
+        - updated_at
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 128
+        role:
+          $ref: "#/components/schemas/PlatformAccountRole"
+        enabled:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PlatformAccountList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformAccount"
     ProjectRole:
       type: string
       enum:

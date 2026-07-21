@@ -29,6 +29,16 @@ export interface ClipAssetFolderAssignment {
   updated_at: string
 }
 
+export interface ProjectMembership {
+  membership_id: string
+  project_id: string
+  actor_id: string
+  role: ProjectRole
+  status: 'ACTIVE' | 'REMOVED'
+  version: number
+  updated_at: string
+}
+
 interface ListResponse<T> {
   items: T[]
 }
@@ -59,6 +69,37 @@ export function createProject(displayName: string): Promise<DataProject> {
 
 export function getProject(projectId: string, signal?: AbortSignal): Promise<DataProject> {
   return readJson<DataProject>(`/api/v1/projects/${encodeURIComponent(projectId)}`, signal)
+}
+
+export async function listProjectMemberships(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<ProjectMembership[]> {
+  return (
+    await readJson<ListResponse<ProjectMembership>>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/memberships`,
+      signal,
+    )
+  ).items
+}
+
+export function upsertProjectMembership(
+  projectId: string,
+  actorId: string,
+  role: ProjectRole,
+): Promise<ProjectMembership> {
+  return writeJson<ProjectMembership>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/memberships/${encodeURIComponent(actorId)}`,
+    'PUT',
+    { role },
+  )
+}
+
+export async function removeProjectMembership(projectId: string, actorId: string): Promise<ProjectMembership> {
+  return writeJson<ProjectMembership>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/memberships/${encodeURIComponent(actorId)}`,
+    'DELETE',
+  )
 }
 
 export async function listAssetFolders(

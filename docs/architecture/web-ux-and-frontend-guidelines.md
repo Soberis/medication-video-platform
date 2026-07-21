@@ -8,8 +8,9 @@
 
 发生冲突时按以下顺序处理：
 
-1. `docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`；
-2. `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`（V1.2 未变更条款的继承来源）；
+1. `docs/requirements/baselines/V1.3/配药视频数据管理平台需求文档_V1.3.md`；
+2. `docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md` 与
+   `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`（V1.3 未变更条款的继承来源）；
 3. [总体技术设计](./配药平台技术设计.md)；
 4. `docs/adr/` 中已批准的技术决策；
 5. [状态机与领域守卫](./state-machines.md)、[安全、隐私与保留销毁](./security-privacy-retention.md)等专题设计；
@@ -89,7 +90,7 @@ P0 非目标：
 | `/projects/:projectId/sessions`、详情子路由 | 多相机配药操作列表、完整性与详情 | 项目隔离查询、游标分页、状态语义和测试具备 | 已启用 |
 | `/annotation-projects` | 标注项目和标签/指南版本 | 标注项目契约具备 | 待启用 |
 | `/annotation-tasks/:id` | Step 时间轴、Object 工具跳转、草稿、提交与复核 | 标注与复核闭环 | 待启用 |
-| `/admin/users` | 用户启停、ADMIN/MEMBER 模板和项目成员分配 | 正式身份和成员管理具备 | 待启用 |
+| `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 清洗任务、质量结果和隔离区 | 清洗状态机和任务契约 | 待启用 |
 | `/datasets` | 数据集版本、准入、冻结、审批和导出 | 数据集与治理契约 | 待启用 |
 

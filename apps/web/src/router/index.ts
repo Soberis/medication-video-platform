@@ -45,6 +45,18 @@ const router = createRouter({
       name: 'folder-management',
       component: () => import('@/views/FolderManagementView.vue'),
     },
+    {
+      path: '/projects/:projectId/members',
+      name: 'project-memberships',
+      component: () => import('@/views/ProjectMembershipView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/users',
+      name: 'account-management',
+      component: () => import('@/views/AccountManagementView.vue'),
+      meta: { requiresAdmin: true },
+    },
     { path: '/sessions', redirect: '/projects' },
     { path: '/assets', redirect: '/projects' },
     {
@@ -70,6 +82,9 @@ router.beforeEach(async (to) => {
     await auth.loadSession()
   } catch {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.requiresAdmin === true && auth.session?.role !== 'ADMIN') {
+    return { name: 'project-list' }
   }
   return auth.isAuthenticated ? true : { name: 'login', query: { redirect: to.fullPath } }
 })

@@ -13,6 +13,8 @@ const projectId = computed(() => String(route.params.projectId ?? ''))
 const sessionsRoute = computed(() => ({ name: 'session-list', params: { projectId: projectId.value } }))
 const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: projectId.value } }))
 const foldersRoute = computed(() => ({ name: 'folder-management', params: { projectId: projectId.value } }))
+const membershipsRoute = computed(() => ({ name: 'project-memberships', params: { projectId: projectId.value } }))
+const isAdministrator = computed(() => auth.session?.role === 'ADMIN')
 
 async function logout() {
   await auth.logout()
@@ -35,8 +37,10 @@ async function logout() {
         <span v-else class="nav-unavailable" title="请先选择项目">视频资产</span>
         <RouterLink v-if="projectId" :to="foldersRoute">文件夹</RouterLink>
         <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
+        <RouterLink v-if="projectId && isAdministrator" :to="membershipsRoute">项目成员</RouterLink>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
+        <RouterLink v-if="isAdministrator" :to="{ name: 'account-management' }">账号管理</RouterLink>
       </nav>
       <div v-if="auth.session" class="account-summary">
         <span>{{ auth.session.username }}</span>

@@ -18,7 +18,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
-@RestControllerAdvice(assignableTypes = ProjectController.class)
+@RestControllerAdvice(assignableTypes = {
+		ProjectController.class,
+		PlatformAccountManagementController.class
+})
 class ProjectExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(ProjectExceptionHandler.class);
