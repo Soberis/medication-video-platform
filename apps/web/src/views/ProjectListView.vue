@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElButton, ElCard, ElEmpty, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import { ElAlert, ElButton, ElCard, ElEmpty, ElTable, ElTableColumn, ElTag } from 'element-plus'
 import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
 import { CatalogApiError } from '@/api/catalog'
@@ -11,6 +11,7 @@ const projects = shallowRef<DataProject[]>([])
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
 const errorCode = ref('')
 const errorMessage = ref('')
+const isLocalDevelopment = import.meta.env.DEV
 let activeRequest: AbortController | null = null
 
 async function loadProjects() {
@@ -47,6 +48,16 @@ onUnmounted(() => activeRequest?.abort())
     <ElButton :loading="loadState === 'loading'" @click="loadProjects">刷新</ElButton>
   </section>
 
+  <ElAlert
+    v-if="isLocalDevelopment"
+    class="catalog-alert"
+    title="本地开发身份与权限"
+    description="本地环境没有登录页。Vite 代理以合成身份调用 API，项目和 ADMIN/MEMBER 角色由后端 Membership 在每次请求中校验；页面不能切换或伪造权限。可用 start-local.ps1 -WebRole admin 或 member 切换测试身份。"
+    type="info"
+    :closable="false"
+    show-icon
+  />
+
   <div v-if="loadState === 'loading'" class="catalog-notice" role="status">正在读取授权项目…</div>
   <div v-else-if="loadState === 'error'" class="catalog-error" role="alert">
     <strong>{{ errorCode }}</strong>
@@ -82,6 +93,10 @@ onUnmounted(() => activeRequest?.abort())
 
   <ElEmpty
     v-else-if="loadState === 'success'"
-    description="当前账号尚未加入任何项目，请联系管理员添加项目成员。"
+    :description="
+      isLocalDevelopment
+        ? '当前合成身份尚未加入任何项目。请以管理员身份创建项目或添加项目成员，再刷新此页。'
+        : '当前账号尚未加入任何项目，请联系管理员添加项目成员。'
+    "
   />
 </template>

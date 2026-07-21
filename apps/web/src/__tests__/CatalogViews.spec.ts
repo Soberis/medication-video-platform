@@ -100,6 +100,53 @@ describe('catalog views', () => {
     expect(wrapper.html()).not.toContain('storage_bucket')
   })
 
+  it('does not offer the destructive action to a project member', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: string | URL | Request) => {
+        const url = String(input)
+        if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+          return Promise.resolve(
+            jsonResponse({
+              project_id: projectId,
+              display_name: '合成测试项目',
+              status: 'ACTIVE',
+              current_role: 'MEMBER',
+              created_at: '2026-07-15T01:03:03Z',
+            }),
+          )
+        }
+        return Promise.resolve(
+          jsonResponse({
+            clip_asset_id: assetId,
+            batch_id: '60000000-0000-4000-8000-000000000001',
+            source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+            client_file_id: '90000000-0000-4000-8000-000000000001',
+            content_type: 'video/mp4',
+            size_bytes: 8_388_608,
+            sha256: 'a'.repeat(64),
+            status: 'UPLOADED',
+            folder_id: null,
+            session_binding: null,
+            created_at: '2026-07-15T01:03:03Z',
+            updated_at: '2026-07-15T01:03:03Z',
+          }),
+        )
+      }),
+    )
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
+    await router.isReady()
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('当前为普通用户权限')
+    expect(wrapper.findAll('button').some((button) => button.text() === '删除视频')).toBe(false)
+  })
+
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
     const folderId = 'a0000000-0000-4000-8000-000000000001'
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {

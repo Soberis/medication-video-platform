@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [switch]$Worker
+    [switch]$Worker,
+    [ValidateSet('member', 'admin')]
+    [string]$WebRole = 'member'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,6 +45,18 @@ function Start-LocalProcess {
 
 Import-LocalEnvironment $envFile
 
+# The selected synthetic identity is inherited only by the Vite proxy process.
+# It is not compiled into, stored by, or sent to browser JavaScript.
+if ($WebRole -eq 'admin') {
+    $env:DEV_WEB_BEARER_TOKEN = $env:DEV_ADMIN_BEARER_TOKEN
+}
+else {
+    $env:DEV_WEB_BEARER_TOKEN = $env:DEV_BEARER_TOKEN
+}
+if ([string]::IsNullOrWhiteSpace($env:DEV_WEB_BEARER_TOKEN)) {
+    throw "The synthetic $WebRole Web identity is not configured. Check $envFile."
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue) -or -not (docker version --format '{{.Server.Version}}' 2>$null)) {
     throw 'Docker Desktop is not running or unreachable. Start Docker Desktop, then run this script again.'
 }
@@ -65,7 +79,7 @@ else {
 }
 
 if (Test-TcpPortInUse $webPort) {
-    Write-Host "Web app already listens on $webPort." -ForegroundColor Yellow
+    Write-Warning "Web app already listens on $webPort. The requested WebRole '$WebRole' applies only when this script starts a new Web process."
 }
 elseif (-not (Test-Path -LiteralPath (Join-Path $root 'apps/web/node_modules'))) {
     Write-Warning 'Web dependencies are not installed. Run: pnpm install --frozen-lockfile'
@@ -81,4 +95,5 @@ if ($Worker) {
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: http://localhost:$apiPort/actuator/health" -ForegroundColor Cyan
 Write-Host "Web: http://localhost:$webPort/projects" -ForegroundColor Cyan
+Write-Host "Web development identity: $WebRole (server-side proxy only)" -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray

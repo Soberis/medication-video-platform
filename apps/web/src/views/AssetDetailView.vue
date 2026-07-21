@@ -4,6 +4,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { CatalogApiError, deleteClipAsset, getClipAsset, type ClipAssetRead } from '@/api/catalog'
+import { getProject, type ProjectRole } from '@/api/projects'
 import {
   assetStatusLabels,
   declaredSyncStatusLabels,
@@ -27,7 +28,11 @@ const errorMessage = ref('')
 const actionErrorCode = ref('')
 const actionErrorMessage = ref('')
 const isDeleting = ref(false)
+const projectRole = ref<ProjectRole | null>(null)
 let activeRequest: AbortController | null = null
+let activeRoleRequest: AbortController | null = null
+
+const canDelete = computed(() => projectRole.value === 'ADMIN')
 
 async function loadDetail() {
   activeRequest?.abort()
@@ -49,8 +54,34 @@ async function loadDetail() {
   }
 }
 
-watch([projectId, assetId], () => void loadDetail(), { immediate: true })
-onUnmounted(() => activeRequest?.abort())
+async function loadProjectRole() {
+  activeRoleRequest?.abort()
+  const request = new AbortController()
+  activeRoleRequest = request
+  projectRole.value = null
+  try {
+    const project = await getProject(projectId.value, request.signal)
+    if (activeRoleRequest === request) projectRole.value = project.current_role
+  } catch {
+    // Fail closed for destructive UI. The API remains the final authorization boundary.
+    if (!request.signal.aborted && activeRoleRequest === request) projectRole.value = null
+  } finally {
+    if (activeRoleRequest === request) activeRoleRequest = null
+  }
+}
+
+watch(
+  [projectId, assetId],
+  () => {
+    void loadDetail()
+    void loadProjectRole()
+  },
+  { immediate: true },
+)
+onUnmounted(() => {
+  activeRequest?.abort()
+  activeRoleRequest?.abort()
+})
 
 async function confirmDelete() {
   if (!detail.value || isDeleting.value) return
@@ -106,7 +137,9 @@ async function confirmDelete() {
       </div>
       <div class="detail-actions">
         <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
-        <ElButton type="danger" plain :loading="isDeleting" @click="confirmDelete">删除（仅管理员）</ElButton>
+        <ElButton v-if="canDelete" type="danger" plain :loading="isDeleting" @click="confirmDelete">
+          删除视频
+        </ElButton>
       </div>
     </section>
 
@@ -123,6 +156,15 @@ async function confirmDelete() {
     <ElAlert
       title="视频预览尚未开放"
       description="当前接口只返回安全的资产元数据。完成媒体处理、隐私评估和预览授权后，平台才会提供可播放的派生视频。"
+      type="info"
+      :closable="false"
+      show-icon
+    />
+
+    <ElAlert
+      v-if="projectRole === 'MEMBER'"
+      title="当前为普通用户权限"
+      description="你可以查看视频状态；删除视频仅对项目管理员开放。"
       type="info"
       :closable="false"
       show-icon

@@ -34,6 +34,10 @@ export async function listProjects(signal?: AbortSignal): Promise<DataProject[]>
   return (await readJson<ListResponse<DataProject>>('/api/v1/projects', signal)).items
 }
 
+export function getProject(projectId: string, signal?: AbortSignal): Promise<DataProject> {
+  return readJson<DataProject>(`/api/v1/projects/${encodeURIComponent(projectId)}`, signal)
+}
+
 export async function listAssetFolders(
   projectId: string,
   signal?: AbortSignal,
