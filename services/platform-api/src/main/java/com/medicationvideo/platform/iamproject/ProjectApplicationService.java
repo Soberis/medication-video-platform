@@ -88,12 +88,12 @@ class ProjectApplicationService {
 	}
 
 	@Transactional(readOnly = true)
-	ProjectListResponse list(String actorId) {
+	ProjectListResponse list(String actorId, boolean canCreateProjects) {
 		var memberships = this.membershipRepository
 				.findAllByActorIdAndStatusOrderByCreatedAtAscMembershipIdAsc(
 						actorId, MembershipStatus.ACTIVE);
 		if (memberships.isEmpty()) {
-			return new ProjectListResponse(java.util.List.of());
+			return new ProjectListResponse(java.util.List.of(), canCreateProjects);
 		}
 		var roleByProject = memberships.stream().collect(Collectors.toMap(
 				ProjectMembership::getProjectId,
@@ -103,7 +103,7 @@ class ProjectApplicationService {
 		return new ProjectListResponse(projects.stream()
 				.map(project -> ProjectResponse.from(
 						project, roleByProject.get(project.getProjectId())))
-				.toList());
+				.toList(), canCreateProjects);
 	}
 
 	@Transactional(readOnly = true)

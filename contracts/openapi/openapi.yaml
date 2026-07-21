@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.24.0
+  version: 0.25.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
-    manage their ADMIN/MEMBER memberships, list only projects visible to the authenticated member,
+    authenticate internal platform accounts with an HttpOnly session, manage their ADMIN/MEMBER
+    memberships, list only projects visible to the authenticated member,
     manage one-level project folders and classify ClipAssets without changing media ownership,
     require an ACTIVE project membership for every upload command and an ACTIVE ADMIN membership
     for server-side camera configuration, initialize an upload
@@ -35,7 +36,12 @@ servers:
     description: Version 1 API prefix
 security:
   - bearerAuth: []
+  - sessionCookie: []
 tags:
+  - name: Authentication
+    description: >-
+      Internal platform-account password login, session inspection and logout. Hospital edge devices
+      do not use these endpoints; they retain their service credentials for automated uploads.
   - name: Projects
     description: >-
       Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Membership
@@ -72,6 +78,85 @@ tags:
       Administrator-only, project-scoped read model for active clip-asset quarantine records. This
       contract does not expose quarantine creation, release or destruction commands.
 paths:
+  /auth/login:
+    post:
+      operationId: loginPlatformAccount
+      tags:
+        - Authentication
+      summary: Start an internal platform-account session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformLoginRequest"
+      responses:
+        "200":
+          description: Authenticated session. The response sets the XSRF-TOKEN Cookie used for subsequent browser commands.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSession"
+        "400":
+          description: Login request failed validation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The username or password is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/session:
+    get:
+      operationId: getPlatformSession
+      tags:
+        - Authentication
+      summary: Read the current internal platform-account session
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Current authenticated session.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSession"
+        "401":
+          description: No authenticated session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/logout:
+    post:
+      operationId: logoutPlatformAccount
+      tags:
+        - Authentication
+      summary: End the current internal platform-account session
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Session ended.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+        "401":
+          description: No authenticated session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects:
     post:
       operationId: createProject
@@ -134,7 +219,9 @@ paths:
       tags:
         - Projects
       summary: List projects visible to the authenticated member
-      description: Returns only ACTIVE projects with an ACTIVE membership for the authenticated actor.
+      description: >-
+        Returns only ACTIVE projects with an ACTIVE membership for the authenticated actor, plus the
+        server-evaluated capability to create a project.
       responses:
         "200":
           description: Authorized projects, ordered deterministically.
@@ -2857,8 +2944,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: >-
-        OAuth 2.0/OIDC access token in shared environments. Local development uses a synthetic
-        bearer adapter and must never reuse hospital or production credentials.
+        Edge or service bearer token. Local development uses a synthetic bearer adapter and must
+        never reuse hospital or production credentials.
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: MVPSESSION
+      description: HttpOnly session cookie for an internal platform-account browser session.
     workerBearerAuth:
       type: http
       scheme: bearer
@@ -2884,6 +2976,34 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[^\x00-\x1F\x7F]+$
+    PlatformLoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+          writeOnly: true
+    PlatformSession:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - role
+      properties:
+        username:
+          type: string
+        role:
+          $ref: "#/components/schemas/ProjectRole"
     ProjectRole:
       type: string
       enum:
@@ -2927,11 +3047,15 @@ components:
       additionalProperties: false
       required:
         - items
+        - can_create_projects
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/Project"
+        can_create_projects:
+          type: boolean
+          description: True only when the authenticated identity has provisioning administrator authority.
     ProjectMembershipRequest:
       type: object
       additionalProperties: false

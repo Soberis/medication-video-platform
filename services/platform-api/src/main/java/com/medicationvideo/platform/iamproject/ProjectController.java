@@ -67,7 +67,7 @@ class ProjectController {
 		var actor = requireActor(authentication);
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
-				.body(this.service.list(actor.actorId()));
+				.body(this.service.list(actor.actorId(), hasProvisioningAdministrator(authentication)));
 	}
 
 	@GetMapping("/{projectId}")
@@ -150,13 +150,17 @@ class ProjectController {
 	}
 
 	private static void requireProvisioningAdministrator(Authentication authentication) {
-		if (authentication.getAuthorities().stream()
-				.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+		if (!hasProvisioningAdministrator(authentication)) {
 			throw new ProjectApiException(
 					"PROJECT_ACCESS_DENIED",
 					"Administrator authority is required to create a project.",
 					403);
 		}
+	}
+
+	private static boolean hasProvisioningAdministrator(Authentication authentication) {
+		return authentication != null && authentication.getAuthorities().stream()
+				.anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
 	}
 
 	private static String resolveRequestId(String requestId) {

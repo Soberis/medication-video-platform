@@ -36,7 +36,7 @@ Codex、开发环境和 CI 只允许使用合成数据。未经明确授权和�
 
 ### 4.1 身份
 
-- 使用医院 IdP/OIDC；平台不自建普通用户密码体系。
+- 使用平台内部管理账号；密码仅保存 BCrypt 哈希，浏览器使用 HttpOnly 会话 Cookie 与 CSRF 保护。医院边端使用独立服务凭据，不使用管理端账号。
 - 服务、Worker 和外部适配器使用独立机器身份，禁止共享个人账号。
 - token audience、issuer、signature、expiry 和 clock skew 必须验证。
 - 管理员也不能绕过 project/purpose/classification 守卫直接读取全部对象。
@@ -108,7 +108,7 @@ raw INGESTED
 
 当前首个 P0 实现只落地人工 `PrivacyAssessment`，未启用自动隐私检测、脱敏 Worker、
 `PrivacyReleaseDecision` 或隔离解除。未评估资产返回 `UNKNOWN/BLOCKED`；已评估的
-`NONE/SUSPECTED/CONFIRMED` 也保持 `BLOCKED`。评估仅允许管理员（真实 OIDC 接入后应拆分为批准的
+`NONE/SUSPECTED/CONFIRMED` 也保持 `BLOCKED`。评估仅允许管理员（未来如出现外部身份集成，应拆分为批准的
 隐私复核角色），绑定 ClipAsset、平台验证 SHA-256、策略 key/digest、固定 finding 类别、操作者、
 请求 ID 和追加式审计。`NONE` 只能进入后续人工放行评审，不能直接进入标注池或导出。
 
@@ -205,7 +205,7 @@ request/approval reference
 - 输出只能进入 CandidateAnnotation。
 - DNS、连接尝试、模型摘要和镜像摘要进入安全监控。
 
-### 10.3 OIDC、S3 和 RabbitMQ
+### 10.3 平台账号、S3 和 RabbitMQ
 
 - 每个适配器设置连接超时、证书验证、最小权限、重试上限和熔断。
 - 外部 payload 不直接成为业务真值；必须经适配器规范化和领域守卫。
@@ -247,7 +247,7 @@ previous_event_hash（如启用链式完整性）
 
 当前首个落地场景是媒体 DLQ 受控重放：`audit_event` 使用数据库 trigger 阻止 UPDATE/DELETE，
 记录独立管理员 actor、项目、稳定原因、request ID、旧/新 attempt、dead-letter ID 和非敏感
-变更引用。该实现只证明应用写入和数据库追加约束；独立 SIEM/WORM 导出、真实 OIDC 角色映射、
+变更引用。该实现只证明应用写入和数据库追加约束；独立 SIEM/WORM 导出、账号启停与密码重置流程、
 失败认证审计和数据库职责分离仍属于后续安全验收项。
 
 ## 12. 保留、legal hold 与销毁
@@ -351,7 +351,7 @@ certificate digest
 - [ ] 系统安全等级及对应测评/测试要求。
 - [ ] S4/S3/S2 分级映射和角色权限矩阵。
 - [ ] ADMIN/MEMBER 到细粒度权限项的映射、标注自审拒绝和高风险职责分离。
-- [ ] OIDC 提供方、服务身份和紧急访问流程。
+- [ ] 平台账号引导、禁用、密码重置、服务身份和紧急访问流程。
 - [ ] S3 产品、bucket/密钥隔离、对象锁和生命周期能力。
 - [ ] TLS、KMS、轮换、备份密钥和 crypto-shredding 方案。
 - [ ] 隐私检测/人工复核范围，含画面文本、人脸、工牌和语音。

@@ -320,7 +320,7 @@ message ID；禁止把 DLQ body 直接投回业务队列。
 
 当前受控媒体重放接口为 `POST /api/v1/media-jobs/{media_job_id}/replays`，规则如下：
 
-- 仅项目管理员可调用；local/test 使用与边端上传令牌分离的管理员令牌，生产仍等待真实 IdP；
+- 仅项目管理员可调用；local/test 使用与边端上传令牌分离的合成管理员服务凭据，内部管理端使用平台账号会话；
 - 请求只复制脱敏诊断的 `dead_letter_id`、source message/attempt、稳定原因和 body SHA-256，
   不提交原消息 body、lease token、URL 或对象信息；
 - 服务端按与 Worker 一致的 UUIDv5 规则复核 `dead_letter_id`，并要求 source message/attempt

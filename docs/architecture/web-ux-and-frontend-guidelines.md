@@ -166,7 +166,7 @@ P0 非目标：
 
 前端可以根据授权结果调整导航和操作入口，但服务端授权始终是最终门禁。
 
-本地开发阶段不提供伪造的浏览器登录或角色切换控件。Web 代理以一个合成身份请求 API；项目列表和项目详情返回的 Membership 才是当前角色事实。`start-local.ps1 -WebRole admin` 或 `member` 只用于切换本地代理身份，不能替代生产 OIDC。
+平台管理端提供内部账号登录页；登录后显示账号与 ADMIN/MEMBER 全局角色，项目列表和项目详情返回的 Membership 仍是项目权限事实。浏览器不得伪造角色、保存密码或持久化会话/CSRF token；边端设备不使用 Web 登录页，而是使用独立上传凭据。账号引导、会话和 CSRF 规则见 [ADR-0002](../adr/0002-platform-account-authentication.md)。
 
 ### 6.2 敏感状态表达
 

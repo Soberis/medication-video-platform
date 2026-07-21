@@ -10,12 +10,13 @@
 
 按以下顺序理解需求和实现：
 
-1. `docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`：当前业务需求基线；未变更条款继承 `V1.1.13` DOCX。
-2. `docs/architecture/配药平台技术设计.md`：总体架构、技术选型、模块边界和实施顺序。
-3. `docs/adr/`：已经冻结的技术决策。
-4. `docs/architecture/` 中由主技术设计链接的专题详细设计。
-5. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
-6. 真实代码、数据库迁移和测试结果。
+1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
+2. `docs/requirements/baselines/V1.3/配药视频数据管理平台需求文档_V1.3.md`：当前业务需求基线；未变更条款继承 V1.2/V1.1.13。
+3. `docs/architecture/配药平台技术设计.md`：总体架构、技术选型、模块边界和实施顺序。
+4. `docs/adr/`：已经冻结的技术决策。
+5. `docs/architecture/` 中由主技术设计链接的专题详细设计。
+6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
+7. 真实代码、数据库迁移和测试结果。
 
 发现冲突时按上述优先级处理并说明影响，不自行猜测或扩大范围。前端界面任务还应读取 `docs/design.md` 和 `docs/architecture/web-ux-and-frontend-guidelines.md`；它们只约束设计与实现方式，不覆盖业务需求和正式契约。
 

@@ -1,16 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: '/projects',
     },
     {
       path: '/login',
-      name: 'local-login',
-      component: () => import('@/views/LocalLoginView.vue'),
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
     },
     {
       path: '/projects',
@@ -55,6 +58,20 @@ const router = createRouter({
       component: () => import('@/views/LocalUploadView.vue'),
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  if (to.meta.public === true) {
+    if (auth.isAuthenticated) return { name: 'project-list' }
+    return true
+  }
+  try {
+    await auth.loadSession()
+  } catch {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  return auth.isAuthenticated ? true : { name: 'login', query: { redirect: to.fullPath } }
 })
 
 export default router

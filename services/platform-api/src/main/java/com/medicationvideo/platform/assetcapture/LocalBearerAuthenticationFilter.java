@@ -48,7 +48,11 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 			HttpServletResponse response,
 			FilterChain filterChain) throws ServletException, IOException {
 		var authorization = request.getHeader("Authorization");
-		if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+		if (authorization == null || authorization.isBlank()) {
+			filterChain.doFilter(request, response);
+			return;
+		}
+		if (!authorization.startsWith(BEARER_PREFIX)) {
 			unauthorized(response);
 			return;
 		}

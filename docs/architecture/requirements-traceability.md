@@ -1,10 +1,10 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md`
+> 当前需求基线：`docs/requirements/baselines/V1.3/配药视频数据管理平台需求文档_V1.3.md`
 > 继承需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-07-20
+> 最后更新：2026-07-21
 
 ## 1. 目的
 
@@ -112,9 +112,9 @@ FR-025 当前 `PI` 证据和边界：
 - 自动隐私检测属于 P2；P0 已有 `QUARANTINE_REQUIRED` 到活动隔离记录的最小编排，但尚缺隔离复核/解除、DeidentifyRun/DEIDENTIFIED variant、PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
   FR-025 或隐私闭环完成。
 
-### 3.4 V1.2 新增需求
+### 3.4 V1.2/V1.3 新增与细化需求
 
-以下四项是 V1.2 相对 V1.1.13 的已批准新增需求。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 进一步明确内部平台账号、边端自动上传和账号管理。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -122,6 +122,8 @@ FR-025 当前 `PI` 证据和边界：
 | FR-034 平台本地上传 | P0 | `assetcapture`、Web | 复用 upload/multipart/complete | upload_batch.upload_source_type 及现有上传表 | 页面选择本机视频完成上传和入库；越权或不符合上传规则的请求被拒绝 | PI |
 | FR-035 视频删除 | P0 | `assetcapture`、`governance` | delete video；reference guard | clip_asset.deleted_at/deleted_by/delete_reason、audit_event | 管理员可删除无用或不合格视频；不级联删除其他视频；操作可审计；受控引用守卫生效 | D1 |
 | FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | PI |
+| FR-037 平台内部账号登录 | P0 | `iamproject`、Web、`governance` | auth login/session/logout | platform_account、audit_event、HTTP session | BCrypt、统一失败提示、会话/CSRF/注销和未认证拒绝 | I |
+| FR-038 管理员账号管理 | P0 | `iamproject`、Web、`governance` | users/account enablement/memberships | platform_account、membership、audit_event | 管理员创建/启停普通用户并分配项目成员；无公开注册 | D1 |
 
 “上传后可播放”由既有 FR-007/FR-008 细化，“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环，不创建重复 FR。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
@@ -133,7 +135,7 @@ FR-033/FR-036 当前 `PI` 证据和边界：
 - 数据库只接受 `ADMIN`/`MEMBER` 和 `ACTIVE`/`REMOVED`，移除成员保留历史；变更命令保存原响应快照并使用追加式审计，重放不会重复产生业务变更或审计。
 - OpenAPI 0.22.0、Flyway V23 和 `AssetFolderContractTests` 已覆盖一层文件夹创建/重命名/删除、成员只读、管理员写入、视频同项目分类/未分类、大小写重名、跨项目复合外键、并发单写和审计失败回滚。删除文件夹只清空 `clip_asset.folder_id` 并递增资产版本，不删除视频或移动对象。
 - OpenAPI 0.24.0 与资产目录合同测试已将 Session、ClipAsset 和 EVENT_LOG 查询统一到显式项目路径并接入 ACTIVE Membership；非成员项目隐藏为 `PROJECT_NOT_FOUND`，成员读取其他项目资源返回资源级 404。Vue 先列授权项目，再在项目路由内查询 Session/视频，视频列表可按真实一层文件夹或“未分类”投影筛选。
-- 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹/分类、全部上传入口、Camera 配置和资产目录已使用 Membership 守卫；项目成员可上传和读取目录，Camera 配置要求项目 ADMIN，批次 Abort 的管理员判断来自项目 Membership。真实 OIDC 用户管理、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 仍未完成，因此两项需求仍为 `PI`。
+- 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹/分类、全部上传入口、Camera 配置和资产目录已使用 Membership 守卫；项目成员可上传和读取目录，Camera 配置要求项目 ADMIN，批次 Abort 的管理员判断来自项目 Membership。内部账号登录、会话与 CSRF 已实现；管理员账号创建/启停、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 仍未完成，因此相关需求仍为 `PI`/`D1`。
 
 FR-034 当前 `PI` 证据和边界：
 

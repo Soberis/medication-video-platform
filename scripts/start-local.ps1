@@ -108,6 +108,7 @@ if (Test-Path -LiteralPath $runtimeFile) {
 }
 
 $apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
+$webPort = [int]($env:WEB_PORT ?? '5173')
 
 if ($InfrastructureOnly) {
     Write-Host "Infrastructure is ready. Run .\scripts\status-local.ps1 to inspect it." -ForegroundColor Cyan
@@ -130,8 +131,15 @@ if ($Worker) {
     }
 }
 
+if (Test-TcpPortInUse $webPort) {
+    Write-Host "Web app already listens on $webPort. Stop and restart it to use a different local role." -ForegroundColor Yellow
+}
+else {
+    Start-LocalProcess 'web' 'Web app' 'cmd.exe' "/c pnpm --filter @medication-video-platform/web dev" (Join-Path $logDirectory 'web.log')
+}
+
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: http://localhost:$apiPort/actuator/health" -ForegroundColor Cyan
-Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
+Write-Host "Web app: http://localhost:$webPort" -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

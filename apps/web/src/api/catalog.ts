@@ -1,3 +1,5 @@
+import { csrfHeaders } from '@/api/http'
+
 export type CaptureSessionAssemblyStatus =
   | 'OPEN'
   | 'ASSEMBLING'
@@ -244,6 +246,7 @@ export async function deleteClipAsset(projectId: string, clipAssetId: string, re
         Accept: 'application/json',
         'Content-Type': 'application/json',
         'Idempotency-Key': crypto.randomUUID(),
+        ...csrfHeaders(),
       },
       body: JSON.stringify({ reason }),
       cache: 'no-store',

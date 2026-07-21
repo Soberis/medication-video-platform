@@ -137,11 +137,17 @@ class ProjectMembershipContractTests {
 				ADMIN_ACTOR));
 		assertEquals(1, countAudit(projectId, "PROJECT_CREATED"));
 		assertEquals(1, countAudit(projectId, "PROJECT_MEMBERSHIP_GRANTED"));
+		this.mockMvc.perform(get("/api/v1/projects")
+					.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.can_create_projects").value(true));
 
 		this.mockMvc.perform(get("/api/v1/projects")
 					.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.items").isEmpty());
+				.andExpect(jsonPath("$.items").isEmpty())
+				.andExpect(jsonPath("$.can_create_projects").value(false));
 	}
 
 	@Test
@@ -185,7 +191,8 @@ class ProjectMembershipContractTests {
 				.andExpect(jsonPath("$.items.length()").value(1))
 				.andExpect(jsonPath("$.items[0].project_id")
 						.value(firstProjectId.toString()))
-				.andExpect(jsonPath("$.items[0].current_role").value("MEMBER"));
+				.andExpect(jsonPath("$.items[0].current_role").value("MEMBER"))
+				.andExpect(jsonPath("$.can_create_projects").value(false));
 
 		this.mockMvc.perform(get("/api/v1/projects/{projectId}", firstProjectId)
 					.header("Authorization", "Bearer " + MEMBER_TOKEN))

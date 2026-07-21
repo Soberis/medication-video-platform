@@ -1,5 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
+import { csrfHeaders } from '@/api/http'
+
 import { hashFileInWorker } from '@/upload/hash-file'
 
 export const LOCAL_UPLOAD_PART_SIZE_BYTES = 8 * 1024 * 1024
@@ -278,6 +280,7 @@ async function requestJson<T>(
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
+  Object.assign(headers, csrfHeaders())
   const response = await fetch(path, {
     method,
     headers,

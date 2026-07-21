@@ -1,4 +1,5 @@
 import { CatalogApiError } from '@/api/catalog'
+import { csrfHeaders } from '@/api/http'
 
 export type ProjectRole = 'ADMIN' | 'MEMBER'
 export type ProjectStatus = 'ACTIVE'
@@ -32,6 +33,11 @@ interface ListResponse<T> {
   items: T[]
 }
 
+export interface ProjectList {
+  items: DataProject[]
+  can_create_projects: boolean
+}
+
 interface ApiErrorBody {
   error_code?: unknown
   error_message?: unknown
@@ -40,7 +46,15 @@ interface ApiErrorBody {
 }
 
 export async function listProjects(signal?: AbortSignal): Promise<DataProject[]> {
-  return (await readJson<ListResponse<DataProject>>('/api/v1/projects', signal)).items
+  return (await getProjectList(signal)).items
+}
+
+export function getProjectList(signal?: AbortSignal): Promise<ProjectList> {
+  return readJson<ProjectList>('/api/v1/projects', signal)
+}
+
+export function createProject(displayName: string): Promise<DataProject> {
+  return writeJson<DataProject>('/api/v1/projects', 'POST', { display_name: displayName })
 }
 
 export function getProject(projectId: string, signal?: AbortSignal): Promise<DataProject> {
@@ -132,6 +146,7 @@ async function write(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: obj
     headers: {
       Accept: 'application/json',
       'Idempotency-Key': crypto.randomUUID(),
+      ...csrfHeaders(),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -149,7 +164,7 @@ async function projectApiError(response: Response) {
   const errorCode = typeof body.error_code === 'string' ? body.error_code : 'PROJECT_REQUEST_FAILED'
   const errorMessage =
     errorCode === 'PROJECT_ACCESS_DENIED'
-      ? '当前用户无权管理该项目。'
+      ? '当前身份没有执行此操作的权限。'
       : errorCode === 'ASSET_FOLDER_NAME_CONFLICT'
         ? '当前项目中已存在同名文件夹。'
         : errorCode === 'ASSET_FOLDER_NOT_FOUND'

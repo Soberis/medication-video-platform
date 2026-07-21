@@ -9,8 +9,8 @@ Sprint 0 已完成，正在交付 P0 上传与资产闭环。
 - Core API 是 Java 21、Spring Boot 和 Spring Modulith 模块化单体；
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
 - PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
-- Redis、CVAT、真实 OIDC、Export Worker 和 AI 插件尚未启用；
-- 下一纵向切片是可播放 Variant 与播放授权，随后实现视频软删除。
+- Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
+- 下一纵向切片是可播放 Variant 与播放授权；视频软删除已具备，后续只补审计与播放闭环所需的联调证据。
 
 详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
 
@@ -44,24 +44,23 @@ docs/                          需求、设计、ADR 和运行手册
 
 要求 Java 21、Node.js 22、pnpm 11、Python 3.12、uv 和 Docker Desktop。准确依赖版本由构建文件和 lockfile 冻结。
 
-后端和前端使用独立终端，便于查看日志和单独停止。Docker 只运行 PostgreSQL、RabbitMQ 和 S3；脚本以 Spring `local` profile 通过 Maven 启动 Core API。
+Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API 和 Web，并统一记录后台进程与日志。
 
-终端 A：启动基础设施与后端。
+首次安装前端依赖：
+
+```powershell
+cd C:\Dev\Projects\medication-video-platform
+pnpm install --frozen-lockfile
+```
+
+启动全部本地服务：
 
 ```powershell
 cd C:\Dev\Projects\medication-video-platform
 .\scripts\start-local.ps1
 ```
 
-终端 B：首次先安装依赖，之后启动前端。
-
-```powershell
-cd C:\Dev\Projects\medication-video-platform
-pnpm install --frozen-lockfile
-pnpm run web:dev
-```
-
-Web 默认地址为 `http://localhost:5173/projects`，Core API 健康检查为 `http://localhost:8080/actuator/health`。前端在终端 B 用 `Ctrl+C` 停止；后端日志位于 `logs/local/`。
+在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`，浏览器不保存密码或会话令牌。
 
 ```powershell
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置

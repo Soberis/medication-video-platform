@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import java.util.UUID;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,46 +10,81 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 
 @Configuration(proxyBeanMethods = false)
 @Profile({"local", "test"})
-class UploadSecurityConfiguration {
+class LocalBearerSecurityConfiguration {
 
 	@Bean
-	@Order(2)
-	SecurityFilterChain uploadSecurityFilterChain(
-			HttpSecurity http,
+	LocalBearerAuthenticationFilter localBearerAuthenticationFilter(
 			@Value("${platform.security.local-bearer-token:}") String bearerToken,
 			@Value("${platform.security.local-admin-bearer-token:}") String adminBearerToken,
-			@Value("${platform.security.local-project-id}") UUID projectId) throws Exception {
-		var localBearerFilter = new LocalBearerAuthenticationFilter(
-				bearerToken, adminBearerToken, projectId);
-		return http
-				.csrf(csrf -> csrf.disable())
-				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers("/actuator/health/**").permitAll()
-						.requestMatchers("/api/v1/**").authenticated()
-						.anyRequest().denyAll())
-				.addFilterBefore(localBearerFilter, UsernamePasswordAuthenticationFilter.class)
-				.build();
+			@Value("${platform.security.local-project-id}") UUID projectId) {
+		return new LocalBearerAuthenticationFilter(bearerToken, adminBearerToken, projectId);
 	}
 }
 
 @Configuration(proxyBeanMethods = false)
-@Profile("!local & !test")
-class DenyAllApiSecurityConfiguration {
+class PlatformSecurityConfiguration {
 
 	@Bean
-	SecurityFilterChain denyAllApiSecurityFilterChain(HttpSecurity http) throws Exception {
-		return http
-				.csrf(csrf -> csrf.disable())
-				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+	PasswordEncoder platformPasswordEncoder() {
+		return new BCryptPasswordEncoder();
+	}
+
+	@Bean
+	SecurityContextRepository securityContextRepository() {
+		return new HttpSessionSecurityContextRepository();
+	}
+
+	@Bean
+	@Order(2)
+	SecurityFilterChain platformSecurityFilterChain(
+			HttpSecurity http,
+			SecurityContextRepository securityContextRepository,
+			ObjectProvider<LocalBearerAuthenticationFilter> localBearerAuthenticationFilter)
+			throws Exception {
+		var csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+		csrfTokenRepository.setCookiePath("/");
+		http
+				.securityContext(context -> context
+						.securityContextRepository(securityContextRepository)
+						.requireExplicitSave(false))
+				.csrf(csrf -> csrf
+						.csrfTokenRepository(csrfTokenRepository)
+						.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+						.ignoringRequestMatchers("/api/v1/auth/login")
+						.ignoringRequestMatchers(new RequestHeaderRequestMatcher("Authorization")))
+				.sessionManagement(session -> session
+						.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+						.sessionFixation(fixation -> fixation.migrateSession()))
+				.requestCache(cache -> cache.disable())
+				.exceptionHandling(exception -> exception.authenticationEntryPoint((request, response, failure) -> {
+					response.setStatus(401);
+					response.setContentType("application/problem+json");
+					response.getWriter().write("{\"error_code\":\"UNAUTHENTICATED\","
+							+ "\"error_message\":\"An authenticated platform session or service credential is required.\","
+							+ "\"retryable\":false,\"request_id\":\""
+							+ java.util.UUID.randomUUID() + "\"}");
+				}))
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers("/actuator/health/**").permitAll()
-						.anyRequest().denyAll())
+						.requestMatchers("/actuator/health/**", "/api/v1/auth/login").permitAll()
+						.requestMatchers("/api/v1/**").authenticated()
+						.anyRequest().denyAll());
+		var localFilter = localBearerAuthenticationFilter.getIfAvailable();
+		if (localFilter != null) {
+			http.addFilterBefore(localFilter, UsernamePasswordAuthenticationFilter.class);
+		}
+		return http
 				.build();
 	}
 }

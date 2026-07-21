@@ -57,6 +57,14 @@ code {
   border-bottom: 1px solid #dce3ee;
 }
 
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475467;
+  font-size: 14px;
+}
+
 .app-header h1 {
   margin: 4px 0 0;
   font-size: clamp(28px, 5vw, 44px);
@@ -572,6 +580,18 @@ code {
 .login-card p:not(.app-eyebrow) {
   color: #5c687b;
   line-height: 1.65;
+}
+
+.login-form {
+  margin-top: 24px;
+}
+
+.login-form .el-button {
+  width: 100%;
+}
+
+.login-error {
+  margin-top: 20px;
 }
 
 .login-actions {

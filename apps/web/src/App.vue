@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ElButton, ElTag } from 'element-plus'
 import { RouterLink, RouterView } from 'vue-router'
 import { useRoute } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
 const route = useRoute()
+const auth = useAuthStore()
+const isLoginRoute = computed(() => route.name === 'login')
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const sessionsRoute = computed(() => ({ name: 'session-list', params: { projectId: projectId.value } }))
 const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: projectId.value } }))
 const foldersRoute = computed(() => ({ name: 'folder-management', params: { projectId: projectId.value } }))
+
+async function logout() {
+  await auth.logout()
+}
 </script>
 
 <template>
-  <div class="app-shell">
+  <RouterView v-if="isLoginRoute" />
+  <div v-else class="app-shell">
     <header class="app-header">
       <div>
         <p class="app-eyebrow">护士配药视频 · 云端数据管理</p>
@@ -27,8 +37,14 @@ const foldersRoute = computed(() => ({ name: 'folder-management', params: { proj
         <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <RouterLink to="/uploads">上传排障</RouterLink>
-        <RouterLink v-if="import.meta.env.DEV" :to="{ name: 'local-login' }">切换身份</RouterLink>
       </nav>
+      <div v-if="auth.session" class="account-summary">
+        <span>{{ auth.session.username }}</span>
+        <ElTag size="small" :type="auth.session.role === 'ADMIN' ? 'primary' : 'info'">
+          {{ auth.session.role === 'ADMIN' ? '管理员' : '普通用户' }}
+        </ElTag>
+        <ElButton link type="primary" @click="logout">退出登录</ElButton>
+      </div>
     </header>
 
     <main id="main-content">

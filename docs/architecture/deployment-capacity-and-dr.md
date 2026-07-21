@@ -28,17 +28,17 @@
 | RabbitMQ | 作业和事件传递 | 否 |
 | Redis（可选） | 缓存、限流、短锁、短期进度；有测量证据后启用 | 否 |
 | CVAT | Object 标注外部工具 | 外部工作副本，正式 revision 仍在平台 |
-| OIDC/IdP | 用户和服务认证 | 身份事实由 IdP 管理 |
+| 平台账号会话 | 内部管理用户认证 | 平台账号、会话与项目 Membership 共同构成用户访问事实 |
 | Observability | metrics、traces、logs、alerts | 运维证据，不替代业务审计 |
 
 ### 2.2 渐进激活
 
 | 阶段 | 默认启用 | 明确不在本阶段启用 |
 | --- | --- | --- |
-| Sprint 0 | Core API、Web、PostgreSQL、本地 S3 兼容对象存储 | RabbitMQ、Redis、CVAT、Worker、真实 IdP |
+| Sprint 0 | Core API、Web、PostgreSQL、本地 S3 兼容对象存储、平台账号会话 | RabbitMQ、Redis、CVAT、Worker、外部 IdP |
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
-| 隐私与标注 | 开发认证适配器、CVAT；UAT 前真实 OIDC | Export/AI Worker、无证据的 Redis |
+| 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
 | 数据集与导出 | Export Worker | AI Worker、无证据的 Redis |
 | P1 | AI Worker 和插件 | 不影响 P0 人工闭环 |
 
@@ -57,10 +57,10 @@ Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流�
 | --- | --- | --- | --- |
 | Local | 仅合成 | 本地容器/Mock | 开发和快速测试 |
 | CI | 仅合成、短生命周期 | 默认无公网或最小依赖镜像源 | 构建、测试、契约和安全门禁 |
-| UAT | 合成或明确批准的隔离样本 | UAT IdP/S3/CVAT | 端到端验收、容量和恢复演练 |
+| UAT | 合成或明确批准的隔离样本 | 平台账号会话/S3/CVAT | 端到端验收、容量和恢复演练 |
 | Production | 经批准的真实数据 | 医院批准系统 | 正式运行 |
 
-环境间禁止共享数据库、bucket、密钥、OIDC client、RabbitMQ vhost 和服务账号。生产数据不得回流开发/CI。
+环境间禁止共享数据库、bucket、密钥、会话密钥、RabbitMQ vhost 和服务账号。生产数据不得回流开发/CI。
 
 ## 4. 逻辑部署拓扑
 
@@ -74,7 +74,7 @@ flowchart TB
     API --> S3[(S3-compatible storage)]
     API --> MQ[(RabbitMQ)]
     API -. optional .-> REDIS[(Redis)]
-    API --> IDP["OIDC / IdP"]
+    API --> ACCOUNT["平台账号 / 会话"]
     API --> CVAT["CVAT"]
     MQ --> MW["Media Worker"]
     MQ --> EW["Export Worker"]

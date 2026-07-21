@@ -5,12 +5,6 @@ import { defineConfig, loadEnv } from 'vite'
 
 const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url))
 
-function selectedDevelopmentRole(cookieHeader: string | undefined) {
-  return cookieHeader?.split(';').some((value) => value.trim() === 'mvp_dev_role=admin')
-    ? 'admin'
-    : 'member'
-}
-
 export default defineConfig(({ mode }) => {
   // Load the repository .env for the development proxy only. Values without
   // the VITE_ prefix remain unavailable to browser code. A fresh checkout
@@ -24,9 +18,6 @@ export default defineConfig(({ mode }) => {
   if (!Number.isInteger(configuredWebPort) || configuredWebPort < 1024 || configuredWebPort > 65535) {
     throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
   }
-
-  const memberBearerToken = environmentValue('DEV_BEARER_TOKEN')
-  const adminBearerToken = environmentValue('DEV_ADMIN_BEARER_TOKEN')
 
   return {
     envDir: workspaceRoot,
@@ -43,13 +34,6 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://localhost:8080',
           changeOrigin: true,
-          configure: (proxy) => {
-            proxy.on('proxyReq', (proxyRequest, request) => {
-              const role = selectedDevelopmentRole(request.headers.cookie)
-              const token = role === 'admin' ? adminBearerToken : memberBearerToken
-              if (token) proxyRequest.setHeader('Authorization', `Bearer ${token}`)
-            })
-          },
         },
       },
     },

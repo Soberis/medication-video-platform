@@ -114,7 +114,7 @@ flowchart LR
 
 - Flyway V22 已实现 `project`、`membership` 和幂等成员命令证据；项目创建原子建立首个 `ADMIN`，成员变更按 project 行锁串行并写追加式审计。
 - 普通用户只能列出和读取其 `ACTIVE` Membership 对应的 Project；成员清单和变更要求项目内 `ACTIVE ADMIN`，且最后一个活动管理员不可移除或降级。
-- 当前没有从既有 UploadBatch、ClipAsset 或审计活动反推 Membership。既有资产 API 接入 Membership、Tenant 语义、RoleBinding、PurposeGrant、项目关闭和真实 OIDC 用户生命周期属于后续经批准切片。
+- 当前没有从既有 UploadBatch、ClipAsset 或审计活动反推 Membership。既有资产 API 接入 Membership、Tenant 语义、RoleBinding、PurposeGrant、项目关闭和平台账号启停/密码重置生命周期属于后续经批准切片。
 
 ## 5. `assetcapture`
 
