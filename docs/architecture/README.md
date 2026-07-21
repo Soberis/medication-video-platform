@@ -1,6 +1,6 @@
 # Architecture Documents
 
-本目录保存配药视频数据平台的总体技术基线和可实施的详细设计。
+本索引汇总配药视频数据平台的总体技术基线、专题设计和 Web 设计简报。
 
 ## 文档导航
 
@@ -21,6 +21,7 @@
 
 - 业务需求基线位于 `docs/requirements/`，本目录不复制需求正文。
 - 总体技术设计只保存跨领域决策；详细规则进入对应专题文档。
+- `docs/design.md` 只定义视觉方向和信息表达；Web 实现、状态和验收规则由前端体验规范负责。
 - 已批准技术决策进入 `docs/adr/`；详细设计不得覆盖 ADR。
 - API、事件和结构化数据契约进入 `contracts/`，不能只保存在 Markdown 示例中。
 - 数据库结构只通过 `services/platform-api/src/main/resources/db/migration/` 维护。
