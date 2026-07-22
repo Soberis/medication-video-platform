@@ -259,6 +259,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
+| QualityReview | quality_review | 保存每个项目视频当前有效的人工质量结论、固定原因、评审人和版本 |
 | CleaningRuleSet | cleaning_rule_set、cleaning_rule | 版本化规则、阈值和适用范围 |
 | CleaningRun | cleaning_run、cleaning_result | 对冻结输入执行的不可变运行 |
 | DuplicateGroup | duplicate_group、duplicate_member | 完全重复和近重复证据 |
@@ -267,6 +268,8 @@ flowchart LR
 
 ### 8.2 不变量
 
+- 一个项目视频只有一条当前 QualityReview；修改使用版本号防止覆盖他人的并发判断，历史由追加式 `audit_event` 保留。
+- QualityReview 只接受已入库、未删除且属于当前项目的视频；`QUALIFIED` 使用固定的 `MEETS_REQUIREMENTS`，`REJECTED` 和 `NEEDS_REVIEW` 使用与结论匹配的稳定原因码。
 - 自动规则可产生 PASS、WARNING、REJECT、HUMAN_REVIEW 或 QUARANTINE，但不得自动物理删除。
 - 完全重复以内容摘要为证据；近重复以版本化视频指纹/关键帧算法为证据，两者不能混为同一结论。
 - CleaningRun 冻结输入集合、规则摘要和软件摘要；重跑创建新 run。

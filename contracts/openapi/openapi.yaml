@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.30.0
+  version: 0.31.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -20,7 +20,8 @@ info:
     metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
-    member for human training-data review after media ingest, and create and read project-scoped media probe jobs that freeze the input
+    member for human training-data review after media ingest, record the current human quality
+    conclusion with a stable reason and optimistic version, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -55,6 +56,10 @@ tags:
       Upload batch lifecycle owned by the assetcapture module. Every command and read requires an
       ACTIVE membership in the owning project; a batch outside that scope is hidden as
       UPLOAD_BATCH_NOT_FOUND.
+  - name: Quality Review
+    description: >-
+      Project-member human decisions about whether an INGESTED ClipAsset is suitable for annotation
+      and training. The current fact is versioned and every change is append-only audited.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -2283,6 +2288,111 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Object storage could not issue a temporary read address. Retrying may succeed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/quality-review:
+    get:
+      operationId: getClipAssetQualityReview
+      tags:
+        - Quality Review
+      summary: Read the current human quality conclusion for a video
+      description: >-
+        Requires an ACTIVE ADMIN or MEMBER membership in the explicit project. An undeleted asset
+        without a conclusion returns UNREVIEWED with version 0. The response never exposes storage
+        details.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ClipAssetId"
+      responses:
+        "200":
+          description: Current quality-review fact or the explicit UNREVIEWED projection.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityReview"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The authenticated account has no ACTIVE membership in the project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or undeleted ClipAsset is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: recordClipAssetQualityReview
+      tags:
+        - Quality Review
+      summary: Record or revise the human quality conclusion for a video
+      description: >-
+        Requires an ACTIVE ADMIN or MEMBER membership. The asset must be undeleted and INGESTED.
+        expected_version is 0 for an unreviewed asset and must match the current review version for
+        a revision. Repeating the same conclusion returns the current fact without another audit
+        event. A changed conclusion is written atomically with an append-only audit event.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ClipAssetId"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualityReviewRequest"
+      responses:
+        "200":
+          description: The current quality conclusion after the command.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityReview"
+        "400":
+          description: The decision, reason or expected version is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The authenticated account has no ACTIVE membership in the project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or undeleted ClipAsset is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The asset is not INGESTED or the expected review version is stale.
           content:
             application/problem+json:
               schema:
@@ -4581,6 +4691,85 @@ components:
         content_type:
           type: string
           const: video/mp4
+    QualityReviewDecision:
+      type: string
+      enum:
+        - QUALIFIED
+        - REJECTED
+        - NEEDS_REVIEW
+    QualityReviewReasonCode:
+      type: string
+      enum:
+        - MEETS_REQUIREMENTS
+        - SENSITIVE_CONTENT
+        - BLURRY_OR_OUT_OF_FOCUS
+        - BLACK_OR_CORRUPTED_FRAMES
+        - SEVERE_OCCLUSION
+        - INCOMPLETE_ACTION
+        - WRONG_SCENE
+        - DUPLICATE
+        - OTHER_QUALITY_FAILURE
+        - UNCERTAIN_QUALITY
+        - METADATA_MISMATCH
+    QualityReviewRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - reason_code
+        - expected_version
+      properties:
+        decision:
+          $ref: "#/components/schemas/QualityReviewDecision"
+        reason_code:
+          $ref: "#/components/schemas/QualityReviewReasonCode"
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 0
+    QualityReview:
+      type: object
+      additionalProperties: false
+      required:
+        - quality_review_id
+        - project_id
+        - clip_asset_id
+        - decision
+        - reason_code
+        - reviewed_by
+        - reviewed_at
+        - version
+      properties:
+        quality_review_id:
+          type: [string, "null"]
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum:
+            - UNREVIEWED
+            - QUALIFIED
+            - REJECTED
+            - NEEDS_REVIEW
+        reason_code:
+          anyOf:
+            - $ref: "#/components/schemas/QualityReviewReasonCode"
+            - type: "null"
+        reviewed_by:
+          type: [string, "null"]
+          maxLength: 128
+        reviewed_at:
+          type: [string, "null"]
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 0
     ClipAssetSessionBinding:
       type: object
       additionalProperties: false

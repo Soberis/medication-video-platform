@@ -220,7 +220,7 @@ describe('catalog views', () => {
   })
 
   it('lets a project member request playback only after an explicit click', async () => {
-    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
       if (url.endsWith(`/api/v1/projects/${projectId}`)) {
         return Promise.resolve(
@@ -243,6 +243,22 @@ describe('catalog views', () => {
             expires_at: new Date(Date.now() + 300_000).toISOString(),
             content_type: 'video/mp4',
           }),
+        )
+      }
+      if (url.endsWith('/quality-review')) {
+        return Promise.resolve(
+          jsonResponse(
+            init?.method === 'PUT'
+              ? {
+                  ...unreviewedQuality(),
+                  quality_review_id: 'c0000000-0000-4000-8000-000000000001',
+                  decision: 'QUALIFIED',
+                  reason_code: 'MEETS_REQUIREMENTS',
+                  reviewed_by: 'reviewer',
+                  reviewed_at: '2026-07-22T01:02:03Z',
+                }
+              : unreviewedQuality(),
+          ),
         )
       }
       return Promise.resolve(
@@ -291,6 +307,21 @@ describe('catalog views', () => {
     expect(wrapper.find('video').exists()).toBe(false)
     expect(wrapper.text()).toContain('视频加载失败')
     expect(wrapper.text()).toContain('重新获取播放授权')
+
+    await wrapper.findAll('button').find((button) => button.text() === '保存质量结论')!.trigger('click')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/quality-review`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          decision: 'QUALIFIED',
+          reason_code: 'MEETS_REQUIREMENTS',
+          expected_version: 0,
+        }),
+      }),
+    )
+    expect(wrapper.text()).toContain('符合训练数据要求')
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
@@ -397,4 +428,17 @@ function jsonResponse(body: object, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function unreviewedQuality() {
+  return {
+    quality_review_id: null,
+    project_id: projectId,
+    clip_asset_id: assetId,
+    decision: 'UNREVIEWED',
+    reason_code: null,
+    reviewed_by: null,
+    reviewed_at: null,
+    version: 0,
+  }
 }

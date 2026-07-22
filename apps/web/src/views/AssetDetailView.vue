@@ -31,6 +31,16 @@ import {
   type ProjectRole,
 } from '@/api/projects'
 import {
+  getQualityReview,
+  qualityDecisionLabels,
+  qualityReasonLabels,
+  QualityReviewApiError,
+  recordQualityReview,
+  type QualityReview,
+  type QualityReviewCommandDecision,
+  type QualityReviewReasonCode,
+} from '@/api/quality'
+import {
   assetStatusLabels,
   declaredSyncStatusLabels,
   formatBytes,
@@ -60,8 +70,16 @@ const isRequestingPlayback = ref(false)
 const playbackGrant = shallowRef<ClipAssetPlaybackGrant | null>(null)
 const playbackState = ref<'idle' | 'waiting' | 'ready' | 'error' | 'expired'>('idle')
 const playbackMessage = ref('')
+const qualityReview = shallowRef<QualityReview | null>(null)
+const qualityLoadState = ref<'loading' | 'success' | 'error'>('loading')
+const qualityErrorCode = ref('')
+const qualityErrorMessage = ref('')
+const selectedQualityDecision = ref<QualityReviewCommandDecision>('QUALIFIED')
+const selectedQualityReason = ref<QualityReviewReasonCode>('MEETS_REQUIREMENTS')
+const isSavingQuality = ref(false)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
+let activeQualityRequest: AbortController | null = null
 let playbackExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
@@ -71,6 +89,28 @@ const canPlay = computed(
     detail.value?.status === 'INGESTED' &&
     detail.value.content_type === 'video/mp4',
 )
+const canReviewQuality = computed(() => projectRole.value !== null && detail.value?.status === 'INGESTED')
+const reasonsByDecision: Record<QualityReviewCommandDecision, QualityReviewReasonCode[]> = {
+  QUALIFIED: ['MEETS_REQUIREMENTS'],
+  REJECTED: [
+    'SENSITIVE_CONTENT',
+    'BLURRY_OR_OUT_OF_FOCUS',
+    'BLACK_OR_CORRUPTED_FRAMES',
+    'SEVERE_OCCLUSION',
+    'INCOMPLETE_ACTION',
+    'WRONG_SCENE',
+    'DUPLICATE',
+    'OTHER_QUALITY_FAILURE',
+  ],
+  NEEDS_REVIEW: ['UNCERTAIN_QUALITY', 'METADATA_MISMATCH'],
+}
+const qualityReasonOptions = computed(() => reasonsByDecision[selectedQualityDecision.value])
+const qualityTagType = computed(() => {
+  if (qualityReview.value?.decision === 'QUALIFIED') return 'success' as const
+  if (qualityReview.value?.decision === 'REJECTED') return 'danger' as const
+  if (qualityReview.value?.decision === 'NEEDS_REVIEW') return 'warning' as const
+  return 'info' as const
+})
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 const playbackAvailability = computed(() => {
   if (!detail.value) return null
@@ -141,6 +181,7 @@ function expirePlayback() {
 
 async function loadDetail() {
   activeRequest?.abort()
+  activeQualityRequest?.abort()
   const request = new AbortController()
   activeRequest = request
   loadState.value = 'loading'
@@ -150,6 +191,21 @@ async function loadDetail() {
       resetPlayback()
       selectedFolderId.value = detail.value.folder_id ?? ''
       loadState.value = 'success'
+      if (detail.value.status === 'INGESTED') {
+        void loadQualityReview()
+      } else {
+        qualityReview.value = {
+          quality_review_id: null,
+          project_id: projectId.value,
+          clip_asset_id: assetId.value,
+          decision: 'UNREVIEWED',
+          reason_code: null,
+          reviewed_by: null,
+          reviewed_at: null,
+          version: 0,
+        }
+        qualityLoadState.value = 'success'
+      }
     }
   } catch (error) {
     if (request.signal.aborted || activeRequest !== request) return
@@ -189,6 +245,41 @@ async function loadProjectRole() {
   }
 }
 
+async function loadQualityReview() {
+  activeQualityRequest?.abort()
+  const request = new AbortController()
+  activeQualityRequest = request
+  qualityLoadState.value = 'loading'
+  qualityErrorCode.value = ''
+  qualityErrorMessage.value = ''
+  try {
+    const result = await getQualityReview(projectId.value, assetId.value, request.signal)
+    if (activeQualityRequest !== request) return
+    qualityReview.value = result
+    if (result.decision !== 'UNREVIEWED' && result.reason_code) {
+      selectedQualityDecision.value = result.decision
+      selectedQualityReason.value = result.reason_code
+    } else {
+      selectedQualityDecision.value = 'QUALIFIED'
+      selectedQualityReason.value = 'MEETS_REQUIREMENTS'
+    }
+    qualityLoadState.value = 'success'
+  } catch (error) {
+    if (request.signal.aborted || activeQualityRequest !== request) return
+    qualityReview.value = null
+    qualityLoadState.value = 'error'
+    qualityErrorCode.value = error instanceof QualityReviewApiError ? error.errorCode : 'QUALITY_REVIEW_FAILED'
+    qualityErrorMessage.value =
+      error instanceof QualityReviewApiError ? error.message : '暂时无法读取质量结论，请稍后重试。'
+  } finally {
+    if (activeQualityRequest === request) activeQualityRequest = null
+  }
+}
+
+function refreshPage() {
+  void loadDetail()
+}
+
 watch(
   [projectId, assetId],
   () => {
@@ -200,6 +291,7 @@ watch(
 onUnmounted(() => {
   activeRequest?.abort()
   activeRoleRequest?.abort()
+  activeQualityRequest?.abort()
   clearPlaybackExpiryTimer()
 })
 
@@ -274,6 +366,35 @@ async function startPlayback() {
   }
 }
 
+async function saveQualityReview() {
+  if (!qualityReview.value || !canReviewQuality.value || isSavingQuality.value) return
+  isSavingQuality.value = true
+  qualityErrorCode.value = ''
+  qualityErrorMessage.value = ''
+  try {
+    qualityReview.value = await recordQualityReview(projectId.value, assetId.value, {
+      decision: selectedQualityDecision.value,
+      reason_code: selectedQualityReason.value,
+      expected_version: qualityReview.value.version,
+    })
+    ElMessage.success('质量结论已保存。')
+  } catch (error) {
+    qualityErrorCode.value = error instanceof QualityReviewApiError ? error.errorCode : 'QUALITY_REVIEW_FAILED'
+    qualityErrorMessage.value =
+      error instanceof QualityReviewApiError ? error.message : '质量结论暂未保存，请稍后重试。'
+  } finally {
+    isSavingQuality.value = false
+  }
+}
+
+watch(selectedQualityDecision, (decision) => {
+  const availableReasons = reasonsByDecision[decision]
+  if (!availableReasons.includes(selectedQualityReason.value)) {
+    const firstReason = availableReasons[0]
+    if (firstReason) selectedQualityReason.value = firstReason
+  }
+})
+
 function closePlayback() {
   resetPlayback()
 }
@@ -324,7 +445,7 @@ function handlePlaybackError() {
       </div>
       <div class="detail-actions">
         <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
-        <ElButton @click="loadDetail">刷新状态</ElButton>
+        <ElButton @click="refreshPage">刷新状态</ElButton>
       </div>
     </section>
 
@@ -391,6 +512,54 @@ function handlePlaybackError() {
             重新获取播放授权
           </ElButton>
           <ElButton plain @click="closePlayback">关闭视频</ElButton>
+        </div>
+      </template>
+    </ElCard>
+
+    <ElCard class="detail-card" shadow="never">
+      <template #header><strong>人工质量判断</strong></template>
+      <p class="form-hint">根据实际画面判断该视频是否适合进入标注。播放本身不会自动产生质量结论。</p>
+      <div v-if="qualityLoadState === 'loading'" class="catalog-notice" role="status">正在读取质量结论…</div>
+      <ElAlert
+        v-else-if="qualityLoadState === 'error'"
+        type="error"
+        :title="qualityErrorMessage"
+        :description="qualityErrorCode ? `错误码：${qualityErrorCode}` : undefined"
+        :closable="false"
+        show-icon
+      />
+      <template v-else-if="qualityReview">
+        <div class="quality-review-summary">
+          <ElTag :type="qualityTagType">{{ qualityDecisionLabels[qualityReview.decision] }}</ElTag>
+          <span v-if="qualityReview.reason_code">{{ qualityReasonLabels[qualityReview.reason_code] }}</span>
+          <span v-if="qualityReview.reviewed_by && qualityReview.reviewed_at" class="form-hint">
+            {{ qualityReview.reviewed_by }} · {{ formatDateTime(qualityReview.reviewed_at) }}
+          </span>
+        </div>
+        <ElAlert
+          v-if="detail.status !== 'INGESTED'"
+          title="视频完成媒体检测后才能判断质量"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+        <div v-else class="quality-review-actions">
+          <ElSelect v-model="selectedQualityDecision" aria-label="质量结论">
+            <ElOption label="合格" value="QUALIFIED" />
+            <ElOption label="不合格" value="REJECTED" />
+            <ElOption label="需复核" value="NEEDS_REVIEW" />
+          </ElSelect>
+          <ElSelect v-model="selectedQualityReason" aria-label="质量原因">
+            <ElOption
+              v-for="reason in qualityReasonOptions"
+              :key="reason"
+              :label="qualityReasonLabels[reason]"
+              :value="reason"
+            />
+          </ElSelect>
+          <ElButton type="primary" :loading="isSavingQuality" :disabled="!canReviewQuality" @click="saveQualityReview">
+            保存质量结论
+          </ElButton>
         </div>
       </template>
     </ElCard>

@@ -689,6 +689,22 @@ code {
   width: min(100%, 380px);
 }
 
+.quality-review-summary,
+.quality-review-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.quality-review-summary {
+  margin: 14px 0;
+}
+
+.quality-review-actions .el-select {
+  width: min(100%, 300px);
+}
+
 .heading-tags {
   display: flex;
   gap: 8px;
@@ -1020,12 +1036,18 @@ code {
 
   .local-upload-actions,
   .asset-classification-actions,
+  .quality-review-actions,
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .asset-classification-actions .el-select {
+    width: 100%;
+  }
+
+  .quality-review-actions .el-select,
+  .quality-review-actions .el-button {
     width: 100%;
   }
 

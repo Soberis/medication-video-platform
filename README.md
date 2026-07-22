@@ -4,13 +4,14 @@
 
 ## 当前阶段
 
-Sprint 0 已完成，正在交付 P0 上传与资产闭环。
+Sprint 0 已完成，正在交付 P0 数据审核、标注与清洗闭环。
 
 - Core API 是 Java 21、Spring Boot 和 Spring Modulith 模块化单体；
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
 - PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
 - Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
 - 已完成项目内视频人工审核播放：ACTIVE 项目 ADMIN/MEMBER 可在媒体检测通过后显式申请短期只读地址，签发会审计且 URL 不落库；P0 不再运行独立隐私评估或隔离子系统，意外敏感内容按质量不合格处理并由管理员软删除。
+- 已完成最小人工质量判断：项目成员可对已入库视频记录合格、不合格或需复核及固定原因；结论支持并发保护和追加式审计，尚未接入正式标注准入。
 
 详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
 

@@ -125,6 +125,20 @@ PENDING → PASS
 
 自动规则不能把 WARNING 隐式升级为 PASS。规则重跑产生新的 CleaningRun/MediaReport，由领域服务明确选择当前有效结论，旧结论保留。
 
+### 4.3 人工视频质量判断
+
+```text
+UNREVIEWED → QUALIFIED
+           → REJECTED
+           → NEEDS_REVIEW
+QUALIFIED / REJECTED / NEEDS_REVIEW → 任一新结论（版本并发保护）
+```
+
+- 只允许 ACTIVE 项目成员判断已入库且未删除的视频；质量判断不改变媒体入库状态。
+- `QUALIFIED` 使用固定的 `MEETS_REQUIREMENTS`；`REJECTED` 与 `NEEDS_REVIEW` 必须使用与结论匹配的固定原因码。
+- 相同结论和原因是幂等重试，不新增历史；结论变化写入当前事实并追加审计事件。
+- 当前只有 `QUALIFIED` 可以进入正式标注；该守卫在标注切片实现时由服务端再次校验。
+
 ## 5. 隐私与脱敏状态
 
 ### 5.1 Privacy risk（P0 后置）
@@ -293,12 +307,12 @@ GENERATED/PENDING_REVIEW → EXPIRED
 
 | 操作 | 必须满足 |
 | --- | --- |
-| 创建标注任务 | asset INGESTED；允许的 session/stream 质量；privacy ALLOWED_ANNOTATION；quarantine NONE |
+| 创建标注任务 | asset `INGESTED`、未删除；当前人工质量结论 `QUALIFIED`；项目与任务范围有效 |
 | 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；asset `INGESTED`、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
-| 发现异常敏感内容 | 停止正常数据流并建立活动隔离；后续新播放授权、标注、AI、数据集和导出入口必须统一拒绝，直至批准解除 |
+| 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
 | 提交 revision | task 可提交；schema/guideline 未变化；时间和几何基础校验通过 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
-| 数据集冻结 | session/stream 准入、privacy ALLOWED_INTERNAL_EXPORT、review PASS、post-clean PASS 或批准 override、quarantine NONE |
+| 数据集冻结 | session/stream 准入、人工质量 `QUALIFIED`、annotation review PASS、post-clean PASS 或批准 override |
 | 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |
 | AI 作业 | P1 已启用；DEIDENTIFIED variant；privacy ALLOWED_ANNOTATION；quarantine NONE；算法版本已批准 |
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |
