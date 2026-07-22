@@ -40,6 +40,15 @@ describe('authentication API', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'csrf-test-token' }) }),
     )
   })
+
+  it('maps a refused proxy connection to a stable service-unavailable error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    await expect(getSession()).rejects.toMatchObject({
+      errorCode: 'AUTH_SERVICE_UNAVAILABLE',
+      message: '认证服务暂不可用，请确认 Core API 已启动后重试。',
+    })
+  })
 })
 
 function sessionResponse() {

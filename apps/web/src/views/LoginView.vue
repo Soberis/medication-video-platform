@@ -23,8 +23,9 @@ async function submitLogin() {
     await router.replace(redirect.startsWith('/') ? redirect : '/projects')
   } catch (error) {
     errorMessage.value = error instanceof AuthApiError ? error.message : '暂时无法完成登录，请稍后重试。'
-  } finally {
-    password.value = ''
+    if (error instanceof AuthApiError && error.errorCode === 'INVALID_CREDENTIALS') {
+      password.value = ''
+    }
   }
 }
 </script>
@@ -47,12 +48,13 @@ async function submitLogin() {
 
       <ElForm class="login-form" label-position="top" @submit.prevent="submitLogin">
         <ElFormItem label="账号">
-          <ElInput v-model="username" autocomplete="username" maxlength="128" required />
+          <ElInput v-model="username" name="username" autocomplete="username" maxlength="128" required />
         </ElFormItem>
         <ElFormItem label="密码">
           <ElInput
             v-model="password"
             type="password"
+            name="password"
             show-password
             autocomplete="current-password"
             maxlength="256"

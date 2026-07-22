@@ -6,10 +6,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$envFile = Join-Path $root '.env'
-if (-not (Test-Path -LiteralPath $envFile)) {
-    $envFile = Join-Path $root '.env.example'
-}
+$exampleEnvFile = Join-Path $root '.env.example'
+$localEnvFile = Join-Path $root '.env'
 $logDirectory = Join-Path $root 'logs/local'
 $runtimeFile = Join-Path $logDirectory 'managed-processes.json'
 
@@ -74,7 +72,10 @@ else {
 }
 
 if ($IncludeListeningApps) {
-    Import-LocalEnvironment $envFile
+    Import-LocalEnvironment $exampleEnvFile
+    if (Test-Path -LiteralPath $localEnvFile) {
+        Import-LocalEnvironment $localEnvFile
+    }
     foreach ($port in @([int]($env:PLATFORM_API_PORT ?? '8080'), [int]($env:WEB_PORT ?? '5173'))) {
         $listenerProcessId = Get-ListeningProcessId $port
         if ($null -ne $listenerProcessId) {
@@ -93,7 +94,11 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 
 $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
-& docker compose --env-file $envFile -f $composeFile down
+$composeEnvironmentArguments = @('--env-file', $exampleEnvFile)
+if (Test-Path -LiteralPath $localEnvFile) {
+    $composeEnvironmentArguments += @('--env-file', $localEnvFile)
+}
+& docker compose @composeEnvironmentArguments -f $composeFile down
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose did not stop cleanly.'
 }

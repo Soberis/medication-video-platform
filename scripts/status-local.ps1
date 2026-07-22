@@ -3,10 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$envFile = Join-Path $root '.env'
-if (-not (Test-Path -LiteralPath $envFile)) {
-    $envFile = Join-Path $root '.env.example'
-}
+$exampleEnvFile = Join-Path $root '.env.example'
+$localEnvFile = Join-Path $root '.env'
 
 function Import-LocalEnvironment {
     param([string]$Path)
@@ -52,21 +50,53 @@ function Show-Listener {
     Write-Host "${Name}: listening on $Port" -ForegroundColor Green
 }
 
-Import-LocalEnvironment $envFile
+function Show-CoreApiHealth {
+    param([int]$Port)
+
+    $healthUri = "http://127.0.0.1:$Port/actuator/health"
+    if (-not (Test-TcpPortInUse $Port)) {
+        Write-Host "Core API: not listening on $Port" -ForegroundColor Yellow
+        return
+    }
+
+    try {
+        $health = Invoke-RestMethod -Uri $healthUri -Method Get -TimeoutSec 2
+        if ($health.status -eq 'UP') {
+            Write-Host "Core API: healthy on $Port" -ForegroundColor Green
+            return
+        }
+    }
+    catch {
+        # The listener exists but did not return the expected health response.
+    }
+
+    Write-Host "Core API: listening on $Port, but health is not UP" -ForegroundColor Yellow
+}
+
+Import-LocalEnvironment $exampleEnvFile
+if (Test-Path -LiteralPath $localEnvFile) {
+    Import-LocalEnvironment $localEnvFile
+}
+
+$composeEnvironmentArguments = @('--env-file', $exampleEnvFile)
+if (Test-Path -LiteralPath $localEnvFile) {
+    $composeEnvironmentArguments += @('--env-file', $localEnvFile)
+}
+
 $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
 $logDirectory = Join-Path $root 'logs/local'
 $runtimeFile = Join-Path $logDirectory 'managed-processes.json'
 
 Write-Host 'Infrastructure:' -ForegroundColor Cyan
 if (Get-Command docker -ErrorAction SilentlyContinue) {
-    & docker compose --env-file $envFile -f $composeFile ps
+    & docker compose @composeEnvironmentArguments -f $composeFile ps
 }
 else {
     Write-Host 'Docker CLI is unavailable.' -ForegroundColor Yellow
 }
 
 Write-Host "`nApplications:" -ForegroundColor Cyan
-Show-Listener 'Core API' ([int]($env:PLATFORM_API_PORT ?? '8080'))
+Show-CoreApiHealth ([int]($env:PLATFORM_API_PORT ?? '8080'))
 Show-Listener 'Web app' ([int]($env:WEB_PORT ?? '5173'))
 
 if (Test-Path -LiteralPath $runtimeFile) {

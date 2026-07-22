@@ -18,7 +18,7 @@ export class AuthApiError extends Error {
 }
 
 export async function login(username: string, password: string): Promise<PlatformSession> {
-  const response = await fetch('/api/v1/auth/login', {
+  const response = await authFetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -29,7 +29,7 @@ export async function login(username: string, password: string): Promise<Platfor
 }
 
 export async function getSession(): Promise<PlatformSession> {
-  const response = await fetch('/api/v1/auth/session', {
+  const response = await authFetch('/api/v1/auth/session', {
     method: 'GET',
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
@@ -39,13 +39,21 @@ export async function getSession(): Promise<PlatformSession> {
 }
 
 export async function logout(): Promise<void> {
-  const response = await fetch('/api/v1/auth/logout', {
+  const response = await authFetch('/api/v1/auth/logout', {
     method: 'POST',
     headers: { Accept: 'application/json', ...csrfHeaders() },
     credentials: 'same-origin',
     cache: 'no-store',
   })
   if (!response.ok && response.status !== 401) throw await toAuthError(response)
+}
+
+async function authFetch(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new AuthApiError('认证服务暂不可用，请确认 Core API 已启动后重试。', 'AUTH_SERVICE_UNAVAILABLE')
+  }
 }
 
 async function readSession(response: Response): Promise<PlatformSession> {
@@ -61,11 +69,16 @@ async function toAuthError(response: Response): Promise<AuthApiError> {
   } catch {
     // Use the stable fallback for a proxy or non-JSON failure.
   }
+  if (errorCode === 'AUTH_REQUEST_FAILED' && response.status >= 500) {
+    errorCode = 'AUTH_SERVICE_UNAVAILABLE'
+  }
   const message =
     errorCode === 'INVALID_CREDENTIALS'
       ? '账号或密码不正确。'
       : errorCode === 'UNAUTHENTICATED'
         ? '登录已过期，请重新登录。'
-        : '暂时无法完成登录，请稍后重试。'
+        : errorCode === 'AUTH_SERVICE_UNAVAILABLE'
+          ? '认证服务暂不可用，请确认 Core API 已启动后重试。'
+          : '暂时无法完成登录，请稍后重试。'
   return new AuthApiError(message, errorCode)
 }
