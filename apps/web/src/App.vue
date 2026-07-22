@@ -15,9 +15,19 @@ const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: p
 const foldersRoute = computed(() => ({ name: 'folder-management', params: { projectId: projectId.value } }))
 const membershipsRoute = computed(() => ({ name: 'project-memberships', params: { projectId: projectId.value } }))
 const isAdministrator = computed(() => auth.session?.role === 'ADMIN')
+const isManagementRoute = computed(() =>
+  ['folder-management', 'project-memberships', 'upload-progress', 'account-management'].includes(
+    String(route.name),
+  ),
+)
 
 async function logout() {
   await auth.logout()
+}
+
+function closeManagementMenu(event: MouseEvent) {
+  const navigationMenu = (event.currentTarget as HTMLElement).closest('details')
+  navigationMenu?.removeAttribute('open')
 }
 </script>
 
@@ -25,7 +35,7 @@ async function logout() {
   <RouterView v-if="isLoginRoute" />
   <div v-else class="app-shell">
     <header class="app-header">
-      <div>
+      <div class="app-brand">
         <p class="app-eyebrow">护士配药视频 · 云端数据管理</p>
         <h1>配药视频数据管理平台</h1>
       </div>
@@ -35,12 +45,29 @@ async function logout() {
         <span v-else class="nav-unavailable" title="请先选择项目">配药操作</span>
         <RouterLink v-if="projectId" :to="assetsRoute">视频资产</RouterLink>
         <span v-else class="nav-unavailable" title="请先选择项目">视频资产</span>
-        <RouterLink v-if="projectId" :to="foldersRoute">文件夹</RouterLink>
-        <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
-        <RouterLink v-if="projectId && isAdministrator" :to="membershipsRoute">项目成员</RouterLink>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
-        <RouterLink to="/uploads">上传排障</RouterLink>
-        <RouterLink v-if="isAdministrator" :to="{ name: 'account-management' }">账号管理</RouterLink>
+        <details class="nav-more" :class="{ 'nav-more-active': isManagementRoute }">
+          <summary>管理</summary>
+          <div class="nav-more-menu">
+            <RouterLink v-if="projectId" :to="foldersRoute" @click="closeManagementMenu">文件夹</RouterLink>
+            <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
+            <RouterLink
+              v-if="projectId && isAdministrator"
+              :to="membershipsRoute"
+              @click="closeManagementMenu"
+            >
+              项目成员
+            </RouterLink>
+            <RouterLink to="/uploads" @click="closeManagementMenu">上传排障</RouterLink>
+            <RouterLink
+              v-if="isAdministrator"
+              :to="{ name: 'account-management' }"
+              @click="closeManagementMenu"
+            >
+              账号管理
+            </RouterLink>
+          </div>
+        </details>
       </nav>
       <div v-if="auth.session" class="account-summary">
         <span>{{ auth.session.username }}</span>
