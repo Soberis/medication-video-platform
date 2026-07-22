@@ -62,7 +62,7 @@ allow =
 
 V1.2 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
-- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除，但查看 raw、隐私放行和正式导出仍需单独权限/审批；
+- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除；普通 raw 查看、隐私放行和正式导出仍需单独权限/审批。P0 仅允许平台 ADMIN 与项目 ADMIN 同时成立时显式申请一次人工审核 raw 地址；
 - `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放已批准的 PREVIEW/DEIDENTIFIED，并编辑分配给自己的任务；
 - 平台本地上传必须同时满足角色、项目和上传规则；开发、测试和 CI 仍只使用合成数据；
 - AssetFolder 不参与授权计算，不能用“移动到文件夹”授予或撤销数据权限；
@@ -155,7 +155,7 @@ request/approval reference
 
 普通 `PLAYBACK` URL 只针对已批准的具体 `PREVIEW`/`DEIDENTIFIED` Variant，签发前检查项目成员、purpose、PrivacyReleaseDecision、Quarantine 和 `deleted_at`；`PrivacyAssessment=NONE` 不能代替放行决定。普通用户不得取得 raw URL。
 
-隐私复核确需查看 raw 时使用独立的 `PRIVACY_REVIEW` 授权：绑定复核人、ClipAsset 和对象版本、审批/任务依据、最短 TTL 与请求 ID，并完整审计。管理员角色本身不授予该能力，`PRIVACY_REVIEW` 地址不得复用于普通播放、标注、下载或导出，也不构成 PrivacyReleaseDecision。
+隐私复核确需查看 raw 时使用独立的 `PRIVACY_REVIEW` 授权。当前 P0 的最小人工审核依据是一次显式请求，同时校验平台 `ROLE_ADMIN` 与当前项目 ACTIVE `ADMIN` membership，以及 ClipAsset `INGESTED`、未删除和 `video/mp4`；这只允许内部人工隐私/质量判断，不是普通管理员的通用 raw 能力。服务端将复核人、ClipAsset、对象版本、purpose、请求 ID 和双重授权依据写入追加式审计，但不写入 URL；URL 只在 no-store 响应中返回，默认 5 分钟到期。审计证明“签发过授权”，不能证明浏览器逐帧观看。`PRIVACY_REVIEW` 地址不得复用于普通播放、标注、下载或导出，也不构成 PrivacyReleaseDecision；普通 `PLAYBACK` 仍必须满足上一段 Variant 放行规则。
 
 平台本地上传的上传 URL 绑定用户、项目、文件大小、类型和 checksum 条件。开发、测试和 CI 环境只允许合成数据。
 

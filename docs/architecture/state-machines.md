@@ -325,6 +325,7 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | --- | --- |
 | 创建标注任务 | asset INGESTED；允许的 session/stream 质量；privacy ALLOWED_ANNOTATION；quarantine NONE |
 | 播放视频 | 可播放 variant 已就绪；有效 PrivacyRelease；项目/用途授权；quarantine NONE；`deleted_at IS NULL` |
+| 管理员 raw 人工审核 | 显式 `PRIVACY_REVIEW` 请求；平台 ADMIN + ACTIVE 项目 ADMIN；asset INGESTED、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于普通播放或隐私放行 |
 | 提交 revision | task 可提交；schema/guideline 未变化；时间和几何基础校验通过 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
 | 数据集冻结 | session/stream 准入、privacy ALLOWED_INTERNAL_EXPORT、review PASS、post-clean PASS 或批准 override、quarantine NONE |

@@ -533,6 +533,19 @@ code {
   margin-top: 14px;
 }
 
+.review-video {
+  display: block;
+  width: min(100%, 960px);
+  max-height: 70vh;
+  margin: 1rem 0;
+  background: #101828;
+  border-radius: 0.5rem;
+}
+
+.review-actions {
+  margin-top: 0.75rem;
+}
+
 .asset-classification-actions .el-select {
   width: min(100%, 380px);
 }

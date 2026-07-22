@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AssetDetailView from '@/views/AssetDetailView.vue'
 import AssetListView from '@/views/AssetListView.vue'
 import SessionListView from '@/views/SessionListView.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const sessionId = '40000000-0000-4000-8000-000000000001'
@@ -49,7 +51,7 @@ describe('catalog views', () => {
       SessionListView,
     )
     await router.isReady()
-    const wrapper = mount(SessionListView, { global: { plugins: [router] } })
+    const wrapper = mount(SessionListView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('已绑定 1 / 2')
@@ -88,11 +90,11 @@ describe('catalog views', () => {
       AssetDetailView,
     )
     await router.isReady()
-    const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('视频预览尚未开放')
-    expect(wrapper.text()).toContain('媒体处理、隐私评估和预览授权')
+    expect(wrapper.text()).toContain('常规视频预览尚未开放')
+    expect(wrapper.text()).toContain('普通预览需要获准的派生视频')
     expect(wrapper.text()).toContain('尚未绑定到 CaptureSession')
     expect(wrapper.text()).toContain('未分类')
     expect(wrapper.find('video').exists()).toBe(false)
@@ -140,7 +142,7 @@ describe('catalog views', () => {
       AssetDetailView,
     )
     await router.isReady()
-    const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('当前为普通用户权限')
@@ -205,7 +207,7 @@ describe('catalog views', () => {
       AssetDetailView,
     )
     await router.isReady()
-    const wrapper = mount(AssetDetailView, { global: { plugins: [router] } })
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('视频分类')
@@ -214,6 +216,73 @@ describe('catalog views', () => {
       expect.any(Object),
     )
     expect(wrapper.findAll('button').some((button) => button.text() === '更新分类')).toBe(true)
+  })
+
+  it('requests a short-lived raw-review grant only after an eligible administrator clicks', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            project_id: projectId,
+            display_name: '合成测试项目',
+            status: 'ACTIVE',
+            current_role: 'ADMIN',
+            created_at: '2026-07-15T01:03:03Z',
+          }),
+        )
+      }
+      if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
+      if (url.endsWith('/raw-review-playback-grants')) {
+        return Promise.resolve(
+          jsonResponse({
+            grant_id: 'b0000000-0000-4000-8000-000000000001',
+            purpose: 'PRIVACY_REVIEW',
+            media_url: 'https://storage.invalid/review.mp4?signature=synthetic',
+            expires_at: '2026-07-21T01:08:03Z',
+            content_type: 'video/mp4',
+          }),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          clip_asset_id: assetId,
+          batch_id: '60000000-0000-4000-8000-000000000001',
+          source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+          client_file_id: '90000000-0000-4000-8000-000000000001',
+          content_type: 'video/mp4',
+          size_bytes: 8_388_608,
+          sha256: 'a'.repeat(64),
+          status: 'INGESTED',
+          folder_id: null,
+          session_binding: null,
+          created_at: '2026-07-15T01:03:03Z',
+          updated_at: '2026-07-15T01:03:03Z',
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
+    await router.isReady()
+    const pinia = createPinia()
+    useAuthStore(pinia).session = { username: 'reviewer', role: 'ADMIN' }
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, pinia] } })
+    await flushPromises()
+
+    expect(wrapper.find('video').exists()).toBe(false)
+    await wrapper.findAll('button').find((button) => button.text() === '审核查看原始视频')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/raw-review-playback-grants`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(wrapper.find('video').attributes('src')).toContain('signature=synthetic')
+    expect(wrapper.text()).toContain('原始视频人工审核')
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
@@ -265,7 +334,7 @@ describe('catalog views', () => {
       AssetListView,
     )
     await router.isReady()
-    const wrapper = mount(AssetListView, { global: { plugins: [router] } })
+    const wrapper = mount(AssetListView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('待标注')

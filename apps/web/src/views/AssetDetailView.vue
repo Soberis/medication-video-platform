@@ -14,7 +14,14 @@ import {
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { CatalogApiError, deleteClipAsset, getClipAsset, type ClipAssetRead } from '@/api/catalog'
+import {
+  authorizeRawReviewPlayback,
+  CatalogApiError,
+  deleteClipAsset,
+  getClipAsset,
+  type ClipAssetRead,
+  type RawReviewPlaybackGrant,
+} from '@/api/catalog'
 import {
   assignClipAssetFolder,
   getProject,
@@ -32,11 +39,13 @@ import {
   statusTone,
   streamStatusLabels,
 } from '@/catalog-presentation'
+import { useAuthStore } from '@/stores/auth'
 
 defineOptions({ name: 'AssetDetailView' })
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const assetId = computed(() => String(route.params.id ?? ''))
 const detail = shallowRef<ClipAssetRead | null>(null)
@@ -50,10 +59,19 @@ const projectRole = ref<ProjectRole | null>(null)
 const folders = shallowRef<AssetFolder[]>([])
 const selectedFolderId = ref('')
 const isClassifying = ref(false)
+const isRequestingPlayback = ref(false)
+const playbackGrant = shallowRef<RawReviewPlaybackGrant | null>(null)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
+const canReviewRaw = computed(
+  () =>
+    auth.session?.role === 'ADMIN' &&
+    projectRole.value === 'ADMIN' &&
+    detail.value?.status === 'INGESTED' &&
+    detail.value.content_type === 'video/mp4',
+)
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 
 async function loadDetail() {
@@ -64,6 +82,7 @@ async function loadDetail() {
   try {
     detail.value = await getClipAsset(projectId.value, assetId.value, request.signal)
     if (activeRequest === request) {
+      playbackGrant.value = null
       selectedFolderId.value = detail.value.folder_id ?? ''
       loadState.value = 'success'
     }
@@ -169,6 +188,26 @@ async function updateClassification() {
     isClassifying.value = false
   }
 }
+
+async function startRawReviewPlayback() {
+  if (!canReviewRaw.value || isRequestingPlayback.value) return
+  isRequestingPlayback.value = true
+  actionErrorCode.value = ''
+  actionErrorMessage.value = ''
+  try {
+    playbackGrant.value = await authorizeRawReviewPlayback(projectId.value, assetId.value)
+  } catch (error) {
+    playbackGrant.value = null
+    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'RAW_REVIEW_PLAYBACK_FAILED'
+    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '无法签发审核播放地址，请稍后重试。'
+  } finally {
+    isRequestingPlayback.value = false
+  }
+}
+
+function closeRawReviewPlayback() {
+  playbackGrant.value = null
+}
 </script>
 
 <template>
@@ -194,6 +233,14 @@ async function updateClassification() {
       </div>
       <div class="detail-actions">
         <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
+        <ElButton
+          v-if="canReviewRaw && !playbackGrant"
+          type="primary"
+          :loading="isRequestingPlayback"
+          @click="startRawReviewPlayback"
+        >
+          审核查看原始视频
+        </ElButton>
         <ElButton v-if="canDelete" type="danger" plain :loading="isDeleting" @click="confirmDelete">
           删除视频
         </ElButton>
@@ -211,17 +258,35 @@ async function updateClassification() {
     />
 
     <ElAlert
-      title="视频预览尚未开放"
-      description="当前接口只返回安全的资产元数据。完成媒体处理、隐私评估和预览授权后，平台才会提供可播放的派生视频。"
+      v-if="!playbackGrant"
+      :title="canReviewRaw ? '原始视频仅用于管理员人工审核' : '常规视频预览尚未开放'"
+      :description="canReviewRaw
+        ? '点击“审核查看原始视频”后才会签发一次短期只读地址；地址到期后需重新申请，不能用于下载、标注或普通预览。'
+        : '当前页面只返回安全的资产元数据。普通预览需要获准的派生视频；原始视频仅向同时具备平台和项目管理员权限的人员开放人工审核。'"
       type="info"
       :closable="false"
       show-icon
     />
 
+    <ElCard v-if="playbackGrant" class="detail-card" shadow="never">
+      <template #header><strong>原始视频人工审核</strong></template>
+      <p class="form-hint">
+        本次地址仅用于隐私与质量人工审核，将于 {{ formatDateTime(playbackGrant.expires_at) }} 到期。
+        平台只记录授权行为，不记录浏览器逐帧播放行为。
+      </p>
+      <video class="review-video" controls preload="metadata" :src="playbackGrant.media_url">
+        当前浏览器不支持视频播放。
+      </video>
+      <div class="detail-actions review-actions">
+        <ElTag type="warning">{{ playbackGrant.purpose }}</ElTag>
+        <ElButton plain @click="closeRawReviewPlayback">关闭视频</ElButton>
+      </div>
+    </ElCard>
+
     <ElAlert
       v-if="projectRole === 'MEMBER'"
       title="当前为普通用户权限"
-      description="你可以查看视频状态；删除视频仅对项目管理员开放。"
+      description="你可以查看视频状态；删除视频和原始视频人工审核仅对项目管理员开放。"
       type="info"
       :closable="false"
       show-icon

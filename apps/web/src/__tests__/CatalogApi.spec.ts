@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { deleteClipAsset } from '@/api/catalog'
+import { authorizeRawReviewPlayback, deleteClipAsset } from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const clipAssetId = '50000000-0000-4000-8000-000000000001'
@@ -24,6 +24,32 @@ describe('catalog API', () => {
           'Idempotency-Key': 'delete-idempotency-key-0001',
         }),
       }),
+    )
+  })
+
+  it('requests a no-store raw-review playback grant without persisting the URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          grant_id: '70000000-0000-4000-8000-000000000001',
+          purpose: 'PRIVACY_REVIEW',
+          media_url: 'https://storage.invalid/review.mp4?signature=synthetic',
+          expires_at: '2026-07-21T01:08:03Z',
+          content_type: 'video/mp4',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(authorizeRawReviewPlayback(projectId, clipAssetId)).resolves.toMatchObject({
+      purpose: 'PRIVACY_REVIEW',
+      content_type: 'video/mp4',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/raw-review-playback-grants`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
     )
   })
 })

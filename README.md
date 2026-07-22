@@ -10,7 +10,7 @@ Sprint 0 已完成，正在交付 P0 上传与资产闭环。
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
 - PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
 - Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
-- 下一纵向切片是可播放 Variant 与播放授权；视频软删除已具备，后续只补审计与播放闭环所需的联调证据。
+- 已完成管理员原始视频人工审核授权：仅同时具备平台 ADMIN 和项目 ADMIN 的内部人员可显式申请短期地址，签发会审计；普通可播放 Variant 与 PrivacyReleaseDecision 仍在后续切片。
 
 详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
 

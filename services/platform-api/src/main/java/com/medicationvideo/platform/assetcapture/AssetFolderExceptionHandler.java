@@ -21,7 +21,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = { AssetFolderController.class, ClipAssetDeletionController.class })
+@RestControllerAdvice(assignableTypes = {
+		AssetFolderController.class,
+		ClipAssetDeletionController.class,
+		RawReviewPlaybackController.class
+})
 class AssetFolderExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(AssetFolderExceptionHandler.class);
@@ -68,6 +72,15 @@ class AssetFolderExceptionHandler {
 				exception.getErrorCode(),
 				exception.getMessage(),
 				false);
+	}
+
+	@ExceptionHandler(RawReviewPlaybackException.class)
+	ResponseEntity<ApiErrorResponse> rawReviewPlayback(RawReviewPlaybackException exception) {
+		return error(
+				HttpStatus.valueOf(exception.getStatusCode()),
+				exception.getErrorCode(),
+				exception.getMessage(),
+				exception.isRetryable());
 	}
 
 	@ExceptionHandler(Exception.class)

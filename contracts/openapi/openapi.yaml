@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.26.0
+  version: 0.27.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -19,7 +19,8 @@ info:
     assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
     metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
-    filters, and create and read project-scoped media probe jobs that freeze the input
+    filters, issue an explicitly requested, audited, short-lived raw-video grant solely for an
+    internal administrator's manual privacy and quality review, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -62,6 +63,11 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
+  - name: Raw Review Playback
+    description: >-
+      Explicit, short-lived raw-video access for an internal global ADMIN who also has ACTIVE ADMIN
+      membership in the requested project. It is not ordinary playback, download, annotation or a
+      privacy-release decision.
   - name: Asset Folders
     description: >-
       One-level project-scoped ClipAsset classification owned by assetcapture. Folders never grant
@@ -2218,6 +2224,75 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: The project or active video asset is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/raw-review-playback-grants:
+    post:
+      operationId: grantRawReviewPlayback
+      tags:
+        - Raw Review Playback
+      summary: Issue one short-lived raw-video address for manual internal review
+      description: >-
+        Requires both a global platform ADMIN and an ACTIVE ADMIN membership in the explicit
+        project. The asset must be an undeleted, INGESTED video/mp4. The signed URL is returned
+        only in this no-store response and is never persisted or written to the audit details.
+        The audit record proves grant issuance, not byte-level browser viewing. This endpoint is
+        not normal playback and does not grant annotation, download, export or privacy release.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "200":
+          description: A five-minute raw-review grant. The actual duration is deployment configured.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RawReviewPlaybackGrant"
+        "400":
+          description: The clip asset identifier or request identifier is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: A global ADMIN and ACTIVE project ADMIN membership are both required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The clip asset does not exist in the requested project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The asset is deleted, not INGESTED or is not an MP4 video.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Object storage could not issue a temporary read address. Retrying may succeed.
           content:
             application/problem+json:
               schema:
@@ -4944,6 +5019,33 @@ components:
           minLength: 1
           maxLength: 500
           description: User-entered reason retained in the append-only deletion audit event.
+    RawReviewPlaybackGrant:
+      type: object
+      additionalProperties: false
+      required:
+        - grant_id
+        - purpose
+        - media_url
+        - expires_at
+        - content_type
+      properties:
+        grant_id:
+          type: string
+          format: uuid
+          description: Audit-event identifier for this issuance, not a durable reusable capability.
+        purpose:
+          type: string
+          const: PRIVACY_REVIEW
+        media_url:
+          type: string
+          format: uri
+          description: Short-lived object-store address. The client must not persist or log it.
+        expires_at:
+          type: string
+          format: date-time
+        content_type:
+          type: string
+          const: video/mp4
     ClipAssetSessionBinding:
       type: object
       additionalProperties: false
