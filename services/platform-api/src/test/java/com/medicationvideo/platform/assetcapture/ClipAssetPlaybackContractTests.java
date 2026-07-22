@@ -33,8 +33,8 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(RawReviewPlaybackContractTests.FakeStorageConfiguration.class)
-class RawReviewPlaybackContractTests {
+@Import(ClipAssetPlaybackContractTests.FakeStorageConfiguration.class)
+class ClipAssetPlaybackContractTests {
 
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
@@ -64,54 +64,54 @@ class RawReviewPlaybackContractTests {
 	}
 
 	@Test
-	void administratorWithProjectMembershipGetsShortLivedRawReviewGrantAndAuditEvidence()
+	void activeProjectMembersGetShortLivedDataReviewGrantAndAuditEvidence()
 			throws Exception {
 		var clipAssetId = insertClipAsset("INGESTED", "video/mp4", false);
-		var requestId = "raw-review-grant-" + UUID.randomUUID();
+		var requestId = "playback-grant-" + UUID.randomUUID();
 
 		this.mockMvc.perform(post(
-					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/raw-review-playback-grants",
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/playback-grants",
 					PROJECT_ID,
 					clipAssetId)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN)
 				.header("X-Request-Id", requestId))
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.purpose").value("PRIVACY_REVIEW"))
+				.andExpect(jsonPath("$.purpose").value("DATA_REVIEW"))
 				.andExpect(jsonPath("$.content_type").value("video/mp4"))
 				.andExpect(jsonPath("$.media_url").value("https://storage.invalid/review.mp4?signature=synthetic"))
 				.andExpect(jsonPath("$.expires_at").exists())
 				.andExpect(jsonPath("$.grant_id").exists());
 
-		assertEquals(1, this.objectStorage.authorizeReadCalls);
+		grant(clipAssetId, ADMIN_TOKEN, "playback-admin-" + UUID.randomUUID())
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.purpose").value("DATA_REVIEW"));
+
+		assertEquals(2, this.objectStorage.authorizeReadCalls);
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE project_id = ?
 				  AND request_id = ?
-				  AND action = 'RAW_REVIEW_PLAYBACK_GRANTED'
-				  AND reason_code = 'PRIVACY_REVIEW'
-				  AND authorization_reference = 'ROLE_ADMIN+PROJECT_MEMBERSHIP_ADMIN'
+				  AND action = 'CLIP_ASSET_PLAYBACK_GRANTED'
+				  AND reason_code = 'DATA_REVIEW'
+				  AND authorization_reference = 'PROJECT_MEMBERSHIP_MEMBER'
 				  AND details_json::text NOT LIKE '%storage.invalid%'
 				""", PROJECT_ID, requestId));
 	}
 
 	@Test
-	void deniesMembersAndRejectsDeletedUnprocessedAndUnsupportedAssets() throws Exception {
-		var readyAssetId = insertClipAsset("INGESTED", "video/mp4", false);
+	void rejectsDeletedUnprocessedAndUnsupportedAssets() throws Exception {
 		var unprocessedAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
 		var unsupportedAssetId = insertClipAsset("INGESTED", "video/webm", false);
 		var deletedAssetId = insertClipAsset("INGESTED", "video/mp4", true);
 
-		grant(readyAssetId, MEMBER_TOKEN, "raw-review-member-0001")
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error_code").value("RAW_REVIEW_PLAYBACK_ACCESS_DENIED"));
-		grant(unprocessedAssetId, ADMIN_TOKEN, "raw-review-unprocessed-0001")
+		grant(unprocessedAssetId, MEMBER_TOKEN, "playback-unprocessed-0001")
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("RAW_REVIEW_PLAYBACK_NOT_READY"));
-		grant(unsupportedAssetId, ADMIN_TOKEN, "raw-review-unsupported-0001")
+				.andExpect(jsonPath("$.error_code").value("PLAYBACK_NOT_READY"));
+		grant(unsupportedAssetId, MEMBER_TOKEN, "playback-unsupported-0001")
 				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("RAW_REVIEW_PLAYBACK_UNSUPPORTED_MEDIA"));
-		grant(deletedAssetId, ADMIN_TOKEN, "raw-review-deleted-0001")
+				.andExpect(jsonPath("$.error_code").value("PLAYBACK_UNSUPPORTED_MEDIA"));
+		grant(deletedAssetId, MEMBER_TOKEN, "playback-deleted-0001")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_DELETED"));
 	}
@@ -119,7 +119,7 @@ class RawReviewPlaybackContractTests {
 	@Test
 	void reportsStorageFailureAsRetryableWithoutWritingAnAuditGrant() throws Exception {
 		var clipAssetId = insertClipAsset("INGESTED", "video/mp4", false);
-		var requestId = "raw-review-storage-failure-" + UUID.randomUUID();
+		var requestId = "playback-storage-failure-" + UUID.randomUUID();
 		this.objectStorage.failAuthorizeRead = true;
 
 		grant(clipAssetId, ADMIN_TOKEN, requestId)
@@ -134,7 +134,7 @@ class RawReviewPlaybackContractTests {
 			String token,
 			String requestId) throws Exception {
 		return this.mockMvc.perform(post(
-					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/raw-review-playback-grants",
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/playback-grants",
 					PROJECT_ID,
 					clipAssetId)
 				.header("Authorization", "Bearer " + token)
@@ -154,7 +154,7 @@ class RawReviewPlaybackContractTests {
 				VALUES (?, ?, ?, ?, 'synthetic-review-device', ?, 1, 1234, ?,
 				        'COMPLETED', ?, ?, ?, ?, ?)
 				""",
-				batchId, PROJECT_ID, "raw-review-batch-" + batchId, SHA256,
+				batchId, PROJECT_ID, "playback-batch-" + batchId, SHA256,
 				ProjectMembershipTestData.ADMIN_ACTOR, SHA256,
 				Timestamp.from(BASE_TIME.plusSeconds(3600)), Timestamp.from(BASE_TIME),
 				Timestamp.from(BASE_TIME), SHA256, Timestamp.from(BASE_TIME));
@@ -168,7 +168,7 @@ class RawReviewPlaybackContractTests {
 				VALUES (?, ?, ?, ?, ?, 'VIDEO', ?, 1234, ?, 8388608, 1,
 				        'UPLOADED', ?, ?, 'synthetic-bucket', ?, ?, ?, ?, ?, ?, 'synthetic-etag')
 				""",
-				uploadFileId, batchId, clientFileId, "raw-review-file-" + uploadFileId, SHA256,
+				uploadFileId, batchId, clientFileId, "playback-file-" + uploadFileId, SHA256,
 				contentType, SHA256, Timestamp.from(BASE_TIME), Timestamp.from(BASE_TIME),
 				"objects/" + uploadFileId, "multipart-" + uploadFileId, Timestamp.from(BASE_TIME),
 				Timestamp.from(BASE_TIME), Timestamp.from(BASE_TIME), SHA256);

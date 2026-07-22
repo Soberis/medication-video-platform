@@ -42,7 +42,6 @@ $requiredFiles = @(
     'contracts/events/media-probe-result-v1.schema.json',
     'contracts/events/media-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
-    'contracts/profiles/privacy-assessment-policy-v1.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
@@ -141,24 +140,6 @@ try {
 }
 catch {
     Add-Failure "Media probe baseline profile is invalid: $($_.Exception.Message)"
-}
-
-try {
-    $privacyPolicyContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/privacy-assessment-policy-v1.json') -Raw).TrimEnd("`r", "`n")
-    $privacyPolicyContent | ConvertFrom-Json | Out-Null
-    Add-Pass 'Privacy assessment policy is valid JSON'
-
-    $privacyPolicyBytes = [System.Text.Encoding]::UTF8.GetBytes($privacyPolicyContent)
-    $privacyPolicyDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($privacyPolicyBytes)).ToLowerInvariant()
-    if ($privacyPolicyDigest -eq 'd5d18c436d401a223832f1c85b6ff076de01a9dddeecb879268ff89bc5719517') {
-        Add-Pass 'Privacy assessment policy digest matches the server contract'
-    }
-    else {
-        Add-Failure "Privacy assessment policy digest changed unexpectedly: $privacyPolicyDigest"
-    }
-}
-catch {
-    Add-Failure "Privacy assessment policy is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {

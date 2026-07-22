@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -130,14 +132,14 @@ class UploadMultipartController {
 				clientFileId));
 	}
 
-	private static UploadActor requireActor(Authentication authentication) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
+	private static PlatformActor requireActor(Authentication authentication) {
+		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
 		return actor;
 	}
 
-	private UUID requireProject(UUID batchId, UploadActor actor) {
+	private UUID requireProject(UUID batchId, PlatformActor actor) {
 		return this.authorizer.requireBatchMember(batchId, actor.actorId()).projectId();
 	}
 }

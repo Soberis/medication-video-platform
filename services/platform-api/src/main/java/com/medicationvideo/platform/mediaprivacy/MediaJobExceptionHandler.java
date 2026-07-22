@@ -25,8 +25,7 @@ import com.medicationvideo.platform.iamproject.ProjectAccessException;
 		MediaJobController.class,
 		MediaJobReplayController.class,
 		MediaWorkerController.class,
-		MediaReportController.class,
-		PrivacyAssessmentController.class
+		MediaReportController.class
 })
 class MediaJobExceptionHandler {
 
@@ -78,15 +77,6 @@ class MediaJobExceptionHandler {
 	@ExceptionHandler(ClipAssetNotProbeableException.class)
 	ResponseEntity<ApiErrorResponse> notProbeable(ClipAssetNotProbeableException exception) {
 		return error(HttpStatus.CONFLICT, "CLIP_ASSET_NOT_PROBEABLE", exception.getMessage(), false);
-	}
-
-	@ExceptionHandler(PrivacyAssessmentException.class)
-	ResponseEntity<ApiErrorResponse> privacyAssessment(PrivacyAssessmentException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
-				false);
 	}
 
 	@ExceptionHandler(MediaJobExecutionException.class)

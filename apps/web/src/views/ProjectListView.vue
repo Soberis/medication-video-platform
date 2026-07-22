@@ -88,7 +88,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="projects-title">
     <div>
       <p class="app-eyebrow">数据与权限边界</p>
-      <h2 id="projects-title">授权项目</h2>
+      <h1 id="projects-title">授权项目</h1>
       <p>选择一个已加入的项目，再查看该项目的配药操作、视频和文件夹。</p>
     </div>
     <div class="detail-actions">

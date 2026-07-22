@@ -21,24 +21,24 @@ import jakarta.validation.constraints.Pattern;
 @Validated
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/clip-assets")
-class RawReviewPlaybackController {
+class ClipAssetPlaybackController {
 
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
 
-	private final RawReviewPlaybackService service;
+	private final ClipAssetPlaybackService service;
 
-	RawReviewPlaybackController(RawReviewPlaybackService service) {
+	ClipAssetPlaybackController(ClipAssetPlaybackService service) {
 		this.service = service;
 	}
 
-	@PostMapping("/{clipAssetId}/raw-review-playback-grants")
-	ResponseEntity<RawReviewPlaybackGrantResponse> grant(
+	@PostMapping("/{clipAssetId}/playback-grants")
+	ResponseEntity<ClipAssetPlaybackGrantResponse> grant(
 			@PathVariable UUID projectId,
 			@PathVariable UUID clipAssetId,
 			@RequestHeader(name = "X-Request-Id", required = false)
 			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
-		var actor = requireGlobalAdministrator(authentication);
+		var actor = requireActor(authentication);
 		var response = this.service.grant(
 				projectId,
 				clipAssetId,
@@ -48,14 +48,11 @@ class RawReviewPlaybackController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
-	private static ProjectActor requireGlobalAdministrator(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof ProjectActor actor)
-				|| authentication.getAuthorities().stream()
-						.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
-			throw new RawReviewPlaybackException(
-					"RAW_REVIEW_PLAYBACK_ACCESS_DENIED",
-					"A platform administrator is required for raw review playback.",
+	private static ProjectActor requireActor(Authentication authentication) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
+			throw new ClipAssetPlaybackException(
+					"PLAYBACK_ACCESS_DENIED",
+					"An authenticated platform account is required for video playback.",
 					403,
 					false);
 		}

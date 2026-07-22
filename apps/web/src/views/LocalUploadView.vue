@@ -189,7 +189,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="local-upload-title">
     <div>
       <p class="app-eyebrow">平台本地上传</p>
-      <h2 id="local-upload-title">选择视频并上传</h2>
+      <h1 id="local-upload-title">选择视频并上传</h1>
       <p>每个视频使用独立批次上传、校验并建立单视角配药操作记录；不会从文件名推断多相机关系。</p>
     </div>
     <ElButton :loading="projectLoadState === 'loading'" :disabled="isUploading" @click="loadProjects">刷新项目</ElButton>
@@ -199,8 +199,8 @@ onUnmounted(() => activeRequest?.abort())
     v-if="errorMessage"
     class="catalog-alert"
     type="error"
-    :title="errorCode"
-    :description="errorMessage"
+    :title="errorMessage"
+    :description="errorCode ? `错误码：${errorCode}` : undefined"
     show-icon
     :closable="false"
   />

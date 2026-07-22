@@ -144,7 +144,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="assets-title">
     <div>
       <p class="app-eyebrow">单路相机视频</p>
-      <h2 id="assets-title">视频资产</h2>
+      <h1 id="assets-title">视频资产</h1>
       <p>用于跨 Session 排查单路视频状态；日常数据管理仍以一次配药操作为主。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadPage(false, true)">刷新</ElButton>
@@ -198,6 +198,7 @@ onUnmounted(() => activeRequest?.abort())
   </ElCard>
 
   <ElAlert
+    class="catalog-alert"
     title="文件夹只用于当前项目内的一层分类，不改变项目权限或对象存储位置。"
     type="info"
     :closable="false"

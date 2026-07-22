@@ -187,7 +187,7 @@ class UploadBatchContractTests {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(validRequest(PROJECT_ID, 1L)))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.error_code").value("UNAUTHORIZED"));
+				.andExpect(jsonPath("$.error_code").value("UNAUTHENTICATED"));
 
 		this.mockMvc.perform(post("/api/v1/upload/init")
 					.header("Authorization", "Bearer " + TOKEN)

@@ -5,7 +5,7 @@
 
 ## 1. 原则
 
-平台使用多个正交状态表达资产、session、隐私、标注、清洗、隔离和数据集生命周期。禁止用一个 `status` 串联全部流程。
+平台使用多个正交状态表达资产、session、标注、清洗和数据集生命周期。禁止用一个 `status` 串联全部流程。隐私与隔离状态机已按 V1.5 移出 P0，仅作为未来设计参考。
 
 每次状态迁移必须：
 
@@ -127,30 +127,9 @@ PENDING → PASS
 
 ## 5. 隐私与脱敏状态
 
-### 5.1 Privacy risk
+### 5.1 Privacy risk（P0 后置）
 
-```text
-UNKNOWN → NONE
-        → SUSPECTED → NONE/CONFIRMED
-        → CONFIRMED
-```
-
-`NONE` 表示在指定 assessment/version 下未发现风险，不表示永久或绝对无风险。
-
-当前首个 P0 切片把“尚无 assessment”解释为 `UNKNOWN`，并把 release 投影保持为
-`BLOCKED`。人工评估以追加版本保存；同一 ClipAsset 和输入摘要已有当前版本时，新命令必须
-显式引用 `supersedes_assessment_id`，不能覆盖旧证据。固定策略
-`privacy-assessment-policy-v1` 的最小分流为：
-
-| risk | findings | required action | 当前 release |
-| --- | --- | --- | --- |
-| `NONE` | 空 | `RELEASE_REVIEW_REQUIRED` | `BLOCKED` |
-| `SUSPECTED` | 非空 | `QUARANTINE_REQUIRED` | `BLOCKED` |
-| `CONFIRMED` | 非空 | `DEIDENTIFICATION_REQUIRED` 或 `QUARANTINE_REQUIRED` | `BLOCKED` |
-
-`QUARANTINE_REQUIRED` 是评估结论要求的后续动作，不等同于 `qualitycleaning` 已经创建
-`quarantine_record`；`RELEASE_REVIEW_REQUIRED` 也不等同于已经放行。后续编排必须调用各自
-拥有模块的应用服务，不能由 `mediaprivacy` 直接写隔离表。
+V1.5 不运行 PrivacyAssessment、DeidentifyRun 或 PrivacyRelease 状态机。采集端按协议避免敏感信息；人工审核发现意外敏感内容时，直接记录质量 `REJECTED` 与固定原因，再由管理员软删除。未来确有合规或共享需求时，应在新基线中重新定义状态和守卫。
 
 ### 5.2 DeidentifyRun
 
@@ -228,18 +207,9 @@ PENDING → PASS
 - WARNING 进入数据集前必须有 AdmissionOverride。
 - REJECT 表示默认不准入，不表示删除。
 
-### 7.2 Quarantine
+### 7.2 Quarantine（P0 后置）
 
-```text
-NONE → ACTIVE → REVIEW_PENDING → RELEASED
-          │             └→ ACTIVE
-          └→ DESTRUCTION_PENDING （独立销毁审批通过后）
-```
-
-- ACTIVE 时禁止新标注、AI、数据集准入和普通预览。
-- ACTIVE 数据仅可在独立批准的 `PRIVACY_REVIEW`/隔离复核用途下短时访问 raw；不得将复核授权复用于普通播放或导出。
-- RELEASED 只解除指定原因和范围；若仍有其他 active 原因，整体仍隔离。
-- 隔离解除必须重新评估已经过期的隐私或质量结论。
+V1.5 不暴露隔离命令或查询。历史 `quarantine_record` 仅为不可改写的迁移记录；当前不合格数据使用质量结论控制标注和数据集准入，删除仍采用可审计软删除。
 
 ### 7.3 AdmissionOverride
 
@@ -324,8 +294,8 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 操作 | 必须满足 |
 | --- | --- |
 | 创建标注任务 | asset INGESTED；允许的 session/stream 质量；privacy ALLOWED_ANNOTATION；quarantine NONE |
-| 播放视频 | 可播放 variant 已就绪；有效 PrivacyRelease；项目/用途授权；quarantine NONE；`deleted_at IS NULL` |
-| 管理员 raw 人工审核 | 显式 `PRIVACY_REVIEW` 请求；平台 ADMIN + ACTIVE 项目 ADMIN；asset INGESTED、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于普通播放或隐私放行 |
+| 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；asset `INGESTED`、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
+| 发现异常敏感内容 | 停止正常数据流并建立活动隔离；后续新播放授权、标注、AI、数据集和导出入口必须统一拒绝，直至批准解除 |
 | 提交 revision | task 可提交；schema/guideline 未变化；时间和几何基础校验通过 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
 | 数据集冻结 | session/stream 准入、privacy ALLOWED_INTERNAL_EXPORT、review PASS、post-clean PASS 或批准 override、quarantine NONE |

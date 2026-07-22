@@ -4,7 +4,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
 
-record RawReviewPlaybackGrantResponse(
+record ClipAssetPlaybackGrantResponse(
 		UUID grantId,
 		String purpose,
 		URI mediaUrl,

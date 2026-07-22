@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -70,7 +72,7 @@ class CameraConfigurationController {
 	}
 
 	private void requireAdministrator(Authentication authentication, UUID projectId) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
+		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
 		this.authorizer.requireAdministrator(projectId, actor.actorId());

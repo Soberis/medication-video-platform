@@ -52,29 +52,25 @@ allow =
   AND tenant/project match
   AND classification <= clearance
   AND purpose grant valid
-  AND privacy release permits action
   AND task assignment permits scope (when applicable)
   AND approval valid (for high-risk action)
-  AND not quarantined/revoked/expired
+  AND not deleted/revoked/expired
 ```
 
 #### 4.2.1 MVP 两级界面角色
 
-V1.2 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
+V1.5 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
-- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除；普通 raw 查看、隐私放行和正式导出仍需单独权限/审批。P0 仅允许平台 ADMIN 与项目 ADMIN 同时成立时显式申请一次人工审核 raw 地址；
-- `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放已批准的 PREVIEW/DEIDENTIFIED，并编辑分配给自己的任务；
+- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除，并可在已加入项目内播放技术校验通过的视频；
+- `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放 `INGESTED` MP4、记录质量判断并编辑分配给自己的任务；
 - 平台本地上传必须同时满足角色、项目和上传规则；开发、测试和 CI 仍只使用合成数据；
 - AssetFolder 不参与授权计算，不能用“移动到文件夹”授予或撤销数据权限；
-- 后续增加复核员或质检员只调整权限模板，不改变 project、purpose、privacy 和 task assignment 守卫。
+- 后续增加复核员或质检员只调整权限模板，不改变 project、purpose 和 task assignment 守卫。
 
 ### 4.3 职责分离
 
 以下操作申请人与审批人分离：
 
-- raw/S4 访问；
-- 隔离解除；
-- `ALLOWED_INTERNAL_EXPORT` 隐私放行；
 - DatasetVersion freeze；
 - 正式导出和下载授权；
 - 保留期例外、legal hold 变更和物理销毁；
@@ -84,7 +80,7 @@ V1.2 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
 标注复核同样要求提交者与复核者不同。即使两人界面上都显示为管理员，也不能由同一主体完成提交和通过。
 
-## 5. 隐私处理流程
+## 5. 隐私处理流程（P0 后置）
 
 ```text
 raw INGESTED
@@ -106,11 +102,7 @@ raw INGESTED
 - 屏幕、纸质医嘱、标签敏感文本、人脸、工牌和可能的语音隐私纳入评估范围。
 - 正式导出前执行最终人工检查；“观察到零漏检”不代表总体风险数学上为零。
 
-当前首个 P0 实现只落地人工 `PrivacyAssessment`，未启用自动隐私检测、脱敏 Worker、
-`PrivacyReleaseDecision` 或隔离解除。未评估资产返回 `UNKNOWN/BLOCKED`；已评估的
-`NONE/SUSPECTED/CONFIRMED` 也保持 `BLOCKED`。评估仅允许管理员（未来如出现外部身份集成，应拆分为批准的
-隐私复核角色），绑定 ClipAsset、平台验证 SHA-256、策略 key/digest、固定 finding 类别、操作者、
-请求 ID 和追加式审计。`NONE` 只能进入后续人工放行评审，不能直接进入标注池或导出。
+以上流程仅是未来出现真实合规或外部共享需求时的设计参考。V1.5 P0 不运行 PrivacyAssessment、PrivacyRelease、脱敏 Variant 或 Quarantine API。采集规范要求避免敏感信息；人工审核发现意外敏感内容时，记录质量 `REJECTED` 与固定原因，再由管理员软删除。
 
 ## 6. 假名化与身份映射
 
@@ -153,9 +145,9 @@ request/approval reference
 - 撤销通过禁用业务授权、对象策略/版本和短期 TTL 组合实现；不能宣称已签发 URL 可被普遍即时撤回。
 - Web 响应使用适当的 `Referrer-Policy`、缓存和内容处置头。
 
-普通 `PLAYBACK` URL 只针对已批准的具体 `PREVIEW`/`DEIDENTIFIED` Variant，签发前检查项目成员、purpose、PrivacyReleaseDecision、Quarantine 和 `deleted_at`；`PrivacyAssessment=NONE` 不能代替放行决定。普通用户不得取得 raw URL。
+V1.5 的普通内部审核播放直接针对技术校验通过的原始 MP4，不强制先生成 `PREVIEW`/`DEIDENTIFIED` Variant。签发 `DATA_REVIEW` URL 前检查登录账号、ACTIVE 项目 Membership、`INGESTED`、`deleted_at IS NULL` 和媒体类型；响应使用 `no-store`，默认 5 分钟到期。服务端将用户、项目、ClipAsset、对象版本、purpose、请求 ID 和项目角色写入追加式审计，但不记录 URL。审计只能证明“签发过授权”，不能证明逐帧观看；该地址不得复用于下载、导出或外部共享，播放也不构成质量通过或标注批准。
 
-隐私复核确需查看 raw 时使用独立的 `PRIVACY_REVIEW` 授权。当前 P0 的最小人工审核依据是一次显式请求，同时校验平台 `ROLE_ADMIN` 与当前项目 ACTIVE `ADMIN` membership，以及 ClipAsset `INGESTED`、未删除和 `video/mp4`；这只允许内部人工隐私/质量判断，不是普通管理员的通用 raw 能力。服务端将复核人、ClipAsset、对象版本、purpose、请求 ID 和双重授权依据写入追加式审计，但不写入 URL；URL 只在 no-store 响应中返回，默认 5 分钟到期。审计证明“签发过授权”，不能证明浏览器逐帧观看。`PRIVACY_REVIEW` 地址不得复用于普通播放、标注、下载或导出，也不构成 PrivacyReleaseDecision；普通 `PLAYBACK` 仍必须满足上一段 Variant 放行规则。
+采集规范仍应避免可识别人员、屏幕、标签和语音。若人工查看时意外发现敏感内容，当前统一进入质量 `REJECTED` 和管理员软删除流程，不创建第二套平行状态机。
 
 平台本地上传的上传 URL 绑定用户、项目、文件大小、类型和 checksum 条件。开发、测试和 CI 环境只允许合成数据。
 
@@ -192,7 +184,7 @@ request/approval reference
 
 ### 10.1 CVAT
 
-- 只同步获得 `ALLOWED_ANNOTATION` 的批准 variant。
+- 只同步质量合格且属于授权项目的资产；若未来引入派生 variant，再增加相应用途守卫。
 - 使用独立项目/组织边界和服务身份。
 - 外部 task ID 映射由 `integration` 保存，正式 AnnotationRevision 由平台导入验证后创建。
 - CVAT 导出结果视为不可信外部输入，验证 schema、范围、时间和几何。
@@ -201,7 +193,7 @@ request/approval reference
 ### 10.2 AI Worker
 
 - 默认禁止公网出站；模型和依赖离线导入并校验摘要。
-- 只读取 DEIDENTIFIED、ALLOWED_ANNOTATION、非隔离 variant。
+- 只读取质量合格、属于授权项目且摘要固定的输入；机器输出只能成为候选标注。
 - 输出只能进入 CandidateAnnotation。
 - DNS、连接尝试、模型摘要和镜像摘要进入安全监控。
 
@@ -216,10 +208,10 @@ request/approval reference
 至少审计：
 
 - 登录、失败认证和权限变更；
-- raw/隔离数据查看与下载授权；
+- raw 数据查看与下载授权；
 - 预签名 URL 签发；
 - 标注提交、退回、裁决和 schema 变更；
-- 清洗 override 和隔离解除；
+- 清洗 override；
 - 数据集 freeze、export、download 和过期；
 - 项目/成员和 AssetFolder 创建、重命名、删除及视频移动；
 - 视频删除；

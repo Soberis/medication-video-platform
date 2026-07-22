@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.medicationvideo.platform.assetcapture.UploadActor;
+import com.medicationvideo.platform.iamproject.PlatformActor;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -60,9 +60,9 @@ class MediaJobController {
 				.body(MediaJobResponse.from(job, this.service.currentAttempt(job)));
 	}
 
-	private static UploadActor requireActor(Authentication authentication) {
+	private static PlatformActor requireActor(Authentication authentication) {
 		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof UploadActor actor)) {
+				|| !(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;

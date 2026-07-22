@@ -24,7 +24,7 @@ import com.medicationvideo.platform.iamproject.ProjectAccessException;
 @RestControllerAdvice(assignableTypes = {
 		AssetFolderController.class,
 		ClipAssetDeletionController.class,
-		RawReviewPlaybackController.class
+		ClipAssetPlaybackController.class
 })
 class AssetFolderExceptionHandler {
 
@@ -74,8 +74,8 @@ class AssetFolderExceptionHandler {
 				false);
 	}
 
-	@ExceptionHandler(RawReviewPlaybackException.class)
-	ResponseEntity<ApiErrorResponse> rawReviewPlayback(RawReviewPlaybackException exception) {
+	@ExceptionHandler(ClipAssetPlaybackException.class)
+	ResponseEntity<ApiErrorResponse> clipAssetPlayback(ClipAssetPlaybackException exception) {
 		return error(
 				HttpStatus.valueOf(exception.getStatusCode()),
 				exception.getErrorCode(),

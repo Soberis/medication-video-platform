@@ -145,7 +145,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="query-card" aria-labelledby="progress-title">
     <div>
       <p class="status-label">上传状态查询</p>
-      <h2 id="progress-title">查看批次上传进度</h2>
+      <h1 id="progress-title">查看批次上传进度</h1>
       <p class="section-description">只读取平台已确认的状态，不会上传文件或改变批次。</p>
     </div>
 

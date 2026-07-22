@@ -8,8 +8,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -56,6 +58,8 @@ class PlatformSecurityConfiguration {
 		var csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
 		csrfTokenRepository.setCookiePath("/");
 		http
+				.securityMatcher(request -> !request.getRequestURI()
+						.startsWith("/api/v1/internal/media-jobs/"))
 				.securityContext(context -> context
 						.securityContextRepository(securityContextRepository)
 						.requireExplicitSave(false))
@@ -68,14 +72,22 @@ class PlatformSecurityConfiguration {
 						.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
 						.sessionFixation(fixation -> fixation.migrateSession()))
 				.requestCache(cache -> cache.disable())
-				.exceptionHandling(exception -> exception.authenticationEntryPoint((request, response, failure) -> {
-					response.setStatus(401);
-					response.setContentType("application/problem+json");
-					response.getWriter().write("{\"error_code\":\"UNAUTHENTICATED\","
-							+ "\"error_message\":\"An authenticated platform session or service credential is required.\","
-							+ "\"retryable\":false,\"request_id\":\""
-							+ java.util.UUID.randomUUID() + "\"}");
-				}))
+				.exceptionHandling(exception -> exception
+						.authenticationEntryPoint((request, response, failure) ->
+								writeAuthenticationRequired(response))
+						.accessDeniedHandler((request, response, failure) -> {
+							var authentication = SecurityContextHolder.getContext().getAuthentication();
+							if (authentication == null || authentication instanceof AnonymousAuthenticationToken) {
+								writeAuthenticationRequired(response);
+								return;
+							}
+							response.setStatus(403);
+							response.setContentType("application/problem+json");
+							response.getWriter().write("{\"error_code\":\"FORBIDDEN\","
+									+ "\"error_message\":\"The authenticated actor is not allowed to perform this operation.\","
+									+ "\"retryable\":false,\"request_id\":\""
+									+ java.util.UUID.randomUUID() + "\"}");
+						}))
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers("/actuator/health/**", "/api/v1/auth/login").permitAll()
 						.requestMatchers("/api/v1/**").authenticated()
@@ -86,5 +98,16 @@ class PlatformSecurityConfiguration {
 		}
 		return http
 				.build();
+	}
+
+	private static void writeAuthenticationRequired(jakarta.servlet.http.HttpServletResponse response)
+			throws java.io.IOException {
+		response.setStatus(401);
+		response.setHeader("WWW-Authenticate", "Bearer");
+		response.setContentType("application/problem+json");
+		response.getWriter().write("{\"error_code\":\"UNAUTHENTICATED\","
+				+ "\"error_message\":\"An authenticated platform session or service credential is required.\","
+				+ "\"retryable\":false,\"request_id\":\""
+				+ java.util.UUID.randomUUID() + "\"}");
 	}
 }

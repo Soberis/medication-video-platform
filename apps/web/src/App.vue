@@ -35,10 +35,15 @@ function closeManagementMenu(event: MouseEvent) {
   <RouterView v-if="isLoginRoute" />
   <div v-else class="app-shell">
     <header class="app-header">
-      <div class="app-brand">
-        <p class="app-eyebrow">护士配药视频 · 云端数据管理</p>
-        <h1>配药视频数据管理平台</h1>
-      </div>
+      <RouterLink
+        class="app-brand"
+        :to="{ name: 'project-list' }"
+        active-class=""
+        exact-active-class=""
+        aria-label="返回项目列表"
+      >
+        配药视频数据管理平台
+      </RouterLink>
       <nav class="primary-nav" aria-label="主导航">
         <RouterLink :to="{ name: 'project-list' }">项目</RouterLink>
         <RouterLink v-if="projectId" :to="sessionsRoute">配药操作</RouterLink>

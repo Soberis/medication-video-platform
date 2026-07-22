@@ -154,7 +154,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="folders-title">
     <div>
       <p class="app-eyebrow">项目内一层分类</p>
-      <h2 id="folders-title">视频文件夹</h2>
+      <h1 id="folders-title">视频文件夹</h1>
       <p>文件夹仅用于归类视频，不改变项目权限、对象存储位置或视频本身。</p>
     </div>
     <div class="detail-actions">

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$Worker,
+    [switch]$SkipWorker,
     [switch]$InfrastructureOnly,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
@@ -172,7 +173,16 @@ else {
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 
-if ($Worker) {
+if ($Worker -and $SkipWorker) {
+    throw 'Use either -Worker or -SkipWorker, not both.'
+}
+
+if (-not $SkipWorker) {
+    foreach ($requiredCommand in @('uv', 'ffmpeg', 'ffprobe')) {
+        if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
+            throw "Full local startup requires $requiredCommand for media processing. Install it or use -SkipWorker for API/Web-only work."
+        }
+    }
     if (Test-ManagedProcessRunning 'worker') {
         Write-Host "Media Worker is already managed by this script (PID $($managedProcesses.worker.processId))." -ForegroundColor Yellow
     }

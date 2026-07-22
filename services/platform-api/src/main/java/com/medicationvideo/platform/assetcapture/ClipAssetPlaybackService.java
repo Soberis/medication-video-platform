@@ -16,9 +16,9 @@ import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 @Service
-class RawReviewPlaybackService {
+class ClipAssetPlaybackService {
 
-	private static final String PURPOSE = "PRIVACY_REVIEW";
+	private static final String PURPOSE = "DATA_REVIEW";
 	private static final String MP4_CONTENT_TYPE = "video/mp4";
 
 	private final ProjectAccessService projectAccessService;
@@ -27,13 +27,13 @@ class RawReviewPlaybackService {
 	private final AuditEventRecorder auditRecorder;
 	private final Duration authorizationLifetime;
 
-	RawReviewPlaybackService(
+	ClipAssetPlaybackService(
 			ProjectAccessService projectAccessService,
 			ClipAssetRepository assetRepository,
 			MultipartObjectStorage objectStorage,
 			AuditEventRecorder auditRecorder,
 			@org.springframework.beans.factory.annotation.Value(
-					"${platform.playback.raw-review-url-ttl:PT5M}") Duration authorizationLifetime) {
+					"${platform.playback.url-ttl:PT5M}") Duration authorizationLifetime) {
 		this.projectAccessService = projectAccessService;
 		this.assetRepository = assetRepository;
 		this.objectStorage = objectStorage;
@@ -42,49 +42,50 @@ class RawReviewPlaybackService {
 	}
 
 	@Transactional
-	RawReviewPlaybackGrantResponse grant(
+	ClipAssetPlaybackGrantResponse grant(
 			UUID projectId,
 			UUID clipAssetId,
 			String actorId,
 			String requestId,
 			String traceId) {
-		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
-		var asset = this.assetRepository.findForUpdate(clipAssetId, projectId)
-				.orElseThrow(() -> new RawReviewPlaybackException(
+		var projectRole = this.projectAccessService.requireMember(projectId, actorId);
+		var asset = this.assetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
+				.orElseThrow(() -> new ClipAssetPlaybackException(
 						"CLIP_ASSET_NOT_FOUND",
 						"The clip asset was not found in the project.",
 						404,
 						false));
 		if (asset.isDeleted()) {
-			throw new RawReviewPlaybackException(
+			throw new ClipAssetPlaybackException(
 					"CLIP_ASSET_DELETED",
-					"The clip asset has been deleted and cannot be reviewed.",
+					"The clip asset has been deleted and cannot be played.",
 					409,
 					false);
 		}
 		if (asset.getStatus() != ClipAssetStatus.INGESTED) {
-			throw new RawReviewPlaybackException(
-					"RAW_REVIEW_PLAYBACK_NOT_READY",
-					"The clip asset must complete media ingest before raw review playback.",
+			throw new ClipAssetPlaybackException(
+					"PLAYBACK_NOT_READY",
+					"The clip asset must complete media ingest before playback.",
 					409,
 					false);
 		}
 		if (!MP4_CONTENT_TYPE.equalsIgnoreCase(asset.getContentType())) {
-			throw new RawReviewPlaybackException(
-					"RAW_REVIEW_PLAYBACK_UNSUPPORTED_MEDIA",
-					"Raw review playback currently supports video/mp4 only.",
+			throw new ClipAssetPlaybackException(
+					"PLAYBACK_UNSUPPORTED_MEDIA",
+					"Video playback currently supports video/mp4 only.",
 					409,
 					false);
 		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		final var mediaUrl = authorize(asset);
+		var mediaUrl = authorize(asset);
+		var authorizationReference = "PROJECT_MEMBERSHIP_" + projectRole.name();
 		var auditEventId = this.auditRecorder.record(new AuditEventCommand(
 				now,
 				AuditActorType.USER,
 				actorId,
 				projectId,
-				"RAW_REVIEW_PLAYBACK_GRANTED",
+				"CLIP_ASSET_PLAYBACK_GRANTED",
 				"ClipAsset",
 				clipAssetId.toString(),
 				Long.toString(asset.getVersion()),
@@ -92,9 +93,12 @@ class RawReviewPlaybackService {
 				PURPOSE,
 				requestId,
 				traceId,
-				"ROLE_ADMIN+PROJECT_MEMBERSHIP_ADMIN",
-				Map.of("purpose", PURPOSE, "content_type", asset.getContentType())));
-		return new RawReviewPlaybackGrantResponse(
+				authorizationReference,
+				Map.of(
+						"purpose", PURPOSE,
+						"content_type", asset.getContentType(),
+						"project_role", projectRole.name())));
+		return new ClipAssetPlaybackGrantResponse(
 				auditEventId,
 				PURPOSE,
 				mediaUrl,
@@ -107,9 +111,9 @@ class RawReviewPlaybackService {
 			return this.objectStorage.authorizeRead(asset.getObjectReference(), this.authorizationLifetime);
 		}
 		catch (MultipartObjectStorageException exception) {
-			throw new RawReviewPlaybackException(
+			throw new ClipAssetPlaybackException(
 					"OBJECT_STORAGE_UNAVAILABLE",
-					"Object storage could not authorize raw review playback.",
+					"Object storage could not authorize video playback.",
 					503,
 					true,
 					exception);

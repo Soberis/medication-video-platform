@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.medicationvideo.platform.assetcapture.UploadActor;
+import com.medicationvideo.platform.iamproject.PlatformActor;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -58,9 +58,9 @@ class MediaJobReplayController {
 				.body(MediaJobReplayResponse.from(replay));
 	}
 
-	private static UploadActor requireAdministrator(Authentication authentication) {
+	private static PlatformActor requireAdministrator(Authentication authentication) {
 		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof UploadActor actor)
+				|| !(authentication.getPrincipal() instanceof PlatformActor actor)
 				|| authentication.getAuthorities().stream()
 						.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
 			throw new MediaJobAuthorizationException();

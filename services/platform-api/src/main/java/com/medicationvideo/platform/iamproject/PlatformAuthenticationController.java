@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.medicationvideo.platform.assetcapture.UploadActor;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -83,7 +81,7 @@ class PlatformAuthenticationController {
 	private static UsernamePasswordAuthenticationToken requirePlatformAuthentication(
 			Authentication authentication) {
 		if (authentication instanceof UsernamePasswordAuthenticationToken platformAuthentication
-				&& platformAuthentication.getPrincipal() instanceof UploadActor) {
+				&& platformAuthentication.getPrincipal() instanceof PlatformActor) {
 			return platformAuthentication;
 		}
 		throw new PlatformAuthenticationException();

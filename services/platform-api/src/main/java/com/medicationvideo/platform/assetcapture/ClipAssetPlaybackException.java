@@ -1,19 +1,19 @@
 package com.medicationvideo.platform.assetcapture;
 
-final class RawReviewPlaybackException extends RuntimeException {
+final class ClipAssetPlaybackException extends RuntimeException {
 
 	private final String errorCode;
 	private final int statusCode;
 	private final boolean retryable;
 
-	RawReviewPlaybackException(String errorCode, String message, int statusCode, boolean retryable) {
+	ClipAssetPlaybackException(String errorCode, String message, int statusCode, boolean retryable) {
 		super(message);
 		this.errorCode = errorCode;
 		this.statusCode = statusCode;
 		this.retryable = retryable;
 	}
 
-	RawReviewPlaybackException(
+	ClipAssetPlaybackException(
 			String errorCode,
 			String message,
 			int statusCode,

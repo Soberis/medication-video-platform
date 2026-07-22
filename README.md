@@ -10,7 +10,7 @@ Sprint 0 已完成，正在交付 P0 上传与资产闭环。
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
 - PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
 - Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
-- 已完成管理员原始视频人工审核授权：仅同时具备平台 ADMIN 和项目 ADMIN 的内部人员可显式申请短期地址，签发会审计；普通可播放 Variant 与 PrivacyReleaseDecision 仍在后续切片。
+- 已完成项目内视频人工审核播放：ACTIVE 项目 ADMIN/MEMBER 可在媒体检测通过后显式申请短期只读地址，签发会审计且 URL 不落库；P0 不再运行独立隐私评估或隔离子系统，意外敏感内容按质量不合格处理并由管理员软删除。
 
 详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
 
@@ -44,7 +44,7 @@ docs/                          需求、设计、ADR 和运行手册
 
 要求 Java 21、Node.js 22、pnpm 11、Python 3.12、uv 和 Docker Desktop。准确依赖版本由构建文件和 lockfile 冻结。
 
-Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API 和 Web，并统一记录后台进程与日志。
+Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API、Media Worker 和 Web，并统一记录后台进程与日志。
 
 首次安装前端依赖：
 
@@ -60,13 +60,13 @@ cd C:\Dev\Projects\medication-video-platform
 .\scripts\start-local.ps1
 ```
 
-在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。`start-local.ps1` 会等待 Core API 健康后再启动或确认 Web，默认最长等待 180 秒。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
+在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。`start-local.ps1` 会等待 Core API 健康后启动 Media Worker，再启动或确认 Web，默认最长等待 180 秒。这样平台本地上传的视频会继续完成媒体探测，而不会长期停留在“已上传，待入库”。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
 
 ```powershell
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
 .\scripts\stop-local.ps1                # 停止脚本启动的后端/Worker 和本地容器，保留数据卷
 .\scripts\stop-local.ps1 -KeepInfrastructure
-.\scripts\start-local.ps1 -Worker       # 需要媒体处理时才启动 Worker
+.\scripts\start-local.ps1 -SkipWorker   # 仅做 API/Web 元数据开发时显式跳过 Worker
 ```
 
 如果 8080 或 5173 是此前手工启动的进程，先用 `status-local.ps1` 确认；只有明确要结束它时才执行 `stop-local.ps1 -IncludeListeningApps`。

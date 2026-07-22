@@ -8,7 +8,7 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.3；未变更条款继承 V1.2/V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、视频播放与删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
+当前业务事实来源是 V1.5；未变更条款继承 V1.4/V1.3/V1.2/V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -211,26 +211,17 @@ flowchart LR
 | MediaJob | media_job、media_job_attempt | 探测、转码、缩略图、抽帧和质量指标作业 |
 | AssetVariant | asset_variant、variant_lineage | PREVIEW、THUMBNAIL、DEIDENTIFIED、TRIMMED、DATASET_FRAME 等派生资产 |
 | MediaReport | media_report | 容器、编码、解码、画质、音轨和时间基准报告 |
-| PrivacyAssessment | privacy_assessment、privacy_finding | 自动/人工隐私风险及证据 |
-| DeidentifyRun | deidentify_run | 不可变脱敏运行、配方、输入/输出摘要和验证结论 |
-| PrivacyRelease | privacy_release_decision | 用途、variant、有效期和批准范围绑定的放行决定 |
+| PrivacyAssessment（后置） | privacy_assessment、privacy_finding | 历史迁移保留；P0 无运行接口 |
+| DeidentifyRun（后置） | deidentify_run | 仅在真实合规需求成立后设计 |
+| PrivacyRelease（后置） | privacy_release_decision | 仅在真实共享或用途隔离需求成立后设计 |
 
 ### 6.2 不变量
 
 - 每个 variant 必须递归追溯到 raw，并保存输入摘要、配方版本、软件/镜像摘要。
-- `privacy_release_decision` 必须绑定具体 variant digest、purpose、project 和有效期；不能只给整个 session 一个永久通行标志。
-- 标注员和 AI Worker 默认只读取已批准的 `DEIDENTIFIED` variant。
 - Worker 不直接写上述表；结果经 Core API 验证和提交。
-- 自动隐私检测不能直接产生内部导出许可，必须经过策略允许的人工门禁。
-- `PrivacyAssessment` 绑定 project、ClipAsset、平台验证的输入摘要和不可变策略摘要；重新评估创建
-  新版本并显式引用当前版本，不覆盖旧结论。
-- 没有 assessment 时风险投影为 `UNKNOWN`；任何 assessment 结论在没有独立
-  `PrivacyReleaseDecision` 前仍为 `BLOCKED`。`NONE` 只表示在指定策略和本次人工检查中未观察到
-  已列风险，不表示总体风险绝对为零。
-- finding 使用固定类别而不是可能含敏感信息的自由文本；当前 P0 类别覆盖人脸、姓名、病历号、
-  屏幕、工牌、医嘱文本、标签文本、语音和其他风险。
-- `QUARANTINE_REQUIRED` 是跨模块后续动作要求，不是 `quarantine_record` 的替代事实；
-  `mediaprivacy` 不得直接写 `qualitycleaning` 表。
+- P0 播放不依赖 AssetVariant 或隐私放行；意外敏感内容通过质量 `REJECTED` 和管理员软删除处理。
+- 历史隐私表不得由当前业务代码写入；如未来重新启用，必须创建新需求基线、契约和迁移。
+- `mediaprivacy` 不得直接写 `qualitycleaning` 表。
 
 ## 7. `annotationreview`
 
@@ -271,7 +262,7 @@ flowchart LR
 | CleaningRuleSet | cleaning_rule_set、cleaning_rule | 版本化规则、阈值和适用范围 |
 | CleaningRun | cleaning_run、cleaning_result | 对冻结输入执行的不可变运行 |
 | DuplicateGroup | duplicate_group、duplicate_member | 完全重复和近重复证据 |
-| Quarantine | quarantine_record | 隔离范围、原因、来源和解除状态 |
+| Quarantine（后置） | quarantine_record | 历史迁移保留；P0 无运行接口 |
 | AdmissionOverride | admission_override | warning/例外准入的批准人、理由、期限和版本范围 |
 
 ### 8.2 不变量

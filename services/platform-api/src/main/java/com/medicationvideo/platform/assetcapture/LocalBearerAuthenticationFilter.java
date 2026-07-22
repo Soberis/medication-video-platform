@@ -11,6 +11,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,7 +41,9 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
-		return !request.getRequestURI().startsWith("/api/v1/");
+		var requestUri = request.getRequestURI();
+		return !requestUri.startsWith("/api/v1/")
+				|| requestUri.startsWith("/api/v1/internal/media-jobs/");
 	}
 
 	@Override
@@ -68,7 +72,7 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		var actor = new UploadActor(
+		var actor = new PlatformActor(
 				this.projectId,
 				admin ? "local-synthetic-admin" : "local-synthetic-uploader");
 		var authentication = new UsernamePasswordAuthenticationToken(

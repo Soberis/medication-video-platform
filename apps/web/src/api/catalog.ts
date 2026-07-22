@@ -115,9 +115,9 @@ export interface ClipAssetRead {
   updated_at: string
 }
 
-export interface RawReviewPlaybackGrant {
+export interface ClipAssetPlaybackGrant {
   grant_id: string
-  purpose: 'PRIVACY_REVIEW'
+  purpose: 'DATA_REVIEW'
   media_url: string
   expires_at: string
   content_type: string
@@ -163,9 +163,9 @@ const errorMessages: Record<string, string> = {
   CLIP_ASSET_NOT_FOUND: '未找到该视频资产，或它不属于当前项目。',
   PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
-  RAW_REVIEW_PLAYBACK_ACCESS_DENIED: '仅平台管理员可在所属项目中查看原始视频。',
-  RAW_REVIEW_PLAYBACK_NOT_READY: '视频尚未完成媒体检测，暂不能用于人工审核播放。',
-  RAW_REVIEW_PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的原始审核视频。',
+  PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
+  PLAYBACK_NOT_READY: '视频尚未完成媒体检测，暂不能播放。',
+  PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   OBJECT_STORAGE_UNAVAILABLE: '对象存储暂时无法签发播放地址，请稍后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
@@ -269,16 +269,16 @@ export async function deleteClipAsset(projectId: string, clipAssetId: string, re
   throw await toCatalogError(response)
 }
 
-export async function authorizeRawReviewPlayback(projectId: string, clipAssetId: string) {
+export async function authorizeClipAssetPlayback(projectId: string, clipAssetId: string) {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/raw-review-playback-grants`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/playback-grants`,
     {
       method: 'POST',
       headers: { Accept: 'application/json', ...csrfHeaders() },
       cache: 'no-store',
     },
   )
-  if (response.ok) return (await response.json()) as RawReviewPlaybackGrant
+  if (response.ok) return (await response.json()) as ClipAssetPlaybackGrant
   throw await toCatalogError(response)
 }
 

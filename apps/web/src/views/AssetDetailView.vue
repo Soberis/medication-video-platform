@@ -3,15 +3,11 @@ import {
   ElAlert,
   ElButton,
   ElCard,
-  ElCheckbox,
-  ElCheckboxGroup,
   ElDescriptions,
   ElDescriptionsItem,
   ElMessage,
   ElMessageBox,
   ElOption,
-  ElRadio,
-  ElRadioGroup,
   ElSelect,
   ElTag,
 } from 'element-plus'
@@ -19,12 +15,12 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
-  authorizeRawReviewPlayback,
+  authorizeClipAssetPlayback,
   CatalogApiError,
   deleteClipAsset,
   getClipAsset,
   type ClipAssetRead,
-  type RawReviewPlaybackGrant,
+  type ClipAssetPlaybackGrant,
 } from '@/api/catalog'
 import {
   assignClipAssetFolder,
@@ -43,21 +39,10 @@ import {
   statusTone,
   streamStatusLabels,
 } from '@/catalog-presentation'
-import {
-  createPrivacyAssessment,
-  getPrivacyStatus,
-  PrivacyApiError,
-  type PrivacyFindingType,
-  type PrivacyRiskLevel,
-  type PrivacyStatus,
-} from '@/api/privacy'
-import { useAuthStore } from '@/stores/auth'
-
 defineOptions({ name: 'AssetDetailView' })
 
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const assetId = computed(() => String(route.params.id ?? ''))
 const detail = shallowRef<ClipAssetRead | null>(null)
@@ -72,50 +57,87 @@ const folders = shallowRef<AssetFolder[]>([])
 const selectedFolderId = ref('')
 const isClassifying = ref(false)
 const isRequestingPlayback = ref(false)
-const playbackGrant = shallowRef<RawReviewPlaybackGrant | null>(null)
-const privacyStatus = shallowRef<PrivacyStatus | null>(null)
-const privacyLoadState = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
-const privacyErrorCode = ref('')
-const privacyErrorMessage = ref('')
-const privacyRisk = ref<Exclude<PrivacyRiskLevel, 'UNKNOWN'>>('NONE')
-const privacyFindings = ref<PrivacyFindingType[]>([])
-const isSavingPrivacy = ref(false)
+const playbackGrant = shallowRef<ClipAssetPlaybackGrant | null>(null)
+const playbackState = ref<'idle' | 'waiting' | 'ready' | 'error' | 'expired'>('idle')
+const playbackMessage = ref('')
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
-let activePrivacyRequest: AbortController | null = null
+let playbackExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
-const canReviewRaw = computed(
+const canPlay = computed(
   () =>
-    auth.session?.role === 'ADMIN' &&
-    projectRole.value === 'ADMIN' &&
+    projectRole.value !== null &&
     detail.value?.status === 'INGESTED' &&
     detail.value.content_type === 'video/mp4',
 )
-const canAdministerPrivacy = computed(
-  () =>
-    auth.session?.role === 'ADMIN' &&
-    projectRole.value === 'ADMIN' &&
-    detail.value?.status === 'INGESTED',
-)
-const privacyRequiredAction = computed(() =>
-  privacyRisk.value === 'NONE'
-    ? 'RELEASE_REVIEW_REQUIRED'
-    : privacyRisk.value === 'SUSPECTED'
-      ? 'QUARANTINE_REQUIRED'
-      : 'DEIDENTIFICATION_REQUIRED',
-)
-const privacyReasonCode = computed(() =>
-  privacyRisk.value === 'NONE'
-    ? 'NO_IDENTIFIABLE_INFORMATION_OBSERVED'
-    : privacyRisk.value === 'SUSPECTED'
-      ? 'RISK_REQUIRES_ISOLATION'
-      : 'IDENTIFIABLE_INFORMATION_OBSERVED',
-)
-const privacyDecisionValid = computed(() =>
-  privacyRisk.value === 'NONE' ? privacyFindings.value.length === 0 : privacyFindings.value.length > 0,
-)
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
+const playbackAvailability = computed(() => {
+  if (!detail.value) return null
+  if (detail.value.status === 'UPLOADED') {
+    return {
+      title: '媒体检测尚未开始',
+      description: '视频已经保存。媒体检测完成后，项目成员即可播放并判断数据质量。',
+      type: 'info' as const,
+    }
+  }
+  if (detail.value.status === 'INGESTING') {
+    return {
+      title: '正在进行媒体检测',
+      description: '平台正在检查视频是否可读取和完整解码，请稍后刷新状态。',
+      type: 'warning' as const,
+    }
+  }
+  if (detail.value.status === 'INGEST_FAILED') {
+    return {
+      title: '媒体检测未通过',
+      description: '该视频暂不能播放或进入后续流程，请先查看媒体报告并处理失败原因。',
+      type: 'error' as const,
+    }
+  }
+  if (canPlay.value) {
+    return {
+      title: '可以播放并审核数据质量',
+      description: '点击后获取短期只读播放地址。播放用于判断视频是否适合标注和训练，不会自动改变质量状态。',
+      type: 'success' as const,
+    }
+  }
+  return {
+    title: '当前视频暂不可播放',
+    description: '请确认当前账号已加入项目，并且视频为平台支持的 MP4 格式。',
+    type: 'info' as const,
+  }
+})
+
+function clearPlaybackExpiryTimer() {
+  if (playbackExpiryTimer !== null) {
+    clearTimeout(playbackExpiryTimer)
+    playbackExpiryTimer = null
+  }
+}
+
+function resetPlayback() {
+  clearPlaybackExpiryTimer()
+  playbackGrant.value = null
+  playbackState.value = 'idle'
+  playbackMessage.value = ''
+}
+
+function schedulePlaybackExpiry(expiresAt: string) {
+  clearPlaybackExpiryTimer()
+  const remainingMilliseconds = new Date(expiresAt).getTime() - Date.now()
+  if (!Number.isFinite(remainingMilliseconds) || remainingMilliseconds <= 0) {
+    expirePlayback()
+    return
+  }
+  playbackExpiryTimer = setTimeout(expirePlayback, remainingMilliseconds)
+}
+
+function expirePlayback() {
+  clearPlaybackExpiryTimer()
+  playbackState.value = 'expired'
+  playbackMessage.value = '本次播放授权已到期，请重新获取后继续审核。'
+}
 
 async function loadDetail() {
   activeRequest?.abort()
@@ -125,7 +147,7 @@ async function loadDetail() {
   try {
     detail.value = await getClipAsset(projectId.value, assetId.value, request.signal)
     if (activeRequest === request) {
-      playbackGrant.value = null
+      resetPlayback()
       selectedFolderId.value = detail.value.folder_id ?? ''
       loadState.value = 'success'
     }
@@ -175,26 +197,10 @@ watch(
   },
   { immediate: true },
 )
-watch(
-  [projectId, assetId, canAdministerPrivacy],
-  () => {
-    if (!canAdministerPrivacy.value) {
-      activePrivacyRequest?.abort()
-      privacyStatus.value = null
-      privacyLoadState.value = 'idle'
-      return
-    }
-    void loadPrivacyStatus()
-  },
-  { immediate: true },
-)
-watch(privacyRisk, (risk) => {
-  if (risk === 'NONE') privacyFindings.value = []
-})
 onUnmounted(() => {
   activeRequest?.abort()
   activeRoleRequest?.abort()
-  activePrivacyRequest?.abort()
+  clearPlaybackExpiryTimer()
 })
 
 async function confirmDelete() {
@@ -249,72 +255,47 @@ async function updateClassification() {
   }
 }
 
-async function startRawReviewPlayback() {
-  if (!canReviewRaw.value || isRequestingPlayback.value) return
+async function startPlayback() {
+  if (!canPlay.value || isRequestingPlayback.value) return
+  resetPlayback()
   isRequestingPlayback.value = true
   actionErrorCode.value = ''
   actionErrorMessage.value = ''
   try {
-    playbackGrant.value = await authorizeRawReviewPlayback(projectId.value, assetId.value)
+    playbackGrant.value = await authorizeClipAssetPlayback(projectId.value, assetId.value)
+    playbackState.value = 'waiting'
+    schedulePlaybackExpiry(playbackGrant.value.expires_at)
   } catch (error) {
     playbackGrant.value = null
-    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'RAW_REVIEW_PLAYBACK_FAILED'
-    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '无法签发审核播放地址，请稍后重试。'
+    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'PLAYBACK_FAILED'
+    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '无法获取播放地址，请稍后重试。'
   } finally {
     isRequestingPlayback.value = false
   }
 }
 
-function closeRawReviewPlayback() {
-  playbackGrant.value = null
+function closePlayback() {
+  resetPlayback()
 }
 
-async function loadPrivacyStatus() {
-  activePrivacyRequest?.abort()
-  const request = new AbortController()
-  activePrivacyRequest = request
-  privacyLoadState.value = 'loading'
-  privacyErrorCode.value = ''
-  privacyErrorMessage.value = ''
-  try {
-    privacyStatus.value = await getPrivacyStatus(projectId.value, assetId.value, request.signal)
-    if (activePrivacyRequest === request) privacyLoadState.value = 'success'
-  } catch (error) {
-    if (request.signal.aborted || activePrivacyRequest !== request) return
-    privacyStatus.value = null
-    privacyLoadState.value = 'error'
-    privacyErrorCode.value = error instanceof PrivacyApiError ? error.errorCode : 'PRIVACY_STATUS_FAILED'
-    privacyErrorMessage.value =
-      error instanceof PrivacyApiError ? error.message : '暂时无法读取隐私评估状态，请稍后重试。'
-  } finally {
-    if (activePrivacyRequest === request) activePrivacyRequest = null
+function handlePlaybackReady() {
+  if (playbackState.value !== 'expired') {
+    playbackState.value = 'ready'
+    playbackMessage.value = ''
   }
 }
 
-async function savePrivacyAssessment() {
-  if (!detail.value || !canAdministerPrivacy.value || !privacyDecisionValid.value || isSavingPrivacy.value) return
-  isSavingPrivacy.value = true
-  privacyErrorCode.value = ''
-  privacyErrorMessage.value = ''
-  try {
-    await createPrivacyAssessment(projectId.value, {
-      clip_asset_id: detail.value.clip_asset_id,
-      supersedes_assessment_id: privacyStatus.value?.current_assessment?.privacy_assessment_id ?? null,
-      risk_level: privacyRisk.value,
-      required_action: privacyRequiredAction.value,
-      reason_code: privacyReasonCode.value,
-      finding_types: privacyFindings.value,
-    })
-    ElMessage.success('隐私评估已记录。当前视频仍保持默认阻断状态，尚未获得放行。')
-    await loadPrivacyStatus()
-  } catch (error) {
-    privacyErrorCode.value = error instanceof PrivacyApiError ? error.errorCode : 'PRIVACY_ASSESSMENT_FAILED'
-    privacyErrorMessage.value =
-      error instanceof PrivacyApiError ? error.message : '隐私评估未保存，请稍后重试。'
-  } finally {
-    isSavingPrivacy.value = false
+function handlePlaybackError() {
+  if (!playbackGrant.value) return
+  const expiresAt = new Date(playbackGrant.value.expires_at).getTime()
+  if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+    expirePlayback()
+    return
   }
+  playbackState.value = 'error'
+  playbackMessage.value = '视频加载失败。请检查对象存储连接，或重新获取播放授权后再试。'
 }
+
 </script>
 
 <template>
@@ -335,22 +316,15 @@ async function savePrivacyAssessment() {
     <section class="page-heading detail-heading" aria-labelledby="asset-detail-title">
       <div>
         <p class="app-eyebrow">单路相机视频资产</p>
-        <h2 id="asset-detail-title">{{ detail.client_file_id }}</h2>
-        <p class="mono-wrap">ClipAsset ID：{{ detail.clip_asset_id }}</p>
+        <h1 id="asset-detail-title">视频详情</h1>
+        <p class="asset-identifiers">
+          <span>客户端文件标识 <code>{{ detail.client_file_id }}</code></span>
+          <span>资产 ID <code>{{ detail.clip_asset_id }}</code></span>
+        </p>
       </div>
       <div class="detail-actions">
         <ElTag :type="statusTone(detail.status)">{{ assetStatusLabels[detail.status] }}</ElTag>
-        <ElButton
-          v-if="canReviewRaw && !playbackGrant"
-          type="primary"
-          :loading="isRequestingPlayback"
-          @click="startRawReviewPlayback"
-        >
-          审核查看原始视频
-        </ElButton>
-        <ElButton v-if="canDelete" type="danger" plain :loading="isDeleting" @click="confirmDelete">
-          删除视频
-        </ElButton>
+        <ElButton @click="loadDetail">刷新状态</ElButton>
       </div>
     </section>
 
@@ -358,90 +332,68 @@ async function savePrivacyAssessment() {
       v-if="actionErrorMessage"
       class="catalog-alert"
       type="error"
-      :title="actionErrorCode"
-      :description="actionErrorMessage"
+      :title="actionErrorMessage"
+      :description="actionErrorCode ? `错误码：${actionErrorCode}` : undefined"
       show-icon
       :closable="false"
     />
 
-    <ElAlert
-      v-if="!playbackGrant"
-      :title="canReviewRaw ? '原始视频仅用于管理员人工审核' : '常规视频预览尚未开放'"
-      :description="canReviewRaw
-        ? '点击“审核查看原始视频”后才会签发一次短期只读地址；地址到期后需重新申请，不能用于下载、标注或普通预览。'
-        : '当前页面只返回安全的资产元数据。普通预览需要获准的派生视频；原始视频仅向同时具备平台和项目管理员权限的人员开放人工审核。'"
-      type="info"
-      :closable="false"
-      show-icon
-    />
-
-    <ElCard v-if="playbackGrant" class="detail-card" shadow="never">
-      <template #header><strong>原始视频人工审核</strong></template>
-      <p class="form-hint">
-        本次地址仅用于隐私与质量人工审核，将于 {{ formatDateTime(playbackGrant.expires_at) }} 到期。
-        平台只记录授权行为，不记录浏览器逐帧播放行为。
-      </p>
-      <video class="review-video" controls preload="metadata" :src="playbackGrant.media_url">
-        当前浏览器不支持视频播放。
-      </video>
-      <div class="detail-actions review-actions">
-        <ElTag type="warning">{{ playbackGrant.purpose }}</ElTag>
-        <ElButton plain @click="closeRawReviewPlayback">关闭视频</ElButton>
-      </div>
-    </ElCard>
-
-    <ElCard v-if="canAdministerPrivacy" class="detail-card" shadow="never">
-      <template #header><strong>人工隐私评估</strong></template>
-      <div v-if="privacyLoadState === 'loading'" class="catalog-notice" role="status">正在读取隐私状态…</div>
-      <div v-else-if="privacyLoadState === 'error'" class="catalog-error" role="alert">
-        <strong>{{ privacyErrorCode }}</strong>
-        <span>{{ privacyErrorMessage }}</span>
-        <ElButton @click="loadPrivacyStatus">重试</ElButton>
-      </div>
-      <template v-else-if="privacyStatus">
+    <ElCard class="detail-card playback-card" shadow="never">
+      <template #header><strong>视频审核</strong></template>
+      <ElAlert
+        v-if="!playbackGrant && playbackAvailability"
+        :title="playbackAvailability.title"
+        :description="playbackAvailability.description"
+        :type="playbackAvailability.type"
+        :closable="false"
+        show-icon
+      />
+      <ElButton
+        v-if="canPlay && !playbackGrant"
+        class="playback-primary-action"
+        type="primary"
+        :loading="isRequestingPlayback"
+        @click="startPlayback"
+      >
+        播放视频
+      </ElButton>
+      <template v-else-if="playbackGrant">
+        <p class="form-hint">
+          本次只读地址将于 {{ formatDateTime(playbackGrant.expires_at) }} 到期。平台记录授权行为，但不记录逐帧观看行为。
+        </p>
         <ElAlert
-          :title="`当前风险：${privacyStatus.risk_level}；放行状态：${privacyStatus.privacy_release_status}`"
-          :description="privacyStatus.current_assessment
-            ? `已有第 ${privacyStatus.current_assessment.assessment_version} 次人工评估。重新提交会创建新版本并替代当前版本。`
-            : '尚未记录人工评估。即使评估为“未观察到风险”，视频仍默认阻断，不能直接进入标注或导出。'"
-          type="warning"
+          v-if="playbackMessage"
+          class="playback-feedback"
+          :title="playbackMessage"
+          :type="playbackState === 'error' || playbackState === 'expired' ? 'error' : 'info'"
           :closable="false"
           show-icon
         />
-        <div class="privacy-assessment-form">
-          <p class="form-hint">基于当前人工审核选择风险结论；系统会根据结论固定后续动作，不能手工改写。</p>
-          <ElRadioGroup v-model="privacyRisk" aria-label="隐私风险结论">
-            <ElRadio value="NONE">未观察到可识别信息</ElRadio>
-            <ElRadio value="SUSPECTED">疑似存在风险，隔离</ElRadio>
-            <ElRadio value="CONFIRMED">确认存在风险，后续脱敏</ElRadio>
-          </ElRadioGroup>
-          <ElCheckboxGroup v-model="privacyFindings" :disabled="privacyRisk === 'NONE'" aria-label="可识别信息发现项">
-            <ElCheckbox value="FACE">人脸</ElCheckbox>
-            <ElCheckbox value="NAME">姓名</ElCheckbox>
-            <ElCheckbox value="MEDICAL_RECORD_ID">病历号</ElCheckbox>
-            <ElCheckbox value="SCREEN">屏幕</ElCheckbox>
-            <ElCheckbox value="BADGE">工牌</ElCheckbox>
-            <ElCheckbox value="ORDER_TEXT">医嘱文本</ElCheckbox>
-            <ElCheckbox value="LABEL_TEXT">标签文本</ElCheckbox>
-            <ElCheckbox value="VOICE">语音</ElCheckbox>
-            <ElCheckbox value="OTHER_IDENTIFIABLE_INFORMATION">其他可识别信息</ElCheckbox>
-          </ElCheckboxGroup>
-          <p class="form-hint">提交后动作：<code>{{ privacyRequiredAction }}</code>；放行状态仍为 <code>BLOCKED</code>。</p>
-          <ElButton type="primary" :disabled="!privacyDecisionValid" :loading="isSavingPrivacy" @click="savePrivacyAssessment">
-            {{ privacyStatus.current_assessment ? '重新评估并创建新版本' : '记录隐私评估' }}
+        <video
+          v-if="playbackState !== 'error' && playbackState !== 'expired'"
+          class="review-video"
+          controls
+          preload="none"
+          :src="playbackGrant.media_url"
+          @loadedmetadata="handlePlaybackReady"
+          @error="handlePlaybackError"
+        >
+          当前浏览器不支持视频播放。
+        </video>
+        <div class="detail-actions review-actions">
+          <ElTag type="success">训练数据 · 人工审核</ElTag>
+          <ElButton
+            v-if="playbackState === 'error' || playbackState === 'expired'"
+            type="primary"
+            :loading="isRequestingPlayback"
+            @click="startPlayback"
+          >
+            重新获取播放授权
           </ElButton>
+          <ElButton plain @click="closePlayback">关闭视频</ElButton>
         </div>
       </template>
     </ElCard>
-
-    <ElAlert
-      v-if="projectRole === 'MEMBER'"
-      title="当前为普通用户权限"
-      description="你可以查看视频状态；删除视频和原始视频人工审核仅对项目管理员开放。"
-      type="info"
-      :closable="false"
-      show-icon
-    />
 
     <ElCard v-if="canDelete" class="detail-card" shadow="never">
       <template #header><strong>视频分类</strong></template>
@@ -514,6 +466,14 @@ async function savePrivacyAssessment() {
         </ElDescriptionsItem>
       </ElDescriptions>
       <p v-else class="empty-state">该资产已校验上传，但尚未绑定到 CaptureSession。</p>
+    </ElCard>
+
+    <ElCard v-if="canDelete" class="detail-card danger-card" shadow="never">
+      <template #header><strong>危险操作</strong></template>
+      <div class="danger-actions">
+        <p class="form-hint">删除后视频会从普通列表隐藏，并保留审计记录；不会立即物理删除对象或影响同一 Session 的其他视频。</p>
+        <ElButton type="danger" plain :loading="isDeleting" @click="confirmDelete">删除视频</ElButton>
+      </div>
     </ElCard>
   </template>
 </template>

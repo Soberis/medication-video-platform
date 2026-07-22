@@ -134,7 +134,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="members-title">
     <div>
       <p class="app-eyebrow">项目访问范围</p>
-      <h2 id="members-title">项目成员</h2>
+      <h1 id="members-title">项目成员</h1>
       <p>为内部账号分配当前项目的访问范围。项目角色不改变账号的全局管理员或普通用户身份。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadMemberships">刷新</ElButton>

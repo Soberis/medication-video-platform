@@ -68,6 +68,8 @@ describe('App', () => {
     expect(wrapper.text()).toContain('配药视频数据管理平台')
     expect(wrapper.text()).toContain('授权项目')
     expect(wrapper.text()).toContain('合成测试项目')
+    expect(wrapper.findAll('h1')).toHaveLength(1)
+    expect(wrapper.get('h1').text()).toBe('授权项目')
     expect(wrapper.findAll('.nav-unavailable')).toHaveLength(3)
     expect(wrapper.findAll('.router-link-active')).toHaveLength(1)
     expect(wrapper.text()).toContain('管理')

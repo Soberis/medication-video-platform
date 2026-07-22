@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -39,7 +41,7 @@ class UploadFileController {
 			@Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
 			@Valid @RequestBody UploadFileRegistrationRequest request,
 			Authentication authentication) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
+		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());

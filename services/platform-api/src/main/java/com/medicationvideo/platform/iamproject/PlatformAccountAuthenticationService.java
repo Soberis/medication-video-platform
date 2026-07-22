@@ -10,7 +10,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.medicationvideo.platform.assetcapture.UploadActor;
 import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
@@ -44,7 +43,7 @@ class PlatformAccountAuthenticationService {
 				.filter(candidate -> this.passwordEncoder.matches(
 						request.password(), candidate.getPasswordHash()))
 				.orElseThrow(() -> denied(requestId, traceId));
-		var actor = new UploadActor(this.legacyDefaultProjectId, account.getUsername());
+		var actor = new PlatformActor(this.legacyDefaultProjectId, account.getUsername());
 		var authentication = new UsernamePasswordAuthenticationToken(
 				actor,
 				null,
@@ -58,7 +57,7 @@ class PlatformAccountAuthenticationService {
 				.anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))
 				? PlatformAccountRole.ADMIN
 				: PlatformAccountRole.MEMBER;
-		var actor = (UploadActor) authentication.getPrincipal();
+		var actor = (PlatformActor) authentication.getPrincipal();
 		return new PlatformSessionResponse(actor.actorId(), role);
 	}
 

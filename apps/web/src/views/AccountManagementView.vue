@@ -115,7 +115,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="accounts-title">
     <div>
       <p class="app-eyebrow">内部访问控制</p>
-      <h2 id="accounts-title">平台账号</h2>
+      <h1 id="accounts-title">平台账号</h1>
       <p>创建和启停内部普通用户。账号创建后仍需加入具体项目，才能查看或处理该项目的视频数据。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadAccounts">刷新</ElButton>

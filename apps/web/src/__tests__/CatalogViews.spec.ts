@@ -64,7 +64,7 @@ describe('catalog views', () => {
     )
   }, 15_000)
 
-  it('explains why preview is unavailable without rendering a player or storage location', async () => {
+  it('explains the pending media check without exposing storage or using an identifier as the page title', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -93,8 +93,10 @@ describe('catalog views', () => {
     const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('常规视频预览尚未开放')
-    expect(wrapper.text()).toContain('普通预览需要获准的派生视频')
+    expect(wrapper.get('h1').text()).toBe('视频详情')
+    expect(wrapper.text()).toContain('媒体检测尚未开始')
+    expect(wrapper.text()).toContain('媒体检测完成后，项目成员即可播放并判断数据质量')
+    expect(wrapper.text()).toContain('90000000-0000-4000-8000-000000000001')
     expect(wrapper.text()).toContain('尚未绑定到 CaptureSession')
     expect(wrapper.text()).toContain('未分类')
     expect(wrapper.find('video').exists()).toBe(false)
@@ -145,7 +147,6 @@ describe('catalog views', () => {
     const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('当前为普通用户权限')
     expect(wrapper.findAll('button').some((button) => button.text() === '删除视频')).toBe(false)
   })
 
@@ -218,7 +219,7 @@ describe('catalog views', () => {
     expect(wrapper.findAll('button').some((button) => button.text() === '更新分类')).toBe(true)
   })
 
-  it('requests a short-lived raw-review grant only after an eligible administrator clicks', async () => {
+  it('lets a project member request playback only after an explicit click', async () => {
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
       const url = String(input)
       if (url.endsWith(`/api/v1/projects/${projectId}`)) {
@@ -227,31 +228,19 @@ describe('catalog views', () => {
             project_id: projectId,
             display_name: '合成测试项目',
             status: 'ACTIVE',
-            current_role: 'ADMIN',
+            current_role: 'MEMBER',
             created_at: '2026-07-15T01:03:03Z',
           }),
         )
       }
       if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
-      if (url.endsWith('/privacy-status')) {
-        return Promise.resolve(
-          jsonResponse({
-            clip_asset_id: assetId,
-            input_digest: 'a'.repeat(64),
-            risk_level: 'UNKNOWN',
-            required_action: null,
-            privacy_release_status: 'BLOCKED',
-            current_assessment: null,
-          }),
-        )
-      }
-      if (url.endsWith('/raw-review-playback-grants')) {
+      if (url.endsWith('/playback-grants')) {
         return Promise.resolve(
           jsonResponse({
             grant_id: 'b0000000-0000-4000-8000-000000000001',
-            purpose: 'PRIVACY_REVIEW',
+            purpose: 'DATA_REVIEW',
             media_url: 'https://storage.invalid/review.mp4?signature=synthetic',
-            expires_at: '2026-07-21T01:08:03Z',
+            expires_at: new Date(Date.now() + 300_000).toISOString(),
             content_type: 'video/mp4',
           }),
         )
@@ -281,21 +270,27 @@ describe('catalog views', () => {
     )
     await router.isReady()
     const pinia = createPinia()
-    useAuthStore(pinia).session = { username: 'reviewer', role: 'ADMIN' }
+    useAuthStore(pinia).session = { username: 'reviewer', role: 'MEMBER' }
     const wrapper = mount(AssetDetailView, { global: { plugins: [router, pinia] } })
     await flushPromises()
 
     expect(wrapper.find('video').exists()).toBe(false)
-    await wrapper.findAll('button').find((button) => button.text() === '审核查看原始视频')!.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '播放视频')!.trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${assetId}/raw-review-playback-grants`,
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/playback-grants`,
       expect.objectContaining({ method: 'POST' }),
     )
     expect(wrapper.find('video').attributes('src')).toContain('signature=synthetic')
-    expect(wrapper.text()).toContain('原始视频人工审核')
-    expect(wrapper.text()).toContain('人工隐私评估')
+    expect(wrapper.find('video').attributes('preload')).toBe('none')
+    expect(wrapper.text()).toContain('训练数据 · 人工审核')
+    expect(wrapper.text()).not.toContain('人工隐私评估')
+
+    await wrapper.find('video').trigger('error')
+    expect(wrapper.find('video').exists()).toBe(false)
+    expect(wrapper.text()).toContain('视频加载失败')
+    expect(wrapper.text()).toContain('重新获取播放授权')
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {

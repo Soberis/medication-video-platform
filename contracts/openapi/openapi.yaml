@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.28.0
+  version: 0.30.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -19,14 +19,12 @@ info:
     assemble CaptureSession, CameraSetSnapshot and CameraStream records from a verified uploaded
     metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
-    filters, issue an explicitly requested, audited, short-lived raw-video grant solely for an
-    internal administrator's manual privacy and quality review, and create and read project-scoped media probe jobs that freeze the input
+    filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
+    member for human training-data review after media ingest, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
-    sanitized dead-letter diagnostic, record versioned human privacy assessments against an immutable
-    ingested clip digest without granting annotation or export access, and let an administrator read
-    the active project-scoped quarantine state derived from those assessments. The API never proxies upload bytes through the Core API, exposes storage
+    sanitized dead-letter diagnostic. The API never proxies upload bytes through the Core API, exposes storage
     locations through catalog reads, controls or probes edge hardware, or performs media processing
     synchronously inside a user request.
   license:
@@ -63,7 +61,7 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
-  - name: Raw Review Playback
+  - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal global ADMIN who also has ACTIVE ADMIN
       membership in the requested project. It is not ordinary playback, download, annotation or a
@@ -79,15 +77,6 @@ tags:
       the Transactional Outbox, and returns QUEUED. RabbitMQ is a delivery mechanism rather than
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
-  - name: Privacy Assessments
-    description: >-
-      Project-scoped, administrator-controlled human risk assessments. An assessment is append-only,
-      binds the ingested clip digest and an approved policy digest, and always leaves privacy release
-      BLOCKED until a separate release decision is implemented and approved.
-  - name: Quarantines
-    description: >-
-      Administrator-only, project-scoped read model for active clip-asset quarantine records. This
-      contract does not expose quarantine creation, release or destruction commands.
 paths:
   /auth/login:
     post:
@@ -2228,18 +2217,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/raw-review-playback-grants:
+  /projects/{project_id}/clip-assets/{clip_asset_id}/playback-grants:
     post:
-      operationId: grantRawReviewPlayback
+      operationId: grantClipAssetPlayback
       tags:
-        - Raw Review Playback
-      summary: Issue one short-lived raw-video address for manual internal review
+        - Video Playback
+      summary: Issue a short-lived video address for internal data review
       description: >-
-        Requires both a global platform ADMIN and an ACTIVE ADMIN membership in the explicit
-        project. The asset must be an undeleted, INGESTED video/mp4. The signed URL is returned
-        only in this no-store response and is never persisted or written to the audit details.
-        The audit record proves grant issuance, not byte-level browser viewing. This endpoint is
-        not normal playback and does not grant annotation, download, export or privacy release.
+        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        explicit project. The asset must be an undeleted, INGESTED video/mp4. The signed URL is
+        returned only in this no-store response and is never persisted or written to audit
+        details. The audit record proves grant issuance, not byte-level browser viewing. Playback
+        supports human training-data review and does not itself approve quality, annotation,
+        download or export.
       security:
         - sessionCookie: []
       parameters:
@@ -2253,14 +2243,14 @@ paths:
         - $ref: "#/components/parameters/OptionalRequestId"
       responses:
         "200":
-          description: A five-minute raw-review grant. The actual duration is deployment configured.
+          description: A short-lived playback grant. The actual duration is deployment configured.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RawReviewPlaybackGrant"
+                $ref: "#/components/schemas/ClipAssetPlaybackGrant"
         "400":
           description: The clip asset identifier or request identifier is invalid.
           content:
@@ -2274,7 +2264,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: A global ADMIN and ACTIVE project ADMIN membership are both required.
+          description: The authenticated account has no ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -2655,236 +2645,6 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: The project-scoped job or its successful report was not found.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/privacy-assessments:
-    post:
-      operationId: createPrivacyAssessment
-      tags:
-        - Privacy Assessments
-      summary: Record a versioned human privacy assessment
-      description: >-
-        Administrator-only P0 command. Requires both a global platform ADMIN and ACTIVE ADMIN membership
-        in the explicit project path. The target must be a successfully ingested clip asset in that project.
-        The decision binds the platform-verified input SHA-256 and the approved
-        privacy-assessment-policy-v1 digest. NONE means no listed risk was observed under this assessment,
-        not that risk is mathematically absent; every result remains BLOCKED pending a separate release
-        decision. Reassessment must explicitly supersede the current assessment.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - name: X-Request-Id
-          in: header
-          required: false
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9._:-]+$
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PrivacyAssessmentRequest"
-      responses:
-        "201":
-          description: The immutable assessment version was recorded, or an identical command was replayed.
-          headers:
-            Location:
-              schema:
-                type: string
-              description: Project-scoped assessment resource path.
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrivacyAssessmentResponse"
-        "400":
-          description: The request is malformed or the risk/action/reason/finding combination is invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The caller is not an administrator for the current project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The clip asset was not found in the authenticated project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: >-
-            The clip is not ingested, the idempotency key conflicts, or the reassessment does not
-            explicitly supersede the current version.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/privacy-assessments/{privacy_assessment_id}:
-    get:
-      operationId: getPrivacyAssessment
-      tags:
-        - Privacy Assessments
-      summary: Read one project-scoped privacy assessment version
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: privacy_assessment_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Immutable human assessment evidence.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrivacyAssessmentResponse"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The caller is not an administrator for the current project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The assessment was not found in the authenticated project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/privacy-status:
-    get:
-      operationId: getClipAssetPrivacyStatus
-      tags:
-        - Privacy Assessments
-      summary: Read the current default-deny privacy projection for a clip asset
-      description: >-
-        Returns UNKNOWN and BLOCKED when the ingested asset has no assessment. A recorded NONE,
-        SUSPECTED or CONFIRMED assessment also remains BLOCKED until a separate release decision exists.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Current project-scoped privacy projection.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrivacyStatusResponse"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The caller is not an administrator for the current project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The clip asset was not found in the authenticated project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /quarantines:
-    get:
-      operationId: getClipAssetQuarantineStatus
-      tags:
-        - Quarantines
-      summary: Read the active quarantine status for a clip asset
-      description: >-
-        Administrator-only safe read. Returns the current active quarantine records for an ingested
-        clip asset in the authenticated project. NONE means no active quarantine record exists; it
-        does not constitute a privacy release decision. This operation never creates, releases,
-        destroys or physically moves media.
-      parameters:
-        - name: clip_asset_id
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Current project-scoped quarantine status for the clip asset.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                const: no-store
-              description: Prevents clients from displaying stale quarantine state.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/QuarantineStatusResponse"
-        "400":
-          description: The required clip asset identifier is missing or malformed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The caller is not an administrator for the current project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The clip asset was not found in the authenticated project.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "500":
-          description: The quarantine status could not be evaluated due to an unexpected internal error.
           content:
             application/problem+json:
               schema:
@@ -3572,235 +3332,6 @@ components:
           type: string
           format: date-time
         created_at:
-          type: string
-          format: date-time
-    PrivacyAssessmentRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - clip_asset_id
-        - risk_level
-        - required_action
-        - reason_code
-        - finding_types
-      properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-        supersedes_assessment_id:
-          type:
-            - string
-            - "null"
-          format: uuid
-          description: Required and equal to the current assessment id when creating version 2 or later.
-        risk_level:
-          $ref: "#/components/schemas/PrivacyRiskLevel"
-        required_action:
-          $ref: "#/components/schemas/PrivacyRequiredAction"
-        reason_code:
-          $ref: "#/components/schemas/PrivacyAssessmentReasonCode"
-        finding_types:
-          type: array
-          maxItems: 9
-          uniqueItems: true
-          items:
-            $ref: "#/components/schemas/PrivacyFindingType"
-    PrivacyAssessmentResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - privacy_assessment_id
-        - project_id
-        - clip_asset_id
-        - input_digest
-        - assessment_version
-        - assessment_method
-        - policy_key
-        - policy_digest
-        - risk_level
-        - required_action
-        - privacy_release_status
-        - finding_types
-        - reason_code
-        - assessed_by
-        - assessed_at
-      properties:
-        privacy_assessment_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        clip_asset_id:
-          type: string
-          format: uuid
-        input_digest:
-          type: string
-          pattern: "^[a-f0-9]{64}$"
-        assessment_version:
-          type: integer
-          minimum: 1
-        assessment_method:
-          type: string
-          const: HUMAN_REVIEW
-        policy_key:
-          type: string
-          const: privacy-assessment-policy-v1
-        policy_digest:
-          type: string
-          const: d5d18c436d401a223832f1c85b6ff076de01a9dddeecb879268ff89bc5719517
-        risk_level:
-          $ref: "#/components/schemas/PrivacyRiskLevel"
-        required_action:
-          $ref: "#/components/schemas/PrivacyRequiredAction"
-        privacy_release_status:
-          type: string
-          const: BLOCKED
-        finding_types:
-          type: array
-          maxItems: 9
-          uniqueItems: true
-          items:
-            $ref: "#/components/schemas/PrivacyFindingType"
-        reason_code:
-          $ref: "#/components/schemas/PrivacyAssessmentReasonCode"
-        assessed_by:
-          type: string
-          minLength: 1
-          maxLength: 128
-        supersedes_assessment_id:
-          type:
-            - string
-            - "null"
-          format: uuid
-        assessed_at:
-          type: string
-          format: date-time
-    PrivacyStatusResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - clip_asset_id
-        - input_digest
-        - risk_level
-        - privacy_release_status
-      properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-        input_digest:
-          type: string
-          pattern: "^[a-f0-9]{64}$"
-        risk_level:
-          type: string
-          enum:
-            - UNKNOWN
-            - NONE
-            - SUSPECTED
-            - CONFIRMED
-        required_action:
-          oneOf:
-            - $ref: "#/components/schemas/PrivacyRequiredAction"
-            - type: "null"
-        privacy_release_status:
-          type: string
-          const: BLOCKED
-        current_assessment:
-          oneOf:
-            - $ref: "#/components/schemas/PrivacyAssessmentResponse"
-            - type: "null"
-    PrivacyRiskLevel:
-      type: string
-      enum:
-        - NONE
-        - SUSPECTED
-        - CONFIRMED
-    PrivacyRequiredAction:
-      type: string
-      enum:
-        - RELEASE_REVIEW_REQUIRED
-        - DEIDENTIFICATION_REQUIRED
-        - QUARANTINE_REQUIRED
-    PrivacyAssessmentReasonCode:
-      type: string
-      enum:
-        - NO_IDENTIFIABLE_INFORMATION_OBSERVED
-        - IDENTIFIABLE_INFORMATION_OBSERVED
-        - RISK_REQUIRES_ISOLATION
-    PrivacyFindingType:
-      type: string
-      enum:
-        - FACE
-        - NAME
-        - MEDICAL_RECORD_ID
-        - SCREEN
-        - BADGE
-        - ORDER_TEXT
-        - LABEL_TEXT
-        - VOICE
-        - OTHER
-    QuarantineStatusResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - clip_asset_id
-        - input_digest
-        - quarantine_status
-        - active_records
-      properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-        input_digest:
-          type: string
-          pattern: "^[a-f0-9]{64}$"
-          description: Platform-verified SHA-256 digest of the immutable clip input.
-        quarantine_status:
-          type: string
-          enum:
-            - NONE
-            - ACTIVE
-        active_records:
-          type: array
-          items:
-            $ref: "#/components/schemas/QuarantineRecordResponse"
-    QuarantineRecordResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - quarantine_record_id
-        - reason_code
-        - source_type
-        - source_id
-        - source_version
-        - activated_by
-        - activated_at
-      properties:
-        quarantine_record_id:
-          type: string
-          format: uuid
-        reason_code:
-          type: string
-          enum:
-            - PRIVACY_RISK
-            - BAD_FILE
-            - NON_TARGET_SCENE
-            - DUPLICATE
-        source_type:
-          type: string
-          enum:
-            - PRIVACY_ASSESSMENT
-        source_id:
-          type: string
-          format: uuid
-        source_version:
-          type: integer
-          minimum: 1
-        activated_by:
-          type: string
-          minLength: 1
-          maxLength: 128
-        activated_at:
           type: string
           format: date-time
     UploadSourceType:
@@ -5023,7 +4554,7 @@ components:
           minLength: 1
           maxLength: 500
           description: User-entered reason retained in the append-only deletion audit event.
-    RawReviewPlaybackGrant:
+    ClipAssetPlaybackGrant:
       type: object
       additionalProperties: false
       required:
@@ -5039,7 +4570,7 @@ components:
           description: Audit-event identifier for this issuance, not a durable reusable capability.
         purpose:
           type: string
-          const: PRIVACY_REVIEW
+          const: DATA_REVIEW
         media_url:
           type: string
           format: uri

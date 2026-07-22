@@ -75,7 +75,7 @@ onUnmounted(() => activeRequest?.abort())
     <section class="page-heading detail-heading" aria-labelledby="session-detail-title">
       <div>
         <p class="app-eyebrow">一次护士配药操作</p>
-        <h2 id="session-detail-title">{{ detail.device_id }}</h2>
+        <h1 id="session-detail-title">{{ detail.device_id }}</h1>
         <p class="mono-wrap">Session ID：{{ detail.capture_session_id }}</p>
       </div>
       <div class="heading-tags">

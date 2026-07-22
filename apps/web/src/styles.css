@@ -25,8 +25,7 @@ select {
   font: inherit;
 }
 
-button,
-input {
+button {
   min-height: 44px;
 }
 
@@ -49,7 +48,7 @@ code {
 
 .app-header {
   display: grid;
-  grid-template-columns: minmax(218px, 0.9fr) minmax(0, 1.65fr) auto;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.65fr) auto;
   align-items: center;
   gap: 16px 24px;
   margin-bottom: 20px;
@@ -59,6 +58,17 @@ code {
 
 .app-brand {
   min-width: 0;
+  color: #172033;
+  font-size: clamp(20px, 1.8vw, 24px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-brand:hover {
+  color: #244da8;
 }
 
 .account-summary {
@@ -67,15 +77,6 @@ code {
   gap: 8px;
   color: #475467;
   font-size: 14px;
-  white-space: nowrap;
-}
-
-.app-header h1 {
-  margin: 3px 0 0;
-  color: #172033;
-  font-size: clamp(22px, 2vw, 30px);
-  letter-spacing: -0.025em;
-  line-height: 1.15;
   white-space: nowrap;
 }
 
@@ -193,11 +194,15 @@ code {
   border-radius: 18px;
 }
 
-.query-card h2,
+.query-card h1,
 .summary-card h2,
 .files-heading h2 {
   margin: 7px 0 0;
   font-size: clamp(22px, 3vw, 28px);
+}
+
+.query-card h1 {
+  letter-spacing: -0.025em;
 }
 
 .section-description {
@@ -444,13 +449,14 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin: 34px 0 20px;
+  margin: 28px 0 20px;
 }
 
-.page-heading h2 {
+.page-heading h1 {
   margin: 6px 0 0;
-  font-size: clamp(26px, 4vw, 36px);
+  font-size: clamp(28px, 3vw, 36px);
   letter-spacing: -0.025em;
+  line-height: 1.2;
 }
 
 .page-heading p:not(.app-eyebrow) {
@@ -465,6 +471,10 @@ code {
 .detail-card {
   border-color: #dce3ee;
   border-radius: 14px;
+}
+
+.filter-card > .el-card__body {
+  padding: 20px;
 }
 
 .catalog-filters {
@@ -483,17 +493,34 @@ code {
   margin-bottom: 0;
 }
 
+.catalog-filters .el-form-item__label {
+  height: auto;
+  margin-bottom: 8px;
+  padding: 0;
+  line-height: 20px;
+}
+
 .catalog-filters .el-select,
 .catalog-filters .el-date-editor,
 .catalog-filters .el-input {
   width: 100%;
 }
 
+.el-input__wrapper,
+.el-select__wrapper,
+.el-date-editor.el-input__wrapper {
+  min-height: 44px;
+}
+
+.el-button:not(.is-link) {
+  min-height: 44px;
+}
+
 .filter-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   white-space: nowrap;
 }
 
@@ -508,20 +535,39 @@ code {
 }
 
 .catalog-error {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 4px 16px;
   border-color: #f1b8b3;
   color: #912018;
   background: #fff1f0;
 }
 
 .catalog-error span {
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.catalog-error strong {
+  grid-column: 1;
+  grid-row: 2;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .catalog-error small {
+  grid-column: 1;
+  grid-row: 3;
   overflow-wrap: anywhere;
+}
+
+.catalog-error .el-button {
+  grid-column: 2;
+  grid-row: 1 / 4;
 }
 
 .table-card {
@@ -580,6 +626,11 @@ code {
   gap: 8px;
   color: #667085;
   font-size: 14px;
+  margin-top: 28px;
+}
+
+.breadcrumb + .page-heading {
+  margin-top: 16px;
 }
 
 .detail-heading {
@@ -590,6 +641,23 @@ code {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.asset-identifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  color: #667085;
+  font-size: 13px;
+}
+
+.asset-identifiers span {
+  min-width: 0;
+}
+
+.asset-identifiers code {
+  color: #475467;
 }
 
 .asset-classification-actions {
@@ -608,21 +676,13 @@ code {
   border-radius: 0.5rem;
 }
 
+.playback-primary-action,
+.playback-feedback {
+  margin-top: 16px;
+}
+
 .review-actions {
   margin-top: 0.75rem;
-}
-
-.privacy-assessment-form {
-  display: grid;
-  gap: 0.9rem;
-  margin-top: 1rem;
-}
-
-.privacy-assessment-form .el-radio-group,
-.privacy-assessment-form .el-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
 }
 
 .asset-classification-actions .el-select {
@@ -636,6 +696,21 @@ code {
 
 .detail-card {
   margin-top: 20px;
+}
+
+.danger-card {
+  border-color: #f1b8b3;
+}
+
+.danger-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.danger-actions .form-hint {
+  max-width: 760px;
 }
 
 .mono-wrap {
@@ -664,7 +739,7 @@ code {
   width: min(100%, 560px);
 }
 
-.login-card h2 {
+.login-card h1 {
   margin: 8px 0 0;
   font-size: 30px;
 }
@@ -680,6 +755,25 @@ code {
 
 .login-form .el-button {
   width: 100%;
+}
+
+.account-form,
+.membership-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: end;
+}
+
+.account-form .form-hint,
+.account-form > .el-button,
+.membership-form > .el-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.account-form .form-hint {
+  margin-bottom: 16px;
 }
 
 .login-error {
@@ -797,9 +891,14 @@ code {
 
 .el-empty {
   margin-top: 20px;
+  padding: 32px 20px;
   border: 1px dashed #c7d0df;
   border-radius: 14px;
   background: #fff;
+}
+
+.el-empty__image {
+  width: 96px;
 }
 
 .el-descriptions code {
@@ -828,23 +927,33 @@ code {
   }
 
   .page-heading,
-  .detail-heading,
-  .catalog-error {
+  .detail-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .app-header {
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
     gap: 14px;
   }
 
-  .app-header h1 {
-    font-size: clamp(22px, 8vw, 28px);
+  .app-brand {
+    font-size: clamp(20px, 7vw, 24px);
+  }
+
+  .account-summary {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .detail-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .danger-actions {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -875,6 +984,17 @@ code {
     max-width: 100%;
   }
 
+  .catalog-error {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-error .el-button {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    margin-top: 8px;
+  }
+
   .table-footer {
     align-items: flex-start;
     flex-direction: column;
@@ -882,8 +1002,16 @@ code {
 
   .batch-form-row,
   .metric-grid,
-  .file-meta-grid {
+  .file-meta-grid,
+  .account-form,
+  .membership-form {
     grid-template-columns: 1fr;
+  }
+
+  .account-form .form-hint,
+  .account-form > .el-button,
+  .membership-form > .el-button {
+    grid-column: 1;
   }
 
   .batch-form button {

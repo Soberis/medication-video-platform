@@ -12,6 +12,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+
 @Service
 class UploadBatchService {
 
@@ -31,7 +33,7 @@ class UploadBatchService {
 		this.batchTtl = batchTtl;
 	}
 
-	UploadBatch initialize(UploadActor actor, String idempotencyKey, UploadBatchInitRequest request) {
+	UploadBatch initialize(PlatformActor actor, String idempotencyKey, UploadBatchInitRequest request) {
 		var sourceType = request.uploadSourceType() == null
 				? UploadSourceType.HOSPITAL_REMOTE
 				: request.uploadSourceType();

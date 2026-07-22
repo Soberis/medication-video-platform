@@ -16,11 +16,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.medicationvideo.platform.iamproject.PlatformActor;
+import com.medicationvideo.platform.iamproject.ProjectRole;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-
-import com.medicationvideo.platform.iamproject.ProjectRole;
 
 @Validated
 @RestController
@@ -125,8 +126,8 @@ class UploadBatchController {
 				.body(response);
 	}
 
-	private static UploadActor requireActor(Authentication authentication) {
-		if (!(authentication.getPrincipal() instanceof UploadActor actor)) {
+	private static PlatformActor requireActor(Authentication authentication) {
+		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
 		return actor;

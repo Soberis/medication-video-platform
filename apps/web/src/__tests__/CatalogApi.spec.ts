@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authorizeRawReviewPlayback, deleteClipAsset } from '@/api/catalog'
+import { authorizeClipAssetPlayback, deleteClipAsset } from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const clipAssetId = '50000000-0000-4000-8000-000000000001'
@@ -27,12 +27,12 @@ describe('catalog API', () => {
     )
   })
 
-  it('requests a no-store raw-review playback grant without persisting the URL', async () => {
+  it('requests a no-store data-review playback grant without persisting the URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           grant_id: '70000000-0000-4000-8000-000000000001',
-          purpose: 'PRIVACY_REVIEW',
+          purpose: 'DATA_REVIEW',
           media_url: 'https://storage.invalid/review.mp4?signature=synthetic',
           expires_at: '2026-07-21T01:08:03Z',
           content_type: 'video/mp4',
@@ -42,13 +42,13 @@ describe('catalog API', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(authorizeRawReviewPlayback(projectId, clipAssetId)).resolves.toMatchObject({
-      purpose: 'PRIVACY_REVIEW',
+    await expect(authorizeClipAssetPlayback(projectId, clipAssetId)).resolves.toMatchObject({
+      purpose: 'DATA_REVIEW',
       content_type: 'video/mp4',
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/raw-review-playback-grants`,
+      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/playback-grants`,
       expect.objectContaining({ method: 'POST', cache: 'no-store' }),
     )
   })

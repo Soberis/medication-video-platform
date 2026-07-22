@@ -125,7 +125,7 @@ onUnmounted(() => activeRequest?.abort())
   <section class="page-heading" aria-labelledby="sessions-title">
     <div>
       <p class="app-eyebrow">护士配药 · 多相机数据</p>
-      <h2 id="sessions-title">配药操作记录</h2>
+      <h1 id="sessions-title">配药操作记录</h1>
       <p>按一次配药操作查看多路视频是否绑定、是否完成媒体入库，以及后续质量状态。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadPage(false)">刷新</ElButton>
@@ -240,6 +240,6 @@ onUnmounted(() => activeRequest?.abort())
 
   <ElEmpty
     v-else-if="loadState === 'success'"
-    description="当前项目没有符合条件的配药操作记录。数据由边端自动上传，无需在此手工添加。"
+    description="当前项目没有符合条件的配药操作记录。可调整筛选，或通过边端自动上传和平台本地上传新增视频。"
   />
 </template>

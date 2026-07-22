@@ -1,10 +1,10 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.3/配药视频数据管理平台需求文档_V1.3.md`
+> 当前需求基线：`docs/requirements/baselines/V1.5/配药视频数据管理平台需求文档_V1.5.md`
 > 继承需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-07-21
+> 最后更新：2026-07-22
 
 ## 1. 目的
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在进行 Sprint 1 上传/资产纵向闭环，并已建立不会绕过默认阻断的首个人工隐私评估切片和最小数据项目/成员权限切片。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产和人工审核闭环。V1.5 已删除未形成产品闭环的隐私评估与隔离运行能力；历史迁移继续保留。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -49,10 +49,10 @@
 | FR-004 元数据必填校验 | P0 | `assetcapture` | `capture-session-metadata-v1`；CaptureSession ingest | capture_session、camera_set_snapshot、camera_stream | 缺字段阻断；服务器 CameraSet 对账；原子建档 | I |
 | FR-005 上传批次批量状态变更 | P0 | `assetcapture` | batch command API | upload_batch、audit_event | 部分失败返回逐项结果，不允许静默跳过 | D1 |
 | FR-006 资产列表和常用筛选 | P0 | `assetcapture`、只读投影 | asset/session query API | 资产检索投影 | 规定数据量与并发下第一页 P95 不超过 3 秒 | PI |
-| FR-007 资产详情、预览和状态历史 | P0 | `assetcapture`、`mediaprivacy`、`governance` | clip/session detail；preview grant | clip_asset、asset_variant、audit_event | 只能预览有权限的批准 variant；状态历史完整 | PI |
+| FR-007 资产详情、播放和状态历史 | P0 | `assetcapture`、`governance` | clip/session detail；playback grant | clip_asset、audit_event | 项目成员只能播放已完成媒体检测且未删除的资产；状态历史完整 | PI |
 | FR-008 裁剪、抽帧、预览和媒体预处理 | P0 | `mediaprivacy` | media job API；`MediaJobRequestedV1`/result | media_job、asset_variant、media_report | 派生资产可追溯到 raw 摘要、配方和软件摘要 | PI |
 | FR-009 批量业务标签 | P0 | `assetcapture` | asset tag command API | asset_tag、audit_event | 幂等添加/移除；跨项目和越权操作被拒绝 | D1 |
-| FR-010 隔离区 | P0 | `qualitycleaning`、`governance` | quarantine command/query | quarantine_record、approval_request | 隔离数据默认不可标注、不可导出；解除需要批准 | PI |
+| FR-010 隔离区 | P1 | `qualitycleaning`、`governance` | 出现真实合规需求后重新设计 | 历史 quarantine_record 仅保留迁移 | P0 通过质量 REJECTED 与管理员软删除处理 | DEFERRED |
 
 当前 `I`/`PI` 证据和边界：
 
@@ -60,9 +60,9 @@
 - FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果/脱敏死信 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；Worker 心跳、grace 后失联回收、retryable 结果的 `RETRY_WAIT`/Outbox 有限退避、新 attempt/新 capability、旧结果拒绝、max-attempts 终止、不复制 lease capability 的脱敏死信路径，以及独立管理员令牌、幂等受控重放和数据库追加式审计已有合同测试。2026-07-16 的本地合成演练进一步验证了真实 broker 上的错误身份拒绝、脱敏 DLQ、管理员重放、新 attempt/Outbox/审计和最终 MediaReport 闭环；损坏媒体矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
-- FR-006/FR-007 当前完成的是第一段只读能力：显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 授权项目入口和列表/详情。另有管理员 raw 人工审核播放：双重 ADMIN、`INGESTED`、未删除 MP4 才可在显式点击后拿到 no-store 短期 URL，签发追加式审计且 URL 不落库；这不是普通预览，也不构成隐私放行。FR-008 已有媒体探测作业和报告，但尚未生成可播放 Variant。场景、科室、隐私、标注、清洗筛选、性能基准、预览 Variant、状态历史和完整审计尚未完成，因此三条均为 `PI`，不能宣布需求验收通过。
-- FR-010 当前完成活动隔离的第一段：`QUARANTINE_REQUIRED` 的人工隐私评估通过 `qualitycleaning` 公开应用服务在同一事务内幂等建立 `quarantine_record` 和追加式审计；所有评估和隐私状态接口使用显式项目路径，并同时校验平台 ADMIN 与项目 ACTIVE ADMIN Membership。并发相同命令只产生一份评估、隔离及对应审计，数据库以项目/资产和评估来源复合外键拒绝跨项目、伪造来源或错误版本。管理员可按项目查询资产的活动隔离记录，普通用户和跨项目查询被拒绝，`NONE` 不被误判为隐私放行，后续重新评估也不会自动解除既有隔离。尚未实现隔离复核、批准解除、销毁申请，以及标注/AI/数据集各入口的统一隔离守卫，因此仍为 `PI`。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、`media-probe-job-v1`、`media-probe-result-v1`、`media-dead-letter-v1`、批准的媒体探测与人工隐私评估 profile、Flyway V1～V23、V19→V21 历史升级与约束测试、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引/上传终止与清理及其积压告警判定/MediaJob/Outbox/Inbox/租约恢复/脱敏死信/受控重放/追加式审计/人工隐私评估/活动隔离及并发合同测试、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具及本地结果、Media Worker、Vue 页面测试和 Bruno 控制面场景；合成链路已真实完成 VIDEO/METADATA/EVENT_LOG 直传、Session 组装、2 GiB 双进程恢复、Outbox 投递、队列消费、探测解码、结果入库和 MediaReport 查询，并完成一次真实 DLQ 到受控重放闭环；人工隐私评估和活动隔离仍默认阻断且不等于放行。这些证据不能替代弱网/并发/目标 S3 性能测试、目标环境监控采集与通知演练、损坏媒体矩阵或 UAT。
+- FR-006/FR-007 当前完成显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 授权项目入口和列表/详情。V1.5 保留项目成员审核播放：`INGESTED`、未删除 MP4 可在显式点击后拿到 no-store 短期 `DATA_REVIEW` URL，签发追加式审计且 URL 不落库；播放不自动改变质量或标注状态。状态历史、完整审计查询、浏览器兼容矩阵和 UAT 尚未完成，因此仍为 `PI`。
+- FR-010 已按 V1.5 后置。历史 Flyway V19～V21 继续参与空库与升级验证，但当前 OpenAPI、服务和 Web 不暴露 PrivacyAssessment 或 Quarantine 运行能力。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、Flyway V1～V26、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -91,7 +91,7 @@
 | FR-022 创建清洗任务 | P0 | `qualitycleaning` | cleaning runs | cleaning_run、cleaning_rule_set | 输入筛选条件冻结；重跑产生新 run | D1 |
 | FR-023 视频质量自动检测 | P0 | `mediaprivacy`、`qualitycleaning` | media metrics/result | media_report、cleaning_result | 指标算法、阈值、软件摘要和输入摘要可追溯 | D1 |
 | FR-024 完全重复和近重复检测 | P0 | `qualitycleaning` | duplicate detection job/result | duplicate_group、cleaning_result | SHA-256 完全重复与视频指纹近重复分开报告；不自动物理删除 | D1 |
-| FR-025 隐私风险标记 | P0 | `mediaprivacy` | privacy assessment/review | privacy_assessment、deidentify_run | 人脸、屏幕、工牌、文本和语音风险有人工复核路径 | PI |
+| FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
 | FR-027 创建数据集版本 | P0 | `datasetexport` | dataset versions | dataset_version | 选择规则、标签/清洗规则、创建人和时间冻结 | D1 |
 | FR-028 数据集准入 | P0 | `datasetexport` | dataset validation | dataset_member_session、dataset_member_stream | 未复核、未放行、警告未批准或摘要变化均阻断冻结 | D1 |
@@ -100,21 +100,11 @@
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze command/approval | dataset_version、approval_request | FROZEN 后成员、revision、split 和规则不可修改 | D1 |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
 
-FR-025 当前 `PI` 证据和边界：
+FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移链不可变，运行 API、前端客户端、策略 profile 和状态投影已从 P0 删除。未来若重新启用，必须重新建立需求、威胁模型、用途边界、契约和迁移，不能直接恢复历史代码。
 
-- V19 已建立 `privacy_assessment` 和 `privacy_finding` 所有权表；人工评估绑定 project、已
-  `INGESTED` ClipAsset、平台验证 SHA-256、固定策略 key/digest、操作者和请求证据。
-- OpenAPI 0.20.1 提供管理员创建、按 ID 查询、ClipAsset 当前隐私投影和活动隔离查询；未评估返回
-  `UNKNOWN/BLOCKED`，所有评估结论仍为 `BLOCKED`，不会因 `NONE` 自动开放标注或导出。
-- `NONE` 必须无 finding 且只进入 release review；`SUSPECTED` 必须隔离复核；`CONFIRMED`
-  必须有固定 finding 并进入脱敏或隔离。重复命令在并发下保持幂等，重新评估显式 supersede 当前
-  版本，旧证据和追加式审计保留；V21 以复合外键固定项目、资产、摘要、来源和版本。
-- 自动隐私检测属于 P2；P0 已有 `QUARANTINE_REQUIRED` 到活动隔离记录的最小编排，但尚缺隔离复核/解除、DeidentifyRun/DEIDENTIFIED variant、PrivacyReleaseDecision、隐私区域标注/复核、预览授权和正式导出前最终人工检查，因此不能宣布
-  FR-025 或隐私闭环完成。
+### 3.4 V1.2～V1.5 新增与细化需求
 
-### 3.4 V1.2/V1.3 新增与细化需求
-
-V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 进一步明确内部平台账号、边端自动上传和账号管理。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -124,8 +114,13 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 进一
 | FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | PI |
 | FR-037 平台内部账号登录 | P0 | `iamproject`、Web、`governance` | auth login/session/logout | platform_account、audit_event、HTTP session | BCrypt、统一失败提示、会话/CSRF/注销和未认证拒绝 | I |
 | FR-038 管理员账号管理 | P0 | `iamproject`、Web、`governance` | platform accounts/account enablement/memberships | platform_account、membership、audit_event | 管理员创建/启停普通用户并分配项目成员；无公开注册 | PI |
+| FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放 `INGESTED`、未删除 MP4；短期 URL 不落库；状态和错误清楚 | PI |
+| FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | D1 |
+| FR-041 机器候选标注边界 | P1 | `aicandidate`、`annotationreview` | candidate annotation API/event | candidate_annotation、annotation_revision | 机器结果不能覆盖正式标签；人工确认和独立复核后才可能入集 | D1 |
 
-“上传后可播放”由既有 FR-007/FR-008 细化，“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环，不创建重复 FR。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
+“上传后可播放”由 FR-007 与 V1.4 FR-039 共同细化；“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
+
+FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`、Vue API/页面测试已覆盖 ADMIN/MEMBER 项目成员、媒体状态、软删除、MP4、短期 `DATA_REVIEW` URL、no-store 和 URL 不进入审计。Range/seek 浏览器矩阵和 UAT 尚未完成。FR-040 尚未创建表或接口，是下一纵向切片。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
 
@@ -153,7 +148,7 @@ FR-034 当前 `PI` 证据和边界：
 | NFR-PERF-004 | CVAT 完成后五分钟内同步 | `integration`、`annotationreview` | 从 CVAT 完成时间到平台 revision 可见时间的 P95；故障重试单列 | D1 |
 | NFR-OPS-001 | 清洗、导出等异步执行并可查进度 | 各作业所属模块 | 状态、心跳、失败原因、取消和重跑测试 | D1 |
 | NFR-OPS-002 | 所有后台任务可重跑、可取消 | 作业协议 | 请求取消、运行中协作取消、完成后取消和重复取消 | D1 |
-| NFR-SEC-001 | 标注员默认不能访问 raw | `iamproject`、`mediaprivacy` | RBAC+ABAC 正反向权限矩阵和预签名 URL 越权测试 | D1 |
+| NFR-SEC-001 | 原始视频仅限授权项目内部使用 | `iamproject`、`assetcapture` | Membership 正反向权限矩阵、短期 URL 和跨项目越权测试 | PI |
 | NFR-SEC-002 | 传输和存储加密 | 部署与对象存储 | TLS 配置、密钥引用、静态加密和轮换演练 | PENDING |
 | NFR-SEC-003 | 高风险操作可审计 | `governance` | 原始访问、修改、删除、导出、审批和权限变更完整性测试 | D1 |
 | NFR-MAINT-001 | 标签、清洗和准入规则版本化 | `annotationreview`、`qualitycleaning`、`datasetexport` | 冻结版本不可覆盖；旧数据可重建 | D1 |
@@ -185,9 +180,9 @@ AI 启用决策前必须冻结：
 
 ### 5.3 需求基线归一化决策
 
-V1.2 是当前业务需求基线，未变更条款继承 V1.1.13 DOCX。下表记录 TD-V1.4 对继承条款的实现归一化口径，不修改历史 DOCX。
+V1.5 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.5 对继承条款的实现归一化口径，不修改历史基线。
 
-| 继承的 V1.1.13 表述 | TD-V1.4 实现口径 | 原因 |
+| 继承的 V1.1.13 表述 | TD-V1.5 实现口径 | 原因 |
 | --- | --- | --- |
 | 通用 `confidence` | 人工标注使用明确的确定性/不确定性字段；AI 分数必须记录任务、来源和语义版本 | 不同来源的分数不可直接比较 |
 | 秒或 0.01 秒粒度 | UI 可显示秒，小数输入在边界转换；存储和契约统一使用整数毫秒 | 避免浮点累计误差和跨语言歧义 |
@@ -196,14 +191,14 @@ V1.2 是当前业务需求基线，未变更条款继承 V1.1.13 DOCX。下表�
 | 清洗后排除或删除 | 逻辑排除、隔离与物理删除分开；物理删除受保留策略、审批和审计约束 | 保证可追溯和合规处置 |
 | 默认 70/15/15 划分 | 小样本验收采用 pilot/holdout；正式比例由样本设计批准，并按 session/操作者/批次等泄漏组隔离 | 固定比例不等于科学抽样 |
 | 隐私漏检为 0 | 仅表示批准样本经最终人工检查后观察到 0 个漏检，不外推为总体风险绝对为零 | 避免统计结论越界 |
-| 护士配药视频默认无敏感信息 | 未经评估的 raw 视频先按待隐私评估处理；确认不含人脸、声音、工牌、屏幕、标签或环境标识后可按批准规则降级 | 拍摄对象不是患者也不代表视频天然无个人或机构敏感信息 |
+| 采集视频按规范不包含敏感信息 | 媒体技术校验后允许项目成员直接审核播放；若意外发现人脸、声音、工牌、屏幕、标签或环境标识则转入隔离 | 不把低风险假设变成“绝对没有风险”，同时避免每条视频强制走放行流程 |
 
-V1.2 新增需求归一化：
+V1.2～V1.5 新增需求归一化：
 
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |
 | 医院远端上传和平台本地上传 | 两种入口复用 Upload/Multipart/Complete、项目权限和入库校验 | 入口不同，入库规则一致 |
-| 上传视频可以播放 | 入库后生成获准 Variant，再按 project、privacy 和 quarantine 签发短期 `PLAYBACK` 授权；raw 隐私复核使用不可复用的独立 `PRIVACY_REVIEW` 授权 | 上传成功不等于具备播放条件，管理员身份也不自动获得 raw 权限 |
+| 上传视频可以播放 | 媒体技术校验为 `INGESTED` 后，ACTIVE 项目成员显式取得短期 `DATA_REVIEW` 地址；播放不自动判定质量 | 上传完成仍需校验可读性，项目 Membership 和短期授权防止公开访问 |
 | 无用或不合格视频可以删除 | 删除目标视频并保留权限、引用和审计守卫 | 满足数据整理需求且不破坏受控结果 |
 | 项目下不同文件夹 | 一层 AssetFolder，按视频归类，不承载权限或对象路径 | 满足简单分类需求 |
 | 只有管理员和普通用户 | 两级界面模板映射细粒度权限；高风险职责分离和标注禁止自审仍保留 | 简化 UI 不降低安全边界 |
