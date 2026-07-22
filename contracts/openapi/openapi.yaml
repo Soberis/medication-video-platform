@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.27.0
+  version: 0.28.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -2659,19 +2659,21 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /privacy-assessments:
+  /projects/{project_id}/privacy-assessments:
     post:
       operationId: createPrivacyAssessment
       tags:
         - Privacy Assessments
       summary: Record a versioned human privacy assessment
       description: >-
-        Administrator-only P0 command. The target must be a successfully ingested clip asset in the
-        authenticated project. The decision binds the platform-verified input SHA-256 and the approved
+        Administrator-only P0 command. Requires both a global platform ADMIN and ACTIVE ADMIN membership
+        in the explicit project path. The target must be a successfully ingested clip asset in that project.
+        The decision binds the platform-verified input SHA-256 and the approved
         privacy-assessment-policy-v1 digest. NONE means no listed risk was observed under this assessment,
         not that risk is mathematically absent; every result remains BLOCKED pending a separate release
         decision. Reassessment must explicitly supersede the current assessment.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/IdempotencyKey"
         - name: X-Request-Id
           in: header
@@ -2735,13 +2737,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /privacy-assessments/{privacy_assessment_id}:
+  /projects/{project_id}/privacy-assessments/{privacy_assessment_id}:
     get:
       operationId: getPrivacyAssessment
       tags:
         - Privacy Assessments
       summary: Read one project-scoped privacy assessment version
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: privacy_assessment_id
           in: path
           required: true
@@ -2778,7 +2781,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /clip-assets/{clip_asset_id}/privacy-status:
+  /projects/{project_id}/clip-assets/{clip_asset_id}/privacy-status:
     get:
       operationId: getClipAssetPrivacyStatus
       tags:
@@ -2788,6 +2791,7 @@ paths:
         Returns UNKNOWN and BLOCKED when the ingested asset has no assessment. A recorded NONE,
         SUSPECTED or CONFIRMED assessment also remains BLOCKED until a separate release decision exists.
       parameters:
+        - $ref: "#/components/parameters/ProjectId"
         - name: clip_asset_id
           in: path
           required: true

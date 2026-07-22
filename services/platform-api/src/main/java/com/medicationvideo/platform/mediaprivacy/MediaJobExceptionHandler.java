@@ -19,6 +19,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
+import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
 @RestControllerAdvice(assignableTypes = {
 		MediaJobController.class,
@@ -48,6 +49,15 @@ class MediaJobExceptionHandler {
 	@ExceptionHandler(MediaJobAuthorizationException.class)
 	ResponseEntity<ApiErrorResponse> forbidden(MediaJobAuthorizationException exception) {
 		return error(HttpStatus.FORBIDDEN, "PROJECT_ACCESS_DENIED", exception.getMessage(), false);
+	}
+
+	@ExceptionHandler(ProjectAccessException.class)
+	ResponseEntity<ApiErrorResponse> projectAccess(ProjectAccessException exception) {
+		return error(
+				HttpStatus.valueOf(exception.getStatusCode()),
+				exception.getErrorCode(),
+				exception.getMessage(),
+				false);
 	}
 
 	@ExceptionHandler(MediaJobIdempotencyConflictException.class)

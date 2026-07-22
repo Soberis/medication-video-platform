@@ -3,11 +3,15 @@ import {
   ElAlert,
   ElButton,
   ElCard,
+  ElCheckbox,
+  ElCheckboxGroup,
   ElDescriptions,
   ElDescriptionsItem,
   ElMessage,
   ElMessageBox,
   ElOption,
+  ElRadio,
+  ElRadioGroup,
   ElSelect,
   ElTag,
 } from 'element-plus'
@@ -39,6 +43,14 @@ import {
   statusTone,
   streamStatusLabels,
 } from '@/catalog-presentation'
+import {
+  createPrivacyAssessment,
+  getPrivacyStatus,
+  PrivacyApiError,
+  type PrivacyFindingType,
+  type PrivacyRiskLevel,
+  type PrivacyStatus,
+} from '@/api/privacy'
 import { useAuthStore } from '@/stores/auth'
 
 defineOptions({ name: 'AssetDetailView' })
@@ -61,8 +73,16 @@ const selectedFolderId = ref('')
 const isClassifying = ref(false)
 const isRequestingPlayback = ref(false)
 const playbackGrant = shallowRef<RawReviewPlaybackGrant | null>(null)
+const privacyStatus = shallowRef<PrivacyStatus | null>(null)
+const privacyLoadState = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+const privacyErrorCode = ref('')
+const privacyErrorMessage = ref('')
+const privacyRisk = ref<Exclude<PrivacyRiskLevel, 'UNKNOWN'>>('NONE')
+const privacyFindings = ref<PrivacyFindingType[]>([])
+const isSavingPrivacy = ref(false)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
+let activePrivacyRequest: AbortController | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
 const canReviewRaw = computed(
@@ -71,6 +91,29 @@ const canReviewRaw = computed(
     projectRole.value === 'ADMIN' &&
     detail.value?.status === 'INGESTED' &&
     detail.value.content_type === 'video/mp4',
+)
+const canAdministerPrivacy = computed(
+  () =>
+    auth.session?.role === 'ADMIN' &&
+    projectRole.value === 'ADMIN' &&
+    detail.value?.status === 'INGESTED',
+)
+const privacyRequiredAction = computed(() =>
+  privacyRisk.value === 'NONE'
+    ? 'RELEASE_REVIEW_REQUIRED'
+    : privacyRisk.value === 'SUSPECTED'
+      ? 'QUARANTINE_REQUIRED'
+      : 'DEIDENTIFICATION_REQUIRED',
+)
+const privacyReasonCode = computed(() =>
+  privacyRisk.value === 'NONE'
+    ? 'NO_IDENTIFIABLE_INFORMATION_OBSERVED'
+    : privacyRisk.value === 'SUSPECTED'
+      ? 'RISK_REQUIRES_ISOLATION'
+      : 'IDENTIFIABLE_INFORMATION_OBSERVED',
+)
+const privacyDecisionValid = computed(() =>
+  privacyRisk.value === 'NONE' ? privacyFindings.value.length === 0 : privacyFindings.value.length > 0,
 )
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 
@@ -132,9 +175,26 @@ watch(
   },
   { immediate: true },
 )
+watch(
+  [projectId, assetId, canAdministerPrivacy],
+  () => {
+    if (!canAdministerPrivacy.value) {
+      activePrivacyRequest?.abort()
+      privacyStatus.value = null
+      privacyLoadState.value = 'idle'
+      return
+    }
+    void loadPrivacyStatus()
+  },
+  { immediate: true },
+)
+watch(privacyRisk, (risk) => {
+  if (risk === 'NONE') privacyFindings.value = []
+})
 onUnmounted(() => {
   activeRequest?.abort()
   activeRoleRequest?.abort()
+  activePrivacyRequest?.abort()
 })
 
 async function confirmDelete() {
@@ -207,6 +267,53 @@ async function startRawReviewPlayback() {
 
 function closeRawReviewPlayback() {
   playbackGrant.value = null
+}
+
+async function loadPrivacyStatus() {
+  activePrivacyRequest?.abort()
+  const request = new AbortController()
+  activePrivacyRequest = request
+  privacyLoadState.value = 'loading'
+  privacyErrorCode.value = ''
+  privacyErrorMessage.value = ''
+  try {
+    privacyStatus.value = await getPrivacyStatus(projectId.value, assetId.value, request.signal)
+    if (activePrivacyRequest === request) privacyLoadState.value = 'success'
+  } catch (error) {
+    if (request.signal.aborted || activePrivacyRequest !== request) return
+    privacyStatus.value = null
+    privacyLoadState.value = 'error'
+    privacyErrorCode.value = error instanceof PrivacyApiError ? error.errorCode : 'PRIVACY_STATUS_FAILED'
+    privacyErrorMessage.value =
+      error instanceof PrivacyApiError ? error.message : '暂时无法读取隐私评估状态，请稍后重试。'
+  } finally {
+    if (activePrivacyRequest === request) activePrivacyRequest = null
+  }
+}
+
+async function savePrivacyAssessment() {
+  if (!detail.value || !canAdministerPrivacy.value || !privacyDecisionValid.value || isSavingPrivacy.value) return
+  isSavingPrivacy.value = true
+  privacyErrorCode.value = ''
+  privacyErrorMessage.value = ''
+  try {
+    await createPrivacyAssessment(projectId.value, {
+      clip_asset_id: detail.value.clip_asset_id,
+      supersedes_assessment_id: privacyStatus.value?.current_assessment?.privacy_assessment_id ?? null,
+      risk_level: privacyRisk.value,
+      required_action: privacyRequiredAction.value,
+      reason_code: privacyReasonCode.value,
+      finding_types: privacyFindings.value,
+    })
+    ElMessage.success('隐私评估已记录。当前视频仍保持默认阻断状态，尚未获得放行。')
+    await loadPrivacyStatus()
+  } catch (error) {
+    privacyErrorCode.value = error instanceof PrivacyApiError ? error.errorCode : 'PRIVACY_ASSESSMENT_FAILED'
+    privacyErrorMessage.value =
+      error instanceof PrivacyApiError ? error.message : '隐私评估未保存，请稍后重试。'
+  } finally {
+    isSavingPrivacy.value = false
+  }
 }
 </script>
 
@@ -281,6 +388,50 @@ function closeRawReviewPlayback() {
         <ElTag type="warning">{{ playbackGrant.purpose }}</ElTag>
         <ElButton plain @click="closeRawReviewPlayback">关闭视频</ElButton>
       </div>
+    </ElCard>
+
+    <ElCard v-if="canAdministerPrivacy" class="detail-card" shadow="never">
+      <template #header><strong>人工隐私评估</strong></template>
+      <div v-if="privacyLoadState === 'loading'" class="catalog-notice" role="status">正在读取隐私状态…</div>
+      <div v-else-if="privacyLoadState === 'error'" class="catalog-error" role="alert">
+        <strong>{{ privacyErrorCode }}</strong>
+        <span>{{ privacyErrorMessage }}</span>
+        <ElButton @click="loadPrivacyStatus">重试</ElButton>
+      </div>
+      <template v-else-if="privacyStatus">
+        <ElAlert
+          :title="`当前风险：${privacyStatus.risk_level}；放行状态：${privacyStatus.privacy_release_status}`"
+          :description="privacyStatus.current_assessment
+            ? `已有第 ${privacyStatus.current_assessment.assessment_version} 次人工评估。重新提交会创建新版本并替代当前版本。`
+            : '尚未记录人工评估。即使评估为“未观察到风险”，视频仍默认阻断，不能直接进入标注或导出。'"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <div class="privacy-assessment-form">
+          <p class="form-hint">基于当前人工审核选择风险结论；系统会根据结论固定后续动作，不能手工改写。</p>
+          <ElRadioGroup v-model="privacyRisk" aria-label="隐私风险结论">
+            <ElRadio value="NONE">未观察到可识别信息</ElRadio>
+            <ElRadio value="SUSPECTED">疑似存在风险，隔离</ElRadio>
+            <ElRadio value="CONFIRMED">确认存在风险，后续脱敏</ElRadio>
+          </ElRadioGroup>
+          <ElCheckboxGroup v-model="privacyFindings" :disabled="privacyRisk === 'NONE'" aria-label="可识别信息发现项">
+            <ElCheckbox value="FACE">人脸</ElCheckbox>
+            <ElCheckbox value="NAME">姓名</ElCheckbox>
+            <ElCheckbox value="MEDICAL_RECORD_ID">病历号</ElCheckbox>
+            <ElCheckbox value="SCREEN">屏幕</ElCheckbox>
+            <ElCheckbox value="BADGE">工牌</ElCheckbox>
+            <ElCheckbox value="ORDER_TEXT">医嘱文本</ElCheckbox>
+            <ElCheckbox value="LABEL_TEXT">标签文本</ElCheckbox>
+            <ElCheckbox value="VOICE">语音</ElCheckbox>
+            <ElCheckbox value="OTHER_IDENTIFIABLE_INFORMATION">其他可识别信息</ElCheckbox>
+          </ElCheckboxGroup>
+          <p class="form-hint">提交后动作：<code>{{ privacyRequiredAction }}</code>；放行状态仍为 <code>BLOCKED</code>。</p>
+          <ElButton type="primary" :disabled="!privacyDecisionValid" :loading="isSavingPrivacy" @click="savePrivacyAssessment">
+            {{ privacyStatus.current_assessment ? '重新评估并创建新版本' : '记录隐私评估' }}
+          </ElButton>
+        </div>
+      </template>
     </ElCard>
 
     <ElAlert

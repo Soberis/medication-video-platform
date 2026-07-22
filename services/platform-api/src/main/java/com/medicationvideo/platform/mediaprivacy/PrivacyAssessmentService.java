@@ -24,6 +24,9 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.iamproject.ProjectAccessException;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 import com.medicationvideo.platform.qualitycleaning.QuarantineActivationCommand;
 import com.medicationvideo.platform.qualitycleaning.QuarantineCommandService;
 
@@ -34,6 +37,7 @@ class PrivacyAssessmentService {
 	private final AssetCatalogQueryService assetCatalog;
 	private final AuditEventRecorder auditRecorder;
 	private final QuarantineCommandService quarantineService;
+	private final ProjectAccessService projectAccessService;
 	private final TransactionTemplate assessmentTransaction;
 	private final TransactionTemplate idempotencyResolutionTransaction;
 
@@ -42,11 +46,13 @@ class PrivacyAssessmentService {
 			AssetCatalogQueryService assetCatalog,
 			AuditEventRecorder auditRecorder,
 			QuarantineCommandService quarantineService,
+			ProjectAccessService projectAccessService,
 			PlatformTransactionManager transactionManager) {
 		this.repository = repository;
 		this.assetCatalog = assetCatalog;
 		this.auditRecorder = auditRecorder;
 		this.quarantineService = quarantineService;
+		this.projectAccessService = projectAccessService;
 		this.assessmentTransaction = requiresNewTransaction(transactionManager, false);
 		this.idempotencyResolutionTransaction = requiresNewTransaction(
 				transactionManager, true);
@@ -97,6 +103,7 @@ class PrivacyAssessmentService {
 			String traceId,
 			PrivacyAssessmentRequest request,
 			String requestFingerprint) {
+		requireProjectAdministrator(projectId, actorId);
 		var byIdempotency = this.repository.findByProjectIdAndIdempotencyKey(
 				projectId, idempotencyKey);
 		if (byIdempotency.isPresent()) {
@@ -163,6 +170,15 @@ class PrivacyAssessmentService {
 		transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		transaction.setReadOnly(readOnly);
 		return transaction;
+	}
+
+	private void requireProjectAdministrator(UUID projectId, String actorId) {
+		if (this.projectAccessService.requireMember(projectId, actorId) != ProjectRole.ADMIN) {
+			throw new ProjectAccessException(
+					"PROJECT_ACCESS_DENIED",
+					"Project administrator membership is required.",
+					403);
+		}
 	}
 
 	private static boolean isConcurrentAssessmentWrite(
@@ -242,7 +258,7 @@ class PrivacyAssessmentService {
 				assessment.getReasonCode().name(),
 				requestId,
 				traceId,
-				"ROLE_ADMIN",
+				"ROLE_ADMIN+PROJECT_MEMBERSHIP_ADMIN",
 				Map.copyOf(details)));
 	}
 

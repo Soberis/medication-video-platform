@@ -233,6 +233,18 @@ describe('catalog views', () => {
         )
       }
       if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
+      if (url.endsWith('/privacy-status')) {
+        return Promise.resolve(
+          jsonResponse({
+            clip_asset_id: assetId,
+            input_digest: 'a'.repeat(64),
+            risk_level: 'UNKNOWN',
+            required_action: null,
+            privacy_release_status: 'BLOCKED',
+            current_assessment: null,
+          }),
+        )
+      }
       if (url.endsWith('/raw-review-playback-grants')) {
         return Promise.resolve(
           jsonResponse({
@@ -283,6 +295,7 @@ describe('catalog views', () => {
     )
     expect(wrapper.find('video').attributes('src')).toContain('signature=synthetic')
     expect(wrapper.text()).toContain('原始视频人工审核')
+    expect(wrapper.text()).toContain('人工隐私评估')
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {

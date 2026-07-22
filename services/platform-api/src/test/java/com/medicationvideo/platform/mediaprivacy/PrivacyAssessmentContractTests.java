@@ -34,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.jayway.jsonpath.JsonPath;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -61,6 +62,7 @@ class PrivacyAssessmentContractTests {
 	@BeforeEach
 	void clearAssessments() {
 		clearSyntheticPrivacyData();
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 	}
 
 	@AfterEach
@@ -92,7 +94,10 @@ class PrivacyAssessmentContractTests {
 	void unassessedIngestedAssetIsExplicitlyUnknownAndBlocked() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED");
 
-		this.mockMvc.perform(get("/api/v1/clip-assets/{clipAssetId}/privacy-status", clipAssetId)
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/privacy-status",
+					PROJECT_ID,
+					clipAssetId)
 					.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -127,7 +132,10 @@ class PrivacyAssessmentContractTests {
 				.getContentAsString();
 		var assessmentId = UUID.fromString(JsonPath.read(response, "$.privacy_assessment_id"));
 
-		this.mockMvc.perform(get("/api/v1/privacy-assessments/{assessmentId}", assessmentId)
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/privacy-assessments/{assessmentId}",
+					PROJECT_ID,
+					assessmentId)
 					.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.privacy_assessment_id").value(assessmentId.toString()))
@@ -165,7 +173,10 @@ class PrivacyAssessmentContractTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.privacy_assessment_id").value(assessmentId));
 
-		this.mockMvc.perform(get("/api/v1/clip-assets/{clipAssetId}/privacy-status", clipAssetId)
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/privacy-status",
+					PROJECT_ID,
+					clipAssetId)
 					.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.risk_level").value("CONFIRMED"))
@@ -425,7 +436,7 @@ class PrivacyAssessmentContractTests {
 			String idempotencyKey,
 			String requestId,
 			String body) throws Exception {
-		return this.mockMvc.perform(post("/api/v1/privacy-assessments")
+		return this.mockMvc.perform(post("/api/v1/projects/{projectId}/privacy-assessments", PROJECT_ID)
 				.header("Authorization", "Bearer " + token)
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", requestId)
