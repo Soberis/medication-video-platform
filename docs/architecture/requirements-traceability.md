@@ -73,7 +73,7 @@
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | FR-011 标注项目和标签版本 | P0 | `annotationreview` | annotation projects；label schemas | annotation_project、label_schema、label_definition | 同一 session 可进入不同项目；结果绑定不可变 schema digest | D1 |
-| FR-012 任务拆分和分配 | P0 | `annotationreview` | annotation tasks/assignments | annotation_task、task_assignment | session Step 与 stream Object 范围不混淆；重复分配受唯一约束保护 | D1 |
+| FR-012 任务拆分和分配 | P0 | `annotationreview` | annotation tasks | annotation_task | 当前先按单个 ClipAsset 创建一个直接分配任务；重复创建受唯一约束保护 | PI |
 | FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API；task events | annotation_task | 只允许状态机定义的迁移；并发提交产生 409 而非覆盖 | D1 |
 | FR-014 标注指南绑定 | P0 | `annotationreview` | guideline versions | annotation_guideline_version | 提交 revision 可追溯到实际使用的指南摘要 | D1 |
 | FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation progress query | annotation_progress_projection | 与任务事实表对账一致；统计不反向写业务表 | D1 |
@@ -115,14 +115,16 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确
 | FR-037 平台内部账号登录 | P0 | `iamproject`、Web、`governance` | auth login/session/logout | platform_account、audit_event、HTTP session | BCrypt、统一失败提示、会话/CSRF/注销和未认证拒绝 | I |
 | FR-038 管理员账号管理 | P0 | `iamproject`、Web、`governance` | platform accounts/account enablement/memberships | platform_account、membership、audit_event | 管理员创建/启停普通用户并分配项目成员；无公开注册 | PI |
 | FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放 `INGESTED`、未删除 MP4；短期 URL 不落库；状态和错误清楚 | PI |
-| FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | PI |
+| FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | I |
 | FR-041 机器候选标注边界 | P1 | `aicandidate`、`annotationreview` | candidate annotation API/event | candidate_annotation、annotation_revision | 机器结果不能覆盖正式标签；人工确认和独立复核后才可能入集 | D1 |
 
 “上传后可播放”由 FR-007 与 V1.4 FR-039 共同细化；“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
 FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`、Vue API/页面测试已覆盖 ADMIN/MEMBER 项目成员、媒体状态、软删除、MP4、短期 `DATA_REVIEW` URL、no-store 和 URL 不进入审计。Range/seek 浏览器矩阵和 UAT 尚未完成。
 
-FR-040 当前 `PI` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。正式标注任务尚未实现，因此“仅 QUALIFIED 进入标注”仍待后续切片联调验证。
+FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
+
+FR-012 当前 `PI` 证据和边界：Flyway V28、OpenAPI、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计。当前任务只有 `ASSIGNED`，还没有标注内容、提交、返工或独立复核。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
 

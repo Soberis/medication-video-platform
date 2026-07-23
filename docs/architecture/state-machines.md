@@ -186,6 +186,8 @@ PENDING → ASSIGNED → IN_PROGRESS → SUBMITTED → COMPLETED
              └→ PENDING    （回收）
 ```
 
+当前 P0 切片只启用 `ASSIGNED`：项目管理员仅能为 `INGESTED`、未删除且当前质量为 `QUALIFIED` 的视频创建一个直接分配任务。`PENDING`、执行、提交、返工和完成迁移须随 Revision/Review 切片一起启用，不能由前端提前伪造。
+
 | 迁移 | 角色与守卫 |
 | --- | --- |
 | PENDING → ASSIGNED | 调度员/项目管理员；assignee 有项目权限；范围未被冲突任务锁定 |

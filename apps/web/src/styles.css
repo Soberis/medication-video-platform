@@ -690,7 +690,8 @@ code {
 }
 
 .quality-review-summary,
-.quality-review-actions {
+.quality-review-actions,
+.annotation-task-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -703,6 +704,19 @@ code {
 
 .quality-review-actions .el-select {
   width: min(100%, 300px);
+}
+
+.annotation-task-actions {
+  margin-top: 14px;
+}
+
+.annotation-task-actions .el-select {
+  width: min(100%, 380px);
+}
+
+.detail-card .el-alert + .text-link {
+  display: inline-block;
+  margin-top: 14px;
 }
 
 .heading-tags {

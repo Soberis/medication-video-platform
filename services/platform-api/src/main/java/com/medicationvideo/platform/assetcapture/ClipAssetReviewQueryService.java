@@ -17,11 +17,28 @@ public class ClipAssetReviewQueryService {
 	@Transactional(readOnly = true)
 	public ReviewFacts getReviewFacts(UUID projectId, UUID clipAssetId) {
 		var asset = this.repository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
-				.filter(candidate -> !candidate.isDeleted())
-				.orElseThrow(() -> new AssetCatalogQueryException(
-						"CLIP_ASSET_NOT_FOUND",
-						"The clip asset was not found in the current project."));
+				.orElseThrow(ClipAssetReviewQueryService::assetNotFound);
+		return toReviewFacts(asset);
+	}
+
+	@Transactional
+	public ReviewFacts lockAndGetReviewFacts(UUID projectId, UUID clipAssetId) {
+		var asset = this.repository.findForUpdate(clipAssetId, projectId)
+				.orElseThrow(ClipAssetReviewQueryService::assetNotFound);
+		return toReviewFacts(asset);
+	}
+
+	private static ReviewFacts toReviewFacts(ClipAsset asset) {
+		if (asset.isDeleted()) {
+			throw assetNotFound();
+		}
 		return new ReviewFacts(asset.getStatus() == ClipAssetStatus.INGESTED, asset.getStatus().name());
+	}
+
+	private static AssetCatalogQueryException assetNotFound() {
+		return new AssetCatalogQueryException(
+				"CLIP_ASSET_NOT_FOUND",
+				"The clip asset was not found in the current project.");
 	}
 
 	public record ReviewFacts(boolean reviewable, String assetStatus) {

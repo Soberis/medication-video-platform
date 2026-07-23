@@ -231,7 +231,7 @@ flowchart LR
 | --- | --- | --- |
 | LabelSchema | label_schema、label_definition、label_attribute_definition | 标签、属性、互斥/重叠规则和版本摘要 |
 | AnnotationProject | annotation_project、annotation_guideline_version | 项目范围、工具、schema 和指南版本 |
-| AnnotationTask | annotation_task、task_assignment、external_task_mapping | session Step、stream Object、隐私和质量任务 |
+| AnnotationTask | annotation_task（当前）；task_assignment、external_task_mapping（后续） | 当前按单个 ClipAsset 直接分配；后续再扩展 session Step、stream Object 和外部工具映射 |
 | AnnotationRevision | annotation_revision、step_segment、object_annotation、observable_event_annotation、privacy_region_annotation | 一次不可变提交 |
 | Review | review_record、adjudication_record | 通过、退回和裁决，不覆盖原 revision |
 | ValidationResult | annotation_validation_result | 时间、标签、几何、必填属性和隐私规则检查 |

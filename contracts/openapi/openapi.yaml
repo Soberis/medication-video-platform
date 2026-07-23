@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.31.0
+  version: 0.32.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -21,7 +21,8 @@ info:
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
     member for human training-data review after media ingest, record the current human quality
-    conclusion with a stable reason and optimistic version, and create and read project-scoped media probe jobs that freeze the input
+    conclusion with a stable reason and optimistic version, let project administrators create and
+    assign one auditable annotation task for a qualified video, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -60,6 +61,11 @@ tags:
     description: >-
       Project-member human decisions about whether an INGESTED ClipAsset is suitable for annotation
       and training. The current fact is versioned and every change is append-only audited.
+  - name: Annotation Tasks
+    description: >-
+      Minimal project-scoped human annotation queue. A project administrator assigns one task only
+      after a ClipAsset is INGESTED and its current human quality conclusion is QUALIFIED. Members
+      can read only tasks assigned to themselves.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -2288,6 +2294,109 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Object storage could not issue a temporary read address. Retrying may succeed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-tasks:
+    get:
+      operationId: listAnnotationTasks
+      tags:
+        - Annotation Tasks
+      summary: List annotation tasks visible to the current project member
+      description: >-
+        Requires an ACTIVE project membership. Project administrators receive the project queue;
+        ordinary members receive only tasks assigned to their own internal account.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Visible annotation tasks in newest-first order.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationTaskList"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/annotation-tasks:
+    post:
+      operationId: createAnnotationTask
+      tags:
+        - Annotation Tasks
+      summary: Create and assign the first annotation task for a qualified video
+      description: >-
+        Requires an ACTIVE ADMIN membership. The asset must be undeleted, INGESTED and currently
+        QUALIFIED by human review; the assignee must hold an ACTIVE membership in the same project.
+        The idempotency key safely replays the identical creation request. One current task exists
+        per project video.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/ClipAssetId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationTaskRequest"
+      responses:
+        "201":
+          description: The new task, or the identical idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationTask"
+        "400":
+          description: The request or assignee identifier is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project, assignee or undeleted ClipAsset is not visible in the requested scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The asset is not ready or qualified, the key conflicts, or a task already exists.
           content:
             application/problem+json:
               schema:
@@ -4691,6 +4800,69 @@ components:
         content_type:
           type: string
           const: video/mp4
+    AnnotationTaskRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - assignee_actor_id
+      properties:
+        assignee_actor_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
+    AnnotationTask:
+      type: object
+      additionalProperties: false
+      required:
+        - annotation_task_id
+        - project_id
+        - clip_asset_id
+        - assignee_actor_id
+        - created_by
+        - status
+        - created_at
+        - updated_at
+        - version
+      properties:
+        annotation_task_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        assignee_actor_id:
+          type: string
+          maxLength: 128
+        created_by:
+          type: string
+          maxLength: 128
+        status:
+          type: string
+          const: ASSIGNED
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    AnnotationTaskList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnnotationTask"
     QualityReviewDecision:
       type: string
       enum:

@@ -12,6 +12,7 @@ const isLoginRoute = computed(() => route.name === 'login')
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const sessionsRoute = computed(() => ({ name: 'session-list', params: { projectId: projectId.value } }))
 const assetsRoute = computed(() => ({ name: 'asset-list', params: { projectId: projectId.value } }))
+const annotationTasksRoute = computed(() => ({ name: 'annotation-task-list', params: { projectId: projectId.value } }))
 const foldersRoute = computed(() => ({ name: 'folder-management', params: { projectId: projectId.value } }))
 const membershipsRoute = computed(() => ({ name: 'project-memberships', params: { projectId: projectId.value } }))
 const isAdministrator = computed(() => auth.session?.role === 'ADMIN')
@@ -50,6 +51,8 @@ function closeManagementMenu(event: MouseEvent) {
         <span v-else class="nav-unavailable" title="请先选择项目">配药操作</span>
         <RouterLink v-if="projectId" :to="assetsRoute">视频资产</RouterLink>
         <span v-else class="nav-unavailable" title="请先选择项目">视频资产</span>
+        <RouterLink v-if="projectId" :to="annotationTasksRoute">标注任务</RouterLink>
+        <span v-else class="nav-unavailable" title="请先选择项目">标注任务</span>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <details class="nav-more" :class="{ 'nav-more-active': isManagementRoute }">
           <summary>管理</summary>

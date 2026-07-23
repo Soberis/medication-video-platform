@@ -41,6 +41,11 @@ const router = createRouter({
       component: () => import('@/views/AssetDetailView.vue'),
     },
     {
+      path: '/projects/:projectId/annotation-tasks',
+      name: 'annotation-task-list',
+      component: () => import('@/views/AnnotationTaskListView.vue'),
+    },
+    {
       path: '/projects/:projectId/folders',
       name: 'folder-management',
       component: () => import('@/views/FolderManagementView.vue'),

@@ -324,6 +324,109 @@ describe('catalog views', () => {
     expect(wrapper.text()).toContain('符合训练数据要求')
   })
 
+  it('lets an administrator create one task only after the video is human-qualified', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+        return Promise.resolve(
+          jsonResponse({
+            project_id: projectId,
+            display_name: '合成测试项目',
+            status: 'ACTIVE',
+            current_role: 'ADMIN',
+            created_at: '2026-07-15T01:03:03Z',
+          }),
+        )
+      }
+      if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
+      if (url.endsWith('/memberships')) {
+        return Promise.resolve(
+          jsonResponse({
+            items: [
+              {
+                membership_id: 'd0000000-0000-4000-8000-000000000001',
+                project_id: projectId,
+                actor_id: 'local-synthetic-uploader',
+                role: 'MEMBER',
+                status: 'ACTIVE',
+                version: 0,
+                updated_at: '2026-07-23T01:00:00Z',
+              },
+            ],
+          }),
+        )
+      }
+      if (url.endsWith('/quality-review')) {
+        return Promise.resolve(
+          jsonResponse({
+            ...unreviewedQuality(),
+            quality_review_id: 'c0000000-0000-4000-8000-000000000001',
+            decision: 'QUALIFIED',
+            reason_code: 'MEETS_REQUIREMENTS',
+            reviewed_by: 'local-synthetic-uploader',
+            reviewed_at: '2026-07-23T01:00:00Z',
+          }),
+        )
+      }
+      if (url.endsWith('/annotation-tasks') && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              annotation_task_id: 'e0000000-0000-4000-8000-000000000001',
+              project_id: projectId,
+              clip_asset_id: assetId,
+              assignee_actor_id: 'local-synthetic-uploader',
+              created_by: 'local-synthetic-admin',
+              status: 'ASSIGNED',
+              created_at: '2026-07-23T01:00:00Z',
+              updated_at: '2026-07-23T01:00:00Z',
+              version: 0,
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          clip_asset_id: assetId,
+          batch_id: '60000000-0000-4000-8000-000000000001',
+          source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+          client_file_id: '90000000-0000-4000-8000-000000000001',
+          content_type: 'video/mp4',
+          size_bytes: 8_388_608,
+          sha256: 'a'.repeat(64),
+          status: 'INGESTED',
+          folder_id: null,
+          session_binding: null,
+          created_at: '2026-07-15T01:03:03Z',
+          updated_at: '2026-07-15T01:03:03Z',
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
+    await router.isReady()
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, createPinia()] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('标注任务')
+    await wrapper.findAll('button').find((button) => button.text() === '创建标注任务')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/annotation-tasks`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ assignee_actor_id: 'local-synthetic-uploader' }),
+      }),
+    )
+    expect(wrapper.text()).toContain('标注任务已创建并分配')
+  })
+
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
     const folderId = 'a0000000-0000-4000-8000-000000000001'
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
@@ -416,6 +519,11 @@ function testRouter(
         path: '/projects/:projectId/assets/:id',
         name: 'asset-detail',
         component: routePath === '/projects/:projectId/assets/:id' ? component : EmptyView,
+      },
+      {
+        path: '/projects/:projectId/annotation-tasks',
+        name: 'annotation-task-list',
+        component: EmptyView,
       },
     ],
   })

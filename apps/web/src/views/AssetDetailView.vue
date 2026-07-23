@@ -26,10 +26,17 @@ import {
   assignClipAssetFolder,
   getProject,
   listAssetFolders,
+  listProjectMemberships,
   unclassifyClipAsset,
   type AssetFolder,
+  type ProjectMembership,
   type ProjectRole,
 } from '@/api/projects'
+import {
+  AnnotationTaskApiError,
+  createAnnotationTask,
+  type AnnotationTask,
+} from '@/api/annotation'
 import {
   getQualityReview,
   qualityDecisionLabels,
@@ -77,6 +84,10 @@ const qualityErrorMessage = ref('')
 const selectedQualityDecision = ref<QualityReviewCommandDecision>('QUALIFIED')
 const selectedQualityReason = ref<QualityReviewReasonCode>('MEETS_REQUIREMENTS')
 const isSavingQuality = ref(false)
+const annotationAssignees = shallowRef<ProjectMembership[]>([])
+const selectedAnnotationAssignee = ref('')
+const createdAnnotationTask = shallowRef<AnnotationTask | null>(null)
+const isCreatingAnnotationTask = ref(false)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
 let activeQualityRequest: AbortController | null = null
@@ -90,6 +101,13 @@ const canPlay = computed(
     detail.value.content_type === 'video/mp4',
 )
 const canReviewQuality = computed(() => projectRole.value !== null && detail.value?.status === 'INGESTED')
+const canCreateAnnotationTask = computed(
+  () =>
+    projectRole.value === 'ADMIN' &&
+    detail.value?.status === 'INGESTED' &&
+    qualityReview.value?.decision === 'QUALIFIED' &&
+    annotationAssignees.value.length > 0,
+)
 const reasonsByDecision: Record<QualityReviewCommandDecision, QualityReviewReasonCode[]> = {
   QUALIFIED: ['MEETS_REQUIREMENTS'],
   REJECTED: [
@@ -189,6 +207,7 @@ async function loadDetail() {
     detail.value = await getClipAsset(projectId.value, assetId.value, request.signal)
     if (activeRequest === request) {
       resetPlayback()
+      createdAnnotationTask.value = null
       selectedFolderId.value = detail.value.folder_id ?? ''
       loadState.value = 'success'
       if (detail.value.status === 'INGESTED') {
@@ -230,12 +249,27 @@ async function loadProjectRole() {
     projectRole.value = project.current_role
     if (project.current_role !== 'ADMIN') {
       folders.value = []
+      annotationAssignees.value = []
+      selectedAnnotationAssignee.value = ''
       return
     }
     try {
       folders.value = await listAssetFolders(projectId.value, request.signal)
     } catch {
       if (!request.signal.aborted && activeRoleRequest === request) folders.value = []
+    }
+    try {
+      const memberships = await listProjectMemberships(projectId.value, request.signal)
+      if (request.signal.aborted || activeRoleRequest !== request) return
+      annotationAssignees.value = memberships
+      if (!memberships.some((membership) => membership.actor_id === selectedAnnotationAssignee.value)) {
+        selectedAnnotationAssignee.value = memberships[0]?.actor_id ?? ''
+      }
+    } catch {
+      if (!request.signal.aborted && activeRoleRequest === request) {
+        annotationAssignees.value = []
+        selectedAnnotationAssignee.value = ''
+      }
     }
   } catch {
     // Fail closed for destructive UI. The API remains the final authorization boundary.
@@ -384,6 +418,27 @@ async function saveQualityReview() {
       error instanceof QualityReviewApiError ? error.message : '质量结论暂未保存，请稍后重试。'
   } finally {
     isSavingQuality.value = false
+  }
+}
+
+async function createTask() {
+  if (!canCreateAnnotationTask.value || !selectedAnnotationAssignee.value || isCreatingAnnotationTask.value) return
+  isCreatingAnnotationTask.value = true
+  actionErrorCode.value = ''
+  actionErrorMessage.value = ''
+  try {
+    createdAnnotationTask.value = await createAnnotationTask(
+      projectId.value,
+      assetId.value,
+      selectedAnnotationAssignee.value,
+    )
+    ElMessage.success('标注任务已创建并分配。')
+  } catch (error) {
+    actionErrorCode.value = error instanceof AnnotationTaskApiError ? error.errorCode : 'ANNOTATION_TASK_REQUEST_FAILED'
+    actionErrorMessage.value =
+      error instanceof AnnotationTaskApiError ? error.message : '标注任务暂未创建，请稍后重试。'
+  } finally {
+    isCreatingAnnotationTask.value = false
   }
 }
 
@@ -559,6 +614,43 @@ function handlePlaybackError() {
           </ElSelect>
           <ElButton type="primary" :loading="isSavingQuality" :disabled="!canReviewQuality" @click="saveQualityReview">
             保存质量结论
+          </ElButton>
+        </div>
+      </template>
+    </ElCard>
+
+    <ElCard v-if="canCreateAnnotationTask" class="detail-card" shadow="never">
+      <template #header><strong>标注任务</strong></template>
+      <template v-if="createdAnnotationTask">
+        <ElAlert
+          title="标注任务已创建并分配"
+          :description="`执行人：${createdAnnotationTask.assignee_actor_id}。标注内容与独立复核将在下一切片启用。`"
+          type="success"
+          :closable="false"
+          show-icon
+        />
+        <RouterLink class="text-link" :to="{ name: 'annotation-task-list', params: { projectId } }">
+          查看标注任务
+        </RouterLink>
+      </template>
+      <template v-else>
+        <p class="form-hint">该视频已通过人工质量判断。请选择项目成员并创建标注任务。</p>
+        <div class="annotation-task-actions">
+          <ElSelect v-model="selectedAnnotationAssignee" aria-label="标注任务执行人">
+            <ElOption
+              v-for="member in annotationAssignees"
+              :key="member.membership_id"
+              :label="`${member.actor_id} · ${member.role === 'ADMIN' ? '管理员' : '普通用户'}`"
+              :value="member.actor_id"
+            />
+          </ElSelect>
+          <ElButton
+            type="primary"
+            :loading="isCreatingAnnotationTask"
+            :disabled="!selectedAnnotationAssignee"
+            @click="createTask"
+          >
+            创建标注任务
           </ElButton>
         </div>
       </template>
