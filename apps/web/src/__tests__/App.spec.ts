@@ -90,6 +90,38 @@ describe('App', () => {
 
     expect(wrapper.text()).toContain('新建项目')
   })
+
+  it('only exposes project rename and archive commands to project administrators', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              project_id: '30000000-0000-4000-8000-000000000001',
+              display_name: '管理员项目',
+              status: 'ACTIVE',
+              current_role: 'ADMIN',
+              created_at: '2026-07-20T00:00:00Z',
+            },
+            {
+              project_id: '30000000-0000-4000-8000-000000000002',
+              display_name: '普通成员项目',
+              status: 'ACTIVE',
+              current_role: 'MEMBER',
+              created_at: '2026-07-20T00:00:00Z',
+            },
+          ],
+          can_create_projects: false,
+        }),
+      ),
+    )
+    const wrapper = mount(ProjectListView, { global: { stubs: { RouterLink: true } } })
+    await flushPromises()
+
+    expect(wrapper.findAll('button').filter((button) => button.text() === '改名')).toHaveLength(1)
+    expect(wrapper.findAll('button').filter((button) => button.text() === '归档')).toHaveLength(1)
+  })
 })
 
 function jsonResponse(body: object, status = 200) {

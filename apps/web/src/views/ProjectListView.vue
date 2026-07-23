@@ -12,7 +12,13 @@ import {
 import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
 import { CatalogApiError } from '@/api/catalog'
-import { createProject, getProjectList, type DataProject } from '@/api/projects'
+import {
+  archiveProject,
+  createProject,
+  getProjectList,
+  renameProject,
+  type DataProject,
+} from '@/api/projects'
 
 defineOptions({ name: 'ProjectListView' })
 
@@ -21,6 +27,8 @@ const loadState = ref<'loading' | 'success' | 'error'>('loading')
 const errorCode = ref('')
 const errorMessage = ref('')
 const isCreating = ref(false)
+const renamingProjectId = ref<string | null>(null)
+const archivingProjectId = ref<string | null>(null)
 const canCreateProjects = ref(false)
 let activeRequest: AbortController | null = null
 
@@ -80,6 +88,67 @@ async function createDataProject() {
   }
 }
 
+async function renameDataProject(project: DataProject) {
+  if (renamingProjectId.value) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '仅修改项目显示名称，不会影响项目成员、文件夹或视频归属。',
+      '修改项目名称',
+      {
+        confirmButtonText: '保存名称',
+        cancelButtonText: '取消',
+        inputValue: project.display_name,
+        inputPattern: /\S/,
+        inputErrorMessage: '请输入项目名称。',
+      },
+    )
+    const displayName = value.trim()
+    if (displayName.length > 128) {
+      ElMessage.error('项目名称不能超过 128 个字符。')
+      return
+    }
+    renamingProjectId.value = project.project_id
+    await renameProject(project.project_id, displayName)
+    ElMessage.success('项目名称已更新。')
+    await loadProjects()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error instanceof CatalogApiError ? error.message : '项目名称未更新，请稍后重试。')
+  } finally {
+    renamingProjectId.value = null
+  }
+}
+
+async function archiveDataProject(project: DataProject) {
+  if (archivingProjectId.value) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '归档会立即停止项目访问并从日常列表移除，但不会物理删除视频、对象或审计记录。请输入完整项目名称确认。',
+      '归档项目',
+      {
+        confirmButtonText: '确认归档',
+        cancelButtonText: '取消',
+        inputPlaceholder: project.display_name,
+        inputPattern: /\S/,
+        inputErrorMessage: '请输入项目名称确认。',
+      },
+    )
+    if (value.trim() !== project.display_name) {
+      ElMessage.error('输入的项目名称不匹配，未执行归档。')
+      return
+    }
+    archivingProjectId.value = project.project_id
+    await archiveProject(project.project_id)
+    ElMessage.success('项目已归档，视频与审计记录仍被保留。')
+    await loadProjects()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error instanceof CatalogApiError ? error.message : '项目未归档，请稍后重试。')
+  } finally {
+    archivingProjectId.value = null
+  }
+}
+
 onMounted(() => void loadProjects())
 onUnmounted(() => activeRequest?.abort())
 </script>
@@ -119,7 +188,7 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="状态" width="100">
         <template #default>启用</template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="120" fixed="right">
+      <ElTableColumn label="操作" width="250" fixed="right">
         <template #default="{ row }">
           <RouterLink
             class="text-link"
@@ -127,6 +196,24 @@ onUnmounted(() => activeRequest?.abort())
           >
             进入项目
           </RouterLink>
+          <ElButton
+            v-if="row.current_role === 'ADMIN'"
+            link
+            type="primary"
+            :loading="renamingProjectId === row.project_id"
+            @click="renameDataProject(row as DataProject)"
+          >
+            改名
+          </ElButton>
+          <ElButton
+            v-if="row.current_role === 'ADMIN'"
+            link
+            type="danger"
+            :loading="archivingProjectId === row.project_id"
+            @click="archiveDataProject(row as DataProject)"
+          >
+            归档
+          </ElButton>
         </template>
       </ElTableColumn>
     </ElTable>

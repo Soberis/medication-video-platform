@@ -80,6 +80,35 @@ class ProjectController {
 				.body(this.service.get(projectId, actor.actorId()));
 	}
 
+	@PutMapping("/{projectId}")
+	ResponseEntity<ProjectResponse> rename(
+			@PathVariable UUID projectId,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody ProjectRenameRequest request,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(this.service.rename(
+						projectId,
+						actor.actorId(),
+						resolveRequestId(requestId),
+						MDC.get("traceId"),
+						request));
+	}
+
+	@DeleteMapping("/{projectId}")
+	ResponseEntity<Void> archive(
+			@PathVariable UUID projectId,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.service.archive(projectId, actor.actorId(), resolveRequestId(requestId), MDC.get("traceId"));
+		return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+	}
+
 	@GetMapping("/{projectId}/memberships")
 	ResponseEntity<ProjectMembershipListResponse> listMemberships(
 			@PathVariable UUID projectId,

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.medicationvideo.platform.iamproject.PlatformActor;
+import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -28,9 +29,36 @@ import jakarta.validation.constraints.Pattern;
 class MediaJobController {
 
 	private final MediaJobService service;
+	private final ProjectAccessService projectAccessService;
 
-	MediaJobController(MediaJobService service) {
+	MediaJobController(MediaJobService service, ProjectAccessService projectAccessService) {
 		this.service = service;
+		this.projectAccessService = projectAccessService;
+	}
+
+	/**
+	 * Starts the one explicit P0 media check for an uploaded video. Playback remains a separate
+	 * user action after the Worker has accepted the media report.
+	 */
+	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-jobs")
+	ResponseEntity<MediaJobResponse> createClipAssetMediaProbe(
+			@PathVariable UUID projectId,
+			@PathVariable UUID clipAssetId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.projectAccessService.requireMember(projectId, actor.actorId());
+		var job = this.service.create(
+				projectId,
+				idempotencyKey,
+				new MediaJobRequest(clipAssetId, MediaJobType.MEDIA_PROBE));
+		var body = MediaJobResponse.from(job, this.service.currentAttempt(job));
+		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
+				.cacheControl(CacheControl.noStore())
+				.location(location)
+				.body(body);
 	}
 
 	@PostMapping("/media-jobs")

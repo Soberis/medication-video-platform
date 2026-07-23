@@ -2,7 +2,7 @@ import { CatalogApiError } from '@/api/catalog'
 import { csrfHeaders } from '@/api/http'
 
 export type ProjectRole = 'ADMIN' | 'MEMBER'
-export type ProjectStatus = 'ACTIVE'
+export type ProjectStatus = 'ACTIVE' | 'ARCHIVED'
 
 export interface DataProject {
   project_id: string
@@ -69,6 +69,18 @@ export function createProject(displayName: string): Promise<DataProject> {
 
 export function getProject(projectId: string, signal?: AbortSignal): Promise<DataProject> {
   return readJson<DataProject>(`/api/v1/projects/${encodeURIComponent(projectId)}`, signal)
+}
+
+export function renameProject(projectId: string, displayName: string): Promise<DataProject> {
+  return writeJson<DataProject>(`/api/v1/projects/${encodeURIComponent(projectId)}`, 'PUT', {
+    display_name: displayName,
+  })
+}
+
+export async function archiveProject(projectId: string): Promise<void> {
+  const response = await write(`/api/v1/projects/${encodeURIComponent(projectId)}`, 'DELETE')
+  if (response.status === 204) return
+  throw await projectApiError(response)
 }
 
 export async function listProjectMemberships(

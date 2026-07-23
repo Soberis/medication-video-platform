@@ -19,7 +19,7 @@ class DataProject {
 	@Column(name = "project_id", nullable = false, updatable = false)
 	private UUID projectId;
 
-	@Column(name = "display_name", nullable = false, length = 128, updatable = false)
+	@Column(name = "display_name", nullable = false, length = 128)
 	private String displayName;
 
 	@Enumerated(EnumType.STRING)
@@ -106,5 +106,22 @@ class DataProject {
 
 	long getRowVersion() {
 		return this.rowVersion;
+	}
+
+	void rename(String displayName) {
+		if (this.status != ProjectStatus.ACTIVE) {
+			throw new IllegalStateException("Only an active project can be renamed.");
+		}
+		this.displayName = displayName;
+	}
+
+	void archive() {
+		if (this.status == ProjectStatus.ARCHIVED) {
+			return;
+		}
+		if (this.status != ProjectStatus.ACTIVE) {
+			throw new IllegalStateException("Only an active project can be archived.");
+		}
+		this.status = ProjectStatus.ARCHIVED;
 	}
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.32.0
+  version: 0.34.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -20,7 +20,7 @@ info:
     metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
-    member for human training-data review after media ingest, record the current human quality
+    member for human training-data review after an explicitly requested media ingest, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
     assign one auditable annotation task for a qualified video, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
@@ -50,7 +50,8 @@ tags:
       enable and disable MEMBER accounts. This directory never exposes password hashes.
   - name: Projects
     description: >-
-      Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Membership
+      Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Administrators
+      may rename an ACTIVE project or archive it without physically deleting its data; membership
       changes are project-scoped, administrator-controlled, idempotent and append-only audited.
   - name: Uploads
     description: >-
@@ -409,6 +410,100 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "401":
           description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist or is not visible to the authenticated actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: renameProject
+      tags:
+        - Projects
+      summary: Rename an active data project
+      description: >-
+        Requires an ACTIVE ADMIN membership. Changes only the display name; project ID, memberships,
+        folders, videos and audit history are unchanged. Repeating the same desired name has no
+        additional business side effect.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRenameRequest"
+      responses:
+        "200":
+          description: Renamed active project.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Request or project identifier validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project does not exist, is archived, or is not visible to the authenticated actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: archiveProject
+      tags:
+        - Projects
+      summary: Archive a data project without physically deleting its data
+      description: >-
+        Requires an ACTIVE ADMIN membership. ARCHIVED projects disappear from normal project lists
+        and reject future project-scoped access. This command retains project, membership, video,
+        object-storage and audit records; P0 has no project hard-delete endpoint.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "204":
+          description: Project archived, or it was already archived.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+        "400":
+          description: Project identifier validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
           content:
             application/problem+json:
               schema:
@@ -2228,6 +2323,74 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-jobs:
+    post:
+      operationId: requestClipAssetMediaProbe
+      tags:
+        - Media Jobs
+      summary: Explicitly start the baseline media check for one uploaded video
+      description: >-
+        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        explicit project. It accepts only an undeleted video asset in UPLOADED state, atomically
+        creates (or returns) the one baseline MEDIA_PROBE job, attempt and Outbox envelope, and
+        returns the durable queued job. This request does not play the video. After the Worker
+        completes technical validation, the user must still explicitly request a playback grant.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Probe job queued or the same immutable input was already queued.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+              description: Canonical URL of the media job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaJobResponse"
+        "400":
+          description: The project, clip asset or Idempotency-Key is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller has no active membership in the project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or active video asset is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The asset is deleted, no longer UPLOADED or conflicts with the request key.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/clip-assets/{clip_asset_id}/playback-grants:
     post:
       operationId: grantClipAssetPlayback
@@ -3173,6 +3336,17 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[^\x00-\x1F\x7F]+$
+    ProjectRenameRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - display_name
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[^\x00-\x1F\x7F]+$
     PlatformLoginRequest:
       type: object
       additionalProperties: false
@@ -3279,6 +3453,7 @@ components:
       type: string
       enum:
         - ACTIVE
+        - ARCHIVED
     MembershipStatus:
       type: string
       enum:

@@ -22,6 +22,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -40,10 +42,36 @@ class MediaJobContractTests {
 
 	@BeforeEach
 	void clearState() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, UUID.fromString(PROJECT_ID));
 		this.jdbcTemplate.update("DELETE FROM outbox_event");
 		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM media_report");
 		this.jdbcTemplate.update("DELETE FROM media_job");
+	}
+
+	@Test
+	void projectMemberCanExplicitlyQueueTheMediaProbeForAnUploadedAsset() throws Exception {
+		var clipAssetId = insertUploadedClipAsset(UUID.fromString(PROJECT_ID), "video/mp4",
+				"UPLOADED", Instant.parse("2026-07-23T12:00:00Z"));
+
+		this.mockMvc.perform(post(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-jobs",
+					PROJECT_ID,
+					clipAssetId)
+				.header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "manual-media-probe-001234567890"))
+				.andExpect(status().isAccepted())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.project_id").value(PROJECT_ID))
+				.andExpect(jsonPath("$.clip_asset_id").value(clipAssetId.toString()))
+				.andExpect(jsonPath("$.job_type").value("MEDIA_PROBE"))
+				.andExpect(jsonPath("$.status").value("QUEUED"));
+
+		assertEquals(1, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM media_job WHERE project_id = ? AND clip_asset_id = ?",
+				Integer.class,
+				UUID.fromString(PROJECT_ID),
+				clipAssetId));
 	}
 
 	@Test

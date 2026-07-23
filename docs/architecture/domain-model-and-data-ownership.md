@@ -2,13 +2,13 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-21
+> 最后更新：2026-07-23
 
 ## 1. 目标与边界
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.5；未变更条款继承 V1.4/V1.3/V1.2/V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
+当前业务事实来源是 V1.6；未变更条款继承 V1.5/V1.4/V1.3/V1.2/V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -107,13 +107,14 @@ flowchart LR
 - 用户有系统身份不等于拥有任何项目数据权限。
 - 权限判断至少包含 tenant、project、classification、purpose、expiry 和 task assignment。
 - 角色变更不能追溯性改变历史审计中的当时授权上下文。
-- 项目关闭后禁止创建新任务和新导出，但保留按策略授权的历史查询。
+- ARCHIVED 项目禁止新的项目内读取和操作；P0 不通过项目管理界面提供恢复或物理删除。
 - P0 的界面角色只有 `ADMIN` 和 `MEMBER`，它们是细粒度权限项的模板，不是绕过 purpose、project、privacy、task assignment 或审批守卫的通行证。
 
 ### 4.3 当前实现边界
 
-- Flyway V22 已实现 `project`、`membership` 和幂等成员命令证据；项目创建原子建立首个 `ADMIN`，成员变更按 project 行锁串行并写追加式审计。
+- Flyway V22 和 V29 已实现 `project`、`membership`、项目归档状态和幂等成员命令证据；项目创建原子建立首个 `ADMIN`，成员变更按 project 行锁串行并写追加式审计。
 - 普通用户只能列出和读取其 `ACTIVE` Membership 对应的 Project；成员清单和变更要求项目内 `ACTIVE ADMIN`，且最后一个活动管理员不可移除或降级。
+- ACTIVE 项目的管理员可修改显示名称或归档项目；两者保留稳定 project ID，归档不级联删除成员、视频、对象或审计记录。
 - 当前没有从既有 UploadBatch、ClipAsset 或审计活动反推 Membership。既有资产 API 接入 Membership、Tenant 语义、RoleBinding、PurposeGrant、项目关闭和平台账号启停/密码重置生命周期属于后续经批准切片。
 
 ## 5. `assetcapture`

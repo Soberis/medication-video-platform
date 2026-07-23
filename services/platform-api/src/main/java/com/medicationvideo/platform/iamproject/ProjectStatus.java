@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.iamproject;
 
 enum ProjectStatus {
-	ACTIVE
+	ACTIVE,
+	ARCHIVED
 }

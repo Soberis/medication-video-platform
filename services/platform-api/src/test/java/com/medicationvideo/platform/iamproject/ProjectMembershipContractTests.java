@@ -264,6 +264,62 @@ class ProjectMembershipContractTests {
 	}
 
 	@Test
+	void administratorCanRenameAndArchiveAProjectWithoutDestroyingItsRecords() throws Exception {
+		var projectId = createProjectId(
+				"project-archive-study-0001", "Synthetic Archive Study");
+		upsertMembership(
+				projectId,
+				MEMBER_ACTOR,
+				"project-archive-member-0001",
+				"MEMBER")
+				.andExpect(status().isOk());
+
+		this.mockMvc.perform(put("/api/v1/projects/{projectId}", projectId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("X-Request-Id", "project-rename-request-0001")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"display_name\":\"Synthetic Archive Study Renamed\"}"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.display_name").value("Synthetic Archive Study Renamed"))
+				.andExpect(jsonPath("$.status").value("ACTIVE"));
+		assertEquals(1, countAudit(projectId, "PROJECT_RENAMED"));
+
+		this.mockMvc.perform(put("/api/v1/projects/{projectId}", projectId)
+					.header("Authorization", "Bearer " + MEMBER_TOKEN)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"display_name\":\"Forbidden Rename\"}"))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		this.mockMvc.perform(delete("/api/v1/projects/{projectId}", projectId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("X-Request-Id", "project-archive-request-0001"))
+				.andExpect(status().isNoContent())
+				.andExpect(header().string("Cache-Control", "no-store"));
+		assertEquals("ARCHIVED", this.jdbcTemplate.queryForObject(
+				"SELECT status FROM project WHERE project_id = ?", String.class, projectId));
+		assertEquals(1, count("SELECT count(*) FROM project WHERE project_id = ?", projectId));
+		assertEquals(2, count("SELECT count(*) FROM membership WHERE project_id = ?", projectId));
+		assertEquals(1, countAudit(projectId, "PROJECT_ARCHIVED"));
+
+		this.mockMvc.perform(get("/api/v1/projects")
+					.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items").isEmpty());
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}", projectId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+
+		this.mockMvc.perform(delete("/api/v1/projects/{projectId}", projectId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("X-Request-Id", "project-archive-request-0002"))
+				.andExpect(status().isNoContent());
+		assertEquals(1, countAudit(projectId, "PROJECT_ARCHIVED"));
+	}
+
+	@Test
 	void concurrentProjectCreationProducesOneProjectMembershipAndAuditPair() throws Exception {
 		var concurrency = 4;
 		var insertReady = new CountDownLatch(concurrency);

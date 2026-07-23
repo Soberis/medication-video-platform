@@ -324,6 +324,65 @@ describe('catalog views', () => {
     expect(wrapper.text()).toContain('符合训练数据要求')
   })
 
+  it('lets a project member explicitly start media detection for an uploaded video', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith(`/api/v1/projects/${projectId}`)) {
+        return Promise.resolve(jsonResponse({
+          project_id: projectId,
+          display_name: '合成测试项目',
+          status: 'ACTIVE',
+          current_role: 'MEMBER',
+          created_at: '2026-07-15T01:03:03Z',
+        }))
+      }
+      if (url.endsWith('/media-probe-jobs')) {
+        return Promise.resolve(jsonResponse({
+          media_job_id: 'b0000000-0000-4000-8000-000000000001',
+          project_id: projectId,
+          clip_asset_id: assetId,
+          job_type: 'MEDIA_PROBE',
+          status: 'QUEUED',
+        }, 202))
+      }
+      return Promise.resolve(jsonResponse({
+        clip_asset_id: assetId,
+        batch_id: '60000000-0000-4000-8000-000000000001',
+        source_upload_file_id: '80000000-0000-4000-8000-000000000001',
+        client_file_id: '90000000-0000-4000-8000-000000000001',
+        content_type: 'video/mp4',
+        size_bytes: 8_388_608,
+        sha256: 'a'.repeat(64),
+        status: 'UPLOADED',
+        folder_id: null,
+        session_binding: null,
+        created_at: '2026-07-15T01:03:03Z',
+        updated_at: '2026-07-15T01:03:03Z',
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = testRouter(
+      `/projects/${projectId}/assets/${assetId}`,
+      '/projects/:projectId/assets/:id',
+      AssetDetailView,
+    )
+    await router.isReady()
+    const pinia = createPinia()
+    useAuthStore(pinia).session = { username: 'reviewer', role: 'MEMBER' }
+    const wrapper = mount(AssetDetailView, { global: { plugins: [router, pinia] } })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === '开始媒体检测')!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/media-probe-jobs`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(wrapper.text()).toContain('媒体检测已提交')
+    expect(wrapper.findAll('button').some((button) => button.text() === '播放视频')).toBe(false)
+  })
+
   it('lets an administrator create one task only after the video is human-qualified', async () => {
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)

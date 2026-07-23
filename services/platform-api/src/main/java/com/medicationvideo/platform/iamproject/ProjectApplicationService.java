@@ -115,6 +115,52 @@ class ProjectApplicationService {
 		return ProjectResponse.from(project, membership.getRole());
 	}
 
+	@Transactional
+	ProjectResponse rename(
+			UUID projectId,
+			String actorId,
+			String requestId,
+			String traceId,
+			ProjectRenameRequest request) {
+		var project = lockActiveProject(projectId);
+		var membership = requireAdministrator(projectId, actorId);
+		var displayName = request.displayName().trim();
+		if (!project.getDisplayName().equals(displayName)) {
+			var oldDisplayName = project.getDisplayName();
+			project.rename(displayName);
+			project = this.projectRepository.saveAndFlush(project);
+			recordProjectChanged(
+					project,
+					actorId,
+					"PROJECT_RENAMED",
+					"PROJECT_RENAMED",
+					requestId,
+					traceId,
+					Map.of("old_display_name", oldDisplayName, "new_display_name", displayName));
+		}
+		return ProjectResponse.from(project, membership.getRole());
+	}
+
+	@Transactional
+	void archive(UUID projectId, String actorId, String requestId, String traceId) {
+		var project = this.projectRepository.findForUpdate(projectId)
+				.orElseThrow(ProjectApplicationService::projectNotFound);
+		this.requireAdministrator(projectId, actorId);
+		if (project.getStatus() == ProjectStatus.ARCHIVED) {
+			return;
+		}
+		project.archive();
+		project = this.projectRepository.saveAndFlush(project);
+		recordProjectChanged(
+				project,
+				actorId,
+				"PROJECT_ARCHIVED",
+				"PROJECT_ARCHIVED",
+				requestId,
+				traceId,
+				Map.of("previous_status", ProjectStatus.ACTIVE.name()));
+	}
+
 	@Transactional(readOnly = true)
 	ProjectMembershipListResponse listMemberships(UUID projectId, String actorId) {
 		requireAdministrator(projectId, actorId);
@@ -335,6 +381,31 @@ class ProjectApplicationService {
 				traceId,
 				"ROLE_ADMIN",
 				Map.of("status", project.getStatus().name())));
+	}
+
+	private void recordProjectChanged(
+			DataProject project,
+			String actorId,
+			String action,
+			String reasonCode,
+			String requestId,
+			String traceId,
+			Map<String, String> details) {
+		this.auditRecorder.record(new AuditEventCommand(
+				now(),
+				AuditActorType.USER,
+				actorId,
+				project.getProjectId(),
+				action,
+				"Project",
+				project.getProjectId().toString(),
+				Long.toString(project.getRowVersion()),
+				AuditOutcome.SUCCEEDED,
+				reasonCode,
+				requestId,
+				traceId,
+				"PROJECT_ADMIN",
+				details));
 	}
 
 	private void recordMembershipChanged(

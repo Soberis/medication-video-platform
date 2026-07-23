@@ -59,7 +59,7 @@ allow =
 
 #### 4.2.1 MVP 两级界面角色
 
-V1.5 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
+V1.6 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
 - `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除，并可在已加入项目内播放技术校验通过的视频；
 - `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放 `INGESTED` MP4、记录质量判断并编辑分配给自己的任务；
@@ -102,7 +102,7 @@ raw INGESTED
 - 屏幕、纸质医嘱、标签敏感文本、人脸、工牌和可能的语音隐私纳入评估范围。
 - 正式导出前执行最终人工检查；“观察到零漏检”不代表总体风险数学上为零。
 
-以上流程仅是未来出现真实合规或外部共享需求时的设计参考。V1.5 P0 不运行 PrivacyAssessment、PrivacyRelease、脱敏 Variant 或 Quarantine API。采集规范要求避免敏感信息；人工审核发现意外敏感内容时，记录质量 `REJECTED` 与固定原因，再由管理员软删除。
+以上流程仅是未来出现真实合规或外部共享需求时的设计参考。V1.6 P0 不运行 PrivacyAssessment、PrivacyRelease、脱敏 Variant 或 Quarantine API。采集规范要求避免敏感信息；人工审核发现意外敏感内容时，记录质量 `REJECTED` 与固定原因，再由管理员软删除。
 
 ## 6. 假名化与身份映射
 
@@ -145,7 +145,7 @@ request/approval reference
 - 撤销通过禁用业务授权、对象策略/版本和短期 TTL 组合实现；不能宣称已签发 URL 可被普遍即时撤回。
 - Web 响应使用适当的 `Referrer-Policy`、缓存和内容处置头。
 
-V1.5 的普通内部审核播放直接针对技术校验通过的原始 MP4，不强制先生成 `PREVIEW`/`DEIDENTIFIED` Variant。签发 `DATA_REVIEW` URL 前检查登录账号、ACTIVE 项目 Membership、`INGESTED`、`deleted_at IS NULL` 和媒体类型；响应使用 `no-store`，默认 5 分钟到期。服务端将用户、项目、ClipAsset、对象版本、purpose、请求 ID 和项目角色写入追加式审计，但不记录 URL。审计只能证明“签发过授权”，不能证明逐帧观看；该地址不得复用于下载、导出或外部共享，播放也不构成质量通过或标注批准。
+V1.6 的普通内部审核播放直接针对技术校验通过的原始 MP4，不强制先生成 `PREVIEW`/`DEIDENTIFIED` Variant。签发 `DATA_REVIEW` URL 前检查登录账号、ACTIVE 项目 Membership、`INGESTED`、`deleted_at IS NULL` 和媒体类型；响应使用 `no-store`，默认 5 分钟到期。服务端将用户、项目、ClipAsset、对象版本、purpose、请求 ID 和项目角色写入追加式审计，但不记录 URL。审计只能证明“签发过授权”，不能证明逐帧观看；该地址不得复用于下载、导出或外部共享，播放也不构成质量通过或标注批准。
 
 采集规范仍应避免可识别人员、屏幕、标签和语音。若人工查看时意外发现敏感内容，当前统一进入质量 `REJECTED` 和管理员软删除流程，不创建第二套平行状态机。
 

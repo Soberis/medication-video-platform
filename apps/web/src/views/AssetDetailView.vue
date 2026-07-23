@@ -19,6 +19,7 @@ import {
   CatalogApiError,
   deleteClipAsset,
   getClipAsset,
+  requestClipAssetMediaProbe,
   type ClipAssetRead,
   type ClipAssetPlaybackGrant,
 } from '@/api/catalog'
@@ -74,6 +75,8 @@ const folders = shallowRef<AssetFolder[]>([])
 const selectedFolderId = ref('')
 const isClassifying = ref(false)
 const isRequestingPlayback = ref(false)
+const isRequestingMediaProbe = ref(false)
+const mediaProbeMessage = ref('')
 const playbackGrant = shallowRef<ClipAssetPlaybackGrant | null>(null)
 const playbackState = ref<'idle' | 'waiting' | 'ready' | 'error' | 'expired'>('idle')
 const playbackMessage = ref('')
@@ -99,6 +102,9 @@ const canPlay = computed(
     projectRole.value !== null &&
     detail.value?.status === 'INGESTED' &&
     detail.value.content_type === 'video/mp4',
+)
+const canRequestMediaProbe = computed(
+  () => projectRole.value !== null && detail.value?.status === 'UPLOADED',
 )
 const canReviewQuality = computed(() => projectRole.value !== null && detail.value?.status === 'INGESTED')
 const canCreateAnnotationTask = computed(
@@ -400,6 +406,23 @@ async function startPlayback() {
   }
 }
 
+async function requestMediaProbe() {
+  if (!canRequestMediaProbe.value || isRequestingMediaProbe.value) return
+  isRequestingMediaProbe.value = true
+  actionErrorCode.value = ''
+  actionErrorMessage.value = ''
+  mediaProbeMessage.value = ''
+  try {
+    const job = await requestClipAssetMediaProbe(projectId.value, assetId.value)
+    mediaProbeMessage.value = `媒体检测已提交（任务 ${job.media_job_id}）。等待状态变为“已入库”后即可播放。`
+  } catch (error) {
+    actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'MEDIA_PROBE_REQUEST_FAILED'
+    actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '媒体检测暂未提交，请稍后重试。'
+  } finally {
+    isRequestingMediaProbe.value = false
+  }
+}
+
 async function saveQualityReview() {
   if (!qualityReview.value || !canReviewQuality.value || isSavingQuality.value) return
   isSavingQuality.value = true
@@ -524,6 +547,17 @@ function handlePlaybackError() {
         :closable="false"
         show-icon
       />
+      <template v-if="canRequestMediaProbe">
+        <ElButton
+          class="playback-primary-action"
+          type="primary"
+          :loading="isRequestingMediaProbe"
+          @click="requestMediaProbe"
+        >
+          开始媒体检测
+        </ElButton>
+        <p v-if="mediaProbeMessage" class="form-hint">{{ mediaProbeMessage }}</p>
+      </template>
       <ElButton
         v-if="canPlay && !playbackGrant"
         class="playback-primary-action"

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authorizeClipAssetPlayback, deleteClipAsset } from '@/api/catalog'
+import { authorizeClipAssetPlayback, deleteClipAsset, requestClipAssetMediaProbe } from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const clipAssetId = '50000000-0000-4000-8000-000000000001'
@@ -50,6 +50,36 @@ describe('catalog API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/playback-grants`,
       expect.objectContaining({ method: 'POST', cache: 'no-store' }),
+    )
+  })
+
+  it('explicitly queues a media probe before the user asks to play an uploaded video', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          media_job_id: '80000000-0000-4000-8000-000000000001',
+          project_id: projectId,
+          clip_asset_id: clipAssetId,
+          job_type: 'MEDIA_PROBE',
+          status: 'QUEUED',
+        }),
+        { status: 202, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('media-probe-idempotency-0001') })
+
+    await expect(requestClipAssetMediaProbe(projectId, clipAssetId)).resolves.toMatchObject({
+      job_type: 'MEDIA_PROBE',
+      status: 'QUEUED',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/media-probe-jobs`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'media-probe-idempotency-0001' }),
+      }),
     )
   })
 })

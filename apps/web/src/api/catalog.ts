@@ -123,6 +123,14 @@ export interface ClipAssetPlaybackGrant {
   content_type: string
 }
 
+export interface MediaProbeJob {
+  media_job_id: string
+  project_id: string
+  clip_asset_id: string
+  job_type: 'MEDIA_PROBE'
+  status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED'
+}
+
 export interface CatalogPage<T> {
   items: T[]
   next_cursor: string | null
@@ -165,6 +173,7 @@ const errorMessages: Record<string, string> = {
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
   PLAYBACK_NOT_READY: '视频尚未完成媒体检测，暂不能播放。',
+  CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
   PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   OBJECT_STORAGE_UNAVAILABLE: '对象存储暂时无法签发播放地址，请稍后重试。',
@@ -279,6 +288,23 @@ export async function authorizeClipAssetPlayback(projectId: string, clipAssetId:
     },
   )
   if (response.ok) return (await response.json()) as ClipAssetPlaybackGrant
+  throw await toCatalogError(response)
+}
+
+export async function requestClipAssetMediaProbe(projectId: string, clipAssetId: string) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-probe-jobs`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as MediaProbeJob
   throw await toCatalogError(response)
 }
 
