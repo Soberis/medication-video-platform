@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface MediaReportRepository extends JpaRepository<MediaReport, UUID> {
 
 	Optional<MediaReport> findByMediaJobId(UUID mediaJobId);
+
+	Optional<MediaReport> findByProjectIdAndClipAssetId(UUID projectId, UUID clipAssetId);
 }

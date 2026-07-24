@@ -20,6 +20,7 @@ import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
+import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
 @Service
@@ -28,6 +29,7 @@ class AnnotationTaskService {
 	private final ProjectAccessService projectAccessService;
 	private final ClipAssetReviewQueryService assetQueryService;
 	private final QualityReviewQueryService qualityReviewQueryService;
+	private final MediaDurationQueryService mediaDurationQueryService;
 	private final AnnotationTaskRepository repository;
 	private final AnnotationRevisionRepository revisionRepository;
 	private final AnnotationReviewRepository reviewRepository;
@@ -37,6 +39,7 @@ class AnnotationTaskService {
 			ProjectAccessService projectAccessService,
 			ClipAssetReviewQueryService assetQueryService,
 			QualityReviewQueryService qualityReviewQueryService,
+			MediaDurationQueryService mediaDurationQueryService,
 			AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository,
 			AnnotationReviewRepository reviewRepository,
@@ -44,6 +47,7 @@ class AnnotationTaskService {
 		this.projectAccessService = projectAccessService;
 		this.assetQueryService = assetQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
+		this.mediaDurationQueryService = mediaDurationQueryService;
 		this.repository = repository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
@@ -197,6 +201,7 @@ class AnnotationTaskService {
 					"The clip asset is no longer eligible for annotation submission.",
 					409);
 		}
+		validateSegmentBounds(projectId, task.getClipAssetId(), request.segments());
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		task.submit(now);
 		var revisionNumber = this.revisionRepository.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(
@@ -328,6 +333,26 @@ class AnnotationTaskService {
 			document.put("note", request.note().trim());
 		}
 		return Map.copyOf(document);
+	}
+
+	private void validateSegmentBounds(
+			UUID projectId,
+			UUID clipAssetId,
+			List<AnnotationSegmentCommand> segments) {
+		var durationMicroseconds = this.mediaDurationQueryService
+				.findVerifiedDurationMicroseconds(projectId, clipAssetId);
+		if (durationMicroseconds.isEmpty()) {
+			return;
+		}
+		var maximumEndMilliseconds = durationMicroseconds.getAsLong() / 1_000;
+		for (var segment : segments) {
+			if (segment.endMs() > maximumEndMilliseconds) {
+				throw new AnnotationTaskException(
+						"ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION",
+						"An annotation segment exceeds the verified media duration.",
+						400);
+			}
+		}
 	}
 
 	private static String digest(AnnotationRevisionSubmitCommand request) {

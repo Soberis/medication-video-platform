@@ -163,6 +163,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_ALREADY_SUBMITTED: '该任务已经提交标注，等待后续复核。',
     ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该视频已不再满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间片段的结束时间必须晚于开始时间。',
+    ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了媒体检测确认的视频时长。',
     ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',
     ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',

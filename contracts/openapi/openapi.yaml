@@ -2576,6 +2576,7 @@ paths:
         video must still be undeleted, INGESTED and human-qualified. P0 accepts a small
         annotation-document.v1 consisting of one or more labelled time ranges and an optional note;
         it does not provide drawing tools, AI annotations or independent review in this operation.
+        When a media report exists, each time range must also end within its verified duration.
         The Idempotency-Key safely replays the identical submission without creating another revision.
       security:
         - sessionCookie: []
