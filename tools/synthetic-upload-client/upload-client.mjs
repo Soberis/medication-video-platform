@@ -104,12 +104,7 @@ export class SyntheticUploadClient {
     this.fetchImpl = fetchImpl
   }
 
-  async uploadSyntheticSession(videoBytes) {
-    const deviceId = 'synthetic-edge-uploader-01'
-    const recordedAt = new Date().toISOString()
-    const captureSessionId = randomUUID()
-    const videoFile = createUploadFile('VIDEO', 'video/mp4', videoBytes)
-
+  async provisionSyntheticCamera() {
     const channel = await this.#requestJson(
       'provision camera channel',
       `/projects/${this.projectId}/camera-channels/synthetic-upload-client.overview`,
@@ -134,10 +129,24 @@ export class SyntheticUploadClient {
         },
       },
     )
-
-    const metadata = createSyntheticMetadata({
+    return {
       cameraChannelId: channel.camera_channel_id,
       cameraSetId: cameraSet.camera_set_id,
+    }
+  }
+
+  async uploadSyntheticSession(videoBytes, camera) {
+    if (!camera?.cameraChannelId || !camera?.cameraSetId) {
+      throw new TypeError('A provisioned camera channel and camera set are required')
+    }
+    const deviceId = 'synthetic-edge-uploader-01'
+    const recordedAt = new Date().toISOString()
+    const captureSessionId = randomUUID()
+    const videoFile = createUploadFile('VIDEO', 'video/mp4', videoBytes)
+
+    const metadata = createSyntheticMetadata({
+      cameraChannelId: camera.cameraChannelId,
+      cameraSetId: camera.cameraSetId,
       captureSessionId,
       deviceId,
       recordedAt,

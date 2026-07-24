@@ -69,6 +69,10 @@ async function main() {
   if (!bearerToken) {
     throw new Error('Set DEV_BEARER_TOKEN to the local synthetic API token before running')
   }
+  const adminBearerToken = process.env.DEV_ADMIN_BEARER_TOKEN
+  if (!adminBearerToken) {
+    throw new Error('Set DEV_ADMIN_BEARER_TOKEN to configure the local synthetic camera before running')
+  }
   const baseUrl = process.env.PLATFORM_BASE_URL || 'http://localhost:8080'
   const projectId = process.env.DEV_PROJECT_ID || '00000000-0000-0000-0000-000000000001'
   const workDirectory = await mkdtemp(path.join(tmpdir(), 'medication-synthetic-upload-'))
@@ -77,8 +81,10 @@ async function main() {
     const videoPath = path.join(workDirectory, 'synthetic-medication-preparation.mp4')
     await generateSyntheticVideo(videoPath)
     const videoBytes = await readFile(videoPath)
-    const client = new SyntheticUploadClient({ baseUrl, projectId, bearerToken })
-    const result = await client.uploadSyntheticSession(videoBytes)
+    const administrator = new SyntheticUploadClient({ baseUrl, projectId, bearerToken: adminBearerToken })
+    const camera = await administrator.provisionSyntheticCamera()
+    const uploader = new SyntheticUploadClient({ baseUrl, projectId, bearerToken })
+    const result = await uploader.uploadSyntheticSession(videoBytes, camera)
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
   } finally {
     await rm(workDirectory, { recursive: true, force: true })

@@ -6,6 +6,7 @@ import {
   DEFAULT_PART_SIZE_BYTES,
   buildManifest,
   createSyntheticMetadata,
+  SyntheticUploadClient,
   createUploadFile,
   sha256Hex,
   splitParts,
@@ -77,6 +78,31 @@ test('createSyntheticMetadata binds exactly one generated video to server camera
       sync_status: 'UNKNOWN',
     },
   ])
+})
+
+test('SyntheticUploadClient keeps camera provisioning separate from edge upload', async () => {
+  const calls = []
+  const client = new SyntheticUploadClient({
+    baseUrl: 'http://localhost:8080',
+    projectId: '00000000-0000-0000-0000-000000000001',
+    bearerToken: 'synthetic-local-admin-bearer-token-do-not-reuse',
+    fetchImpl: async (url, request) => {
+      calls.push({ url, request })
+      if (url.includes('/camera-channels/')) {
+        return new Response(JSON.stringify({ camera_channel_id: 'channel-1' }), { status: 201 })
+      }
+      return new Response(JSON.stringify({ camera_set_id: 'set-1' }), { status: 201 })
+    },
+  })
+
+  const camera = await client.provisionSyntheticCamera()
+
+  assert.deepEqual(camera, { cameraChannelId: 'channel-1', cameraSetId: 'set-1' })
+  assert.equal(calls.length, 2)
+  await assert.rejects(
+    () => client.uploadSyntheticSession(Buffer.from('synthetic')),
+    /provisioned camera channel and camera set are required/,
+  )
 })
 
 test('synthetic client refuses empty files and undersized planned parts', () => {

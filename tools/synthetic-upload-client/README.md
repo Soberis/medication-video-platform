@@ -18,14 +18,22 @@
 
 ```powershell
 $env:DEV_BEARER_TOKEN='synthetic-local-bearer-token-do-not-reuse'
+$env:DEV_ADMIN_BEARER_TOKEN='synthetic-local-admin-bearer-token-do-not-reuse'
 pnpm run synthetic-upload
 ```
+
+默认 `local` profile 会创建名为“本地合成上传验证”的保留项目，并仅为
+`local-synthetic-uploader`、`local-synthetic-admin` 两个开发身份授予成员资格；这样工具无需手工创建项目。
+设置 `LOCAL_SYNTHETIC_PROJECT_ENABLED=false` 可关闭该开发夹具。此行为不在生产或其他 profile 中加载。
 
 可选环境变量：
 
 - `PLATFORM_BASE_URL`：默认 `http://localhost:8080`；
 - `DEV_PROJECT_ID`：默认本地合成项目；
+- `DEV_ADMIN_BEARER_TOKEN`：仅用于一次性配置合成 CameraChannel/CameraSet；
 - `FFMPEG_PATH`：FFmpeg 不在 `PATH` 时指定可执行文件。
+
+工具用管理员身份配置项目内的合成相机，再用上传身份模拟边端上传；这保持了“项目配置仅管理员可改、边端只负责上传”的权限边界。
 
 安全边界：
 

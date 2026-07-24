@@ -67,8 +67,18 @@ class DataProject {
 			String idempotencyKey,
 			String requestFingerprint,
 			Instant createdAt) {
+		return create(UUID.randomUUID(), displayName, createdBy, idempotencyKey, requestFingerprint, createdAt);
+	}
+
+	static DataProject create(
+			UUID projectId,
+			String displayName,
+			String createdBy,
+			String idempotencyKey,
+			String requestFingerprint,
+			Instant createdAt) {
 		return new DataProject(
-				UUID.randomUUID(),
+				projectId,
 				displayName,
 				createdBy,
 				idempotencyKey,
