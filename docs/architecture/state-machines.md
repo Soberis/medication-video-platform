@@ -304,7 +304,18 @@ REQUESTED → QUEUED → RUNNING → SUCCEEDED
 - CANCEL_REQUESTED 是协作取消；Worker 必须在安全检查点停止并清理临时输出。
 - 迟到结果必须按 job ID、attempt 和 lease token 拒绝。
 
-## 10. AI 候选状态（P1）
+## 10. P0 标注任务
+
+```text
+ASSIGNED → SUBMITTED
+```
+
+- 仅 ACTIVE 项目成员中的任务受分配人可以提交；管理员创建任务不等于可以代替受分配人提交。
+- 提交前 ClipAsset 必须仍为 `INGESTED`、未软删除，且当前人工质量结论为 `QUALIFIED`。
+- P0 一项任务只接受一次不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或已提交任务拒绝。
+- P0 文档只包含一个或多个带标签的时间段和可选说明。返工、独立复核、对象框及与视频时长的上界校验在后续真实用例中启用。
+
+## 11. AI 候选状态（P1）
 
 ```text
 GENERATED → PENDING_REVIEW → ACCEPTED
@@ -317,14 +328,14 @@ GENERATED/PENDING_REVIEW → EXPIRED
 - `CandidateAnnotation.status` 与正式 `Review.status` 是不同概念，数据库字段不得都模糊命名为 `review_status`。
 - 候选过期条件包括输入摘要变化、schema 不兼容、算法撤销或隐私放行撤销。
 
-## 11. 关键兼容性守卫
+## 12. 关键兼容性守卫
 
 | 操作 | 必须满足 |
 | --- | --- |
 | 创建标注任务 | asset `INGESTED`、未删除；当前人工质量结论 `QUALIFIED`；项目与任务范围有效 |
 | 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；asset `INGESTED`、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
 | 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
-| 提交 revision | task 可提交；schema/guideline 未变化；时间和几何基础校验通过 |
+| 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
 | 数据集冻结 | session/stream 准入、人工质量 `QUALIFIED`、annotation review PASS、post-clean PASS 或批准 override |
 | 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |
@@ -332,7 +343,7 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |
 | 移动项目内文件夹 | folder 与 asset 同 project；只更新 `folder_id` |
 
-## 12. 事件与测试要求
+## 13. 事件与测试要求
 
 每个跨模块可观察迁移都应定义版本化事件，例如：
 

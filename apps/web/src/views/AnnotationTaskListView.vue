@@ -1,11 +1,26 @@
 <script setup lang="ts">
-import { ElButton, ElCard, ElEmpty, ElTable, ElTableColumn, ElTag } from 'element-plus'
+import {
+  ElButton,
+  ElCard,
+  ElDialog,
+  ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElInputNumber,
+  ElMessage,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+} from 'element-plus'
 import { onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
   AnnotationTaskApiError,
   listAnnotationTasks,
+  submitAnnotationRevision,
+  type AnnotationSegment,
   type AnnotationTask,
 } from '@/api/annotation'
 import { formatDateTime } from '@/catalog-presentation'
@@ -18,6 +33,11 @@ const items = shallowRef<AnnotationTask[]>([])
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
 const errorCode = ref('')
 const errorMessage = ref('')
+const selectedTask = shallowRef<AnnotationTask | null>(null)
+const isSubmissionOpen = ref(false)
+const segments = ref<AnnotationSegment[]>([])
+const note = ref('')
+const isSubmitting = ref(false)
 let activeRequest: AbortController | null = null
 
 async function loadTasks() {
@@ -50,6 +70,44 @@ watch(
   { immediate: true },
 )
 onUnmounted(() => activeRequest?.abort())
+
+function openSubmission(task: AnnotationTask) {
+  if (!task.can_submit || task.status !== 'ASSIGNED') return
+  selectedTask.value = task
+  isSubmissionOpen.value = true
+  segments.value = [{ start_ms: 0, end_ms: 1000, label: '' }]
+  note.value = ''
+}
+
+function addSegment() {
+  segments.value = [...segments.value, { start_ms: 0, end_ms: 1000, label: '' }]
+}
+
+function removeSegment(index: number) {
+  if (segments.value.length === 1) return
+  segments.value = segments.value.filter((_, currentIndex) => currentIndex !== index)
+}
+
+async function submit() {
+  const task = selectedTask.value
+  if (!task || isSubmitting.value) return
+  const validSegments = segments.value.map((segment) => ({ ...segment, label: segment.label.trim() }))
+  if (validSegments.some((segment) => !segment.label || segment.start_ms < 0 || segment.end_ms <= segment.start_ms)) {
+    ElMessage.error('请填写标签，并确保每个片段的结束时间晚于开始时间。')
+    return
+  }
+  isSubmitting.value = true
+  try {
+    await submitAnnotationRevision(projectId.value, task.annotation_task_id, validSegments, note.value)
+    ElMessage.success('标注已提交，等待后续独立复核。')
+    isSubmissionOpen.value = false
+    await loadTasks()
+  } catch (error) {
+    ElMessage.error(error instanceof AnnotationTaskApiError ? error.message : '标注暂未提交，请稍后重试。')
+  } finally {
+    isSubmitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -57,7 +115,7 @@ onUnmounted(() => activeRequest?.abort())
     <div>
       <p class="app-eyebrow">人工训练数据标注</p>
       <h1 id="annotation-task-title">标注任务</h1>
-      <p>只显示当前项目中你可处理的合格视频任务。标注内容与独立复核将在后续切片启用。</p>
+      <p>只显示当前项目中可处理的合格视频任务。受理人可提交时间片段标签；独立复核将在下一切片启用。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadTasks">刷新</ElButton>
   </section>
@@ -82,12 +140,29 @@ onUnmounted(() => activeRequest?.abort())
         </template>
       </ElTableColumn>
       <ElTableColumn label="状态" width="130">
-        <template #default="{ row }"><ElTag type="warning">{{ row.status === 'ASSIGNED' ? '已分配' : row.status }}</ElTag></template>
+        <template #default="{ row }">
+          <ElTag :type="row.status === 'ASSIGNED' ? 'warning' : 'success'">
+            {{ row.status === 'ASSIGNED' ? '已分配' : '已提交' }}
+          </ElTag>
+        </template>
       </ElTableColumn>
       <ElTableColumn label="执行人" min-width="180" prop="assignee_actor_id" />
       <ElTableColumn label="创建人" min-width="180" prop="created_by" />
       <ElTableColumn label="创建时间" min-width="185">
         <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+      </ElTableColumn>
+      <ElTableColumn label="操作" width="120" fixed="right">
+        <template #default="{ row }">
+          <ElButton
+            v-if="row.can_submit && row.status === 'ASSIGNED'"
+            link
+            type="primary"
+            @click="openSubmission(row as AnnotationTask)"
+          >
+            提交标注
+          </ElButton>
+          <span v-else>—</span>
+        </template>
       </ElTableColumn>
     </ElTable>
   </ElCard>
@@ -96,4 +171,30 @@ onUnmounted(() => activeRequest?.abort())
     v-else
     description="当前没有可处理的标注任务。管理员可在已判定合格的视频详情中创建并分配任务。"
   />
+
+  <ElDialog v-model="isSubmissionOpen" title="提交时间片段标注" width="min(720px, calc(100vw - 32px))">
+    <p class="form-hint">为该视频记录一个或多个动作时间范围。提交后内容不可覆盖，后续由独立复核处理。</p>
+    <ElForm label-position="top" @submit.prevent="submit">
+      <div v-for="(segment, index) in segments" :key="index" class="annotation-segment-row">
+        <ElFormItem label="开始（毫秒）">
+          <ElInputNumber v-model="segment.start_ms" :min="0" :step="100" controls-position="right" />
+        </ElFormItem>
+        <ElFormItem label="结束（毫秒）">
+          <ElInputNumber v-model="segment.end_ms" :min="1" :step="100" controls-position="right" />
+        </ElFormItem>
+        <ElFormItem label="标签">
+          <ElInput v-model="segment.label" maxlength="64" placeholder="例如：拿取药品" />
+        </ElFormItem>
+        <ElButton :disabled="segments.length === 1" @click="removeSegment(index)">移除</ElButton>
+      </div>
+      <ElButton @click="addSegment">新增片段</ElButton>
+      <ElFormItem label="备注（可选）">
+        <ElInput v-model="note" maxlength="1000" :rows="3" type="textarea" />
+      </ElFormItem>
+      <div class="detail-actions">
+        <ElButton @click="isSubmissionOpen = false">取消</ElButton>
+        <ElButton native-type="submit" type="primary" :loading="isSubmitting">提交标注</ElButton>
+      </div>
+    </ElForm>
+  </ElDialog>
 </template>

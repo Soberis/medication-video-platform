@@ -118,8 +118,20 @@ class AnnotationTask {
 	long getVersion() {
 		return this.version;
 	}
+
+	void submit(Instant now) {
+		if (this.status != AnnotationTaskStatus.ASSIGNED) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_TASK_ALREADY_SUBMITTED",
+					"The annotation task has already been submitted.",
+					409);
+		}
+		this.status = AnnotationTaskStatus.SUBMITTED;
+		this.updatedAt = now;
+	}
 }
 
 enum AnnotationTaskStatus {
-	ASSIGNED
+	ASSIGNED,
+	SUBMITTED
 }

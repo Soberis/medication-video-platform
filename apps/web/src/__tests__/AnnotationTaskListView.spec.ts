@@ -23,6 +23,7 @@ describe('annotation task list view', () => {
                 assignee_actor_id: 'local-synthetic-uploader',
                 created_by: 'local-synthetic-admin',
                 status: 'ASSIGNED',
+                can_submit: true,
                 created_at: '2026-07-23T01:00:00Z',
                 updated_at: '2026-07-23T01:00:00Z',
                 version: 0,
@@ -47,6 +48,7 @@ describe('annotation task list view', () => {
 
     expect(wrapper.text()).toContain('标注任务')
     expect(wrapper.text()).toContain('已分配')
+    expect(wrapper.text()).toContain('提交标注')
     expect(wrapper.text()).toContain('local-synthetic-uploader')
     expect(wrapper.find('a').attributes('href')).toBe(`/projects/${projectId}/assets/50000000-0000-4000-8000-000000000001`)
   })

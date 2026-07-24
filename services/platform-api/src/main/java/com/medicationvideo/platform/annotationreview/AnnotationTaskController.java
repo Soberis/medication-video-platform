@@ -82,6 +82,37 @@ class AnnotationTaskController {
 				.body(response);
 	}
 
+	@PostMapping("/annotation-tasks/{annotationTaskId}/revisions")
+	ResponseEntity<AnnotationRevisionResponse> submitRevision(
+			@PathVariable UUID projectId,
+			@PathVariable UUID annotationTaskId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationRevisionRequest request,
+			Authentication authentication) {
+		var response = this.service.submitRevision(
+				projectId,
+				annotationTaskId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
+				new AnnotationRevisionSubmitCommand(
+						request.segments().stream()
+								.map(segment -> new AnnotationSegmentCommand(
+										segment.startMs(), segment.endMs(), segment.label()))
+								.toList(),
+						request.note()));
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.location(URI.create("/api/v1/projects/" + projectId
+						+ "/annotation-tasks/" + annotationTaskId + "/revisions/"
+						+ response.annotationRevisionId()))
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException(
@@ -97,6 +128,22 @@ record AnnotationTaskRequest(
 		@NotNull
 		@NotBlank
 		@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
+}
+
+record AnnotationRevisionRequest(
+		@NotNull
+		@jakarta.validation.constraints.Size(min = 1, max = 200)
+		java.util.List<@Valid AnnotationSegmentRequest> segments,
+		@jakarta.validation.constraints.Size(max = 1000)
+		@Pattern(regexp = "^[^\\p{Cc}]*$") String note) {
+}
+
+record AnnotationSegmentRequest(
+		@jakarta.validation.constraints.Min(0) long startMs,
+		@jakarta.validation.constraints.Min(1) long endMs,
+		@NotBlank
+		@jakarta.validation.constraints.Size(max = 64)
+		@Pattern(regexp = "^[^\\p{Cc}]+$") String label) {
 }
 
 record AnnotationTaskErrorResponse(

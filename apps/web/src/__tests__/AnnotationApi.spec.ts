@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createAnnotationTask, listAnnotationTasks } from '@/api/annotation'
+import { createAnnotationTask, listAnnotationTasks, submitAnnotationRevision } from '@/api/annotation'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
@@ -54,6 +54,41 @@ describe('annotation task API', () => {
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
       message: '只有已判定合格的视频才能创建标注任务。',
     })
+  })
+
+  it('submits an immutable time-range annotation revision with a fresh idempotency key', async () => {
+    const taskId = '30000000-0000-4000-8000-000000000003'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotation_revision_id: '30000000-0000-4000-8000-000000000004',
+        project_id: projectId,
+        annotation_task_id: taskId,
+        clip_asset_id: assetId,
+        revision_number: 1,
+        annotation_schema_version: 'annotation-document.v1',
+        document_sha256: 'a'.repeat(64),
+        submitted_by: 'local-synthetic-uploader',
+        submitted_at: '2026-07-24T00:00:00Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('annotation-revision-idempotency-0001') })
+
+    await expect(
+      submitAnnotationRevision(projectId, taskId, [{ start_ms: 100, end_ms: 900, label: '拿取药品' }], '合成验证'),
+    ).resolves.toMatchObject({ annotation_task_id: taskId, revision_number: 1 })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-tasks/${taskId}/revisions`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          segments: [{ start_ms: 100, end_ms: 900, label: '拿取药品' }],
+          note: '合成验证',
+        }),
+        headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-revision-idempotency-0001' }),
+      }),
+    )
   })
 })
 
