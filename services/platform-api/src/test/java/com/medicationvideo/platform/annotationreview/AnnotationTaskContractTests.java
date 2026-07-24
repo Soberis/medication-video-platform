@@ -204,6 +204,83 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void administratorIndependentlyReviewsSubmittedRevisionOnceAndItIsAudited() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-review-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-review-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"拿取药品\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
+		var idempotencyKey = "annotation-review-" + UUID.randomUUID();
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].annotation_revision.annotation_revision_id").value(revisionId.toString()))
+				.andExpect(jsonPath("$.items[0].annotation_revision.annotation_document.segments.length()").value(1))
+				.andExpect(jsonPath("$.items[0].can_review").value(true));
+
+		var response = review(ADMIN_TOKEN, revisionId, idempotencyKey,
+				"{\"decision\":\"APPROVED\",\"review_note\":\"时间段与画面一致\"}")
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.annotation_revision_id").value(revisionId.toString()))
+				.andExpect(jsonPath("$.decision").value("APPROVED"))
+				.andExpect(jsonPath("$.reviewed_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
+				.andReturn().getResponse().getContentAsString();
+		var reviewId = com.jayway.jsonpath.JsonPath.<String>read(response, "$.annotation_review_id");
+
+		review(ADMIN_TOKEN, revisionId, idempotencyKey,
+				"{\"decision\":\"APPROVED\",\"review_note\":\"时间段与画面一致\"}")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.annotation_review_id").value(reviewId));
+		review(MEMBER_TOKEN, revisionId, "annotation-review-member-" + UUID.randomUUID(),
+				"{\"decision\":\"REJECTED\"}")
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("APPROVED"))
+				.andExpect(jsonPath("$.items[0].can_review").value(false));
+
+		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'ANNOTATION_REVISION_REVIEWED'
+				  AND object_type = 'AnnotationReview'
+				  AND object_id = ?
+				""", reviewId));
+	}
+
+	@Test
+	void submittingAdministratorCannotReviewTheirOwnRevision() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.ADMIN_ACTOR,
+				"annotation-task-self-review-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(ADMIN_TOKEN, taskId, "annotation-revision-self-review-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"拿取药品\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
+
+		review(ADMIN_TOKEN, revisionId, "annotation-review-self-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN"));
+	}
+
+	@Test
 	void membersOnlySeeTasksAssignedToThemWhileAdministratorsSeeTheProjectQueue() throws Exception {
 		var assignedToMember = insertClipAsset(PROJECT_ID, "INGESTED", false);
 		var assignedToAdmin = insertClipAsset(PROJECT_ID, "INGESTED", false);
@@ -253,6 +330,22 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + token)
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", "annotation-revision-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions review(
+			String token,
+			UUID revisionId,
+			String idempotencyKey,
+			String body) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review",
+						PROJECT_ID,
+						revisionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "annotation-review-" + UUID.randomUUID())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body));
 	}
@@ -322,6 +415,7 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_revision WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM quality_review WHERE project_id = ?", projectId);

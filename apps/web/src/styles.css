@@ -706,6 +706,11 @@ code {
   margin-bottom: 12px;
 }
 
+.muted-text {
+  color: var(--el-text-color-secondary);
+  font-size: 0.875rem;
+}
+
 .annotation-segment-row .el-form-item {
   margin-bottom: 0;
 }

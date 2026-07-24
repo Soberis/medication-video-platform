@@ -30,6 +30,7 @@ class AnnotationTaskService {
 	private final QualityReviewQueryService qualityReviewQueryService;
 	private final AnnotationTaskRepository repository;
 	private final AnnotationRevisionRepository revisionRepository;
+	private final AnnotationReviewRepository reviewRepository;
 	private final AuditEventRecorder auditRecorder;
 
 	AnnotationTaskService(
@@ -38,12 +39,14 @@ class AnnotationTaskService {
 			QualityReviewQueryService qualityReviewQueryService,
 			AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository,
+			AnnotationReviewRepository reviewRepository,
 			AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.assetQueryService = assetQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.repository = repository;
 		this.revisionRepository = revisionRepository;
+		this.reviewRepository = reviewRepository;
 		this.auditRecorder = auditRecorder;
 	}
 
@@ -54,8 +57,32 @@ class AnnotationTaskService {
 				? this.repository.findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId)
 				: this.repository.findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(
 						projectId, actorId);
+		if (tasks.isEmpty()) {
+			return new AnnotationTaskListResponse(List.of());
+		}
+		var revisionsByTaskId = this.revisionRepository.findAllByAnnotationTaskIdIn(tasks.stream()
+				.map(AnnotationTask::getAnnotationTaskId)
+				.toList())
+				.stream().collect(java.util.stream.Collectors.toMap(
+						AnnotationRevision::getAnnotationTaskId,
+						revision -> revision));
+		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty()
+				? Map.of()
+				: this.reviewRepository.findAllByAnnotationRevisionIdIn(revisionsByTaskId.values()
+						.stream().map(AnnotationRevision::getAnnotationRevisionId).toList())
+						.stream().collect(java.util.stream.Collectors.toMap(
+								AnnotationReview::getAnnotationRevisionId,
+								review -> review));
 		return new AnnotationTaskListResponse(tasks.stream()
-				.map(task -> AnnotationTaskResponse.from(task, actorId))
+				.map(task -> {
+					var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
+					return AnnotationTaskResponse.from(
+							task,
+							actorId,
+							role,
+							revision,
+							revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()));
+				})
 				.toList());
 	}
 
@@ -78,7 +105,7 @@ class AnnotationTaskService {
 						"The idempotency key was already used for a different annotation task.",
 						409);
 			}
-			return AnnotationTaskResponse.from(replay.get(), actorId);
+			return AnnotationTaskResponse.from(replay.get(), actorId, ProjectRole.ADMIN, null, null);
 		}
 
 		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, clipAssetId);
@@ -127,7 +154,7 @@ class AnnotationTaskService {
 				Map.of(
 						"clip_asset_id", clipAssetId.toString(),
 						"assignee_actor_id", task.getAssigneeActorId())));
-		return AnnotationTaskResponse.from(task, actorId);
+		return AnnotationTaskResponse.from(task, actorId, ProjectRole.ADMIN, null, null);
 	}
 
 	@Transactional
@@ -196,6 +223,73 @@ class AnnotationTaskService {
 		return AnnotationRevisionResponse.from(revision);
 	}
 
+	@Transactional
+	AnnotationReviewResponse reviewRevision(
+			UUID projectId,
+			UUID annotationRevisionId,
+			String actorId,
+			String idempotencyKey,
+			String requestId,
+			String traceId,
+			AnnotationReviewCommand request) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
+				.orElseThrow(AnnotationTaskService::revisionNotFound);
+		if (revision.getSubmittedBy().equals(actorId)) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN",
+					"The submitting member cannot independently review this annotation revision.",
+					403);
+		}
+		var existing = this.reviewRepository.findByAnnotationRevisionId(annotationRevisionId);
+		if (existing.isPresent()) {
+			var review = existing.get();
+			if (review.getReviewedBy().equals(actorId)
+					&& review.matches(request.decision(), request.reviewNote())) {
+				return AnnotationReviewResponse.from(review);
+			}
+			throw new AnnotationTaskException(
+					"ANNOTATION_REVISION_ALREADY_REVIEWED",
+					"The annotation revision already has an immutable review decision.",
+					409);
+		}
+		if (!this.assetQueryService.lockAndGetReviewFacts(projectId, revision.getClipAssetId()).reviewable()
+				|| !this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId, revision.getClipAssetId())
+						.isQualified()) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_REVISION_NO_LONGER_QUALIFIED",
+					"The clip asset is no longer eligible for annotation review.",
+					409);
+		}
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var review = this.reviewRepository.saveAndFlush(AnnotationReview.record(
+				revision,
+				request.decision(),
+				request.reviewNote(),
+				actorId,
+				idempotencyKey,
+				now));
+		this.auditRecorder.record(new AuditEventCommand(
+				now,
+				AuditActorType.USER,
+				actorId,
+				projectId,
+				"ANNOTATION_REVISION_REVIEWED",
+				"AnnotationReview",
+				review.getAnnotationReviewId().toString(),
+				review.getDecision().name(),
+				AuditOutcome.SUCCEEDED,
+				"INDEPENDENT_ANNOTATION_REVIEW",
+				requestId,
+				traceId,
+				"PROJECT_MEMBERSHIP_ADMIN",
+				Map.of(
+						"annotation_revision_id", revision.getAnnotationRevisionId().toString(),
+						"annotation_task_id", revision.getAnnotationTaskId().toString(),
+						"decision", review.getDecision().name())));
+		return AnnotationReviewResponse.from(review);
+	}
+
 	private Map<String, Object> toAnnotationDocument(AnnotationRevisionSubmitCommand request) {
 		var segments = request.segments().stream().map(segment -> {
 			if (segment.endMs() <= segment.startMs()) {
@@ -246,6 +340,13 @@ class AnnotationTaskService {
 				"The annotation task was not found in the current project.",
 				404);
 	}
+
+	private static AnnotationTaskException revisionNotFound() {
+		return new AnnotationTaskException(
+				"ANNOTATION_REVISION_NOT_FOUND",
+				"The annotation revision was not found in the current project.",
+				404);
+	}
 }
 
 record AnnotationTaskCreateRequest(String assigneeActorId) {
@@ -257,6 +358,9 @@ record AnnotationRevisionSubmitCommand(List<AnnotationSegmentCommand> segments, 
 record AnnotationSegmentCommand(long startMs, long endMs, String label) {
 }
 
+record AnnotationReviewCommand(AnnotationReviewDecision decision, String reviewNote) {
+}
+
 record AnnotationTaskResponse(
 		UUID annotationTaskId,
 		UUID projectId,
@@ -265,11 +369,18 @@ record AnnotationTaskResponse(
 		String createdBy,
 		String status,
 		boolean canSubmit,
+		boolean canReview,
+		AnnotationRevisionSummary annotationRevision,
 		Instant createdAt,
 		Instant updatedAt,
 		long version) {
 
-	static AnnotationTaskResponse from(AnnotationTask task, String actorId) {
+	static AnnotationTaskResponse from(
+			AnnotationTask task,
+			String actorId,
+			ProjectRole role,
+			AnnotationRevision revision,
+			AnnotationReview review) {
 		return new AnnotationTaskResponse(
 				task.getAnnotationTaskId(),
 				task.getProjectId(),
@@ -279,6 +390,9 @@ record AnnotationTaskResponse(
 				task.getStatus().name(),
 				task.getStatus() == AnnotationTaskStatus.ASSIGNED
 						&& task.getAssigneeActorId().equals(actorId),
+				role == ProjectRole.ADMIN && revision != null && review == null
+						&& !revision.getSubmittedBy().equals(actorId),
+				AnnotationRevisionSummary.from(revision, review),
 				task.getCreatedAt(),
 				task.getUpdatedAt(),
 				task.getVersion());
@@ -286,6 +400,28 @@ record AnnotationTaskResponse(
 }
 
 record AnnotationTaskListResponse(List<AnnotationTaskResponse> items) {
+}
+
+record AnnotationRevisionSummary(
+		UUID annotationRevisionId,
+		int revisionNumber,
+		Map<String, Object> annotationDocument,
+		String submittedBy,
+		Instant submittedAt,
+		AnnotationReviewResponse review) {
+
+	static AnnotationRevisionSummary from(AnnotationRevision revision, AnnotationReview review) {
+		if (revision == null) {
+			return null;
+		}
+		return new AnnotationRevisionSummary(
+				revision.getAnnotationRevisionId(),
+				revision.getRevisionNumber(),
+				revision.getAnnotationDocument(),
+				revision.getSubmittedBy(),
+				revision.getSubmittedAt(),
+				AnnotationReviewResponse.from(review));
+	}
 }
 
 record AnnotationRevisionResponse(
@@ -310,5 +446,29 @@ record AnnotationRevisionResponse(
 				revision.getDocumentSha256(),
 				revision.getSubmittedBy(),
 				revision.getSubmittedAt());
+	}
+}
+
+record AnnotationReviewResponse(
+		UUID annotationReviewId,
+		UUID projectId,
+		UUID annotationRevisionId,
+		String decision,
+		String reviewNote,
+		String reviewedBy,
+		Instant reviewedAt) {
+
+	static AnnotationReviewResponse from(AnnotationReview review) {
+		if (review == null) {
+			return null;
+		}
+		return new AnnotationReviewResponse(
+				review.getAnnotationReviewId(),
+				review.getProjectId(),
+				review.getAnnotationRevisionId(),
+				review.getDecision().name(),
+				review.getReviewNote(),
+				review.getReviewedBy(),
+				review.getReviewedAt());
 	}
 }

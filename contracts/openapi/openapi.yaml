@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.35.0
+  version: 0.36.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -22,8 +22,8 @@ info:
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
     member for human training-data review after an explicitly requested media ingest, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
-    assign one auditable annotation task for a qualified video and let its assignee submit one immutable
-    time-range revision, and create and read project-scoped media probe jobs that freeze the input
+    assign one auditable annotation task for a qualified video, let its assignee submit one immutable
+    time-range revision, and let an independent project administrator record one review decision, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -2639,6 +2639,79 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-revisions/{annotation_revision_id}/review:
+    post:
+      operationId: reviewAnnotationRevision
+      tags:
+        - Annotation Tasks
+      summary: Record one independent administrator decision for a submitted annotation revision
+      description: >-
+        Requires an ACTIVE ADMIN membership. The reviewer must differ from the revision submitter;
+        the video must remain undeleted, INGESTED and human-qualified. P0 records one immutable
+        APPROVED or REJECTED decision. A rejection blocks later training-data admission but does not
+        reopen the task or create a replacement revision; rework is a later capability.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: annotation_revision_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationReviewRequest"
+      responses:
+        "201":
+          description: Immutable review decision, or the identical idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationReview"
+        "400":
+          description: The request or identifiers are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required and the reviewer must be independent.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or revision is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The revision was already reviewed or its video is no longer eligible.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/clip-assets/{clip_asset_id}/quality-review:
     get:
       operationId: getClipAssetQualityReview
@@ -5072,6 +5145,8 @@ components:
         - created_by
         - status
         - can_submit
+        - can_review
+        - annotation_revision
         - created_at
         - updated_at
         - version
@@ -5099,6 +5174,13 @@ components:
         can_submit:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to submit this task.
+        can_review:
+          type: boolean
+          description: Server-evaluated capability for the current authenticated account to independently review its submitted revision.
+        annotation_revision:
+          anyOf:
+            - $ref: "#/components/schemas/AnnotationRevisionSummary"
+            - type: "null"
         created_at:
           type: string
           format: date-time
@@ -5195,6 +5277,102 @@ components:
           type: string
           maxLength: 128
         submitted_at:
+          type: string
+          format: date-time
+    AnnotationRevisionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - annotation_revision_id
+        - revision_number
+        - annotation_document
+        - submitted_by
+        - submitted_at
+        - review
+      properties:
+        annotation_revision_id:
+          type: string
+          format: uuid
+        revision_number:
+          type: integer
+          const: 1
+        annotation_document:
+          type: object
+          additionalProperties: false
+          required:
+            - schema_version
+            - segments
+          properties:
+            schema_version:
+              type: string
+              const: annotation-document.v1
+            segments:
+              type: array
+              minItems: 1
+              items:
+                $ref: "#/components/schemas/AnnotationSegment"
+            note:
+              type: string
+              maxLength: 1000
+        submitted_by:
+          type: string
+          maxLength: 128
+        submitted_at:
+          type: string
+          format: date-time
+        review:
+          anyOf:
+            - $ref: "#/components/schemas/AnnotationReview"
+            - type: "null"
+    AnnotationReviewDecision:
+      type: string
+      enum:
+        - APPROVED
+        - REJECTED
+    AnnotationReviewRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+      properties:
+        decision:
+          $ref: "#/components/schemas/AnnotationReviewDecision"
+        review_note:
+          type: string
+          maxLength: 1000
+          pattern: ^[^\x00-\x1F\x7F]*$
+    AnnotationReview:
+      type: object
+      additionalProperties: false
+      required:
+        - annotation_review_id
+        - project_id
+        - annotation_revision_id
+        - decision
+        - review_note
+        - reviewed_by
+        - reviewed_at
+      properties:
+        annotation_review_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        annotation_revision_id:
+          type: string
+          format: uuid
+        decision:
+          $ref: "#/components/schemas/AnnotationReviewDecision"
+        review_note:
+          type:
+            - string
+            - "null"
+          maxLength: 1000
+        reviewed_by:
+          type: string
+          maxLength: 128
+        reviewed_at:
           type: string
           format: date-time
     QualityReviewDecision:

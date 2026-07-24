@@ -24,6 +24,8 @@ describe('annotation task list view', () => {
                 created_by: 'local-synthetic-admin',
                 status: 'ASSIGNED',
                 can_submit: true,
+                can_review: false,
+                annotation_revision: null,
                 created_at: '2026-07-23T01:00:00Z',
                 updated_at: '2026-07-23T01:00:00Z',
                 version: 0,

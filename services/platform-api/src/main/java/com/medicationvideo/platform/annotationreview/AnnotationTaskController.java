@@ -113,6 +113,31 @@ class AnnotationTaskController {
 				.body(response);
 	}
 
+	@PostMapping("/annotation-revisions/{annotationRevisionId}/review")
+	ResponseEntity<AnnotationReviewResponse> reviewRevision(
+			@PathVariable UUID projectId,
+			@PathVariable UUID annotationRevisionId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationReviewRequest request,
+			Authentication authentication) {
+		var response = this.service.reviewRevision(
+				projectId,
+				annotationRevisionId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
+				new AnnotationReviewCommand(request.decision(), request.reviewNote()));
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.location(URI.create("/api/v1/projects/" + projectId
+						+ "/annotation-revisions/" + annotationRevisionId + "/review"))
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException(
@@ -144,6 +169,12 @@ record AnnotationSegmentRequest(
 		@NotBlank
 		@jakarta.validation.constraints.Size(max = 64)
 		@Pattern(regexp = "^[^\\p{Cc}]+$") String label) {
+}
+
+record AnnotationReviewRequest(
+		@NotNull AnnotationReviewDecision decision,
+		@jakarta.validation.constraints.Size(max = 1000)
+		@Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
 }
 
 record AnnotationTaskErrorResponse(

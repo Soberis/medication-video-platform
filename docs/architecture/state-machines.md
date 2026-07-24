@@ -313,7 +313,17 @@ ASSIGNED → SUBMITTED
 - 仅 ACTIVE 项目成员中的任务受分配人可以提交；管理员创建任务不等于可以代替受分配人提交。
 - 提交前 ClipAsset 必须仍为 `INGESTED`、未软删除，且当前人工质量结论为 `QUALIFIED`。
 - P0 一项任务只接受一次不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或已提交任务拒绝。
-- P0 文档只包含一个或多个带标签的时间段和可选说明。返工、独立复核、对象框及与视频时长的上界校验在后续真实用例中启用。
+- P0 文档只包含一个或多个带标签的时间段和可选说明。返工、对象框及与视频时长的上界校验在后续真实用例中启用。
+
+### P0 revision 独立复核
+
+```text
+SUBMITTED revision → APPROVED review
+                   → REJECTED review
+```
+
+- 复核是独立于任务状态的一次不可变事实：只有项目 ADMIN 可以创建，且 `reviewed_by != submitted_by`。
+- 当前只支持每个 revision 一条复核决定。`REJECTED` 阻断后续训练数据准入；返工创建新 revision 是后续能力，不在本切片重开任务。
 
 ## 11. AI 候选状态（P1）
 
@@ -336,6 +346,7 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；asset `INGESTED`、MP4、`deleted_at IS NULL`；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
 | 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
 | 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |
+| 复核 revision | 项目 ADMIN 且不等于提交者；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；每 revision 只有一次决定 |
 | 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
 | 数据集冻结 | session/stream 准入、人工质量 `QUALIFIED`、annotation review PASS、post-clean PASS 或批准 override |
 | 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |

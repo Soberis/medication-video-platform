@@ -9,6 +9,7 @@ import {
   ElInput,
   ElInputNumber,
   ElMessage,
+  ElMessageBox,
   ElTable,
   ElTableColumn,
   ElTag,
@@ -19,6 +20,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import {
   AnnotationTaskApiError,
   listAnnotationTasks,
+  reviewAnnotationRevision,
   submitAnnotationRevision,
   type AnnotationSegment,
   type AnnotationTask,
@@ -38,6 +40,7 @@ const isSubmissionOpen = ref(false)
 const segments = ref<AnnotationSegment[]>([])
 const note = ref('')
 const isSubmitting = ref(false)
+const reviewingRevisionId = ref<string | null>(null)
 let activeRequest: AbortController | null = null
 
 async function loadTasks() {
@@ -108,6 +111,33 @@ async function submit() {
     isSubmitting.value = false
   }
 }
+
+async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
+  const revision = task.annotation_revision
+  if (!revision || !task.can_review || reviewingRevisionId.value) return
+  const approved = decision === 'APPROVED'
+  try {
+    await ElMessageBox.confirm(
+      approved
+        ? '确认该时间段标注与视频画面一致，并将其作为通过的人工标注？'
+        : '确认该标注不符合要求？本次将记录为不通过，返工功能将在后续启用。',
+      approved ? '通过标注复核' : '标注复核不通过',
+      { type: approved ? 'success' : 'warning', confirmButtonText: approved ? '确认通过' : '确认不通过', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  reviewingRevisionId.value = revision.annotation_revision_id
+  try {
+    await reviewAnnotationRevision(projectId.value, revision.annotation_revision_id, decision)
+    ElMessage.success(approved ? '标注已通过独立复核。' : '已记录标注不通过。')
+    await loadTasks()
+  } catch (error) {
+    ElMessage.error(error instanceof AnnotationTaskApiError ? error.message : '复核暂未提交，请稍后重试。')
+  } finally {
+    reviewingRevisionId.value = null
+  }
+}
 </script>
 
 <template>
@@ -146,6 +176,18 @@ async function submit() {
           </ElTag>
         </template>
       </ElTableColumn>
+      <ElTableColumn label="标注与复核" min-width="250">
+        <template #default="{ row }">
+          <template v-if="row.annotation_revision">
+            <div>已提交 · {{ row.annotation_revision.annotation_document.segments.length }} 个时间段</div>
+            <ElTag v-if="row.annotation_revision.review" :type="row.annotation_revision.review.decision === 'APPROVED' ? 'success' : 'danger'">
+              {{ row.annotation_revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过' }}
+            </ElTag>
+            <span v-else class="muted-text">等待独立复核</span>
+          </template>
+          <span v-else class="muted-text">尚未提交</span>
+        </template>
+      </ElTableColumn>
       <ElTableColumn label="执行人" min-width="180" prop="assignee_actor_id" />
       <ElTableColumn label="创建人" min-width="180" prop="created_by" />
       <ElTableColumn label="创建时间" min-width="185">
@@ -161,6 +203,24 @@ async function submit() {
           >
             提交标注
           </ElButton>
+          <template v-else-if="row.can_review && row.annotation_revision">
+            <ElButton
+              link
+              type="success"
+              :loading="reviewingRevisionId === row.annotation_revision.annotation_revision_id"
+              @click="review(row as AnnotationTask, 'APPROVED')"
+            >
+              通过
+            </ElButton>
+            <ElButton
+              link
+              type="danger"
+              :disabled="reviewingRevisionId !== null"
+              @click="review(row as AnnotationTask, 'REJECTED')"
+            >
+              不通过
+            </ElButton>
+          </template>
           <span v-else>—</span>
         </template>
       </ElTableColumn>

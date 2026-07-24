@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createAnnotationTask, listAnnotationTasks, submitAnnotationRevision } from '@/api/annotation'
+import {
+  createAnnotationTask,
+  listAnnotationTasks,
+  reviewAnnotationRevision,
+  submitAnnotationRevision,
+} from '@/api/annotation'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
@@ -87,6 +92,37 @@ describe('annotation task API', () => {
           note: '合成验证',
         }),
         headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-revision-idempotency-0001' }),
+      }),
+    )
+  })
+
+  it('records an administrator review with a fresh idempotency key', async () => {
+    const revisionId = '30000000-0000-4000-8000-000000000004'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotation_review_id: '30000000-0000-4000-8000-000000000005',
+        project_id: projectId,
+        annotation_revision_id: revisionId,
+        decision: 'APPROVED',
+        review_note: null,
+        reviewed_by: 'local-synthetic-admin',
+        reviewed_at: '2026-07-24T00:00:00Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('annotation-review-idempotency-0001') })
+
+    await expect(reviewAnnotationRevision(projectId, revisionId, 'APPROVED')).resolves.toMatchObject({
+      annotation_revision_id: revisionId,
+      decision: 'APPROVED',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/review`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ decision: 'APPROVED' }),
+        headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-review-idempotency-0001' }),
       }),
     )
   })

@@ -122,6 +122,10 @@ class AnnotationRevision {
 		return this.documentSha256;
 	}
 
+	Map<String, Object> getAnnotationDocument() {
+		return this.annotationDocument;
+	}
+
 	String getSubmittedBy() {
 		return this.submittedBy;
 	}

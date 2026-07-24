@@ -77,7 +77,7 @@
 | FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API | annotation_task、annotation_revision | `ASSIGNED → SUBMITTED` 只允许受理人；重复提交不覆盖既有修订 | PI |
 | FR-014 标注指南绑定 | P0 | `annotationreview` | guideline versions | annotation_guideline_version | 提交 revision 可追溯到实际使用的指南摘要 | D1 |
 | FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation progress query | annotation_progress_projection | 与任务事实表对账一致；统计不反向写业务表 | D1 |
-| FR-016 基础复核 | P0 | `annotationreview` | review command API | review_record、annotation_revision | 当前只产生不可变 revision；独立复核尚未实现 | PI |
+| FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision | 独立项目管理员记录一次通过/不通过；标注提交者不能自审 | PI |
 | FR-017 退回重标并保留历史 | P0 | `annotationreview` | rework command | annotation_task、annotation_revision、review_record | 返工创建新 revision；旧 revision 不可覆盖 | D1 |
 | FR-018 基础一致性检查 | P0 | `annotationreview`、`qualitycleaning` | validation job/result | annotation_validation_result、cleaning_result | 时间越界、非法类别、隐私缺失等规则有稳定错误码 | D1 |
 | FR-019 抽检比例和全检策略 | P1 | `annotationreview` | sampling policy | review_sampling_policy | 规则版本化并能解释任务为何被抽中 | DEFERRED |
@@ -124,7 +124,7 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-012 当前 `PI` 证据和边界：Flyway V28/V30、OpenAPI、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；受分配成员可把 `ASSIGNED` 任务提交为一次不可变的 `annotation-document.v1` 时间段 revision，服务端保存 SHA-256 和审计。当前不含返工、独立复核、对象框或视频时长上界校验。
+FR-012/FR-016 当前 `PI` 证据和边界：Flyway V28/V30/V31、OpenAPI、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；受分配成员可把 `ASSIGNED` 任务提交为一次不可变的 `annotation-document.v1` 时间段 revision，服务端保存 SHA-256 和审计。另一名项目管理员可对该 revision 记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审。当前不含返工、对象框、抽样复核或视频时长上界校验。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
 
