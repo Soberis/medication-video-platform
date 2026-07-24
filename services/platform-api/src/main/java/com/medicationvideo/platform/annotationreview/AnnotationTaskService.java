@@ -65,7 +65,8 @@ class AnnotationTaskService {
 				.toList())
 				.stream().collect(java.util.stream.Collectors.toMap(
 						AnnotationRevision::getAnnotationTaskId,
-						revision -> revision));
+						revision -> revision,
+						(left, right) -> left.getRevisionNumber() >= right.getRevisionNumber() ? left : right));
 		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty()
 				? Map.of()
 				: this.reviewRepository.findAllByAnnotationRevisionIdIn(revisionsByTaskId.values()
@@ -198,8 +199,12 @@ class AnnotationTaskService {
 		}
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		task.submit(now);
+		var revisionNumber = this.revisionRepository.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(
+				task.getAnnotationTaskId())
+				.map(revision -> revision.getRevisionNumber() + 1)
+				.orElse(1);
 		var revision = this.revisionRepository.saveAndFlush(AnnotationRevision.submit(
-				task, document, documentSha256, actorId, idempotencyKey, now));
+				task, revisionNumber, document, documentSha256, actorId, idempotencyKey, now));
 		this.repository.saveAndFlush(task);
 		this.auditRecorder.record(new AuditEventCommand(
 				now,
@@ -262,6 +267,14 @@ class AnnotationTaskService {
 					409);
 		}
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var task = this.repository.findForUpdate(projectId, revision.getAnnotationTaskId())
+				.orElseThrow(AnnotationTaskService::taskNotFound);
+		if (task.getStatus() != AnnotationTaskStatus.SUBMITTED) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_REVISION_NOT_CURRENT",
+					"Only the current submitted annotation revision can be reviewed.",
+					409);
+		}
 		var review = this.reviewRepository.saveAndFlush(AnnotationReview.record(
 				revision,
 				request.decision(),
@@ -269,6 +282,10 @@ class AnnotationTaskService {
 				actorId,
 				idempotencyKey,
 				now));
+		if (review.getDecision() == AnnotationReviewDecision.REJECTED) {
+			task.returnForRework(now);
+			this.repository.saveAndFlush(task);
+		}
 		this.auditRecorder.record(new AuditEventCommand(
 				now,
 				AuditActorType.USER,
@@ -286,7 +303,8 @@ class AnnotationTaskService {
 				Map.of(
 						"annotation_revision_id", revision.getAnnotationRevisionId().toString(),
 						"annotation_task_id", revision.getAnnotationTaskId().toString(),
-						"decision", review.getDecision().name())));
+						"decision", review.getDecision().name(),
+						"reopened_for_rework", Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED))));
 		return AnnotationReviewResponse.from(review);
 	}
 

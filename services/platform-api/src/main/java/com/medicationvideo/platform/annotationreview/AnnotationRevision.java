@@ -58,6 +58,7 @@ class AnnotationRevision {
 			UUID projectId,
 			UUID annotationTaskId,
 			UUID clipAssetId,
+			int revisionNumber,
 			Map<String, Object> annotationDocument,
 			String documentSha256,
 			String submittedBy,
@@ -67,7 +68,7 @@ class AnnotationRevision {
 		this.projectId = projectId;
 		this.annotationTaskId = annotationTaskId;
 		this.clipAssetId = clipAssetId;
-		this.revisionNumber = 1;
+		this.revisionNumber = revisionNumber;
 		this.annotationSchemaVersion = "annotation-document.v1";
 		this.annotationDocument = Map.copyOf(annotationDocument);
 		this.documentSha256 = documentSha256;
@@ -78,6 +79,7 @@ class AnnotationRevision {
 
 	static AnnotationRevision submit(
 			AnnotationTask task,
+			int revisionNumber,
 			Map<String, Object> annotationDocument,
 			String documentSha256,
 			String submittedBy,
@@ -87,6 +89,7 @@ class AnnotationRevision {
 				task.getProjectId(),
 				task.getAnnotationTaskId(),
 				task.getClipAssetId(),
+				revisionNumber,
 				annotationDocument,
 				documentSha256,
 				submittedBy,

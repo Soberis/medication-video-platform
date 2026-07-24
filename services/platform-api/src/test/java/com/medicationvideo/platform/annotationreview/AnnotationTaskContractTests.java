@@ -281,6 +281,42 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void rejectedReviewReturnsTaskForAnImmutableNextRevision() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-rework-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var firstRevisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-first-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":200,\"label\":\"错误标签\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var firstRevisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+				firstRevisionResponse, "$.annotation_revision_id"));
+
+		review(ADMIN_TOKEN, firstRevisionId, "annotation-review-reject-" + UUID.randomUUID(),
+				"{\"decision\":\"REJECTED\"}")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.decision").value("REJECTED"));
+		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].can_submit").value(true))
+				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("REJECTED"));
+
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-second-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"拿取药品\"}]}")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.revision_number").value(2));
+		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", firstRevisionId));
+	}
+
+	@Test
 	void membersOnlySeeTasksAssignedToThemWhileAdministratorsSeeTheProjectQueue() throws Exception {
 		var assignedToMember = insertClipAsset(PROJECT_ID, "INGESTED", false);
 		var assignedToAdmin = insertClipAsset(PROJECT_ID, "INGESTED", false);

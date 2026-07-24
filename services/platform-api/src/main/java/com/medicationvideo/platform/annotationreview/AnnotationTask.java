@@ -129,6 +129,17 @@ class AnnotationTask {
 		this.status = AnnotationTaskStatus.SUBMITTED;
 		this.updatedAt = now;
 	}
+
+	void returnForRework(Instant now) {
+		if (this.status != AnnotationTaskStatus.SUBMITTED) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_TASK_NOT_SUBMITTED",
+					"Only a submitted annotation task can be returned for rework.",
+					409);
+		}
+		this.status = AnnotationTaskStatus.ASSIGNED;
+		this.updatedAt = now;
+	}
 }
 
 enum AnnotationTaskStatus {

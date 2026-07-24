@@ -82,6 +82,11 @@ function openSubmission(task: AnnotationTask) {
   note.value = ''
 }
 
+function taskStatusLabel(task: AnnotationTask) {
+  if (task.status === 'SUBMITTED') return '已提交'
+  return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '已分配'
+}
+
 function addSegment() {
   segments.value = [...segments.value, { start_ms: 0, end_ms: 1000, label: '' }]
 }
@@ -120,7 +125,7 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
     await ElMessageBox.confirm(
       approved
         ? '确认该时间段标注与视频画面一致，并将其作为通过的人工标注？'
-        : '确认该标注不符合要求？本次将记录为不通过，返工功能将在后续启用。',
+        : '确认该标注不符合要求？本次将记录为不通过，并退回给标注人修改。',
       approved ? '通过标注复核' : '标注复核不通过',
       { type: approved ? 'success' : 'warning', confirmButtonText: approved ? '确认通过' : '确认不通过', cancelButtonText: '取消' },
     )
@@ -172,7 +177,7 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
       <ElTableColumn label="状态" width="130">
         <template #default="{ row }">
           <ElTag :type="row.status === 'ASSIGNED' ? 'warning' : 'success'">
-            {{ row.status === 'ASSIGNED' ? '已分配' : '已提交' }}
+            {{ taskStatusLabel(row as AnnotationTask) }}
           </ElTag>
         </template>
       </ElTableColumn>

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.36.0
+  version: 0.37.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -23,7 +23,7 @@ info:
     member for human training-data review after an explicitly requested media ingest, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
     assign one auditable annotation task for a qualified video, let its assignee submit one immutable
-    time-range revision, and let an independent project administrator record one review decision, and create and read project-scoped media probe jobs that freeze the input
+    time-range revision, let an independent project administrator record one review decision and return a rejected task for a later immutable revision, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -2648,8 +2648,8 @@ paths:
       description: >-
         Requires an ACTIVE ADMIN membership. The reviewer must differ from the revision submitter;
         the video must remain undeleted, INGESTED and human-qualified. P0 records one immutable
-        APPROVED or REJECTED decision. A rejection blocks later training-data admission but does not
-        reopen the task or create a replacement revision; rework is a later capability.
+        APPROVED or REJECTED decision. A rejection returns the task to its assignee; their next
+        immutable revision receives the next revision number. Older revisions and reviews remain immutable.
       security:
         - sessionCookie: []
       parameters:
@@ -5266,7 +5266,7 @@ components:
           format: uuid
         revision_number:
           type: integer
-          const: 1
+          minimum: 1
         annotation_schema_version:
           type: string
           const: annotation-document.v1
@@ -5295,7 +5295,7 @@ components:
           format: uuid
         revision_number:
           type: integer
-          const: 1
+          minimum: 1
         annotation_document:
           type: object
           additionalProperties: false

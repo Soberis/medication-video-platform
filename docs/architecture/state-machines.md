@@ -319,11 +319,11 @@ ASSIGNED → SUBMITTED
 
 ```text
 SUBMITTED revision → APPROVED review
-                   → REJECTED review
+                   → REJECTED review → task ASSIGNED → next revision
 ```
 
 - 复核是独立于任务状态的一次不可变事实：只有项目 ADMIN 可以创建，且 `reviewed_by != submitted_by`。
-- 当前只支持每个 revision 一条复核决定。`REJECTED` 阻断后续训练数据准入；返工创建新 revision 是后续能力，不在本切片重开任务。
+- 当前只支持每个 revision 一条复核决定。`REJECTED` 会把同一任务退回受分配人；再次提交产生下一个 revision，旧 revision 和 review 永不覆盖。
 
 ## 11. AI 候选状态（P1）
 

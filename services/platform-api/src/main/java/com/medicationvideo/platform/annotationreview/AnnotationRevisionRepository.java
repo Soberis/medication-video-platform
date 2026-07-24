@@ -21,6 +21,8 @@ interface AnnotationRevisionRepository extends JpaRepository<AnnotationRevision,
 
 	List<AnnotationRevision> findAllByAnnotationTaskIdIn(Collection<UUID> annotationTaskIds);
 
+	Optional<AnnotationRevision> findTopByAnnotationTaskIdOrderByRevisionNumberDesc(UUID annotationTaskId);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select revision from AnnotationRevision revision
