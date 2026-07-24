@@ -8,8 +8,6 @@ import {
   ElEmpty,
   ElMessage,
   ElMessageBox,
-  ElTable,
-  ElTableColumn,
   ElTag,
 } from 'element-plus'
 import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
@@ -157,11 +155,10 @@ onUnmounted(() => activeRequest?.abort())
 </script>
 
 <template>
-  <section class="page-heading" aria-labelledby="projects-title">
+  <section class="page-heading project-page-heading" aria-labelledby="projects-title">
     <div>
-      <p class="app-eyebrow">数据与权限边界</p>
-      <h1 id="projects-title">授权项目</h1>
-      <p>选择一个已加入的项目，再查看该项目的配药操作、视频和文件夹。</p>
+      <h1 id="projects-title">项目</h1>
+      <p>选择项目，继续管理配药操作、视频和文件夹。</p>
     </div>
     <div class="detail-actions">
       <ElButton :loading="loadState === 'loading'" @click="loadProjects">刷新</ElButton>
@@ -178,40 +175,39 @@ onUnmounted(() => activeRequest?.abort())
     <ElButton @click="loadProjects">重试</ElButton>
   </div>
 
-  <ElCard v-if="projects.length > 0" class="table-card" shadow="never">
-    <ElTable :data="projects" row-key="project_id">
-      <ElTableColumn prop="display_name" label="项目" min-width="220" />
-      <ElTableColumn label="我的角色" width="120">
-        <template #default="{ row }">
-          <ElTag :type="row.current_role === 'ADMIN' ? 'primary' : 'info'">
-            {{ row.current_role === 'ADMIN' ? '管理员' : '普通用户' }}
+  <ElCard v-if="projects.length > 0" class="project-list-card" shadow="never">
+    <ul class="project-list" aria-label="已加入的项目">
+      <li v-for="project in projects" :key="project.project_id" class="project-list-item">
+        <div class="project-list-name">
+          <strong>{{ project.display_name }}</strong>
+          <span>我的角色</span>
+          <ElTag :type="project.current_role === 'ADMIN' ? 'primary' : 'info'">
+            {{ project.current_role === 'ADMIN' ? '管理员' : '普通用户' }}
           </ElTag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="190" fixed="right">
-        <template #default="{ row }">
+        </div>
+        <div class="project-list-actions">
           <RouterLink
             class="text-link"
-            :to="{ name: 'session-list', params: { projectId: row.project_id } }"
+            :to="{ name: 'session-list', params: { projectId: project.project_id } }"
           >
             进入项目
           </RouterLink>
-          <ElDropdown v-if="row.current_role === 'ADMIN'" trigger="click">
-            <ElButton link type="primary">更多</ElButton>
+          <ElDropdown v-if="project.current_role === 'ADMIN'" trigger="click">
+            <ElButton link type="primary">管理</ElButton>
             <template #dropdown>
               <ElDropdownMenu>
-                <ElDropdownItem :disabled="renamingProjectId === row.project_id" @click="renameDataProject(row as DataProject)">
+                <ElDropdownItem :disabled="renamingProjectId === project.project_id" @click="renameDataProject(project)">
                   修改名称
                 </ElDropdownItem>
-                <ElDropdownItem :disabled="archivingProjectId === row.project_id" divided @click="archiveDataProject(row as DataProject)">
+                <ElDropdownItem :disabled="archivingProjectId === project.project_id" divided @click="archiveDataProject(project)">
                   归档项目
                 </ElDropdownItem>
               </ElDropdownMenu>
             </template>
           </ElDropdown>
-        </template>
-      </ElTableColumn>
-    </ElTable>
+        </div>
+      </li>
+    </ul>
   </ElCard>
 
   <ElEmpty

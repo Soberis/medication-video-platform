@@ -10,7 +10,7 @@ Sprint 0 已完成，正在交付 P0 数据审核、标注与清洗闭环。
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
 - PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
 - Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
-- 已完成项目内视频人工审核播放：ACTIVE 项目 ADMIN/MEMBER 可在媒体检测通过后显式申请短期只读地址，签发会审计且 URL 不落库；P0 不再运行独立隐私评估或隔离子系统，意外敏感内容按质量不合格处理并由管理员软删除。
+- 已完成项目内视频人工查看：ACTIVE 项目 ADMIN/MEMBER 可在上传完整性校验完成后显式申请短期只读地址，媒体检测不阻断查看；签发会审计且 URL 不落库。P0 不再运行独立隐私评估或隔离子系统，意外敏感内容按质量不合格处理并由管理员软删除。
 - 项目管理员可以修改项目名称或归档项目；归档从日常列表移除并停止后续访问，但不物理删除视频、对象存储对象或审计。视频删除同样是可审计软删除；物理销毁不属于 P0 用户功能。
 - 已完成最小人工质量判断、标注、独立复核与返工：项目成员可对已入库视频记录合格、不合格或需复核及固定原因；管理员只能为合格视频创建并分配一个标注任务；受分配成员可提交时间段标注与可选说明；另一名项目管理员可记录一次通过/不通过决定。不通过会把任务退回受分配成员，下一次提交产生新 revision；所有提交和复核都保留审计。对象框标注尚未启用。
 
@@ -69,6 +69,7 @@ cd C:\Dev\Projects\medication-video-platform
 .\scripts\stop-local.ps1                # 停止脚本启动的后端/Worker 和本地容器，保留数据卷
 .\scripts\stop-local.ps1 -KeepInfrastructure
 .\scripts\start-local.ps1 -SkipWorker   # 仅做 API/Web 元数据开发时显式跳过 Worker
+.\scripts\start-local.ps1 -RestartApi   # 仅重启脚本启动的 Core API；保留前端、Worker 与容器
 ```
 
 如果 8080 或 5173 是此前手工启动的进程，先用 `status-local.ps1` 确认；只有明确要结束它时才执行 `stop-local.ps1 -IncludeListeningApps`。

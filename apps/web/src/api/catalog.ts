@@ -172,7 +172,6 @@ const errorMessages: Record<string, string> = {
   PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
-  PLAYBACK_NOT_READY: '视频尚未完成媒体检测，暂不能播放。',
   CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
   PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',

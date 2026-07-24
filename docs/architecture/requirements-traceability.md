@@ -49,7 +49,7 @@
 | FR-004 元数据必填校验 | P0 | `assetcapture` | `capture-session-metadata-v1`；CaptureSession ingest | capture_session、camera_set_snapshot、camera_stream | 缺字段阻断；服务器 CameraSet 对账；原子建档 | I |
 | FR-005 上传批次批量状态变更 | P0 | `assetcapture` | batch command API | upload_batch、audit_event | 部分失败返回逐项结果，不允许静默跳过 | D1 |
 | FR-006 资产列表和常用筛选 | P0 | `assetcapture`、只读投影 | asset/session query API | 资产检索投影 | 规定数据量与并发下第一页 P95 不超过 3 秒 | PI |
-| FR-007 资产详情、播放和状态历史 | P0 | `assetcapture`、`governance` | clip/session detail；playback grant | clip_asset、audit_event | 项目成员只能播放已完成媒体检测且未删除的资产；状态历史完整 | PI |
+| FR-007 资产详情、播放和状态历史 | P0 | `assetcapture`、`governance` | clip/session detail；playback grant | clip_asset、audit_event | 项目成员只能播放已完成上传完整性校验、未删除的受支持媒体；技术检测不阻断人工查看，状态历史完整 | PI |
 | FR-008 裁剪、抽帧、预览和媒体预处理 | P0 | `mediaprivacy` | media job API；`MediaJobRequestedV1`/result | media_job、asset_variant、media_report | 派生资产可追溯到 raw 摘要、配方和软件摘要 | PI |
 | FR-009 批量业务标签 | P0 | `assetcapture` | asset tag command API | asset_tag、audit_event | 幂等添加/移除；跨项目和越权操作被拒绝 | D1 |
 | FR-010 隔离区 | P1 | `qualitycleaning`、`governance` | 出现真实合规需求后重新设计 | 历史 quarantine_record 仅保留迁移 | P0 通过质量 REJECTED 与管理员软删除处理 | DEFERRED |

@@ -2400,7 +2400,8 @@ paths:
       summary: Issue a short-lived video address for internal data review
       description: >-
         Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
-        explicit project. The asset must be an undeleted, INGESTED video/mp4. The signed URL is
+        explicit project. The asset must be an undeleted video/mp4 whose upload completed its
+        integrity checks; media probing is not a playback prerequisite. The signed URL is
         returned only in this no-store response and is never persisted or written to audit
         details. The audit record proves grant issuance, not byte-level browser viewing. Playback
         supports human training-data review and does not itself approve quality, annotation,
@@ -2451,7 +2452,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "409":
-          description: The asset is deleted, not INGESTED or is not an MP4 video.
+          description: The asset is deleted or is not an MP4 video.
           content:
             application/problem+json:
               schema:

@@ -64,11 +64,20 @@ describe('catalog views', () => {
     )
   }, 15_000)
 
-  it('explains the pending media check without exposing storage or using an identifier as the page title', async () => {
+  it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({
+      vi.fn().mockImplementation((input: string | URL | Request) => {
+        if (String(input).endsWith(`/api/v1/projects/${projectId}`)) {
+          return Promise.resolve(jsonResponse({
+            project_id: projectId,
+            display_name: '合成测试项目',
+            status: 'ACTIVE',
+            current_role: 'MEMBER',
+            created_at: '2026-07-15T01:03:03Z',
+          }))
+        }
+        return Promise.resolve(jsonResponse({
           clip_asset_id: assetId,
           batch_id: '60000000-0000-4000-8000-000000000001',
           source_upload_file_id: '80000000-0000-4000-8000-000000000001',
@@ -81,8 +90,8 @@ describe('catalog views', () => {
           session_binding: null,
           created_at: '2026-07-15T01:03:03Z',
           updated_at: '2026-07-15T01:03:03Z',
-        }),
-      ),
+        }))
+      }),
     )
     const router = testRouter(
       `/projects/${projectId}/assets/${assetId}`,
@@ -94,11 +103,12 @@ describe('catalog views', () => {
     await flushPromises()
 
     expect(wrapper.get('h1').text()).toBe('视频详情')
-    expect(wrapper.text()).toContain('媒体检测尚未开始')
-    expect(wrapper.text()).toContain('媒体检测完成后，项目成员即可播放并判断数据质量')
+    expect(wrapper.text()).toContain('可以直接查看视频')
+    expect(wrapper.text()).toContain('视频已完成上传完整性校验')
     expect(wrapper.text()).toContain('90000000-0000-4000-8000-000000000001')
     expect(wrapper.text()).toContain('尚未绑定到 CaptureSession')
     expect(wrapper.text()).toContain('未分类')
+    expect(wrapper.findAll('button').some((button) => button.text() === '播放视频')).toBe(true)
     expect(wrapper.find('video').exists()).toBe(false)
     expect(wrapper.html()).not.toContain('object_key')
     expect(wrapper.html()).not.toContain('storage_bucket')
@@ -324,7 +334,7 @@ describe('catalog views', () => {
     expect(wrapper.text()).toContain('符合训练数据要求')
   })
 
-  it('lets a project member explicitly start media detection for an uploaded video', async () => {
+  it('lets a project member play an uploaded video and separately start media detection', async () => {
     const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
       const url = String(input)
       if (url.endsWith(`/api/v1/projects/${projectId}`)) {
@@ -334,6 +344,15 @@ describe('catalog views', () => {
           status: 'ACTIVE',
           current_role: 'MEMBER',
           created_at: '2026-07-15T01:03:03Z',
+        }))
+      }
+      if (url.endsWith('/playback-grants')) {
+        return Promise.resolve(jsonResponse({
+          grant_id: 'b0000000-0000-4000-8000-000000000001',
+          purpose: 'DATA_REVIEW',
+          media_url: 'https://storage.invalid/review.mp4?signature=synthetic',
+          expires_at: new Date(Date.now() + 300_000).toISOString(),
+          content_type: 'video/mp4',
         }))
       }
       if (url.endsWith('/media-probe-jobs')) {
@@ -372,15 +391,20 @@ describe('catalog views', () => {
     const wrapper = mount(AssetDetailView, { global: { plugins: [router, pinia] } })
     await flushPromises()
 
-    await wrapper.findAll('button').find((button) => button.text() === '开始媒体检测')!.trigger('click')
+    expect(wrapper.findAll('button').some((button) => button.text() === '播放视频')).toBe(true)
+    await wrapper.findAll('button').find((button) => button.text() === '播放视频')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('video').exists()).toBe(true)
+
+    await wrapper.findAll('button').find((button) => button.text() === '检测媒体信息')!.trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${assetId}/media-probe-jobs`,
       expect.objectContaining({ method: 'POST' }),
     )
-    expect(wrapper.text()).toContain('媒体检测已提交')
-    expect(wrapper.findAll('button').some((button) => button.text() === '播放视频')).toBe(false)
+    expect(wrapper.text()).toContain('媒体检测已排队')
+    expect(wrapper.find('video').exists()).toBe(true)
   })
 
   it('lets an administrator create one task only after the video is human-qualified', async () => {

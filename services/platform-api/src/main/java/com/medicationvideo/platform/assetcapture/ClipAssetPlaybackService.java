@@ -62,13 +62,6 @@ class ClipAssetPlaybackService {
 					409,
 					false);
 		}
-		if (asset.getStatus() != ClipAssetStatus.INGESTED) {
-			throw new ClipAssetPlaybackException(
-					"PLAYBACK_NOT_READY",
-					"The clip asset must complete media ingest before playback.",
-					409,
-					false);
-		}
 		if (!MP4_CONTENT_TYPE.equalsIgnoreCase(asset.getContentType())) {
 			throw new ClipAssetPlaybackException(
 					"PLAYBACK_UNSUPPORTED_MEDIA",

@@ -449,12 +449,12 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin: 28px 0 20px;
+  margin: 24px 0 18px;
 }
 
 .page-heading h1 {
   margin: 6px 0 0;
-  font-size: clamp(28px, 3vw, 36px);
+  font-size: clamp(26px, 2.6vw, 34px);
   letter-spacing: -0.025em;
   line-height: 1.2;
 }
@@ -464,6 +464,69 @@ code {
   margin: 10px 0 0;
   color: #5c687b;
   line-height: 1.65;
+}
+
+.project-page-heading,
+.project-list-card {
+  max-width: 960px;
+}
+
+.project-list-card {
+  margin-top: 18px;
+}
+
+.project-list-card > .el-card__body {
+  padding: 0;
+}
+
+.project-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 76px;
+  padding: 16px 20px;
+}
+
+.project-list-item + .project-list-item {
+  border-top: 1px solid #e8edf4;
+}
+
+.project-list-name,
+.project-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.project-list-name strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-list-name > span {
+  color: #98a2b3;
+  font-size: 13px;
+}
+
+.project-list-actions {
+  flex: none;
+}
+
+.project-list-actions .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 .filter-card,
@@ -669,16 +732,26 @@ code {
 
 .review-video {
   display: block;
-  width: min(100%, 960px);
-  max-height: 70vh;
-  margin: 1rem 0;
+  width: min(100%, 1040px);
+  max-height: min(68vh, 760px);
+  margin: 18px 0 0;
+  border: 1px solid #27364f;
   background: #101828;
-  border-radius: 0.5rem;
+  border-radius: 10px;
 }
 
 .playback-primary-action,
 .playback-feedback {
   margin-top: 16px;
+}
+
+.media-probe-action {
+  margin: 16px 0 0 10px;
+}
+
+.media-probe-action + .form-hint {
+  display: inline;
+  margin-left: 10px;
 }
 
 .review-actions {
@@ -1068,6 +1141,7 @@ code {
   .local-upload-actions,
   .asset-classification-actions,
   .quality-review-actions,
+  .project-list-item,
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
@@ -1075,6 +1149,10 @@ code {
 
   .asset-classification-actions .el-select {
     width: 100%;
+  }
+
+  .project-list-name {
+    flex-wrap: wrap;
   }
 
   .quality-review-actions .el-select,

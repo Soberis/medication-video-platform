@@ -66,10 +66,10 @@ describe('App', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('配药视频数据管理平台')
-    expect(wrapper.text()).toContain('授权项目')
+    expect(wrapper.text()).toContain('选择项目，继续管理配药操作、视频和文件夹。')
     expect(wrapper.text()).toContain('合成测试项目')
     expect(wrapper.findAll('h1')).toHaveLength(1)
-    expect(wrapper.get('h1').text()).toBe('授权项目')
+    expect(wrapper.get('h1').text()).toBe('项目')
     expect(wrapper.findAll('.nav-unavailable')).toHaveLength(4)
     expect(wrapper.findAll('.router-link-active')).toHaveLength(1)
     expect(wrapper.text()).toContain('管理')
@@ -119,7 +119,7 @@ describe('App', () => {
     const wrapper = mount(ProjectListView, { global: { stubs: { RouterLink: true } } })
     await flushPromises()
 
-    expect(wrapper.findAll('button').filter((button) => button.text() === '更多')).toHaveLength(1)
+    expect(wrapper.findAll('button').filter((button) => button.text() === '管理')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('改名')
     expect(wrapper.text()).not.toContain('归档')
   })

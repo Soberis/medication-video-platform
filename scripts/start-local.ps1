@@ -3,6 +3,7 @@ param(
     [switch]$Worker,
     [switch]$SkipWorker,
     [switch]$InfrastructureOnly,
+    [switch]$RestartApi,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
@@ -112,6 +113,26 @@ function Test-ManagedProcessRunning {
     return $null -ne (Get-Process -Id $managedProcesses[$Key].processId -ErrorAction SilentlyContinue)
 }
 
+function Restart-ManagedApi {
+    if (-not $managedProcesses.Contains('api')) {
+        if (Test-TcpPortInUse $apiPort) {
+            throw "Core API port $apiPort is occupied by an unmanaged process. Use status-local.ps1 to inspect it; this script will not terminate it."
+        }
+        return
+    }
+
+    $processId = [int]$managedProcesses.api.processId
+    if ($null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+        & taskkill.exe /PID $processId /T /F | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not stop the managed Core API process (PID $processId)."
+        }
+        Write-Host "Stopped managed Core API (PID $processId)." -ForegroundColor Yellow
+    }
+    $managedProcesses.Remove('api')
+    Save-ManagedProcesses
+}
+
 Import-LocalEnvironment $exampleEnvFile
 if (Test-Path -LiteralPath $localEnvFile) {
     Import-LocalEnvironment $localEnvFile
@@ -157,6 +178,10 @@ $apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
 $webPort = [int]($env:WEB_PORT ?? '5173')
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
+
+if ($RestartApi) {
+    Restart-ManagedApi
+}
 
 if ($InfrastructureOnly) {
     Write-Host "Infrastructure is ready. Run .\scripts\status-local.ps1 to inspect it." -ForegroundColor Cyan

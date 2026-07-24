@@ -101,8 +101,7 @@ const canDelete = computed(() => projectRole.value === 'ADMIN')
 const canPlay = computed(
   () =>
     projectRole.value !== null &&
-    detail.value?.status === 'INGESTED' &&
-    detail.value.content_type === 'video/mp4',
+    detail.value?.content_type === 'video/mp4',
 )
 const canRequestMediaProbe = computed(
   () => projectRole.value !== null && detail.value?.status === 'UPLOADED' && !mediaProbeSubmitted.value,
@@ -139,39 +138,39 @@ const qualityTagType = computed(() => {
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 const playbackAvailability = computed(() => {
   if (!detail.value) return null
+  if (canPlay.value) {
+    return {
+      title: '可以直接查看视频',
+      description: '视频已完成上传完整性校验。点击播放后获取短期只读地址；媒体检测不影响人工查看，也不会自动改变质量结论。',
+      type: 'success' as const,
+    }
+  }
   if (mediaProbeSubmitted.value) {
     return {
       title: '媒体检测已提交',
-      description: '任务正在队列中等待 Worker 执行。检测完成后，此页会显示“已入库”并开放播放。',
+      description: '任务正在队列中等待 Worker 执行。你仍可直接播放视频；检测结果用于补充时长、编码和完整解码等技术事实。',
       type: 'warning' as const,
     }
   }
   if (detail.value.status === 'UPLOADED') {
     return {
       title: '媒体检测尚未开始',
-      description: '视频已经保存。媒体检测完成后，项目成员即可播放并判断数据质量。',
+      description: '视频已经保存，可直接人工查看。媒体检测用于确认时长、编码和完整解码等技术事实。',
       type: 'info' as const,
     }
   }
   if (detail.value.status === 'INGESTING') {
     return {
       title: '正在进行媒体检测',
-      description: '平台正在检查视频是否可读取和完整解码，请稍后刷新状态。',
+      description: '平台正在检查视频是否可读取和完整解码；这不影响你直接人工查看。',
       type: 'warning' as const,
     }
   }
   if (detail.value.status === 'INGEST_FAILED') {
     return {
       title: '媒体检测未通过',
-      description: '该视频暂不能播放或进入后续流程，请先查看媒体报告并处理失败原因。',
+      description: '技术检测未完成，但仍可人工查看并决定是否保留。该视频不能进入标注或训练数据流程。',
       type: 'error' as const,
-    }
-  }
-  if (canPlay.value) {
-    return {
-      title: '可以播放并审核数据质量',
-      description: '点击后获取短期只读播放地址。播放用于判断视频是否适合标注和训练，不会自动改变质量状态。',
-      type: 'success' as const,
     }
   }
   return {
@@ -550,7 +549,7 @@ function handlePlaybackError() {
     />
 
     <ElCard class="detail-card playback-card" shadow="never">
-      <template #header><strong>视频审核</strong></template>
+      <template #header><strong>视频查看</strong></template>
       <ElAlert
         v-if="!playbackGrant && playbackAvailability"
         :title="playbackAvailability.title"
@@ -559,17 +558,6 @@ function handlePlaybackError() {
         :closable="false"
         show-icon
       />
-      <template v-if="canRequestMediaProbe">
-        <ElButton
-          class="playback-primary-action"
-          type="primary"
-          :loading="isRequestingMediaProbe"
-          @click="requestMediaProbe"
-        >
-          开始媒体检测
-        </ElButton>
-        <p v-if="mediaProbeMessage" class="form-hint">{{ mediaProbeMessage }}</p>
-      </template>
       <ElButton
         v-if="canPlay && !playbackGrant"
         class="playback-primary-action"
@@ -579,7 +567,7 @@ function handlePlaybackError() {
       >
         播放视频
       </ElButton>
-      <template v-else-if="playbackGrant">
+      <template v-if="playbackGrant">
         <p class="form-hint">
           本次只读地址将于 {{ formatDateTime(playbackGrant.expires_at) }} 到期。平台记录授权行为，但不记录逐帧观看行为。
         </p>
@@ -615,6 +603,18 @@ function handlePlaybackError() {
           <ElButton plain @click="closePlayback">关闭视频</ElButton>
         </div>
       </template>
+      <template v-if="canRequestMediaProbe">
+        <ElButton
+          class="media-probe-action"
+          plain
+          :loading="isRequestingMediaProbe"
+          @click="requestMediaProbe"
+        >
+          检测媒体信息
+        </ElButton>
+        <p class="form-hint">技术检测会补充时长、编码和完整解码结果，不影响直接查看。</p>
+      </template>
+      <p v-if="mediaProbeMessage" class="form-hint media-probe-message">{{ mediaProbeMessage }}</p>
     </ElCard>
 
     <ElCard class="detail-card" shadow="never">
@@ -639,7 +639,7 @@ function handlePlaybackError() {
         </div>
         <ElAlert
           v-if="detail.status !== 'INGESTED'"
-          title="视频完成媒体检测后才能判断质量"
+          title="可直接查看；技术检测完成后才能记录质量结论"
           type="info"
           :closable="false"
           show-icon

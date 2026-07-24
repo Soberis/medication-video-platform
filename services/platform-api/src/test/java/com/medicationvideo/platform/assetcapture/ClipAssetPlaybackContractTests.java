@@ -66,7 +66,7 @@ class ClipAssetPlaybackContractTests {
 	@Test
 	void activeProjectMembersGetShortLivedDataReviewGrantAndAuditEvidence()
 			throws Exception {
-		var clipAssetId = insertClipAsset("INGESTED", "video/mp4", false);
+		var clipAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
 		var requestId = "playback-grant-" + UUID.randomUUID();
 
 		this.mockMvc.perform(post(
@@ -100,14 +100,19 @@ class ClipAssetPlaybackContractTests {
 	}
 
 	@Test
-	void rejectsDeletedUnprocessedAndUnsupportedAssets() throws Exception {
-		var unprocessedAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
+	void allowsUploadedAndMediaProcessingAssetsButRejectsDeletedAndUnsupportedAssets() throws Exception {
+		var uploadedAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
+		var ingestingAssetId = insertClipAsset("INGESTING", "video/mp4", false);
+		var ingestFailedAssetId = insertClipAsset("INGEST_FAILED", "video/mp4", false);
 		var unsupportedAssetId = insertClipAsset("INGESTED", "video/webm", false);
 		var deletedAssetId = insertClipAsset("INGESTED", "video/mp4", true);
 
-		grant(unprocessedAssetId, MEMBER_TOKEN, "playback-unprocessed-0001")
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("PLAYBACK_NOT_READY"));
+		grant(uploadedAssetId, MEMBER_TOKEN, "playback-uploaded-0001")
+				.andExpect(status().isOk());
+		grant(ingestingAssetId, MEMBER_TOKEN, "playback-ingesting-0001")
+				.andExpect(status().isOk());
+		grant(ingestFailedAssetId, MEMBER_TOKEN, "playback-ingest-failed-0001")
+				.andExpect(status().isOk());
 		grant(unsupportedAssetId, MEMBER_TOKEN, "playback-unsupported-0001")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("PLAYBACK_UNSUPPORTED_MEDIA"));
