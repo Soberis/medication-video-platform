@@ -77,6 +77,7 @@ const isClassifying = ref(false)
 const isRequestingPlayback = ref(false)
 const isRequestingMediaProbe = ref(false)
 const mediaProbeMessage = ref('')
+const mediaProbeSubmitted = ref(false)
 const playbackGrant = shallowRef<ClipAssetPlaybackGrant | null>(null)
 const playbackState = ref<'idle' | 'waiting' | 'ready' | 'error' | 'expired'>('idle')
 const playbackMessage = ref('')
@@ -104,7 +105,7 @@ const canPlay = computed(
     detail.value.content_type === 'video/mp4',
 )
 const canRequestMediaProbe = computed(
-  () => projectRole.value !== null && detail.value?.status === 'UPLOADED',
+  () => projectRole.value !== null && detail.value?.status === 'UPLOADED' && !mediaProbeSubmitted.value,
 )
 const canReviewQuality = computed(() => projectRole.value !== null && detail.value?.status === 'INGESTED')
 const canCreateAnnotationTask = computed(
@@ -138,6 +139,13 @@ const qualityTagType = computed(() => {
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 const playbackAvailability = computed(() => {
   if (!detail.value) return null
+  if (mediaProbeSubmitted.value) {
+    return {
+      title: '媒体检测已提交',
+      description: '任务正在队列中等待 Worker 执行。检测完成后，此页会显示“已入库”并开放播放。',
+      type: 'warning' as const,
+    }
+  }
   if (detail.value.status === 'UPLOADED') {
     return {
       title: '媒体检测尚未开始',
@@ -317,12 +325,15 @@ async function loadQualityReview() {
 }
 
 function refreshPage() {
+  mediaProbeSubmitted.value = false
   void loadDetail()
 }
 
 watch(
   [projectId, assetId],
   () => {
+    mediaProbeSubmitted.value = false
+    mediaProbeMessage.value = ''
     void loadDetail()
     void loadProjectRole()
   },
@@ -414,7 +425,8 @@ async function requestMediaProbe() {
   mediaProbeMessage.value = ''
   try {
     const job = await requestClipAssetMediaProbe(projectId.value, assetId.value)
-    mediaProbeMessage.value = `媒体检测已提交（任务 ${job.media_job_id}）。等待状态变为“已入库”后即可播放。`
+    mediaProbeSubmitted.value = true
+    mediaProbeMessage.value = `媒体检测已排队（任务 ${job.media_job_id}）。请稍后刷新状态。`
   } catch (error) {
     actionErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'MEDIA_PROBE_REQUEST_FAILED'
     actionErrorMessage.value = error instanceof CatalogApiError ? error.message : '媒体检测暂未提交，请稍后重试。'

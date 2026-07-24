@@ -13,9 +13,12 @@ import static org.mockito.Mockito.when;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.ReturnedMessage;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
@@ -63,6 +66,43 @@ class RabbitOutboxRelayTests {
 			invocation.getArgument(3, CorrelationData.class)
 					.getFuture()
 					.complete(new CorrelationData.Confirm(false, "synthetic nack"));
+			return null;
+		}).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
+
+		new RabbitOutboxRelay(
+				store,
+				rabbitTemplate,
+				20,
+				Duration.ofSeconds(30),
+				Duration.ofSeconds(5),
+				Duration.ofSeconds(5)).relay();
+
+		verify(store, never()).markPublished(any(), any(), any());
+		verify(store).release(
+				eq(event.outboxEventId()),
+				eq(event.claimToken()),
+				any(),
+				eq("BROKER_PUBLISH_FAILED"));
+	}
+
+	@Test
+	void releasesReturnedEventInsteadOfMarkingItPublished() {
+		var store = mock(OutboxEventStore.class);
+		var rabbitTemplate = mock(RabbitTemplate.class);
+		var returnsCallback = new AtomicReference<RabbitTemplate.ReturnsCallback>();
+		doAnswer(invocation -> {
+			returnsCallback.set(invocation.getArgument(0, RabbitTemplate.ReturnsCallback.class));
+			return null;
+		}).when(rabbitTemplate).setReturnsCallback(any());
+		var event = event();
+		when(store.claim(eq(20), any(), eq(Duration.ofSeconds(30)))).thenReturn(List.of(event));
+		doAnswer(invocation -> {
+			var correlation = invocation.getArgument(3, CorrelationData.class);
+			var properties = new MessageProperties();
+			properties.setHeader("spring_returned_message_correlation", correlation.getId());
+			returnsCallback.get().returnedMessage(new ReturnedMessage(
+					new Message(new byte[0], properties), 312, "NO_ROUTE", "missing.exchange", "missing.route"));
+			correlation.getFuture().complete(new CorrelationData.Confirm(true, null));
 			return null;
 		}).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
 

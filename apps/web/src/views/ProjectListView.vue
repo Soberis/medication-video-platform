@@ -2,6 +2,9 @@
 import {
   ElButton,
   ElCard,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElEmpty,
   ElMessage,
   ElMessageBox,
@@ -185,10 +188,7 @@ onUnmounted(() => activeRequest?.abort())
           </ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="状态" width="100">
-        <template #default>启用</template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="250" fixed="right">
+      <ElTableColumn label="操作" width="190" fixed="right">
         <template #default="{ row }">
           <RouterLink
             class="text-link"
@@ -196,24 +196,19 @@ onUnmounted(() => activeRequest?.abort())
           >
             进入项目
           </RouterLink>
-          <ElButton
-            v-if="row.current_role === 'ADMIN'"
-            link
-            type="primary"
-            :loading="renamingProjectId === row.project_id"
-            @click="renameDataProject(row as DataProject)"
-          >
-            改名
-          </ElButton>
-          <ElButton
-            v-if="row.current_role === 'ADMIN'"
-            link
-            type="danger"
-            :loading="archivingProjectId === row.project_id"
-            @click="archiveDataProject(row as DataProject)"
-          >
-            归档
-          </ElButton>
+          <ElDropdown v-if="row.current_role === 'ADMIN'" trigger="click">
+            <ElButton link type="primary">更多</ElButton>
+            <template #dropdown>
+              <ElDropdownMenu>
+                <ElDropdownItem :disabled="renamingProjectId === row.project_id" @click="renameDataProject(row as DataProject)">
+                  修改名称
+                </ElDropdownItem>
+                <ElDropdownItem :disabled="archivingProjectId === row.project_id" divided @click="archiveDataProject(row as DataProject)">
+                  归档项目
+                </ElDropdownItem>
+              </ElDropdownMenu>
+            </template>
+          </ElDropdown>
         </template>
       </ElTableColumn>
     </ElTable>

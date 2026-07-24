@@ -119,8 +119,9 @@ describe('App', () => {
     const wrapper = mount(ProjectListView, { global: { stubs: { RouterLink: true } } })
     await flushPromises()
 
-    expect(wrapper.findAll('button').filter((button) => button.text() === '改名')).toHaveLength(1)
-    expect(wrapper.findAll('button').filter((button) => button.text() === '归档')).toHaveLength(1)
+    expect(wrapper.findAll('button').filter((button) => button.text() === '更多')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('改名')
+    expect(wrapper.text()).not.toContain('归档')
   })
 })
 

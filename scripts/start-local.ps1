@@ -130,6 +130,11 @@ $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
 & docker compose @composeEnvironmentArguments -f $composeFile up -d --wait
 if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not become healthy.' }
 
+$rabbitmqPort = [int]($env:RABBITMQ_PORT ?? '5672')
+if (-not (Test-TcpPortInUse $rabbitmqPort)) {
+    throw "RabbitMQ is healthy in Docker but AMQP port $rabbitmqPort is not published to the host. Recreate only RabbitMQ with: docker compose --env-file .env.example --env-file .env -f infra/docker-compose/compose.yaml up -d --force-recreate rabbitmq"
+}
+
 $logDirectory = Join-Path $root 'logs/local'
 New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 $runtimeFile = Join-Path $logDirectory 'managed-processes.json'
