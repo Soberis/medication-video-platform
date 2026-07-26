@@ -298,7 +298,8 @@ else {
 
 $platformPom = Join-Path $root 'services/platform-api/pom.xml'
 if (Test-Path -LiteralPath $platformPom) {
-    $mavenWrapper = Join-Path $root 'services/platform-api/mvnw.cmd'
+    $mavenWrapperName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'mvnw.cmd' } else { 'mvnw' }
+    $mavenWrapper = Join-Path $root "services/platform-api/$mavenWrapperName"
     if (-not (Test-Path -LiteralPath $mavenWrapper)) {
         Add-Failure 'platform-api has pom.xml but Maven Wrapper is missing'
     }
