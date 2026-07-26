@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.37.0
+  version: 0.38.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -22,8 +22,10 @@ info:
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
     member for human training-data review after an explicitly requested media ingest, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
-    assign one auditable annotation task for a qualified video, let its assignee submit one immutable
-    time-range revision, let an independent project administrator record one review decision and return a rejected task for a later immutable revision, and create and read project-scoped media probe jobs that freeze the input
+    assign one auditable annotation task for a qualified video, expose the immutable P0 primary-Step
+    label schema, let an assignee submit one schema-bound non-overlapping time-range revision, let an
+    independent project administrator record one review decision and return a rejected task for a
+    later immutable revision, and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -2462,6 +2464,42 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-label-schema:
+    get:
+      operationId: getCurrentAnnotationLabelSchema
+      tags:
+        - Annotation Tasks
+      summary: Read the current immutable P0 primary-Step label schema
+      description: >-
+        Requires an ACTIVE project membership. The response contains stable label identifiers,
+        Chinese display names, definitions, ordering and the immutable schema digest used by newly
+        created annotation tasks. Clients must submit label_id values rather than display text.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Current published P0 primary-Step label schema.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationLabelSchema"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-tasks:
     get:
       operationId: listAnnotationTasks
@@ -2570,13 +2608,15 @@ paths:
       operationId: submitAnnotationRevision
       tags:
         - Annotation Tasks
-      summary: Submit the first immutable manual annotation revision for an assigned task
+      summary: Submit an immutable manual annotation revision for an assigned task
       description: >-
         Requires an ACTIVE project membership and that the caller is the task assignee. The task's
         video must still be undeleted, INGESTED and human-qualified. P0 accepts a small
-        annotation-document.v1 consisting of one or more labelled time ranges and an optional note;
-        it does not provide drawing tools, AI annotations or independent review in this operation.
-        When a media report exists, each time range must also end within its verified duration.
+        annotation-document.v1 consisting of one or more primary-Step time ranges selected from the
+        immutable schema bound to the task and an optional note. Primary-Step ranges may touch at a
+        boundary but must not overlap. This operation does not provide drawing tools, AI annotations
+        or independent review. When a media report exists, each range must also end within its
+        verified duration.
         The Idempotency-Key safely replays the identical submission without creating another revision.
       security:
         - sessionCookie: []
@@ -2598,7 +2638,7 @@ paths:
               $ref: "#/components/schemas/AnnotationRevisionRequest"
       responses:
         "201":
-          description: Immutable first revision, or the identical idempotent replay.
+          description: Immutable revision for the current submission round, or the identical idempotent replay.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -2611,7 +2651,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnnotationRevision"
         "400":
-          description: The request, time range or identifiers are invalid.
+          description: The request, label, time range, overlap rule or identifiers are invalid.
           content:
             application/problem+json:
               schema:
@@ -5124,6 +5164,66 @@ components:
         content_type:
           type: string
           const: video/mp4
+    AnnotationLabelDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - label_id
+        - display_name
+        - description
+        - sort_order
+      properties:
+        label_id:
+          type: string
+          enum:
+            - prepare_workspace
+            - retrieve_medicine
+            - prepare_dose
+            - final_review
+            - cleanup
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        sort_order:
+          type: integer
+          minimum: 1
+    AnnotationLabelSchema:
+      type: object
+      additionalProperties: false
+      required:
+        - label_schema_id
+        - schema_key
+        - schema_version
+        - schema_digest
+        - layer
+        - labels
+      properties:
+        label_schema_id:
+          type: string
+          format: uuid
+        schema_key:
+          type: string
+          const: medication-primary-step
+        schema_version:
+          type: string
+          const: p0-primary-step.v1
+        schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        layer:
+          type: string
+          const: primary_step
+        labels:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/AnnotationLabelDefinition"
     AnnotationTaskRequest:
       type: object
       additionalProperties: false
@@ -5142,6 +5242,8 @@ components:
         - annotation_task_id
         - project_id
         - clip_asset_id
+        - label_schema_id
+        - label_schema_digest
         - assignee_actor_id
         - created_by
         - status
@@ -5161,6 +5263,12 @@ components:
         clip_asset_id:
           type: string
           format: uuid
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         assignee_actor_id:
           type: string
           maxLength: 128
@@ -5220,9 +5328,36 @@ components:
           minimum: 1
         label:
           type: string
+          enum:
+            - prepare_workspace
+            - retrieve_medicine
+            - prepare_dose
+            - final_review
+            - cleanup
+    StoredAnnotationSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - start_ms
+        - end_ms
+        - label
+      properties:
+        start_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        end_ms:
+          type: integer
+          format: int64
+          minimum: 1
+        label:
+          type: string
           minLength: 1
           maxLength: 64
           pattern: ^[^\x00-\x1F\x7F]+$
+          description: >-
+            Stable label_id for schema-bound revisions. Historical revisions migrated from the
+            retired legacy-free-text schema retain their original non-control text.
     AnnotationRevisionRequest:
       type: object
       additionalProperties: false
@@ -5249,6 +5384,8 @@ components:
         - clip_asset_id
         - revision_number
         - annotation_schema_version
+        - label_schema_id
+        - label_schema_digest
         - document_sha256
         - submitted_by
         - submitted_at
@@ -5271,6 +5408,12 @@ components:
         annotation_schema_version:
           type: string
           const: annotation-document.v1
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         document_sha256:
           type: string
           pattern: ^[a-f0-9]{64}$
@@ -5286,6 +5429,8 @@ components:
       required:
         - annotation_revision_id
         - revision_number
+        - label_schema_id
+        - label_schema_digest
         - annotation_document
         - submitted_by
         - submitted_at
@@ -5297,6 +5442,12 @@ components:
         revision_number:
           type: integer
           minimum: 1
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         annotation_document:
           type: object
           additionalProperties: false
@@ -5311,7 +5462,7 @@ components:
               type: array
               minItems: 1
               items:
-                $ref: "#/components/schemas/AnnotationSegment"
+                $ref: "#/components/schemas/StoredAnnotationSegment"
             note:
               type: string
               maxLength: 1000

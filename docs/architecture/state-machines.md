@@ -312,8 +312,8 @@ ASSIGNED → SUBMITTED
 
 - 仅 ACTIVE 项目成员中的任务受分配人可以提交；管理员创建任务不等于可以代替受分配人提交。
 - 提交前 ClipAsset 必须仍为 `INGESTED`、未软删除，且当前人工质量结论为 `QUALIFIED`。
-- P0 一项任务只接受一次不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或已提交任务拒绝。
-- P0 文档只包含一个或多个带标签的时间段和可选说明。返工、对象框及与视频时长的上界校验在后续真实用例中启用。
+- P0 每轮提交创建一条不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或尚未退回的已提交任务拒绝。
+- P0 文档只包含一个或多个绑定不可变 P0 LabelSchema 的主 Step 时间段和可选说明。主 Step 可在边界相接但不得重叠；存在已验证 MediaReport 时，结束时间不得超过媒体时长。返工已启用，对象框仍在后续真实用例中启用。
 
 ### P0 revision 独立复核
 

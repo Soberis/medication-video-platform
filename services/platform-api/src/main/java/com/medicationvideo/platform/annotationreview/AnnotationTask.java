@@ -25,6 +25,12 @@ class AnnotationTask {
 	@Column(name = "clip_asset_id", nullable = false, updatable = false)
 	private UUID clipAssetId;
 
+	@Column(name = "label_schema_id", nullable = false, updatable = false)
+	private UUID labelSchemaId;
+
+	@Column(name = "label_schema_digest", nullable = false, updatable = false, length = 64)
+	private String labelSchemaDigest;
+
 	@Column(name = "assignee_actor_id", nullable = false, length = 128)
 	private String assigneeActorId;
 
@@ -57,10 +63,13 @@ class AnnotationTask {
 			String assigneeActorId,
 			String createdBy,
 			String idempotencyKey,
+			AnnotationLabelSchemaBinding labelSchema,
 			Instant now) {
 		this.annotationTaskId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.clipAssetId = clipAssetId;
+		this.labelSchemaId = labelSchema.labelSchemaId();
+		this.labelSchemaDigest = labelSchema.schemaDigest();
 		this.assigneeActorId = assigneeActorId;
 		this.createdBy = createdBy;
 		this.idempotencyKey = idempotencyKey;
@@ -75,8 +84,16 @@ class AnnotationTask {
 			String assigneeActorId,
 			String createdBy,
 			String idempotencyKey,
+			AnnotationLabelSchemaBinding labelSchema,
 			Instant now) {
-		return new AnnotationTask(projectId, clipAssetId, assigneeActorId, createdBy, idempotencyKey, now);
+		return new AnnotationTask(
+				projectId,
+				clipAssetId,
+				assigneeActorId,
+				createdBy,
+				idempotencyKey,
+				labelSchema,
+				now);
 	}
 
 	boolean matchesCreationRequest(UUID clipAssetId, String assigneeActorId) {
@@ -93,6 +110,14 @@ class AnnotationTask {
 
 	UUID getClipAssetId() {
 		return this.clipAssetId;
+	}
+
+	UUID getLabelSchemaId() {
+		return this.labelSchemaId;
+	}
+
+	String getLabelSchemaDigest() {
+		return this.labelSchemaDigest;
 	}
 
 	String getAssigneeActorId() {

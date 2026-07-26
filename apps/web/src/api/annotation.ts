@@ -4,6 +4,8 @@ export interface AnnotationTask {
   annotation_task_id: string
   project_id: string
   clip_asset_id: string
+  label_schema_id: string
+  label_schema_digest: string
   assignee_actor_id: string
   created_by: string
   status: 'ASSIGNED' | 'SUBMITTED'
@@ -21,12 +23,30 @@ export interface AnnotationSegment {
   label: string
 }
 
+export interface AnnotationLabel {
+  label_id: string
+  display_name: string
+  description: string
+  sort_order: number
+}
+
+export interface AnnotationLabelSchema {
+  label_schema_id: string
+  schema_key: string
+  schema_version: string
+  schema_digest: string
+  layer: 'primary_step'
+  labels: AnnotationLabel[]
+}
+
 export interface AnnotationRevision {
   annotation_revision_id: string
   project_id: string
   annotation_task_id: string
   clip_asset_id: string
-  revision_number: 1
+  label_schema_id: string
+  label_schema_digest: string
+  revision_number: number
   annotation_schema_version: 'annotation-document.v1'
   document_sha256: string
   submitted_by: string
@@ -35,7 +55,9 @@ export interface AnnotationRevision {
 
 export interface AnnotationRevisionSummary {
   annotation_revision_id: string
-  revision_number: 1
+  label_schema_id: string
+  label_schema_digest: string
+  revision_number: number
   annotation_document: {
     schema_version: 'annotation-document.v1'
     segments: AnnotationSegment[]
@@ -73,6 +95,20 @@ export async function listAnnotationTasks(projectId: string, signal?: AbortSigna
     signal,
   })
   if (response.ok) return ((await response.json()) as { items: AnnotationTask[] }).items
+  throw await annotationTaskApiError(response)
+}
+
+export async function getAnnotationLabelSchema(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<AnnotationLabelSchema> {
+  const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+    signal,
+  })
+  if (response.ok) return (await response.json()) as AnnotationLabelSchema
   throw await annotationTaskApiError(response)
 }
 
@@ -164,6 +200,8 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该视频已不再满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间片段的结束时间必须晚于开始时间。',
     ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了媒体检测确认的视频时长。',
+    ANNOTATION_LABEL_NOT_ALLOWED: '所选标签不在当前标注规范中，请重新选择。',
+    ANNOTATION_PRIMARY_STEP_OVERLAP: '主流程步骤的时间范围不能重叠，请调整后重试。',
     ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',
     ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',

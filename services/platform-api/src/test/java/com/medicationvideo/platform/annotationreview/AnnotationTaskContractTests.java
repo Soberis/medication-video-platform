@@ -34,6 +34,9 @@ class AnnotationTaskContractTests {
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 	private static final String SHA256 = "b".repeat(64);
+	private static final String CURRENT_LABEL_SCHEMA_ID = "10000000-0000-0000-0000-000000000001";
+	private static final String CURRENT_LABEL_SCHEMA_DIGEST =
+			"305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
 	private static final Instant BASE_TIME = Instant.parse("2026-07-23T01:00:00Z");
 
 	@Autowired
@@ -66,6 +69,8 @@ class AnnotationTaskContractTests {
 				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
 				.andExpect(jsonPath("$.clip_asset_id").value(clipAssetId.toString()))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.label_schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
 				.andExpect(jsonPath("$.assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
 				.andExpect(jsonPath("$.status").value("ASSIGNED"));
 
@@ -81,6 +86,28 @@ class AnnotationTaskContractTests {
 				  AND object_type = 'AnnotationTask'
 				  AND details_json ->> 'clip_asset_id' = ?
 				""", clipAssetId.toString()));
+	}
+
+	@Test
+	void projectMemberReadsTheImmutablePrimaryStepLabelSchema() throws Exception {
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-label-schema", PROJECT_ID)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.schema_key").value("medication-primary-step"))
+				.andExpect(jsonPath("$.schema_version").value("p0-primary-step.v1"))
+				.andExpect(jsonPath("$.schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
+				.andExpect(jsonPath("$.layer").value("primary_step"))
+				.andExpect(jsonPath("$.labels.length()").value(5))
+				.andExpect(jsonPath("$.labels[0].label_id").value("prepare_workspace"))
+				.andExpect(jsonPath("$.labels[0].display_name").value("准备工位/器具"))
+				.andExpect(jsonPath("$.labels[4].label_id").value("cleanup"));
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-label-schema", UUID.randomUUID())
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 	}
 
 	@Test
@@ -143,7 +170,7 @@ class AnnotationTaskContractTests {
 
 		var response = submit(MEMBER_TOKEN, taskId, idempotencyKey,
 				"""
-				{"segments":[{"start_ms":120,"end_ms":780,"label":"拿取药品"}],"note":"合成验证标注"}
+				{"segments":[{"start_ms":120,"end_ms":780,"label":"retrieve_medicine"}],"note":"合成验证标注"}
 				""")
 				.andExpect(status().isCreated())
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -151,12 +178,14 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.clip_asset_id").value(clipAssetId.toString()))
 				.andExpect(jsonPath("$.revision_number").value(1))
 				.andExpect(jsonPath("$.annotation_schema_version").value("annotation-document.v1"))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.label_schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = com.jayway.jsonpath.JsonPath.<String>read(response, "$.annotation_revision_id");
 
 		submit(MEMBER_TOKEN, taskId, idempotencyKey,
 				"""
-				{"segments":[{"start_ms":120,"end_ms":780,"label":"拿取药品"}],"note":"合成验证标注"}
+				{"segments":[{"start_ms":120,"end_ms":780,"label":"retrieve_medicine"}],"note":"合成验证标注"}
 				""")
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.annotation_revision_id").value(revisionId));
@@ -165,11 +194,11 @@ class AnnotationTaskContractTests {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_NOT_ASSIGNEE"));
 		submit(MEMBER_TOKEN, taskId, idempotencyKey,
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"changed\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"prepare_dose\"}]}")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED"));
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-new-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"x\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"cleanup\"}]}")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_ALREADY_SUBMITTED"));
 
@@ -195,12 +224,50 @@ class AnnotationTaskContractTests {
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-invalid-range-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":100,\"label\":\"无效\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":100,\"label\":\"prepare_workspace\"}]}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_SEGMENT_TIME_RANGE_INVALID"));
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
 				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
 		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+	}
+
+	@Test
+	void submissionRequiresSchemaLabelsAndNonOverlappingPrimarySteps() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-schema-validation-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-unknown-label-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":0,\"end_ms\":100,\"label\":\"unknown_step\"}]}")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("ANNOTATION_LABEL_NOT_ALLOWED"));
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-overlap-" + UUID.randomUUID(),
+				"""
+				{"segments":[
+				  {"start_ms":0,"end_ms":300,"label":"prepare_workspace"},
+				  {"start_ms":100,"end_ms":200,"label":"retrieve_medicine"},
+				  {"start_ms":200,"end_ms":400,"label":"prepare_dose"}
+				]}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_STEP_OVERLAP"));
+		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-adjacent-" + UUID.randomUUID(),
+				"""
+				{"segments":[
+				  {"start_ms":0,"end_ms":100,"label":"prepare_workspace"},
+				  {"start_ms":100,"end_ms":200,"label":"retrieve_medicine"}
+				]}
+				""")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID));
+		assertEquals(1, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 	}
 
 	@Test
@@ -215,7 +282,7 @@ class AnnotationTaskContractTests {
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-duration-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":501,\"label\":\"超出时长\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":501,\"label\":\"prepare_dose\"}]}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION"));
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
@@ -233,7 +300,7 @@ class AnnotationTaskContractTests {
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var revisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-review-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
@@ -289,7 +356,7 @@ class AnnotationTaskContractTests {
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var revisionResponse = submit(ADMIN_TOKEN, taskId, "annotation-revision-self-review-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
@@ -310,7 +377,7 @@ class AnnotationTaskContractTests {
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var firstRevisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-first-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":200,\"label\":\"错误标签\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":200,\"label\":\"cleanup\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var firstRevisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
@@ -329,7 +396,7 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("REJECTED"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-second-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.revision_number").value(2));
 		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));

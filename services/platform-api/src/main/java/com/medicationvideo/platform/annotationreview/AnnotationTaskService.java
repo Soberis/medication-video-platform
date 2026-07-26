@@ -30,6 +30,7 @@ class AnnotationTaskService {
 	private final ClipAssetReviewQueryService assetQueryService;
 	private final QualityReviewQueryService qualityReviewQueryService;
 	private final MediaDurationQueryService mediaDurationQueryService;
+	private final AnnotationLabelSchemaService labelSchemaService;
 	private final AnnotationTaskRepository repository;
 	private final AnnotationRevisionRepository revisionRepository;
 	private final AnnotationReviewRepository reviewRepository;
@@ -40,6 +41,7 @@ class AnnotationTaskService {
 			ClipAssetReviewQueryService assetQueryService,
 			QualityReviewQueryService qualityReviewQueryService,
 			MediaDurationQueryService mediaDurationQueryService,
+			AnnotationLabelSchemaService labelSchemaService,
 			AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository,
 			AnnotationReviewRepository reviewRepository,
@@ -48,6 +50,7 @@ class AnnotationTaskService {
 		this.assetQueryService = assetQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.mediaDurationQueryService = mediaDurationQueryService;
+		this.labelSchemaService = labelSchemaService;
 		this.repository = repository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
@@ -134,6 +137,7 @@ class AnnotationTaskService {
 					409);
 		}
 
+		var labelSchema = this.labelSchemaService.currentBinding();
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var task = this.repository.saveAndFlush(AnnotationTask.create(
 				projectId,
@@ -141,6 +145,7 @@ class AnnotationTaskService {
 				request.assigneeActorId(),
 				actorId,
 				idempotencyKey,
+				labelSchema,
 				now));
 		this.auditRecorder.record(new AuditEventCommand(
 				now,
@@ -158,7 +163,9 @@ class AnnotationTaskService {
 				"PROJECT_MEMBERSHIP_ADMIN",
 				Map.of(
 						"clip_asset_id", clipAssetId.toString(),
-						"assignee_actor_id", task.getAssigneeActorId())));
+						"assignee_actor_id", task.getAssigneeActorId(),
+						"label_schema_id", task.getLabelSchemaId().toString(),
+						"label_schema_digest", task.getLabelSchemaDigest())));
 		return AnnotationTaskResponse.from(task, actorId, ProjectRole.ADMIN, null, null);
 	}
 
@@ -193,6 +200,11 @@ class AnnotationTaskService {
 			}
 			return AnnotationRevisionResponse.from(replay.get());
 		}
+		this.labelSchemaService.requireAllowedPrimaryStepLabels(
+				task.getLabelSchemaId(),
+				task.getLabelSchemaDigest(),
+				request.segments().stream().map(AnnotationSegmentCommand::label).toList());
+		validatePrimaryStepOverlap(request.segments());
 		if (!this.assetQueryService.lockAndGetReviewFacts(projectId, task.getClipAssetId()).reviewable()
 				|| !this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId, task.getClipAssetId())
 						.isQualified()) {
@@ -228,6 +240,8 @@ class AnnotationTaskService {
 				Map.of(
 						"annotation_task_id", task.getAnnotationTaskId().toString(),
 						"clip_asset_id", task.getClipAssetId().toString(),
+						"label_schema_id", revision.getLabelSchemaId().toString(),
+						"label_schema_digest", revision.getLabelSchemaDigest(),
 						"document_sha256", documentSha256,
 						"segment_count", Integer.toString(request.segments().size()))));
 		return AnnotationRevisionResponse.from(revision);
@@ -355,6 +369,24 @@ class AnnotationTaskService {
 		}
 	}
 
+	private static void validatePrimaryStepOverlap(List<AnnotationSegmentCommand> segments) {
+		var orderedSegments = segments.stream()
+				.sorted(java.util.Comparator.comparingLong(AnnotationSegmentCommand::startMs)
+						.thenComparingLong(AnnotationSegmentCommand::endMs))
+				.toList();
+		var maximumPreviousEnd = orderedSegments.getFirst().endMs();
+		for (var index = 1; index < orderedSegments.size(); index += 1) {
+			var segment = orderedSegments.get(index);
+			if (segment.startMs() < maximumPreviousEnd) {
+				throw new AnnotationTaskException(
+						"ANNOTATION_PRIMARY_STEP_OVERLAP",
+						"Primary Step annotation segments must not overlap.",
+						400);
+			}
+			maximumPreviousEnd = Math.max(maximumPreviousEnd, segment.endMs());
+		}
+	}
+
 	private static String digest(AnnotationRevisionSubmitCommand request) {
 		try {
 			var canonical = new StringBuilder("annotation-document.v1\n");
@@ -408,6 +440,8 @@ record AnnotationTaskResponse(
 		UUID annotationTaskId,
 		UUID projectId,
 		UUID clipAssetId,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		String assigneeActorId,
 		String createdBy,
 		String status,
@@ -428,6 +462,8 @@ record AnnotationTaskResponse(
 				task.getAnnotationTaskId(),
 				task.getProjectId(),
 				task.getClipAssetId(),
+				task.getLabelSchemaId(),
+				task.getLabelSchemaDigest(),
 				task.getAssigneeActorId(),
 				task.getCreatedBy(),
 				task.getStatus().name(),
@@ -448,6 +484,8 @@ record AnnotationTaskListResponse(List<AnnotationTaskResponse> items) {
 record AnnotationRevisionSummary(
 		UUID annotationRevisionId,
 		int revisionNumber,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		Map<String, Object> annotationDocument,
 		String submittedBy,
 		Instant submittedAt,
@@ -460,6 +498,8 @@ record AnnotationRevisionSummary(
 		return new AnnotationRevisionSummary(
 				revision.getAnnotationRevisionId(),
 				revision.getRevisionNumber(),
+				revision.getLabelSchemaId(),
+				revision.getLabelSchemaDigest(),
 				revision.getAnnotationDocument(),
 				revision.getSubmittedBy(),
 				revision.getSubmittedAt(),
@@ -474,6 +514,8 @@ record AnnotationRevisionResponse(
 		UUID clipAssetId,
 		int revisionNumber,
 		String annotationSchemaVersion,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		String documentSha256,
 		String submittedBy,
 		Instant submittedAt) {
@@ -486,6 +528,8 @@ record AnnotationRevisionResponse(
 				revision.getClipAssetId(),
 				revision.getRevisionNumber(),
 				revision.getAnnotationSchemaVersion(),
+				revision.getLabelSchemaId(),
+				revision.getLabelSchemaDigest(),
 				revision.getDocumentSha256(),
 				revision.getSubmittedBy(),
 				revision.getSubmittedAt());

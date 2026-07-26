@@ -10,18 +10,22 @@ import {
   ElInputNumber,
   ElMessage,
   ElMessageBox,
+  ElOption,
+  ElSelect,
   ElTable,
   ElTableColumn,
   ElTag,
 } from 'element-plus'
-import { onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
   AnnotationTaskApiError,
+  getAnnotationLabelSchema,
   listAnnotationTasks,
   reviewAnnotationRevision,
   submitAnnotationRevision,
+  type AnnotationLabelSchema,
   type AnnotationSegment,
   type AnnotationTask,
 } from '@/api/annotation'
@@ -36,6 +40,12 @@ interface DraftAnnotationSegment extends AnnotationSegment {
 const route = useRoute()
 const projectId = ref(String(route.params.projectId ?? ''))
 const items = shallowRef<AnnotationTask[]>([])
+const labelSchema = shallowRef<AnnotationLabelSchema | null>(null)
+const sortedLabels = computed(() =>
+  [...(labelSchema.value?.labels ?? [])].sort(
+    (left, right) => left.sort_order - right.sort_order || left.label_id.localeCompare(right.label_id),
+  ),
+)
 const loadState = ref<'loading' | 'success' | 'error'>('loading')
 const errorCode = ref('')
 const errorMessage = ref('')
@@ -58,11 +68,19 @@ async function loadTasks() {
   const request = new AbortController()
   activeRequest = request
   loadState.value = 'loading'
+  labelSchema.value = null
   errorCode.value = ''
   errorMessage.value = ''
   try {
-    items.value = await listAnnotationTasks(projectId.value, request.signal)
-    if (activeRequest === request) loadState.value = 'success'
+    const [tasks, schema] = await Promise.all([
+      listAnnotationTasks(projectId.value, request.signal),
+      getAnnotationLabelSchema(projectId.value, request.signal),
+    ])
+    if (activeRequest === request) {
+      items.value = tasks
+      labelSchema.value = schema
+      loadState.value = 'success'
+    }
   } catch (error) {
     if (request.signal.aborted || activeRequest !== request) return
     loadState.value = 'error'
@@ -86,6 +104,15 @@ onUnmounted(() => activeRequest?.abort())
 
 function openSubmission(task: AnnotationTask) {
   if (!task.can_submit || task.status !== 'ASSIGNED') return
+  const schema = labelSchema.value
+  if (
+    !schema ||
+    schema.label_schema_id !== task.label_schema_id ||
+    schema.schema_digest !== task.label_schema_digest
+  ) {
+    ElMessage.error('任务绑定的标签规范与当前项目不一致，请刷新后重试。')
+    return
+  }
   selectedTask.value = task
   isSubmissionOpen.value = true
   segments.value = [createDraftSegment()]
@@ -108,7 +135,12 @@ function removeSegment(index: number) {
 
 async function submit() {
   const task = selectedTask.value
-  if (!task || isSubmitting.value) return
+  const schema = labelSchema.value
+  if (!task || !schema || isSubmitting.value) return
+  if (schema.label_schema_id !== task.label_schema_id || schema.schema_digest !== task.label_schema_digest) {
+    ElMessage.error('任务绑定的标签规范已发生变化，请关闭窗口并刷新后重试。')
+    return
+  }
   const validSegments: AnnotationSegment[] = segments.value.map((segment) => ({
     start_ms: segment.start_ms,
     end_ms: segment.end_ms,
@@ -257,7 +289,9 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
   />
 
   <ElDialog v-model="isSubmissionOpen" title="提交时间片段标注" width="min(720px, calc(100vw - 32px))">
-    <p class="form-hint">为该视频记录一个或多个动作时间范围。提交后内容不可覆盖，后续由独立复核处理。</p>
+    <p class="form-hint">
+      按项目标签规范记录一个或多个主流程步骤。提交后内容不可覆盖，后续由独立复核处理。
+    </p>
     <ElForm label-position="top" @submit.prevent="submit">
       <div
         v-for="(segment, index) in segments"
@@ -273,7 +307,14 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
           <ElInputNumber v-model="segment.end_ms" :min="1" :step="100" controls-position="right" />
         </ElFormItem>
         <ElFormItem label="标签">
-          <ElInput v-model="segment.label" maxlength="64" placeholder="例如：拿取药品" />
+          <ElSelect v-model="segment.label" placeholder="选择步骤标签" :aria-label="`标注片段 ${index + 1} 的标签`">
+            <ElOption
+              v-for="label in sortedLabels"
+              :key="label.label_id"
+              :label="label.display_name"
+              :value="label.label_id"
+            />
+          </ElSelect>
         </ElFormItem>
         <ElButton
           :aria-label="`移除标注片段 ${index + 1}`"
