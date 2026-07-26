@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.39.0
+  version: 0.40.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -77,6 +77,11 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
+  - name: Dataset Admission
+    description: >-
+      Read-only current-state previews of whether a CaptureSession satisfies the prerequisite
+      facts for a future dataset member. A preview never creates a dataset version, member,
+      override, export or approval.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal global ADMIN who also has ACTIVE ADMIN
@@ -2100,6 +2105,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CaptureSession"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Requested project or session not found in the actor's visible scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/capture-sessions/{capture_session_id}/dataset-admission-preview:
+    get:
+      operationId: getCaptureSessionDatasetAdmissionPreview
+      tags:
+        - Dataset Admission
+      summary: Preview current dataset-admission prerequisites for one capture session
+      description: >-
+        Returns current, read-only admission facts for every stream in the session. It does not
+        create DatasetVersion, dataset members, a WARNING override, an approval, an export or a
+        persistent snapshot. The caller must hold an ACTIVE Membership in the requested project.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current prerequisite facts and blocking reasons, ordered by camera_index.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetAdmissionPreview"
         "401":
           description: Authentication is missing or invalid.
           content:
@@ -4664,6 +4715,107 @@ components:
           format: date-time
     CaptureSessionMetadataV1:
       $ref: "../schemas/capture-session-metadata-v1.schema.json"
+    DatasetAdmissionPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - eligible
+        - assembly_status
+        - quality_status
+        - expected_camera_count
+        - received_camera_count
+        - blocking_reasons
+        - streams
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+        eligible:
+          type: boolean
+          description: True only when no session or stream blocking reason is present.
+        assembly_status:
+          $ref: "#/components/schemas/CaptureSessionAssemblyStatus"
+        quality_status:
+          $ref: "#/components/schemas/CaptureQualityStatus"
+        expected_camera_count:
+          type: integer
+          minimum: 1
+        received_camera_count:
+          type: integer
+          minimum: 0
+        blocking_reasons:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetAdmissionPreviewStream"
+    DatasetAdmissionPreviewStream:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_stream_id
+        - clip_asset_id
+        - camera_index
+        - eligible
+        - stream_status
+        - stream_quality_status
+        - asset_status
+        - asset_deleted
+        - quality_review_decision
+        - annotation_review_decision
+        - post_cleaning_decision
+        - blocking_reasons
+      properties:
+        camera_stream_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        camera_index:
+          type: integer
+          minimum: 0
+        eligible:
+          type: boolean
+        stream_status:
+          type: string
+          enum: [BOUND, INGESTED, INGEST_FAILED, UNAVAILABLE]
+        stream_quality_status:
+          $ref: "#/components/schemas/CaptureQualityStatus"
+        asset_status:
+          type: string
+          enum: [MISSING, UPLOADED, INGESTING, INGESTED, INGEST_FAILED]
+        asset_deleted:
+          type: boolean
+        quality_review_decision:
+          type: string
+          enum: [UNREVIEWED, QUALIFIED, REJECTED, NEEDS_REVIEW]
+        annotation_revision_id:
+          type: [string, "null"]
+          format: uuid
+        annotation_review_decision:
+          type: string
+          enum: [UNREVIEWED, APPROVED, REJECTED]
+        post_cleaning_decision:
+          type: string
+          enum: [MISSING, PASS, WARNING, REJECT]
+        annotation_document_sha256:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+        label_schema_digest:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+        blocking_reasons:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
     CaptureSession:
       type: object
       additionalProperties: false

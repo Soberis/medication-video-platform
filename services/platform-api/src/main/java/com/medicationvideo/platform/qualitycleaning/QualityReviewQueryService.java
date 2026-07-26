@@ -1,6 +1,9 @@
 package com.medicationvideo.platform.qualitycleaning;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,19 @@ public class QualityReviewQueryService {
 		return this.repository.findByProjectIdAndClipAssetId(projectId, clipAssetId)
 				.map(review -> new CurrentDecision(review.getDecision().name(), review.getVersion()))
 				.orElseGet(() -> new CurrentDecision("UNREVIEWED", 0));
+	}
+
+	@Transactional(readOnly = true)
+	public Map<UUID, CurrentDecision> findCurrentDecisions(UUID projectId, Collection<UUID> clipAssetIds) {
+		if (clipAssetIds.isEmpty()) {
+			return Map.of();
+		}
+		return this.repository.findAllByProjectIdAndClipAssetIdIn(projectId, clipAssetIds)
+				.stream()
+				.collect(Collectors.toMap(
+						QualityReview::getClipAssetId,
+						review -> new CurrentDecision(review.getDecision().name(), review.getVersion()),
+						(existing, ignored) -> existing));
 	}
 
 	@Transactional

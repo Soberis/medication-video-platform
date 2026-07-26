@@ -17,6 +17,8 @@ interface ClipAssetRepository extends JpaRepository<ClipAsset, UUID> {
 
 	Optional<ClipAsset> findByClipAssetIdAndProjectId(UUID clipAssetId, UUID projectId);
 
+	List<ClipAsset> findAllByClipAssetIdInAndProjectId(List<UUID> clipAssetIds, UUID projectId);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			SELECT asset FROM ClipAsset asset

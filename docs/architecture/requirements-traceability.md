@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产、人工审核和后置清洗闭环。V1.6 在保留 V1.5 隐私简化范围的基础上，明确管理员可改名和归档项目，视频删除保持可审计软删除；历史迁移继续保留。当前纵向切片把复核通过的不可变 AnnotationRevision 推进为已完成任务，并在同一数据库事务内生成版本化、不可变的后置清洗运行与结果；它不创建 DatasetVersion、不自动准入数据集，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产、人工审核、后置清洗和数据集准入预览闭环。V1.6 在保留 V1.5 隐私简化范围的基础上，明确管理员可改名和归档项目，视频删除保持可审计软删除；历史迁移继续保留。当前纵向切片把复核通过的不可变 AnnotationRevision 推进为已完成任务，并在同一数据库事务内生成版本化、不可变的后置清洗运行与结果；随后按 CaptureSession 聚合当前装配、质量、删除、review 和 post-clean 事实，仅返回可解释的准入预览。它不创建 DatasetVersion、不自动写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -94,7 +94,7 @@
 | FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
 | FR-027 创建数据集版本 | P0 | `datasetexport` | dataset versions | dataset_version | 选择规则、标签/清洗规则、创建人和时间冻结 | D1 |
-| FR-028 数据集准入 | P0 | `datasetexport` | dataset validation | dataset_member_session、dataset_member_stream | 未复核、post-clean REJECT、WARNING 无批准例外、资产已删除、质量非 QUALIFIED 或摘要变化均阻断冻结；当前 post-clean PASS 也不自动创建成员 | D1 |
+| FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview | 尚无 dataset_member_* 表 | 已实现按 CaptureSession/stream 汇总当前装配、质量、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览；未复核、post-clean 非 PASS、资产已删除或质量非 QUALIFIED 均不可预览为 eligible。正式创建成员、WARNING 批准例外、摘要对 DatasetVersion 的冻结校验仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | split policy/result | dataset_split_assignment | 同一 leakage group 不跨 split；冲突必须失败而非自动降级 | D1 |
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | export jobs | dataset_export、export_artifact | manifest、action segments、COCO、schema、split、README 和 SHA256SUMS 一致 | D1 |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze command/approval | dataset_version、approval_request | FROZEN 后成员、revision、split 和规则不可修改 | D1 |
@@ -124,7 +124,7 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。无论结果为何，都不在该事务中创建 DatasetVersion 或数据集成员。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
+FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 
