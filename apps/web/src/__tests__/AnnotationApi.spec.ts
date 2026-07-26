@@ -66,6 +66,73 @@ describe('annotation task API', () => {
     })
   })
 
+  it('keeps the completed task and immutable post-cleaning result in the list response', async () => {
+    const cleaningResult = {
+      cleaning_result_id: '82000000-0000-4000-8000-000000000001',
+      cleaning_run_id: '83000000-0000-4000-8000-000000000001',
+      rule_set_key: 'p0-post-annotation',
+      rule_set_version: 'p0-post-annotation.v1',
+      rule_set_digest: 'd'.repeat(64),
+      outcome: 'PASS',
+      reason_codes: [],
+      executed_checks: ['PRIMARY_STEP_LABEL_ALLOWED', 'PRIMARY_STEP_NO_OVERLAP'],
+      evaluated_at: '2026-07-26T01:10:00Z',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              annotation_task_id: 'a0000000-0000-4000-8000-000000000001',
+              project_id: projectId,
+              clip_asset_id: assetId,
+              label_schema_id: labelSchemaId,
+              label_schema_digest: labelSchemaDigest,
+              assignee_actor_id: 'local-synthetic-uploader',
+              created_by: 'local-synthetic-admin',
+              status: 'COMPLETED',
+              can_submit: false,
+              can_review: false,
+              annotation_revision: {
+                annotation_revision_id: '80000000-0000-4000-8000-000000000001',
+                label_schema_id: labelSchemaId,
+                label_schema_digest: labelSchemaDigest,
+                revision_number: 1,
+                annotation_document: {
+                  schema_version: 'annotation-document.v1',
+                  segments: [{ start_ms: 0, end_ms: 1000, label: 'prepare_workspace' }],
+                },
+                submitted_by: 'local-synthetic-uploader',
+                submitted_at: '2026-07-26T01:00:00Z',
+                review: {
+                  annotation_review_id: '81000000-0000-4000-8000-000000000001',
+                  project_id: projectId,
+                  annotation_revision_id: '80000000-0000-4000-8000-000000000001',
+                  decision: 'APPROVED',
+                  review_note: null,
+                  reviewed_by: 'local-synthetic-admin',
+                  reviewed_at: '2026-07-26T01:10:00Z',
+                },
+                post_cleaning_result: cleaningResult,
+              },
+              created_at: '2026-07-26T00:00:00Z',
+              updated_at: '2026-07-26T01:10:00Z',
+              version: 2,
+            },
+          ],
+        }),
+      ),
+    )
+
+    await expect(listAnnotationTasks(projectId)).resolves.toMatchObject([
+      {
+        status: 'COMPLETED',
+        annotation_revision: { post_cleaning_result: cleaningResult },
+      },
+    ])
+  })
+
   it('loads the project primary-step label schema without caching', async () => {
     const signal = new AbortController().signal
     const fetchMock = vi.fn().mockResolvedValue(

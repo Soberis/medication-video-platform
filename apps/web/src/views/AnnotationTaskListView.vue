@@ -58,6 +58,25 @@ const reviewingRevisionId = ref<string | null>(null)
 let activeRequest: AbortController | null = null
 let nextDraftSegmentId = 0
 
+const postCleaningReasonLabels: Readonly<Record<string, string>> = {
+  REVIEW_NOT_APPROVED: '未绑定已通过的独立复核',
+  QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是合格',
+  ASSET_INPUT_DIGEST_INVALID: '视频输入摘要无效',
+  ANNOTATION_DOCUMENT_DIGEST_INVALID: '标注文档摘要无效',
+  ANNOTATION_DOCUMENT_DIGEST_MISMATCH: '标注文档内容与摘要不一致',
+  LABEL_SCHEMA_MISMATCH: '任务与修订绑定的标签规范不一致',
+  ANNOTATION_SEGMENTS_MISSING: '缺少主流程时间片段',
+  SEGMENT_TIME_RANGE_INVALID: '存在无效的时间范围',
+  PRIMARY_STEP_LABEL_NOT_ALLOWED: '存在标签规范未允许的主流程标签',
+  PRIMARY_STEP_OVERLAP: '主流程时间片段存在重叠',
+  VERIFIED_MEDIA_DURATION_UNAVAILABLE: '缺少已验证的视频时长',
+  VERIFIED_MEDIA_DURATION_INVALID: '已验证的视频时长无效',
+  VERIFIED_MEDIA_FACT_INCOMPLETE: '媒体探测事实不完整',
+  VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体探测输入摘要与视频资产不一致',
+  SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间片段超出已验证的视频时长',
+  LEGACY_APPROVED_REVISION_REQUIRES_REVALIDATION: '历史通过记录需要按当前规则重新验证',
+}
+
 function createDraftSegment(): DraftAnnotationSegment {
   nextDraftSegmentId += 1
   return { draftId: nextDraftSegmentId, start_ms: 0, end_ms: 1000, label: '' }
@@ -120,8 +139,57 @@ function openSubmission(task: AnnotationTask) {
 }
 
 function taskStatusLabel(task: AnnotationTask) {
+  if (task.status === 'COMPLETED') return '已完成'
   if (task.status === 'SUBMITTED') return '已提交'
   return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '已分配'
+}
+
+function taskStatusTagType(task: AnnotationTask) {
+  if (task.status === 'COMPLETED') return 'success'
+  if (task.status === 'SUBMITTED') return 'info'
+  return 'warning'
+}
+
+function postCleaningPresentation(task: AnnotationTask) {
+  const revision = task.annotation_revision
+  if (revision?.review?.decision !== 'APPROVED') return null
+  const result = revision.post_cleaning_result
+  const reasons = (result?.reason_codes ?? []).map((reasonCode) => {
+    const knownLabel = postCleaningReasonLabels[reasonCode]
+    if (knownLabel) return knownLabel
+    const safeCode = /^[A-Z][A-Z0-9_]{0,63}$/.test(reasonCode) ? reasonCode : 'UNKNOWN_REASON'
+    return `其他清洗原因（${safeCode}）`
+  })
+  if (result?.outcome === 'PASS') {
+    return {
+      label: '当前规则检查通过',
+      type: 'success' as const,
+      description: '尚未进入训练数据集。',
+      reasons,
+    }
+  }
+  if (result?.outcome === 'WARNING') {
+    return {
+      label: '后置清洗待确认',
+      type: 'warning' as const,
+      description: '不会自动准入数据集，需补充事实或按后续准入流程确认。',
+      reasons,
+    }
+  }
+  if (result?.outcome === 'REJECT') {
+    return {
+      label: '后置清洗不通过',
+      type: 'danger' as const,
+      description: '当前版本默认不准入数据集；视频资产未被删除。',
+      reasons,
+    }
+  }
+  return {
+    label: '后置清洗未执行',
+    type: 'info' as const,
+    description: '尚未形成可用于后续准入判断的结果。',
+    reasons,
+  }
 }
 
 function addSegment() {
@@ -196,7 +264,7 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
     <div>
       <p class="app-eyebrow">人工训练数据标注</p>
       <h1 id="annotation-task-title">标注任务</h1>
-      <p>只显示当前项目中可处理的合格视频任务。受理人提交时间片段标签后，由另一位项目管理员独立复核。</p>
+      <p>只显示当前项目中可处理的合格视频任务。受理人提交时间片段标签后，由另一位项目管理员独立复核并生成后置清洗结果。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadTasks">刷新</ElButton>
   </section>
@@ -222,12 +290,12 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
       </ElTableColumn>
       <ElTableColumn label="状态" width="130">
         <template #default="{ row }">
-          <ElTag :type="row.status === 'ASSIGNED' ? 'warning' : 'success'">
+          <ElTag :type="taskStatusTagType(row as AnnotationTask)">
             {{ taskStatusLabel(row as AnnotationTask) }}
           </ElTag>
         </template>
       </ElTableColumn>
-      <ElTableColumn label="标注与复核" min-width="250">
+      <ElTableColumn label="标注、复核与清洗" min-width="280">
         <template #default="{ row }">
           <template v-if="row.annotation_revision">
             <div>已提交 · {{ row.annotation_revision.annotation_document.segments.length }} 个时间段</div>
@@ -235,6 +303,20 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
               {{ row.annotation_revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过' }}
             </ElTag>
             <span v-else class="muted-text">等待独立复核</span>
+            <div v-if="postCleaningPresentation(row as AnnotationTask)">
+              <ElTag :type="postCleaningPresentation(row as AnnotationTask)?.type">
+                {{ postCleaningPresentation(row as AnnotationTask)?.label }}
+              </ElTag>
+              <span class="cell-secondary">
+                {{ postCleaningPresentation(row as AnnotationTask)?.description }}
+              </span>
+              <span
+                v-if="postCleaningPresentation(row as AnnotationTask)?.reasons.length"
+                class="cell-secondary"
+              >
+                原因：{{ postCleaningPresentation(row as AnnotationTask)?.reasons.join('；') }}
+              </span>
+            </div>
           </template>
           <span v-else class="muted-text">尚未提交</span>
         </template>

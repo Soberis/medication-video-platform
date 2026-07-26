@@ -45,15 +45,7 @@ class AnnotationLabelSchemaService {
 			UUID labelSchemaId,
 			String labelSchemaDigest,
 			List<String> labels) {
-		var schema = this.schemaRepository.findByLabelSchemaIdAndSchemaDigest(
-				labelSchemaId, labelSchemaDigest)
-				.orElseThrow(() -> new IllegalStateException("The annotation task label schema is unavailable."));
-		var allowedLabels = this.definitionRepository
-				.findAllByLabelSchemaIdOrderBySortOrder(schema.getLabelSchemaId())
-				.stream()
-				.filter(definition -> definition.getLabelType() == AnnotationLabelType.PRIMARY_STEP)
-				.map(AnnotationLabelDefinition::getLabelId)
-				.collect(java.util.stream.Collectors.toCollection(HashSet::new));
+		var allowedLabels = allowedPrimaryStepLabels(labelSchemaId, labelSchemaDigest);
 		for (var label : labels) {
 			if (!allowedLabels.contains(label.trim())) {
 				throw new AnnotationTaskException(
@@ -62,6 +54,21 @@ class AnnotationLabelSchemaService {
 						400);
 			}
 		}
+	}
+
+	@Transactional(readOnly = true)
+	java.util.Set<String> allowedPrimaryStepLabels(
+			UUID labelSchemaId,
+			String labelSchemaDigest) {
+		var schema = this.schemaRepository.findByLabelSchemaIdAndSchemaDigest(
+				labelSchemaId, labelSchemaDigest)
+				.orElseThrow(() -> new IllegalStateException("The annotation task label schema is unavailable."));
+		return this.definitionRepository
+				.findAllByLabelSchemaIdOrderBySortOrder(schema.getLabelSchemaId())
+				.stream()
+				.filter(definition -> definition.getLabelType() == AnnotationLabelType.PRIMARY_STEP)
+				.map(AnnotationLabelDefinition::getLabelId)
+				.collect(java.util.stream.Collectors.toCollection(HashSet::new));
 	}
 
 	private AnnotationLabelSchema currentSchema() {

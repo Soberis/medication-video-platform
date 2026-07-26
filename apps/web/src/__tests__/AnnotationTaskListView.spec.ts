@@ -10,6 +10,38 @@ const assetId = '50000000-0000-4000-8000-000000000001'
 const taskId = 'a0000000-0000-4000-8000-000000000001'
 const labelSchemaId = '70000000-0000-4000-8000-000000000001'
 const labelSchemaDigest = 'b'.repeat(64)
+const completedRevision = {
+  annotation_revision_id: '80000000-0000-4000-8000-000000000001',
+  label_schema_id: labelSchemaId,
+  label_schema_digest: labelSchemaDigest,
+  revision_number: 1,
+  annotation_document: {
+    schema_version: 'annotation-document.v1',
+    segments: [{ start_ms: 0, end_ms: 1000, label: 'prepare_workspace' }],
+  },
+  submitted_by: 'local-synthetic-uploader',
+  submitted_at: '2026-07-26T01:00:00Z',
+  review: {
+    annotation_review_id: '81000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    annotation_revision_id: '80000000-0000-4000-8000-000000000001',
+    decision: 'APPROVED',
+    review_note: null,
+    reviewed_by: 'local-synthetic-admin',
+    reviewed_at: '2026-07-26T01:10:00Z',
+  },
+  post_cleaning_result: {
+    cleaning_result_id: '82000000-0000-4000-8000-000000000001',
+    cleaning_run_id: '83000000-0000-4000-8000-000000000001',
+    rule_set_key: 'p0-post-annotation',
+    rule_set_version: 'p0-post-annotation.v1',
+    rule_set_digest: 'd'.repeat(64),
+    outcome: 'PASS',
+    reason_codes: [],
+    executed_checks: ['PRIMARY_STEP_LABEL_ALLOWED', 'PRIMARY_STEP_NO_OVERLAP'],
+    evaluated_at: '2026-07-26T01:10:00Z',
+  },
+}
 
 const labelSchema = {
   label_schema_id: labelSchemaId,
@@ -120,6 +152,58 @@ describe('annotation task list view', () => {
     expect(JSON.parse(String(revisionCall?.[1]?.body))).toEqual({
       segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
     })
+  })
+
+  it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
+    const outcomes = [
+      { outcome: 'PASS', expected: '当前规则检查通过' },
+      { outcome: 'WARNING', expected: '后置清洗待确认' },
+      { outcome: 'REJECT', expected: '后置清洗不通过' },
+      { outcome: null, expected: '后置清洗未执行' },
+    ] as const
+    const tasks = outcomes.map(({ outcome }, index) => ({
+      ...assignedTask,
+      annotation_task_id: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      status: 'COMPLETED',
+      can_submit: false,
+      annotation_revision: {
+        ...completedRevision,
+        annotation_revision_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        post_cleaning_result:
+          outcome === null
+            ? null
+            : {
+                ...completedRevision.post_cleaning_result,
+                outcome,
+                reason_codes:
+                  outcome === 'WARNING'
+                    ? ['VERIFIED_MEDIA_DURATION_UNAVAILABLE', 'FUTURE_RULE_CHECK']
+                    : outcome === 'REJECT'
+                      ? ['PRIMARY_STEP_OVERLAP']
+                      : [],
+              },
+      },
+    }))
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ items: tasks }))
+        .mockResolvedValueOnce(jsonResponse(labelSchema)),
+    )
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('已完成')
+    for (const { expected } of outcomes) expect(wrapper.text()).toContain(expected)
+    expect(wrapper.text()).toContain('尚未进入训练数据集')
+    expect(wrapper.text()).toContain('不会自动准入数据集')
+    expect(wrapper.text()).toContain('缺少已验证的视频时长')
+    expect(wrapper.text()).toContain('其他清洗原因（FUTURE_RULE_CHECK）')
+    expect(wrapper.text()).toContain('当前版本默认不准入数据集')
+    expect(wrapper.text()).toContain('视频资产未被删除')
+    expect(wrapper.text()).toContain('主流程时间片段存在重叠')
+    expect(wrapper.text()).not.toContain('提交标注')
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {

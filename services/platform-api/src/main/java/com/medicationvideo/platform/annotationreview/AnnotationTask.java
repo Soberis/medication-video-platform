@@ -165,9 +165,21 @@ class AnnotationTask {
 		this.status = AnnotationTaskStatus.ASSIGNED;
 		this.updatedAt = now;
 	}
+
+	void complete(Instant now) {
+		if (this.status != AnnotationTaskStatus.SUBMITTED) {
+			throw new AnnotationTaskException(
+					"ANNOTATION_TASK_NOT_SUBMITTED",
+					"Only a submitted annotation task can be completed.",
+					409);
+		}
+		this.status = AnnotationTaskStatus.COMPLETED;
+		this.updatedAt = now;
+	}
 }
 
 enum AnnotationTaskStatus {
 	ASSIGNED,
-	SUBMITTED
+	SUBMITTED,
+	COMPLETED
 }

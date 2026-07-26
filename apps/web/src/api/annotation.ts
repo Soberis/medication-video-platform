@@ -8,7 +8,7 @@ export interface AnnotationTask {
   label_schema_digest: string
   assignee_actor_id: string
   created_by: string
-  status: 'ASSIGNED' | 'SUBMITTED'
+  status: 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
   can_submit: boolean
   can_review: boolean
   annotation_revision: AnnotationRevisionSummary | null
@@ -66,6 +66,19 @@ export interface AnnotationRevisionSummary {
   submitted_by: string
   submitted_at: string
   review: AnnotationReview | null
+  post_cleaning_result: PostCleaningResult | null
+}
+
+export interface PostCleaningResult {
+  cleaning_result_id: string
+  cleaning_run_id: string
+  rule_set_key: string
+  rule_set_version: string
+  rule_set_digest: string
+  outcome: 'PASS' | 'WARNING' | 'REJECT'
+  reason_codes: string[]
+  executed_checks: string[]
+  evaluated_at: string
 }
 
 export interface AnnotationReview {

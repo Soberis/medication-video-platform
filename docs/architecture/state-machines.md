@@ -198,16 +198,14 @@ PENDING → ASSIGNED → IN_PROGRESS → SUBMITTED → COMPLETED
              └→ PENDING    （回收）
 ```
 
-当前 P0 切片只启用 `ASSIGNED`：项目管理员仅能为 `INGESTED`、未删除且当前质量为 `QUALIFIED` 的视频创建一个直接分配任务。`PENDING`、执行、提交、返工和完成迁移须随 Revision/Review 切片一起启用，不能由前端提前伪造。
+当前 P0 切片启用 `ASSIGNED → SUBMITTED → COMPLETED` 和 `SUBMITTED → ASSIGNED` 返工分支：项目管理员仅能为 `INGESTED`、未删除且当前质量为 `QUALIFIED` 的视频创建一个直接分配任务；受分配人提交不可变 revision，独立管理员通过后任务完成，不通过则退回原受分配人。`PENDING`、`IN_PROGRESS`、`ABANDONED` 和重新分配仍未启用，不能由前端提前伪造。
 
 | 迁移 | 角色与守卫 |
 | --- | --- |
 | PENDING → ASSIGNED | 调度员/项目管理员；assignee 有项目权限；范围未被冲突任务锁定 |
-| ASSIGNED → IN_PROGRESS | 当前 assignee；访问的 variant 仍获隐私放行 |
-| IN_PROGRESS → SUBMITTED | 创建不可变 revision；schema/guideline digest 与任务一致；基础校验通过 |
-| SUBMITTED → COMPLETED | review PASS |
-| SUBMITTED → REWORK | review REJECT；必须有错误类型和理由 |
-| REWORK → ASSIGNED/IN_PROGRESS | 创建新任务轮次；旧 revision 只读 |
+| ASSIGNED → SUBMITTED | 当前 assignee；创建不可变 revision；schema digest 与任务一致；基础校验通过 |
+| SUBMITTED → COMPLETED | 当前 revision 获独立 `APPROVED`；同一事务生成绑定该 revision 的不可变 post-clean run/result |
+| SUBMITTED → ASSIGNED | 当前 revision 获 `REJECTED`；保留决定和旧 revision，下一次提交递增 revision number |
 
 ### 6.2 Review
 
@@ -226,14 +224,22 @@ NOT_SUBMITTED → PENDING → PASS
 ### 7.1 前置/后置清洗
 
 ```text
-PENDING → PASS
-        → WARNING → PASS/REJECT
-        → REJECT
+APPROVED revision
+→ 创建 CleaningRun
+→ 同事务完成为 Result(PASS | WARNING | REJECT)
 ```
 
-- 结果绑定 CleaningRun、输入摘要和 rule set digest。
-- WARNING 进入数据集前必须有 AdmissionOverride。
+- 结果绑定 CleaningRun、输入指纹、输入摘要、所选 MediaReport 证据和 rule set digest。
+- run/result 创建后不可原地改写；相同输入指纹幂等复用，规则或输入变化时允许创建新 run。
+  当前切片只在首次 `APPROVED` 时触发，不暴露人工重跑入口。WARNING 进入数据集前必须有
+  AdmissionOverride。
 - REJECT 表示默认不准入，不表示删除。
+- 当前主 Step 纵向切片不建立通用异步清洗入口：`APPROVED` review 在 Core API 的同一数据库事务中把任务推进为 `COMPLETED`，并创建一个版本化、不可变的 post-clean run/result；不新增 Worker、队列或调度状态。
+- 当前规则从持久化文档重新计算 revision 文档摘要，重验 LabelSchema 摘要、标签集合、主 Step
+  左闭右开时间范围、互斥关系，以及按 `created_at + media_report_id` 稳定选出的最新已验证媒体
+  时长和输入摘要。缺少可用于边界复核的已验证媒体时长时结果为 `WARNING`；已经持久化的标签、
+  摘要或时间事实非法时结果为 `REJECT`；全部规则通过时结果为 `PASS`。
+- post-clean `PASS` 只证明该 revision 通过当前规则版本，不自动创建 DatasetVersion 或数据集成员；正式准入仍须在 `datasetexport` 按 CaptureSession、stream、当前资产/质量事实和摘要一致性单独验证。
 
 ### 7.2 Quarantine（P0 后置）
 
@@ -307,7 +313,8 @@ REQUESTED → QUEUED → RUNNING → SUCCEEDED
 ## 10. P0 标注任务
 
 ```text
-ASSIGNED → SUBMITTED
+ASSIGNED → SUBMITTED → COMPLETED
+              └──────→ ASSIGNED → next revision
 ```
 
 - 仅 ACTIVE 项目成员中的任务受分配人可以提交；管理员创建任务不等于可以代替受分配人提交。
@@ -324,6 +331,7 @@ SUBMITTED revision → APPROVED review
 
 - 复核是独立于任务状态的一次不可变事实：只有项目 ADMIN 可以创建，且 `reviewed_by != submitted_by`。
 - 当前只支持每个 revision 一条复核决定。`REJECTED` 会把同一任务退回受分配人；再次提交产生下一个 revision，旧 revision 和 review 永不覆盖。
+- `APPROVED` 会把任务推进到 `COMPLETED`，并在同一事务内为该 revision 生成 post-clean run/result；重复的相同复核请求不得重复创建任务迁移、run、result 或审计。
 
 ## 11. AI 候选状态（P1）
 
@@ -347,8 +355,8 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
 | 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |
 | 复核 revision | 项目 ADMIN 且不等于提交者；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；每 revision 只有一次决定 |
-| 后置清洗 | revision review PASS；引用的 variant 和 schema 摘要不变 |
-| 数据集冻结 | session/stream 准入、人工质量 `QUALIFIED`、annotation review PASS、post-clean PASS 或批准 override |
+| 后置清洗 | 当前 revision review `APPROVED`；文档、LabelSchema、ClipAsset 输入摘要和规则版本被当前 run/result 冻结；缺媒体时长为 WARNING，非法事实为 REJECT |
+| 数据集冻结 | 以 CaptureSession 为成员单位；session/stream 准入、人工质量 `QUALIFIED`、annotation review APPROVED、post-clean PASS 或批准 override，且所有冻结摘要仍匹配 |
 | 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |
 | AI 作业 | P1 已启用；DEIDENTIFIED variant；privacy ALLOWED_ANNOTATION；quarantine NONE；算法版本已批准 |
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |

@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-23
+> 最后更新：2026-07-26
 
 ## 1. 目标与边界
 
@@ -232,9 +232,9 @@ flowchart LR
 | --- | --- | --- |
 | LabelSchema | label_schema、label_definition、label_attribute_definition | 标签、属性、互斥/重叠规则和版本摘要 |
 | AnnotationProject | annotation_project、annotation_guideline_version | 项目范围、工具、schema 和指南版本 |
-| AnnotationTask | annotation_task（当前）；task_assignment、external_task_mapping（后续） | 当前按单个 ClipAsset 直接分配；后续再扩展 session Step、stream Object 和外部工具映射 |
+| AnnotationTask | annotation_task（当前）；task_assignment、external_task_mapping（后续） | 当前按单个 ClipAsset 直接分配，状态启用 ASSIGNED/SUBMITTED/COMPLETED；后续再扩展 session Step、stream Object 和外部工具映射 |
 | AnnotationRevision | annotation_revision、step_segment、object_annotation、observable_event_annotation、privacy_region_annotation | 一次不可变提交 |
-| Review | review_record、adjudication_record | 通过、退回和裁决，不覆盖原 revision |
+| Review | annotation_review（当前）；adjudication_record（后续） | 当前每个 revision 一次独立 APPROVED/REJECTED；不覆盖原 revision |
 | ValidationResult | annotation_validation_result | 时间、标签、几何、必填属性和隐私规则检查 |
 
 ### 7.2 LabelSchema 不变量
@@ -253,6 +253,9 @@ flowchart LR
 - 人工不确定性使用明确字段，例如 `annotator_certainty` 或原因标签；不得与算法 score 混用。
 - 复核员需要修正时，必须退回或创建裁决 revision，并保留来源链。
 - 标注提交者不得复核自己的 revision；两级界面角色不会取消该职责分离守卫。
+- 当前 revision 获 `APPROVED` 时，AnnotationTask 在同一事务推进为 `COMPLETED`，并调用
+  `qualitycleaning` 的公开应用服务写入绑定该 revision 的 post-clean run/result；
+  `REJECTED` 只把任务退回 `ASSIGNED`，不产生 post-clean 结果。
 
 ## 8. `qualitycleaning`
 
@@ -262,7 +265,7 @@ flowchart LR
 | --- | --- | --- |
 | QualityReview | quality_review | 保存每个项目视频当前有效的人工质量结论、固定原因、评审人和版本 |
 | CleaningRuleSet | cleaning_rule_set、cleaning_rule | 版本化规则、阈值和适用范围 |
-| CleaningRun | cleaning_run、cleaning_result | 对冻结输入执行的不可变运行 |
+| CleaningRun | cleaning_run、cleaning_result | 对冻结输入执行的不可变运行；当前先覆盖单个 APPROVED 主 Step revision |
 | DuplicateGroup | duplicate_group、duplicate_member | 完全重复和近重复证据 |
 | Quarantine（后置） | quarantine_record | 历史迁移保留；P0 无运行接口 |
 | AdmissionOverride | admission_override | warning/例外准入的批准人、理由、期限和版本范围 |
@@ -271,10 +274,16 @@ flowchart LR
 
 - 一个项目视频只有一条当前 QualityReview；修改使用版本号防止覆盖他人的并发判断，历史由追加式 `audit_event` 保留。
 - QualityReview 只接受已入库、未删除且属于当前项目的视频；`QUALIFIED` 使用固定的 `MEETS_REQUIREMENTS`，`REJECTED` 和 `NEEDS_REVIEW` 使用与结论匹配的稳定原因码。
-- 自动规则可产生 PASS、WARNING、REJECT、HUMAN_REVIEW 或 QUARANTINE，但不得自动物理删除。
+- 当前 post-clean 规则只产生 PASS、WARNING 或 REJECT：缺少已验证媒体时长为 WARNING；标签、
+  摘要、时间范围或重叠等冻结事实非法为 REJECT；其余为 PASS。任何结果都不得自动物理删除。
 - 完全重复以内容摘要为证据；近重复以版本化视频指纹/关键帧算法为证据，两者不能混为同一结论。
-- CleaningRun 冻结输入集合、规则摘要和软件摘要；重跑创建新 run。
+- 当前 CleaningRun 冻结 AnnotationRevision/document SHA-256、LabelSchema ID/digest、ClipAsset
+  输入摘要、所选最新 MediaReport ID/input digest/recipe digest/时长、输入指纹和规则
+  version/digest；后续引入独立执行程序时再增加软件/镜像摘要。同一输入指纹幂等复用，输入或规则
+  变化时允许创建新 run，旧 run/result 不可覆盖；当前切片尚不暴露人工重跑入口。
 - override 不改变原始清洗结论，只在特定数据集构建中作为附加批准证据。
+- 当前轻量 post-clean 与 APPROVED review 在 Core API 的同一数据库事务中完成，不创建 Worker、
+  Outbox 事件、RabbitMQ 路由或通用清洗页面。PASS 只是后续准入前提，不写 `datasetexport` 表。
 
 ## 9. `datasetexport`
 
@@ -294,7 +303,7 @@ flowchart LR
 - 每个 session 实际纳入的 stream；
 - 每个 stream 使用的 asset variant ID 和 digest；
 - AnnotationRevision ID 和 digest；
-- LabelSchema、CleaningRuleSet 和 PrivacyRelease 决定；
+- LabelSchema、CleaningRuleSet 和 V1.6 当前适用的人工质量/删除状态事实；
 - split policy、leakage group、seed 和实际分配结果；
 - export/sampling profile；
 - 构建软件和镜像摘要。
@@ -302,6 +311,8 @@ flowchart LR
 ### 9.3 不变量
 
 - `dataset_member_session` 决定组织和 split；`dataset_member_stream` 决定实际训练输入，不能只记录 session 而遗漏被排除的流。
+- 当前单 ClipAsset AnnotationTask 和 post-clean 结果不能直接成为正式数据集成员；正式准入以
+  CaptureSession 为成员与 split 最小单位，并聚合实际纳入的全部 CameraStream。
 - 同一 `leakage_group_id` 不得跨 split。
 - VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
@@ -364,7 +375,7 @@ Python Worker 禁止：
 
 ## 13. 事务边界和跨模块流程
 
-单模块命令在一个数据库事务内完成聚合变更和 Outbox 写入。跨模块流程使用显式编排器：
+单模块命令在一个数据库事务内完成聚合变更和 Outbox 写入。跨模块流程通常使用显式编排器：
 
 ```text
 读取必要公开快照
@@ -373,7 +384,11 @@ Python Worker 禁止：
 → 失败时依据流程状态重试或补偿
 ```
 
-编排器不得持有“万能 Repository”，也不得通过一个大事务直接更新多个模块的表。
+编排器不得持有“万能 Repository”，也不得直接使用其他模块的 Repository。当前获批的
+`APPROVED → COMPLETED → post-clean run/result` 是模块化单体内短小且无外部副作用的同步纵向
+切片：`annotationreview` 只写自己的任务/复核表，并通过 `qualitycleaning` 公开应用服务在同一
+数据库事务写清洗表；任何失败整体回滚。未来批量、耗时或跨进程清洗不得沿用该事务，必须升级为
+有持久状态和重试语义的显式编排。
 
 高风险流程至少包括：
 

@@ -1,8 +1,8 @@
 # 异步作业协议
 
 > 文档状态：P0 详细设计（评审稿）  
-> 适用范围：媒体探测/转码/抽帧、隐私处理、清洗、数据集导出；P1 AI 复用同一协议  
-> 最后更新：2026-07-16
+> 适用范围：媒体探测/转码/抽帧、批量或耗时清洗、数据集导出；P1 AI 复用同一协议
+> 最后更新：2026-07-26
 
 ## 1. 核心决策
 
@@ -23,6 +23,10 @@
 
 Python Worker 不连接业务数据库。所有正式状态、AssetVariant、CleaningResult、DatasetExport、AIJob 和 CandidateAnnotation 都由拥有模块的 Core API 写入。
 
+当前 `APPROVED` Revision 的轻量 post-clean 只重验已冻结的标签、时间和摘要事实，耗时短且无
+外部副作用，因此与 Review 在 Core API 同一数据库事务完成，不使用本协议。出现批量输入、重复
+检测、媒体计算、跨进程执行或独立重试需求时，必须转为本协议，不能继续扩大同步事务。
+
 ## 2. 作业所有权
 
 不建立一个可任意承载全部业务状态的全局 `ProcessingJob` 表。各模块拥有自己的业务作业：
@@ -30,7 +34,7 @@ Python Worker 不连接业务数据库。所有正式状态、AssetVariant、Cle
 | 作业 | 所有模块 | 业务真值表 |
 | --- | --- | --- |
 | 媒体探测、转码、抽帧、脱敏 | `mediaprivacy` | media_job、media_job_attempt |
-| 清洗和重复检测 | `qualitycleaning` | cleaning_run、cleaning_result |
+| 批量/耗时清洗和重复检测 | `qualitycleaning` | cleaning_run、cleaning_result |
 | 数据集构建/导出 | `datasetexport` | dataset_export、export_artifact |
 | AI 推理与评估 | `aicandidate` | ai_job、ai_job_attempt、ai_evaluation |
 
