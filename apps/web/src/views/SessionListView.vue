@@ -221,7 +221,8 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <RouterLink
-            class="text-link"
+            class="text-link table-action-link"
+            :aria-label="`查看配药操作：${shortId(row.capture_session_id)}`"
             :to="{
               name: 'session-detail',
               params: { projectId, id: row.capture_session_id },
@@ -233,7 +234,7 @@ onUnmounted(() => activeRequest?.abort())
       </ElTableColumn>
     </ElTable>
     <div class="table-footer">
-      <span>已显示 {{ items.length }} 组 · Session ID 示例 {{ shortId(items[0]!.capture_session_id) }}</span>
+      <span>已显示 {{ items.length }} 组配药操作</span>
       <ElButton v-if="nextCursor" :loading="isAppending" @click="loadPage(true)">加载更多</ElButton>
     </div>
   </ElCard>

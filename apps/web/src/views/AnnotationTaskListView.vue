@@ -29,6 +29,10 @@ import { formatDateTime } from '@/catalog-presentation'
 
 defineOptions({ name: 'AnnotationTaskListView' })
 
+interface DraftAnnotationSegment extends AnnotationSegment {
+  readonly draftId: number
+}
+
 const route = useRoute()
 const projectId = ref(String(route.params.projectId ?? ''))
 const items = shallowRef<AnnotationTask[]>([])
@@ -37,11 +41,17 @@ const errorCode = ref('')
 const errorMessage = ref('')
 const selectedTask = shallowRef<AnnotationTask | null>(null)
 const isSubmissionOpen = ref(false)
-const segments = ref<AnnotationSegment[]>([])
+const segments = ref<DraftAnnotationSegment[]>([])
 const note = ref('')
 const isSubmitting = ref(false)
 const reviewingRevisionId = ref<string | null>(null)
 let activeRequest: AbortController | null = null
+let nextDraftSegmentId = 0
+
+function createDraftSegment(): DraftAnnotationSegment {
+  nextDraftSegmentId += 1
+  return { draftId: nextDraftSegmentId, start_ms: 0, end_ms: 1000, label: '' }
+}
 
 async function loadTasks() {
   activeRequest?.abort()
@@ -78,7 +88,7 @@ function openSubmission(task: AnnotationTask) {
   if (!task.can_submit || task.status !== 'ASSIGNED') return
   selectedTask.value = task
   isSubmissionOpen.value = true
-  segments.value = [{ start_ms: 0, end_ms: 1000, label: '' }]
+  segments.value = [createDraftSegment()]
   note.value = ''
 }
 
@@ -88,7 +98,7 @@ function taskStatusLabel(task: AnnotationTask) {
 }
 
 function addSegment() {
-  segments.value = [...segments.value, { start_ms: 0, end_ms: 1000, label: '' }]
+  segments.value = [...segments.value, createDraftSegment()]
 }
 
 function removeSegment(index: number) {
@@ -99,7 +109,11 @@ function removeSegment(index: number) {
 async function submit() {
   const task = selectedTask.value
   if (!task || isSubmitting.value) return
-  const validSegments = segments.value.map((segment) => ({ ...segment, label: segment.label.trim() }))
+  const validSegments: AnnotationSegment[] = segments.value.map((segment) => ({
+    start_ms: segment.start_ms,
+    end_ms: segment.end_ms,
+    label: segment.label.trim(),
+  }))
   if (validSegments.some((segment) => !segment.label || segment.start_ms < 0 || segment.end_ms <= segment.start_ms)) {
     ElMessage.error('请填写标签，并确保每个片段的结束时间晚于开始时间。')
     return
@@ -150,7 +164,7 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
     <div>
       <p class="app-eyebrow">人工训练数据标注</p>
       <h1 id="annotation-task-title">标注任务</h1>
-      <p>只显示当前项目中可处理的合格视频任务。受理人可提交时间片段标签；独立复核将在下一切片启用。</p>
+      <p>只显示当前项目中可处理的合格视频任务。受理人提交时间片段标签后，由另一位项目管理员独立复核。</p>
     </div>
     <ElButton :loading="loadState === 'loading'" @click="loadTasks">刷新</ElButton>
   </section>
@@ -198,35 +212,40 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
       <ElTableColumn label="创建时间" min-width="185">
         <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
       </ElTableColumn>
-      <ElTableColumn label="操作" width="120" fixed="right">
+      <ElTableColumn label="操作" width="150" fixed="right">
         <template #default="{ row }">
-          <ElButton
-            v-if="row.can_submit && row.status === 'ASSIGNED'"
-            link
-            type="primary"
-            @click="openSubmission(row as AnnotationTask)"
-          >
-            提交标注
-          </ElButton>
-          <template v-else-if="row.can_review && row.annotation_revision">
+          <div class="table-actions">
             <ElButton
+              v-if="row.can_submit && row.status === 'ASSIGNED'"
               link
-              type="success"
-              :loading="reviewingRevisionId === row.annotation_revision.annotation_revision_id"
-              @click="review(row as AnnotationTask, 'APPROVED')"
+              type="primary"
+              :aria-label="`提交视频 ${row.clip_asset_id} 的标注`"
+              @click="openSubmission(row as AnnotationTask)"
             >
-              通过
+              提交标注
             </ElButton>
-            <ElButton
-              link
-              type="danger"
-              :disabled="reviewingRevisionId !== null"
-              @click="review(row as AnnotationTask, 'REJECTED')"
-            >
-              不通过
-            </ElButton>
-          </template>
-          <span v-else>—</span>
+            <template v-else-if="row.can_review && row.annotation_revision">
+              <ElButton
+                link
+                type="success"
+                :aria-label="`通过视频 ${row.clip_asset_id} 的标注复核`"
+                :loading="reviewingRevisionId === row.annotation_revision.annotation_revision_id"
+                @click="review(row as AnnotationTask, 'APPROVED')"
+              >
+                通过
+              </ElButton>
+              <ElButton
+                link
+                type="danger"
+                :aria-label="`不通过视频 ${row.clip_asset_id} 的标注复核`"
+                :disabled="reviewingRevisionId !== null"
+                @click="review(row as AnnotationTask, 'REJECTED')"
+              >
+                不通过
+              </ElButton>
+            </template>
+            <span v-else>—</span>
+          </div>
         </template>
       </ElTableColumn>
     </ElTable>
@@ -240,7 +259,13 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
   <ElDialog v-model="isSubmissionOpen" title="提交时间片段标注" width="min(720px, calc(100vw - 32px))">
     <p class="form-hint">为该视频记录一个或多个动作时间范围。提交后内容不可覆盖，后续由独立复核处理。</p>
     <ElForm label-position="top" @submit.prevent="submit">
-      <div v-for="(segment, index) in segments" :key="index" class="annotation-segment-row">
+      <div
+        v-for="(segment, index) in segments"
+        :key="segment.draftId"
+        class="annotation-segment-row"
+        role="group"
+        :aria-label="`标注片段 ${index + 1}`"
+      >
         <ElFormItem label="开始（毫秒）">
           <ElInputNumber v-model="segment.start_ms" :min="0" :step="100" controls-position="right" />
         </ElFormItem>
@@ -250,7 +275,13 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
         <ElFormItem label="标签">
           <ElInput v-model="segment.label" maxlength="64" placeholder="例如：拿取药品" />
         </ElFormItem>
-        <ElButton :disabled="segments.length === 1" @click="removeSegment(index)">移除</ElButton>
+        <ElButton
+          :aria-label="`移除标注片段 ${index + 1}`"
+          :disabled="segments.length === 1"
+          @click="removeSegment(index)"
+        >
+          移除
+        </ElButton>
       </div>
       <ElButton @click="addSegment">新增片段</ElButton>
       <ElFormItem label="备注（可选）">

@@ -190,25 +190,28 @@ onUnmounted(() => activeRequest?.abort())
       </ElTableColumn>
       <ElTableColumn label="操作" width="190" fixed="right">
         <template #default="{ row }">
-          <RouterLink
-            class="text-link"
-            :to="{ name: 'session-list', params: { projectId: row.project_id } }"
-          >
-            进入项目
-          </RouterLink>
-          <ElDropdown v-if="row.current_role === 'ADMIN'" trigger="click">
-            <ElButton link type="primary">更多</ElButton>
-            <template #dropdown>
-              <ElDropdownMenu>
-                <ElDropdownItem :disabled="renamingProjectId === row.project_id" @click="renameDataProject(row as DataProject)">
-                  修改名称
-                </ElDropdownItem>
-                <ElDropdownItem :disabled="archivingProjectId === row.project_id" divided @click="archiveDataProject(row as DataProject)">
-                  归档项目
-                </ElDropdownItem>
-              </ElDropdownMenu>
-            </template>
-          </ElDropdown>
+          <div class="table-actions">
+            <RouterLink
+              class="text-link"
+              :aria-label="`进入项目：${row.display_name}`"
+              :to="{ name: 'session-list', params: { projectId: row.project_id } }"
+            >
+              进入项目
+            </RouterLink>
+            <ElDropdown v-if="row.current_role === 'ADMIN'" trigger="click">
+              <ElButton link type="primary" :aria-label="`更多项目操作：${row.display_name}`">更多</ElButton>
+              <template #dropdown>
+                <ElDropdownMenu>
+                  <ElDropdownItem :disabled="renamingProjectId === row.project_id" @click="renameDataProject(row as DataProject)">
+                    修改名称
+                  </ElDropdownItem>
+                  <ElDropdownItem :disabled="archivingProjectId === row.project_id" divided @click="archiveDataProject(row as DataProject)">
+                    归档项目
+                  </ElDropdownItem>
+                </ElDropdownMenu>
+              </template>
+            </ElDropdown>
+          </div>
         </template>
       </ElTableColumn>
     </ElTable>

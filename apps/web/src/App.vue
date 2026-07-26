@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ElButton, ElTag } from 'element-plus'
-import { RouterLink, RouterView } from 'vue-router'
-import { useRoute } from 'vue-router'
+import { ElButton, ElMessage, ElTag } from 'element-plus'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const isLoginRoute = computed(() => route.name === 'login')
 const projectId = computed(() => String(route.params.projectId ?? ''))
@@ -23,7 +23,12 @@ const isManagementRoute = computed(() =>
 )
 
 async function logout() {
-  await auth.logout()
+  try {
+    await auth.logout()
+    await router.replace({ name: 'login' })
+  } catch {
+    ElMessage.error('退出登录未完成，请稍后重试。')
+  }
 }
 
 function closeManagementMenu(event: MouseEvent) {
@@ -35,6 +40,7 @@ function closeManagementMenu(event: MouseEvent) {
 <template>
   <RouterView v-if="isLoginRoute" />
   <div v-else class="app-shell">
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header class="app-header">
       <RouterLink
         class="app-brand"
@@ -48,17 +54,13 @@ function closeManagementMenu(event: MouseEvent) {
       <nav class="primary-nav" aria-label="主导航">
         <RouterLink :to="{ name: 'project-list' }">项目</RouterLink>
         <RouterLink v-if="projectId" :to="sessionsRoute">配药操作</RouterLink>
-        <span v-else class="nav-unavailable" title="请先选择项目">配药操作</span>
         <RouterLink v-if="projectId" :to="assetsRoute">视频资产</RouterLink>
-        <span v-else class="nav-unavailable" title="请先选择项目">视频资产</span>
         <RouterLink v-if="projectId" :to="annotationTasksRoute">标注任务</RouterLink>
-        <span v-else class="nav-unavailable" title="请先选择项目">标注任务</span>
         <RouterLink :to="{ name: 'local-upload' }">本地上传</RouterLink>
         <details class="nav-more" :class="{ 'nav-more-active': isManagementRoute }">
           <summary>管理</summary>
           <div class="nav-more-menu">
             <RouterLink v-if="projectId" :to="foldersRoute" @click="closeManagementMenu">文件夹</RouterLink>
-            <span v-else class="nav-unavailable" title="请先选择项目">文件夹</span>
             <RouterLink
               v-if="projectId && isAdministrator"
               :to="membershipsRoute"
@@ -82,11 +84,11 @@ function closeManagementMenu(event: MouseEvent) {
         <ElTag size="small" :type="auth.session.role === 'ADMIN' ? 'primary' : 'info'">
           {{ auth.session.role === 'ADMIN' ? '管理员' : '普通用户' }}
         </ElTag>
-        <ElButton link type="primary" @click="logout">退出登录</ElButton>
+        <ElButton link type="primary" :loading="auth.loading" @click="logout">退出登录</ElButton>
       </div>
     </header>
 
-    <main id="main-content">
+    <main id="main-content" tabindex="-1">
       <RouterView />
     </main>
   </div>

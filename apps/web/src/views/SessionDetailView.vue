@@ -157,7 +157,7 @@ onUnmounted(() => activeRequest?.abort())
         <ElTableColumn label="视频资产" width="100" fixed="right">
           <template #default="{ row }">
             <RouterLink
-              class="text-link"
+              class="text-link table-action-link"
               :to="{ name: 'asset-detail', params: { projectId, id: row.clip_asset_id } }"
             >
               查看资产

@@ -29,8 +29,10 @@ import {
   assetStatusLabels,
   formatBytes,
   formatDateTime,
+  qualityStatusLabels,
   statusLabel,
   statusTone,
+  streamStatusLabels,
 } from '@/catalog-presentation'
 
 defineOptions({ name: 'AssetListView' })
@@ -252,8 +254,10 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="流 / 质量" min-width="150">
         <template #default="{ row }">
           <template v-if="row.session_binding">
-            <span>{{ row.session_binding.stream_status }}</span>
-            <span class="cell-secondary">质量：{{ row.session_binding.quality_status }}</span>
+            <span>{{ statusLabel(streamStatusLabels, row.session_binding.stream_status) }}</span>
+            <span class="cell-secondary">
+              质量：{{ statusLabel(qualityStatusLabels, row.session_binding.quality_status) }}
+            </span>
           </template>
           <span v-else>等待 Session 组装</span>
         </template>
@@ -264,7 +268,8 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <RouterLink
-            class="text-link"
+            class="text-link table-action-link"
+            :aria-label="`查看视频详情：${row.client_file_id}`"
             :to="{ name: 'asset-detail', params: { projectId, id: row.clip_asset_id } }"
           >
             查看详情

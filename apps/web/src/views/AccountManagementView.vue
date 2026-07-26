@@ -123,7 +123,7 @@ onUnmounted(() => activeRequest?.abort())
 
   <ElAlert
     title="账号与项目权限分开管理"
-    description="账号仅决定是否能登录；项目 Membership 决定能够看到和操作哪些项目。医院边端与媒体 Worker 不使用此账号体系。"
+    description="账号仅决定是否能登录；项目成员关系决定能够查看和操作哪些项目。医院边端设备与媒体处理服务不使用此账号体系。"
     type="info"
     :closable="false"
     show-icon
