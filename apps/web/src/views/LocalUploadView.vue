@@ -207,48 +207,54 @@ onUnmounted(() => activeRequest?.abort())
 
   <ElCard class="local-upload-card" shadow="never">
     <form class="local-upload-form" @submit.prevent="startUpload">
-      <label for="local-upload-project">所属项目</label>
-      <ElSelect
-        id="local-upload-project"
-        v-model="selectedProjectId"
-        :loading="projectLoadState === 'loading'"
-        :disabled="isUploading || projectLoadState !== 'success'"
-        placeholder="选择已加入的项目"
-      >
-        <ElOption
-          v-for="project in projects"
-          :key="project.project_id"
-          :label="`${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '普通用户'}）`"
-          :value="project.project_id"
+      <div class="local-upload-field">
+        <label for="local-upload-project">所属项目</label>
+        <ElSelect
+          id="local-upload-project"
+          v-model="selectedProjectId"
+          :loading="projectLoadState === 'loading'"
+          :disabled="isUploading || projectLoadState !== 'success'"
+          placeholder="选择已加入的项目"
+        >
+          <ElOption
+            v-for="project in projects"
+            :key="project.project_id"
+            :label="`${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '普通用户'}）`"
+            :value="project.project_id"
+          />
+        </ElSelect>
+      </div>
+
+      <div class="local-upload-field">
+        <label for="local-upload-folder">项目文件夹（可选）</label>
+        <ElSelect
+          id="local-upload-folder"
+          v-model="selectedFolderId"
+          clearable
+          :loading="folderLoadState === 'loading'"
+          :disabled="isUploading || !selectedProjectId"
+          placeholder="不分类"
+        >
+          <ElOption v-for="folder in folders" :key="folder.folder_id" :label="folder.display_name" :value="folder.folder_id" />
+        </ElSelect>
+        <p v-if="selectedProjectId && folderLoadState === 'success' && folders.length === 0" class="form-hint">
+          当前项目没有文件夹，视频将保持未分类。
+        </p>
+      </div>
+
+      <div class="local-upload-field local-upload-files-field">
+        <label for="local-upload-files">本机视频</label>
+        <input
+          id="local-upload-files"
+          class="local-file-input"
+          type="file"
+          accept="video/*"
+          multiple
+          :disabled="isUploading"
+          @change="selectFiles"
         />
-      </ElSelect>
-
-      <label for="local-upload-folder">项目文件夹（可选）</label>
-      <ElSelect
-        id="local-upload-folder"
-        v-model="selectedFolderId"
-        clearable
-        :loading="folderLoadState === 'loading'"
-        :disabled="isUploading || !selectedProjectId"
-        placeholder="不分类"
-      >
-        <ElOption v-for="folder in folders" :key="folder.folder_id" :label="folder.display_name" :value="folder.folder_id" />
-      </ElSelect>
-      <p v-if="selectedProjectId && folderLoadState === 'success' && folders.length === 0" class="form-hint">
-        当前项目没有文件夹，视频将保持未分类。
-      </p>
-
-      <label for="local-upload-files">本机视频</label>
-      <input
-        id="local-upload-files"
-        class="local-file-input"
-        type="file"
-        accept="video/*"
-        multiple
-        :disabled="isUploading"
-        @change="selectFiles"
-      />
-      <p class="form-hint">可一次选择多个视频；平台会按顺序分别上传，避免把多个视频误组装为同一次拍摄。</p>
+        <p class="form-hint">可一次选择多个视频；平台会按顺序分别上传，避免把多个视频误组装为同一次拍摄。</p>
+      </div>
 
       <ul v-if="selectedFiles.length > 0 && tasks.length === 0" class="selected-file-list" aria-label="已选择的视频">
         <li v-for="file in selectedFiles" :key="`${file.name}:${file.size}:${file.lastModified}`">

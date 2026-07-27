@@ -36,10 +36,10 @@ export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
 }
 
 export const assetStatusLabels: Record<ClipAssetStatus, string> = {
-  UPLOADED: '已上传，待入库',
-  INGESTING: '入库处理中',
-  INGESTED: '已入库',
-  INGEST_FAILED: '入库失败',
+  UPLOADED: '上传完成，待检测',
+  INGESTING: '媒体检测中',
+  INGESTED: '媒体检测完成',
+  INGEST_FAILED: '媒体检测失败',
 }
 
 export function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {

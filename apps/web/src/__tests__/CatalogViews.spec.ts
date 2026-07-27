@@ -12,6 +12,32 @@ const projectId = '30000000-0000-4000-8000-000000000001'
 const sessionId = '40000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 
+function verifiedMediaReport() {
+  return {
+    media_report_id: 'a0000000-0000-4000-8000-000000000001',
+    media_job_id: 'b0000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    clip_asset_id: assetId,
+    container_format: 'mov',
+    duration_microseconds: 2_000_000,
+    video_codec: 'h264',
+    video_profile: 'High',
+    width: 1280,
+    height: 720,
+    pixel_format: 'yuv420p',
+    primary_video_bitrate_bps: 2_000_000,
+    average_frame_rate_numerator: 30,
+    average_frame_rate_denominator: 1,
+    frame_count: 60,
+    variable_frame_rate: false,
+    audio_stream_count: 1,
+    decode_verified: true as const,
+    input_digest_verified: true as const,
+    warning_codes: ['AUDIO_PRESENT'],
+    created_at: '2026-07-22T01:02:03Z',
+  }
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('catalog views', () => {
@@ -244,6 +270,7 @@ describe('catalog views', () => {
         )
       }
       if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
+      if (url.endsWith('/media-report')) return Promise.resolve(jsonResponse(verifiedMediaReport()))
       if (url.endsWith('/playback-grants')) {
         return Promise.resolve(
           jsonResponse({
@@ -310,7 +337,10 @@ describe('catalog views', () => {
     )
     expect(wrapper.find('video').attributes('src')).toContain('signature=synthetic')
     expect(wrapper.find('video').attributes('preload')).toBe('none')
-    expect(wrapper.text()).toContain('训练数据 · 人工审核')
+    expect(wrapper.text()).toContain('人工查看')
+    expect(wrapper.find('.video-stage').exists()).toBe(true)
+    expect(wrapper.text()).toContain('完整解码已验证')
+    expect(wrapper.text()).toContain('0:02')
     expect(wrapper.text()).not.toContain('人工隐私评估')
 
     await wrapper.find('video').trigger('error')
@@ -391,6 +421,7 @@ describe('catalog views', () => {
     const wrapper = mount(AssetDetailView, { global: { plugins: [router, pinia] } })
     await flushPromises()
 
+    expect(wrapper.text()).toContain('上传完成，待检测')
     expect(wrapper.findAll('button').some((button) => button.text() === '播放视频')).toBe(true)
     await wrapper.findAll('button').find((button) => button.text() === '播放视频')!.trigger('click')
     await flushPromises()
@@ -422,6 +453,7 @@ describe('catalog views', () => {
         )
       }
       if (url.endsWith('/asset-folders')) return Promise.resolve(jsonResponse({ items: [] }))
+      if (url.endsWith('/media-report')) return Promise.resolve(jsonResponse(verifiedMediaReport()))
       if (url.endsWith('/memberships')) {
         return Promise.resolve(
           jsonResponse({

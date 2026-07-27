@@ -28,6 +28,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,6 +54,7 @@ class MediaJobExecutionContractTests {
 
 	@BeforeEach
 	void clearMediaState() {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM media_job_manual_replay");
 		this.jdbcTemplate.update("DELETE FROM inbox_message");
 		this.jdbcTemplate.update("DELETE FROM outbox_event");
@@ -239,6 +241,20 @@ class MediaJobExecutionContractTests {
 				.andExpect(jsonPath("$.has_b_frames").value(true))
 				.andExpect(jsonPath("$.has_bframes").doesNotExist())
 				.andExpect(jsonPath("$.warning_codes[0]").value("AUDIO_PRESENT"))
+				.andExpect(jsonPath("$.input_url").doesNotExist())
+				.andExpect(jsonPath("$.object_key").doesNotExist());
+
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-report",
+					PROJECT_ID,
+					created.clipAssetId())
+				.header("Authorization", "Bearer " + USER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.media_job_id").value(created.jobId().toString()))
+				.andExpect(jsonPath("$.clip_asset_id").value(created.clipAssetId().toString()))
+				.andExpect(jsonPath("$.duration_microseconds").value(2_000_000))
+				.andExpect(jsonPath("$.decode_verified").value(true))
 				.andExpect(jsonPath("$.input_url").doesNotExist())
 				.andExpect(jsonPath("$.object_key").doesNotExist());
 	}

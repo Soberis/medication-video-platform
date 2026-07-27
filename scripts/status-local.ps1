@@ -99,6 +99,11 @@ Write-Host "`nApplications:" -ForegroundColor Cyan
 Show-CoreApiHealth ([int]($env:PLATFORM_API_PORT ?? '8080'))
 Show-Listener 'Web app' ([int]($env:WEB_PORT ?? '5173'))
 
+Write-Host "`nHost ports:" -ForegroundColor Cyan
+Show-Listener 'PostgreSQL' ([int]($env:POSTGRES_PORT ?? '15432'))
+Show-Listener 'S3' ([int]($env:S3_PORT ?? '9000'))
+Show-Listener 'RabbitMQ' ([int]($env:RABBITMQ_PORT ?? '5672'))
+
 if (Test-Path -LiteralPath $runtimeFile) {
     Write-Host "`nProcesses started by start-local.ps1:" -ForegroundColor Cyan
     try {

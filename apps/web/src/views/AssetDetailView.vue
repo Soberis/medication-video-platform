@@ -19,6 +19,7 @@ import {
   CatalogApiError,
   deleteClipAsset,
   getClipAsset,
+  getClipAssetMediaReport,
   requestClipAssetMediaProbe,
   type ClipAssetRead,
   type ClipAssetPlaybackGrant,
@@ -78,6 +79,10 @@ const isRequestingPlayback = ref(false)
 const isRequestingMediaProbe = ref(false)
 const mediaProbeMessage = ref('')
 const mediaProbeSubmitted = ref(false)
+const mediaReport = shallowRef<Awaited<ReturnType<typeof getClipAssetMediaReport>> | null>(null)
+const mediaReportLoadState = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+const mediaReportErrorCode = ref('')
+const mediaReportErrorMessage = ref('')
 const playbackGrant = shallowRef<ClipAssetPlaybackGrant | null>(null)
 const playbackState = ref<'idle' | 'waiting' | 'ready' | 'error' | 'expired'>('idle')
 const playbackMessage = ref('')
@@ -95,6 +100,7 @@ const isCreatingAnnotationTask = ref(false)
 let activeRequest: AbortController | null = null
 let activeRoleRequest: AbortController | null = null
 let activeQualityRequest: AbortController | null = null
+let activeMediaReportRequest: AbortController | null = null
 let playbackExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
 const canDelete = computed(() => projectRole.value === 'ADMIN')
@@ -135,6 +141,7 @@ const qualityTagType = computed(() => {
   if (qualityReview.value?.decision === 'NEEDS_REVIEW') return 'warning' as const
   return 'info' as const
 })
+const mediaReportWarnings = computed(() => mediaReport.value?.warning_codes ?? [])
 const classificationChanged = computed(() => selectedFolderId.value !== (detail.value?.folder_id ?? ''))
 const playbackAvailability = computed(() => {
   if (!detail.value) return null
@@ -194,6 +201,43 @@ function resetPlayback() {
   playbackMessage.value = ''
 }
 
+function resetMediaReport() {
+  activeMediaReportRequest?.abort()
+  activeMediaReportRequest = null
+  mediaReport.value = null
+  mediaReportLoadState.value = 'idle'
+  mediaReportErrorCode.value = ''
+  mediaReportErrorMessage.value = ''
+}
+
+function formatMediaDuration(value: number) {
+  const seconds = Math.floor(value / 1_000_000)
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function formatFrameRate(numerator: number | null, denominator: number | null) {
+  if (!numerator || !denominator) return '未提供'
+  return `${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(numerator / denominator)} fps`
+}
+
+function formatBitrate(value: number | null) {
+  if (!value) return '未提供'
+  return `${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(value / 1_000_000)} Mbps`
+}
+
+function mediaWarningLabel(code: string) {
+  const labels: Record<string, string> = {
+    PTS_MISSING: '时间戳缺失',
+    PTS_NON_MONOTONIC: '时间戳不连续',
+    FRAME_COUNT_UNAVAILABLE: '无法统计帧数',
+    DURATION_MISMATCH: '时长存在差异',
+    VFR_DETECTED: '可变帧率',
+    AUDIO_PRESENT: '包含音轨',
+  }
+  return labels[code] ?? code
+}
+
 function schedulePlaybackExpiry(expiresAt: string) {
   clearPlaybackExpiryTimer()
   const remainingMilliseconds = new Date(expiresAt).getTime() - Date.now()
@@ -225,7 +269,9 @@ async function loadDetail() {
       loadState.value = 'success'
       if (detail.value.status === 'INGESTED') {
         void loadQualityReview()
+        void loadMediaReport()
       } else {
+        resetMediaReport()
         qualityReview.value = {
           quality_review_id: null,
           project_id: projectId.value,
@@ -248,6 +294,29 @@ async function loadDetail() {
       error instanceof CatalogApiError ? error.message : '暂时无法读取视频资产详情，请稍后重试。'
   } finally {
     if (activeRequest === request) activeRequest = null
+  }
+}
+
+async function loadMediaReport() {
+  activeMediaReportRequest?.abort()
+  const request = new AbortController()
+  activeMediaReportRequest = request
+  mediaReportLoadState.value = 'loading'
+  mediaReportErrorCode.value = ''
+  mediaReportErrorMessage.value = ''
+  try {
+    mediaReport.value = await getClipAssetMediaReport(projectId.value, assetId.value, request.signal)
+    if (activeMediaReportRequest !== request) return
+    mediaReportLoadState.value = 'success'
+  } catch (error) {
+    if (request.signal.aborted || activeMediaReportRequest !== request) return
+    mediaReport.value = null
+    mediaReportLoadState.value = 'error'
+    mediaReportErrorCode.value = error instanceof CatalogApiError ? error.errorCode : 'MEDIA_REPORT_REQUEST_FAILED'
+    mediaReportErrorMessage.value =
+      error instanceof CatalogApiError ? error.message : '暂时无法读取媒体检测报告，请稍后重试。'
+  } finally {
+    if (activeMediaReportRequest === request) activeMediaReportRequest = null
   }
 }
 
@@ -342,6 +411,7 @@ onUnmounted(() => {
   activeRequest?.abort()
   activeRoleRequest?.abort()
   activeQualityRequest?.abort()
+  activeMediaReportRequest?.abort()
   clearPlaybackExpiryTimer()
 })
 
@@ -568,9 +638,10 @@ function handlePlaybackError() {
         播放视频
       </ElButton>
       <template v-if="playbackGrant">
-        <p class="form-hint">
-          本次只读地址将于 {{ formatDateTime(playbackGrant.expires_at) }} 到期。平台记录授权行为，但不记录逐帧观看行为。
-        </p>
+        <div class="playback-meta">
+          <span>授权有效至 {{ formatDateTime(playbackGrant.expires_at) }}</span>
+          <ElTag type="success">人工查看</ElTag>
+        </div>
         <ElAlert
           v-if="playbackMessage"
           class="playback-feedback"
@@ -579,19 +650,21 @@ function handlePlaybackError() {
           :closable="false"
           show-icon
         />
-        <video
-          v-if="playbackState !== 'error' && playbackState !== 'expired'"
-          class="review-video"
-          controls
-          preload="none"
-          :src="playbackGrant.media_url"
-          @loadedmetadata="handlePlaybackReady"
-          @error="handlePlaybackError"
-        >
-          当前浏览器不支持视频播放。
-        </video>
-        <div class="detail-actions review-actions">
-          <ElTag type="success">训练数据 · 人工审核</ElTag>
+        <div v-if="playbackState !== 'error' && playbackState !== 'expired'" class="video-stage">
+          <video
+            class="review-video"
+            controls
+            preload="none"
+            playsinline
+            aria-label="视频预览"
+            :src="playbackGrant.media_url"
+            @loadedmetadata="handlePlaybackReady"
+            @error="handlePlaybackError"
+          >
+            当前浏览器不支持视频播放。
+          </video>
+        </div>
+        <div class="playback-toolbar">
           <ElButton
             v-if="playbackState === 'error' || playbackState === 'expired'"
             type="primary"
@@ -604,17 +677,70 @@ function handlePlaybackError() {
         </div>
       </template>
       <template v-if="canRequestMediaProbe">
-        <ElButton
-          class="media-probe-action"
-          plain
-          :loading="isRequestingMediaProbe"
-          @click="requestMediaProbe"
-        >
-          检测媒体信息
-        </ElButton>
-        <p class="form-hint">技术检测会补充时长、编码和完整解码结果，不影响直接查看。</p>
+        <div class="playback-toolbar media-probe-toolbar">
+          <ElButton plain :loading="isRequestingMediaProbe" @click="requestMediaProbe">检测媒体信息</ElButton>
+          <p class="form-hint">补充时长、编码和完整解码结果，不影响直接查看。</p>
+        </div>
       </template>
       <p v-if="mediaProbeMessage" class="form-hint media-probe-message">{{ mediaProbeMessage }}</p>
+    </ElCard>
+
+    <ElCard class="detail-card" shadow="never">
+      <template #header><strong>媒体检测报告</strong></template>
+      <div v-if="detail.status === 'INGESTED' && mediaReportLoadState === 'loading'" class="catalog-notice" role="status">
+        正在读取媒体检测报告…
+      </div>
+      <ElAlert
+        v-else-if="detail.status === 'INGESTED' && mediaReportLoadState === 'error'"
+        type="error"
+        :title="mediaReportErrorMessage"
+        :description="mediaReportErrorCode ? `错误码：${mediaReportErrorCode}` : undefined"
+        :closable="false"
+        show-icon
+      />
+      <template v-else-if="detail.status === 'INGESTED' && mediaReport">
+        <div class="media-report-summary">
+          <ElTag type="success">完整解码已验证</ElTag>
+          <span class="form-hint">检测完成于 {{ formatDateTime(mediaReport.created_at) }}</span>
+        </div>
+        <ElDescriptions :column="3" border class="media-report-facts">
+          <ElDescriptionsItem label="时长">{{ formatMediaDuration(mediaReport.duration_microseconds) }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="画面">{{ mediaReport.width }} × {{ mediaReport.height }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="编码">
+            {{ mediaReport.video_codec }}{{ mediaReport.video_profile ? ` · ${mediaReport.video_profile}` : '' }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="帧率">
+            {{ formatFrameRate(mediaReport.average_frame_rate_numerator, mediaReport.average_frame_rate_denominator) }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="视频码率">{{ formatBitrate(mediaReport.primary_video_bitrate_bps) }}</ElDescriptionsItem>
+          <ElDescriptionsItem label="音轨">{{ mediaReport.audio_stream_count ? `${mediaReport.audio_stream_count} 条` : '无' }}</ElDescriptionsItem>
+        </ElDescriptions>
+        <ElAlert
+          v-if="mediaReportWarnings.length"
+          class="media-report-warnings"
+          type="warning"
+          title="检测发现需关注项"
+          :description="mediaReportWarnings.map(mediaWarningLabel).join('；')"
+          :closable="false"
+          show-icon
+        />
+      </template>
+      <ElAlert
+        v-else-if="detail.status === 'INGEST_FAILED'"
+        type="error"
+        title="媒体检测失败"
+        description="该视频仍可人工查看，但不能记录质量结论或进入标注流程。"
+        :closable="false"
+        show-icon
+      />
+      <ElAlert
+        v-else
+        type="info"
+        :title="detail.status === 'INGESTING' ? '媒体检测进行中' : '媒体检测尚未开始'"
+        description="检测完成后将在这里显示时长、分辨率、编码和完整解码结果。"
+        :closable="false"
+        show-icon
+      />
     </ElCard>
 
     <ElCard class="detail-card" shadow="never">
@@ -631,15 +757,23 @@ function handlePlaybackError() {
       />
       <template v-else-if="qualityReview">
         <div class="quality-review-summary">
-          <ElTag :type="qualityTagType">{{ qualityDecisionLabels[qualityReview.decision] }}</ElTag>
-          <span v-if="qualityReview.reason_code">{{ qualityReasonLabels[qualityReview.reason_code] }}</span>
-          <span v-if="qualityReview.reviewed_by && qualityReview.reviewed_at" class="form-hint">
+          <ElTag :type="detail.status === 'INGESTED' ? qualityTagType : 'info'">
+            {{ detail.status === 'INGESTED' ? qualityDecisionLabels[qualityReview.decision] : '待技术检测' }}
+          </ElTag>
+          <span v-if="detail.status === 'INGESTED' && qualityReview.reason_code">
+            {{ qualityReasonLabels[qualityReview.reason_code] }}
+          </span>
+          <span
+            v-if="detail.status === 'INGESTED' && qualityReview.reviewed_by && qualityReview.reviewed_at"
+            class="form-hint"
+          >
             {{ qualityReview.reviewed_by }} · {{ formatDateTime(qualityReview.reviewed_at) }}
           </span>
         </div>
         <ElAlert
           v-if="detail.status !== 'INGESTED'"
-          title="可直接查看；技术检测完成后才能记录质量结论"
+          title="技术检测完成后才能记录质量结论"
+          description="当前视频仍可直接播放并供人工预览；检测只补充时长、编码和完整解码等技术事实。"
           type="info"
           :closable="false"
           show-icon

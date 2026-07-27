@@ -151,9 +151,19 @@ $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
 & docker compose @composeEnvironmentArguments -f $composeFile up -d --wait
 if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not become healthy.' }
 
-$rabbitmqPort = [int]($env:RABBITMQ_PORT ?? '5672')
-if (-not (Test-TcpPortInUse $rabbitmqPort)) {
-    throw "RabbitMQ is healthy in Docker but AMQP port $rabbitmqPort is not published to the host. Recreate only RabbitMQ with: docker compose --env-file .env.example --env-file .env -f infra/docker-compose/compose.yaml up -d --force-recreate rabbitmq"
+$requiredHostPorts = @(
+    @{ Service = 'postgres'; Name = 'PostgreSQL'; Port = [int]($env:POSTGRES_PORT ?? '15432') },
+    @{ Service = 's3'; Name = 'S3'; Port = [int]($env:S3_PORT ?? '9000') },
+    @{ Service = 'rabbitmq'; Name = 'RabbitMQ'; Port = [int]($env:RABBITMQ_PORT ?? '5672') }
+)
+foreach ($requiredHostPort in $requiredHostPorts) {
+    if (Test-TcpPortInUse $requiredHostPort.Port) { continue }
+
+    Write-Host "$($requiredHostPort.Name) is healthy in Docker but port $($requiredHostPort.Port) is not published. Recreating only $($requiredHostPort.Service)..." -ForegroundColor Yellow
+    & docker compose @composeEnvironmentArguments -f $composeFile up -d --wait --force-recreate $requiredHostPort.Service
+    if ($LASTEXITCODE -ne 0 -or -not (Test-TcpPortInUse $requiredHostPort.Port)) {
+        throw "$($requiredHostPort.Name) port $($requiredHostPort.Port) is still unavailable after recreating $($requiredHostPort.Service)."
+    }
 }
 
 $logDirectory = Join-Path $root 'logs/local'

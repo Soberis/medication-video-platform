@@ -131,6 +131,30 @@ export interface MediaProbeJob {
   status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED'
 }
 
+export interface MediaReport {
+  media_report_id: string
+  media_job_id: string
+  project_id: string
+  clip_asset_id: string
+  container_format: string
+  duration_microseconds: number
+  video_codec: string
+  video_profile: string | null
+  width: number
+  height: number
+  pixel_format: string | null
+  primary_video_bitrate_bps: number | null
+  average_frame_rate_numerator: number | null
+  average_frame_rate_denominator: number | null
+  frame_count: number | null
+  variable_frame_rate: boolean
+  audio_stream_count: number
+  decode_verified: true
+  input_digest_verified: true
+  warning_codes: string[]
+  created_at: string
+}
+
 export interface CatalogPage<T> {
   items: T[]
   next_cursor: string | null
@@ -175,6 +199,7 @@ const errorMessages: Record<string, string> = {
   CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
   PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
+  MEDIA_REPORT_NOT_FOUND: '媒体检测报告尚未就绪，请在检测完成后刷新状态。',
   OBJECT_STORAGE_UNAVAILABLE: '对象存储暂时无法签发播放地址，请稍后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -254,6 +279,13 @@ export function listClipAssets(
 export function getClipAsset(projectId: string, clipAssetId: string, signal?: AbortSignal) {
   return readJson<ClipAssetRead>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
+    signal,
+  )
+}
+
+export function getClipAssetMediaReport(projectId: string, clipAssetId: string, signal?: AbortSignal) {
+  return readJson<MediaReport>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-report`,
     signal,
   )
 }

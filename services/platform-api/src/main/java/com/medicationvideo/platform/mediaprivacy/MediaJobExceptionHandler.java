@@ -25,7 +25,8 @@ import com.medicationvideo.platform.iamproject.ProjectAccessException;
 		MediaJobController.class,
 		MediaJobReplayController.class,
 		MediaWorkerController.class,
-		MediaReportController.class
+		MediaReportController.class,
+		ClipAssetMediaReportController.class
 })
 class MediaJobExceptionHandler {
 

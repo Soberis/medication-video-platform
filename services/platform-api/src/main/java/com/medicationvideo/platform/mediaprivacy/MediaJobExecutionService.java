@@ -194,6 +194,17 @@ class MediaJobExecutionService {
 						"A succeeded media job has no immutable report."));
 	}
 
+	/**
+	 * Reads the immutable technical facts through the video identity used by the management UI.
+	 * A report only exists after a successful full-stream media probe.
+	 */
+	@Transactional(readOnly = true)
+	MediaReport getReportForClipAsset(UUID projectId, UUID clipAssetId) {
+		return this.reportRepository.findByProjectIdAndClipAssetId(projectId, clipAssetId)
+				.orElseThrow(() -> new MediaJobExecutionException(
+						"MEDIA_REPORT_NOT_FOUND", "The media report is not available.", false));
+	}
+
 	private void requireResultIdentity(
 			MediaJob job,
 			MediaJobAttempt attempt,

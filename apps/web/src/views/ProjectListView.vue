@@ -179,15 +179,17 @@ onUnmounted(() => activeRequest?.abort())
     <ul class="project-list" aria-label="已加入的项目">
       <li v-for="project in projects" :key="project.project_id" class="project-list-item">
         <div class="project-list-name">
-          <strong>{{ project.display_name }}</strong>
-          <span>我的角色</span>
-          <ElTag :type="project.current_role === 'ADMIN' ? 'primary' : 'info'">
-            {{ project.current_role === 'ADMIN' ? '管理员' : '普通用户' }}
-          </ElTag>
+          <div class="project-list-heading">
+            <strong>{{ project.display_name }}</strong>
+            <ElTag :type="project.current_role === 'ADMIN' ? 'primary' : 'info'">
+              {{ project.current_role === 'ADMIN' ? '管理员' : '普通用户' }}
+            </ElTag>
+          </div>
+          <p>在项目内统一管理配药操作、视频资产、标注任务和文件夹。</p>
         </div>
         <div class="project-list-actions">
           <RouterLink
-            class="text-link"
+            class="project-open-link"
             :to="{ name: 'session-list', params: { projectId: project.project_id } }"
           >
             进入项目

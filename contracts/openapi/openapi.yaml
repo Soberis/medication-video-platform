@@ -20,7 +20,7 @@ info:
     metadata object, query explicitly project-scoped CaptureSession, ClipAsset and EVENT_LOG read
     models through ACTIVE Membership with bounded cursor pagination and folder/unclassified asset
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
-    member for human training-data review after an explicitly requested media ingest, record the current human quality
+    member for human training-data review after upload-integrity verification, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
     assign one auditable annotation task for a qualified video, let its assignee submit one immutable
     time-range revision, let an independent project administrator record one review decision and return a rejected task for a later immutable revision, and create and read project-scoped media probe jobs that freeze the input
@@ -76,9 +76,8 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Video Playback
     description: >-
-      Explicit, short-lived raw-video access for an internal global ADMIN who also has ACTIVE ADMIN
-      membership in the requested project. It is not ordinary playback, download, annotation or a
-      privacy-release decision.
+      Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
+      It is for human review, not download, annotation or a privacy-release decision.
   - name: Asset Folders
     description: >-
       One-level project-scoped ClipAsset classification owned by assetcapture. Folders never grant
@@ -2334,8 +2333,9 @@ paths:
         Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
         explicit project. It accepts only an undeleted video asset in UPLOADED state, atomically
         creates (or returns) the one baseline MEDIA_PROBE job, attempt and Outbox envelope, and
-        returns the durable queued job. This request does not play the video. After the Worker
-        completes technical validation, the user must still explicitly request a playback grant.
+        returns the durable queued job. This request does not play the video and does not block
+        direct human playback; successful technical validation is required before a quality
+        conclusion can be recorded or the video enters the annotation flow.
       security:
         - sessionCookie: []
       parameters:
@@ -2388,6 +2388,55 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "409":
           description: The asset is deleted, no longer UPLOADED or conflicts with the request key.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/media-report:
+    get:
+      operationId: getClipAssetMediaReport
+      tags:
+        - Media Jobs
+      summary: Read the immutable successful media report for one video asset
+      description: >-
+        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        explicit project. A report is available only after a Worker has independently verified
+        the uploaded input digest and completed a full video-stream decode. This response contains
+        technical facts only and never exposes an object location, signed URL or Worker capability.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Immutable media facts accepted from an approved Worker.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaReportResponse"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller has no active membership in the project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project, active video asset or successful media report is not visible to the caller.
           content:
             application/problem+json:
               schema:
