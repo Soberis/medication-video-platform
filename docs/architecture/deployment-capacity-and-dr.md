@@ -19,7 +19,7 @@
 
 | 工作负载 | 职责 | 是否保存业务真值 |
 | --- | --- | --- |
-| Web | Vue 管理端静态资源 | 否 |
+| Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
 | Export Worker | 数据集文件生成和校验 | 否，只写临时对象并回传结果 |
@@ -68,7 +68,7 @@ Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流�
 flowchart TB
     U["Internal platform operator"] --> RP["TLS reverse proxy / WAF"]
     E["Hospital edge uploader"] --> RP
-    RP --> WEB["Vue Web"]
+    RP --> WEB["React Web"]
     RP --> API["Core API"]
     API --> PG[(PostgreSQL)]
     API --> S3[(S3-compatible storage)]

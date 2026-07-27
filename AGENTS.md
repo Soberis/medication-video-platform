@@ -103,7 +103,7 @@ MediaPipe 不进入 P0 关键路径。
 组件工程生成后，质量门禁应覆盖：
 
 - Java：编译、测试、格式检查、Spring Modulith 边界验证和 Flyway 测试。
-- Vue：lint、type-check、unit test 和 build。
+- React：lint、type-check、unit test 和 build。
 - Python：lockfile 检查、Ruff、mypy 和 pytest。
 - 契约：OpenAPI、事件 Schema 和兼容性检查。
 - 系统：合同、集成、E2E 和安全测试。

@@ -38,4 +38,4 @@ ClipAsset INGESTED
 
 - 后端合同测试覆盖两种项目角色、未就绪、软删除、不支持媒体、对象存储失败、no-store 和审计不含 URL。
 - 前端测试覆盖显式点击后才请求、`preload=none`、地址到期、加载失败和重试。
-- OpenAPI lint、Vue lint/type-check/test/build、Java 测试和 Modulith 边界测试进入质量门禁。
+- OpenAPI lint、React lint/type-check/test/build、Java 测试和 Modulith 边界测试进入质量门禁。

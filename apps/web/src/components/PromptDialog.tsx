@@ -1,0 +1,105 @@
+/* eslint-disable react-refresh/only-export-components */
+
+import { Input, Modal } from 'antd'
+import {
+  createContext,
+  type PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+
+interface PromptOptions {
+  title: string
+  description: string
+  confirmText: string
+  placeholder?: string
+  initialValue?: string
+  validate?: (value: string) => string | null
+}
+
+type PromptFunction = (options: PromptOptions) => Promise<string | null>
+
+const PromptContext = createContext<PromptFunction | null>(null)
+
+export function PromptProvider({ children }: PropsWithChildren) {
+  const [activePrompt, setActivePrompt] = useState<PromptOptions | null>(null)
+  const [value, setValue] = useState('')
+  const [error, setError] = useState('')
+  const activeResolver = useRef<((value: string | null) => void) | null>(null)
+
+  const prompt = useCallback<PromptFunction>(
+    (options) =>
+      new Promise((resolve) => {
+        activeResolver.current?.(null)
+        activeResolver.current = resolve
+        setValue(options.initialValue ?? '')
+        setError('')
+        setActivePrompt(options)
+      }),
+    [],
+  )
+
+  const close = useCallback((result: string | null) => {
+    const resolve = activeResolver.current
+    activeResolver.current = null
+    setActivePrompt(null)
+    setError('')
+    resolve?.(result)
+  }, [])
+
+  useEffect(
+    () => () => {
+      activeResolver.current?.(null)
+      activeResolver.current = null
+    },
+    [],
+  )
+
+  const confirm = useCallback(() => {
+    if (!activePrompt) return
+    const validationError = activePrompt.validate?.(value) ?? null
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    close(value)
+  }, [activePrompt, close, value])
+
+  return (
+    <PromptContext.Provider value={prompt}>
+      {children}
+      <Modal
+        open={activePrompt !== null}
+        title={activePrompt?.title}
+        okText={activePrompt?.confirmText}
+        cancelText="取消"
+        onOk={confirm}
+        onCancel={() => close(null)}
+        destroyOnHidden
+      >
+        <p>{activePrompt?.description}</p>
+        <Input
+          autoFocus
+          value={value}
+          placeholder={activePrompt?.placeholder}
+          status={error ? 'error' : undefined}
+          onChange={(event) => {
+            setValue(event.target.value)
+            if (error) setError('')
+          }}
+          onPressEnter={confirm}
+        />
+        {error ? <p className="field-error">{error}</p> : null}
+      </Modal>
+    </PromptContext.Provider>
+  )
+}
+
+export function usePromptDialog() {
+  const context = useContext(PromptContext)
+  if (!context) throw new Error('usePromptDialog 必须在 PromptProvider 内使用。')
+  return context
+}

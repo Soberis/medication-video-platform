@@ -42,7 +42,7 @@ export const assetStatusLabels: Record<ClipAssetStatus, string> = {
   INGEST_FAILED: '媒体检测失败',
 }
 
-export function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+export function statusTone(status: string): 'success' | 'warning' | 'error' | 'default' | 'processing' {
   if (status === 'PASS' || status === 'COMPLETE' || status === 'INGESTED') {
     return 'success'
   }
@@ -50,9 +50,9 @@ export function statusTone(status: string): 'success' | 'warning' | 'danger' | '
     return 'warning'
   }
   if (status === 'REJECT' || status === 'INCOMPLETE' || status === 'INGEST_FAILED' || status === 'UNAVAILABLE') {
-    return 'danger'
+    return 'error'
   }
-  return status === 'BOUND' || status === 'UPLOADED' ? 'primary' : 'info'
+  return status === 'BOUND' || status === 'UPLOADED' ? 'processing' : 'default'
 }
 
 export function statusLabel(labels: Record<string, string>, status: string) {

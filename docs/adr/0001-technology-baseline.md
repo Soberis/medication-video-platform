@@ -9,7 +9,7 @@
 
 ## 决策
 
-1. Web 使用 Vue 3、TypeScript、Vite、Element Plus、Pinia 和 Vue Router。
+1. Web 前端原始基线为 Vue 3、TypeScript、Vite、Element Plus、Pinia 和 Vue Router；该条已由 [ADR-0003](./0003-react-web-frontend.md) 替代为 React 技术栈。
 2. Core API 使用 Java 21、Spring Boot 4.1.0 和 Spring Modulith 2.1.0，构建方式为 Maven Wrapper。
 3. Core API 是一个 Spring Boot 应用，项目 Java 根包冻结为 `com.medicationvideo.platform`，八个领域模块按 Java 包和表所有权隔离。
 4. 外部系统通过 `integration` 端口和适配器接入；MVP 不创建独立适配器服务。

@@ -355,7 +355,7 @@ if (Test-Path -LiteralPath $webPackage) {
     }
 }
 else {
-    Add-Skip 'Web gates: Vue skeleton has not been generated yet'
+    Add-Skip 'Web gates: React application has not been generated yet'
 }
 
 $syntheticUploadClient = Join-Path $root 'tools/synthetic-upload-client/index.mjs'

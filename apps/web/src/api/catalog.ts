@@ -403,7 +403,7 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   throw await toCatalogError(response)
 }
 
-async function toCatalogError(response: Response) {
+async function toCatalogError(response: Response): Promise<CatalogApiError> {
   let body: ApiErrorBody = {}
   try {
     body = (await response.json()) as ApiErrorBody
@@ -411,7 +411,7 @@ async function toCatalogError(response: Response) {
     // Use the safe fallback below for proxy and non-JSON failures.
   }
   const errorCode = typeof body.error_code === 'string' ? body.error_code : 'CATALOG_REQUEST_FAILED'
-  throw new CatalogApiError(
+  return new CatalogApiError(
     errorMessages[errorCode] ?? '暂时无法读取视频数据，请稍后重试。',
     errorCode,
     body.retryable === true,

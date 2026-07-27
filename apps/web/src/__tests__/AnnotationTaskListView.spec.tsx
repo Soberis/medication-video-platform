@@ -1,9 +1,9 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { ElForm, ElOption, ElSelect } from 'element-plus'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import AnnotationTaskListView from '@/views/AnnotationTaskListView.vue'
+import { renderRoute } from '@/test/render'
+import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
@@ -42,7 +42,6 @@ const completedRevision = {
     evaluated_at: '2026-07-26T01:10:00Z',
   },
 }
-
 const labelSchema = {
   label_schema_id: labelSchemaId,
   schema_key: 'medication-primary-step',
@@ -64,7 +63,6 @@ const labelSchema = {
     },
   ],
 }
-
 const assignedTask = {
   annotation_task_id: taskId,
   project_id: projectId,
@@ -83,25 +81,19 @@ const assignedTask = {
   version: 0,
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals()
-  document.body.innerHTML = ''
-})
+afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task list view', () => {
   it('loads the task queue and label schema together, then links back to the video', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ items: [assignedTask] }))
-      .mockResolvedValueOnce(jsonResponse(labelSchema))
-    vi.stubGlobal('fetch', fetchMock)
-    const wrapper = await mountView()
-
-    expect(wrapper.text()).toContain('标注任务')
-    expect(wrapper.text()).toContain('已分配')
-    expect(wrapper.text()).toContain('提交标注')
-    expect(wrapper.text()).toContain('local-synthetic-uploader')
-    expect(wrapper.find('a').attributes('href')).toBe(`/projects/${projectId}/assets/${assetId}`)
+    const fetchMock = stubTasks([assignedTask], labelSchema)
+    renderView()
+    expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
+    expect(screen.getByText('已分配')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: assetId })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/assets/${assetId}`,
+    )
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -109,13 +101,12 @@ describe('annotation task list view', () => {
   })
 
   it('shows schema display names and submits the selected label id', async () => {
-    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
-      if (url.endsWith('/annotation-tasks') && init?.method === 'GET') {
+      if (url.endsWith('/annotation-tasks') && init?.method === 'GET')
         return jsonResponse({ items: [assignedTask] })
-      }
-      if (url.endsWith(`/annotation-tasks/${taskId}/revisions`) && init?.method === 'POST') {
+      if (url.endsWith(`/annotation-tasks/${taskId}/revisions`) && init?.method === 'POST')
         return jsonResponse({
           annotation_revision_id: '80000000-0000-4000-8000-000000000001',
           project_id: projectId,
@@ -129,25 +120,17 @@ describe('annotation task list view', () => {
           submitted_by: 'local-synthetic-uploader',
           submitted_at: '2026-07-26T01:00:00Z',
         })
-      }
       throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
-    const wrapper = await mountView()
-
-    const openButton = wrapper.findAll('button').find((button) => button.text() === '提交标注')
-    expect(openButton).toBeDefined()
-    await openButton!.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.findAllComponents(ElOption).map((option) => option.props('label'))).toEqual([
-      '准备工作区',
-      '拿取药品',
-    ])
-    wrapper.findComponent(ElSelect).vm.$emit('update:modelValue', 'retrieve_medicine')
-    await wrapper.findComponent(ElForm).trigger('submit')
-    await flushPromises()
-
+    const user = userEvent.setup()
+    renderView()
+    await user.click(await screen.findByRole('button', { name: /提交视频/ }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('combobox', { name: '标注片段 1 的标签' }))
+    expect(await screen.findByText('准备工作区')).toBeInTheDocument()
+    await user.click(screen.getByText('拿取药品'))
+    await user.click(within(dialog).getByRole('button', { name: '提交标注' }))
     const revisionCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(revisionCall).toBeDefined()
     expect(JSON.parse(String(revisionCall?.[1]?.body))).toEqual({
@@ -186,27 +169,18 @@ describe('annotation task list view', () => {
               },
       },
     }))
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(jsonResponse({ items: tasks }))
-        .mockResolvedValueOnce(jsonResponse(labelSchema)),
-    )
-
-    const wrapper = await mountView()
-
-    expect(wrapper.text()).toContain('已完成')
-    for (const { expected } of outcomes) expect(wrapper.text()).toContain(expected)
-    expect(wrapper.text()).toContain('尚未进入训练数据集')
-    expect(wrapper.text()).toContain('不会自动准入数据集')
-    expect(wrapper.text()).toContain('缺少已验证的视频时长')
-    expect(wrapper.text()).toContain('其他清洗原因（FUTURE_RULE_CHECK）')
-    expect(wrapper.text()).toContain('当前版本默认不准入数据集')
-    expect(wrapper.text()).toContain('视频资产未被删除')
-    expect(wrapper.text()).toContain('主流程时间片段存在重叠')
-    expect(wrapper.text()).toContain('重新核对清洗')
-    expect(wrapper.text()).not.toContain('提交标注')
+    stubTasks(tasks, labelSchema)
+    renderView()
+    expect(await screen.findByText('当前规则检查通过')).toBeInTheDocument()
+    for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
+    expect(screen.getByText(/尚未进入训练数据集/)).toBeInTheDocument()
+    expect(screen.getByText(/不会自动准入数据集/)).toBeInTheDocument()
+    expect(screen.getByText(/缺少已验证的视频时长/)).toBeInTheDocument()
+    expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
+    expect(screen.getByText(/当前版本默认不准入数据集/)).toBeInTheDocument()
+    expect(screen.getByText(/主流程时间片段存在重叠/)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
+    expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
@@ -214,36 +188,39 @@ describe('annotation task list view', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValueOnce(jsonResponse({ items: [assignedTask] }))
-        .mockResolvedValueOnce(
-          jsonResponse({ error_code: 'ANNOTATION_LABEL_SCHEMA_NOT_FOUND' }, { status: 404 }),
+        .mockImplementation((input: RequestInfo | URL) =>
+          Promise.resolve(
+            String(input).endsWith('/annotation-label-schema')
+              ? jsonResponse({ error_code: 'ANNOTATION_LABEL_SCHEMA_NOT_FOUND' }, { status: 404 })
+              : jsonResponse({ items: [assignedTask] }),
+          ),
         ),
     )
-    const wrapper = await mountView()
-
-    expect(wrapper.find('.catalog-error').exists()).toBe(true)
-    expect(wrapper.text()).toContain('ANNOTATION_LABEL_SCHEMA_NOT_FOUND')
-    expect(wrapper.find('.el-table').exists()).toBe(false)
+    renderView()
+    expect(await screen.findByText('ANNOTATION_LABEL_SCHEMA_NOT_FOUND')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 })
 
-async function mountView() {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/projects/:projectId/annotation-tasks', name: 'annotation-task-list', component: AnnotationTaskListView },
-      { path: '/projects/:projectId/assets/:id', name: 'asset-detail', component: { template: '<div />' } },
-    ],
+function renderView() {
+  return renderRoute(<AnnotationTaskListView />, {
+    route: `/projects/${projectId}/annotation-tasks`,
+    path: '/projects/:projectId/annotation-tasks',
   })
-  await router.push(`/projects/${projectId}/annotation-tasks`)
-  await router.isReady()
-  const wrapper = mount(AnnotationTaskListView, {
-    global: { plugins: [router] },
-  })
-  await flushPromises()
-  return wrapper
 }
-
+function stubTasks(tasks: object[], schema: object) {
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(
+        String(input).endsWith('/annotation-label-schema')
+          ? jsonResponse(schema)
+          : jsonResponse({ items: tasks }),
+      ),
+    )
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
 function jsonResponse(body: object, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
     ...init,

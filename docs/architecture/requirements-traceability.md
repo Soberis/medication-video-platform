@@ -56,13 +56,13 @@
 
 当前 `I`/`PI` 证据和边界：
 
-- FR-001：UploadBatch 初始化、不可变 UploadFile 清单、Complete Batch、VIDEO 到最小 RAW ClipAsset 的幂等绑定、EVENT_LOG 到不可变对象索引的幂等绑定及项目隔离查询、严格 METADATA 解析、CaptureSession/CameraSetSnapshot/CameraStream 原子组装、媒体探测入库、项目隔离的批次/文件只读进度查询和 Vue `/uploads` 只读进度页已有 OpenAPI、Flyway、合同测试与前端测试；事件负载解析不属于当前对象索引，UAT 尚未闭合。
+- FR-001：UploadBatch 初始化、不可变 UploadFile 清单、Complete Batch、VIDEO 到最小 RAW ClipAsset 的幂等绑定、EVENT_LOG 到不可变对象索引的幂等绑定及项目隔离查询、严格 METADATA 解析、CaptureSession/CameraSetSnapshot/CameraStream 原子组装、媒体探测入库、项目隔离的批次/文件只读进度查询和 React `/uploads` 只读进度页已有 OpenAPI、Flyway、合同测试与前端测试；事件负载解析不属于当前对象索引，UAT 尚未闭合。
 - FR-002：已校验声明大小、摘要格式、Part 范围、存储实际大小、最终对象大小和流式计算的完整文件 SHA-256；MediaJob、批准配方摘要、任务/结果/脱敏死信 Schema、Transactional Outbox、RabbitMQ 单一业务队列/DLQ 和最小 Media Worker 已有可执行证据。合成 MP4 已真实完成队列消费、独立摘要复核、FFprobe 事实提取、FFmpeg 完整解码、受租约保护的结果提交、Inbox 去重、状态提交和 MediaReport 查询；Worker 心跳、grace 后失联回收、retryable 结果的 `RETRY_WAIT`/Outbox 有限退避、新 attempt/新 capability、旧结果拒绝、max-attempts 终止、不复制 lease capability 的脱敏死信路径，以及独立管理员令牌、幂等受控重放和数据库追加式审计已有合同测试。2026-07-16 的本地合成演练进一步验证了真实 broker 上的错误身份拒绝、脱敏 DLQ、管理员重放、新 attempt/Outbox/审计和最终 MediaReport 闭环；损坏媒体矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
-- FR-006/FR-007 当前完成显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 授权项目入口和列表/详情。项目成员可对 `UPLOADED` 视频显式、幂等地发起媒体检测；`INGESTED`、未删除 MP4 可在显式点击后拿到 no-store 短期 `DATA_REVIEW` URL，签发追加式审计且 URL 不落库；检测和播放均不自动改变质量或标注状态。状态历史、完整审计查询、浏览器兼容矩阵和 UAT 尚未完成，因此仍为 `PI`。
+- FR-006/FR-007 当前完成显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 React 授权项目入口和列表/详情。项目成员可对 `UPLOADED` 视频显式、幂等地发起媒体检测；`INGESTED`、未删除 MP4 可在显式点击后拿到 no-store 短期 `DATA_REVIEW` URL，签发追加式审计且 URL 不落库；检测和播放均不自动改变质量或标注状态。状态历史、完整审计查询、浏览器兼容矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-010 已按 V1.5 及其继承版本后置。历史 Flyway V19～V21 继续参与空库与升级验证，但当前 OpenAPI、服务和 Web 不暴露 PrivacyAssessment 或 Quarantine 运行能力。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、post-clean profile、Flyway V1～V35、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、媒体技术质量投影、P0 Step LabelSchema、基础一致性守卫、后置清洗结果和只读准入准备度、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、post-clean profile、Flyway V1～V35、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、媒体技术质量投影、P0 Step LabelSchema、基础一致性守卫、后置清洗结果和只读准入准备度、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、React 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -120,11 +120,11 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确
 
 “上传后可播放”由 FR-007 与 V1.4 FR-039 共同细化；“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
-FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`、Vue API/页面测试已覆盖 ADMIN/MEMBER 项目成员、媒体状态、软删除、MP4、短期 `DATA_REVIEW` URL、no-store 和 URL 不进入审计。Range/seek 浏览器矩阵和 UAT 尚未完成。
+FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`、React API/页面测试已覆盖 ADMIN/MEMBER 项目成员、媒体状态、软删除、MP4、短期 `DATA_REVIEW` URL、no-store 和 URL 不进入审计。Range/seek 浏览器矩阵和 UAT 尚未完成。
 
-FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
+FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
+FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 React API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 
@@ -137,13 +137,13 @@ FR-033/FR-036 当前 `PI` 证据和边界：
 - OpenAPI 0.21.0、Flyway V22 和 `ProjectMembershipContractTests` 已覆盖项目幂等创建、首个 ADMIN 原子建立、ADMIN/MEMBER 成员授权/改角/移除、普通成员只见授权项目、最后管理员保护、并发单写和审计失败全事务回滚。
 - 数据库只接受 `ADMIN`/`MEMBER` 和 `ACTIVE`/`REMOVED`，移除成员保留历史；变更命令保存原响应快照并使用追加式审计，重放不会重复产生业务变更或审计。
 - OpenAPI 0.22.0、Flyway V23 和 `AssetFolderContractTests` 已覆盖一层文件夹创建/重命名/删除、成员只读、管理员写入、视频同项目分类/未分类、大小写重名、跨项目复合外键、并发单写和审计失败回滚。删除文件夹只清空 `clip_asset.folder_id` 并递增资产版本，不删除视频或移动对象。
-- OpenAPI 0.24.0 与资产目录合同测试已将 Session、ClipAsset 和 EVENT_LOG 查询统一到显式项目路径并接入 ACTIVE Membership；非成员项目隐藏为 `PROJECT_NOT_FOUND`，成员读取其他项目资源返回资源级 404。Vue 先列授权项目，再在项目路由内查询 Session/视频，视频列表可按真实一层文件夹或“未分类”投影筛选。
+- OpenAPI 0.24.0 与资产目录合同测试已将 Session、ClipAsset 和 EVENT_LOG 查询统一到显式项目路径并接入 ACTIVE Membership；非成员项目隐藏为 `PROJECT_NOT_FOUND`，成员读取其他项目资源返回资源级 404。React 先列授权项目，再在项目路由内查询 Session/视频，视频列表可按真实一层文件夹或“未分类”投影筛选。
 - 本实现没有从历史上传或资产活动推断 Membership，避免把既有行为错误升级为授权事实。文件夹/分类、全部上传入口、Camera 配置和资产目录已使用 Membership 守卫；项目成员可上传和读取目录，Camera 配置要求项目 ADMIN，批次 Abort 的管理员判断来自项目 Membership。内部账号登录、会话与 CSRF，以及全局管理员创建/列出/启停普通用户、在项目内分配成员和对应审计均已实现；账号角色提升、密码重置、会话即时吊销、Tenant/RoleBinding/PurposeGrant、项目关闭和 UAT 仍未完成，因此相关需求仍为 `PI`/`D1`。
 
 FR-034 当前 `PI` 证据和边界：
 
 - Flyway V24、OpenAPI 0.24.0 和 `UploadBatchContractTests` 已覆盖 `PLATFORM_LOCAL` 来源、固定来源标识和“一批次恰好一个 VIDEO”守卫；错误的多文件批次返回稳定错误码。
-- Vue `/uploads/new` 加载授权项目和项目内一层文件夹。每个用户选择的视频独立计算完整文件与 Part SHA-256，独立初始化/登记/Multipart/Part 授权与确认/Complete File/Complete Batch/CaptureSession；Web 单元测试覆盖该控制面调用顺序和多文件顺序队列，浏览器不会记录预签名 URL。
+- React `/uploads/new` 加载授权项目和项目内一层文件夹。每个用户选择的视频独立计算完整文件与 Part SHA-256，独立初始化/登记/Multipart/Part 授权与确认/Complete File/Complete Batch/CaptureSession；Web 单元测试覆盖该控制面调用顺序和多文件顺序队列，浏览器不会记录预签名 URL。
 - 本地 SeaweedFS 的浏览器 `PUT` 预检允许该开发场景；真实边端网络、目标内部浏览器、支持格式与容量、弱网/断点恢复页面体验以及 UAT 仍未完成，因此不能称为需求验收完成。
 
 ## 4. 非功能需求追踪
@@ -161,7 +161,7 @@ FR-034 当前 `PI` 证据和边界：
 | NFR-SEC-003 | 高风险操作可审计 | `governance` | 原始访问、修改、删除、导出、审批和权限变更完整性测试 | D1 |
 | NFR-MAINT-001 | 标签、清洗和准入规则版本化 | `annotationreview`、`qualitycleaning`、`datasetexport` | 冻结版本不可覆盖；旧数据可重建 | D1 |
 | NFR-MAINT-002 | 提供迁移、备份和恢复 | Flyway、部署设计 | 空库迁移、升级迁移、PITR、对象恢复和一致性核验 | PENDING |
-| NFR-UX-001 | 内部桌面端在 1366×768、1080p、2K、4K 下保持统一边界、操作可见且无页面级横向滚动 | Web 规范、Vue | 记录视口与系统缩放比例的真实浏览器逐页抽查 | PI |
+| NFR-UX-001 | 内部桌面端在 1366×768、1080p、2K、4K 下保持统一边界、操作可见且无页面级横向滚动 | Web 规范、React | 记录视口与系统缩放比例的真实浏览器逐页抽查 | PI |
 
 `PENDING` 项必须在 UAT 计划冻结前补充数据规模、并发、内部管理浏览器、RPO/RTO、对象存储产品和边端网络条件，不能在代码中写成未经批准的常量。
 

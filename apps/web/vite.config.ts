@@ -1,6 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import vue from '@vitejs/plugin-vue'
+import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 
 const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     envDir: workspaceRoot,
-    plugins: [vue()],
+    plugins: [react()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

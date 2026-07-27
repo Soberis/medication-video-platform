@@ -181,15 +181,15 @@ P0 非目标：
 
 ### 7.1 基线
 
-- Vue 3、TypeScript、Vite 和 Vue Router；
-- 使用 Composition API 与 `<script setup lang="ts">`；
+- React 19、TypeScript、Vite 和 React Router；
+- 使用函数组件、严格 TypeScript 和 React StrictMode；
 - API 访问集中在 `src/api/` 或明确的领域 API 模块；
-- 页面负责路由参数和编排，展示组件通过 props/emits 交互；
+- 页面负责路由参数和编排，展示组件通过 props/callbacks 交互；
 - 服务端数据默认使用页面局部状态，不复制为第二份业务事实。
 
-### 7.2 Element Plus
+### 7.2 Ant Design
 
-Element Plus 已是批准的前端技术选型，但按需启用。满足以下任一条件时引入：
+Ant Design 已是批准的 React 组件技术选型，但按需启用。满足以下任一条件时引入：
 
 - 首个复杂资产或 Session 列表需要筛选、分页和批量选择；
 - 出现重复使用的表单、对话框、日期选择或树形选择；
@@ -199,16 +199,11 @@ Element Plus 已是批准的前端技术选型，但按需启用。满足以下�
 
 Session/资产列表是首个满足启用条件的页面。首次接入限定为列表、筛选、描述列表、状态标签、空态和分页所需组件；不因组件库可用而提前加入批量操作、上传器、播放器或全局业务组件层。
 
-### 7.3 Pinia
+### 7.3 客户端状态
 
-Pinia 已锁定依赖版本，但只在出现真实跨路由客户端状态时注册，例如：
+登录会话和当前用户使用 React Context。当前项目继续由显式路由参数表达；筛选、批次、资产、标注和数据集等状态优先使用页面局部 state/reducer 与小型 hooks。
 
-- 登录会话和当前用户；
-- 当前项目与权限上下文；
-- 需要跨页面保留的筛选条件；
-- 全局任务通知。
-
-批次、资产、标注和数据集等服务端对象不得仅因多个组件使用就整体复制进 Pinia。应优先通过 API 查询、局部状态和小型 composable 组合。
+服务端对象不得仅因多个组件使用就整体复制进全局 Store。出现第二个真实跨路由客户端状态用例前，不引入 Redux、Zustand、TanStack Query 或通用缓存层。
 
 ### 7.4 平台本地上传
 
@@ -309,7 +304,7 @@ P0 页面至少满足以下要求：
 | 层级 | 职责 |
 | --- | --- |
 | ESLint | 静态代码规则 |
-| `vue-tsc` | TypeScript 与模板类型检查 |
+| `tsc` | TypeScript 与 JSX 类型检查 |
 | Vitest | 组件状态、错误映射、交互和 API 边界单元测试 |
 | Playwright | 真实浏览器中的路由、关键流程、权限和失败恢复 |
 | Accessibility 检查 | 键盘、语义、焦点、对比度和动态状态 |

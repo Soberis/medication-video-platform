@@ -207,7 +207,7 @@ async function write(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: obj
   })
 }
 
-async function projectApiError(response: Response) {
+async function projectApiError(response: Response): Promise<CatalogApiError> {
   let body: ApiErrorBody = {}
   try {
     body = (await response.json()) as ApiErrorBody
@@ -223,7 +223,7 @@ async function projectApiError(response: Response) {
         : errorCode === 'ASSET_FOLDER_NOT_FOUND'
           ? '未找到该文件夹，或它已被其他管理员删除。'
           : '暂时无法读取或更新项目数据，请稍后重试。'
-  throw new CatalogApiError(
+  return new CatalogApiError(
     errorMessage,
     errorCode,
     body.retryable === true,

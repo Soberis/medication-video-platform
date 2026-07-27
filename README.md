@@ -20,7 +20,7 @@ Sprint 0 已完成，上传/资产和最小人工审核、标注、独立复核�
 ## 架构
 
 ```text
-Vue 3 Web
+React Web
     ↓ REST / OpenAPI
 Java 21 + Spring Boot + Spring Modulith Core API
     ├── PostgreSQL
@@ -33,7 +33,7 @@ Java 21 + Spring Boot + Spring Modulith Core API
 ## 目录
 
 ```text
-apps/web/                       Vue 管理端
+apps/web/                      React 管理端
 services/platform-api/         Core API
 workers/                       按阶段启用的异步 Worker
 plugins/                       P1 AI 插件
