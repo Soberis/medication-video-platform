@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { authorizeClipAssetPlayback, deleteClipAsset, requestClipAssetMediaProbe } from '@/api/catalog'
+import {
+  authorizeClipAssetPlayback,
+  deleteClipAsset,
+  getCaptureSessionDatasetAdmissionPreview,
+  requestClipAssetMediaProbe,
+} from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const clipAssetId = '50000000-0000-4000-8000-000000000001'
+const captureSessionId = '40000000-0000-4000-8000-000000000001'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -80,6 +86,37 @@ describe('catalog API', () => {
         method: 'POST',
         headers: expect.objectContaining({ 'Idempotency-Key': 'media-probe-idempotency-0001' }),
       }),
+    )
+  })
+
+  it('reads the current dataset-admission preview without caching it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          capture_session_id: captureSessionId,
+          eligible: false,
+          assembly_status: 'COMPLETE',
+          quality_status: 'PASS',
+          expected_camera_count: 1,
+          received_camera_count: 1,
+          blocking_reasons: [],
+          streams: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getCaptureSessionDatasetAdmissionPreview(projectId, captureSessionId),
+    ).resolves.toMatchObject({
+      capture_session_id: captureSessionId,
+      eligible: false,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
   })
 })

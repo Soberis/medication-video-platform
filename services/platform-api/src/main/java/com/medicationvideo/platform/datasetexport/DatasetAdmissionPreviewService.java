@@ -109,6 +109,10 @@ class DatasetAdmissionPreviewService {
         if (!"PASS".equals(cleaningDecision)) {
             reasons.add("POST_CLEANING_" + cleaningDecision);
         }
+        if (cleaning != null && quality != null
+                && cleaning.qualityReviewVersion() != quality.version()) {
+            reasons.add("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING");
+        }
         return new StreamDatasetAdmissionPreview(
                 stream.cameraStreamId(), stream.clipAssetId(), stream.cameraIndex(), reasons.isEmpty(),
                 stream.streamStatus(), stream.qualityStatus(), stream.assetStatus(), stream.assetDeleted(),

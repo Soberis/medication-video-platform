@@ -896,7 +896,7 @@ function handlePlaybackError() {
         <ElDescriptionsItem label="流状态">
           {{ streamStatusLabels[detail.session_binding.stream_status] }}
         </ElDescriptionsItem>
-        <ElDescriptionsItem label="平台质量">
+        <ElDescriptionsItem label="流技术检测">
           {{ qualityStatusLabels[detail.session_binding.quality_status] }}
         </ElDescriptionsItem>
         <ElDescriptionsItem label="边端同步声明">

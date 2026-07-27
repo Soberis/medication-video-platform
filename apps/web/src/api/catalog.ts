@@ -86,6 +86,44 @@ export interface CaptureSessionDetail {
   created_at: string
 }
 
+export type DatasetQualityReviewDecision =
+  | 'UNREVIEWED'
+  | 'QUALIFIED'
+  | 'REJECTED'
+  | 'NEEDS_REVIEW'
+export type DatasetAnnotationReviewDecision = 'UNREVIEWED' | 'APPROVED' | 'REJECTED'
+export type DatasetPostCleaningDecision = 'MISSING' | 'PASS' | 'WARNING' | 'REJECT'
+export type DatasetAssetStatus = ClipAssetStatus | 'MISSING'
+
+export interface DatasetAdmissionPreviewStream {
+  camera_stream_id: string
+  clip_asset_id: string
+  camera_index: number
+  eligible: boolean
+  stream_status: CameraStreamStatus
+  stream_quality_status: CaptureQualityStatus
+  asset_status: DatasetAssetStatus
+  asset_deleted: boolean
+  quality_review_decision: DatasetQualityReviewDecision
+  annotation_revision_id?: string | null
+  annotation_review_decision: DatasetAnnotationReviewDecision
+  post_cleaning_decision: DatasetPostCleaningDecision
+  annotation_document_sha256?: string | null
+  label_schema_digest?: string | null
+  blocking_reasons: string[]
+}
+
+export interface DatasetAdmissionPreview {
+  capture_session_id: string
+  eligible: boolean
+  assembly_status: CaptureSessionAssemblyStatus
+  quality_status: CaptureQualityStatus
+  expected_camera_count: number
+  received_camera_count: number
+  blocking_reasons: string[]
+  streams: DatasetAdmissionPreviewStream[]
+}
+
 export interface ClipAssetSessionBinding {
   capture_session_id: string
   camera_stream_id: string
@@ -249,6 +287,17 @@ export function getCaptureSession(
 ) {
   return readJson<CaptureSessionDetail>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions/${encodeURIComponent(captureSessionId)}`,
+    signal,
+  )
+}
+
+export function getCaptureSessionDatasetAdmissionPreview(
+  projectId: string,
+  captureSessionId: string,
+  signal?: AbortSignal,
+) {
+  return readJson<DatasetAdmissionPreview>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions/${encodeURIComponent(captureSessionId)}/dataset-admission-preview`,
     signal,
   )
 }

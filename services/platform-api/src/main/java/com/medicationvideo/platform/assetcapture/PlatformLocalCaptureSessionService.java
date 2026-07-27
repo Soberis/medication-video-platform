@@ -24,6 +24,7 @@ class PlatformLocalCaptureSessionService {
 	private final CameraSetSnapshotRepository snapshotRepository;
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
 	private final CameraStreamRepository streamRepository;
+	private final CaptureSessionMediaProjectionService sessionProjection;
 
 	PlatformLocalCaptureSessionService(
 			UploadBatchRepository batchRepository,
@@ -34,7 +35,8 @@ class PlatformLocalCaptureSessionService {
 			CaptureSessionRepository sessionRepository,
 			CameraSetSnapshotRepository snapshotRepository,
 			CameraSetSnapshotMemberRepository snapshotMemberRepository,
-			CameraStreamRepository streamRepository) {
+			CameraStreamRepository streamRepository,
+			CaptureSessionMediaProjectionService sessionProjection) {
 		this.batchRepository = batchRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.channelRepository = channelRepository;
@@ -44,6 +46,7 @@ class PlatformLocalCaptureSessionService {
 		this.snapshotRepository = snapshotRepository;
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
+		this.sessionProjection = sessionProjection;
 	}
 
 	@Transactional
@@ -102,6 +105,7 @@ class PlatformLocalCaptureSessionService {
 		this.snapshotMemberRepository.saveAndFlush(snapshotMember);
 		var stream = CameraStream.importLocal(session.getCaptureSessionId(), snapshotMember, assets.getFirst(), now);
 		this.streamRepository.saveAndFlush(stream);
+		this.sessionProjection.refresh(projectId, session.getCaptureSessionId(), now);
 		return CaptureSessionResponse.from(session, snapshot, java.util.List.of(snapshotMember), java.util.List.of(stream));
 	}
 

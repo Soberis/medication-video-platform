@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -28,6 +29,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
+import com.medicationvideo.platform.support.CaptureMediaProjectionTestData;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
@@ -190,6 +192,8 @@ class MediaJobExecutionContractTests {
 	@Test
 	void acquiresInputAcceptsSuccessIdempotentlyAndExposesImmutableReport() throws Exception {
 		var created = createQueuedJob();
+		var projection = CaptureMediaProjectionTestData.bindPending(
+				this.jdbcTemplate, PROJECT_ID, created.clipAssetId(), Instant.now().minusSeconds(30));
 		acquire(created)
 				.andExpect(status().isOk())
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -225,6 +229,21 @@ class MediaJobExecutionContractTests {
 				"SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
 		assertEquals("INGESTED", scalar(
 				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?", created.clipAssetId()));
+		assertEquals("INGESTED", scalar(
+				"SELECT stream_status FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId()));
+		assertEquals("PASS", scalar(
+				"SELECT quality_status FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId()));
+		assertEquals(1, count(
+				"SELECT received_camera_count FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
+		assertEquals("COMPLETE", scalar(
+				"SELECT assembly_status FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
+		assertEquals("PASS", scalar(
+				"SELECT quality_status FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
 
 		this.mockMvc.perform(get("/api/v1/media-jobs/{jobId}/report", created.jobId())
 				.header("Authorization", "Bearer " + USER_TOKEN))
@@ -257,6 +276,27 @@ class MediaJobExecutionContractTests {
 				.andExpect(jsonPath("$.decode_verified").value(true))
 				.andExpect(jsonPath("$.input_url").doesNotExist())
 				.andExpect(jsonPath("$.object_key").doesNotExist());
+
+		this.mockMvc.perform(delete(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}",
+					PROJECT_ID,
+					created.clipAssetId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delete-projection-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"reason":"Synthetic media projection verification"}
+						"""))
+				.andExpect(status().isNoContent());
+		assertEquals("UNAVAILABLE", scalar(
+				"SELECT stream_status FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId()));
+		assertEquals(0, count(
+				"SELECT received_camera_count FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
+		assertEquals("INCOMPLETE", scalar(
+				"SELECT assembly_status FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
 	}
 
 	@Test
@@ -347,6 +387,8 @@ class MediaJobExecutionContractTests {
 	@Test
 	void persistsStableFailureWithoutCreatingMediaReport() throws Exception {
 		var created = createQueuedJob();
+		var projection = CaptureMediaProjectionTestData.bindPending(
+				this.jdbcTemplate, PROJECT_ID, created.clipAssetId(), Instant.now().minusSeconds(30));
 		acquire(created).andExpect(status().isOk());
 
 		submitResult(created, failedResult(created))
@@ -360,6 +402,21 @@ class MediaJobExecutionContractTests {
 				"SELECT error_code FROM media_job_attempt WHERE media_job_id = ?", created.jobId()));
 		assertEquals("INGEST_FAILED", scalar(
 				"SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?", created.clipAssetId()));
+		assertEquals("INGEST_FAILED", scalar(
+				"SELECT stream_status FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId()));
+		assertEquals("REJECT", scalar(
+				"SELECT quality_status FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId()));
+		assertEquals(0, count(
+				"SELECT received_camera_count FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
+		assertEquals("ASSEMBLING", scalar(
+				"SELECT assembly_status FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
+		assertEquals("REJECT", scalar(
+				"SELECT quality_status FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId()));
 
 		this.mockMvc.perform(get("/api/v1/media-jobs/{jobId}", created.jobId())
 				.header("Authorization", "Bearer " + USER_TOKEN))
@@ -817,4 +874,5 @@ class MediaJobExecutionContractTests {
 			String leaseToken,
 			int attempt) {
 	}
+
 }

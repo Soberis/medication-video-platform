@@ -38,6 +38,7 @@ class CaptureSessionIngestService {
 	private final CameraSetSnapshotRepository snapshotRepository;
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
 	private final CameraStreamRepository streamRepository;
+	private final CaptureSessionMediaProjectionService sessionProjection;
 	private final MultipartObjectStorage objectStorage;
 	private final ObjectMapper objectMapper;
 	private final Validator validator;
@@ -53,6 +54,7 @@ class CaptureSessionIngestService {
 			CameraSetSnapshotRepository snapshotRepository,
 			CameraSetSnapshotMemberRepository snapshotMemberRepository,
 			CameraStreamRepository streamRepository,
+			CaptureSessionMediaProjectionService sessionProjection,
 			MultipartObjectStorage objectStorage,
 			ObjectMapper objectMapper,
 			Validator validator,
@@ -66,6 +68,7 @@ class CaptureSessionIngestService {
 		this.snapshotRepository = snapshotRepository;
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
+		this.sessionProjection = sessionProjection;
 		this.objectStorage = objectStorage;
 		this.objectMapper = objectMapper;
 		this.validator = validator;
@@ -294,6 +297,7 @@ class CaptureSessionIngestService {
 						now))
 				.toList();
 		this.streamRepository.saveAllAndFlush(streams);
+		this.sessionProjection.refresh(projectId, session.getCaptureSessionId(), now);
 		return CaptureSessionResponse.from(session, snapshot, snapshotMembers, streams);
 	}
 

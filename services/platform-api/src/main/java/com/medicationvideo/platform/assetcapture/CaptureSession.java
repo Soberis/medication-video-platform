@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -149,9 +150,9 @@ class CaptureSession {
 		this.cameraSetId = cameraSet.getCameraSetId();
 		this.metadataSchemaVersion = "platform-local-upload-v1";
 		this.expectedCameraCount = 1;
-		this.receivedCameraCount = 1;
+		this.receivedCameraCount = 0;
 		this.serverReceiveTime = createdAt;
-		this.assemblyStatus = CaptureSessionAssemblyStatus.COMPLETE;
+		this.assemblyStatus = CaptureSessionAssemblyStatus.ASSEMBLING;
 		this.qualityStatus = CaptureQualityStatus.PENDING;
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
@@ -225,11 +226,51 @@ class CaptureSession {
 		return this.createdAt;
 	}
 
-	void markStreamUnavailable(Instant changedAt) {
-		if (this.assemblyStatus == CaptureSessionAssemblyStatus.INCOMPLETE) {
+	void refreshMediaProjection(List<CameraStream> streams, Instant changedAt) {
+		var received = Math.toIntExact(streams.stream()
+				.filter(stream -> stream.getStreamStatus() == CameraStreamStatus.INGESTED)
+				.map(CameraStream::getCameraChannelId)
+				.distinct()
+				.count());
+		var projectedAssembly = this.assemblyStatus;
+		if (this.assemblyStatus != CaptureSessionAssemblyStatus.CLOSED) {
+			if (this.assemblyStatus == CaptureSessionAssemblyStatus.INCOMPLETE
+					|| streams.stream()
+							.anyMatch(stream -> stream.getStreamStatus() == CameraStreamStatus.UNAVAILABLE)) {
+				projectedAssembly = CaptureSessionAssemblyStatus.INCOMPLETE;
+			}
+			else {
+				projectedAssembly = received == this.expectedCameraCount
+						&& streams.size() == this.expectedCameraCount
+								? CaptureSessionAssemblyStatus.COMPLETE
+								: CaptureSessionAssemblyStatus.ASSEMBLING;
+			}
+		}
+
+		var projectedQuality = technicalQuality(streams, received);
+		if (this.receivedCameraCount == received
+				&& this.assemblyStatus == projectedAssembly
+				&& this.qualityStatus == projectedQuality) {
 			return;
 		}
-		this.assemblyStatus = CaptureSessionAssemblyStatus.INCOMPLETE;
+		this.receivedCameraCount = received;
+		this.assemblyStatus = projectedAssembly;
+		this.qualityStatus = projectedQuality;
 		this.updatedAt = changedAt;
+	}
+
+	private CaptureQualityStatus technicalQuality(List<CameraStream> streams, int received) {
+		if (streams.stream().anyMatch(stream -> stream.getQualityStatus() == CaptureQualityStatus.REJECT)) {
+			return CaptureQualityStatus.REJECT;
+		}
+		if (streams.size() != this.expectedCameraCount
+				|| received != this.expectedCameraCount
+				|| streams.stream().anyMatch(stream -> stream.getQualityStatus() == CaptureQualityStatus.PENDING)) {
+			return CaptureQualityStatus.PENDING;
+		}
+		if (streams.stream().anyMatch(stream -> stream.getQualityStatus() == CaptureQualityStatus.WARNING)) {
+			return CaptureQualityStatus.WARNING;
+		}
+		return CaptureQualityStatus.PASS;
 	}
 }

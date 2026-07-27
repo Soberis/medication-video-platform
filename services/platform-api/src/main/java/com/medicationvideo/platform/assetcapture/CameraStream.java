@@ -85,7 +85,7 @@ class CameraStream {
 		this.timeOffsetMs = metadata.timeOffsetMs();
 		this.declaredSyncStatus = metadata.syncStatus();
 		this.streamStatus = initialStatus(clipAsset.getStatus());
-		this.qualityStatus = CaptureQualityStatus.PENDING;
+		this.qualityStatus = initialQualityStatus(clipAsset.getStatus());
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
 	}
@@ -115,7 +115,7 @@ class CameraStream {
 		stream.timeOffsetMs = 0;
 		stream.declaredSyncStatus = DeclaredSyncStatus.UNKNOWN;
 		stream.streamStatus = initialStatus(clipAsset.getStatus());
-		stream.qualityStatus = CaptureQualityStatus.PENDING;
+		stream.qualityStatus = initialQualityStatus(clipAsset.getStatus());
 		stream.createdAt = createdAt;
 		stream.updatedAt = createdAt;
 		return stream;
@@ -177,6 +177,7 @@ class CameraStream {
 					false);
 		}
 		this.streamStatus = succeeded ? CameraStreamStatus.INGESTED : CameraStreamStatus.INGEST_FAILED;
+		this.qualityStatus = succeeded ? CaptureQualityStatus.PASS : CaptureQualityStatus.REJECT;
 		this.updatedAt = changedAt;
 	}
 
@@ -193,6 +194,14 @@ class CameraStream {
 			case UPLOADED, INGESTING -> CameraStreamStatus.BOUND;
 			case INGESTED -> CameraStreamStatus.INGESTED;
 			case INGEST_FAILED -> CameraStreamStatus.INGEST_FAILED;
+		};
+	}
+
+	private static CaptureQualityStatus initialQualityStatus(ClipAssetStatus assetStatus) {
+		return switch (assetStatus) {
+			case UPLOADED, INGESTING -> CaptureQualityStatus.PENDING;
+			case INGESTED -> CaptureQualityStatus.PASS;
+			case INGEST_FAILED -> CaptureQualityStatus.REJECT;
 		};
 	}
 }

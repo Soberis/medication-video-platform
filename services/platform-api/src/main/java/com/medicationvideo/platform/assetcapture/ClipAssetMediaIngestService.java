@@ -13,14 +13,17 @@ public class ClipAssetMediaIngestService {
 	private final ClipAssetRepository assetRepository;
 	private final CameraStreamRepository streamRepository;
 	private final MultipartObjectStorage objectStorage;
+	private final CaptureSessionMediaProjectionService sessionProjection;
 
 	public ClipAssetMediaIngestService(
 			ClipAssetRepository assetRepository,
 			CameraStreamRepository streamRepository,
-			MultipartObjectStorage objectStorage) {
+			MultipartObjectStorage objectStorage,
+			CaptureSessionMediaProjectionService sessionProjection) {
 		this.assetRepository = assetRepository;
 		this.streamRepository = streamRepository;
 		this.objectStorage = objectStorage;
+		this.sessionProjection = sessionProjection;
 	}
 
 	@Transactional
@@ -54,7 +57,10 @@ public class ClipAssetMediaIngestService {
 		var asset = lock(projectId, clipAssetId);
 		asset.completeMediaIngest(succeeded, changedAt);
 		this.streamRepository.findByClipAssetId(clipAssetId)
-				.ifPresent(stream -> stream.completeMediaIngest(succeeded, changedAt));
+				.ifPresent(stream -> {
+					stream.completeMediaIngest(succeeded, changedAt);
+					this.sessionProjection.refresh(projectId, stream.getCaptureSessionId(), changedAt);
+				});
 	}
 
 	private ClipAsset lock(UUID projectId, UUID clipAssetId) {

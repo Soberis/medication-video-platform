@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AssetDetailView from '@/views/AssetDetailView.vue'
 import AssetListView from '@/views/AssetListView.vue'
+import SessionDetailView from '@/views/SessionDetailView.vue'
 import SessionListView from '@/views/SessionListView.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -89,6 +90,110 @@ describe('catalog views', () => {
       expect.any(Object),
     )
   }, 15_000)
+
+  it('shows a concise, evidence-based dataset readiness preview on the session detail page', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith('/dataset-admission-preview')) {
+        return Promise.resolve(
+          jsonResponse({
+            capture_session_id: sessionId,
+            eligible: false,
+            assembly_status: 'COMPLETE',
+            quality_status: 'PENDING',
+            expected_camera_count: 1,
+            received_camera_count: 1,
+            blocking_reasons: ['SESSION_QUALITY_NOT_PASS'],
+            streams: [
+              {
+                camera_stream_id: '41000000-0000-4000-8000-000000000001',
+                clip_asset_id: assetId,
+                camera_index: 0,
+                eligible: false,
+                stream_status: 'INGESTED',
+                stream_quality_status: 'PENDING',
+                asset_status: 'INGESTED',
+                asset_deleted: false,
+                quality_review_decision: 'UNREVIEWED',
+                annotation_revision_id: null,
+                annotation_review_decision: 'UNREVIEWED',
+                post_cleaning_decision: 'MISSING',
+                annotation_document_sha256: null,
+                label_schema_digest: null,
+                blocking_reasons: [
+                  'QUALITY_REVIEW_NOT_QUALIFIED',
+                  'ANNOTATION_REVISION_MISSING',
+                ],
+              },
+            ],
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(captureSessionDetail()))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = testRouter(
+      `/projects/${projectId}/sessions/${sessionId}`,
+      '/projects/:projectId/sessions/:id',
+      SessionDetailView,
+    )
+    await router.isReady()
+    const wrapper = mount(SessionDetailView, { global: { plugins: [router, createPinia()] } })
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('配药操作详情')
+    expect(wrapper.text()).toContain('synthetic-edge-01')
+    expect(wrapper.text()).toContain('训练数据准备度')
+    expect(wrapper.text()).toContain('尚未准备完成')
+    expect(wrapper.text()).toContain('技术检测')
+    expect(wrapper.text()).toContain('人工质量')
+    expect(wrapper.text()).toContain('本次配药操作的技术检测尚未通过')
+    expect(wrapper.text()).toContain('有视频尚未通过人工质量判断')
+    expect(wrapper.text()).toContain('有视频尚未提交人工标注')
+    expect(wrapper.findAll('.detail-card')).toHaveLength(3)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-sessions/${sessionId}`,
+      expect.any(Object),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-sessions/${sessionId}/dataset-admission-preview`,
+      expect.any(Object),
+    )
+  })
+
+  it('keeps the session facts available when the readiness preview temporarily fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: string | URL | Request) => {
+        if (String(input).endsWith('/dataset-admission-preview')) {
+          return Promise.resolve(
+            jsonResponse(
+              {
+                error_code: 'DATASET_ADMISSION_PREVIEW_UNAVAILABLE',
+                error_message: 'Synthetic failure.',
+                retryable: true,
+              },
+              503,
+            ),
+          )
+        }
+        return Promise.resolve(jsonResponse(captureSessionDetail()))
+      }),
+    )
+    const router = testRouter(
+      `/projects/${projectId}/sessions/${sessionId}`,
+      '/projects/:projectId/sessions/:id',
+      SessionDetailView,
+    )
+    await router.isReady()
+    const wrapper = mount(SessionDetailView, { global: { plugins: [router, createPinia()] } })
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('配药操作详情')
+    expect(wrapper.text()).toContain('采集概况')
+    expect(wrapper.text()).toContain('暂时无法读取视频数据，请稍后重试。')
+    expect(wrapper.findAll('button').some((button) => button.text() === '重试')).toBe(true)
+  })
 
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     vi.stubGlobal(
@@ -609,7 +714,11 @@ describe('catalog views', () => {
 function testRouter(
   path: string,
   routePath: string,
-  component: typeof SessionListView | typeof AssetDetailView | typeof AssetListView,
+  component:
+    | typeof SessionListView
+    | typeof SessionDetailView
+    | typeof AssetDetailView
+    | typeof AssetListView,
 ) {
   const EmptyView = { template: '<div />' }
   const router = createRouter({
@@ -623,7 +732,7 @@ function testRouter(
       {
         path: '/projects/:projectId/sessions/:id',
         name: 'session-detail',
-        component: EmptyView,
+        component: routePath === '/projects/:projectId/sessions/:id' ? component : EmptyView,
       },
       {
         path: '/projects/:projectId/assets',
@@ -663,5 +772,59 @@ function unreviewedQuality() {
     reviewed_by: null,
     reviewed_at: null,
     version: 0,
+  }
+}
+
+function captureSessionDetail() {
+  return {
+    capture_session_id: sessionId,
+    project_id: projectId,
+    batch_id: '60000000-0000-4000-8000-000000000001',
+    device_id: 'synthetic-edge-01',
+    metadata_upload_file_id: null,
+    metadata_schema_version: '1.0',
+    metadata_sha256: null,
+    expected_camera_count: 1,
+    received_camera_count: 1,
+    sync_group_id: 'sync-group-01',
+    device_time_utc: '2026-07-15T01:02:03Z',
+    device_timezone: 'Asia/Shanghai',
+    server_receive_time: '2026-07-15T01:03:03Z',
+    assembly_status: 'COMPLETE',
+    quality_status: 'PENDING',
+    camera_set_snapshot: {
+      camera_set_snapshot_id: '70000000-0000-4000-8000-000000000001',
+      source_camera_set_id: '71000000-0000-4000-8000-000000000001',
+      camera_set_key: 'dispensing-cabin-a',
+      configuration_version: 1,
+      layout_version: 'layout-v1',
+      expected_camera_count: 1,
+      members: [
+        {
+          camera_channel_id: '72000000-0000-4000-8000-000000000001',
+          camera_index: 0,
+          camera_role: 'overview',
+          mount_position: 'top',
+          enabled: true,
+        },
+      ],
+    },
+    streams: [
+      {
+        camera_stream_id: '41000000-0000-4000-8000-000000000001',
+        clip_asset_id: assetId,
+        client_file_id: '90000000-0000-4000-8000-000000000001',
+        camera_channel_id: '72000000-0000-4000-8000-000000000001',
+        camera_index: 0,
+        camera_role: 'overview',
+        mount_position: 'top',
+        record_start_utc: '2026-07-15T01:02:03Z',
+        time_offset_ms: 0,
+        sync_status: 'PASS',
+        stream_status: 'INGESTED',
+        quality_status: 'PENDING',
+      },
+    ],
+    created_at: '2026-07-15T01:03:03Z',
   }
 }

@@ -146,7 +146,7 @@ onUnmounted(() => activeRequest?.abort())
           />
         </ElSelect>
       </ElFormItem>
-      <ElFormItem label="平台质量状态">
+      <ElFormItem label="技术检测状态">
         <ElSelect v-model="qualityStatus" clearable placeholder="全部状态">
           <ElOption
             v-for="(label, value) in qualityStatusLabels"

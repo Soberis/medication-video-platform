@@ -77,6 +77,27 @@ class DatasetAdmissionPreviewServiceTests {
                 "ANNOTATION_REVISION_MISSING"), response.streams().getFirst().blockingReasons());
     }
 
+    @Test
+    void blocksAStalePostCleaningResultAfterTheQualityReviewVersionChanges() {
+        var captureFacts = mock(CaptureSessionDatasetAdmissionQueryService.class);
+        var qualityFacts = mock(QualityReviewQueryService.class);
+        var annotationFacts = mock(AnnotationDatasetAdmissionQueryService.class);
+        when(captureFacts.getFacts(PROJECT_ID, SESSION_ID)).thenReturn(completeSession());
+        when(qualityFacts.findCurrentDecisions(any(), any()))
+                .thenReturn(Map.of(ASSET_ID, new QualityReviewQueryService.CurrentDecision("QUALIFIED", 2)));
+        when(annotationFacts.findLatestByClipAssetIds(any(), any()))
+                .thenReturn(Map.of(ASSET_ID, approvedAnnotation()));
+
+        var response = new DatasetAdmissionPreviewService(captureFacts, qualityFacts, annotationFacts)
+                .preview(PROJECT_ID, SESSION_ID);
+
+        assertFalse(response.eligible());
+        assertFalse(response.streams().getFirst().eligible());
+        assertEquals(
+                List.of("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING"),
+                response.streams().getFirst().blockingReasons());
+    }
+
     private static CaptureSessionDatasetAdmissionFacts completeSession() {
         return new CaptureSessionDatasetAdmissionFacts(
                 SESSION_ID, 1, 1, "COMPLETE", "PASS", List.of(new CaptureSessionDatasetAdmissionFacts.Stream(
@@ -88,6 +109,6 @@ class DatasetAdmissionPreviewServiceTests {
                 ASSET_ID, REVISION_ID, "APPROVED", "b".repeat(64), "c".repeat(64),
                 new PostCleaningResultSummary(
                         UUID.randomUUID(), UUID.randomUUID(), "p0-post-annotation-cleaning-v1", "v1",
-                        "d".repeat(64), "PASS", List.of(), List.of("DOCUMENT_DIGEST"), Instant.EPOCH));
+                        "d".repeat(64), 1, "PASS", List.of(), List.of("DOCUMENT_DIGEST"), Instant.EPOCH));
     }
 }

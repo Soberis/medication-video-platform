@@ -151,6 +151,10 @@ class CleaningRun {
 		return this.cleaningRuleSetId;
 	}
 
+	long getQualityReviewVersion() {
+		return this.qualityReviewVersion;
+	}
+
 	CleaningRuleSet getRuleSet() {
 		return this.ruleSet;
 	}

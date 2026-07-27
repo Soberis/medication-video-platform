@@ -1,10 +1,10 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.6/配药视频数据管理平台需求文档_V1.6.md`
-> 继承需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`
+> 当前需求基线：`docs/requirements/baselines/V1.8/配药视频数据管理平台需求文档_V1.8.md`
+> 继承需求基线：V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-07-26
+> 最后更新：2026-07-27
 
 ## 1. 目的
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产、人工审核、后置清洗和数据集准入预览闭环。V1.6 在保留 V1.5 隐私简化范围的基础上，明确管理员可改名和归档项目，视频删除保持可审计软删除；历史迁移继续保留。当前纵向切片把复核通过的不可变 AnnotationRevision 推进为已完成任务，并在同一数据库事务内生成版本化、不可变的后置清洗运行与结果；随后按 CaptureSession 聚合当前装配、质量、删除、review 和 post-clean 事实，仅返回可解释的准入预览。它不创建 DatasetVersion、不自动写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集准入准备度。V1.8 继承 V1.7 的内部训练数据平台边界，并把 Web 验收明确为笔记本、1080p、2K 和 4K 桌面视口。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。它不创建 DatasetVersion、不写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -61,8 +61,8 @@
 - FR-003：Multipart Session、短期 Part 授权、对象存储侧 Part 确认、恢复协调、Part/文件/批次进度查询、幂等 Complete File/Complete Batch，以及发起人或项目管理员 Abort 已有实现。TTL 过期会原子写入批次/文件终态、追加式审计和持久化清理任务；清理使用 claim lease、有限重试，并区分 Multipart Abort 与已完成遗留对象删除。2026-07-17 已在本地固定 SeaweedFS 4.29 上完成准确 2 GiB、64 MiB × 32 Parts 的双进程中断恢复：未确认 Part 经 reconciliation 找回，最终大小/完整 SHA-256、重复 Complete 和合成对象清理均通过；三 Part 兼容测试同时覆盖 SeaweedFS marker 空页回退。应用内清理积压指标、WARNING/CRITICAL/恢复判定和无重复状态跃迁已有合同测试；弱网、并发、目标 S3 产品、生产监控采集/通知路由和 UAT 环境验收尚未完成，因此仍为 `PI`。
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 授权项目入口和列表/详情。项目成员可对 `UPLOADED` 视频显式、幂等地发起媒体检测；`INGESTED`、未删除 MP4 可在显式点击后拿到 no-store 短期 `DATA_REVIEW` URL，签发追加式审计且 URL 不落库；检测和播放均不自动改变质量或标注状态。状态历史、完整审计查询、浏览器兼容矩阵和 UAT 尚未完成，因此仍为 `PI`。
-- FR-010 已按 V1.6 后置。历史 Flyway V19～V21 继续参与空库与升级验证，但当前 OpenAPI、服务和 Web 不暴露 PrivacyAssessment 或 Quarantine 运行能力。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、post-clean profile、Flyway V1～V34、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、P0 Step LabelSchema、基础一致性守卫与后置清洗结果、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
+- FR-010 已按 V1.5 及其继承版本后置。历史 Flyway V19～V21 继续参与空库与升级验证，但当前 OpenAPI、服务和 Web 不暴露 PrivacyAssessment 或 Quarantine 运行能力。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、post-clean profile、Flyway V1～V35、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、媒体技术质量投影、P0 Step LabelSchema、基础一致性守卫、后置清洗结果和只读准入准备度、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -94,7 +94,7 @@
 | FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
 | FR-027 创建数据集版本 | P0 | `datasetexport` | dataset versions | dataset_version | 选择规则、标签/清洗规则、创建人和时间冻结 | D1 |
-| FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview | 尚无 dataset_member_* 表 | 已实现按 CaptureSession/stream 汇总当前装配、质量、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览；未复核、post-clean 非 PASS、资产已删除或质量非 QUALIFIED 均不可预览为 eligible。正式创建成员、WARNING 批准例外、摘要对 DatasetVersion 的冻结校验仍待实现 | PI |
+| FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview | 尚无 dataset_member_* 表 | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可预览为 eligible。正式创建成员、WARNING 批准例外和 DatasetVersion 冻结校验仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | split policy/result | dataset_split_assignment | 同一 leakage group 不跨 split；冲突必须失败而非自动降级 | D1 |
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | export jobs | dataset_export、export_artifact | manifest、action segments、COCO、schema、split、README 和 SHA256SUMS 一致 | D1 |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze command/approval | dataset_version、approval_request | FROZEN 后成员、revision、split 和规则不可修改 | D1 |
@@ -102,9 +102,9 @@
 
 FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移链不可变，运行 API、前端客户端、策略 profile 和状态投影已从 P0 删除。未来若重新启用，必须重新建立需求、威胁模型、用途边界、契约和迁移，不能直接恢复历史代码。
 
-### 3.4 V1.2～V1.6 新增与细化需求
+### 3.4 V1.2～V1.8 新增与细化需求
 
-V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -161,6 +161,7 @@ FR-034 当前 `PI` 证据和边界：
 | NFR-SEC-003 | 高风险操作可审计 | `governance` | 原始访问、修改、删除、导出、审批和权限变更完整性测试 | D1 |
 | NFR-MAINT-001 | 标签、清洗和准入规则版本化 | `annotationreview`、`qualitycleaning`、`datasetexport` | 冻结版本不可覆盖；旧数据可重建 | D1 |
 | NFR-MAINT-002 | 提供迁移、备份和恢复 | Flyway、部署设计 | 空库迁移、升级迁移、PITR、对象恢复和一致性核验 | PENDING |
+| NFR-UX-001 | 内部桌面端在 1366×768、1080p、2K、4K 下保持统一边界、操作可见且无页面级横向滚动 | Web 规范、Vue | 记录视口与系统缩放比例的真实浏览器逐页抽查 | PI |
 
 `PENDING` 项必须在 UAT 计划冻结前补充数据规模、并发、内部管理浏览器、RPO/RTO、对象存储产品和边端网络条件，不能在代码中写成未经批准的常量。
 
@@ -188,9 +189,9 @@ AI 启用决策前必须冻结：
 
 ### 5.3 需求基线归一化决策
 
-V1.6 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.6 对继承条款的实现归一化口径，不修改历史基线。
+V1.8 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.8 对继承条款的实现归一化口径，不修改历史基线。
 
-| 继承的 V1.1.13 表述 | TD-V1.6 实现口径 | 原因 |
+| 继承的 V1.1.13 表述 | TD-V1.8 实现口径 | 原因 |
 | --- | --- | --- |
 | 通用 `confidence` | 人工标注使用明确的确定性/不确定性字段；AI 分数必须记录任务、来源和语义版本 | 不同来源的分数不可直接比较 |
 | 秒或 0.01 秒粒度 | UI 可显示秒，小数输入在边界转换；存储和契约统一使用整数毫秒 | 避免浮点累计误差和跨语言歧义 |
@@ -199,9 +200,9 @@ V1.6 是当前业务需求基线，未变更条款按版本链继承。下表记
 | 清洗后排除或删除 | 逻辑排除、隔离与物理删除分开；物理删除受保留策略、审批和审计约束 | 保证可追溯和合规处置 |
 | 默认 70/15/15 划分 | 小样本验收采用 pilot/holdout；正式比例由样本设计批准，并按 session/操作者/批次等泄漏组隔离 | 固定比例不等于科学抽样 |
 | 隐私漏检为 0 | 仅表示批准样本经最终人工检查后观察到 0 个漏检，不外推为总体风险绝对为零 | 避免统计结论越界 |
-| 采集视频按规范不包含敏感信息 | 媒体技术校验后允许项目成员直接审核播放；若意外发现人脸、声音、工牌、屏幕、标签或环境标识则转入隔离 | 不把低风险假设变成“绝对没有风险”，同时避免每条视频强制走放行流程 |
+| 采集视频按规范不包含敏感信息 | 上传完整性校验后允许项目成员直接审核播放；若意外发现不应保留的敏感内容，则记录人工质量 `REJECTED` 和固定原因，并由管理员软删除 | 不把低风险假设变成“绝对没有风险”，也不恢复已经移出 P0 的独立隔离状态机 |
 
-V1.2～V1.6 新增需求归一化：
+V1.2～V1.8 新增需求归一化：
 
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |

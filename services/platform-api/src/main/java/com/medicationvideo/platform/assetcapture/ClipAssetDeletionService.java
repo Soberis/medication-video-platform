@@ -20,19 +20,19 @@ class ClipAssetDeletionService {
 	private final ProjectAccessService projectAccessService;
 	private final ClipAssetRepository assetRepository;
 	private final CameraStreamRepository streamRepository;
-	private final CaptureSessionRepository sessionRepository;
+	private final CaptureSessionMediaProjectionService sessionProjection;
 	private final AuditEventRecorder auditRecorder;
 
 	ClipAssetDeletionService(
 			ProjectAccessService projectAccessService,
 			ClipAssetRepository assetRepository,
 			CameraStreamRepository streamRepository,
-			CaptureSessionRepository sessionRepository,
+			CaptureSessionMediaProjectionService sessionProjection,
 			AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.assetRepository = assetRepository;
 		this.streamRepository = streamRepository;
-		this.sessionRepository = sessionRepository;
+		this.sessionProjection = sessionProjection;
 		this.auditRecorder = auditRecorder;
 	}
 
@@ -59,8 +59,7 @@ class ClipAssetDeletionService {
 		asset = this.assetRepository.saveAndFlush(asset);
 		this.streamRepository.findByClipAssetId(clipAssetId).ifPresent(stream -> {
 			stream.markAssetUnavailable(now);
-			this.sessionRepository.findById(stream.getCaptureSessionId())
-					.ifPresent(session -> session.markStreamUnavailable(now));
+			this.sessionProjection.refresh(projectId, stream.getCaptureSessionId(), now);
 		});
 		this.auditRecorder.record(new AuditEventCommand(
 				now,

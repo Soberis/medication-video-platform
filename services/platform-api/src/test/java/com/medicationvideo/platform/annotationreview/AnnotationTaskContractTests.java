@@ -22,6 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.medicationvideo.platform.support.CaptureMediaProjectionTestData;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
@@ -295,6 +296,8 @@ class AnnotationTaskContractTests {
 	@Test
 	void administratorIndependentlyReviewsSubmittedRevisionOnceAndItIsAudited() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var captureSessionId = CaptureMediaProjectionTestData.bindEligible(
+				this.jdbcTemplate, PROJECT_ID, clipAssetId, BASE_TIME).captureSessionId();
 		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
 		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 1_000_000L);
 		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
@@ -362,6 +365,39 @@ class AnnotationTaskContractTests {
 				  AND object_type = 'CleaningResult'
 				  AND details_json ->> 'annotation_revision_id' = ?
 				""", revisionId.toString()));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview",
+						PROJECT_ID,
+						captureSessionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.eligible").value(true))
+				.andExpect(jsonPath("$.blocking_reasons").isEmpty())
+				.andExpect(jsonPath("$.streams[0].eligible").value(true))
+				.andExpect(jsonPath("$.streams[0].quality_review_decision").value("QUALIFIED"))
+				.andExpect(jsonPath("$.streams[0].annotation_review_decision").value("APPROVED"))
+				.andExpect(jsonPath("$.streams[0].post_cleaning_decision").value("PASS"))
+				.andExpect(jsonPath("$.streams[0].blocking_reasons").isEmpty());
+
+		this.jdbcTemplate.update("""
+				UPDATE quality_review
+				SET version = version + 1,
+				    reviewed_at = ?
+				WHERE project_id = ? AND clip_asset_id = ?
+				""", Timestamp.from(BASE_TIME.plusSeconds(30)), PROJECT_ID, clipAssetId);
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview",
+						PROJECT_ID,
+						captureSessionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.eligible").value(false))
+				.andExpect(jsonPath("$.streams[0].eligible").value(false))
+				.andExpect(jsonPath("$.streams[0].blocking_reasons[0]")
+						.value("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING"));
 	}
 
 	@Test
@@ -757,6 +793,26 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("""
+				DELETE FROM camera_stream
+				WHERE capture_session_id IN (
+				    SELECT capture_session_id FROM capture_session WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM camera_set_snapshot_member
+				WHERE camera_set_snapshot_id IN (
+				    SELECT snapshot.camera_set_snapshot_id
+				    FROM camera_set_snapshot snapshot
+				    JOIN capture_session session
+				      ON session.capture_session_id = snapshot.capture_session_id
+				    WHERE session.project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM camera_set_snapshot
+				WHERE capture_session_id IN (
+				    SELECT capture_session_id FROM capture_session WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("DELETE FROM capture_session WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM cleaning_result WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM cleaning_run WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", projectId);
@@ -770,7 +826,14 @@ class AnnotationTaskContractTests {
 				"DELETE FROM upload_file WHERE batch_id IN (SELECT batch_id FROM upload_batch WHERE project_id = ?)",
 				projectId);
 		this.jdbcTemplate.update("DELETE FROM upload_batch WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM camera_set_member
+				WHERE camera_set_id IN (SELECT camera_set_id FROM camera_set WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("DELETE FROM camera_set WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM camera_channel WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM project WHERE project_id = ?", projectId);
 	}
+
 }
