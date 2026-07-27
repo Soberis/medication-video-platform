@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/App.vue'
+import { useAuthStore } from '@/stores/auth'
 import ProjectListView from '@/views/ProjectListView.vue'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -70,7 +71,12 @@ describe('App', () => {
     expect(wrapper.text()).toContain('合成测试项目')
     expect(wrapper.findAll('h1')).toHaveLength(1)
     expect(wrapper.get('h1').text()).toBe('项目')
-    expect(wrapper.findAll('.nav-unavailable')).toHaveLength(4)
+    expect(wrapper.findAll('.nav-unavailable')).toHaveLength(0)
+    expect(wrapper.find('.skip-link').attributes('href')).toBe('#main-content')
+    const navigationText = wrapper.get('nav[aria-label="主导航"]').text()
+    expect(navigationText).not.toContain('配药操作')
+    expect(navigationText).not.toContain('视频资产')
+    expect(navigationText).not.toContain('标注任务')
     expect(wrapper.findAll('.router-link-active')).toHaveLength(1)
     expect(wrapper.text()).toContain('管理')
     expect(wrapper.text()).toContain('上传排障')
@@ -122,6 +128,35 @@ describe('App', () => {
     expect(wrapper.findAll('button').filter((button) => button.text() === '管理')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('改名')
     expect(wrapper.text()).not.toContain('归档')
+  })
+
+  it('returns to login after logout succeeds', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.session = { username: 'platform-admin', role: 'ADMIN' }
+    auth.initialized = true
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/login', name: 'login', component: { template: '<div>Login</div>' } },
+        { path: '/projects', name: 'project-list', component: { template: '<div>Projects</div>' } },
+        { path: '/uploads', name: 'upload-progress', component: { template: '<div />' } },
+        { path: '/uploads/new', name: 'local-upload', component: { template: '<div />' } },
+        { path: '/admin/users', name: 'account-management', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/projects')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [pinia, router] } })
+
+    const logoutButton = wrapper.findAll('button').find((button) => button.text() === '退出登录')
+    expect(logoutButton).toBeDefined()
+    await logoutButton!.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(auth.session).toBeNull()
   })
 })
 

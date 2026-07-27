@@ -35,6 +35,12 @@ class AnnotationRevision {
 	@Column(name = "annotation_schema_version", nullable = false, updatable = false, length = 64)
 	private String annotationSchemaVersion;
 
+	@Column(name = "label_schema_id", nullable = false, updatable = false)
+	private UUID labelSchemaId;
+
+	@Column(name = "label_schema_digest", nullable = false, updatable = false, length = 64)
+	private String labelSchemaDigest;
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "annotation_document", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private Map<String, Object> annotationDocument;
@@ -59,6 +65,8 @@ class AnnotationRevision {
 			UUID annotationTaskId,
 			UUID clipAssetId,
 			int revisionNumber,
+			UUID labelSchemaId,
+			String labelSchemaDigest,
 			Map<String, Object> annotationDocument,
 			String documentSha256,
 			String submittedBy,
@@ -70,6 +78,8 @@ class AnnotationRevision {
 		this.clipAssetId = clipAssetId;
 		this.revisionNumber = revisionNumber;
 		this.annotationSchemaVersion = "annotation-document.v1";
+		this.labelSchemaId = labelSchemaId;
+		this.labelSchemaDigest = labelSchemaDigest;
 		this.annotationDocument = Map.copyOf(annotationDocument);
 		this.documentSha256 = documentSha256;
 		this.submittedBy = submittedBy;
@@ -90,6 +100,8 @@ class AnnotationRevision {
 				task.getAnnotationTaskId(),
 				task.getClipAssetId(),
 				revisionNumber,
+				task.getLabelSchemaId(),
+				task.getLabelSchemaDigest(),
 				annotationDocument,
 				documentSha256,
 				submittedBy,
@@ -119,6 +131,14 @@ class AnnotationRevision {
 
 	String getAnnotationSchemaVersion() {
 		return this.annotationSchemaVersion;
+	}
+
+	UUID getLabelSchemaId() {
+		return this.labelSchemaId;
+	}
+
+	String getLabelSchemaDigest() {
+		return this.labelSchemaDigest;
 	}
 
 	String getDocumentSha256() {

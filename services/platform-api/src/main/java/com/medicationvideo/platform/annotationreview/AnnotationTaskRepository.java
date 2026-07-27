@@ -20,6 +20,8 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 
 	boolean existsByProjectIdAndClipAssetId(UUID projectId, UUID clipAssetId);
 
+	List<AnnotationTask> findAllByProjectIdAndClipAssetIdIn(UUID projectId, List<UUID> clipAssetIds);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select task from AnnotationTask task

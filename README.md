@@ -48,21 +48,54 @@ docs/                          需求、设计、ADR 和运行手册
 
 Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API、Media Worker 和 Web，并统一记录后台进程与日志。
 
+macOS 首次准备（已安装 Homebrew）：
+
+```bash
+brew install openjdk@21 node@22 pnpm uv ffmpeg
+brew install --cask docker
+export PATH="$(brew --prefix openjdk@21)/bin:$(brew --prefix node@22)/bin:$PATH"
+export JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"
+uv python install 3.12
+open -a Docker
+```
+
+`PATH` 和 `JAVA_HOME` 两行需要写入 `~/.zprofile` 才会在新终端持续生效。Docker Desktop 首次打开后，等待菜单栏显示引擎已启动，再执行项目脚本。
+
 首次安装前端依赖：
 
-```powershell
-cd C:\Dev\Projects\medication-video-platform
+```bash
+cd /path/to/medication-video-platform
 pnpm install --frozen-lockfile
 ```
 
-启动全部本地服务：
+在 macOS / Linux 上启动全部本地服务：
+
+```bash
+cd /path/to/medication-video-platform
+./scripts/check-environment.sh
+./scripts/start-local.sh
+```
+
+在 Windows PowerShell 上使用：
 
 ```powershell
 cd C:\Dev\Projects\medication-video-platform
+.\scripts\check-environment.ps1
 .\scripts\start-local.ps1
 ```
 
-在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。`start-local.ps1` 会等待 Core API 健康后启动 Media Worker，再启动或确认 Web，默认最长等待 180 秒。这样平台本地上传的视频会继续完成媒体探测，而不会长期停留在“已上传，待入库”。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
+在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本会等待 Core API 健康后启动 Media Worker，再启动或确认 Web，默认最长等待 180 秒。这样平台本地上传的视频会继续完成媒体探测，而不会长期停留在“已上传，待入库”。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
+
+macOS / Linux 常用命令：
+
+```bash
+./scripts/status-local.sh
+./scripts/stop-local.sh
+./scripts/stop-local.sh --keep-infrastructure
+./scripts/start-local.sh --skip-worker
+```
+
+Windows PowerShell 常用命令：
 
 ```powershell
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
@@ -72,17 +105,16 @@ cd C:\Dev\Projects\medication-video-platform
 .\scripts\start-local.ps1 -RestartApi   # 仅重启脚本启动的 Core API；保留前端、Worker 与容器
 ```
 
-如果 8080 或 5173 是此前手工启动的进程，先用 `status-local.ps1` 确认；只有明确要结束它时才执行 `stop-local.ps1 -IncludeListeningApps`。
+如果 8080 或 5173 是此前手工启动的进程，先用状态脚本确认；只有明确要结束它时，macOS / Linux 才执行 `./scripts/stop-local.sh --include-listening-apps`，Windows 才执行 `.\scripts\stop-local.ps1 -IncludeListeningApps`。
 
 ## 验证
 
 ```powershell
-.\scripts\check-environment.ps1
 .\scripts\quality-gate.ps1 -Strict
 pnpm run api:test
 ```
 
-`api:test` 需要本地基础设施和 Core API 已启动，并且只能使用合成开发身份和合成视频。
+macOS / Linux 可用 `pwsh ./scripts/quality-gate.ps1 -Strict` 运行同一质量门禁；`api:test` 需要本地基础设施和 Core API 已启动，并且只能使用合成开发身份和合成视频。
 
 ## 数据安全
 

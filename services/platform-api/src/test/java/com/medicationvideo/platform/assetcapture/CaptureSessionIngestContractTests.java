@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -160,6 +161,32 @@ class CaptureSessionIngestContractTests {
 		assertEquals(1, this.snapshotRepository.count());
 		assertEquals(2, this.snapshotMemberRepository.count());
 		assertEquals(2, this.streamRepository.count());
+	}
+
+	@Test
+	void exposesAReadOnlyDatasetAdmissionPreviewWithCurrentBlockingReasons() throws Exception {
+		var configuration = cameraSet(PROJECT_ID, true, false);
+		var captureSessionId = UUID.randomUUID();
+		var metadata = metadata(
+				captureSessionId,
+				configuration.cameraSetId(),
+				1,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.firstChannelId(), 0, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, 1);
+		this.objectStorage.bytes = metadata;
+		ingest(batch.getBatchId()).andExpect(status().isCreated());
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview",
+						PROJECT_ID, captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.capture_session_id").value(captureSessionId.toString()))
+				.andExpect(jsonPath("$.eligible").value(false))
+				.andExpect(jsonPath("$.blocking_reasons[2]").value("SESSION_QUALITY_NOT_PASS"))
+				.andExpect(jsonPath("$.streams[0].clip_asset_id").isNotEmpty())
+				.andExpect(jsonPath("$.streams[0].post_cleaning_decision").value("MISSING"))
+				.andExpect(jsonPath("$.streams[0].blocking_reasons").isArray());
 	}
 
 	@Test

@@ -52,11 +52,22 @@ const isUploading = computed(() => uploadState.value === 'uploading')
 const canStart = computed(
   () =>
     !isUploading.value &&
+    tasks.value.length === 0 &&
     projectLoadState.value === 'success' &&
     selectedProjectId.value.length > 0 &&
     selectedFiles.value.length > 0,
 )
 const completedTaskCount = computed(() => tasks.value.filter((task) => task.status === 'COMPLETED').length)
+const failedTaskCount = computed(() => tasks.value.filter((task) => task.status === 'FAILED').length)
+const uploadSummary = computed<{
+  label: string
+  type: 'primary' | 'success' | 'warning' | 'danger'
+}>(() => {
+  if (uploadState.value !== 'completed') return { label: '上传中', type: 'primary' }
+  if (failedTaskCount.value === 0) return { label: '全部完成', type: 'success' }
+  if (completedTaskCount.value === 0) return { label: '本轮失败', type: 'danger' }
+  return { label: '部分完成', type: 'warning' }
+})
 
 async function loadProjects() {
   projectLoadState.value = 'loading'
@@ -80,6 +91,10 @@ async function loadFolders(projectId: string) {
   activeRequest?.abort()
   selectedFolderId.value = null
   folders.value = []
+  if (folderLoadState.value === 'error') {
+    errorCode.value = ''
+    errorMessage.value = ''
+  }
   if (!projectId) {
     folderLoadState.value = 'idle'
     return
@@ -104,6 +119,7 @@ function selectFiles(event: Event) {
   selectedFiles.value = Array.from(input.files ?? [])
   input.value = ''
   tasks.value = []
+  uploadState.value = 'idle'
   errorCode.value = ''
   errorMessage.value = ''
 }
@@ -147,6 +163,7 @@ async function startUpload() {
     }
   }
   uploadState.value = 'completed'
+  selectedFiles.value = []
 }
 
 function percent(task: UploadTask) {
@@ -180,7 +197,16 @@ function showError(error: unknown, fallbackCode: string, fallbackMessage: string
   errorMessage.value = error instanceof CatalogApiError ? error.message : fallbackMessage
 }
 
-watch(selectedProjectId, (projectId) => void loadFolders(projectId))
+watch(selectedProjectId, (projectId, previousProjectId) => {
+  if (projectId !== previousProjectId) {
+    selectedFiles.value = []
+    tasks.value = []
+    uploadState.value = 'idle'
+    errorCode.value = ''
+    errorMessage.value = ''
+  }
+  void loadFolders(projectId)
+})
 onMounted(() => void loadProjects())
 onUnmounted(() => activeRequest?.abort())
 </script>
@@ -205,7 +231,11 @@ onUnmounted(() => activeRequest?.abort())
     :closable="false"
   />
 
-  <ElCard class="local-upload-card" shadow="never">
+  <ElCard
+    v-if="projectLoadState !== 'success' || projects.length > 0"
+    class="local-upload-card"
+    shadow="never"
+  >
     <form class="local-upload-form" @submit.prevent="startUpload">
       <div class="local-upload-field">
         <label for="local-upload-project">所属项目</label>
@@ -240,6 +270,10 @@ onUnmounted(() => activeRequest?.abort())
         <p v-if="selectedProjectId && folderLoadState === 'success' && folders.length === 0" class="form-hint">
           当前项目没有文件夹，视频将保持未分类。
         </p>
+        <div v-else-if="selectedProjectId && folderLoadState === 'error'" class="inline-form-error" role="alert">
+          <span>项目文件夹读取失败，可重试或保持未分类上传。</span>
+          <ElButton link type="primary" @click="loadFolders(selectedProjectId)">重试</ElButton>
+        </div>
       </div>
 
       <div class="local-upload-field local-upload-files-field">
@@ -265,7 +299,13 @@ onUnmounted(() => activeRequest?.abort())
 
       <div class="local-upload-actions">
         <ElButton type="primary" native-type="submit" :disabled="!canStart" :loading="isUploading">
-          {{ isUploading ? '正在上传…' : `开始上传${selectedFiles.length > 1 ? `（${selectedFiles.length} 个视频）` : ''}` }}
+          {{
+            isUploading
+              ? '正在上传…'
+              : uploadState === 'completed'
+                ? '重新选择视频后上传'
+                : `开始上传${selectedFiles.length > 1 ? `（${selectedFiles.length} 个视频）` : ''}`
+          }}
         </ElButton>
         <RouterLink v-if="selectedProjectId" class="text-link" :to="{ name: 'asset-list', params: { projectId: selectedProjectId } }">
           查看项目视频
@@ -274,22 +314,25 @@ onUnmounted(() => activeRequest?.abort())
     </form>
   </ElCard>
 
-  <section v-if="tasks.length > 0" class="local-upload-results" aria-labelledby="local-upload-progress-title">
+  <section
+    v-if="tasks.length > 0"
+    class="local-upload-results"
+    aria-live="polite"
+    aria-labelledby="local-upload-progress-title"
+  >
     <div class="card-header-row">
       <div>
         <p class="app-eyebrow">真实上传进度</p>
-        <h3 id="local-upload-progress-title">已完成 {{ completedTaskCount }} / {{ tasks.length }} 个视频</h3>
+        <h2 id="local-upload-progress-title">已完成 {{ completedTaskCount }} / {{ tasks.length }} 个视频</h2>
       </div>
-      <ElTag :type="uploadState === 'completed' ? 'success' : 'primary'">
-        {{ uploadState === 'completed' ? '本轮已结束' : '上传中' }}
-      </ElTag>
+      <ElTag :type="uploadSummary.type">{{ uploadSummary.label }}</ElTag>
     </div>
 
     <article v-for="task in tasks" :key="task.id" class="local-upload-task">
       <div class="file-heading">
         <div>
           <p class="file-kind">{{ task.status === 'COMPLETED' ? '已完成' : task.status === 'FAILED' ? '失败' : '视频上传' }}</p>
-          <h4>{{ task.file.name }}</h4>
+          <h3>{{ task.file.name }}</h3>
         </div>
         <ElTag :type="task.status === 'FAILED' ? 'danger' : task.status === 'COMPLETED' ? 'success' : 'primary'">
           {{ task.status === 'QUEUED' ? '等待中' : task.status === 'RUNNING' ? '处理中' : task.status === 'COMPLETED' ? '完成' : '失败' }}
@@ -299,7 +342,9 @@ onUnmounted(() => activeRequest?.abort())
       <p class="task-description">{{ taskDescription(task) }}</p>
       <p v-if="task.progress?.batchId" class="batch-meta">批次 ID：<code>{{ task.progress.batchId }}</code></p>
       <p v-if="task.captureSessionId" class="batch-meta">配药操作 ID：<code>{{ task.captureSessionId }}</code></p>
-      <p v-if="task.errorCode" class="task-error"><strong>{{ task.errorCode }}</strong><span>{{ task.errorMessage }}</span></p>
+      <p v-if="task.errorCode" class="task-error" role="alert">
+        <strong>{{ task.errorCode }}</strong><span>{{ task.errorMessage }}</span>
+      </p>
     </article>
   </section>
 

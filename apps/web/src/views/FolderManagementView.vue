@@ -190,8 +190,26 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="状态" width="120"><template #default><ElTag type="info">可用</ElTag></template></ElTableColumn>
       <ElTableColumn v-if="canManageFolders" label="操作" width="190" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="primary" :disabled="isMutating" @click="renameFolder(asAssetFolder(row))">重命名</ElButton>
-          <ElButton link type="danger" :disabled="isMutating" @click="removeFolder(asAssetFolder(row))">删除</ElButton>
+          <div class="table-actions">
+            <ElButton
+              link
+              type="primary"
+              :aria-label="`重命名文件夹：${row.display_name}`"
+              :disabled="isMutating"
+              @click="renameFolder(asAssetFolder(row))"
+            >
+              重命名
+            </ElButton>
+            <ElButton
+              link
+              type="danger"
+              :aria-label="`删除文件夹：${row.display_name}`"
+              :disabled="isMutating"
+              @click="removeFolder(asAssetFolder(row))"
+            >
+              删除
+            </ElButton>
+          </div>
         </template>
       </ElTableColumn>
     </ElTable>

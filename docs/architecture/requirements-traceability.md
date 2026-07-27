@@ -4,7 +4,7 @@
 > 当前需求基线：`docs/requirements/baselines/V1.6/配药视频数据管理平台需求文档_V1.6.md`
 > 继承需求基线：`docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-07-23
+> 最后更新：2026-07-26
 
 ## 1. 目的
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产和人工审核闭环。V1.6 在保留 V1.5 隐私简化范围的基础上，明确管理员可改名和归档项目，视频删除保持可审计软删除；历史迁移继续保留。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0，正在收敛 P0 上传、资产、人工审核、后置清洗和数据集准入预览闭环。V1.6 在保留 V1.5 隐私简化范围的基础上，明确管理员可改名和归档项目，视频删除保持可审计软删除；历史迁移继续保留。当前纵向切片把复核通过的不可变 AnnotationRevision 推进为已完成任务，并在同一数据库事务内生成版本化、不可变的后置清洗运行与结果；随后按 CaptureSession 聚合当前装配、质量、删除、review 和 post-clean 事实，仅返回可解释的准入预览。它不创建 DatasetVersion、不自动写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -62,7 +62,7 @@
 - FR-004：`capture-session-metadata-v1` 严格要求 capture session、device、CameraSet、布局、同步组、设备时间/时区以及每路 VIDEO/CameraChannel/index/enabled/record start/offset/sync status；缺字段和未知字段被阻断，服务器配置与视频一一绑定均经合同测试。该条达到实现态 `I`，但尚无 20 组真实授权样例的 UAT 证据。
 - FR-006/FR-007 当前完成显式项目上下文和 ACTIVE Membership 隔离的 Session/ClipAsset 列表与详情、设备/批次/相机角色/拍摄时间/当前状态/项目内文件夹/未分类筛选、不透明 cursor、无对象存储信息的安全响应，以及 Vue 授权项目入口和列表/详情。项目成员可对 `UPLOADED` 视频显式、幂等地发起媒体检测；`INGESTED`、未删除 MP4 可在显式点击后拿到 no-store 短期 `DATA_REVIEW` URL，签发追加式审计且 URL 不落库；检测和播放均不自动改变质量或标注状态。状态历史、完整审计查询、浏览器兼容矩阵和 UAT 尚未完成，因此仍为 `PI`。
 - FR-010 已按 V1.6 后置。历史 Flyway V19～V21 继续参与空库与升级验证，但当前 OpenAPI、服务和 Web 不暴露 PrivacyAssessment 或 Quarantine 运行能力。
-- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、Flyway V1～V29、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
+- 当前可执行证据位于 OpenAPI、`capture-session-metadata-v1`、媒体任务/结果/死信 Schema、post-clean profile、Flyway V1～V34、项目改名/归档、项目/成员/文件夹/视频分类、资产/EVENT_LOG 对象索引、上传终止与清理、MediaJob/Outbox/Inbox/租约恢复/死信/受控重放、P0 Step LabelSchema、基础一致性守卫与后置清洗结果、追加式审计、S3 与 RabbitMQ 兼容性验证、合成上传客户端、2 GiB 中断恢复工具、Media Worker、Vue 页面测试和 Bruno 控制面场景。历史隐私表约束测试只证明迁移兼容，不表示当前产品启用了隐私子系统。这些证据不能替代弱网/并发、目标环境监控通知、损坏媒体矩阵或 UAT。
 
 接口细化说明：需求基线中的 `/upload/chunk` 表示分片上传能力，实际契约采用 Part 授权、客户端预签名直传 S3、服务端确认/协调；需求基线中的 `/upload/complete` 分为单对象 Complete File 和批次清单 Complete Batch。该映射保持 FR-001～FR-003 的业务能力，同时避免 Core API 代理大视频字节。媒体探测、EVENT_LOG 对象索引、2 GiB 本机中断恢复、Abort、过期清理代码路径和应用内积压判定已经闭合；弱网/并发、目标环境监控通知和 UAT 环境验收仍未闭合，因此相关需求仍为 `PI`。
 
@@ -72,14 +72,14 @@
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| FR-011 标注项目和标签版本 | P0 | `annotationreview` | annotation projects；label schemas | annotation_project、label_schema、label_definition | 同一 session 可进入不同项目；结果绑定不可变 schema digest | D1 |
+| FR-011 标注项目和标签版本 | P0 | `annotationreview` | annotation projects；label schemas | annotation_project、label_schema、label_definition | 同一 session 可进入不同项目；结果绑定不可变 schema digest | PI |
 | FR-012 任务拆分和分配 | P0 | `annotationreview` | annotation tasks | annotation_task | 当前先按单个 ClipAsset 创建一个直接分配任务；重复创建受唯一约束保护 | PI |
-| FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API | annotation_task、annotation_revision | `ASSIGNED → SUBMITTED` 只允许受理人；重复提交不覆盖既有修订 | PI |
+| FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API | annotation_task、annotation_revision | `ASSIGNED → SUBMITTED` 只允许受理人；`APPROVED` 推进为 `COMPLETED`；重复提交不覆盖既有修订 | PI |
 | FR-014 标注指南绑定 | P0 | `annotationreview` | guideline versions | annotation_guideline_version | 提交 revision 可追溯到实际使用的指南摘要 | D1 |
 | FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation progress query | annotation_progress_projection | 与任务事实表对账一致；统计不反向写业务表 | D1 |
-| FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision | 独立项目管理员记录一次通过/不通过；标注提交者不能自审 | PI |
+| FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision、annotation_task | 独立项目管理员记录一次通过/不通过；标注提交者不能自审；通过只完成当前任务，不等于数据集准入 | PI |
 | FR-017 退回重标并保留历史 | P0 | `annotationreview` | rework command | annotation_task、annotation_revision、annotation_review | `REJECTED` 退回任务；再次提交创建递增 revision，旧记录不可覆盖 | PI |
-| FR-018 基础一致性检查 | P0 | `annotationreview`、`qualitycleaning` | validation job/result | annotation_validation_result、cleaning_result | 时间越界、非法类别、隐私缺失等规则有稳定错误码 | D1 |
+| FR-018 基础一致性检查 | P0 | `annotationreview`、`qualitycleaning` | 提交守卫；post-clean run/result | annotation_revision、cleaning_rule_set、cleaning_run、cleaning_result | 提交时阻断时间和标签错误；复核通过后以冻结输入重验，缺少已验证媒体时长产生 `WARNING`，非法事实产生 `REJECT` | PI |
 | FR-019 抽检比例和全检策略 | P1 | `annotationreview` | sampling policy | review_sampling_policy | 规则版本化并能解释任务为何被抽中 | DEFERRED |
 | FR-020 冲突标注对比 | P1 | `annotationreview` | comparison query | annotation_comparison | 同源 revision 对齐且不混用不同 schema | DEFERRED |
 | FR-021 标注质检报告 | P1 | `annotationreview` | quality report API | annotation_quality_report | 指标口径、分母、时间窗和 schema 版本明确 | DEFERRED |
@@ -88,13 +88,13 @@
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| FR-022 创建清洗任务 | P0 | `qualitycleaning` | cleaning runs | cleaning_run、cleaning_rule_set | 输入筛选条件冻结；重跑产生新 run | D1 |
+| FR-022 创建清洗任务 | P0 | `qualitycleaning` | post-clean runs/results | cleaning_run、cleaning_result、cleaning_rule_set | 当前先对单个已批准 revision 同步创建不可变 run/result；规则或输入变化产生新 run，不覆盖历史 | PI |
 | FR-023 视频质量自动检测 | P0 | `mediaprivacy`、`qualitycleaning` | media metrics/result | media_report、cleaning_result | 指标算法、阈值、软件摘要和输入摘要可追溯 | D1 |
 | FR-024 完全重复和近重复检测 | P0 | `qualitycleaning` | duplicate detection job/result | duplicate_group、cleaning_result | SHA-256 完全重复与视频指纹近重复分开报告；不自动物理删除 | D1 |
 | FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
 | FR-027 创建数据集版本 | P0 | `datasetexport` | dataset versions | dataset_version | 选择规则、标签/清洗规则、创建人和时间冻结 | D1 |
-| FR-028 数据集准入 | P0 | `datasetexport` | dataset validation | dataset_member_session、dataset_member_stream | 未复核、未放行、警告未批准或摘要变化均阻断冻结 | D1 |
+| FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview | 尚无 dataset_member_* 表 | 已实现按 CaptureSession/stream 汇总当前装配、质量、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览；未复核、post-clean 非 PASS、资产已删除或质量非 QUALIFIED 均不可预览为 eligible。正式创建成员、WARNING 批准例外、摘要对 DatasetVersion 的冻结校验仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | split policy/result | dataset_split_assignment | 同一 leakage group 不跨 split；冲突必须失败而非自动降级 | D1 |
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | export jobs | dataset_export、export_artifact | manifest、action segments、COCO、schema、split、README 和 SHA256SUMS 一致 | D1 |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze command/approval | dataset_version、approval_request | FROZEN 后成员、revision、split 和规则不可修改 | D1 |
@@ -110,11 +110,11 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确
 | --- | --- | --- | --- | --- | --- | --- |
 | FR-033 数据项目、成员与项目内一层文件夹 | P0 | `iamproject`、`assetcapture` | projects/memberships；asset folders；video folder move | project、membership、asset_folder、clip_asset.folder_id、audit_event | 普通用户仅见成员项目；不同视频可归入不同文件夹；删除文件夹不删除视频；跨项目移动被拒绝 | PI |
 | FR-034 平台本地上传 | P0 | `assetcapture`、Web | 复用 upload/multipart/complete | upload_batch.upload_source_type 及现有上传表 | 页面选择本机视频完成上传和入库；越权或不符合上传规则的请求被拒绝 | PI |
-| FR-035 视频删除 | P0 | `assetcapture`、`governance` | delete video；reference guard | clip_asset.deleted_at/deleted_by/delete_reason、audit_event | 管理员可删除无用或不合格视频；不级联删除其他视频；操作可审计；受控引用守卫生效 | D1 |
+| FR-035 视频删除 | P0 | `assetcapture`、`governance` | delete video；reference guard | clip_asset.deleted_at/deleted_by/delete_reason、audit_event | 管理员可删除无用或不合格视频；不级联删除其他视频；操作可审计；新标注和后续准入守卫生效 | PI |
 | FR-036 ADMIN/MEMBER 两级角色 | P0 | `iamproject`、`governance` | users/memberships | membership.role、audit_event | 只提供两种角色；后端角色检查和项目隔离有效 | PI |
 | FR-037 平台内部账号登录 | P0 | `iamproject`、Web、`governance` | auth login/session/logout | platform_account、audit_event、HTTP session | BCrypt、统一失败提示、会话/CSRF/注销和未认证拒绝 | I |
 | FR-038 管理员账号管理 | P0 | `iamproject`、Web、`governance` | platform accounts/account enablement/memberships | platform_account、membership、audit_event | 管理员创建/启停普通用户并分配项目成员；无公开注册 | PI |
-| FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放 `INGESTED`、未删除 MP4；短期 URL 不落库；状态和错误清楚 | PI |
+| FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放已完成上传完整性校验、未删除的 MP4；媒体检测不阻断人工查看；短期 URL 不落库；状态和错误清楚 | PI |
 | FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | I |
 | FR-041 机器候选标注边界 | P1 | `aicandidate`、`annotationreview` | candidate annotation API/event | candidate_annotation、annotation_revision | 机器结果不能覆盖正式标签；人工确认和独立复核后才可能入集 | D1 |
 
@@ -124,9 +124,13 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 Vue API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-012/FR-016/FR-017 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32、OpenAPI、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；受分配成员可把 `ASSIGNED` 任务提交为不可变的 `annotation-document.v1` 时间段 revision，服务端保存 SHA-256 和审计。另一名项目管理员可对当前 revision 记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。当前不含对象框、抽样复核或视频时长上界校验。
+FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
+
+FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
+
+FR-035 当前 `PI` 证据和边界：软删除 API、`deleted_at/deleted_by/delete_reason`、普通目录隐藏、播放与新标注拒绝、ADMIN 权限、同一 CaptureSession 其他视频不级联删除和追加式审计已有契约与测试。正式数据集候选排除、冻结引用影响分析和 UAT 尚未完成，因此不能升级为 `I` 或 `UAT`。
 
 FR-033/FR-036 当前 `PI` 证据和边界：
 
@@ -148,9 +152,9 @@ FR-034 当前 `PI` 证据和边界：
 | --- | --- | --- | --- | --- |
 | NFR-PERF-001 | 单文件至少支持 2GB，上传可恢复 | `assetcapture`、对象存储 | 2GB/边界大小合成文件；断网、重传、重复 complete 和过期 upload 测试 | PI |
 | NFR-PERF-002 | 常用列表第一页 3 秒内返回 | 查询投影、PostgreSQL | 冻结数据规模、过滤组合和并发后统计服务端 P95；浏览器时间单列 | PENDING |
-| NFR-PERF-003 | 脱敏视频和缩略图可预览 | `mediaprivacy`、Web | 指定浏览器矩阵下验证解码、首帧、seek 和多路播放 | PENDING |
-| NFR-PERF-004 | CVAT 完成后五分钟内同步 | `integration`、`annotationreview` | 从 CVAT 完成时间到平台 revision 可见时间的 P95；故障重试单列 | D1 |
-| NFR-OPS-001 | 清洗、导出等异步执行并可查进度 | 各作业所属模块 | 状态、心跳、失败原因、取消和重跑测试 | D1 |
+| NFR-PERF-003 | 脱敏视频和缩略图可预览（旧基线） | `mediaprivacy`、Web | V1.5 已后置脱敏/Preview Variant；P0 原始 MP4 审核播放按 FR-039 验证 | DEFERRED |
+| NFR-PERF-004 | 外部标注工具完成后五分钟内同步 | `integration`、`annotationreview` | V1.5 已把 CVAT 移出 P0；未来批准外部工具后重新冻结同步 SLO 和故障测试 | DEFERRED |
+| NFR-OPS-001 | 清洗、导出等异步执行并可查进度 | 各作业所属模块 | 当前单 revision post-clean 是同步事务，不属于异步作业；未来批量清洗和导出需验证状态、心跳、失败、取消与重跑 | D1 |
 | NFR-OPS-002 | 所有后台任务可重跑、可取消 | 作业协议 | 请求取消、运行中协作取消、完成后取消和重复取消 | D1 |
 | NFR-SEC-001 | 原始视频仅限授权项目内部使用 | `iamproject`、`assetcapture` | Membership 正反向权限矩阵、短期 URL 和跨项目越权测试 | PI |
 | NFR-SEC-002 | 传输和存储加密 | 部署与对象存储 | TLS 配置、密钥引用、静态加密和轮换演练 | PENDING |
@@ -202,7 +206,7 @@ V1.2～V1.6 新增需求归一化：
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |
 | 医院远端上传和平台本地上传 | 两种入口复用 Upload/Multipart/Complete、项目权限和入库校验 | 入口不同，入库规则一致 |
-| 上传视频可以播放 | 媒体技术校验为 `INGESTED` 后，ACTIVE 项目成员显式取得短期 `DATA_REVIEW` 地址；播放不自动判定质量 | 上传完成仍需校验可读性，项目 Membership 和短期授权防止公开访问 |
+| 上传视频可以播放 | 上传完整性校验完成后，ACTIVE 项目成员显式取得短期 `DATA_REVIEW` 地址；播放不自动判定质量，媒体技术检测不阻断人工查看 | 媒体检测继续校验可读性并作为质量、标注和训练候选的技术前提；项目 Membership 和短期授权防止公开访问 |
 | 无用或不合格视频可以删除 | 删除目标视频并保留权限、引用和审计守卫 | 满足数据整理需求且不破坏受控结果 |
 | 项目下不同文件夹 | 一层 AssetFolder，按视频归类，不承载权限或对象路径 | 满足简单分类需求 |
 | 只有管理员和普通用户 | 两级界面模板映射细粒度权限；高风险职责分离和标注禁止自审仍保留 | 简化 UI 不降低安全边界 |

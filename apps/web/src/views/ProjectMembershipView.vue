@@ -202,7 +202,13 @@ onUnmounted(() => activeRequest?.abort())
       <ElTableColumn label="状态" width="110"><template #default>有效</template></ElTableColumn>
       <ElTableColumn v-if="canManageMembers" label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <ElButton link type="danger" :disabled="isMutating" @click="removeMembership(asProjectMembership(row))">
+          <ElButton
+            link
+            type="danger"
+            :aria-label="`移除项目成员：${row.actor_id}`"
+            :disabled="isMutating"
+            @click="removeMembership(asProjectMembership(row))"
+          >
             移除
           </ElButton>
         </template>

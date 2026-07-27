@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.37.0
+  version: 0.40.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -22,8 +22,11 @@ info:
     filters, issue an explicitly requested, audited, short-lived video grant to an ACTIVE project
     member for human training-data review after upload-integrity verification, record the current human quality
     conclusion with a stable reason and optimistic version, let project administrators create and
-    assign one auditable annotation task for a qualified video, let its assignee submit one immutable
-    time-range revision, let an independent project administrator record one review decision and return a rejected task for a later immutable revision, and create and read project-scoped media probe jobs that freeze the input
+    assign one auditable annotation task for a qualified video, expose the immutable P0 primary-Step
+    label schema, let an assignee submit one schema-bound non-overlapping time-range revision, let an
+    independent project administrator record one review decision, return a rejected task for a
+    later immutable revision, or complete an approved task with a persisted post-cleaning result,
+    and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
     MediaReport facts, and let an administrator create an audited new attempt from a retained
@@ -74,6 +77,11 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
+  - name: Dataset Admission
+    description: >-
+      Read-only current-state previews of whether a CaptureSession satisfies the prerequisite
+      facts for a future dataset member. A preview never creates a dataset version, member,
+      override, export or approval.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -2114,6 +2122,52 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/capture-sessions/{capture_session_id}/dataset-admission-preview:
+    get:
+      operationId: getCaptureSessionDatasetAdmissionPreview
+      tags:
+        - Dataset Admission
+      summary: Preview current dataset-admission prerequisites for one capture session
+      description: >-
+        Returns current, read-only admission facts for every stream in the session. It does not
+        create DatasetVersion, dataset members, a WARNING override, an approval, an export or a
+        persistent snapshot. The caller must hold an ACTIVE Membership in the requested project.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current prerequisite facts and blocking reasons, ordered by camera_index.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetAdmissionPreview"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The authenticated principal cannot be used for project-scoped reads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Requested project or session not found in the actor's visible scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/clip-assets:
     get:
       operationId: listClipAssets
@@ -2512,6 +2566,42 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-label-schema:
+    get:
+      operationId: getCurrentAnnotationLabelSchema
+      tags:
+        - Annotation Tasks
+      summary: Read the current immutable P0 primary-Step label schema
+      description: >-
+        Requires an ACTIVE project membership. The response contains stable label identifiers,
+        Chinese display names, definitions, ordering and the immutable schema digest used by newly
+        created annotation tasks. Clients must submit label_id values rather than display text.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Current published P0 primary-Step label schema.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationLabelSchema"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-tasks:
     get:
       operationId: listAnnotationTasks
@@ -2620,13 +2710,15 @@ paths:
       operationId: submitAnnotationRevision
       tags:
         - Annotation Tasks
-      summary: Submit the first immutable manual annotation revision for an assigned task
+      summary: Submit an immutable manual annotation revision for an assigned task
       description: >-
         Requires an ACTIVE project membership and that the caller is the task assignee. The task's
         video must still be undeleted, INGESTED and human-qualified. P0 accepts a small
-        annotation-document.v1 consisting of one or more labelled time ranges and an optional note;
-        it does not provide drawing tools, AI annotations or independent review in this operation.
-        When a media report exists, each time range must also end within its verified duration.
+        annotation-document.v1 consisting of one or more primary-Step time ranges selected from the
+        immutable schema bound to the task and an optional note. Primary-Step ranges may touch at a
+        boundary but must not overlap. This operation does not provide drawing tools, AI annotations
+        or independent review. When a media report exists, each range must also end within its
+        verified duration.
         The Idempotency-Key safely replays the identical submission without creating another revision.
       security:
         - sessionCookie: []
@@ -2648,7 +2740,7 @@ paths:
               $ref: "#/components/schemas/AnnotationRevisionRequest"
       responses:
         "201":
-          description: Immutable first revision, or the identical idempotent replay.
+          description: Immutable revision for the current submission round, or the identical idempotent replay.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -2661,7 +2753,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnnotationRevision"
         "400":
-          description: The request, time range or identifiers are invalid.
+          description: The request, label, time range, overlap rule or identifiers are invalid.
           content:
             application/problem+json:
               schema:
@@ -2700,7 +2792,9 @@ paths:
         Requires an ACTIVE ADMIN membership. The reviewer must differ from the revision submitter;
         the video must remain undeleted, INGESTED and human-qualified. P0 records one immutable
         APPROVED or REJECTED decision. A rejection returns the task to its assignee; their next
-        immutable revision receives the next revision number. Older revisions and reviews remain immutable.
+        immutable revision receives the next revision number. An approval completes the task and
+        persists the deterministic post-cleaning result for that exact immutable revision. Older
+        revisions, reviews and cleaning results remain immutable.
       security:
         - sessionCookie: []
       parameters:
@@ -4671,6 +4765,107 @@ components:
           format: date-time
     CaptureSessionMetadataV1:
       $ref: "../schemas/capture-session-metadata-v1.schema.json"
+    DatasetAdmissionPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - eligible
+        - assembly_status
+        - quality_status
+        - expected_camera_count
+        - received_camera_count
+        - blocking_reasons
+        - streams
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+        eligible:
+          type: boolean
+          description: True only when no session or stream blocking reason is present.
+        assembly_status:
+          $ref: "#/components/schemas/CaptureSessionAssemblyStatus"
+        quality_status:
+          $ref: "#/components/schemas/CaptureQualityStatus"
+        expected_camera_count:
+          type: integer
+          minimum: 1
+        received_camera_count:
+          type: integer
+          minimum: 0
+        blocking_reasons:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetAdmissionPreviewStream"
+    DatasetAdmissionPreviewStream:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_stream_id
+        - clip_asset_id
+        - camera_index
+        - eligible
+        - stream_status
+        - stream_quality_status
+        - asset_status
+        - asset_deleted
+        - quality_review_decision
+        - annotation_review_decision
+        - post_cleaning_decision
+        - blocking_reasons
+      properties:
+        camera_stream_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        camera_index:
+          type: integer
+          minimum: 0
+        eligible:
+          type: boolean
+        stream_status:
+          type: string
+          enum: [BOUND, INGESTED, INGEST_FAILED, UNAVAILABLE]
+        stream_quality_status:
+          $ref: "#/components/schemas/CaptureQualityStatus"
+        asset_status:
+          type: string
+          enum: [MISSING, UPLOADED, INGESTING, INGESTED, INGEST_FAILED]
+        asset_deleted:
+          type: boolean
+        quality_review_decision:
+          type: string
+          enum: [UNREVIEWED, QUALIFIED, REJECTED, NEEDS_REVIEW]
+        annotation_revision_id:
+          type: [string, "null"]
+          format: uuid
+        annotation_review_decision:
+          type: string
+          enum: [UNREVIEWED, APPROVED, REJECTED]
+        post_cleaning_decision:
+          type: string
+          enum: [MISSING, PASS, WARNING, REJECT]
+        annotation_document_sha256:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+        label_schema_digest:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+        blocking_reasons:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
     CaptureSession:
       type: object
       additionalProperties: false
@@ -5174,6 +5369,66 @@ components:
         content_type:
           type: string
           const: video/mp4
+    AnnotationLabelDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - label_id
+        - display_name
+        - description
+        - sort_order
+      properties:
+        label_id:
+          type: string
+          enum:
+            - prepare_workspace
+            - retrieve_medicine
+            - prepare_dose
+            - final_review
+            - cleanup
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        sort_order:
+          type: integer
+          minimum: 1
+    AnnotationLabelSchema:
+      type: object
+      additionalProperties: false
+      required:
+        - label_schema_id
+        - schema_key
+        - schema_version
+        - schema_digest
+        - layer
+        - labels
+      properties:
+        label_schema_id:
+          type: string
+          format: uuid
+        schema_key:
+          type: string
+          const: medication-primary-step
+        schema_version:
+          type: string
+          const: p0-primary-step.v1
+        schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        layer:
+          type: string
+          const: primary_step
+        labels:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/AnnotationLabelDefinition"
     AnnotationTaskRequest:
       type: object
       additionalProperties: false
@@ -5192,6 +5447,8 @@ components:
         - annotation_task_id
         - project_id
         - clip_asset_id
+        - label_schema_id
+        - label_schema_digest
         - assignee_actor_id
         - created_by
         - status
@@ -5211,6 +5468,12 @@ components:
         clip_asset_id:
           type: string
           format: uuid
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         assignee_actor_id:
           type: string
           maxLength: 128
@@ -5222,6 +5485,7 @@ components:
           enum:
             - ASSIGNED
             - SUBMITTED
+            - COMPLETED
         can_submit:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to submit this task.
@@ -5270,9 +5534,36 @@ components:
           minimum: 1
         label:
           type: string
+          enum:
+            - prepare_workspace
+            - retrieve_medicine
+            - prepare_dose
+            - final_review
+            - cleanup
+    StoredAnnotationSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - start_ms
+        - end_ms
+        - label
+      properties:
+        start_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        end_ms:
+          type: integer
+          format: int64
+          minimum: 1
+        label:
+          type: string
           minLength: 1
           maxLength: 64
           pattern: ^[^\x00-\x1F\x7F]+$
+          description: >-
+            Stable label_id for schema-bound revisions. Historical revisions migrated from the
+            retired legacy-free-text schema retain their original non-control text.
     AnnotationRevisionRequest:
       type: object
       additionalProperties: false
@@ -5299,6 +5590,8 @@ components:
         - clip_asset_id
         - revision_number
         - annotation_schema_version
+        - label_schema_id
+        - label_schema_digest
         - document_sha256
         - submitted_by
         - submitted_at
@@ -5321,6 +5614,12 @@ components:
         annotation_schema_version:
           type: string
           const: annotation-document.v1
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         document_sha256:
           type: string
           pattern: ^[a-f0-9]{64}$
@@ -5336,10 +5635,13 @@ components:
       required:
         - annotation_revision_id
         - revision_number
+        - label_schema_id
+        - label_schema_digest
         - annotation_document
         - submitted_by
         - submitted_at
         - review
+        - post_cleaning_result
       properties:
         annotation_revision_id:
           type: string
@@ -5347,6 +5649,12 @@ components:
         revision_number:
           type: integer
           minimum: 1
+        label_schema_id:
+          type: string
+          format: uuid
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
         annotation_document:
           type: object
           additionalProperties: false
@@ -5361,7 +5669,7 @@ components:
               type: array
               minItems: 1
               items:
-                $ref: "#/components/schemas/AnnotationSegment"
+                $ref: "#/components/schemas/StoredAnnotationSegment"
             note:
               type: string
               maxLength: 1000
@@ -5375,6 +5683,75 @@ components:
           anyOf:
             - $ref: "#/components/schemas/AnnotationReview"
             - type: "null"
+        post_cleaning_result:
+          description: >-
+            Immutable post-cleaning result for this exact approved revision. It is null before
+            approval, for rejected revisions, and for historical approved revisions that have not
+            been evaluated.
+          anyOf:
+            - $ref: "#/components/schemas/PostCleaningResult"
+            - type: "null"
+    PostCleaningResult:
+      type: object
+      additionalProperties: false
+      required:
+        - cleaning_result_id
+        - cleaning_run_id
+        - rule_set_key
+        - rule_set_version
+        - rule_set_digest
+        - outcome
+        - reason_codes
+        - executed_checks
+        - evaluated_at
+      properties:
+        cleaning_result_id:
+          type: string
+          format: uuid
+        cleaning_run_id:
+          type: string
+          format: uuid
+        rule_set_key:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-z][a-z0-9._-]{0,63}$
+        rule_set_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-z0-9][a-z0-9._-]{0,63}$
+        rule_set_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        outcome:
+          type: string
+          enum:
+            - PASS
+            - WARNING
+            - REJECT
+        reason_codes:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
+        executed_checks:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: ^[A-Z][A-Z0-9_]{0,63}$
+        evaluated_at:
+          type: string
+          format: date-time
     AnnotationReviewDecision:
       type: string
       enum:

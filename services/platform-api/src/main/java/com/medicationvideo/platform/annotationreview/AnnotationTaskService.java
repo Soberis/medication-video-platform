@@ -21,6 +21,9 @@ import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
 import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
+import com.medicationvideo.platform.qualitycleaning.PostCleaningQueryService;
+import com.medicationvideo.platform.qualitycleaning.PostCleaningResultSummary;
+import com.medicationvideo.platform.qualitycleaning.PostCleaningService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
 @Service
@@ -30,6 +33,9 @@ class AnnotationTaskService {
 	private final ClipAssetReviewQueryService assetQueryService;
 	private final QualityReviewQueryService qualityReviewQueryService;
 	private final MediaDurationQueryService mediaDurationQueryService;
+	private final PostCleaningService postCleaningService;
+	private final PostCleaningQueryService postCleaningQueryService;
+	private final AnnotationLabelSchemaService labelSchemaService;
 	private final AnnotationTaskRepository repository;
 	private final AnnotationRevisionRepository revisionRepository;
 	private final AnnotationReviewRepository reviewRepository;
@@ -40,6 +46,9 @@ class AnnotationTaskService {
 			ClipAssetReviewQueryService assetQueryService,
 			QualityReviewQueryService qualityReviewQueryService,
 			MediaDurationQueryService mediaDurationQueryService,
+			PostCleaningService postCleaningService,
+			PostCleaningQueryService postCleaningQueryService,
+			AnnotationLabelSchemaService labelSchemaService,
 			AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository,
 			AnnotationReviewRepository reviewRepository,
@@ -48,6 +57,9 @@ class AnnotationTaskService {
 		this.assetQueryService = assetQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.mediaDurationQueryService = mediaDurationQueryService;
+		this.postCleaningService = postCleaningService;
+		this.postCleaningQueryService = postCleaningQueryService;
+		this.labelSchemaService = labelSchemaService;
 		this.repository = repository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
@@ -78,6 +90,11 @@ class AnnotationTaskService {
 						.stream().collect(java.util.stream.Collectors.toMap(
 								AnnotationReview::getAnnotationRevisionId,
 								review -> review));
+		var postCleaningByRevisionId = revisionsByTaskId.isEmpty()
+				? Map.<UUID, PostCleaningResultSummary>of()
+				: this.postCleaningQueryService.findLatestByAnnotationRevisionIds(
+						revisionsByTaskId.values()
+								.stream().map(AnnotationRevision::getAnnotationRevisionId).toList());
 		return new AnnotationTaskListResponse(tasks.stream()
 				.map(task -> {
 					var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
@@ -86,7 +103,10 @@ class AnnotationTaskService {
 							actorId,
 							role,
 							revision,
-							revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()));
+							revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()),
+							revision == null
+									? null
+									: postCleaningByRevisionId.get(revision.getAnnotationRevisionId()));
 				})
 				.toList());
 	}
@@ -110,7 +130,7 @@ class AnnotationTaskService {
 						"The idempotency key was already used for a different annotation task.",
 						409);
 			}
-			return AnnotationTaskResponse.from(replay.get(), actorId, ProjectRole.ADMIN, null, null);
+			return AnnotationTaskResponse.from(replay.get(), actorId, ProjectRole.ADMIN, null, null, null);
 		}
 
 		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, clipAssetId);
@@ -134,6 +154,7 @@ class AnnotationTaskService {
 					409);
 		}
 
+		var labelSchema = this.labelSchemaService.currentBinding();
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var task = this.repository.saveAndFlush(AnnotationTask.create(
 				projectId,
@@ -141,6 +162,7 @@ class AnnotationTaskService {
 				request.assigneeActorId(),
 				actorId,
 				idempotencyKey,
+				labelSchema,
 				now));
 		this.auditRecorder.record(new AuditEventCommand(
 				now,
@@ -158,8 +180,10 @@ class AnnotationTaskService {
 				"PROJECT_MEMBERSHIP_ADMIN",
 				Map.of(
 						"clip_asset_id", clipAssetId.toString(),
-						"assignee_actor_id", task.getAssigneeActorId())));
-		return AnnotationTaskResponse.from(task, actorId, ProjectRole.ADMIN, null, null);
+						"assignee_actor_id", task.getAssigneeActorId(),
+						"label_schema_id", task.getLabelSchemaId().toString(),
+						"label_schema_digest", task.getLabelSchemaDigest())));
+		return AnnotationTaskResponse.from(task, actorId, ProjectRole.ADMIN, null, null, null);
 	}
 
 	@Transactional
@@ -181,7 +205,7 @@ class AnnotationTaskService {
 					403);
 		}
 		var document = toAnnotationDocument(request);
-		var documentSha256 = digest(request);
+		var documentSha256 = digest(document);
 		var replay = this.revisionRepository.findByAnnotationTaskIdAndSubmittedByAndIdempotencyKey(
 				task.getAnnotationTaskId(), actorId, idempotencyKey);
 		if (replay.isPresent()) {
@@ -193,6 +217,11 @@ class AnnotationTaskService {
 			}
 			return AnnotationRevisionResponse.from(replay.get());
 		}
+		this.labelSchemaService.requireAllowedPrimaryStepLabels(
+				task.getLabelSchemaId(),
+				task.getLabelSchemaDigest(),
+				request.segments().stream().map(AnnotationSegmentCommand::label).toList());
+		validatePrimaryStepOverlap(request.segments());
 		if (!this.assetQueryService.lockAndGetReviewFacts(projectId, task.getClipAssetId()).reviewable()
 				|| !this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId, task.getClipAssetId())
 						.isQualified()) {
@@ -228,6 +257,8 @@ class AnnotationTaskService {
 				Map.of(
 						"annotation_task_id", task.getAnnotationTaskId().toString(),
 						"clip_asset_id", task.getClipAssetId().toString(),
+						"label_schema_id", revision.getLabelSchemaId().toString(),
+						"label_schema_digest", revision.getLabelSchemaDigest(),
 						"document_sha256", documentSha256,
 						"segment_count", Integer.toString(request.segments().size()))));
 		return AnnotationRevisionResponse.from(revision);
@@ -263,9 +294,10 @@ class AnnotationTaskService {
 					"The annotation revision already has an immutable review decision.",
 					409);
 		}
-		if (!this.assetQueryService.lockAndGetReviewFacts(projectId, revision.getClipAssetId()).reviewable()
-				|| !this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId, revision.getClipAssetId())
-						.isQualified()) {
+		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, revision.getClipAssetId());
+		var qualityDecision = this.qualityReviewQueryService.lockAndGetCurrentDecision(
+				projectId, revision.getClipAssetId());
+		if (!assetFacts.reviewable() || !qualityDecision.isQualified()) {
 			throw new AnnotationTaskException(
 					"ANNOTATION_REVISION_NO_LONGER_QUALIFIED",
 					"The clip asset is no longer eligible for annotation review.",
@@ -291,6 +323,38 @@ class AnnotationTaskService {
 			task.returnForRework(now);
 			this.repository.saveAndFlush(task);
 		}
+		else {
+			var mediaFact = this.mediaDurationQueryService.findLatestVerifiedDurationFact(
+					projectId, revision.getClipAssetId());
+			this.postCleaningService.evaluate(
+					new PostCleaningService.EvaluationCommand(
+							projectId,
+							revision.getClipAssetId(),
+							assetFacts.assetSha256(),
+							qualityDecision.version(),
+							qualityDecision.isQualified(),
+							revision.getAnnotationRevisionId(),
+							review.getAnnotationReviewId(),
+							true,
+							revision.getDocumentSha256(),
+							digest(revision.getAnnotationDocument()),
+							task.getLabelSchemaId(),
+							task.getLabelSchemaDigest(),
+							revision.getLabelSchemaId(),
+							revision.getLabelSchemaDigest(),
+							this.labelSchemaService.allowedPrimaryStepLabels(
+									revision.getLabelSchemaId(), revision.getLabelSchemaDigest()),
+							toPostCleaningSegments(revision),
+							mediaFact.map(fact -> fact.mediaReportId()).orElse(null),
+							mediaFact.map(fact -> fact.inputDigest()).orElse(null),
+							mediaFact.map(fact -> fact.recipeDigest()).orElse(null),
+							mediaFact.map(fact -> fact.durationMicroseconds()).orElse(null),
+							actorId),
+					requestId,
+					traceId);
+			task.complete(now);
+			this.repository.saveAndFlush(task);
+		}
 		this.auditRecorder.record(new AuditEventCommand(
 				now,
 				AuditActorType.USER,
@@ -309,8 +373,28 @@ class AnnotationTaskService {
 						"annotation_revision_id", revision.getAnnotationRevisionId().toString(),
 						"annotation_task_id", revision.getAnnotationTaskId().toString(),
 						"decision", review.getDecision().name(),
-						"reopened_for_rework", Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED))));
+						"reopened_for_rework", Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED),
+						"task_completed", Boolean.toString(review.getDecision() == AnnotationReviewDecision.APPROVED))));
 		return AnnotationReviewResponse.from(review);
+	}
+
+	private static List<PostCleaningService.SegmentSnapshot> toPostCleaningSegments(
+			AnnotationRevision revision) {
+		var value = revision.getAnnotationDocument().get("segments");
+		if (!(value instanceof List<?> storedSegments)) {
+			return List.of();
+		}
+		return storedSegments.stream().map(AnnotationTaskService::toPostCleaningSegment).toList();
+	}
+
+	private static PostCleaningService.SegmentSnapshot toPostCleaningSegment(Object value) {
+		if (!(value instanceof Map<?, ?> segment)
+				|| !(segment.get("start_ms") instanceof Number start)
+				|| !(segment.get("end_ms") instanceof Number end)
+				|| !(segment.get("label") instanceof String label)) {
+			return new PostCleaningService.SegmentSnapshot(0, 0, "");
+		}
+		return new PostCleaningService.SegmentSnapshot(start.longValue(), end.longValue(), label);
 	}
 
 	private Map<String, Object> toAnnotationDocument(AnnotationRevisionSubmitCommand request) {
@@ -355,21 +439,78 @@ class AnnotationTaskService {
 		}
 	}
 
-	private static String digest(AnnotationRevisionSubmitCommand request) {
+	private static void validatePrimaryStepOverlap(List<AnnotationSegmentCommand> segments) {
+		var orderedSegments = segments.stream()
+				.sorted(java.util.Comparator.comparingLong(AnnotationSegmentCommand::startMs)
+						.thenComparingLong(AnnotationSegmentCommand::endMs))
+				.toList();
+		var maximumPreviousEnd = orderedSegments.getFirst().endMs();
+		for (var index = 1; index < orderedSegments.size(); index += 1) {
+			var segment = orderedSegments.get(index);
+			if (segment.startMs() < maximumPreviousEnd) {
+				throw new AnnotationTaskException(
+						"ANNOTATION_PRIMARY_STEP_OVERLAP",
+						"Primary Step annotation segments must not overlap.",
+						400);
+			}
+			maximumPreviousEnd = Math.max(maximumPreviousEnd, segment.endMs());
+		}
+	}
+
+	private static String digest(Map<String, Object> document) {
+		if (!hasOnlyDocumentFields(document)
+				|| !(document.get("schema_version") instanceof String schemaVersion)
+				|| !(document.get("segments") instanceof List<?> segments)
+				|| (document.containsKey("note") && !(document.get("note") instanceof String))) {
+			return null;
+		}
 		try {
-			var canonical = new StringBuilder("annotation-document.v1\n");
-			for (var segment : request.segments()) {
-				canonical.append(segment.startMs()).append(':').append(segment.endMs()).append(':');
-				appendLengthPrefixed(canonical, segment.label().trim());
+			var canonical = new StringBuilder(schemaVersion).append('\n');
+			for (var value : segments) {
+				if (!(value instanceof Map<?, ?> segment)
+						|| segment.size() != 3
+						|| !segment.containsKey("start_ms")
+						|| !segment.containsKey("end_ms")
+						|| !segment.containsKey("label")
+						|| !(segment.get("label") instanceof String label)) {
+					return null;
+				}
+				var startMs = exactLong(segment.get("start_ms"));
+				var endMs = exactLong(segment.get("end_ms"));
+				if (startMs == null || endMs == null) {
+					return null;
+				}
+				canonical.append(startMs).append(':').append(endMs).append(':');
+				appendLengthPrefixed(canonical, label);
 				canonical.append('\n');
 			}
 			canonical.append("note:");
-			appendLengthPrefixed(canonical, request.note() == null ? "" : request.note().trim());
+			appendLengthPrefixed(canonical, (String) document.getOrDefault("note", ""));
 			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
 					.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable.", exception);
+		}
+	}
+
+	private static boolean hasOnlyDocumentFields(Map<String, Object> document) {
+		if (!document.containsKey("schema_version") || !document.containsKey("segments")) {
+			return false;
+		}
+		return document.size() == 2
+				|| (document.size() == 3 && document.containsKey("note"));
+	}
+
+	private static Long exactLong(Object value) {
+		if (!(value instanceof Number)) {
+			return null;
+		}
+		try {
+			return Long.parseLong(value.toString());
+		}
+		catch (NumberFormatException exception) {
+			return null;
 		}
 	}
 
@@ -408,6 +549,8 @@ record AnnotationTaskResponse(
 		UUID annotationTaskId,
 		UUID projectId,
 		UUID clipAssetId,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		String assigneeActorId,
 		String createdBy,
 		String status,
@@ -423,19 +566,23 @@ record AnnotationTaskResponse(
 			String actorId,
 			ProjectRole role,
 			AnnotationRevision revision,
-			AnnotationReview review) {
+			AnnotationReview review,
+			PostCleaningResultSummary postCleaningResult) {
 		return new AnnotationTaskResponse(
 				task.getAnnotationTaskId(),
 				task.getProjectId(),
 				task.getClipAssetId(),
+				task.getLabelSchemaId(),
+				task.getLabelSchemaDigest(),
 				task.getAssigneeActorId(),
 				task.getCreatedBy(),
 				task.getStatus().name(),
 				task.getStatus() == AnnotationTaskStatus.ASSIGNED
 						&& task.getAssigneeActorId().equals(actorId),
-				role == ProjectRole.ADMIN && revision != null && review == null
+				task.getStatus() == AnnotationTaskStatus.SUBMITTED
+						&& role == ProjectRole.ADMIN && revision != null && review == null
 						&& !revision.getSubmittedBy().equals(actorId),
-				AnnotationRevisionSummary.from(revision, review),
+				AnnotationRevisionSummary.from(revision, review, postCleaningResult),
 				task.getCreatedAt(),
 				task.getUpdatedAt(),
 				task.getVersion());
@@ -448,22 +595,59 @@ record AnnotationTaskListResponse(List<AnnotationTaskResponse> items) {
 record AnnotationRevisionSummary(
 		UUID annotationRevisionId,
 		int revisionNumber,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		Map<String, Object> annotationDocument,
 		String submittedBy,
 		Instant submittedAt,
-		AnnotationReviewResponse review) {
+		AnnotationReviewResponse review,
+		PostCleaningResultResponse postCleaningResult) {
 
-	static AnnotationRevisionSummary from(AnnotationRevision revision, AnnotationReview review) {
+	static AnnotationRevisionSummary from(
+			AnnotationRevision revision,
+			AnnotationReview review,
+			PostCleaningResultSummary postCleaningResult) {
 		if (revision == null) {
 			return null;
 		}
 		return new AnnotationRevisionSummary(
 				revision.getAnnotationRevisionId(),
 				revision.getRevisionNumber(),
+				revision.getLabelSchemaId(),
+				revision.getLabelSchemaDigest(),
 				revision.getAnnotationDocument(),
 				revision.getSubmittedBy(),
 				revision.getSubmittedAt(),
-				AnnotationReviewResponse.from(review));
+				AnnotationReviewResponse.from(review),
+				PostCleaningResultResponse.from(postCleaningResult));
+	}
+}
+
+record PostCleaningResultResponse(
+		UUID cleaningResultId,
+		UUID cleaningRunId,
+		String ruleSetKey,
+		String ruleSetVersion,
+		String ruleSetDigest,
+		String outcome,
+		List<String> reasonCodes,
+		List<String> executedChecks,
+		Instant evaluatedAt) {
+
+	static PostCleaningResultResponse from(PostCleaningResultSummary result) {
+		if (result == null) {
+			return null;
+		}
+		return new PostCleaningResultResponse(
+				result.cleaningResultId(),
+				result.cleaningRunId(),
+				result.ruleSetKey(),
+				result.ruleSetVersion(),
+				result.ruleSetDigest(),
+				result.outcome(),
+				result.reasonCodes(),
+				result.executedChecks(),
+				result.evaluatedAt());
 	}
 }
 
@@ -474,6 +658,8 @@ record AnnotationRevisionResponse(
 		UUID clipAssetId,
 		int revisionNumber,
 		String annotationSchemaVersion,
+		UUID labelSchemaId,
+		String labelSchemaDigest,
 		String documentSha256,
 		String submittedBy,
 		Instant submittedAt) {
@@ -486,6 +672,8 @@ record AnnotationRevisionResponse(
 				revision.getClipAssetId(),
 				revision.getRevisionNumber(),
 				revision.getAnnotationSchemaVersion(),
+				revision.getLabelSchemaId(),
+				revision.getLabelSchemaDigest(),
 				revision.getDocumentSha256(),
 				revision.getSubmittedBy(),
 				revision.getSubmittedAt());

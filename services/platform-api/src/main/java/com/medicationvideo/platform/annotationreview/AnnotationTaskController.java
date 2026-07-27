@@ -184,7 +184,10 @@ record AnnotationTaskErrorResponse(
 		String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = AnnotationTaskController.class)
+@RestControllerAdvice(assignableTypes = {
+	AnnotationTaskController.class,
+	AnnotationLabelSchemaController.class
+})
 class AnnotationTaskExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

@@ -34,6 +34,11 @@ class AnnotationTaskContractTests {
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 	private static final String SHA256 = "b".repeat(64);
+	private static final String CURRENT_LABEL_SCHEMA_ID = "10000000-0000-0000-0000-000000000001";
+	private static final String CURRENT_LABEL_SCHEMA_DIGEST =
+			"305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
+	private static final String MEDIA_RECIPE_DIGEST =
+			"8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765";
 	private static final Instant BASE_TIME = Instant.parse("2026-07-23T01:00:00Z");
 
 	@Autowired
@@ -66,6 +71,8 @@ class AnnotationTaskContractTests {
 				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
 				.andExpect(jsonPath("$.clip_asset_id").value(clipAssetId.toString()))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.label_schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
 				.andExpect(jsonPath("$.assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
 				.andExpect(jsonPath("$.status").value("ASSIGNED"));
 
@@ -81,6 +88,28 @@ class AnnotationTaskContractTests {
 				  AND object_type = 'AnnotationTask'
 				  AND details_json ->> 'clip_asset_id' = ?
 				""", clipAssetId.toString()));
+	}
+
+	@Test
+	void projectMemberReadsTheImmutablePrimaryStepLabelSchema() throws Exception {
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-label-schema", PROJECT_ID)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.schema_key").value("medication-primary-step"))
+				.andExpect(jsonPath("$.schema_version").value("p0-primary-step.v1"))
+				.andExpect(jsonPath("$.schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
+				.andExpect(jsonPath("$.layer").value("primary_step"))
+				.andExpect(jsonPath("$.labels.length()").value(5))
+				.andExpect(jsonPath("$.labels[0].label_id").value("prepare_workspace"))
+				.andExpect(jsonPath("$.labels[0].display_name").value("准备工位/器具"))
+				.andExpect(jsonPath("$.labels[4].label_id").value("cleanup"));
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-label-schema", UUID.randomUUID())
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 	}
 
 	@Test
@@ -143,7 +172,7 @@ class AnnotationTaskContractTests {
 
 		var response = submit(MEMBER_TOKEN, taskId, idempotencyKey,
 				"""
-				{"segments":[{"start_ms":120,"end_ms":780,"label":"拿取药品"}],"note":"合成验证标注"}
+				{"segments":[{"start_ms":120,"end_ms":780,"label":"retrieve_medicine"}],"note":"合成验证标注"}
 				""")
 				.andExpect(status().isCreated())
 				.andExpect(header().string("Cache-Control", "no-store"))
@@ -151,12 +180,14 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.clip_asset_id").value(clipAssetId.toString()))
 				.andExpect(jsonPath("$.revision_number").value(1))
 				.andExpect(jsonPath("$.annotation_schema_version").value("annotation-document.v1"))
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID))
+				.andExpect(jsonPath("$.label_schema_digest").value(CURRENT_LABEL_SCHEMA_DIGEST))
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = com.jayway.jsonpath.JsonPath.<String>read(response, "$.annotation_revision_id");
 
 		submit(MEMBER_TOKEN, taskId, idempotencyKey,
 				"""
-				{"segments":[{"start_ms":120,"end_ms":780,"label":"拿取药品"}],"note":"合成验证标注"}
+				{"segments":[{"start_ms":120,"end_ms":780,"label":"retrieve_medicine"}],"note":"合成验证标注"}
 				""")
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.annotation_revision_id").value(revisionId));
@@ -165,11 +196,11 @@ class AnnotationTaskContractTests {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_NOT_ASSIGNEE"));
 		submit(MEMBER_TOKEN, taskId, idempotencyKey,
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"changed\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"prepare_dose\"}]}")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED"));
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-new-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"x\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"cleanup\"}]}")
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_ALREADY_SUBMITTED"));
 
@@ -195,12 +226,50 @@ class AnnotationTaskContractTests {
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-invalid-range-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":100,\"label\":\"无效\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":100,\"label\":\"prepare_workspace\"}]}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_SEGMENT_TIME_RANGE_INVALID"));
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
 				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
 		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+	}
+
+	@Test
+	void submissionRequiresSchemaLabelsAndNonOverlappingPrimarySteps() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-schema-validation-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-unknown-label-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":0,\"end_ms\":100,\"label\":\"unknown_step\"}]}")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("ANNOTATION_LABEL_NOT_ALLOWED"));
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-overlap-" + UUID.randomUUID(),
+				"""
+				{"segments":[
+				  {"start_ms":0,"end_ms":300,"label":"prepare_workspace"},
+				  {"start_ms":100,"end_ms":200,"label":"retrieve_medicine"},
+				  {"start_ms":200,"end_ms":400,"label":"prepare_dose"}
+				]}
+				""")
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_STEP_OVERLAP"));
+		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+
+		submit(MEMBER_TOKEN, taskId, "annotation-revision-adjacent-" + UUID.randomUUID(),
+				"""
+				{"segments":[
+				  {"start_ms":0,"end_ms":100,"label":"prepare_workspace"},
+				  {"start_ms":100,"end_ms":200,"label":"retrieve_medicine"}
+				]}
+				""")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.label_schema_id").value(CURRENT_LABEL_SCHEMA_ID));
+		assertEquals(1, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 	}
 
 	@Test
@@ -215,7 +284,7 @@ class AnnotationTaskContractTests {
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-duration-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":501,\"label\":\"超出时长\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":501,\"label\":\"prepare_dose\"}]}")
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error_code").value("ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION"));
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
@@ -227,13 +296,14 @@ class AnnotationTaskContractTests {
 	void administratorIndependentlyReviewsSubmittedRevisionOnceAndItIsAudited() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
 		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 1_000_000L);
 		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
 				"annotation-task-review-" + UUID.randomUUID())
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var revisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-review-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
@@ -267,16 +337,183 @@ class AnnotationTaskContractTests {
 		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].status").value("COMPLETED"))
 				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("APPROVED"))
+				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.outcome").value("PASS"))
+				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.rule_set_key")
+						.value("p0-post-annotation"))
 				.andExpect(jsonPath("$.items[0].can_review").value(false));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
+		assertEquals(1, count("SELECT count(*) FROM cleaning_run WHERE annotation_revision_id = ?", revisionId));
+		assertEquals("PASS", this.jdbcTemplate.queryForObject(
+				"SELECT outcome FROM cleaning_result WHERE annotation_revision_id = ?",
+				String.class,
+				revisionId));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'ANNOTATION_REVISION_REVIEWED'
 				  AND object_type = 'AnnotationReview'
 				  AND object_id = ?
 				""", reviewId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'POST_ANNOTATION_CLEANING_COMPLETED'
+				  AND object_type = 'CleaningResult'
+				  AND details_json ->> 'annotation_revision_id' = ?
+				""", revisionId.toString()));
+	}
+
+	@Test
+	void approvedRevisionWithoutVerifiedDurationIsWarningRatherThanImplicitPass() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-warning-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-warning-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":10,\"end_ms\":20,\"label\":\"prepare_workspace\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+				revisionResponse, "$.annotation_revision_id"));
+
+		review(ADMIN_TOKEN, revisionId, "annotation-review-warning-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isCreated());
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].status").value("COMPLETED"))
+				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.outcome")
+						.value("WARNING"))
+				.andExpect(jsonPath(
+						"$.items[0].annotation_revision.post_cleaning_result.reason_codes[0]")
+						.value("VERIFIED_MEDIA_DURATION_UNAVAILABLE"));
+	}
+
+	@Test
+	void zeroDurationFactIsPersistedAsARejectInsteadOfFailingTheReview() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-zero-duration-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(
+				MEMBER_TOKEN,
+				taskId,
+				"annotation-revision-zero-duration-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":0,\"end_ms\":10,\"label\":\"prepare_workspace\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+				revisionResponse, "$.annotation_revision_id"));
+		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 0);
+
+		review(ADMIN_TOKEN, revisionId, "annotation-review-zero-duration-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isCreated());
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].status").value("COMPLETED"))
+				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.outcome")
+						.value("REJECT"))
+				.andExpect(jsonPath(
+						"$.items[0].annotation_revision.post_cleaning_result.reason_codes[0]")
+						.value("VERIFIED_MEDIA_DURATION_INVALID"));
+		assertEquals(0L, this.jdbcTemplate.queryForObject(
+				"SELECT verified_duration_microseconds FROM cleaning_run WHERE annotation_revision_id = ?",
+				Long.class,
+				revisionId));
+	}
+
+	@Test
+	void changedAnnotationDocumentIsRejectedByDigestRevalidation() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 1_000_000L);
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-digest-recheck-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(
+				MEMBER_TOKEN,
+				taskId,
+				"annotation-revision-digest-recheck-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":10,\"end_ms\":20,\"label\":\"prepare_workspace\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+				revisionResponse, "$.annotation_revision_id"));
+		this.jdbcTemplate.update("""
+				UPDATE annotation_revision
+				SET annotation_document = jsonb_set(
+				    annotation_document,
+				    '{segments,0,end_ms}',
+				    '30'::jsonb)
+				WHERE annotation_revision_id = ?
+				""", revisionId);
+
+		review(ADMIN_TOKEN, revisionId, "annotation-review-digest-recheck-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isCreated());
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.outcome")
+						.value("REJECT"))
+				.andExpect(jsonPath(
+						"$.items[0].annotation_revision.post_cleaning_result.reason_codes[0]")
+						.value("ANNOTATION_DOCUMENT_DIGEST_MISMATCH"));
+	}
+
+	@Test
+	void latestVerifiedMediaReportIsSelectedAndFrozenDeterministically() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 100_000L, BASE_TIME);
+		var latestReportId = insertVerifiedMediaReport(
+				PROJECT_ID,
+				clipAssetId,
+				1_000_000L,
+				BASE_TIME.plusSeconds(10),
+				"d".repeat(64));
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-latest-media-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(
+				MEMBER_TOKEN,
+				taskId,
+				"annotation-revision-latest-media-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":500,\"label\":\"prepare_workspace\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+				revisionResponse, "$.annotation_revision_id"));
+
+		review(ADMIN_TOKEN, revisionId, "annotation-review-latest-media-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isCreated());
+
+		assertEquals(latestReportId, this.jdbcTemplate.queryForObject(
+				"SELECT media_report_id FROM cleaning_run WHERE annotation_revision_id = ?",
+				UUID.class,
+				revisionId));
+		assertEquals(1_000_000L, this.jdbcTemplate.queryForObject(
+				"SELECT verified_duration_microseconds FROM cleaning_run WHERE annotation_revision_id = ?",
+				Long.class,
+				revisionId));
 	}
 
 	@Test
@@ -289,7 +526,7 @@ class AnnotationTaskContractTests {
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var revisionResponse = submit(ADMIN_TOKEN, taskId, "annotation-revision-self-review-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":1,\"end_ms\":2,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var revisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
@@ -310,7 +547,7 @@ class AnnotationTaskContractTests {
 				.andReturn().getResponse().getContentAsString();
 		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
 		var firstRevisionResponse = submit(MEMBER_TOKEN, taskId, "annotation-revision-first-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":100,\"end_ms\":200,\"label\":\"错误标签\"}]}")
+				"{\"segments\":[{\"start_ms\":100,\"end_ms\":200,\"label\":\"cleanup\"}]}")
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		var firstRevisionId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
@@ -329,11 +566,12 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("REJECTED"));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-second-" + UUID.randomUUID(),
-				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"拿取药品\"}]}")
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"retrieve_medicine\"}]}")
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.revision_number").value(2));
 		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", firstRevisionId));
+		assertEquals(0, count("SELECT count(*) FROM cleaning_run WHERE annotation_revision_id = ?", firstRevisionId));
 	}
 
 	@Test
@@ -466,19 +704,37 @@ class AnnotationTaskContractTests {
 		return clipAssetId;
 	}
 
-	private void insertVerifiedMediaReport(UUID projectId, UUID clipAssetId, long durationMicroseconds) {
+	private UUID insertVerifiedMediaReport(UUID projectId, UUID clipAssetId, long durationMicroseconds) {
+		return insertVerifiedMediaReport(projectId, clipAssetId, durationMicroseconds, BASE_TIME);
+	}
+
+	private UUID insertVerifiedMediaReport(
+			UUID projectId,
+			UUID clipAssetId,
+			long durationMicroseconds,
+			Instant createdAt) {
+		return insertVerifiedMediaReport(
+				projectId, clipAssetId, durationMicroseconds, createdAt, MEDIA_RECIPE_DIGEST);
+	}
+
+	private UUID insertVerifiedMediaReport(
+			UUID projectId,
+			UUID clipAssetId,
+			long durationMicroseconds,
+			Instant createdAt,
+			String recipeDigest) {
 		var mediaJobId = UUID.randomUUID();
+		var mediaReportId = UUID.randomUUID();
 		this.jdbcTemplate.update("""
 				INSERT INTO media_job (
 				    media_job_id, project_id, clip_asset_id, job_type, input_digest, input_size_bytes,
 				    content_type, status, idempotency_key, request_fingerprint, created_at, updated_at,
 				    version, probe_profile_key, recipe_digest)
 				VALUES (?, ?, ?, 'MEDIA_PROBE', ?, 1234, 'video/mp4', 'SUCCEEDED', ?, ?, ?, ?, 0,
-				        'media-probe-baseline-v1',
-				        '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765')
+				        'media-probe-baseline-v1', ?)
 				""",
 				mediaJobId, projectId, clipAssetId, SHA256, "annotation-media-job-" + mediaJobId,
-				SHA256, Timestamp.from(BASE_TIME), Timestamp.from(BASE_TIME));
+				SHA256, Timestamp.from(createdAt), Timestamp.from(createdAt), recipeDigest);
 		this.jdbcTemplate.update("""
 				INSERT INTO media_report (
 				    media_report_id, media_job_id, project_id, clip_asset_id, report_schema_version,
@@ -486,14 +742,14 @@ class AnnotationTaskContractTests {
 				    video_stream_count, primary_video_stream_index, video_codec, width, height,
 				    time_base_numerator, time_base_denominator, variable_frame_rate, audio_stream_count,
 				    decode_verified, input_digest_verified, warning_codes, created_at)
-				VALUES (?, ?, ?, ?, 'media-report.v1', ?,
-				        '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765',
+				VALUES (?, ?, ?, ?, 'media-report.v1', ?, ?,
 				        'sha256:207391c770bee4a8dfe3530ef5f31af07904950f9bc2dcb822fedb086222164a',
 				        'mov,mp4,m4a,3gp,3g2,mj2', ?, 1, 0, 'h264', 640, 360, 1, 90000, false, 0,
 				        true, true, '[]'::jsonb, ?)
 				""",
-				UUID.randomUUID(), mediaJobId, projectId, clipAssetId, SHA256, durationMicroseconds,
-				Timestamp.from(BASE_TIME));
+				mediaReportId, mediaJobId, projectId, clipAssetId, SHA256, recipeDigest, durationMicroseconds,
+				Timestamp.from(createdAt));
+		return mediaReportId;
 	}
 
 	private int count(String sql, Object... arguments) {
@@ -501,6 +757,8 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM cleaning_result WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM cleaning_run WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_revision WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", projectId);

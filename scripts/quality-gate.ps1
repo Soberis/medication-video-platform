@@ -42,6 +42,7 @@ $requiredFiles = @(
     'contracts/events/media-probe-result-v1.schema.json',
     'contracts/events/media-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
+    'contracts/profiles/p0-post-annotation-cleaning-v1.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
@@ -140,6 +141,24 @@ try {
 }
 catch {
     Add-Failure "Media probe baseline profile is invalid: $($_.Exception.Message)"
+}
+
+try {
+    $postCleaningProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/p0-post-annotation-cleaning-v1.json') -Raw).TrimEnd("`r", "`n")
+    $postCleaningProfileContent | ConvertFrom-Json | Out-Null
+    Add-Pass 'P0 post-annotation cleaning profile is valid JSON'
+
+    $postCleaningProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($postCleaningProfileContent)
+    $postCleaningProfileDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($postCleaningProfileBytes)).ToLowerInvariant()
+    if ($postCleaningProfileDigest -eq '7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a') {
+        Add-Pass 'P0 post-annotation cleaning profile digest matches the server contract'
+    }
+    else {
+        Add-Failure "P0 post-annotation cleaning profile digest changed unexpectedly: $postCleaningProfileDigest"
+    }
+}
+catch {
+    Add-Failure "P0 post-annotation cleaning profile is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {
@@ -298,7 +317,8 @@ else {
 
 $platformPom = Join-Path $root 'services/platform-api/pom.xml'
 if (Test-Path -LiteralPath $platformPom) {
-    $mavenWrapper = Join-Path $root 'services/platform-api/mvnw.cmd'
+    $mavenWrapperName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'mvnw.cmd' } else { 'mvnw' }
+    $mavenWrapper = Join-Path $root "services/platform-api/$mavenWrapperName"
     if (-not (Test-Path -LiteralPath $mavenWrapper)) {
         Add-Failure 'platform-api has pom.xml but Maven Wrapper is missing'
     }

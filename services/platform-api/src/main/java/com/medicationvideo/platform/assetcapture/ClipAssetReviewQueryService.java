@@ -32,7 +32,10 @@ public class ClipAssetReviewQueryService {
 		if (asset.isDeleted()) {
 			throw assetNotFound();
 		}
-		return new ReviewFacts(asset.getStatus() == ClipAssetStatus.INGESTED, asset.getStatus().name());
+		return new ReviewFacts(
+				asset.getStatus() == ClipAssetStatus.INGESTED,
+				asset.getStatus().name(),
+				asset.getSha256());
 	}
 
 	private static AssetCatalogQueryException assetNotFound() {
@@ -41,6 +44,6 @@ public class ClipAssetReviewQueryService {
 				"The clip asset was not found in the current project.");
 	}
 
-	public record ReviewFacts(boolean reviewable, String assetStatus) {
+	public record ReviewFacts(boolean reviewable, String assetStatus, String assetSha256) {
 	}
 }
