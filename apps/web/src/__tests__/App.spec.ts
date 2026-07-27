@@ -126,6 +126,8 @@ describe('App', () => {
     await flushPromises()
 
     expect(wrapper.findAll('button').filter((button) => button.text() === '管理')).toHaveLength(1)
+    expect(wrapper.get('[aria-label="进入项目：管理员项目"]')).toBeTruthy()
+    expect(wrapper.get('[aria-label="管理项目：管理员项目"]')).toBeTruthy()
     expect(wrapper.text()).not.toContain('改名')
     expect(wrapper.text()).not.toContain('归档')
   })

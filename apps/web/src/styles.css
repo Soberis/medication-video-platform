@@ -66,6 +66,18 @@ code {
   padding: 24px 0 56px;
 }
 
+@media (min-width: 2200px) {
+  .app-shell {
+    width: min(1760px, calc(100% - 80px));
+  }
+}
+
+@media (min-width: 3200px) {
+  .app-shell {
+    width: min(2400px, calc(100% - 120px));
+  }
+}
+
 .skip-link {
   position: fixed;
   z-index: 100;
@@ -949,7 +961,7 @@ code {
 }
 
 .local-upload-card {
-  width: min(100%, 860px);
+  width: 100%;
 }
 
 .login-page {

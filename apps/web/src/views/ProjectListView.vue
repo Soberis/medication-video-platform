@@ -191,11 +191,14 @@ onUnmounted(() => activeRequest?.abort())
           <RouterLink
             class="project-open-link"
             :to="{ name: 'session-list', params: { projectId: project.project_id } }"
+            :aria-label="`进入项目：${project.display_name}`"
           >
             进入项目
           </RouterLink>
           <ElDropdown v-if="project.current_role === 'ADMIN'" trigger="click">
-            <ElButton link type="primary">管理</ElButton>
+            <ElButton link type="primary" :aria-label="`管理项目：${project.display_name}`">
+              管理
+            </ElButton>
             <template #dropdown>
               <ElDropdownMenu>
                 <ElDropdownItem :disabled="renamingProjectId === project.project_id" @click="renameDataProject(project)">
