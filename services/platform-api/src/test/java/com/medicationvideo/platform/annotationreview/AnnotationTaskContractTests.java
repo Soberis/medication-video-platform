@@ -345,7 +345,8 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.outcome").value("PASS"))
 				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.rule_set_key")
 						.value("p0-post-annotation"))
-				.andExpect(jsonPath("$.items[0].can_review").value(false));
+				.andExpect(jsonPath("$.items[0].can_review").value(false))
+				.andExpect(jsonPath("$.items[0].can_recheck_post_cleaning").value(true));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
 		assertEquals(1, count("SELECT count(*) FROM cleaning_run WHERE annotation_revision_id = ?", revisionId));
@@ -398,6 +399,35 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.streams[0].eligible").value(false))
 				.andExpect(jsonPath("$.streams[0].blocking_reasons[0]")
 						.value("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING"));
+
+		recheck(MEMBER_TOKEN, revisionId)
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var rechecked = recheck(ADMIN_TOKEN, revisionId)
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.outcome").value("PASS"))
+				.andReturn().getResponse().getContentAsString();
+		var recheckedResultId = com.jayway.jsonpath.JsonPath.<String>read(rechecked, "$.cleaning_result_id");
+		recheck(ADMIN_TOKEN, revisionId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.cleaning_result_id").value(recheckedResultId));
+		assertEquals(2, count("SELECT count(*) FROM cleaning_run WHERE annotation_revision_id = ?", revisionId));
+		assertEquals(2, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'POST_ANNOTATION_CLEANING_COMPLETED'
+				  AND details_json ->> 'annotation_revision_id' = ?
+				""", revisionId.toString()));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview",
+						PROJECT_ID,
+						captureSessionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.eligible").value(true))
+				.andExpect(jsonPath("$.streams[0].eligible").value(true))
+				.andExpect(jsonPath("$.streams[0].blocking_reasons").isEmpty());
 	}
 
 	@Test
@@ -678,6 +708,15 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "annotation-review-" + UUID.randomUUID())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions recheck(String token, UUID revisionId) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/post-cleaning-rechecks",
+						PROJECT_ID,
+						revisionId)
+				.header("Authorization", "Bearer " + token)
+				.header("X-Request-Id", "annotation-recheck-" + UUID.randomUUID()));
 	}
 
 	private void insertQualityReview(UUID projectId, UUID clipAssetId, String decision, String reasonCode) {

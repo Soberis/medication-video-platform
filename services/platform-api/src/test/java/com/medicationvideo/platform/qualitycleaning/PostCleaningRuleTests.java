@@ -88,7 +88,8 @@ class PostCleaningRuleTests {
 				command.mediaInputDigest(),
 				command.mediaRecipeDigest(),
 				command.verifiedDurationMicroseconds(),
-				command.actorId());
+				command.actorId(),
+				command.authorizationBasis());
 
 		var result = PostCleaningService.evaluateRules(command);
 
@@ -123,6 +124,7 @@ class PostCleaningRuleTests {
 				durationMicroseconds == null ? null : SHA256,
 				durationMicroseconds == null ? null : "c".repeat(64),
 				durationMicroseconds,
-				"synthetic-reviewer");
+				"synthetic-reviewer",
+				"SYNTHETIC_TEST");
 	}
 }

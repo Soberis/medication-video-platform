@@ -4,6 +4,7 @@ import {
   createAnnotationTask,
   getAnnotationLabelSchema,
   listAnnotationTasks,
+  recheckAnnotationPostCleaning,
   reviewAnnotationRevision,
   submitAnnotationRevision,
 } from '@/api/annotation'
@@ -94,6 +95,7 @@ describe('annotation task API', () => {
               status: 'COMPLETED',
               can_submit: false,
               can_review: false,
+              can_recheck_post_cleaning: true,
               annotation_revision: {
                 annotation_revision_id: '80000000-0000-4000-8000-000000000001',
                 label_schema_id: labelSchemaId,
@@ -235,6 +237,30 @@ describe('annotation task API', () => {
         body: JSON.stringify({ decision: 'APPROVED' }),
         headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-review-idempotency-0001' }),
       }),
+    )
+  })
+
+  it('rechecks post-cleaning with the current facts without a browser-side idempotency model', async () => {
+    const revisionId = '30000000-0000-4000-8000-000000000004'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        cleaning_result_id: '82000000-0000-4000-8000-000000000001',
+        cleaning_run_id: '83000000-0000-4000-8000-000000000001',
+        rule_set_key: 'p0-post-annotation',
+        rule_set_version: 'p0-post-annotation.v1',
+        rule_set_digest: 'd'.repeat(64),
+        outcome: 'PASS',
+        reason_codes: [],
+        executed_checks: ['PRIMARY_STEP_NO_OVERLAP'],
+        evaluated_at: '2026-07-27T01:00:00Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(recheckAnnotationPostCleaning(projectId, revisionId)).resolves.toMatchObject({ outcome: 'PASS' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/post-cleaning-rechecks`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
     )
   })
 })

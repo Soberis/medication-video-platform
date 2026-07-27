@@ -23,6 +23,7 @@ import {
   AnnotationTaskApiError,
   getAnnotationLabelSchema,
   listAnnotationTasks,
+  recheckAnnotationPostCleaning,
   reviewAnnotationRevision,
   submitAnnotationRevision,
   type AnnotationLabelSchema,
@@ -55,6 +56,7 @@ const segments = ref<DraftAnnotationSegment[]>([])
 const note = ref('')
 const isSubmitting = ref(false)
 const reviewingRevisionId = ref<string | null>(null)
+const recheckingRevisionId = ref<string | null>(null)
 let activeRequest: AbortController | null = null
 let nextDraftSegmentId = 0
 
@@ -257,6 +259,30 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
     reviewingRevisionId.value = null
   }
 }
+
+async function recheckPostCleaning(task: AnnotationTask) {
+  const revision = task.annotation_revision
+  if (!revision || !task.can_recheck_post_cleaning || recheckingRevisionId.value) return
+  try {
+    await ElMessageBox.confirm(
+      '将按当前人工质量、视频和标注事实重新生成后置清洗结果；历史结果会保留，不会修改已通过的标注。',
+      '重新核对清洗',
+      { type: 'warning', confirmButtonText: '确认重新核对', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  recheckingRevisionId.value = revision.annotation_revision_id
+  try {
+    await recheckAnnotationPostCleaning(projectId.value, revision.annotation_revision_id)
+    ElMessage.success('已按当前事实核对清洗结果。')
+    await loadTasks()
+  } catch (error) {
+    ElMessage.error(error instanceof AnnotationTaskApiError ? error.message : '暂时无法重新核对清洗，请稍后重试。')
+  } finally {
+    recheckingRevisionId.value = null
+  }
+}
 </script>
 
 <template>
@@ -358,6 +384,16 @@ async function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
                 不通过
               </ElButton>
             </template>
+            <ElButton
+              v-else-if="row.can_recheck_post_cleaning && row.annotation_revision"
+              link
+              type="primary"
+              :aria-label="`重新核对视频 ${row.clip_asset_id} 的后置清洗`"
+              :loading="recheckingRevisionId === row.annotation_revision.annotation_revision_id"
+              @click="recheckPostCleaning(row as AnnotationTask)"
+            >
+              重新核对清洗
+            </ElButton>
             <span v-else>—</span>
           </div>
         </template>

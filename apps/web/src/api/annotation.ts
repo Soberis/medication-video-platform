@@ -11,6 +11,7 @@ export interface AnnotationTask {
   status: 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
   can_submit: boolean
   can_review: boolean
+  can_recheck_post_cleaning: boolean
   annotation_revision: AnnotationRevisionSummary | null
   created_at: string
   updated_at: string
@@ -195,6 +196,22 @@ export async function reviewAnnotationRevision(
   throw await annotationTaskApiError(response)
 }
 
+export async function recheckAnnotationPostCleaning(
+  projectId: string,
+  annotationRevisionId: string,
+): Promise<PostCleaningResult> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-revisions/${encodeURIComponent(annotationRevisionId)}/post-cleaning-rechecks`,
+    {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...csrfHeaders() },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as PostCleaningResult
+  throw await annotationTaskApiError(response)
+}
+
 async function annotationTaskApiError(response: Response): Promise<AnnotationTaskApiError> {
   let errorCode = 'ANNOTATION_TASK_REQUEST_FAILED'
   try {
@@ -218,6 +235,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',
     ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',
+    ANNOTATION_POST_CLEANING_RECHECK_NOT_READY: '当前标注、任务或视频状态不允许重新核对清洗。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(messages[errorCode] ?? '标注任务暂未创建，请稍后重试。', errorCode)

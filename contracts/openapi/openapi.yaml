@@ -2857,6 +2857,69 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-revisions/{annotation_revision_id}/post-cleaning-rechecks:
+    post:
+      operationId: recheckAnnotationPostCleaning
+      tags:
+        - Annotation Tasks
+      summary: Re-evaluate an approved annotation revision against current training facts
+      description: >-
+        Requires an ACTIVE ADMIN membership. The revision must remain independently APPROVED, its
+        task COMPLETED and its video undeleted and INGESTED. The service re-evaluates the immutable
+        revision using the current human-quality version and current verified media fact. An unchanged
+        input fingerprint returns the existing immutable result; a changed input creates a new run and
+        result without overwriting history. A non-qualified current quality fact is recorded as REJECT.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: annotation_revision_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "200":
+          description: Current-facts post-cleaning result, including a safe idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostCleaningResult"
+        "400":
+          description: The identifiers are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No authenticated platform session exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE ADMIN membership is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project or revision is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The revision, task or video is no longer eligible for controlled rechecking.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/clip-assets/{clip_asset_id}/quality-review:
     get:
       operationId: getClipAssetQualityReview
@@ -5454,6 +5517,7 @@ components:
         - status
         - can_submit
         - can_review
+        - can_recheck_post_cleaning
         - annotation_revision
         - created_at
         - updated_at
@@ -5492,6 +5556,9 @@ components:
         can_review:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to independently review its submitted revision.
+        can_recheck_post_cleaning:
+          type: boolean
+          description: Server-evaluated capability for an administrator to re-evaluate a completed approved revision against current facts.
         annotation_revision:
           anyOf:
             - $ref: "#/components/schemas/AnnotationRevisionSummary"

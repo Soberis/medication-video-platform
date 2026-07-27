@@ -76,6 +76,7 @@ const assignedTask = {
   status: 'ASSIGNED',
   can_submit: true,
   can_review: false,
+  can_recheck_post_cleaning: false,
   annotation_revision: null,
   created_at: '2026-07-23T01:00:00Z',
   updated_at: '2026-07-23T01:00:00Z',
@@ -166,6 +167,7 @@ describe('annotation task list view', () => {
       annotation_task_id: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
       status: 'COMPLETED',
       can_submit: false,
+      can_recheck_post_cleaning: true,
       annotation_revision: {
         ...completedRevision,
         annotation_revision_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
@@ -203,6 +205,7 @@ describe('annotation task list view', () => {
     expect(wrapper.text()).toContain('当前版本默认不准入数据集')
     expect(wrapper.text()).toContain('视频资产未被删除')
     expect(wrapper.text()).toContain('主流程时间片段存在重叠')
+    expect(wrapper.text()).toContain('重新核对清洗')
     expect(wrapper.text()).not.toContain('提交标注')
   })
 

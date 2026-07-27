@@ -138,6 +138,24 @@ class AnnotationTaskController {
 				.body(response);
 	}
 
+	@PostMapping("/annotation-revisions/{annotationRevisionId}/post-cleaning-rechecks")
+	ResponseEntity<PostCleaningResultResponse> recheckPostCleaning(
+			@PathVariable UUID projectId,
+			@PathVariable UUID annotationRevisionId,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			Authentication authentication) {
+		var response = this.service.recheckPostCleaning(
+				projectId,
+				annotationRevisionId,
+				requireActor(authentication).actorId(),
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"));
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException(

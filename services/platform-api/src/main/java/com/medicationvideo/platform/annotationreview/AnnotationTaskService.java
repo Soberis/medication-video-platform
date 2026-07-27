@@ -324,34 +324,17 @@ class AnnotationTaskService {
 			this.repository.saveAndFlush(task);
 		}
 		else {
-			var mediaFact = this.mediaDurationQueryService.findLatestVerifiedDurationFact(
-					projectId, revision.getClipAssetId());
-			this.postCleaningService.evaluate(
-					new PostCleaningService.EvaluationCommand(
-							projectId,
-							revision.getClipAssetId(),
-							assetFacts.assetSha256(),
-							qualityDecision.version(),
-							qualityDecision.isQualified(),
-							revision.getAnnotationRevisionId(),
-							review.getAnnotationReviewId(),
-							true,
-							revision.getDocumentSha256(),
-							digest(revision.getAnnotationDocument()),
-							task.getLabelSchemaId(),
-							task.getLabelSchemaDigest(),
-							revision.getLabelSchemaId(),
-							revision.getLabelSchemaDigest(),
-							this.labelSchemaService.allowedPrimaryStepLabels(
-									revision.getLabelSchemaId(), revision.getLabelSchemaDigest()),
-							toPostCleaningSegments(revision),
-							mediaFact.map(fact -> fact.mediaReportId()).orElse(null),
-							mediaFact.map(fact -> fact.inputDigest()).orElse(null),
-							mediaFact.map(fact -> fact.recipeDigest()).orElse(null),
-							mediaFact.map(fact -> fact.durationMicroseconds()).orElse(null),
-							actorId),
+			this.evaluatePostCleaning(
+					projectId,
+					revision,
+					review,
+					task,
+					assetFacts.assetSha256(),
+					qualityDecision,
+					actorId,
 					requestId,
-					traceId);
+					traceId,
+					"INDEPENDENT_ANNOTATION_REVIEW");
 			task.complete(now);
 			this.repository.saveAndFlush(task);
 		}
@@ -376,6 +359,87 @@ class AnnotationTaskService {
 						"reopened_for_rework", Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED),
 						"task_completed", Boolean.toString(review.getDecision() == AnnotationReviewDecision.APPROVED))));
 		return AnnotationReviewResponse.from(review);
+	}
+
+	@Transactional
+	PostCleaningResultResponse recheckPostCleaning(
+			UUID projectId,
+			UUID annotationRevisionId,
+			String actorId,
+			String requestId,
+			String traceId) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
+				.orElseThrow(AnnotationTaskService::revisionNotFound);
+		var review = this.reviewRepository.findByAnnotationRevisionId(annotationRevisionId)
+				.orElseThrow(AnnotationTaskService::postCleaningRecheckNotReady);
+		if (review.getDecision() != AnnotationReviewDecision.APPROVED) {
+			throw postCleaningRecheckNotReady();
+		}
+		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, revision.getClipAssetId());
+		if (!assetFacts.reviewable()) {
+			throw postCleaningRecheckNotReady();
+		}
+		var qualityDecision = this.qualityReviewQueryService.lockAndGetCurrentDecision(
+				projectId, revision.getClipAssetId());
+		var task = this.repository.findForUpdate(projectId, revision.getAnnotationTaskId())
+				.orElseThrow(AnnotationTaskService::taskNotFound);
+		if (task.getStatus() != AnnotationTaskStatus.COMPLETED) {
+			throw postCleaningRecheckNotReady();
+		}
+		return PostCleaningResultResponse.from(this.evaluatePostCleaning(
+				projectId,
+				revision,
+				review,
+				task,
+				assetFacts.assetSha256(),
+				qualityDecision,
+				actorId,
+				requestId,
+				traceId,
+				"PROJECT_MEMBERSHIP_ADMIN"));
+	}
+
+	private PostCleaningResultSummary evaluatePostCleaning(
+			UUID projectId,
+			AnnotationRevision revision,
+			AnnotationReview review,
+			AnnotationTask task,
+			String assetSha256,
+			QualityReviewQueryService.CurrentDecision qualityDecision,
+			String actorId,
+			String requestId,
+			String traceId,
+			String authorizationBasis) {
+		var mediaFact = this.mediaDurationQueryService.findLatestVerifiedDurationFact(
+				projectId, revision.getClipAssetId());
+		return this.postCleaningService.evaluate(
+				new PostCleaningService.EvaluationCommand(
+						projectId,
+						revision.getClipAssetId(),
+						assetSha256,
+						qualityDecision.version(),
+						qualityDecision.isQualified(),
+						revision.getAnnotationRevisionId(),
+						review.getAnnotationReviewId(),
+						true,
+						revision.getDocumentSha256(),
+						digest(revision.getAnnotationDocument()),
+						task.getLabelSchemaId(),
+						task.getLabelSchemaDigest(),
+						revision.getLabelSchemaId(),
+						revision.getLabelSchemaDigest(),
+						this.labelSchemaService.allowedPrimaryStepLabels(
+								revision.getLabelSchemaId(), revision.getLabelSchemaDigest()),
+						toPostCleaningSegments(revision),
+						mediaFact.map(fact -> fact.mediaReportId()).orElse(null),
+						mediaFact.map(fact -> fact.inputDigest()).orElse(null),
+						mediaFact.map(fact -> fact.recipeDigest()).orElse(null),
+						mediaFact.map(fact -> fact.durationMicroseconds()).orElse(null),
+						actorId,
+						authorizationBasis),
+				requestId,
+				traceId);
 	}
 
 	private static List<PostCleaningService.SegmentSnapshot> toPostCleaningSegments(
@@ -531,6 +595,13 @@ class AnnotationTaskService {
 				"The annotation revision was not found in the current project.",
 				404);
 	}
+
+	private static AnnotationTaskException postCleaningRecheckNotReady() {
+		return new AnnotationTaskException(
+				"ANNOTATION_POST_CLEANING_RECHECK_NOT_READY",
+				"Only an approved revision for a completed, reviewable video can be rechecked.",
+				409);
+	}
 }
 
 record AnnotationTaskCreateRequest(String assigneeActorId) {
@@ -556,6 +627,7 @@ record AnnotationTaskResponse(
 		String status,
 		boolean canSubmit,
 		boolean canReview,
+		boolean canRecheckPostCleaning,
 		AnnotationRevisionSummary annotationRevision,
 		Instant createdAt,
 		Instant updatedAt,
@@ -582,6 +654,9 @@ record AnnotationTaskResponse(
 				task.getStatus() == AnnotationTaskStatus.SUBMITTED
 						&& role == ProjectRole.ADMIN && revision != null && review == null
 						&& !revision.getSubmittedBy().equals(actorId),
+				task.getStatus() == AnnotationTaskStatus.COMPLETED
+						&& role == ProjectRole.ADMIN && revision != null && review != null
+						&& review.getDecision() == AnnotationReviewDecision.APPROVED,
 				AnnotationRevisionSummary.from(revision, review, postCleaningResult),
 				task.getCreatedAt(),
 				task.getUpdatedAt(),

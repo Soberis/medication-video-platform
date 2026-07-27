@@ -92,7 +92,7 @@ public class PostCleaningService {
 				"POST_CLEANING_" + evaluation.outcome().name(),
 				requestId,
 				traceId,
-				"INDEPENDENT_ANNOTATION_REVIEW",
+				command.authorizationBasis(),
 				Map.copyOf(details)));
 		return PostCleaningResultSummary.from(result);
 	}
@@ -260,7 +260,8 @@ public class PostCleaningService {
 			String mediaInputDigest,
 			String mediaRecipeDigest,
 			Long verifiedDurationMicroseconds,
-			String actorId) {
+			String actorId,
+			String authorizationBasis) {
 
 		public EvaluationCommand {
 			Objects.requireNonNull(projectId);
@@ -270,6 +271,7 @@ public class PostCleaningService {
 			Objects.requireNonNull(taskLabelSchemaId);
 			Objects.requireNonNull(revisionLabelSchemaId);
 			Objects.requireNonNull(actorId);
+			Objects.requireNonNull(authorizationBasis);
 			allowedLabels = Set.copyOf(allowedLabels);
 			segments = List.copyOf(segments);
 		}

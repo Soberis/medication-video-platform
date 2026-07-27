@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集准入准备度。V1.8 继承 V1.7 的内部训练数据平台边界，并把 Web 验收明确为笔记本、1080p、2K 和 4K 桌面视口。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。它不创建 DatasetVersion、不写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集准入准备度。V1.8 继承 V1.7 的内部训练数据平台边界，并把 Web 验收明确为笔记本、1080p、2K 和 4K 桌面视口。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。管理员可对已完成的通过 revision 按当前事实受控、幂等地重新核对清洗；输入变化产生新不可变 run/result，历史不覆盖。它不创建 DatasetVersion、不写入数据集成员、不提供 WARNING override，也不新增 Worker、队列或清洗页面。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -88,7 +88,7 @@
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| FR-022 创建清洗任务 | P0 | `qualitycleaning` | post-clean runs/results | cleaning_run、cleaning_result、cleaning_rule_set | 当前先对单个已批准 revision 同步创建不可变 run/result；规则或输入变化产生新 run，不覆盖历史 | PI |
+| FR-022 创建清洗任务 | P0 | `qualitycleaning` | post-clean runs/results、受控 recheck | cleaning_run、cleaning_result、cleaning_rule_set | 当前先对单个已批准 revision 同步创建不可变 run/result；管理员可按当前事实幂等重核，规则或输入变化产生新 run，不覆盖历史 | PI |
 | FR-023 视频质量自动检测 | P0 | `mediaprivacy`、`qualitycleaning` | media metrics/result | media_report、cleaning_result | 指标算法、阈值、软件摘要和输入摘要可追溯 | D1 |
 | FR-024 完全重复和近重复检测 | P0 | `qualitycleaning` | duplicate detection job/result | duplicate_group、cleaning_result | SHA-256 完全重复与视频指纹近重复分开报告；不自动物理删除 | D1 |
 | FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
@@ -126,7 +126,7 @@ FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContrac
 
 FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 Vue API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
 
-FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
+FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 
 项目内文件夹不是权限或对象存储目录：P0 只允许一层，一个视频当前最多属于一个文件夹。移动视频只更新 `folder_id`；删除文件夹只将其中视频改为未分类，不删除视频。视频删除也不得级联删除同一 CaptureSession 的其他视频。
 
