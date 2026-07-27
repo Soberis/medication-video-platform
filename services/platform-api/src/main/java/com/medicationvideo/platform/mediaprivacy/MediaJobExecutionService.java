@@ -200,7 +200,8 @@ class MediaJobExecutionService {
 	 */
 	@Transactional(readOnly = true)
 	MediaReport getReportForClipAsset(UUID projectId, UUID clipAssetId) {
-		return this.reportRepository.findByProjectIdAndClipAssetId(projectId, clipAssetId)
+		return this.reportRepository.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDescMediaReportIdDesc(
+				projectId, clipAssetId)
 				.orElseThrow(() -> new MediaJobExecutionException(
 						"MEDIA_REPORT_NOT_FOUND", "The media report is not available.", false));
 	}
