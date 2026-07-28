@@ -235,7 +235,7 @@ if (Test-TcpPortInUse $webPort) {
     Write-Host "Web app already listens on $webPort." -ForegroundColor Yellow
 }
 else {
-    Start-LocalProcess 'web' 'Web app' 'cmd.exe' "/c pnpm --filter @medication-video-platform/web dev" (Join-Path $logDirectory 'web.log')
+    Start-LocalProcess 'web' 'Web app' 'cmd.exe' "/c pnpm run web:dev" (Join-Path $logDirectory 'web.log')
 }
 
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan

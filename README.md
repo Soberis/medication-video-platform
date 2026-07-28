@@ -106,6 +106,14 @@ Windows PowerShell 常用命令：
 .\scripts\start-local.ps1 -RestartApi   # 仅重启脚本启动的 Core API；保留前端、Worker 与容器
 ```
 
+只启动前端开发服务器时，在仓库根目录运行：
+
+```powershell
+pnpm run web:dev
+```
+
+该命令复用 `apps/web` 的 Vite 配置，自动使用 `WEB_PORT`（默认 `5173`）并将 `/api` 代理到本地 Core API（默认 `8080`）。
+
 如果 8080 或 5173 是此前手工启动的进程，先用状态脚本确认；只有明确要结束它时，macOS / Linux 才执行 `./scripts/stop-local.sh --include-listening-apps`，Windows 才执行 `.\scripts\stop-local.ps1 -IncludeListeningApps`。
 
 ## 验证

@@ -25,6 +25,18 @@ function Add-Skip {
     Write-Host "[SKIP] $Message" -ForegroundColor Yellow
 }
 
+function Get-Sha256Hex {
+    param([byte[]]$Bytes)
+
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return (($algorithm.ComputeHash($Bytes) | ForEach-Object { $_.ToString('x2') }) -join '')
+    }
+    finally {
+        $algorithm.Dispose()
+    }
+}
+
 $requiredFiles = @(
     'AGENTS.md',
     'README.md',
@@ -131,7 +143,7 @@ try {
     Add-Pass 'Media probe baseline profile is valid JSON'
 
     $profileBytes = [System.Text.Encoding]::UTF8.GetBytes($mediaProbeProfileContent)
-    $profileDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($profileBytes)).ToLowerInvariant()
+    $profileDigest = Get-Sha256Hex $profileBytes
     if ($profileDigest -eq '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765') {
         Add-Pass 'Media probe baseline profile digest matches the server contract'
     }
@@ -149,7 +161,7 @@ try {
     Add-Pass 'P0 post-annotation cleaning profile is valid JSON'
 
     $postCleaningProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($postCleaningProfileContent)
-    $postCleaningProfileDigest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($postCleaningProfileBytes)).ToLowerInvariant()
+    $postCleaningProfileDigest = Get-Sha256Hex $postCleaningProfileBytes
     if ($postCleaningProfileDigest -eq '7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a') {
         Add-Pass 'P0 post-annotation cleaning profile digest matches the server contract'
     }

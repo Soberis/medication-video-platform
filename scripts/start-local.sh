@@ -148,7 +148,7 @@ if tcp_port_in_use "$web_port"; then
 else
     start_managed_process \
         web "Web app" "$LOG_DIRECTORY/web.log" \
-        pnpm --dir "$PROJECT_ROOT" --filter @medication-video-platform/web dev
+        pnpm run web:dev
 fi
 
 echo
