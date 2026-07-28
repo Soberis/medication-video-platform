@@ -1,6 +1,6 @@
 import { Button, Card, Descriptions, message, Modal, Table, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   CatalogApiError,
@@ -11,6 +11,7 @@ import {
   type CaptureSessionDetail,
   type DatasetAdmissionPreview,
 } from '@/api/catalog'
+import { getProject, type ProjectRole } from '@/api/projects'
 import { paths } from '@/app/paths'
 import {
   assemblyStatusLabels,
@@ -41,6 +42,12 @@ const admissionReasonLabels: Record<string, string> = {
 
 export default function SessionDetailView() {
   const { projectId = '', id: sessionId = '' } = useParams()
+  return <SessionDetailContent key={`${projectId}:${sessionId}`} />
+}
+
+function SessionDetailContent() {
+  const { projectId = '', id: sessionId = '' } = useParams()
+  const navigate = useNavigate()
   const [detail, setDetail] = useState<CaptureSessionDetail | null>(null)
   const [admissionPreview, setAdmissionPreview] = useState<DatasetAdmissionPreview | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -51,9 +58,11 @@ export default function SessionDetailView() {
   const [errorMessage, setErrorMessage] = useState('')
   const [admissionErrorCode, setAdmissionErrorCode] = useState('')
   const [admissionErrorMessage, setAdmissionErrorMessage] = useState('')
+  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
   const [creatingDatasetDraft, setCreatingDatasetDraft] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const admissionRequest = useRef<AbortController | null>(null)
+  const roleRequest = useRef<AbortController | null>(null)
 
   const admissionReasonSummary = useMemo(() => {
     if (!admissionPreview) return []
@@ -139,11 +148,31 @@ export default function SessionDetailView() {
       if (admissionRequest.current === request) admissionRequest.current = null
     }
   }, [projectId, sessionId])
+  const loadProjectRole = useCallback(async () => {
+    roleRequest.current?.abort()
+    const request = new AbortController()
+    roleRequest.current = request
+    setProjectRole(null)
+    try {
+      const project = await getProject(projectId, request.signal)
+      if (roleRequest.current !== request) return
+      setProjectRole(project.current_role)
+    } catch {
+      if (!request.signal.aborted && roleRequest.current === request) setProjectRole(null)
+    } finally {
+      if (roleRequest.current === request) roleRequest.current = null
+    }
+  }, [projectId])
   const createDraft = useCallback(async () => {
+    if (projectRole !== 'ADMIN') {
+      void message.error('只有当前项目管理员可以创建数据集草稿。')
+      return
+    }
     setCreatingDatasetDraft(true)
     try {
       const draft = await createDatasetVersionDraft(projectId, '配药操作训练候选', [sessionId])
       void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
+      void navigate(paths.dataset(projectId, draft.dataset_version_id))
     } catch (error) {
       void message.error(
         error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
@@ -151,7 +180,7 @@ export default function SessionDetailView() {
     } finally {
       setCreatingDatasetDraft(false)
     }
-  }, [projectId, sessionId])
+  }, [navigate, projectId, projectRole, sessionId])
   const confirmCreateDraft = useCallback(() => {
     void Modal.confirm({
       title: '创建训练数据草稿',
@@ -163,15 +192,16 @@ export default function SessionDetailView() {
   }, [createDraft])
   useEffect(() => {
     const timer = window.setTimeout(
-      () => void Promise.all([loadDetail(), loadAdmissionPreview()]),
+      () => void Promise.all([loadDetail(), loadAdmissionPreview(), loadProjectRole()]),
       0,
     )
     return () => {
       window.clearTimeout(timer)
       detailRequest.current?.abort()
       admissionRequest.current?.abort()
+      roleRequest.current?.abort()
     }
-  }, [loadAdmissionPreview, loadDetail])
+  }, [loadAdmissionPreview, loadDetail, loadProjectRole])
 
   return (
     <>
@@ -278,11 +308,19 @@ export default function SessionDetailView() {
                   <div className="readiness-result readiness-result-ready">
                     <div>
                       <strong>当前证据满足训练数据准入条件</strong>
-                      <span>创建草稿时仍会重新校验，避免使用已变化的数据。</span>
+                      <span>
+                        {projectRole === 'ADMIN'
+                          ? '创建草稿时仍会重新校验，避免使用已变化的数据。'
+                          : projectRole === 'MEMBER'
+                            ? '当前项目管理员可据此创建候选草稿。'
+                            : '正在核对当前项目权限。'}
+                      </span>
                     </div>
-                    <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
-                      创建数据集草稿
-                    </Button>
+                    {projectRole === 'ADMIN' ? (
+                      <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
+                        创建数据集草稿
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="readiness-result">

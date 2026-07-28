@@ -1,8 +1,8 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.8/配药视频数据管理平台需求文档_V1.8.md`
-> 继承需求基线：V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
+> 当前需求基线：`docs/requirements/baselines/V1.9/配药视频数据管理平台需求文档_V1.9.md`
+> 继承需求基线：V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-07-28
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集构建。V1.8 继承 V1.7 的内部训练数据平台边界，并把 Web 验收明确为笔记本、1080p、2K 和 4K 桌面视口。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为全部当前符合条件的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。该草稿不冻结、不分配 split、不提供 WARNING override，不新增 Worker、队列或导出。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集构建。V1.9 继承 V1.8 的内部训练数据平台边界和桌面视口验收范围，并把历史 Vue 门禁替换为 React 门禁。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为全部当前符合条件的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。该草稿不冻结、不分配 split、不提供 WARNING override，不新增 Worker、队列或导出。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -93,7 +93,7 @@
 | FR-024 完全重复和近重复检测 | P0 | `qualitycleaning` | duplicate detection job/result | duplicate_group、cleaning_result | SHA-256 完全重复与视频指纹近重复分开报告；不自动物理删除 | D1 |
 | FR-025 隐私风险标记 | P1 | `mediaprivacy` | 出现真实合规或共享需求后重新设计 | 历史 privacy_assessment 仅保留迁移 | 当前采集规范避免敏感信息；意外发现按质量 REJECTED 处理 | DEFERRED |
 | FR-026 清洗结果人工确认 | P0 | `qualitycleaning`、`governance` | cleaning review/override | cleaning_result、admission_override、audit_event | 自动 reject 不等于删除；override 有批准人、理由和版本范围 | D1 |
-| FR-027 创建数据集版本 | P0 | `datasetexport` | create DatasetVersion draft | dataset_version、dataset_member_session、dataset_member_stream | 管理员仅可为全部当前 eligible 的 CaptureSession 创建 `DRAFT` 候选快照；创建人、时间、媒体/标注/清洗证据及审计已固定，选择规则、split/export profile 和冻结仍待实现 | PI |
+| FR-027 创建数据集版本 | P0 | `datasetexport` | create/read DatasetVersion draft | dataset_version、dataset_member_session、dataset_member_stream | 管理员仅可为全部当前 eligible 的 CaptureSession 创建 `DRAFT` 候选快照；项目成员可分页查询草稿元数据及固定的 session/stream 证据，创建人、时间、媒体/标注/清洗证据及审计已固定。选择规则、split/export profile 和冻结仍待实现 | PI |
 | FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview；draft creation | dataset_member_session、dataset_member_stream | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；管理员创建草稿时服务端重新校验所有当前事实，并保存证据快照。未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可进入草稿；WARNING 批准例外和 DatasetVersion 冻结校验仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | split policy/result | dataset_split_assignment | 同一 leakage group 不跨 split；冲突必须失败而非自动降级 | D1 |
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | export jobs | dataset_export、export_artifact | manifest、action segments、COCO、schema、split、README 和 SHA256SUMS 一致 | D1 |
@@ -102,9 +102,9 @@
 
 FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移链不可变，运行 API、前端客户端、策略 profile 和状态投影已从 P0 删除。未来若重新启用，必须重新建立需求、威胁模型、用途边界、契约和迁移，不能直接恢复历史代码。
 
-### 3.4 V1.2～V1.8 新增与细化需求
+### 3.4 V1.2～V1.9 新增与细化需求
 
-V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -124,7 +124,7 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 React API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务内把任务推进到 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览只读汇总 CaptureSession 当前事实和阻断原因，不能替代正式 DatasetVersion 成员创建、冻结摘要校验或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、正式 CaptureSession 数据集准入、冻结或导出。
+FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI` 证据和边界：Flyway V28/V30/V31/V32/V33/V34、OpenAPI、`p0-post-annotation-cleaning-v1` profile、`AnnotationTaskContractTests` 和 React API/页面测试已覆盖管理员创建、同项目 ACTIVE assignee、成员可见范围、质量/媒体状态守卫、每视频唯一任务、幂等重放与审计；固定 P0 `primary_step` LabelSchema 以不可变版本和 SHA-256 摘要发布，任务与每次 revision 均保存实际 schema 引用。受分配成员只能提交 schema 中的五个 P0 Step，主 Step 时间段允许边界相接但不允许重叠，存在 MediaReport 时不得超过已验证时长。提交内容形成不可变 `annotation-document.v1` revision，服务端保存文档 SHA-256 和审计；另一名项目管理员可记录一次不可变 `APPROVED/REJECTED` 决定，提交者不能自审；`REJECTED` 把任务退回 `ASSIGNED`，再次提交产生递增 revision，旧记录永不覆盖。本次后置清洗切片要求 `APPROVED` 在同一事务中推进任务至 `COMPLETED`，从持久化文档重算 SHA-256，并为该 revision 写入绑定标签规范、输入资产、稳定选出的最新 MediaReport、输入指纹和规则摘要的不可变 run/result；缺少已验证媒体时长记录为 `WARNING`，文档/媒体摘要、标签或时间事实非法记录为 `REJECT`，其余为 `PASS`。后续准入预览与 `DRAFT` 创建共同汇总并重新校验 CaptureSession 当前事实；草稿成员与证据快照已持久化，项目成员可读取该不可变快照且不暴露媒体 URL，但仍不能替代冻结时的摘要校验、泄漏检查或人工 override。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、WARNING 批准例外、split、冻结或导出。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 
@@ -189,9 +189,9 @@ AI 启用决策前必须冻结：
 
 ### 5.3 需求基线归一化决策
 
-V1.8 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.8 对继承条款的实现归一化口径，不修改历史基线。
+V1.9 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.9 对继承条款的实现归一化口径，不修改历史基线。
 
-| 继承的 V1.1.13 表述 | TD-V1.8 实现口径 | 原因 |
+| 继承的 V1.1.13 表述 | TD-V1.9 实现口径 | 原因 |
 | --- | --- | --- |
 | 通用 `confidence` | 人工标注使用明确的确定性/不确定性字段；AI 分数必须记录任务、来源和语义版本 | 不同来源的分数不可直接比较 |
 | 秒或 0.01 秒粒度 | UI 可显示秒，小数输入在边界转换；存储和契约统一使用整数毫秒 | 避免浮点累计误差和跨语言歧义 |
@@ -202,7 +202,7 @@ V1.8 是当前业务需求基线，未变更条款按版本链继承。下表记
 | 隐私漏检为 0 | 仅表示批准样本经最终人工检查后观察到 0 个漏检，不外推为总体风险绝对为零 | 避免统计结论越界 |
 | 采集视频按规范不包含敏感信息 | 上传完整性校验后允许项目成员直接审核播放；若意外发现不应保留的敏感内容，则记录人工质量 `REJECTED` 和固定原因，并由管理员软删除 | 不把低风险假设变成“绝对没有风险”，也不恢复已经移出 P0 的独立隔离状态机 |
 
-V1.2～V1.8 新增需求归一化：
+V1.2～V1.9 新增需求归一化：
 
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |

@@ -1,16 +1,18 @@
 # Web
 
-React 管理端。当前激活的纵向功能包括上传排障、护士配药 CaptureSession、单路视频资产查询、人工质量和标注复核。
+React 管理端。当前激活的纵向功能包括上传排障、护士配药 CaptureSession、单路视频资产查询、人工质量、标注复核和数据集草稿创建。
 
 ## Commands
 
 ```powershell
-pnpm --dir apps/web dev
-pnpm --dir apps/web lint
-pnpm --dir apps/web type-check
-pnpm --dir apps/web test
-pnpm --dir apps/web build
+pnpm run web:dev
+pnpm run web:lint
+pnpm run web:type-check
+pnpm run web:test
+pnpm run web:build
 ```
+
+以上命令从仓库根目录运行；如在 `apps/web` 目录内工作，可分别使用 `pnpm dev`、`pnpm lint`、`pnpm type-check`、`pnpm test` 和 `pnpm build`。
 
 开发服务器默认监听 `http://127.0.0.1:5173`（可由 `WEB_PORT` 覆盖），并把 `/api` 代理到 `http://localhost:8080`。Web 使用平台内部账号登录；密码不进入浏览器存储，服务端仅保存 BCrypt 哈希，浏览器通过 HttpOnly 会话 Cookie 与 CSRF Header 调用 API。项目可见性和 ADMIN/MEMBER 仍由后端 Membership 在每次请求中校验，前端从不自行授予权限。医院边端使用独立上传凭据，不使用 Web 登录页。
 
@@ -20,6 +22,6 @@ pnpm --dir apps/web build
 
 `/projects/:projectId/folders` 已提供项目内一层文件夹管理；管理员可创建、重命名和删除文件夹，删除只会将其中视频变为未分类。管理员也可在资产详情变更单个视频的分类；这些操作不改变项目权限或对象存储位置。
 
-当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。合格视频可以由管理员创建并分配标注任务，受分配成员可在任务页提交时间段和可选说明；另一名项目管理员可记录一次通过/不通过复核。复核不通过会退回任务，标注人提交新的不可变 revision，旧记录仍保留。当前不含对象框或抽样复核。当前仍不包含外部 IdP、跨浏览器/医院网络的容量 UAT、上传中断后继续同一批次的页面恢复、派生视频或独立隐私流程。资产详情提供管理员软删除与项目内分类入口；视频软删除会立即阻断播放和后续业务使用，但不会在 P0 中直接物理删除对象或审计。
+当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。合格视频可以由管理员创建并分配标注任务，受分配成员可在任务页提交时间段和可选说明；另一名项目管理员可记录一次通过/不通过复核。复核不通过会退回任务，标注人提交新的不可变 revision，旧记录仍保留。Session 满足当前技术检测、人工质量、复核和 post-clean 准入条件时，项目管理员可显式创建 `DRAFT` 数据集草稿；服务端会重新校验并固定成员与证据快照。项目成员可在 `/projects/:projectId/datasets` 查询草稿列表及固定的 session/stream 摘要，页面不请求媒体 URL。草稿不冻结、不分配 split，也不导出数据集。当前不含对象框或抽样复核。当前仍不包含外部 IdP、跨浏览器/医院网络的容量 UAT、上传中断后继续同一批次的页面恢复、派生视频或独立隐私流程。资产详情提供管理员软删除与项目内分类入口；视频软删除会立即阻断播放和后续业务使用，但不会在 P0 中直接物理删除对象或审计。
 
 认证会话使用 React Context；批次、资产、标注和数据集等服务端对象继续使用页面局部状态，不复制为客户端业务真值。

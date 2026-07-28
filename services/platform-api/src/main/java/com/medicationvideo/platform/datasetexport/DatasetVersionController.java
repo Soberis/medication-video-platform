@@ -11,22 +11,32 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 import com.medicationvideo.platform.iamproject.ProjectActor;
 
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -42,9 +52,33 @@ class DatasetVersionController {
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
 
 	private final DatasetVersionService service;
+	private final DatasetVersionQueryService queryService;
 
-	DatasetVersionController(DatasetVersionService service) {
+	DatasetVersionController(DatasetVersionService service, DatasetVersionQueryService queryService) {
 		this.service = service;
+		this.queryService = queryService;
+	}
+
+	@GetMapping
+	ResponseEntity<DatasetVersionListResponse> list(
+			@PathVariable UUID projectId,
+			@RequestParam(required = false) @Size(max = 512) String cursor,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
+			Authentication authentication) {
+		var response = this.queryService.list(projectId, requireActor(authentication).actorId(), cursor, limit);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	@GetMapping("/{datasetVersionId}")
+	ResponseEntity<DatasetVersionDetailResponse> get(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			Authentication authentication) {
+		var response = this.queryService.get(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId());
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@PostMapping
@@ -148,6 +182,22 @@ class DatasetVersionExceptionHandler {
 				exception.getErrorCode(),
 				exception.getMessage(),
 				exception.getDetails());
+	}
+
+	@ExceptionHandler({
+			MethodArgumentNotValidException.class,
+			HandlerMethodValidationException.class,
+			ConstraintViolationException.class,
+			MissingRequestHeaderException.class,
+			HttpMessageNotReadableException.class,
+			MethodArgumentTypeMismatchException.class
+	})
+	ResponseEntity<DatasetVersionErrorResponse> invalidRequest(Exception exception) {
+		return error(
+				HttpStatus.BAD_REQUEST,
+				"INVALID_DATASET_VERSION_REQUEST",
+				"The dataset-version request is invalid.",
+				Map.of());
 	}
 
 	private static ResponseEntity<DatasetVersionErrorResponse> error(

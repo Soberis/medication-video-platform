@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
 import AssetListView from '@/views/AssetListView'
+import DatasetVersionDetailView from '@/views/DatasetVersionDetailView'
+import DatasetVersionListView from '@/views/DatasetVersionListView'
 import SessionDetailView from '@/views/SessionDetailView'
 import SessionListView from '@/views/SessionListView'
 
@@ -116,6 +118,172 @@ describe('catalog views', () => {
       `/api/v1/projects/${projectId}/capture-sessions/${sessionId}/dataset-admission-preview`,
       expect.any(Object),
     )
+  })
+
+  it('does not offer dataset-draft creation to a project member', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === `/api/v1/projects/${projectId}`) return Promise.resolve(jsonResponse(project('MEMBER')))
+        if (url.endsWith('/dataset-admission-preview')) {
+          return Promise.resolve(
+            jsonResponse({
+              capture_session_id: sessionId,
+              eligible: true,
+              assembly_status: 'COMPLETE',
+              quality_status: 'PASS',
+              expected_camera_count: 1,
+              received_camera_count: 1,
+              blocking_reasons: [],
+              streams: [
+                {
+                  camera_stream_id: '41000000-0000-4000-8000-000000000001',
+                  clip_asset_id: assetId,
+                  camera_index: 0,
+                  eligible: true,
+                  stream_status: 'INGESTED',
+                  stream_quality_status: 'PASS',
+                  asset_status: 'INGESTED',
+                  asset_deleted: false,
+                  quality_review_decision: 'QUALIFIED',
+                  annotation_revision_id: '42000000-0000-4000-8000-000000000001',
+                  annotation_review_decision: 'APPROVED',
+                  post_cleaning_decision: 'PASS',
+                  annotation_document_sha256: 'a'.repeat(64),
+                  label_schema_digest: 'b'.repeat(64),
+                  blocking_reasons: [],
+                },
+              ],
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse(captureSessionDetail()))
+      }),
+    )
+
+    renderSessionDetail()
+
+    expect(await screen.findByText('当前证据满足训练数据准入条件')).toBeInTheDocument()
+    expect(screen.getByText('当前项目管理员可据此创建候选草稿。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
+  })
+
+  it('lists dataset drafts without presenting them as frozen training data', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            dataset_version_id: datasetVersionId,
+            project_id: projectId,
+            display_name: '配药操作训练候选',
+            status: 'DRAFT',
+            created_by: 'local-admin',
+            created_at: '2026-07-28T03:00:00Z',
+          },
+        ],
+        next_cursor: null,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDatasetList()
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('数据集草稿')
+    expect(screen.getByText(/草稿尚未拆分、冻结或导出/)).toBeInTheDocument()
+    expect(await screen.findByText('配药操作训练候选')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /查看数据集草稿：配药操作训练候选/ })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/datasets/${datasetVersionId}`,
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions?limit=20`,
+      expect.any(Object),
+    )
+  })
+
+  it('shows the persisted draft evidence rather than current media URLs', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          dataset_version_id: datasetVersionId,
+          project_id: projectId,
+          display_name: '配药操作训练候选',
+          status: 'DRAFT',
+          created_by: 'local-admin',
+          created_at: '2026-07-28T03:00:00Z',
+          members: [
+            {
+              capture_session_id: sessionId,
+              candidate_index: 0,
+              expected_camera_count: 1,
+              received_camera_count: 1,
+              assembly_status: 'COMPLETE',
+              quality_status: 'PASS',
+              streams: [
+                {
+                  camera_stream_id: '42000000-0000-4000-8000-000000000001',
+                  clip_asset_id: assetId,
+                  camera_index: 0,
+                  asset_sha256: 'a'.repeat(64),
+                  quality_review_decision: 'QUALIFIED',
+                  quality_review_version: 2,
+                  annotation_revision_id: '43000000-0000-4000-8000-000000000001',
+                  annotation_document_sha256: 'b'.repeat(64),
+                  label_schema_digest: 'c'.repeat(64),
+                  cleaning_result_id: '44000000-0000-4000-8000-000000000001',
+                  cleaning_run_id: '45000000-0000-4000-8000-000000000001',
+                  cleaning_rule_set_digest: 'd'.repeat(64),
+                  post_cleaning_outcome: 'PASS',
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    )
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
+    expect(screen.getByText('候选配药操作')).toBeInTheDocument()
+    expect(screen.getByText('不可变候选快照')).toBeInTheDocument()
+    expect(screen.getByText('1 / 1 路')).toBeInTheDocument()
+    expect(document.body.innerHTML).not.toContain('media_url')
+  })
+
+  it('clears previous draft evidence before a different draft route finishes loading', async () => {
+    const firstDatasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const secondDatasetVersionId = '92000000-0000-4000-8000-000000000001'
+    let resolveSecondRequest: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).endsWith(`/dataset-versions/${firstDatasetVersionId}`)) {
+        return Promise.resolve(jsonResponse(datasetVersionDetail(firstDatasetVersionId, '草稿 A')))
+      }
+      return new Promise<Response>((resolve) => {
+        resolveSecondRequest = resolve
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderDatasetDetail(firstDatasetVersionId)
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('草稿 A')
+
+    await router.navigate(`/projects/${projectId}/datasets/${secondDatasetVersionId}`)
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/dataset-versions/${secondDatasetVersionId}`,
+        expect.any(Object),
+      ),
+    )
+    expect(screen.queryByRole('heading', { name: '草稿 A' })).not.toBeInTheDocument()
+    expect(screen.getByText('正在读取不可变候选快照…')).toBeInTheDocument()
+
+    resolveSecondRequest?.(jsonResponse(datasetVersionDetail(secondDatasetVersionId, '草稿 B')))
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('草稿 B')
   })
 
   it('keeps the session facts available when the readiness preview temporarily fails', async () => {
@@ -352,6 +520,18 @@ function renderSessionDetail() {
     path: '/projects/:projectId/sessions/:id',
   })
 }
+function renderDatasetList() {
+  return renderRoute(<DatasetVersionListView />, {
+    route: `/projects/${projectId}/datasets`,
+    path: '/projects/:projectId/datasets',
+  })
+}
+function renderDatasetDetail(datasetVersionId: string) {
+  return renderRoute(<DatasetVersionDetailView />, {
+    route: `/projects/${projectId}/datasets/${datasetVersionId}`,
+    path: '/projects/:projectId/datasets/:id',
+  })
+}
 function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER' }) {
   return renderRoute(<AssetDetailView />, {
     route: `/projects/${projectId}/assets/${assetId}`,
@@ -566,5 +746,53 @@ function captureSessionDetail() {
       },
     ],
     created_at: '2026-07-15T01:03:03Z',
+  }
+}
+
+function project(currentRole: 'ADMIN' | 'MEMBER') {
+  return {
+    project_id: projectId,
+    display_name: '合成配药项目',
+    status: 'ACTIVE',
+    current_role: currentRole,
+    created_at: '2026-07-15T01:00:00Z',
+  }
+}
+
+function datasetVersionDetail(datasetVersionId: string, displayName: string) {
+  return {
+    dataset_version_id: datasetVersionId,
+    project_id: projectId,
+    display_name: displayName,
+    status: 'DRAFT',
+    created_by: 'local-admin',
+    created_at: '2026-07-28T03:00:00Z',
+    members: [
+      {
+        capture_session_id: sessionId,
+        candidate_index: 0,
+        expected_camera_count: 1,
+        received_camera_count: 1,
+        assembly_status: 'COMPLETE',
+        quality_status: 'PASS',
+        streams: [
+          {
+            camera_stream_id: '42000000-0000-4000-8000-000000000001',
+            clip_asset_id: assetId,
+            camera_index: 0,
+            asset_sha256: 'a'.repeat(64),
+            quality_review_decision: 'QUALIFIED',
+            quality_review_version: 2,
+            annotation_revision_id: '43000000-0000-4000-8000-000000000001',
+            annotation_document_sha256: 'b'.repeat(64),
+            label_schema_digest: 'c'.repeat(64),
+            cleaning_result_id: '44000000-0000-4000-8000-000000000001',
+            cleaning_run_id: '45000000-0000-4000-8000-000000000001',
+            cleaning_rule_set_digest: 'd'.repeat(64),
+            post_cleaning_outcome: 'PASS',
+          },
+        ],
+      },
+    ],
   }
 }

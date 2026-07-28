@@ -90,4 +90,60 @@ class DatasetMemberStream {
 			DatasetVersion version, DatasetMemberSession session, DatasetAdmissionStreamEvidence evidence) {
 		return new DatasetMemberStream(version, session, evidence);
 	}
+
+	UUID getDatasetMemberSessionId() {
+		return this.datasetMemberSessionId;
+	}
+
+	UUID getCameraStreamId() {
+		return this.cameraStreamId;
+	}
+
+	UUID getClipAssetId() {
+		return this.clipAssetId;
+	}
+
+	int getCameraIndex() {
+		return this.cameraIndex;
+	}
+
+	String getAssetSha256() {
+		return this.assetSha256;
+	}
+
+	String getQualityReviewDecision() {
+		return this.qualityReviewDecision;
+	}
+
+	long getQualityReviewVersion() {
+		return this.qualityReviewVersion;
+	}
+
+	UUID getAnnotationRevisionId() {
+		return this.annotationRevisionId;
+	}
+
+	String getAnnotationDocumentSha256() {
+		return this.annotationDocumentSha256;
+	}
+
+	String getLabelSchemaDigest() {
+		return this.labelSchemaDigest;
+	}
+
+	UUID getCleaningResultId() {
+		return this.cleaningResultId;
+	}
+
+	UUID getCleaningRunId() {
+		return this.cleaningRunId;
+	}
+
+	String getCleaningRuleSetDigest() {
+		return this.cleaningRuleSetDigest;
+	}
+
+	String getPostCleaningOutcome() {
+		return this.postCleaningOutcome;
+	}
 }

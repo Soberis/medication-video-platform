@@ -133,6 +133,36 @@ export interface DatasetVersionDraft {
   created_at: string
 }
 
+export interface DatasetVersionMemberStream {
+  camera_stream_id: string
+  clip_asset_id: string
+  camera_index: number
+  asset_sha256: string
+  quality_review_decision: 'QUALIFIED'
+  quality_review_version: number
+  annotation_revision_id: string
+  annotation_document_sha256: string
+  label_schema_digest: string
+  cleaning_result_id: string
+  cleaning_run_id: string
+  cleaning_rule_set_digest: string
+  post_cleaning_outcome: 'PASS'
+}
+
+export interface DatasetVersionMemberSession {
+  capture_session_id: string
+  candidate_index: number
+  expected_camera_count: number
+  received_camera_count: number
+  assembly_status: CaptureSessionAssemblyStatus
+  quality_status: CaptureQualityStatus
+  streams: DatasetVersionMemberStream[]
+}
+
+export interface DatasetVersionDetail extends DatasetVersionDraft {
+  members: DatasetVersionMemberSession[]
+}
+
 export interface ClipAssetSessionBinding {
   capture_session_id: string
   camera_stream_id: string
@@ -252,6 +282,8 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_CAPTURE_SESSION_DUPLICATE: '同一配药操作不能重复加入数据集草稿。',
   DATASET_VERSION_IDEMPOTENCY_KEY_REUSED: '本次创建请求与已提交请求冲突，请刷新后重试。',
   DATASET_VERSION_ACCESS_DENIED: '只有项目管理员可以创建数据集草稿。',
+  DATASET_VERSION_NOT_FOUND: '未找到该数据集草稿，或它不属于当前项目。',
+  INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
 
@@ -333,6 +365,26 @@ export async function createDatasetVersionDraft(
   })
   if (response.ok) return (await response.json()) as DatasetVersionDraft
   throw await toCatalogError(response)
+}
+
+export function listDatasetVersions(projectId: string, cursor: string | null, signal?: AbortSignal) {
+  const query = new URLSearchParams({ limit: '20' })
+  add(query, 'cursor', cursor ?? undefined)
+  return readJson<CatalogPage<DatasetVersionDraft>>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions?${query.toString()}`,
+    signal,
+  )
+}
+
+export function getDatasetVersion(
+  projectId: string,
+  datasetVersionId: string,
+  signal?: AbortSignal,
+) {
+  return readJson<DatasetVersionDetail>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}`,
+    signal,
+  )
 }
 
 export function listClipAssets(

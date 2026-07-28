@@ -26,10 +26,14 @@
 - 13 个 Vue SFC、Vue Router、Pinia Auth Store、Element Plus 集成和 Vue 组件测试需要重写。
 - `src/api/`、上传 Worker、核心上传编排、Vite 环境/代理逻辑、业务文案和大部分布局样式可复用。
 - 迁移完成后删除 Vue、Pinia、Element Plus、Vue Test Utils、Vue ESLint 配置和 `vue-tsc`，锁文件只保留 React 技术栈。
-- 部署回滚使用迁移前 Vue 构建产物或回退切换提交；迁移不要求数据库、OpenAPI 或后端行为变化。
+- 部署回滚以切换前已留存的构建产物为准；若仅回退源码，必须重新执行验证和构建，不能将源码提交视为已留存制品。迁移不要求数据库、OpenAPI 或后端行为变化。
 
 ## 非目标
 
 - 不新增移动端、SSR、RSC、微前端或第二套 Web 应用。
 - 不借迁移启用 Privacy、Dataset、AI、CVAT、Object 画框、图表或视频墙。
 - 不把项目 Membership、服务端状态或审计事实复制成客户端业务真值。
+
+## 实施状态
+
+截至 2026-07-28，`apps/web` 已完成单一 React SPA 替换：受跟踪文件中不再包含 `.vue` 文件，依赖、Vite 插件、TypeScript、ESLint 和测试配置也不再引用 Vue、Pinia、Element Plus、Vue Router、Vue Test Utils 或 `vue-tsc`。生产交付不包含 Vue/React 混合运行时；旧 Vue 实现仅可从历史 Git 提交或此前已留存的发布制品追溯。

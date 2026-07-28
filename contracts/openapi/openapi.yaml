@@ -98,6 +98,58 @@ tags:
       result to be validated and committed by the Core API.
 paths:
   /projects/{project_id}/dataset-versions:
+    get:
+      operationId: listDatasetVersions
+      tags:
+        - Dataset Admission
+      summary: List project-scoped dataset drafts
+      description: >-
+        Requires ACTIVE project membership. Returns immutable DRAFT metadata only; it does not
+        assign splits, freeze a DatasetVersion, create an export or authorize data release.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Dataset drafts visible to the current active project member.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionList"
+        "400":
+          description: The cursor or pagination parameters are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
     post:
       operationId: createDatasetVersionDraft
       tags:
@@ -157,6 +209,46 @@ paths:
                 $ref: "#/components/schemas/DatasetVersionError"
         "409":
           description: A selected CaptureSession is not eligible or the idempotency key conflicts.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}:
+    get:
+      operationId: getDatasetVersion
+      tags:
+        - Dataset Admission
+      summary: Read an immutable dataset-draft evidence snapshot
+      description: >-
+        Requires ACTIVE project membership. Returns the DRAFT's persisted session and stream
+        evidence snapshot, without resolving current mutable facts or exposing media URLs.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: Immutable candidate evidence snapshot.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionDetail"
+        "400":
+          description: A path parameter is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
           content:
             application/problem+json:
               schema:
@@ -3673,6 +3765,13 @@ components:
       schema:
         type: string
         format: uuid
+    DatasetVersionId:
+      name: dataset_version_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     OptionalRequestId:
       name: X-Request-Id
       in: header
@@ -4940,6 +5039,144 @@ components:
         created_at:
           type: string
           format: date-time
+    DatasetVersionList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetVersion"
+        next_cursor:
+          type: [string, "null"]
+          maxLength: 512
+    DatasetVersionDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_id
+        - project_id
+        - display_name
+        - status
+        - created_by
+        - created_at
+        - members
+      properties:
+        dataset_version_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          maxLength: 128
+        status:
+          type: string
+          enum: [DRAFT]
+        created_by:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetMemberSession"
+    DatasetMemberSession:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - candidate_index
+        - expected_camera_count
+        - received_camera_count
+        - assembly_status
+        - quality_status
+        - streams
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+        candidate_index:
+          type: integer
+          minimum: 0
+        expected_camera_count:
+          type: integer
+          minimum: 1
+        received_camera_count:
+          type: integer
+          minimum: 0
+        assembly_status:
+          $ref: "#/components/schemas/CaptureSessionAssemblyStatus"
+        quality_status:
+          $ref: "#/components/schemas/CaptureQualityStatus"
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/DatasetMemberStream"
+    DatasetMemberStream:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_stream_id
+        - clip_asset_id
+        - camera_index
+        - asset_sha256
+        - quality_review_decision
+        - quality_review_version
+        - annotation_revision_id
+        - annotation_document_sha256
+        - label_schema_digest
+        - cleaning_result_id
+        - cleaning_run_id
+        - cleaning_rule_set_digest
+        - post_cleaning_outcome
+      properties:
+        camera_stream_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        camera_index:
+          type: integer
+          minimum: 0
+          maximum: 63
+        asset_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        quality_review_decision:
+          type: string
+          const: QUALIFIED
+        quality_review_version:
+          type: integer
+          minimum: 0
+        annotation_revision_id:
+          type: string
+          format: uuid
+        annotation_document_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        cleaning_result_id:
+          type: string
+          format: uuid
+        cleaning_run_id:
+          type: string
+          format: uuid
+        cleaning_rule_set_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        post_cleaning_outcome:
+          type: string
+          const: PASS
     DatasetVersionError:
       type: object
       additionalProperties: false

@@ -87,12 +87,12 @@ P0 非目标：
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
 | `/uploads/new` | 从平台页面上传本机视频并展示真实上传进度 | 后端具备角色、项目/文件夹和文件规则守卫 | 已启用；仅合成数据开发验证 |
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
-| `/projects/:projectId/sessions`、详情子路由 | 多相机配药操作列表、完整性、技术检测和训练数据准备度 | 项目隔离查询、游标分页、状态语义、准入预览和测试具备 | 已启用；详情只读展示阻断证据，不创建或冻结 DatasetVersion |
+| `/projects/:projectId/sessions`、详情子路由 | 多相机配药操作列表、完整性、技术检测、训练数据准备度及数据集草稿创建 | 项目隔离查询、游标分页、状态语义、准入预览、草稿创建与测试具备 | 已启用；项目管理员可为当前 eligible 的 Session 显式创建 `DRAFT` DatasetVersion 并进入草稿证据详情。草稿不分配 split、不冻结、不导出，详情仍展示可解释的阻断证据。 |
 | `/annotation-projects` | 标注项目和标签/指南版本 | 标注项目契约具备 | 待启用 |
 | `/annotation-tasks/:id` | Step 时间轴、Object 工具跳转、草稿、提交与复核 | 标注与复核闭环 | 待启用 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 跨资产的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前单 revision post-clean 只随标注任务展示结果，不为它新建清洗页 |
-| `/datasets` | 以 CaptureSession 为成员的数据集版本、准入、冻结、审批和导出 | 数据集与治理契约 | 待启用；post-clean PASS 不自动创建数据集或成员 |
+| `/projects/:projectId/datasets`、详情子路由 | 项目内 `DRAFT` DatasetVersion 列表及 session/stream 固定证据查询 | 项目成员读取、无缓存、游标分页和草稿快照契约具备 | 已启用；不提供 split、冻结、审批或导出操作，post-clean PASS 也不会自动创建草稿。 |
 
 新页面只能在对应纵向能力已有 OpenAPI、权限边界、状态语义和可执行测试后启用。
 

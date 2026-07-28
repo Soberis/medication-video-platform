@@ -7,8 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -410,6 +412,63 @@ class AnnotationTaskContractTests {
 				  AND object_type = 'DatasetVersion'
 				  AND object_id = ?
 				""", datasetVersionId.toString()));
+		var auditEventsBeforeDatasetRead = count("SELECT count(*) FROM audit_event");
+		var snapshotQualityReviewVersion = this.jdbcTemplate.queryForObject(
+				"SELECT quality_review_version FROM dataset_member_stream WHERE dataset_version_id = ?",
+				Long.class,
+				datasetVersionId);
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.items[0].dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.items[0].status").value("DRAFT"))
+				.andExpect(jsonPath("$.next_cursor").isEmpty());
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].dataset_version_id").value(datasetVersionId.toString()));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.param("limit", "0")
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isBadRequest())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.error_code").value("INVALID_DATASET_VERSION_REQUEST"));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions?cursor=not-a-cursor", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
+		var overflowingCursor = Base64.getUrlEncoder().withoutPadding().encodeToString((
+				"v1|dataset-version|9223372036854775807|2147483647|" + UUID.randomUUID())
+				.getBytes(StandardCharsets.UTF_8));
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.param("cursor", overflowingCursor)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.members[0].capture_session_id").value(captureSessionId.toString()))
+				.andExpect(jsonPath("$.members[0].candidate_index").value(0))
+				.andExpect(jsonPath("$.members[0].streams[0].clip_asset_id").value(clipAssetId.toString()))
+				.andExpect(jsonPath("$.members[0].streams[0].quality_review_decision").value("QUALIFIED"))
+				.andExpect(jsonPath("$.members[0].streams[0].post_cleaning_outcome").value("PASS"))
+				.andExpect(jsonPath("$.members[0].streams[0].annotation_document_sha256").exists())
+				.andExpect(jsonPath("$.members[0].streams[0].media_url").doesNotExist());
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						UUID.randomUUID())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_NOT_FOUND"));
+		assertEquals(auditEventsBeforeDatasetRead, count("SELECT count(*) FROM audit_event"));
 		createDatasetDraft(ADMIN_TOKEN, captureSessionId, datasetIdempotencyKey)
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()));
@@ -435,6 +494,14 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.streams[0].eligible").value(false))
 				.andExpect(jsonPath("$.streams[0].blocking_reasons[0]")
 						.value("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING"));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.members[0].streams[0].quality_review_version")
+						.value(snapshotQualityReviewVersion));
 
 		recheck(MEMBER_TOKEN, revisionId)
 				.andExpect(status().isForbidden())

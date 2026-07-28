@@ -63,4 +63,32 @@ class DatasetMemberSession {
 	UUID getDatasetMemberSessionId() {
 		return this.datasetMemberSessionId;
 	}
+
+	UUID getDatasetVersionId() {
+		return this.datasetVersionId;
+	}
+
+	UUID getCaptureSessionId() {
+		return this.captureSessionId;
+	}
+
+	int getCandidateIndex() {
+		return this.candidateIndex;
+	}
+
+	int getExpectedCameraCount() {
+		return this.expectedCameraCount;
+	}
+
+	int getReceivedCameraCount() {
+		return this.receivedCameraCount;
+	}
+
+	String getAssemblyStatus() {
+		return this.assemblyStatus;
+	}
+
+	String getQualityStatus() {
+		return this.qualityStatus;
+	}
 }
