@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   authorizeClipAssetPlayback,
   deleteClipAsset,
+  createDatasetVersionDraft,
   getCaptureSessionDatasetAdmissionPreview,
   requestClipAssetMediaProbe,
 } from '@/api/catalog'
@@ -117,6 +118,44 @@ describe('catalog API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+  })
+
+  it('creates a dataset draft with CSRF protection and a fresh idempotency key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_id: '90000000-0000-4000-8000-000000000001',
+          project_id: projectId,
+          display_name: '配药操作训练候选',
+          status: 'DRAFT',
+          created_by: 'local-admin',
+          created_at: '2026-07-28T03:00:00Z',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-version-idempotency-0001') })
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      createDatasetVersionDraft(projectId, '配药操作训练候选', [captureSessionId]),
+    ).resolves.toMatchObject({ status: 'DRAFT' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          display_name: '配药操作训练候选',
+          capture_session_ids: [captureSessionId],
+        }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-version-idempotency-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
     )
   })
 })

@@ -20,7 +20,7 @@ dependency-reduced-pom.xml
 *.war
 !.mvn/wrapper/maven-wrapper.jar
 
-# Node / Vue
+# Node / front-end build
 node_modules/
 **/dist/
 **/.vite/

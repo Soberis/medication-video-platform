@@ -79,9 +79,8 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Dataset Admission
     description: >-
-      Read-only current-state previews of whether a CaptureSession satisfies the prerequisite
-      facts for a future dataset member. A preview never creates a dataset version, member,
-      override, export or approval.
+      Current-state previews and administrator-created DRAFT candidate snapshots. A draft is not
+      frozen, split, approved or exportable; those governance transitions remain unavailable.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -98,6 +97,70 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
+  /projects/{project_id}/dataset-versions:
+    post:
+      operationId: createDatasetVersionDraft
+      tags:
+        - Dataset Admission
+      summary: Create an eligible capture-session candidate snapshot as a dataset draft
+      description: >-
+        Requires ACTIVE ADMIN membership. Every supplied CaptureSession is re-evaluated against
+        current admission facts, then its session and stream evidence is persisted as an immutable
+        DRAFT candidate snapshot. This endpoint neither freezes the DatasetVersion nor assigns
+        splits, approves an exception, creates an export or authorizes data release.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetVersionCreateRequest"
+      responses:
+        "201":
+          description: Dataset draft and its immutable candidate snapshot were created.
+          headers:
+            Location:
+              schema:
+                type: string
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersion"
+        "400":
+          description: Request syntax is invalid or a capture-session ID is duplicated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or a selected CaptureSession is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: A selected CaptureSession is not eligible or the idempotency key conflicts.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
   /auth/login:
     post:
       operationId: loginPlatformAccount
@@ -4828,6 +4891,79 @@ components:
           format: date-time
     CaptureSessionMetadataV1:
       $ref: "../schemas/capture-session-metadata-v1.schema.json"
+    DatasetVersionCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - display_name
+        - capture_session_ids
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^\S(?:.*\S)?$
+        capture_session_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+    DatasetVersion:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_id
+        - project_id
+        - display_name
+        - status
+        - created_by
+        - created_at
+      properties:
+        dataset_version_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          maxLength: 128
+        status:
+          type: string
+          enum: [DRAFT]
+        created_by:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+    DatasetVersionError:
+      type: object
+      additionalProperties: false
+      required:
+        - error_code
+        - error_message
+        - retryable
+        - details
+        - request_id
+      properties:
+        error_code:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]{0,127}$
+        error_message:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        request_id:
+          type: string
+          format: uuid
     DatasetAdmissionPreview:
       type: object
       additionalProperties: false

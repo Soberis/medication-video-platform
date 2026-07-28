@@ -996,17 +996,24 @@ code {
 }
 
 .readiness-result > strong,
-.readiness-result > span {
+.readiness-result > span,
+.readiness-result > div > strong,
+.readiness-result > div > span {
   display: block;
 }
 
-.readiness-result > span {
+.readiness-result > span,
+.readiness-result > div > span {
   margin-top: 5px;
   color: #526075;
   line-height: 1.55;
 }
 
 .readiness-result-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
   background: #f0faf4;
 }
 

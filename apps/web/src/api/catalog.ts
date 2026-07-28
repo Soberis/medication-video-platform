@@ -124,6 +124,15 @@ export interface DatasetAdmissionPreview {
   streams: DatasetAdmissionPreviewStream[]
 }
 
+export interface DatasetVersionDraft {
+  dataset_version_id: string
+  project_id: string
+  display_name: string
+  status: 'DRAFT'
+  created_by: string
+  created_at: string
+}
+
 export interface ClipAssetSessionBinding {
   capture_session_id: string
   camera_stream_id: string
@@ -239,6 +248,10 @@ const errorMessages: Record<string, string> = {
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   MEDIA_REPORT_NOT_FOUND: '媒体检测报告尚未就绪，请在检测完成后刷新状态。',
   OBJECT_STORAGE_UNAVAILABLE: '对象存储暂时无法签发播放地址，请稍后重试。',
+  DATASET_VERSION_SESSION_NOT_ELIGIBLE: '当前配药操作尚未满足创建数据集草稿的条件，请刷新后重试。',
+  DATASET_VERSION_CAPTURE_SESSION_DUPLICATE: '同一配药操作不能重复加入数据集草稿。',
+  DATASET_VERSION_IDEMPOTENCY_KEY_REUSED: '本次创建请求与已提交请求冲突，请刷新后重试。',
+  DATASET_VERSION_ACCESS_DENIED: '只有项目管理员可以创建数据集草稿。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
 
@@ -300,6 +313,26 @@ export function getCaptureSessionDatasetAdmissionPreview(
     `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions/${encodeURIComponent(captureSessionId)}/dataset-admission-preview`,
     signal,
   )
+}
+
+export async function createDatasetVersionDraft(
+  projectId: string,
+  displayName: string,
+  captureSessionIds: string[],
+): Promise<DatasetVersionDraft> {
+  const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify({ display_name: displayName, capture_session_ids: captureSessionIds }),
+    cache: 'no-store',
+  })
+  if (response.ok) return (await response.json()) as DatasetVersionDraft
+  throw await toCatalogError(response)
 }
 
 export function listClipAssets(

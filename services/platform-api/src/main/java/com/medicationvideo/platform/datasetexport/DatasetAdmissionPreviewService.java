@@ -35,6 +35,11 @@ class DatasetAdmissionPreviewService {
 
     @Transactional(readOnly = true)
     DatasetAdmissionPreviewResponse preview(UUID projectId, UUID captureSessionId) {
+        return evaluate(projectId, captureSessionId).preview();
+    }
+
+    @Transactional(readOnly = true)
+    DatasetAdmissionEvaluation evaluate(UUID projectId, UUID captureSessionId) {
         var session = this.captureSessionQueryService.getFacts(projectId, captureSessionId);
         var clipAssetIds = session.streams().stream()
                 .map(CaptureSessionDatasetAdmissionFacts.Stream::clipAssetId).toList();
@@ -45,7 +50,7 @@ class DatasetAdmissionPreviewService {
                 .map(stream -> streamPreview(stream, qualityByAssetId, annotationsByAssetId))
                 .toList();
         var eligible = sessionReasons.isEmpty() && streams.stream().allMatch(StreamDatasetAdmissionPreview::eligible);
-        return new DatasetAdmissionPreviewResponse(
+        var preview = new DatasetAdmissionPreviewResponse(
                 session.captureSessionId(),
                 eligible,
                 session.assemblyStatus(),
@@ -54,6 +59,10 @@ class DatasetAdmissionPreviewService {
                 session.receivedCameraCount(),
                 sessionReasons,
                 streams);
+        var evidence = session.streams().stream()
+                .map(stream -> streamEvidence(stream, qualityByAssetId, annotationsByAssetId))
+                .toList();
+        return new DatasetAdmissionEvaluation(session, preview, evidence);
     }
 
     private static List<String> sessionReasons(CaptureSessionDatasetAdmissionFacts session) {
@@ -119,4 +128,49 @@ class DatasetAdmissionPreviewService {
                 qualityDecision, annotation.annotationRevisionId(), annotation.reviewDecision(),
                 cleaningDecision, annotation.documentSha256(), annotation.labelSchemaDigest(), List.copyOf(reasons));
     }
+
+    private static DatasetAdmissionStreamEvidence streamEvidence(
+            CaptureSessionDatasetAdmissionFacts.Stream stream,
+            Map<UUID, QualityReviewQueryService.CurrentDecision> qualityByAssetId,
+            Map<UUID, AnnotationDatasetAdmissionFact> annotationsByAssetId) {
+        var quality = qualityByAssetId.get(stream.clipAssetId());
+        var annotation = annotationsByAssetId.get(stream.clipAssetId());
+        var cleaning = annotation == null ? null : annotation.postCleaningResult();
+        return new DatasetAdmissionStreamEvidence(
+                stream.cameraStreamId(),
+                stream.clipAssetId(),
+                stream.cameraIndex(),
+                stream.assetSha256(),
+                quality == null ? "UNREVIEWED" : quality.decision(),
+                quality == null ? 0 : quality.version(),
+                annotation == null ? null : annotation.annotationRevisionId(),
+                annotation == null ? null : annotation.documentSha256(),
+                annotation == null ? null : annotation.labelSchemaDigest(),
+                cleaning == null ? null : cleaning.cleaningResultId(),
+                cleaning == null ? null : cleaning.cleaningRunId(),
+                cleaning == null ? null : cleaning.ruleSetDigest(),
+                cleaning == null ? "MISSING" : cleaning.outcome());
+    }
+}
+
+record DatasetAdmissionEvaluation(
+        CaptureSessionDatasetAdmissionFacts captureSession,
+        DatasetAdmissionPreviewResponse preview,
+        List<DatasetAdmissionStreamEvidence> streamEvidence) {
+}
+
+record DatasetAdmissionStreamEvidence(
+        UUID cameraStreamId,
+        UUID clipAssetId,
+        int cameraIndex,
+        String assetSha256,
+        String qualityReviewDecision,
+        long qualityReviewVersion,
+        UUID annotationRevisionId,
+        String annotationDocumentSha256,
+        String labelSchemaDigest,
+        UUID cleaningResultId,
+        UUID cleaningRunId,
+        String cleaningRuleSetDigest,
+        String postCleaningOutcome) {
 }

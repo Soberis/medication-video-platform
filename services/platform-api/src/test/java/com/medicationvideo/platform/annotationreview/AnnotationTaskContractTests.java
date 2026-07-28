@@ -382,6 +382,42 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.streams[0].post_cleaning_decision").value("PASS"))
 				.andExpect(jsonPath("$.streams[0].blocking_reasons").isEmpty());
 
+		var datasetIdempotencyKey = "dataset-version-draft-" + UUID.randomUUID();
+		var datasetDraft = createDatasetDraft(
+				ADMIN_TOKEN,
+				captureSessionId,
+				datasetIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
+				.andExpect(jsonPath("$.display_name").value("训练候选集 01"))
+				.andExpect(jsonPath("$.status").value("DRAFT"))
+				.andReturn().getResponse().getContentAsString();
+		var datasetVersionId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.<String>read(datasetDraft, "$.dataset_version_id"));
+		assertEquals(1, count("SELECT count(*) FROM dataset_member_session WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(1, count("SELECT count(*) FROM dataset_member_stream WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(this.jdbcTemplate.queryForObject(
+				"SELECT document_sha256 FROM annotation_revision WHERE annotation_revision_id = ?",
+				String.class,
+				revisionId), this.jdbcTemplate.queryForObject(
+				"SELECT annotation_document_sha256 FROM dataset_member_stream WHERE dataset_version_id = ?",
+				String.class,
+				datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_VERSION_DRAFT_CREATED'
+				  AND object_type = 'DatasetVersion'
+				  AND object_id = ?
+				""", datasetVersionId.toString()));
+		createDatasetDraft(ADMIN_TOKEN, captureSessionId, datasetIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()));
+		assertEquals(1, count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
+		createDatasetDraft(MEMBER_TOKEN, captureSessionId, "dataset-version-member-" + UUID.randomUUID())
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
 		this.jdbcTemplate.update("""
 				UPDATE quality_review
 				SET version = version + 1,
@@ -719,6 +755,19 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "annotation-recheck-" + UUID.randomUUID()));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
+			String token,
+			UUID captureSessionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-version-request-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"display_name\":\"训练候选集 01\",\"capture_session_ids\":[\""
+						+ captureSessionId + "\"]}"));
+	}
+
 	private void insertQualityReview(UUID projectId, UUID clipAssetId, String decision, String reasonCode) {
 		this.jdbcTemplate.update("""
 				INSERT INTO quality_review (
@@ -832,6 +881,9 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM dataset_member_stream WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM dataset_member_session WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM dataset_version WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("""
 				DELETE FROM camera_stream
 				WHERE capture_session_id IN (

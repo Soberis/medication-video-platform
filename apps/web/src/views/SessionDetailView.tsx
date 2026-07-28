@@ -1,9 +1,10 @@
-import { Button, Card, Descriptions, Table, Tag } from 'antd'
+import { Button, Card, Descriptions, message, Modal, Table, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  createDatasetVersionDraft,
   getCaptureSession,
   getCaptureSessionDatasetAdmissionPreview,
   type CameraStream,
@@ -50,6 +51,7 @@ export default function SessionDetailView() {
   const [errorMessage, setErrorMessage] = useState('')
   const [admissionErrorCode, setAdmissionErrorCode] = useState('')
   const [admissionErrorMessage, setAdmissionErrorMessage] = useState('')
+  const [creatingDatasetDraft, setCreatingDatasetDraft] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const admissionRequest = useRef<AbortController | null>(null)
 
@@ -137,6 +139,28 @@ export default function SessionDetailView() {
       if (admissionRequest.current === request) admissionRequest.current = null
     }
   }, [projectId, sessionId])
+  const createDraft = useCallback(async () => {
+    setCreatingDatasetDraft(true)
+    try {
+      const draft = await createDatasetVersionDraft(projectId, '配药操作训练候选', [sessionId])
+      void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
+    } catch (error) {
+      void message.error(
+        error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
+      )
+    } finally {
+      setCreatingDatasetDraft(false)
+    }
+  }, [projectId, sessionId])
+  const confirmCreateDraft = useCallback(() => {
+    void Modal.confirm({
+      title: '创建训练数据草稿',
+      content: '将再次核对当前准入条件，并保存本次配药操作的证据快照。不会冻结、拆分或导出数据。',
+      okText: '创建草稿',
+      cancelText: '取消',
+      onOk: createDraft,
+    })
+  }, [createDraft])
   useEffect(() => {
     const timer = window.setTimeout(
       () => void Promise.all([loadDetail(), loadAdmissionPreview()]),
@@ -252,8 +276,13 @@ export default function SessionDetailView() {
                 </div>
                 {admissionPreview.eligible ? (
                   <div className="readiness-result readiness-result-ready">
-                    <strong>当前证据满足训练数据准入条件</strong>
-                    <span>后续创建数据集时仍会重新校验，避免使用已变化的数据。</span>
+                    <div>
+                      <strong>当前证据满足训练数据准入条件</strong>
+                      <span>创建草稿时仍会重新校验，避免使用已变化的数据。</span>
+                    </div>
+                    <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
+                      创建数据集草稿
+                    </Button>
                   </div>
                 ) : (
                   <div className="readiness-result">
