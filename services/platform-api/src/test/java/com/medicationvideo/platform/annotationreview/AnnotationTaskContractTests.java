@@ -11,7 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -157,6 +159,95 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_NOT_FOUND"));
+	}
+
+	@Test
+	void administratorCreatesAMultiSessionDraftInTheSubmittedOrder() throws Exception {
+		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
+		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
+
+		var response = createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(secondSessionId, firstSessionId),
+				"dataset-version-multi-session-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.status").value("DRAFT"))
+				.andReturn().getResponse().getContentAsString();
+		var datasetVersionId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.<String>read(response, "$.dataset_version_id"));
+
+		var memberSessionIds = this.jdbcTemplate.query("""
+				SELECT capture_session_id
+				FROM dataset_member_session
+				WHERE dataset_version_id = ?
+				ORDER BY candidate_index
+				""", (resultSet, rowNumber) -> UUID.fromString(resultSet.getString("capture_session_id")), datasetVersionId);
+		assertEquals(List.of(secondSessionId, firstSessionId), memberSessionIds);
+		assertEquals(2, count("SELECT count(*) FROM dataset_member_session WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(2, count("SELECT count(*) FROM dataset_member_stream WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_VERSION_DRAFT_CREATED'
+				  AND object_id = ?
+				""", datasetVersionId.toString()));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.members.length()").value(2))
+				.andExpect(jsonPath("$.members[0].capture_session_id").value(secondSessionId.toString()))
+				.andExpect(jsonPath("$.members[0].candidate_index").value(0))
+				.andExpect(jsonPath("$.members[1].capture_session_id").value(firstSessionId.toString()))
+				.andExpect(jsonPath("$.members[1].candidate_index").value(1));
+	}
+
+	@Test
+	void datasetDraftCreationIsAtomicWhenOneSubmittedSessionIsNotEligible() throws Exception {
+		var draftAuditEventsBefore = count("""
+				SELECT count(*) FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'DATASET_VERSION_DRAFT_CREATED'
+				""", PROJECT_ID);
+		var eligibleSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
+		var ineligibleAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var ineligibleSessionId = CaptureMediaProjectionTestData.bindEligible(
+				this.jdbcTemplate, PROJECT_ID, ineligibleAssetId, BASE_TIME.plusSeconds(20)).captureSessionId();
+
+		createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(eligibleSessionId, ineligibleSessionId),
+				"dataset-version-atomic-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_SESSION_NOT_ELIGIBLE"))
+				.andExpect(jsonPath("$.details.capture_session_id").value(ineligibleSessionId.toString()));
+
+		assertEquals(0, count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
+		assertEquals(0, count("SELECT count(*) FROM dataset_member_session WHERE project_id = ?", PROJECT_ID));
+		assertEquals(0, count("SELECT count(*) FROM dataset_member_stream WHERE project_id = ?", PROJECT_ID));
+		assertEquals(draftAuditEventsBefore, count("""
+				SELECT count(*) FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'DATASET_VERSION_DRAFT_CREATED'
+				""", PROJECT_ID));
+	}
+
+	@Test
+	void datasetDraftCreationRejectsMoreThanOneHundredSubmittedSessions() throws Exception {
+		var captureSessionIds = IntStream.range(0, 101)
+				.mapToObj(index -> UUID.randomUUID())
+				.toList();
+
+		createDatasetDraft(
+				ADMIN_TOKEN,
+				captureSessionIds,
+				"dataset-version-too-many-" + UUID.randomUUID())
+				.andExpect(status().isBadRequest())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.error_code").value("INVALID_DATASET_VERSION_REQUEST"));
+
+		assertEquals(0, count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
 	}
 
 	@Test
@@ -870,13 +961,48 @@ class AnnotationTaskContractTests {
 			String token,
 			UUID captureSessionId,
 			String idempotencyKey) throws Exception {
+		return createDatasetDraft(token, List.of(captureSessionId), idempotencyKey);
+	}
+
+	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
+			String token,
+			List<UUID> captureSessionIds,
+			String idempotencyKey) throws Exception {
+		var captureSessionIdsJson = String.join(",", captureSessionIds.stream()
+				.map(captureSessionId -> "\"" + captureSessionId + "\"")
+				.toList());
 		return this.mockMvc.perform(post("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
 				.header("Authorization", "Bearer " + token)
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", "dataset-version-request-" + UUID.randomUUID())
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"display_name\":\"训练候选集 01\",\"capture_session_ids\":[\""
-						+ captureSessionId + "\"]}"));
+				.content("{\"display_name\":\"训练候选集 01\",\"capture_session_ids\":["
+						+ captureSessionIdsJson + "]}"));
+	}
+
+	private UUID createEligibleDatasetSession(Instant createdAt) throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var captureSessionId = CaptureMediaProjectionTestData.bindEligible(
+				this.jdbcTemplate, PROJECT_ID, clipAssetId, createdAt).captureSessionId();
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		insertVerifiedMediaReport(PROJECT_ID, clipAssetId, 1_000_000L);
+		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-dataset-multi-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var taskId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(taskResponse, "$.annotation_task_id"));
+		var revisionResponse = submit(MEMBER_TOKEN, taskId,
+				"annotation-revision-dataset-multi-" + UUID.randomUUID(),
+				"{\"segments\":[{\"start_ms\":120,\"end_ms\":780,\"label\":\"retrieve_medicine\"}]}")
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var revisionId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
+		review(ADMIN_TOKEN, revisionId, "annotation-review-dataset-multi-" + UUID.randomUUID(),
+				"{\"decision\":\"APPROVED\"}")
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.decision").value("APPROVED"));
+		return captureSessionId;
 	}
 
 	private void insertQualityReview(UUID projectId, UUID clipAssetId, String decision, String reasonCode) {

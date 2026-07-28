@@ -65,6 +65,7 @@ function SessionDetailContent() {
   const detailRequest = useRef<AbortController | null>(null)
   const admissionRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
+  const draftRequest = useRef<AbortController | null>(null)
 
   const admissionReasonSummary = useMemo(() => {
     if (!admissionPreview) return []
@@ -176,17 +177,30 @@ function SessionDetailContent() {
       void message.error('只有当前项目管理员可以创建数据集草稿。')
       return
     }
+    draftRequest.current?.abort()
+    const request = new AbortController()
+    draftRequest.current = request
     setCreatingDatasetDraft(true)
     try {
-      const draft = await createDatasetVersionDraft(projectId, '配药操作训练候选', [sessionId])
+      const draft = await createDatasetVersionDraft(
+        projectId,
+        '配药操作训练候选',
+        [sessionId],
+        request.signal,
+      )
+      if (request.signal.aborted || draftRequest.current !== request) return
       void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
       void navigate(paths.dataset(projectId, draft.dataset_version_id))
     } catch (error) {
+      if (request.signal.aborted || draftRequest.current !== request) return
       void message.error(
         error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
       )
     } finally {
-      setCreatingDatasetDraft(false)
+      if (draftRequest.current === request) {
+        draftRequest.current = null
+        setCreatingDatasetDraft(false)
+      }
     }
   }, [navigate, projectId, projectRole, sessionId])
   const confirmCreateDraft = useCallback(() => {
@@ -208,6 +222,7 @@ function SessionDetailContent() {
       detailRequest.current?.abort()
       admissionRequest.current?.abort()
       roleRequest.current?.abort()
+      draftRequest.current?.abort()
     }
   }, [loadAdmissionPreview, loadDetail, loadProjectRole])
 
@@ -334,7 +349,7 @@ function SessionDetailContent() {
                       ) : null}
                     </div>
                     {roleLoadState === 'error' ? (
-                      <div className="readiness-role-error" role="alert">
+                      <div className="permission-check-error" role="alert">
                         <strong>{roleErrorCode}</strong>
                         <Button onClick={() => void loadProjectRole()}>重试权限核对</Button>
                       </div>

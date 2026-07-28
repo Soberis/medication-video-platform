@@ -1,16 +1,18 @@
-import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag } from 'antd'
+import { Button, Card, DatePicker, Empty, Form, Input, message, Modal, Select, Table, Tag } from 'antd'
 import type { Dayjs } from 'dayjs'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { type Key, useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  createDatasetVersionDraft,
   listCaptureSessions,
   type CaptureQualityStatus,
   type CaptureSessionAssemblyStatus,
   type CaptureSessionFilters,
   type CaptureSessionListItem,
 } from '@/api/catalog'
+import { getProject, type ProjectRole } from '@/api/projects'
 import { paths } from '@/app/paths'
 import {
   assemblyStatusLabels,
@@ -23,6 +25,12 @@ import {
 
 export default function SessionListView() {
   const { projectId = '' } = useParams()
+  return <SessionListContent key={projectId} />
+}
+
+function SessionListContent() {
+  const { projectId = '' } = useParams()
+  const navigate = useNavigate()
   const [deviceId, setDeviceId] = useState('')
   const [assemblyStatus, setAssemblyStatus] = useState<CaptureSessionAssemblyStatus | undefined>()
   const [qualityStatus, setQualityStatus] = useState<CaptureQualityStatus | undefined>()
@@ -35,7 +43,16 @@ export default function SessionListView() {
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [requestId, setRequestId] = useState<string | null>(null)
+  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
+  const [roleLoadState, setRoleLoadState] = useState<'loading' | 'success' | 'error'>('loading')
+  const [roleErrorCode, setRoleErrorCode] = useState('')
+  const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false)
+  const [draftDisplayName, setDraftDisplayName] = useState('配药操作训练候选')
+  const [isCreatingDatasetDraft, setIsCreatingDatasetDraft] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
+  const roleRequest = useRef<AbortController | null>(null)
+  const draftRequest = useRef<AbortController | null>(null)
 
   const loadPage = useCallback(
     async (append = false, filters = activeFilters) => {
@@ -43,7 +60,10 @@ export default function SessionListView() {
       const request = new AbortController()
       activeRequest.current = request
       setIsAppending(append)
-      if (!append) setLoadState('loading')
+      if (!append) {
+        setLoadState('loading')
+        setSelectedSessionIds([])
+      }
       setErrorCode('')
       setErrorMessage('')
       setRequestId(null)
@@ -79,6 +99,30 @@ export default function SessionListView() {
     [activeFilters, nextCursor, projectId],
   )
 
+  const loadProjectRole = useCallback(async () => {
+    roleRequest.current?.abort()
+    const request = new AbortController()
+    roleRequest.current = request
+    setProjectRole(null)
+    setRoleLoadState('loading')
+    setRoleErrorCode('')
+    try {
+      const project = await getProject(projectId, request.signal)
+      if (roleRequest.current !== request) return
+      setProjectRole(project.current_role)
+      setRoleLoadState('success')
+      if (project.current_role !== 'ADMIN') setSelectedSessionIds([])
+    } catch (error) {
+      if (request.signal.aborted || roleRequest.current !== request) return
+      setProjectRole(null)
+      setRoleLoadState('error')
+      setRoleErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED')
+      setSelectedSessionIds([])
+    } finally {
+      if (roleRequest.current === request) roleRequest.current = null
+    }
+  }, [projectId])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setItems([])
@@ -89,10 +133,19 @@ export default function SessionListView() {
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
+      draftRequest.current?.abort()
     }
     // loadPage changes with pagination state; project changes are the only automatic reload trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadProjectRole(), 0)
+    return () => {
+      window.clearTimeout(timer)
+      roleRequest.current?.abort()
+    }
+  }, [loadProjectRole])
 
   function applyFilters() {
     const filters: CaptureSessionFilters = {
@@ -116,6 +169,68 @@ export default function SessionListView() {
     setItems([])
     setNextCursor(null)
     void loadPage(false, {})
+  }
+
+  function updateSelectedSessions(keys: Key[]) {
+    const selected = new Set(keys.map(String))
+    const orderedIds = items
+      .map((item) => item.capture_session_id)
+      .filter((captureSessionId) => selected.has(captureSessionId))
+    if (orderedIds.length > 100) {
+      void message.warning('单次最多选择 100 条配药操作。')
+      setSelectedSessionIds(orderedIds.slice(0, 100))
+      return
+    }
+    setSelectedSessionIds(orderedIds)
+  }
+
+  function openDraftModal() {
+    if (!selectedSessionIds.length) return
+    setDraftDisplayName('配药操作训练候选')
+    setIsDraftModalOpen(true)
+  }
+
+  async function createDraft() {
+    if (projectRole !== 'ADMIN') {
+      void message.error('只有当前项目管理员可以创建数据集草稿。')
+      return
+    }
+    const displayName = draftDisplayName.trim()
+    if (!displayName) {
+      void message.error('请填写草稿名称。')
+      return
+    }
+    if (!selectedSessionIds.length) {
+      void message.error('请至少选择一条配药操作。')
+      return
+    }
+    draftRequest.current?.abort()
+    const request = new AbortController()
+    draftRequest.current = request
+    setIsCreatingDatasetDraft(true)
+    try {
+      const draft = await createDatasetVersionDraft(
+        projectId,
+        displayName,
+        selectedSessionIds,
+        request.signal,
+      )
+      if (request.signal.aborted || draftRequest.current !== request) return
+      void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
+      setIsDraftModalOpen(false)
+      setSelectedSessionIds([])
+      void navigate(paths.dataset(projectId, draft.dataset_version_id))
+    } catch (error) {
+      if (request.signal.aborted || draftRequest.current !== request) return
+      void message.error(
+        error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
+      )
+    } finally {
+      if (draftRequest.current === request) {
+        draftRequest.current = null
+        setIsCreatingDatasetDraft(false)
+      }
+    }
   }
 
   return (
@@ -193,11 +308,49 @@ export default function SessionListView() {
           <Button onClick={() => void loadPage(false)}>重试</Button>
         </div>
       ) : null}
+      {roleLoadState === 'error' ? (
+        <div className="permission-check-error" role="alert">
+          <span>暂时无法核对项目管理员权限，无法创建数据集草稿。</span>
+          <strong>{roleErrorCode}</strong>
+          <Button onClick={() => void loadProjectRole()}>重试权限核对</Button>
+        </div>
+      ) : null}
       {items.length > 0 ? (
         <Card className="table-card" variant="outlined" aria-busy={isAppending}>
+          {projectRole === 'ADMIN' ? (
+            <div className="dataset-draft-selection-toolbar" aria-live="polite">
+              <div>
+                <strong>已选择 {selectedSessionIds.length} 条配药操作</strong>
+                <span>仅提交当前已加载的记录；服务端会在创建时重新核对每一条记录。</span>
+              </div>
+              <div className="dataset-draft-selection-actions">
+                {selectedSessionIds.length ? (
+                  <Button type="link" onClick={() => setSelectedSessionIds([])}>
+                    清除选择
+                  </Button>
+                ) : null}
+                <Button type="primary" disabled={!selectedSessionIds.length} onClick={openDraftModal}>
+                  创建数据集草稿
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <Table<CaptureSessionListItem>
             dataSource={items}
             rowKey="capture_session_id"
+            rowSelection={
+              projectRole === 'ADMIN'
+                ? {
+                    selectedRowKeys: selectedSessionIds,
+                    onChange: updateSelectedSessions,
+                    getCheckboxProps: (row) => ({
+                      disabled:
+                        selectedSessionIds.length >= 100 &&
+                        !selectedSessionIds.includes(row.capture_session_id),
+                    }),
+                  }
+                : undefined
+            }
             pagination={false}
             scroll={{ x: 1100 }}
             columns={[
@@ -285,6 +438,32 @@ export default function SessionListView() {
       {loadState === 'success' && items.length === 0 ? (
         <Empty description="当前项目没有符合条件的配药操作记录。可调整筛选，或通过边端自动上传和平台本地上传新增视频。" />
       ) : null}
+      <Modal
+        open={isDraftModalOpen}
+        title="创建数据集草稿"
+        okText="创建草稿"
+        cancelText="取消"
+        confirmLoading={isCreatingDatasetDraft}
+        okButtonProps={{ disabled: !draftDisplayName.trim() || !selectedSessionIds.length }}
+        onCancel={() => setIsDraftModalOpen(false)}
+        onOk={() => void createDraft()}
+      >
+        <p className="form-hint">
+          将为已选的 {selectedSessionIds.length} 条配药操作保存候选证据快照。服务端会重新核对准入条件；任一记录不符合时，不会创建草稿。草稿不会拆分、冻结或导出。
+        </p>
+        <Form layout="vertical">
+          <Form.Item label="草稿名称" htmlFor="dataset-draft-display-name">
+            <Input
+              id="dataset-draft-display-name"
+              value={draftDisplayName}
+              maxLength={128}
+              showCount
+              autoFocus
+              onChange={(event) => setDraftDisplayName(event.target.value)}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 }

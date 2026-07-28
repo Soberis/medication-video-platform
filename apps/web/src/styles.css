@@ -742,6 +742,34 @@ code {
   font-size: 14px;
 }
 
+.dataset-draft-selection-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 18px;
+  background: #f4f7fc;
+}
+
+.dataset-draft-selection-toolbar strong,
+.dataset-draft-selection-toolbar span {
+  display: block;
+}
+
+.dataset-draft-selection-toolbar span {
+  margin-top: 4px;
+  color: #59677c;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dataset-draft-selection-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
 .text-link,
 .breadcrumb a {
   color: #2f5ec4;
@@ -1017,7 +1045,7 @@ code {
   background: #f0faf4;
 }
 
-.readiness-role-error {
+.permission-check-error {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1029,7 +1057,12 @@ code {
   color: #714b0a;
 }
 
-.readiness-role-error strong {
+.permission-check-error span {
+  color: #714b0a;
+  line-height: 1.5;
+}
+
+.permission-check-error strong {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   font-weight: 600;
@@ -1450,12 +1483,17 @@ code {
     margin-top: 8px;
   }
 
-  .readiness-role-error {
+  .permission-check-error {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dataset-draft-selection-toolbar {
     align-items: flex-start;
     flex-direction: column;
   }

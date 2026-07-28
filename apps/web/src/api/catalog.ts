@@ -351,6 +351,7 @@ export async function createDatasetVersionDraft(
   projectId: string,
   displayName: string,
   captureSessionIds: string[],
+  signal?: AbortSignal,
 ): Promise<DatasetVersionDraft> {
   const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions`, {
     method: 'POST',
@@ -362,6 +363,7 @@ export async function createDatasetVersionDraft(
     },
     body: JSON.stringify({ display_name: displayName, capture_session_ids: captureSessionIds }),
     cache: 'no-store',
+    signal,
   })
   if (response.ok) return (await response.json()) as DatasetVersionDraft
   throw await toCatalogError(response)

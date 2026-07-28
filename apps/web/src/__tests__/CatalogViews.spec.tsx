@@ -20,34 +20,25 @@ describe('catalog views', () => {
   it('distinguishes bound, ingested and pending quality facts in the session list', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse({
-            items: [
-              {
-                capture_session_id: sessionId,
-                batch_id: '60000000-0000-4000-8000-000000000001',
-                device_id: 'synthetic-edge-01',
-                camera_set_id: '70000000-0000-4000-8000-000000000001',
-                camera_set_key: 'dispensing-cabin-a',
-                camera_set_configuration_version: 1,
-                camera_layout_version: 'layout-v1',
-                expected_camera_count: 2,
-                bound_stream_count: 1,
-                received_camera_count: 0,
-                ingest_failed_stream_count: 0,
-                sync_group_id: 'sync-group-01',
-                device_time_utc: '2026-07-15T01:02:03Z',
-                server_receive_time: '2026-07-15T01:03:03Z',
-                assembly_status: 'ASSEMBLING',
-                quality_status: 'PENDING',
-                created_at: '2026-07-15T01:03:03Z',
-              },
-            ],
-            next_cursor: null,
-          }),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input) === `/api/v1/projects/${projectId}`
+            ? jsonResponse(project('ADMIN'))
+            : jsonResponse({
+                items: [
+                  {
+                    ...captureSessionListItem(sessionId),
+                    expected_camera_count: 2,
+                    bound_stream_count: 1,
+                    received_camera_count: 0,
+                    assembly_status: 'ASSEMBLING',
+                    quality_status: 'PENDING',
+                  },
+                ],
+                next_cursor: null,
+              }),
         ),
+      ),
     )
     renderSessionList()
     expect(await screen.findByText('已绑定 1 / 2')).toBeInTheDocument()
@@ -59,6 +50,188 @@ describe('catalog views', () => {
       expect.any(Object),
     )
   }, 15_000)
+
+  it('lets an administrator create one draft from selected sessions in list order', async () => {
+    const firstSessionId = '40000000-0000-4000-8000-000000000011'
+    const secondSessionId = '40000000-0000-4000-8000-000000000012'
+    const datasetVersionId = '91000000-0000-4000-8000-000000000010'
+    let createBody: unknown
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`) return Promise.resolve(jsonResponse(project('ADMIN')))
+      if (url === `/api/v1/projects/${projectId}/dataset-versions` && init?.method === 'POST') {
+        createBody = JSON.parse(String(init.body))
+        return Promise.resolve(
+          jsonResponse(
+            {
+              dataset_version_id: datasetVersionId,
+              project_id: projectId,
+              display_name: '两条配药操作候选',
+              status: 'DRAFT',
+              created_by: 'local-admin',
+              created_at: '2026-07-28T03:00:00Z',
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            captureSessionListItem(firstSessionId, 'synthetic-edge-01'),
+            captureSessionListItem(secondSessionId, 'synthetic-edge-02'),
+          ],
+          next_cursor: null,
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderSessionList()
+
+    expect(await screen.findByText('已选择 0 条配药操作')).toBeInTheDocument()
+    const checkboxes = await screen.findAllByRole('checkbox')
+    expect(checkboxes).toHaveLength(3)
+    const firstSessionCheckbox = checkboxes[1]
+    const secondSessionCheckbox = checkboxes[2]
+    if (!firstSessionCheckbox || !secondSessionCheckbox) {
+      throw new Error('Expected one checkbox for each listed capture session.')
+    }
+    await user.click(secondSessionCheckbox)
+    await user.click(firstSessionCheckbox)
+    expect(screen.getByText('已选择 2 条配药操作')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '创建数据集草稿' }))
+    await user.clear(screen.getByLabelText('草稿名称'))
+    await user.type(screen.getByLabelText('草稿名称'), '两条配药操作候选')
+    await user.click(screen.getByRole('button', { name: '创建草稿' }))
+
+    await waitFor(() =>
+      expect(createBody).toEqual({
+        display_name: '两条配药操作候选',
+        capture_session_ids: [firstSessionId, secondSessionId],
+      }),
+    )
+  })
+
+  it('does not expose multi-session draft selection to a project member', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input) === `/api/v1/projects/${projectId}`
+            ? jsonResponse(project('MEMBER'))
+            : jsonResponse({
+                items: [captureSessionListItem(sessionId)],
+                next_cursor: null,
+              }),
+        ),
+      ),
+    )
+
+    renderSessionList()
+
+    expect(await screen.findByText('synthetic-edge-01')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('keeps the session list usable and retries when project role lookup fails', async () => {
+    let roleRequestFails = true
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === `/api/v1/projects/${projectId}`) {
+          return Promise.resolve(
+            roleRequestFails
+              ? jsonResponse(
+                  {
+                    error_code: 'PROJECT_ROLE_UNAVAILABLE',
+                    error_message: 'Synthetic failure.',
+                    retryable: true,
+                  },
+                  503,
+                )
+              : jsonResponse(project('ADMIN')),
+          )
+        }
+        return Promise.resolve(
+          jsonResponse({
+            items: [captureSessionListItem(sessionId)],
+            next_cursor: null,
+          }),
+        )
+      }),
+    )
+    const user = userEvent.setup()
+
+    renderSessionList()
+
+    expect(await screen.findByText('synthetic-edge-01')).toBeInTheDocument()
+    expect(screen.getByText('暂时无法核对项目管理员权限，无法创建数据集草稿。')).toBeInTheDocument()
+    expect(screen.getByText('PROJECT_ROLE_UNAVAILABLE')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
+
+    roleRequestFails = false
+    await user.click(screen.getByRole('button', { name: '重试权限核对' }))
+
+    expect(await screen.findByText('已选择 0 条配药操作')).toBeInTheDocument()
+  })
+
+  it('does not navigate back to an old project when its draft request resolves after a route change', async () => {
+    const otherProjectId = '30000000-0000-4000-8000-000000000002'
+    const datasetVersionId = '91000000-0000-4000-8000-000000000020'
+    let resolveDraftRequest: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}/dataset-versions` && init?.method === 'POST') {
+        return new Promise<Response>((resolve) => {
+          resolveDraftRequest = resolve
+        })
+      }
+      if (url === `/api/v1/projects/${projectId}` || url === `/api/v1/projects/${otherProjectId}`) {
+        return Promise.resolve(jsonResponse(project('ADMIN')))
+      }
+      return Promise.resolve(
+        jsonResponse({
+          items: [captureSessionListItem(sessionId)],
+          next_cursor: null,
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    const { router } = renderSessionList()
+    expect(await screen.findByText('已选择 0 条配药操作')).toBeInTheDocument()
+    const sessionCheckbox = (await screen.findAllByRole('checkbox'))[1]
+    if (!sessionCheckbox) throw new Error('Expected a checkbox for the listed capture session.')
+    await user.click(sessionCheckbox)
+    await user.click(screen.getByRole('button', { name: '创建数据集草稿' }))
+    await user.click(screen.getByRole('button', { name: '创建草稿' }))
+    await waitFor(() => expect(resolveDraftRequest).toBeTypeOf('function'))
+
+    await router.navigate(`/projects/${otherProjectId}/sessions`)
+    resolveDraftRequest?.(
+      jsonResponse(
+        {
+          dataset_version_id: datasetVersionId,
+          project_id: projectId,
+          display_name: '旧项目草稿',
+          status: 'DRAFT',
+          created_by: 'local-admin',
+          created_at: '2026-07-28T03:00:00Z',
+        },
+        201,
+      ),
+    )
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/projects/${otherProjectId}/sessions`),
+    )
+  })
 
   it('shows a concise, evidence-based dataset readiness preview on the session detail page', async () => {
     const fetchMock = vi
@@ -199,14 +372,14 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('当前证据满足训练数据准入条件')).toBeInTheDocument()
     expect(screen.getByText('项目权限暂时无法核对，暂不提供创建草稿操作。')).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('PROJECT_ROLE_UNAVAILABLE')
+    expect(screen.getByText('PROJECT_ROLE_UNAVAILABLE')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
 
     roleRequestFails = false
     await user.click(screen.getByRole('button', { name: '重试权限核对' }))
 
     expect(await screen.findByRole('button', { name: '创建数据集草稿' })).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText('PROJECT_ROLE_UNAVAILABLE')).not.toBeInTheDocument()
   })
 
   it('lists dataset drafts without presenting them as frozen training data', async () => {
@@ -767,6 +940,29 @@ function verifiedMediaReport() {
     created_at: '2026-07-22T01:02:03Z',
   }
 }
+
+function captureSessionListItem(captureSessionId: string, deviceId = 'synthetic-edge-01') {
+  return {
+    capture_session_id: captureSessionId,
+    batch_id: '60000000-0000-4000-8000-000000000001',
+    device_id: deviceId,
+    camera_set_id: '70000000-0000-4000-8000-000000000001',
+    camera_set_key: 'dispensing-cabin-a',
+    camera_set_configuration_version: 1,
+    camera_layout_version: 'layout-v1',
+    expected_camera_count: 1,
+    bound_stream_count: 1,
+    received_camera_count: 1,
+    ingest_failed_stream_count: 0,
+    sync_group_id: 'sync-group-01',
+    device_time_utc: '2026-07-15T01:02:03Z',
+    server_receive_time: '2026-07-15T01:03:03Z',
+    assembly_status: 'COMPLETE',
+    quality_status: 'PASS',
+    created_at: '2026-07-15T01:03:03Z',
+  }
+}
+
 function captureSessionDetail() {
   return {
     capture_session_id: sessionId,
