@@ -116,6 +116,50 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void datasetDraftListUsesAStableCursorAndDoesNotCrossProjectBoundaries() throws Exception {
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
+		var newestId = UUID.fromString("d0000000-0000-4000-8000-000000000005");
+		var sameTimeHigherId = UUID.fromString("d0000000-0000-4000-8000-000000000004");
+		var sameTimeLowerId = UUID.fromString("d0000000-0000-4000-8000-000000000003");
+		var oldestId = UUID.fromString("d0000000-0000-4000-8000-000000000002");
+		var otherProjectId = UUID.fromString("d0000000-0000-4000-8000-000000000001");
+		insertDatasetDraft(PROJECT_ID, newestId, "最新草稿", BASE_TIME.plusSeconds(20));
+		insertDatasetDraft(PROJECT_ID, sameTimeHigherId, "同秒草稿 B", BASE_TIME.plusSeconds(10));
+		insertDatasetDraft(PROJECT_ID, sameTimeLowerId, "同秒草稿 A", BASE_TIME.plusSeconds(10));
+		insertDatasetDraft(PROJECT_ID, oldestId, "最早草稿", BASE_TIME);
+		insertDatasetDraft(OTHER_PROJECT_ID, otherProjectId, "其他项目草稿", BASE_TIME.plusSeconds(30));
+
+		var firstPage = this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.param("limit", "2")
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(2))
+				.andExpect(jsonPath("$.items[0].dataset_version_id").value(newestId.toString()))
+				.andExpect(jsonPath("$.items[1].dataset_version_id").value(sameTimeHigherId.toString()))
+				.andExpect(jsonPath("$.next_cursor").isNotEmpty())
+				.andReturn().getResponse().getContentAsString();
+		var nextCursor = com.jayway.jsonpath.JsonPath.<String>read(firstPage, "$.next_cursor");
+
+		this.mockMvc.perform(get("/api/v1/projects/{projectId}/dataset-versions", PROJECT_ID)
+				.param("limit", "2")
+				.param("cursor", nextCursor)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(2))
+				.andExpect(jsonPath("$.items[0].dataset_version_id").value(sameTimeLowerId.toString()))
+				.andExpect(jsonPath("$.items[1].dataset_version_id").value(oldestId.toString()))
+				.andExpect(jsonPath("$.next_cursor").isEmpty());
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						otherProjectId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_NOT_FOUND"));
+	}
+
+	@Test
 	void onlyQualifiedAssetsAndProjectAdministratorsCanCreateTasks() throws Exception {
 		var qualifiedAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
 		insertQualityReview(PROJECT_ID, qualifiedAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
@@ -941,6 +985,29 @@ class AnnotationTaskContractTests {
 				mediaReportId, mediaJobId, projectId, clipAssetId, SHA256, recipeDigest, durationMicroseconds,
 				Timestamp.from(createdAt));
 		return mediaReportId;
+	}
+
+	private void insertDatasetDraft(UUID projectId, UUID datasetVersionId, String displayName, Instant createdAt) {
+		this.jdbcTemplate.update("""
+				INSERT INTO dataset_version (
+				    dataset_version_id,
+				    project_id,
+				    display_name,
+				    dataset_version_status,
+				    created_by,
+				    idempotency_key,
+				    request_fingerprint,
+				    created_at,
+				    row_version
+				)
+				VALUES (?, ?, ?, 'DRAFT', 'test-admin', ?, ?, ?, 0)
+				""",
+				datasetVersionId,
+				projectId,
+				displayName,
+				"dataset-query-seed-" + datasetVersionId,
+				SHA256,
+				Timestamp.from(createdAt));
 	}
 
 	private int count(String sql, Object... arguments) {
