@@ -96,6 +96,10 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/views/DatasetVersionDetailView')).default }),
           },
           {
+            path: '/projects/:projectId/event-logs',
+            lazy: async () => ({ Component: (await import('@/views/CaptureEventLogListView')).default }),
+          },
+          {
             path: '/projects/:projectId/folders',
             lazy: async () => ({
               Component: (await import('@/views/FolderManagementView')).default,

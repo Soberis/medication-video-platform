@@ -1,5 +1,5 @@
 /**
- * Frozen dataset versions and reproducible export boundary.
+ * DRAFT dataset-version evidence snapshots and the future export boundary.
  */
 @ApplicationModule(displayName = "Dataset and Export")
 package com.medicationvideo.platform.datasetexport;

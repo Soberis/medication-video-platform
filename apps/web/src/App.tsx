@@ -4,7 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'reac
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 
-const managementPaths = ['/folders', '/members', '/uploads', '/admin/users']
+const managementPaths = ['/folders', '/members', '/event-logs', '/uploads', '/admin/users']
 
 export default function AppShell() {
   const auth = useAuth()
@@ -55,6 +55,11 @@ export default function AppShell() {
               {projectId && isAdministrator ? (
                 <NavLink to={paths.memberships(projectId)} onClick={closeManagementMenu}>
                   项目成员
+                </NavLink>
+              ) : null}
+              {projectId ? (
+                <NavLink to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
+                  采集事件日志
                 </NavLink>
               ) : null}
               <NavLink to={paths.uploads} onClick={closeManagementMenu}>

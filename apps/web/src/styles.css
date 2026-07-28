@@ -604,6 +604,10 @@ code {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.catalog-filters.event-log-filters {
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(230px, 1.3fr) auto;
+}
+
 .catalog-filters .ant-form-item {
   min-width: 0;
   margin-bottom: 0;
@@ -1385,6 +1389,10 @@ code {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .catalog-filters.event-log-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .readiness-evidence,
   .technical-facts dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1460,7 +1468,8 @@ code {
   }
 
   .catalog-filters,
-  .catalog-filters.asset-filters {
+  .catalog-filters.asset-filters,
+  .catalog-filters.event-log-filters {
     grid-template-columns: 1fr;
   }
 

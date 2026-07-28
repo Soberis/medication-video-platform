@@ -16,7 +16,7 @@ pnpm run web:build
 
 开发服务器默认监听 `http://127.0.0.1:5173`（可由 `WEB_PORT` 覆盖），并把 `/api` 代理到 `http://localhost:8080`。Web 使用平台内部账号登录；密码不进入浏览器存储，服务端仅保存 BCrypt 哈希，浏览器通过 HttpOnly 会话 Cookie 与 CSRF Header 调用 API。项目可见性和 ADMIN/MEMBER 仍由后端 Membership 在每次请求中校验，前端从不自行授予权限。医院边端使用独立上传凭据，不使用 Web 登录页。
 
-根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。项目 ADMIN 可以修改项目显示名称或归档项目；归档会停止后续项目访问并从日常列表移除，但不物理删除项目、视频、对象或审计。进入项目后，`/projects/:projectId/sessions` 以一次护士配药操作为主对象展示多相机完整性、组装和质量状态，`/projects/:projectId/assets` 用于单路视频及项目内一层文件夹/未分类筛选；详情路由保持同一项目上下文。`/uploads` 继续只读展示批次和文件进度，`/uploads/new` 用于平台本地上传。
+根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。项目 ADMIN 可以修改项目显示名称或归档项目；归档会停止后续项目访问并从日常列表移除，但不物理删除项目、视频、对象或审计。进入项目后，`/projects/:projectId/sessions` 以一次护士配药操作为主对象展示多相机完整性、组装和质量状态，`/projects/:projectId/assets` 用于单路视频及项目内一层文件夹/未分类筛选；`/projects/:projectId/event-logs` 供项目成员按批次、设备和平台索引时间查询已验证的事件日志对象索引，不读取日志内容、不暴露存储地址或下载链接，也不推断设备动作。详情路由保持同一项目上下文。`/uploads` 继续只读展示批次和文件进度，`/uploads/new` 用于平台本地上传。
 
 `/uploads/new` 已启用平台本地上传：用户选择已加入的项目、可选的一层文件夹和一个或多个本机视频；每个视频使用独立 `PLATFORM_LOCAL` 批次，浏览器先在 Web Worker 中分块计算 SHA-256，再复用 Upload/Multipart/Complete/CaptureSession 协议直传对象存储。页面只显示运行期批次 ID，不记录或输出预签名 URL；多视频按顺序执行，避免误组装为同一次多相机拍摄。
 

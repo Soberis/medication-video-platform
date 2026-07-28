@@ -73,6 +73,29 @@ describe('App', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('offers every project member the project-scoped event-log index under management', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    renderRouter(
+      [
+        {
+          path: '/projects/:projectId/event-logs',
+          element: <AppShell />,
+          children: [{ index: true, element: <div>采集事件日志页面</div> }],
+        },
+      ],
+      [`/projects/${projectId}/event-logs`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '采集事件日志' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/event-logs`,
+    )
+    expect(within(navigation).queryByText('项目成员')).not.toBeInTheDocument()
+    expect(screen.getByText('采集事件日志页面')).toBeInTheDocument()
+  })
+
   it('only exposes project rename and archive commands to project administrators', async () => {
     vi.stubGlobal(
       'fetch',

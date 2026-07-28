@@ -12,6 +12,7 @@ export const paths = {
   datasets: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/datasets`,
   dataset: (projectId: string, datasetVersionId: string) =>
     `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetVersionId)}`,
+  eventLogs: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/event-logs`,
   folders: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/folders`,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
   accounts: '/admin/users',
