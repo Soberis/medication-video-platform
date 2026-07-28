@@ -53,10 +53,15 @@ class DatasetVersionController {
 
 	private final DatasetVersionService service;
 	private final DatasetVersionQueryService queryService;
+	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
-	DatasetVersionController(DatasetVersionService service, DatasetVersionQueryService queryService) {
+	DatasetVersionController(
+			DatasetVersionService service,
+			DatasetVersionQueryService queryService,
+			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
 		this.queryService = queryService;
+		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
 
 	@GetMapping
@@ -75,6 +80,18 @@ class DatasetVersionController {
 			@PathVariable UUID datasetVersionId,
 			Authentication authentication) {
 		var response = this.queryService.get(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId());
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	@GetMapping("/{datasetVersionId}/current-admission")
+	ResponseEntity<DatasetVersionCurrentAdmissionResponse> currentAdmission(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			Authentication authentication) {
+		var response = this.currentAdmissionQueryService.get(
 				projectId,
 				datasetVersionId,
 				requireActor(authentication).actorId());

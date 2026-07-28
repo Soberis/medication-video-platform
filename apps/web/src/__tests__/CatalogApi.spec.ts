@@ -5,6 +5,7 @@ import {
   deleteClipAsset,
   createDatasetVersionDraft,
   getDatasetVersion,
+  getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
   listCaptureEventLogs,
   listDatasetVersions,
@@ -294,6 +295,34 @@ describe('catalog API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+  })
+
+  it('reads current dataset-admission facts only through a no-store abortable request', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_id: datasetVersionId,
+          all_members_currently_admission_eligible: false,
+          members: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+
+    await expect(
+      getDatasetVersionCurrentAdmission(projectId, datasetVersionId, controller.signal),
+    ).resolves.toMatchObject({
+      dataset_version_id: datasetVersionId,
+      all_members_currently_admission_eligible: false,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store', signal: controller.signal }),
     )
   })
 })

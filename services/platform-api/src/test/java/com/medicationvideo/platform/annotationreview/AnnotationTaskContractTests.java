@@ -568,6 +568,12 @@ class AnnotationTaskContractTests {
 				  AND object_type = 'DatasetVersion'
 				  AND object_id = ?
 				""", datasetVersionId.toString()));
+		var datasetVersionRowsBeforeCurrentAdmissionRead = count(
+				"SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID);
+		var memberSessionRowsBeforeCurrentAdmissionRead = count(
+				"SELECT count(*) FROM dataset_member_session WHERE project_id = ?", PROJECT_ID);
+		var memberStreamRowsBeforeCurrentAdmissionRead = count(
+				"SELECT count(*) FROM dataset_member_stream WHERE project_id = ?", PROJECT_ID);
 		var auditEventsBeforeDatasetRead = count("SELECT count(*) FROM audit_event");
 		var snapshotQualityReviewVersion = this.jdbcTemplate.queryForObject(
 				"SELECT quality_review_version FROM dataset_member_stream WHERE dataset_version_id = ?",
@@ -618,11 +624,47 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.members[0].streams[0].annotation_document_sha256").exists())
 				.andExpect(jsonPath("$.members[0].streams[0].media_url").doesNotExist());
 		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.all_members_currently_admission_eligible").value(true))
+				.andExpect(jsonPath("$.members.length()").value(1))
+				.andExpect(jsonPath("$.members[0].capture_session_id").value(captureSessionId.toString()))
+				.andExpect(jsonPath("$.members[0].candidate_index").value(0))
+				.andExpect(jsonPath("$.members[0].current_admission.eligible").value(true))
+				.andExpect(jsonPath("$.members[0].evidence_changes").isEmpty());
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.all_members_currently_admission_eligible").value(true));
+		assertEquals(datasetVersionRowsBeforeCurrentAdmissionRead,
+				count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
+		assertEquals(memberSessionRowsBeforeCurrentAdmissionRead,
+				count("SELECT count(*) FROM dataset_member_session WHERE project_id = ?", PROJECT_ID));
+		assertEquals(memberStreamRowsBeforeCurrentAdmissionRead,
+				count("SELECT count(*) FROM dataset_member_stream WHERE project_id = ?", PROJECT_ID));
+		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
 						PROJECT_ID,
 						UUID.randomUUID())
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_NOT_FOUND"));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						UUID.randomUUID())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_NOT_FOUND"));
 		assertEquals(auditEventsBeforeDatasetRead, count("SELECT count(*) FROM audit_event"));
 		createDatasetDraft(ADMIN_TOKEN, captureSessionId, datasetIdempotencyKey)
@@ -651,6 +693,19 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.streams[0].blocking_reasons[0]")
 						.value("QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING"));
 		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.all_members_currently_admission_eligible").value(false))
+				.andExpect(jsonPath("$.members[0].current_admission.eligible").value(false))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].scope").value("STREAM"))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].camera_stream_id").isNotEmpty())
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].change_codes[0]")
+						.value("STREAM_QUALITY_REVIEW_VERSION_CHANGED"));
+		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
 						PROJECT_ID,
 						datasetVersionId)
@@ -677,6 +732,24 @@ class AnnotationTaskContractTests {
 				WHERE action = 'POST_ANNOTATION_CLEANING_COMPLETED'
 				  AND details_json ->> 'annotation_revision_id' = ?
 				""", revisionId.toString()));
+		var auditEventsBeforeRecoveredCurrentAdmissionRead = count("SELECT count(*) FROM audit_event");
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.all_members_currently_admission_eligible").value(true))
+				.andExpect(jsonPath("$.members[0].current_admission.eligible").value(true))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].scope").value("STREAM"))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].change_codes[0]")
+						.value("STREAM_QUALITY_REVIEW_VERSION_CHANGED"))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].change_codes[1]")
+						.value("STREAM_CLEANING_RESULT_CHANGED"))
+				.andExpect(jsonPath("$.members[0].evidence_changes[0].change_codes[2]")
+						.value("STREAM_CLEANING_RUN_CHANGED"));
+		assertEquals(auditEventsBeforeRecoveredCurrentAdmissionRead, count("SELECT count(*) FROM audit_event"));
 
 		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview",

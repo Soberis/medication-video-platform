@@ -253,6 +253,49 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/current-admission:
+    get:
+      operationId: getDatasetVersionCurrentAdmission
+      tags:
+        - Dataset Admission
+      summary: Read a dataset draft's current admission facts separately from its immutable snapshot
+      description: >-
+        Requires ACTIVE project membership. Re-evaluates every persisted DRAFT member against current
+        admission facts and reports the stable evidence differences from its immutable candidate
+        snapshot. This is a read-only observation: it does not write audit events, change the draft,
+        assign splits, approve an exception, freeze a DatasetVersion, create an export, authorize data
+        release, or state that the draft can be frozen.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: Current admission facts and differences from the immutable candidate snapshot.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionCurrentAdmission"
+        "400":
+          description: A path parameter is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
   /auth/login:
     post:
       operationId: loginPlatformAccount
@@ -5177,6 +5220,101 @@ components:
         post_cleaning_outcome:
           type: string
           const: PASS
+    DatasetVersionCurrentAdmission:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_id
+        - all_members_currently_admission_eligible
+        - members
+      properties:
+        dataset_version_id:
+          type: string
+          format: uuid
+        all_members_currently_admission_eligible:
+          type: boolean
+          description: >-
+            Current observation only. True does not freeze the draft, approve release, assign splits,
+            or state that the DatasetVersion can be frozen.
+        members:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/DatasetVersionCurrentAdmissionMember"
+    DatasetVersionCurrentAdmissionMember:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - candidate_index
+        - current_admission
+        - evidence_changes
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+          description: The immutable candidate member identity.
+        candidate_index:
+          type: integer
+          minimum: 0
+          description: The immutable candidate order retained by the DRAFT snapshot.
+        current_admission:
+          $ref: "#/components/schemas/DatasetAdmissionPreview"
+        evidence_changes:
+          type: array
+          description: >-
+            Differences between the immutable candidate evidence and current facts. An empty array
+            means no tracked evidence difference was found; it does not authorize a freeze or release.
+          items:
+            $ref: "#/components/schemas/DatasetVersionEvidenceChange"
+    DatasetVersionEvidenceChange:
+      type: object
+      additionalProperties: false
+      required:
+        - scope
+        - camera_stream_id
+        - change_codes
+      properties:
+        scope:
+          type: string
+          enum: [SESSION, STREAM]
+        camera_stream_id:
+          type: [string, "null"]
+          format: uuid
+          description: Null for a SESSION change; identifies the affected immutable stream for a STREAM change.
+        change_codes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: >-
+            Stable evidence-difference codes. SESSION codes are
+            SESSION_EXPECTED_CAMERA_COUNT_CHANGED, SESSION_RECEIVED_CAMERA_COUNT_CHANGED,
+            SESSION_ASSEMBLY_STATUS_CHANGED and SESSION_QUALITY_STATUS_CHANGED. STREAM codes are
+            STREAM_ADDED, STREAM_REMOVED, STREAM_ASSET_SHA256_CHANGED,
+            STREAM_QUALITY_REVIEW_DECISION_CHANGED, STREAM_QUALITY_REVIEW_VERSION_CHANGED,
+            STREAM_ANNOTATION_REVISION_CHANGED, STREAM_ANNOTATION_DOCUMENT_SHA256_CHANGED,
+            STREAM_LABEL_SCHEMA_DIGEST_CHANGED, STREAM_CLEANING_RESULT_CHANGED,
+            STREAM_CLEANING_RUN_CHANGED, STREAM_CLEANING_RULE_SET_DIGEST_CHANGED and
+            STREAM_POST_CLEANING_OUTCOME_CHANGED.
+          items:
+            type: string
+            enum:
+              - SESSION_EXPECTED_CAMERA_COUNT_CHANGED
+              - SESSION_RECEIVED_CAMERA_COUNT_CHANGED
+              - SESSION_ASSEMBLY_STATUS_CHANGED
+              - SESSION_QUALITY_STATUS_CHANGED
+              - STREAM_ADDED
+              - STREAM_REMOVED
+              - STREAM_ASSET_SHA256_CHANGED
+              - STREAM_QUALITY_REVIEW_DECISION_CHANGED
+              - STREAM_QUALITY_REVIEW_VERSION_CHANGED
+              - STREAM_ANNOTATION_REVISION_CHANGED
+              - STREAM_ANNOTATION_DOCUMENT_SHA256_CHANGED
+              - STREAM_LABEL_SCHEMA_DIGEST_CHANGED
+              - STREAM_CLEANING_RESULT_CHANGED
+              - STREAM_CLEANING_RUN_CHANGED
+              - STREAM_CLEANING_RULE_SET_DIGEST_CHANGED
+              - STREAM_POST_CLEANING_OUTCOME_CHANGED
     DatasetVersionError:
       type: object
       additionalProperties: false

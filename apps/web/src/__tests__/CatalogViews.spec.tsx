@@ -493,6 +493,163 @@ describe('catalog views', () => {
     expect(document.body.innerHTML).not.toContain('media_url')
   })
 
+  it('checks current admission only after an explicit action and explains changed evidence', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === currentAdmissionPath) {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_version_id: datasetVersionId,
+            all_members_currently_admission_eligible: false,
+            members: [
+              {
+                capture_session_id: sessionId,
+                candidate_index: 0,
+                current_admission: {
+                  capture_session_id: sessionId,
+                  eligible: false,
+                  assembly_status: 'COMPLETE',
+                  quality_status: 'PENDING',
+                  expected_camera_count: 1,
+                  received_camera_count: 1,
+                  blocking_reasons: ['SESSION_QUALITY_NOT_PASS'],
+                  streams: [
+                    {
+                      camera_stream_id: '42000000-0000-4000-8000-000000000001',
+                      clip_asset_id: assetId,
+                      camera_index: 0,
+                      eligible: false,
+                      stream_status: 'INGESTED',
+                      stream_quality_status: 'PENDING',
+                      asset_status: 'INGESTED',
+                      asset_deleted: false,
+                      quality_review_decision: 'UNREVIEWED',
+                      annotation_revision_id: '43000000-0000-4000-8000-000000000001',
+                      annotation_review_decision: 'APPROVED',
+                      post_cleaning_decision: 'PASS',
+                      annotation_document_sha256: 'a'.repeat(64),
+                      label_schema_digest: 'b'.repeat(64),
+                      blocking_reasons: ['QUALITY_REVIEW_NOT_QUALIFIED'],
+                    },
+                  ],
+                },
+                evidence_changes: [
+                  {
+                    scope: 'SESSION',
+                    camera_stream_id: null,
+                    change_codes: ['SESSION_QUALITY_STATUS_CHANGED'],
+                  },
+                  {
+                    scope: 'STREAM',
+                    camera_stream_id: '42000000-0000-4000-8000-000000000001',
+                    change_codes: ['STREAM_POST_CLEANING_OUTCOME_CHANGED', 'UNKNOWN_CHANGE_CODE'],
+                  },
+                ],
+              },
+            ],
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
+    expect(fetchMock).not.toHaveBeenCalledWith(currentAdmissionPath, expect.any(Object))
+    expect(screen.getByText('尚未核对当前事实。')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+
+    expect(await screen.findByText('至少一条候选操作当前不满足草稿创建前提。')).toBeInTheDocument()
+    expect(screen.getByText('本次配药操作的技术检测尚未通过')).toBeInTheDocument()
+    expect(screen.getByText('有视频尚未通过人工质量判断')).toBeInTheDocument()
+    expect(screen.getByText(/技术检测状态已变化/)).toBeInTheDocument()
+    expect(screen.getByText(/后置清洗结论已变化/)).toBeInTheDocument()
+    expect(screen.getByText(/UNKNOWN_CHANGE_CODE/)).toBeInTheDocument()
+    expect(screen.getByText(/当前草稿创建前提，不代表可冻结\/可导出/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /拆分|冻结|导出/ })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      currentAdmissionPath,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+  })
+
+  it('keeps the immutable snapshot visible and retries a failed current-admission check', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`
+    let currentAdmissionAttempts = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === currentAdmissionPath) {
+        currentAdmissionAttempts += 1
+        return Promise.resolve(
+          currentAdmissionAttempts === 1
+            ? jsonResponse(
+                {
+                  error_code: 'DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE',
+                  retryable: true,
+                  request_id: 'request-current-admission-0001',
+                },
+                503,
+              )
+            : jsonResponse({
+                dataset_version_id: datasetVersionId,
+                all_members_currently_admission_eligible: true,
+                members: [],
+              }),
+        )
+      }
+      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
+    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+
+    expect(await screen.findByText('DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE')).toBeInTheDocument()
+    expect(screen.getByText('请求标识：request-current-admission-0001')).toBeInTheDocument()
+    expect(screen.getByText('候选配药操作')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /重\s*试/ }))
+
+    expect(await screen.findByText('所有候选操作当前仍满足草稿创建前提。')).toBeInTheDocument()
+    expect(currentAdmissionAttempts).toBe(2)
+  })
+
+  it('aborts an in-flight current-admission check when leaving the draft detail route', async () => {
+    const firstDatasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const secondDatasetVersionId = '92000000-0000-4000-8000-000000000001'
+    const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${firstDatasetVersionId}/current-admission`
+    let currentAdmissionSignal: AbortSignal | undefined
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === currentAdmissionPath) {
+        currentAdmissionSignal = init?.signal as AbortSignal | undefined
+        return new Promise<Response>(() => undefined)
+      }
+      const datasetVersionId = String(input).endsWith(`/${secondDatasetVersionId}`)
+        ? secondDatasetVersionId
+        : firstDatasetVersionId
+      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    const { router } = renderDatasetDetail(firstDatasetVersionId)
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
+
+    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+    await waitFor(() => expect(currentAdmissionSignal).toBeDefined())
+    await router.navigate(`/projects/${projectId}/datasets/${secondDatasetVersionId}`)
+
+    await waitFor(() => expect(currentAdmissionSignal?.aborted).toBe(true))
+  })
+
   it('clears previous draft evidence before a different draft route finishes loading', async () => {
     const firstDatasetVersionId = '91000000-0000-4000-8000-000000000001'
     const secondDatasetVersionId = '92000000-0000-4000-8000-000000000001'

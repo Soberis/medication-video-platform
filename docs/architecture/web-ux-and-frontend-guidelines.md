@@ -93,7 +93,7 @@ P0 非目标：
 | `/annotation-tasks/:id` | Step 时间轴、Object 工具跳转、草稿、提交与复核 | 标注与复核闭环 | 待启用 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 跨资产的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前单 revision post-clean 只随标注任务展示结果，不为它新建清洗页 |
-| `/projects/:projectId/datasets`、详情子路由 | 项目内 `DRAFT` DatasetVersion 列表及 session/stream 固定证据查询 | 项目成员读取、无缓存、游标分页和草稿快照契约具备 | 已启用；不提供 split、冻结、审批或导出操作，post-clean PASS 也不会自动创建草稿。 |
+| `/projects/:projectId/datasets`、详情子路由 | 项目内 `DRAFT` DatasetVersion 列表及 session/stream 固定证据查询 | 项目成员读取、无缓存、游标分页和草稿快照契约具备 | 已启用；固定证据详情与“当前准入”只读核对必须使用不同请求和不同文案。当前准入只解释当前事实及相对快照的差异，不得显示“可冻结”、不得触发 split、冻结、审批或导出；post-clean PASS 也不会自动创建草稿。 |
 
 新页面只能在对应纵向能力已有 OpenAPI、权限边界、状态语义和可执行测试后启用。
 

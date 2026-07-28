@@ -163,6 +163,25 @@ export interface DatasetVersionDetail extends DatasetVersionDraft {
   members: DatasetVersionMemberSession[]
 }
 
+export interface DatasetVersionCurrentAdmissionEvidenceChange {
+  scope: 'SESSION' | 'STREAM'
+  camera_stream_id: string | null
+  change_codes: string[]
+}
+
+export interface DatasetVersionCurrentAdmissionMember {
+  capture_session_id: string
+  candidate_index: number
+  current_admission: DatasetAdmissionPreview
+  evidence_changes: DatasetVersionCurrentAdmissionEvidenceChange[]
+}
+
+export interface DatasetVersionCurrentAdmission {
+  dataset_version_id: string
+  all_members_currently_admission_eligible: boolean
+  members: DatasetVersionCurrentAdmissionMember[]
+}
+
 export interface ClipAssetSessionBinding {
   capture_session_id: string
   camera_stream_id: string
@@ -303,6 +322,7 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_IDEMPOTENCY_KEY_REUSED: '本次创建请求与已提交请求冲突，请刷新后重试。',
   DATASET_VERSION_ACCESS_DENIED: '只有项目管理员可以创建数据集草稿。',
   DATASET_VERSION_NOT_FOUND: '未找到该数据集草稿，或它不属于当前项目。',
+  DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE: '暂时无法核对当前准入事实，请稍后重试。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -409,6 +429,17 @@ export function getDatasetVersion(
 ) {
   return readJson<DatasetVersionDetail>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}`,
+    signal,
+  )
+}
+
+export function getDatasetVersionCurrentAdmission(
+  projectId: string,
+  datasetVersionId: string,
+  signal?: AbortSignal,
+) {
+  return readJson<DatasetVersionCurrentAdmission>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/current-admission`,
     signal,
   )
 }
