@@ -169,6 +169,46 @@ describe('catalog views', () => {
     expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
   })
 
+  it('keeps readiness facts and lets an administrator retry a failed project role lookup', async () => {
+    let roleRequestFails = true
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`) {
+        return Promise.resolve(
+          roleRequestFails
+            ? jsonResponse(
+                {
+                  error_code: 'PROJECT_ROLE_UNAVAILABLE',
+                  error_message: 'Synthetic failure.',
+                  retryable: true,
+                },
+                503,
+              )
+            : jsonResponse(project('ADMIN')),
+        )
+      }
+      if (url.endsWith('/dataset-admission-preview')) {
+        return Promise.resolve(jsonResponse(eligibleAdmissionPreview()))
+      }
+      return Promise.resolve(jsonResponse(captureSessionDetail()))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderSessionDetail()
+
+    expect(await screen.findByText('当前证据满足训练数据准入条件')).toBeInTheDocument()
+    expect(screen.getByText('项目权限暂时无法核对，暂不提供创建草稿操作。')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('PROJECT_ROLE_UNAVAILABLE')
+    expect(screen.queryByRole('button', { name: '创建数据集草稿' })).not.toBeInTheDocument()
+
+    roleRequestFails = false
+    await user.click(screen.getByRole('button', { name: '重试权限核对' }))
+
+    expect(await screen.findByRole('button', { name: '创建数据集草稿' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('lists dataset drafts without presenting them as frozen training data', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
     const fetchMock = vi.fn().mockResolvedValue(
@@ -284,6 +324,38 @@ describe('catalog views', () => {
 
     resolveSecondRequest?.(jsonResponse(datasetVersionDetail(secondDatasetVersionId, '草稿 B')))
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('草稿 B')
+  })
+
+  it('clears previous draft evidence before a different project route finishes loading', async () => {
+    const otherProjectId = '31000000-0000-4000-8000-000000000001'
+    const firstDatasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const secondDatasetVersionId = '93000000-0000-4000-8000-000000000001'
+    let resolveSecondRequest: ((response: Response) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).endsWith(`/dataset-versions/${firstDatasetVersionId}`)) {
+        return Promise.resolve(jsonResponse(datasetVersionDetail(firstDatasetVersionId, '项目 A 草稿')))
+      }
+      return new Promise<Response>((resolve) => {
+        resolveSecondRequest = resolve
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { router } = renderDatasetDetail(firstDatasetVersionId)
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('项目 A 草稿')
+
+    await router.navigate(`/projects/${otherProjectId}/datasets/${secondDatasetVersionId}`)
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${otherProjectId}/dataset-versions/${secondDatasetVersionId}`,
+        expect.any(Object),
+      ),
+    )
+    expect(screen.queryByRole('heading', { name: '项目 A 草稿' })).not.toBeInTheDocument()
+    expect(screen.getByText('正在读取不可变候选快照…')).toBeInTheDocument()
+
+    resolveSecondRequest?.(jsonResponse(datasetVersionDetail(secondDatasetVersionId, '项目 B 草稿')))
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('项目 B 草稿')
   })
 
   it('keeps the session facts available when the readiness preview temporarily fails', async () => {
@@ -756,6 +828,37 @@ function project(currentRole: 'ADMIN' | 'MEMBER') {
     status: 'ACTIVE',
     current_role: currentRole,
     created_at: '2026-07-15T01:00:00Z',
+  }
+}
+
+function eligibleAdmissionPreview() {
+  return {
+    capture_session_id: sessionId,
+    eligible: true,
+    assembly_status: 'COMPLETE',
+    quality_status: 'PASS',
+    expected_camera_count: 1,
+    received_camera_count: 1,
+    blocking_reasons: [],
+    streams: [
+      {
+        camera_stream_id: '41000000-0000-4000-8000-000000000001',
+        clip_asset_id: assetId,
+        camera_index: 0,
+        eligible: true,
+        stream_status: 'INGESTED',
+        stream_quality_status: 'PASS',
+        asset_status: 'INGESTED',
+        asset_deleted: false,
+        quality_review_decision: 'QUALIFIED',
+        annotation_revision_id: '42000000-0000-4000-8000-000000000001',
+        annotation_review_decision: 'APPROVED',
+        post_cleaning_decision: 'PASS',
+        annotation_document_sha256: 'a'.repeat(64),
+        label_schema_digest: 'b'.repeat(64),
+        blocking_reasons: [],
+      },
+    ],
   }
 }
 

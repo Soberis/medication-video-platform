@@ -59,6 +59,8 @@ function SessionDetailContent() {
   const [admissionErrorCode, setAdmissionErrorCode] = useState('')
   const [admissionErrorMessage, setAdmissionErrorMessage] = useState('')
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
+  const [roleLoadState, setRoleLoadState] = useState<'loading' | 'success' | 'error'>('loading')
+  const [roleErrorCode, setRoleErrorCode] = useState('')
   const [creatingDatasetDraft, setCreatingDatasetDraft] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const admissionRequest = useRef<AbortController | null>(null)
@@ -153,12 +155,18 @@ function SessionDetailContent() {
     const request = new AbortController()
     roleRequest.current = request
     setProjectRole(null)
+    setRoleLoadState('loading')
+    setRoleErrorCode('')
     try {
       const project = await getProject(projectId, request.signal)
       if (roleRequest.current !== request) return
       setProjectRole(project.current_role)
-    } catch {
-      if (!request.signal.aborted && roleRequest.current === request) setProjectRole(null)
+      setRoleLoadState('success')
+    } catch (error) {
+      if (request.signal.aborted || roleRequest.current !== request) return
+      setProjectRole(null)
+      setRoleLoadState('error')
+      setRoleErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED')
     } finally {
       if (roleRequest.current === request) roleRequest.current = null
     }
@@ -305,23 +313,33 @@ function SessionDetailContent() {
                   </div>
                 </div>
                 {admissionPreview.eligible ? (
-                  <div className="readiness-result readiness-result-ready">
-                    <div>
-                      <strong>当前证据满足训练数据准入条件</strong>
-                      <span>
-                        {projectRole === 'ADMIN'
-                          ? '创建草稿时仍会重新校验，避免使用已变化的数据。'
-                          : projectRole === 'MEMBER'
-                            ? '当前项目管理员可据此创建候选草稿。'
-                            : '正在核对当前项目权限。'}
-                      </span>
+                  <>
+                    <div className="readiness-result readiness-result-ready">
+                      <div>
+                        <strong>当前证据满足训练数据准入条件</strong>
+                        <span>
+                          {projectRole === 'ADMIN'
+                            ? '创建草稿时仍会重新校验，避免使用已变化的数据。'
+                            : projectRole === 'MEMBER'
+                              ? '当前项目管理员可据此创建候选草稿。'
+                              : roleLoadState === 'error'
+                                ? '项目权限暂时无法核对，暂不提供创建草稿操作。'
+                                : '正在核对当前项目权限。'}
+                        </span>
+                      </div>
+                      {projectRole === 'ADMIN' ? (
+                        <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
+                          创建数据集草稿
+                        </Button>
+                      ) : null}
                     </div>
-                    {projectRole === 'ADMIN' ? (
-                      <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
-                        创建数据集草稿
-                      </Button>
+                    {roleLoadState === 'error' ? (
+                      <div className="readiness-role-error" role="alert">
+                        <strong>{roleErrorCode}</strong>
+                        <Button onClick={() => void loadProjectRole()}>重试权限核对</Button>
+                      </div>
                     ) : null}
-                  </div>
+                  </>
                 ) : (
                   <div className="readiness-result">
                     <strong>还需完成 {admissionReasonSummary.length} 项条件</strong>
