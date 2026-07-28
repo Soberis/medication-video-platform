@@ -311,18 +311,21 @@ export class CatalogApiError extends Error {
   readonly errorCode: string
   readonly retryable: boolean
   readonly requestId: string | null
+  readonly status: number
 
   constructor(
     message: string,
     errorCode = 'CATALOG_REQUEST_FAILED',
     retryable = false,
     requestId: string | null = null,
+    status = 0,
   ) {
     super(message)
     this.name = 'CatalogApiError'
     this.errorCode = errorCode
     this.retryable = retryable
     this.requestId = requestId
+    this.status = status
   }
 }
 
@@ -371,6 +374,7 @@ export async function createDatasetVersionDraft(
   projectId: string,
   displayName: string,
   captureSessionIds: string[],
+  idempotencyKey: string,
   signal?: AbortSignal,
 ): Promise<DatasetVersionDraft> {
   const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions`, {
@@ -378,7 +382,7 @@ export async function createDatasetVersionDraft(
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'Idempotency-Key': crypto.randomUUID(),
+      'Idempotency-Key': idempotencyKey,
       ...csrfHeaders(),
     },
     body: JSON.stringify({ display_name: displayName, capture_session_ids: captureSessionIds }),
@@ -530,8 +534,10 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 async function toCatalogError(response: Response): Promise<CatalogApiError> {
   let body: ApiErrorBody = {}
+  let hasReadableErrorBody = false
   try {
     body = (await response.json()) as ApiErrorBody
+    hasReadableErrorBody = true
   } catch {
     // Use the safe fallback below for proxy and non-JSON failures.
   }
@@ -539,8 +545,9 @@ async function toCatalogError(response: Response): Promise<CatalogApiError> {
   return new CatalogApiError(
     errorMessages[errorCode] ?? '暂时无法读取视频数据，请稍后重试。',
     errorCode,
-    body.retryable === true,
+    body.retryable === true || response.status >= 500 || !hasReadableErrorBody,
     typeof body.request_id === 'string' ? body.request_id : null,
+    response.status,
   )
 }
 

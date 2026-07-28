@@ -1,5 +1,5 @@
 import { Button, Card, Descriptions, message, Modal, Table, Tag } from 'antd'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -12,6 +12,7 @@ import {
   type DatasetAdmissionPreview,
 } from '@/api/catalog'
 import { getProject, type ProjectRole } from '@/api/projects'
+import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { paths } from '@/app/paths'
 import {
   assemblyStatusLabels,
@@ -66,6 +67,14 @@ function SessionDetailContent() {
   const admissionRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
   const draftRequest = useRef<AbortController | null>(null)
+
+  useLayoutEffect(() => {
+    return () => {
+      // Do not abort a user command during navigation; its persisted idempotency key makes a later
+      // retry safe, while clearing this reference prevents a stale response from navigating back.
+      draftRequest.current = null
+    }
+  }, [projectId, sessionId])
 
   const admissionReasonSummary = useMemo(() => {
     if (!admissionPreview) return []
@@ -177,7 +186,8 @@ function SessionDetailContent() {
       void message.error('只有当前项目管理员可以创建数据集草稿。')
       return
     }
-    draftRequest.current?.abort()
+    if (draftRequest.current) return
+    const intent = getDatasetDraftIntent(projectId, '配药操作训练候选', [sessionId])
     const request = new AbortController()
     draftRequest.current = request
     setCreatingDatasetDraft(true)
@@ -186,15 +196,21 @@ function SessionDetailContent() {
         projectId,
         '配药操作训练候选',
         [sessionId],
+        intent.idempotencyKey,
         request.signal,
       )
-      if (request.signal.aborted || draftRequest.current !== request) return
+      if (draftRequest.current !== request) return
+      clearDatasetDraftIntent(intent)
       void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
       void navigate(paths.dataset(projectId, draft.dataset_version_id))
     } catch (error) {
-      if (request.signal.aborted || draftRequest.current !== request) return
+      if (draftRequest.current !== request) return
+      const outcomeIsUncertain = !(error instanceof CatalogApiError) || error.retryable
+      if (!outcomeIsUncertain) clearDatasetDraftIntent(intent)
       void message.error(
-        error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
+        outcomeIsUncertain
+          ? '暂时无法确认数据集草稿是否已创建，请再次点击创建安全重试。'
+          : error.message,
       )
     } finally {
       if (draftRequest.current === request) {
@@ -222,7 +238,7 @@ function SessionDetailContent() {
       detailRequest.current?.abort()
       admissionRequest.current?.abort()
       roleRequest.current?.abort()
-      draftRequest.current?.abort()
+      draftRequest.current = null
     }
   }, [loadAdmissionPreview, loadDetail, loadProjectRole])
 

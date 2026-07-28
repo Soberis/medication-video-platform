@@ -1,6 +1,6 @@
 import { Button, Card, DatePicker, Empty, Form, Input, message, Modal, Select, Table, Tag } from 'antd'
 import type { Dayjs } from 'dayjs'
-import { type Key, useCallback, useEffect, useRef, useState } from 'react'
+import { type Key, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import {
@@ -13,6 +13,7 @@ import {
   type CaptureSessionListItem,
 } from '@/api/catalog'
 import { getProject, type ProjectRole } from '@/api/projects'
+import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { paths } from '@/app/paths'
 import {
   assemblyStatusLabels,
@@ -53,6 +54,14 @@ function SessionListContent() {
   const activeRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
   const draftRequest = useRef<AbortController | null>(null)
+
+  useLayoutEffect(() => {
+    return () => {
+      // A user-triggered write must finish or be retried with its saved key, but its late response
+      // must not update a route that has already been replaced.
+      draftRequest.current = null
+    }
+  }, [projectId])
 
   const loadPage = useCallback(
     async (append = false, filters = activeFilters) => {
@@ -133,7 +142,7 @@ function SessionListContent() {
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
-      draftRequest.current?.abort()
+      draftRequest.current = null
     }
     // loadPage changes with pagination state; project changes are the only automatic reload trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +213,8 @@ function SessionListContent() {
       void message.error('请至少选择一条配药操作。')
       return
     }
-    draftRequest.current?.abort()
+    if (draftRequest.current) return
+    const intent = getDatasetDraftIntent(projectId, displayName, selectedSessionIds)
     const request = new AbortController()
     draftRequest.current = request
     setIsCreatingDatasetDraft(true)
@@ -213,17 +223,23 @@ function SessionListContent() {
         projectId,
         displayName,
         selectedSessionIds,
+        intent.idempotencyKey,
         request.signal,
       )
-      if (request.signal.aborted || draftRequest.current !== request) return
+      if (draftRequest.current !== request) return
+      clearDatasetDraftIntent(intent)
       void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
       setIsDraftModalOpen(false)
       setSelectedSessionIds([])
       void navigate(paths.dataset(projectId, draft.dataset_version_id))
     } catch (error) {
-      if (request.signal.aborted || draftRequest.current !== request) return
+      if (draftRequest.current !== request) return
+      const outcomeIsUncertain = !(error instanceof CatalogApiError) || error.retryable
+      if (!outcomeIsUncertain) clearDatasetDraftIntent(intent)
       void message.error(
-        error instanceof CatalogApiError ? error.message : '暂时无法创建数据集草稿，请稍后重试。',
+        outcomeIsUncertain
+          ? '暂时无法确认数据集草稿是否已创建，请再次点击创建安全重试。'
+          : error.message,
       )
     } finally {
       if (draftRequest.current === request) {

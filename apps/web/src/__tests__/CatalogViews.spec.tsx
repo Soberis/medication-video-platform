@@ -2,6 +2,10 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  clearDatasetDraftIntent,
+  getDatasetDraftIntent,
+} from '@/app/dataset-draft-intent'
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
 import AssetListView from '@/views/AssetListView'
@@ -14,7 +18,10 @@ const projectId = '30000000-0000-4000-8000-000000000001'
 const sessionId = '40000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  sessionStorage.clear()
+  vi.unstubAllGlobals()
+})
 
 describe('catalog views', () => {
   it('distinguishes bound, ingested and pending quality facts in the session list', async () => {
@@ -184,9 +191,13 @@ describe('catalog views', () => {
     const otherProjectId = '30000000-0000-4000-8000-000000000002'
     const datasetVersionId = '91000000-0000-4000-8000-000000000020'
     let resolveDraftRequest: ((response: Response) => void) | undefined
+    let draftRequestSignal: AbortSignal | undefined
+    let draftIdempotencyKey: string | undefined
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       if (url === `/api/v1/projects/${projectId}/dataset-versions` && init?.method === 'POST') {
+        draftRequestSignal = init.signal as AbortSignal | undefined
+        draftIdempotencyKey = (init.headers as Record<string, string>)['Idempotency-Key']
         return new Promise<Response>((resolve) => {
           resolveDraftRequest = resolve
         })
@@ -214,6 +225,13 @@ describe('catalog views', () => {
     await waitFor(() => expect(resolveDraftRequest).toBeTypeOf('function'))
 
     await router.navigate(`/projects/${otherProjectId}/sessions`)
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(`/api/v1/projects/${otherProjectId}/capture-sessions`),
+        expect.any(Object),
+      ),
+    )
+    expect(draftRequestSignal?.aborted).toBe(false)
     resolveDraftRequest?.(
       jsonResponse(
         {
@@ -231,6 +249,13 @@ describe('catalog views', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/projects/${otherProjectId}/sessions`),
     )
+    const pendingIntent = getDatasetDraftIntent(
+      projectId,
+      '配药操作训练候选',
+      [sessionId],
+    )
+    expect(pendingIntent.idempotencyKey).toBe(draftIdempotencyKey)
+    clearDatasetDraftIntent(pendingIntent)
   })
 
   it('shows a concise, evidence-based dataset readiness preview on the session detail page', async () => {

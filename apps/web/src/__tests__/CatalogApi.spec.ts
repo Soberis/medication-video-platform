@@ -178,7 +178,7 @@ describe('catalog API', () => {
     expect(options).toMatchObject({ method: 'GET', cache: 'no-store', signal: controller.signal })
   })
 
-  it('creates a dataset draft with CSRF protection and a fresh idempotency key', async () => {
+  it('creates a dataset draft with the caller-owned idempotency key and CSRF protection', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -193,11 +193,15 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-version-idempotency-0001') })
     Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
 
     await expect(
-      createDatasetVersionDraft(projectId, '配药操作训练候选', [captureSessionId]),
+      createDatasetVersionDraft(
+        projectId,
+        '配药操作训练候选',
+        [captureSessionId],
+        'dataset-version-idempotency-0001',
+      ),
     ).resolves.toMatchObject({ status: 'DRAFT' })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -214,6 +218,19 @@ describe('catalog API', () => {
         }),
       }),
     )
+  })
+
+  it('keeps an unreadable gateway failure retryable so a draft request can reuse its key', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('upstream unavailable', { status: 503 })))
+
+    await expect(
+      createDatasetVersionDraft(
+        projectId,
+        '配药操作训练候选',
+        [captureSessionId],
+        'dataset-version-idempotency-uncertain-0001',
+      ),
+    ).rejects.toMatchObject({ retryable: true, status: 503 })
   })
 
   it('reads dataset-draft metadata and its immutable evidence snapshot without caching', async () => {
