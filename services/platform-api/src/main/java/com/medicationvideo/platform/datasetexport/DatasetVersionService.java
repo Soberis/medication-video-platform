@@ -6,7 +6,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -132,7 +131,6 @@ class DatasetVersionService {
 
 	private static String requestFingerprint(String displayName, List<UUID> captureSessionIds) {
 		var canonical = displayName + "\n" + captureSessionIds.stream()
-				.sorted(Comparator.comparing(UUID::toString))
 				.map(UUID::toString)
 				.reduce((left, right) -> left + "\n" + right)
 				.orElseThrow();

@@ -204,6 +204,27 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void datasetDraftRejectsAnIdempotencyReplayWhoseSessionOrderChanged() throws Exception {
+		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
+		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
+		var idempotencyKey = "dataset-version-order-replay-" + UUID.randomUUID();
+
+		createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(firstSessionId, secondSessionId),
+				idempotencyKey)
+				.andExpect(status().isCreated());
+		createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(secondSessionId, firstSessionId),
+				idempotencyKey)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_IDEMPOTENCY_KEY_REUSED"));
+
+		assertEquals(1, count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
+	}
+
+	@Test
 	void datasetDraftCreationIsAtomicWhenOneSubmittedSessionIsNotEligible() throws Exception {
 		var draftAuditEventsBefore = count("""
 				SELECT count(*) FROM audit_event
