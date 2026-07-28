@@ -860,8 +860,7 @@ code {
 }
 
 .media-probe-toolbar {
-  padding-top: 14px;
-  border-top: 1px solid #e8edf4;
+  margin-top: 20px;
 }
 
 .asset-classification-actions .ant-select {
@@ -945,10 +944,6 @@ code {
   font-weight: 400;
 }
 
-.readiness-card {
-  border-top: 3px solid #3867d6;
-}
-
 .readiness-loading {
   padding: 22px;
   border-radius: 10px;
@@ -996,8 +991,7 @@ code {
 .readiness-result {
   margin-top: 18px;
   padding: 16px 18px;
-  border-left: 4px solid #d69e2e;
-  border-radius: 4px 10px 10px 4px;
+  border-radius: 8px;
   background: #fffaf0;
 }
 
@@ -1013,7 +1007,6 @@ code {
 }
 
 .readiness-result-ready {
-  border-left-color: #2f855a;
   background: #f0faf4;
 }
 
@@ -1022,27 +1015,13 @@ code {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 24px;
   margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
+  padding: 0 0 0 20px;
 }
 
 .readiness-result li {
-  position: relative;
   min-width: 0;
-  padding-left: 16px;
   color: #475467;
   line-height: 1.5;
-}
-
-.readiness-result li::before {
-  position: absolute;
-  top: 0.62em;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d69e2e;
-  content: '';
 }
 
 .readiness-result li small {
@@ -1133,16 +1112,15 @@ code {
 .login-card {
   width: min(100%, 560px);
   overflow: hidden;
-  border-top: 3px solid var(--app-color-primary);
-  box-shadow: 0 20px 60px rgb(28 42 68 / 10%);
+  box-shadow: 0 16px 44px rgb(28 42 68 / 8%);
 }
 
 .login-card h1 {
-  margin: 8px 0 0;
+  margin: 0;
   font-size: 30px;
 }
 
-.login-card p:not(.app-eyebrow) {
+.login-card > p {
   color: #5c687b;
   line-height: 1.65;
 }

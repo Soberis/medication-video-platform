@@ -49,8 +49,7 @@ export default function LoginView() {
 
   return (
     <section className="login-page" aria-labelledby="login-title">
-      <Card className="login-card" variant="outlined">
-        <p className="app-eyebrow">内部管理端</p>
+      <Card className="login-card" variant="borderless">
         <h1 id="login-title">登录数据管理平台</h1>
         <p>仅供平台管理人员使用。医院侧采集设备通过独立凭据自动上传视频，不使用此页面。</p>
         {errorMessage || auth.sessionError ? (

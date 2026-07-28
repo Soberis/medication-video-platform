@@ -189,7 +189,7 @@ export default function SessionDetailView() {
             </div>
           </section>
           <Card
-            className="detail-card readiness-card"
+            className="detail-card"
             variant="outlined"
             title={
               <div className="card-header-row">

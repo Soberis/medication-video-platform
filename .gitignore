@@ -60,6 +60,7 @@ reports/
 test-results/
 playwright-report/
 blob-report/
+output/
 
 # Local infrastructure state
 .docker-data/
