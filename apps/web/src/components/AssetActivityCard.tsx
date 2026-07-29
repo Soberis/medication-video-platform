@@ -86,19 +86,16 @@ export function AssetActivityCard({
 
   return (
     <Card
-      className="detail-card table-card"
+      className="detail-card"
       title={<strong>操作记录</strong>}
       extra={
         <Button loading={state === 'loading'} onClick={() => void load(true)}>
-          {state === 'idle' ? '查看操作记录' : '刷新'}
+          {state === 'idle' ? '查看记录' : '刷新'}
         </Button>
       }
       variant="outlined"
     >
-      <p className="form-hint">
-        展示与该视频明确关联的追加式审计操作，不等同于每一次内部技术状态变化。
-      </p>
-      {state === 'idle' ? <p>按需读取，页面不会在后台预加载审计记录。</p> : null}
+      {state === 'idle' ? <p className="form-hint">按需加载该视频的操作记录。</p> : null}
       {state === 'error' ? (
         <div className="catalog-error" role="alert">
           <strong>{errorCode}</strong>

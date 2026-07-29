@@ -840,7 +840,7 @@ describe('catalog views', () => {
     })
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
-    const button = await screen.findByRole('button', { name: '查看操作记录' })
+    const button = await screen.findByRole('button', { name: '查看记录' })
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).includes(`/clip-assets/${assetId}/activity`)),
     ).toBe(false)

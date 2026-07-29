@@ -93,7 +93,6 @@ code {
   gap: 16px 24px;
   margin-bottom: 16px;
   padding: 4px 0 14px;
-  border-bottom: 1px solid #dce3ee;
 }
 
 .app-brand {
@@ -968,6 +967,10 @@ code {
   margin-top: 20px;
 }
 
+.detail-card > .ant-card-head {
+  border-bottom: 0;
+}
+
 .card-header-note {
   display: block;
   margin-top: 4px;
@@ -1126,21 +1129,6 @@ code {
   overflow-wrap: anywhere;
   color: #344054;
   font-size: 13px;
-}
-
-.danger-card {
-  border-color: #f1b8b3;
-}
-
-.danger-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.danger-actions .form-hint {
-  max-width: 760px;
 }
 
 .mono-wrap {
@@ -1349,14 +1337,11 @@ code {
 
 .ant-empty {
   margin-top: 20px;
-  padding: 24px 20px;
-  border: 1px dashed #c7d0df;
-  border-radius: 14px;
-  background: #fff;
+  padding: 28px 20px;
 }
 
 .ant-empty-image {
-  width: 72px;
+  display: none;
 }
 
 .ant-descriptions code {
@@ -1443,11 +1428,6 @@ code {
     align-items: center;
     flex-direction: row;
     flex-wrap: wrap;
-  }
-
-  .danger-actions {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .primary-nav {

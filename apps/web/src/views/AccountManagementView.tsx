@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Card, Form, Input, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Card, Form, Input, Table, Tag } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -114,20 +114,12 @@ export default function AccountManagementView() {
         <div>
           <p className="app-eyebrow">内部访问控制</p>
           <h1 id="accounts-title">平台账号</h1>
-          <p>
-            创建和启停内部普通用户。账号创建后仍需加入具体项目，才能查看或处理该项目的视频数据。
-          </p>
+          <p>创建、启停内部账号；加入项目后才能访问项目数据。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
           刷新
         </Button>
       </section>
-      <Alert
-        title="账号与项目权限分开管理"
-        description="账号仅决定是否能登录；项目成员关系决定能够查看和操作哪些项目。医院边端设备与媒体处理服务不使用此账号体系。"
-        type="info"
-        showIcon
-      />
       <Card className="detail-card" title="创建普通用户" variant="outlined">
         <Form<AccountFields>
           form={form}
@@ -141,9 +133,7 @@ export default function AccountManagementView() {
           <Form.Item label="初始密码" name="password">
             <Input.Password autoComplete="new-password" maxLength={72} />
           </Form.Item>
-          <p className="form-hint">
-            初始密码不会显示在账号列表、日志或审计记录中。当前切片只创建普通用户。
-          </p>
+          <p className="form-hint">初始密码不会写入账号列表、日志或审计记录。</p>
           <Button htmlType="submit" type="primary" loading={isSubmitting}>
             创建账号
           </Button>

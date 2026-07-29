@@ -391,7 +391,6 @@ function SessionDetailContent() {
           </Card>
           <Card className="detail-card" title={<strong>采集概况</strong>} variant="outlined">
             <Descriptions
-              bordered
               column={{ xs: 1, sm: 2, lg: 3 }}
               items={[
                 { key: 'device', label: '拍摄设备', children: detail.device_id },

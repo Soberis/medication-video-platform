@@ -1,4 +1,4 @@
-import { Alert, Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag } from 'antd'
+import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag } from 'antd'
 import type { Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -217,12 +217,6 @@ export default function AssetListView() {
           </div>
         </Form>
       </Card>
-      <Alert
-        className="catalog-alert"
-        title="文件夹只用于当前项目内的一层分类，不改变项目权限或对象存储位置。"
-        type="info"
-        showIcon
-      />
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
           正在读取视频资产…

@@ -191,7 +191,6 @@ export function MediaReportCard({
           <span className="form-hint">检测完成于 {formatDateTime(report.created_at)}</span>
         </div>
         <Descriptions
-          bordered
           column={{ xs: 1, sm: 2, lg: 3 }}
           className="media-report-facts"
           items={[
@@ -501,9 +500,8 @@ export function ClassificationCard({
 export function AssetFacts({ detail, projectId }: { detail: ClipAssetRead; projectId: string }) {
   return (
     <>
-      <Card className="detail-card" title={<strong>资产事实</strong>} variant="outlined">
+      <Card className="detail-card" title={<strong>文件信息</strong>} variant="outlined">
         <Descriptions
-          bordered
           column={{ xs: 1, md: 2 }}
           items={[
             { key: 'content', label: '内容类型', children: detail.content_type },
@@ -535,10 +533,9 @@ export function AssetFacts({ detail, projectId }: { detail: ClipAssetRead; proje
           ]}
         />
       </Card>
-      <Card className="detail-card" title={<strong>Session 与相机绑定</strong>} variant="outlined">
+      <Card className="detail-card" title={<strong>相机绑定</strong>} variant="outlined">
         {detail.session_binding ? (
           <Descriptions
-            bordered
             column={{ xs: 1, md: 2 }}
             items={[
               {
@@ -606,16 +603,20 @@ export function DangerZoneCard({
   onDelete: () => void
 }) {
   return (
-    <Card className="detail-card danger-card" title={<strong>危险操作</strong>} variant="outlined">
-      <div className="danger-actions">
-        <p className="form-hint">
-          删除后视频会从普通列表隐藏，并保留审计记录；不会立即物理删除对象或影响同一 Session
-          的其他视频。
-        </p>
+    <Card
+      className="detail-card"
+      title={<strong>删除视频</strong>}
+      extra={
         <Button danger loading={isDeleting} onClick={onDelete}>
           删除视频
         </Button>
-      </div>
+      }
+      variant="outlined"
+    >
+      <p className="form-hint">
+        从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session
+        的其他视频。
+      </p>
     </Card>
   )
 }

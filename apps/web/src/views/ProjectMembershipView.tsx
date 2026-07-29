@@ -128,18 +128,12 @@ export default function ProjectMembershipView() {
         <div>
           <p className="app-eyebrow">项目访问范围</p>
           <h1 id="members-title">项目成员</h1>
-          <p>为内部账号分配当前项目的访问范围。项目角色不改变账号的全局管理员或普通用户身份。</p>
+          <p>分配当前项目的访问范围；项目角色不改变账号的全局身份。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadMemberships()}>
           刷新
         </Button>
       </section>
-      <Alert
-        title="成员变更会立即影响新的项目请求"
-        description="移除成员不会删除视频或账号，只取消其对当前项目的访问。项目必须至少保留一位项目管理员。"
-        type="info"
-        showIcon
-      />
       {canManageMembers ? (
         <Card className="detail-card" title="添加或更新成员" variant="outlined">
           <Form<MembershipFields>

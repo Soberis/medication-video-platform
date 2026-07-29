@@ -294,9 +294,7 @@ export default function AnnotationTaskListView() {
         <div>
           <p className="app-eyebrow">人工训练数据标注</p>
           <h1 id="annotation-task-title">标注任务</h1>
-          <p>
-            只显示当前项目中可处理的合格视频任务。受理人提交时间片段标签后，由另一位项目管理员独立复核并生成后置清洗结果。
-          </p>
+          <p>处理已分配的合格视频标注；提交后由另一位管理员独立复核。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
           刷新

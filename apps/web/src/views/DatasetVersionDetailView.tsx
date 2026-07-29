@@ -186,7 +186,6 @@ function DatasetVersionDetailContent() {
           </section>
           <Card className="detail-card" title={<strong>草稿事实</strong>} variant="outlined">
             <Descriptions
-              bordered
               column={{ xs: 1, sm: 2, lg: 4 }}
               items={[
                 { key: 'creator', label: '创建人', children: detail.created_by },
