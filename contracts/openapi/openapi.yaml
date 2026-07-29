@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.46.0
+  version: 0.47.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -31,7 +31,9 @@ info:
     build specification while members read its immutable evidence separately from current admission
     facts, read a non-mutating build-readiness preflight that explains every remaining
     DRAFT-to-BUILDING blocker, explicitly advance a still-ready draft to BUILDING, and seal its
-    persisted relational evidence with a deterministic digest before entering VALIDATING, without
+    persisted relational evidence with a deterministic digest before entering VALIDATING, then run
+    one immutable freeze-preflight validation over current admission, references, the snapshot digest,
+    CaptureSession split isolation and the approved build contract, without freezing the version,
     creating export artifacts or starting a Worker,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
@@ -88,7 +90,8 @@ tags:
     description: >-
       Current-state previews and administrator-created DatasetVersion candidate snapshots. DRAFT
       versions can fix build prerequisites and explicitly enter BUILDING; a completed relational
-      snapshot seal advances to VALIDATING. None of these states is frozen, approved or exportable.
+      snapshot seal advances to VALIDATING, where one technical freeze-preflight result can be
+      recorded. A PASS still requires separate approval before freezing and is not exportable.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -554,6 +557,68 @@ paths:
           description: >-
             The version is not BUILDING, the fixed relational evidence is incomplete or inconsistent,
             a snapshot already exists, or the idempotency key was used for another dataset version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/validations:
+    post:
+      operationId: validateDatasetVersion
+      tags:
+        - Dataset Admission
+      summary: Record the immutable freeze-preflight validation
+      description: >-
+        Requires ACTIVE ADMIN membership and a VALIDATING DatasetVersion. Locks the project and runs
+        the versioned DATASET_FREEZE_VALIDATION_V1 checks against current admission, fixed-reference
+        integrity, the recomputed relational snapshot digest, CaptureSession-level split isolation
+        and the approved P0 build contract. It stores exactly one immutable PASS or FAIL result and
+        an audit event. A created result may be FAIL; HTTP 201 only means the validation fact was
+        recorded. PASS does not approve, freeze or export the version, and FAIL must be addressed in
+        a new DatasetVersion rather than by overwriting this result. Replaying the same idempotency
+        key returns the original result.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "201":
+          description: The PASS or FAIL validation result was created or replayed idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionValidation"
+        "400":
+          description: A path parameter or required header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The version is not VALIDATING, its fixed snapshot is unavailable, a validation result
+            already exists, or the idempotency key was used for another dataset version.
           content:
             application/problem+json:
               schema:
@@ -5445,6 +5510,8 @@ components:
         - can_create_build_specification
         - build_snapshot
         - can_create_build_snapshot
+        - validation
+        - can_validate
       properties:
         dataset_version_id:
           type: string
@@ -5501,6 +5568,17 @@ components:
           description: >-
             True only when the current actor is an ACTIVE project administrator, the DatasetVersion
             is BUILDING and no build snapshot exists. This does not authorize freezing or export.
+        validation:
+          description: The immutable freeze-preflight PASS or FAIL result, or null before it runs.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetVersionValidation"
+            - type: "null"
+        can_validate:
+          type: boolean
+          description: >-
+            True only when the current actor is an ACTIVE project administrator, the DatasetVersion
+            is VALIDATING and no validation result exists. It does not authorize approval, freeze
+            or export.
     DatasetSplitPlanCreateRequest:
       type: object
       additionalProperties: false
@@ -5713,6 +5791,73 @@ components:
           type: string
           maxLength: 128
         created_at:
+          type: string
+          format: date-time
+    DatasetVersionValidation:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_validation_id
+        - dataset_version_id
+        - dataset_build_snapshot_id
+        - validation_profile_version
+        - outcome
+        - reason_codes
+        - executed_checks
+        - validated_snapshot_digest
+        - validated_by
+        - validated_at
+      properties:
+        dataset_version_validation_id:
+          type: string
+          format: uuid
+        dataset_version_id:
+          type: string
+          format: uuid
+        dataset_build_snapshot_id:
+          type: string
+          format: uuid
+        validation_profile_version:
+          type: string
+          const: DATASET_FREEZE_VALIDATION_V1
+        outcome:
+          type: string
+          enum: [PASS, FAIL]
+          description: PASS is a technical result only and does not approve or freeze the version.
+        reason_codes:
+          type: array
+          maxItems: 7
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - CURRENT_ADMISSION_NOT_ELIGIBLE
+              - SNAPSHOT_EVIDENCE_CHANGED
+              - SNAPSHOT_REFERENCE_MISMATCH
+              - SNAPSHOT_STRUCTURE_INVALID
+              - SNAPSHOT_DIGEST_MISMATCH
+              - SPLIT_LEAKAGE_DETECTED
+              - BUILD_CONTRACT_MISMATCH
+        executed_checks:
+          type: array
+          minItems: 5
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - CURRENT_ADMISSION
+              - REFERENCE_INTEGRITY
+              - SNAPSHOT_DIGEST
+              - SPLIT_ISOLATION
+              - BUILD_CONTRACT
+        validated_snapshot_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        validated_by:
+          type: string
+          maxLength: 128
+        validated_at:
           type: string
           format: date-time
     DatasetMemberSession:

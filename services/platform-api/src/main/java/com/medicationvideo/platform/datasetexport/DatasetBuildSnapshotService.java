@@ -9,8 +9,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -151,46 +149,10 @@ class DatasetBuildSnapshotService {
 			List<DatasetMemberSession> members,
 			List<DatasetMemberStream> streams,
 			List<DatasetSplitAssignment> assignments) {
-		if (!specification.getDatasetSplitPlanId().equals(splitPlan.getDatasetSplitPlanId())) {
-			throw incomplete("BUILD_CONFIGURATION_MISMATCH");
-		}
-		if (members.isEmpty()) {
-			throw incomplete("MEMBER_EVIDENCE_MISSING");
-		}
-		var membersById = members.stream().collect(Collectors.toUnmodifiableMap(
-				DatasetMemberSession::getDatasetMemberSessionId, Function.identity()));
-		var streamsByMember = streams.stream().collect(Collectors.groupingBy(
-				DatasetMemberStream::getDatasetMemberSessionId));
-		var assignmentsByMember = assignments.stream().collect(Collectors.toUnmodifiableMap(
-				DatasetSplitAssignment::getDatasetMemberSessionId, Function.identity()));
-		if (assignmentsByMember.size() != members.size()) {
-			throw incomplete("SPLIT_ASSIGNMENT_INCOMPLETE");
-		}
-		if (!membersById.keySet().containsAll(streamsByMember.keySet())) {
-			throw incomplete("STREAM_EVIDENCE_INCOMPLETE");
-		}
-
-		for (var member : members) {
-			var memberStreams = streamsByMember.getOrDefault(member.getDatasetMemberSessionId(), List.of());
-			if (member.getExpectedCameraCount() != member.getReceivedCameraCount()
-					|| memberStreams.size() != member.getExpectedCameraCount()) {
-				throw incomplete("STREAM_EVIDENCE_INCOMPLETE");
-			}
-			var assignment = assignmentsByMember.get(member.getDatasetMemberSessionId());
-			if (assignment == null
-					|| !assignment.getCaptureSessionId().equals(member.getCaptureSessionId())
-					|| assignment.getCandidateIndex() != member.getCandidateIndex()
-					|| assignment.getLeakageGroupType() != DatasetLeakageGroupType.CAPTURE_SESSION
-					|| !assignment.getLeakageGroupId().equals(member.getCaptureSessionId())) {
-				throw incomplete("SPLIT_ASSIGNMENT_INCOMPLETE");
-			}
-		}
-		if (streams.isEmpty()
-				|| streams.stream().anyMatch(stream ->
-						!specification.getLabelSchemaDigest().equals(stream.getLabelSchemaDigest())
-								|| !specification.getCleaningRuleSetDigest().equals(
-										stream.getCleaningRuleSetDigest()))) {
-			throw incomplete("BUILD_CONFIGURATION_MISMATCH");
+		var issues = DatasetRelationalSnapshotChecks.structuralIssues(
+				specification, splitPlan, members, streams, assignments);
+		if (!issues.isEmpty()) {
+			throw incomplete(issues.getFirst());
 		}
 	}
 

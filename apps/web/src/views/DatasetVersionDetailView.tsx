@@ -10,6 +10,7 @@ import {
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   startDatasetVersionBuild,
+  validateDatasetVersion,
   type DatasetAdmissionPreview,
   type DatasetVersionDetail,
   type DatasetVersionBuildBlocker,
@@ -19,6 +20,7 @@ import {
   type DatasetVersionMemberSession,
   type DatasetVersionMemberStream,
   type DatasetVersionStatus,
+  type DatasetVersionValidationReason,
   type DatasetSplitAssignment,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
@@ -78,6 +80,16 @@ const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
   VALIDATING: '校验中',
 }
 
+const validationReasonLabels: Record<DatasetVersionValidationReason, string> = {
+  CURRENT_ADMISSION_NOT_ELIGIBLE: '至少一条配药操作当前不再满足数据集准入条件',
+  SNAPSHOT_EVIDENCE_CHANGED: '当前视频、标注、质量或清洗事实与固定快照不一致',
+  SNAPSHOT_REFERENCE_MISMATCH: '快照引用或数量与当前版本不一致',
+  SNAPSHOT_STRUCTURE_INVALID: '固定成员、视频、划分或构建配置关系不完整',
+  SNAPSHOT_DIGEST_MISMATCH: '重新计算的关系快照摘要与封存摘要不一致',
+  SPLIT_LEAKAGE_DETECTED: '同一配药操作泄漏组出现在不同数据划分中',
+  BUILD_CONTRACT_MISMATCH: '固定构建规范与当前批准的 P0 契约不一致',
+}
+
 export default function DatasetVersionDetailView() {
   const { projectId = '', id: datasetVersionId = '' } = useParams()
   return <DatasetVersionDetailContent key={`${projectId}:${datasetVersionId}`} />
@@ -115,12 +127,17 @@ function DatasetVersionDetailContent() {
   const [buildSnapshotErrorCode, setBuildSnapshotErrorCode] = useState('')
   const [buildSnapshotErrorMessage, setBuildSnapshotErrorMessage] = useState('')
   const [buildSnapshotRequestId, setBuildSnapshotRequestId] = useState<string | null>(null)
+  const [validationState, setValidationState] = useState<'idle' | 'validating' | 'error'>('idle')
+  const [validationErrorCode, setValidationErrorCode] = useState('')
+  const [validationErrorMessage, setValidationErrorMessage] = useState('')
+  const [validationRequestId, setValidationRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
   const buildSpecificationIntent = useRef<string | null>(null)
   const buildStartIntent = useRef<string | null>(null)
   const buildSnapshotIntent = useRef<string | null>(null)
+  const validationIntent = useRef<string | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -364,6 +381,48 @@ function DatasetVersionDetailContent() {
     })
   }, [modal, sealBuildSnapshot])
 
+  const runValidation = useCallback(async () => {
+    const idempotencyKey = validationIntent.current ?? crypto.randomUUID()
+    validationIntent.current = idempotencyKey
+    setValidationState('validating')
+    setValidationErrorCode('')
+    setValidationErrorMessage('')
+    setValidationRequestId(null)
+    try {
+      const result = await validateDatasetVersion(projectId, datasetVersionId, idempotencyKey)
+      validationIntent.current = null
+      setValidationState('idle')
+      setCurrentAdmission(null)
+      setCurrentAdmissionState('idle')
+      await loadDetail()
+      if (result.outcome === 'PASS') {
+        void message.success('冻结前校验已通过。')
+      } else {
+        void message.warning('冻结前校验未通过，请根据结果新建数据集版本。')
+      }
+    } catch (error) {
+      setValidationState('error')
+      if (error instanceof CatalogApiError) {
+        setValidationErrorCode(error.errorCode)
+        setValidationErrorMessage(error.message)
+        setValidationRequestId(error.requestId)
+      } else {
+        setValidationErrorCode('DATASET_VERSION_VALIDATION_FAILED')
+        setValidationErrorMessage('暂时无法执行冻结前校验，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, loadDetail, message, projectId])
+
+  const confirmValidation = useCallback(() => {
+    modal.confirm({
+      title: '执行冻结前校验？',
+      content: '系统会核对当前准入、固定引用、快照摘要、数据划分和构建契约，并保存一次不可覆盖的结果。未通过时应新建版本；通过也不会自动冻结。',
+      okText: '执行冻结前校验',
+      cancelText: '取消',
+      onOk: runValidation,
+    })
+  }, [modal, runValidation])
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
@@ -495,7 +554,11 @@ function DatasetVersionDetailContent() {
             className="detail-card"
             extra={
               <Button
-                disabled={buildStartState === 'starting' || buildSnapshotState === 'creating'}
+                disabled={
+                  buildStartState === 'starting'
+                  || buildSnapshotState === 'creating'
+                  || validationState === 'validating'
+                }
                 loading={currentAdmissionState === 'loading'}
                 onClick={() => void checkCurrentAdmission()}
               >
@@ -550,6 +613,25 @@ function DatasetVersionDetailContent() {
             ) : detail.status === 'BUILDING' ? (
               <p>构建配置已经封存，请由项目管理员生成构建快照。</p>
             ) : null}
+            {detail.validation ? (
+              <ValidationEvidence validation={detail.validation} />
+            ) : detail.can_validate ? (
+              <div className="dataset-draft-selection-toolbar">
+                <div>
+                  <strong>执行冻结前校验</strong>
+                  <span>核对当前准入、引用、摘要、数据划分和构建契约；结果只属于当前版本。</span>
+                </div>
+                <Button
+                  type="primary"
+                  loading={validationState === 'validating'}
+                  onClick={confirmValidation}
+                >
+                  执行冻结前校验
+                </Button>
+              </div>
+            ) : detail.status === 'VALIDATING' ? (
+              <p>构建快照已封存，请由项目管理员执行冻结前校验。</p>
+            ) : null}
             {buildSpecificationState === 'error' ? (
               <div className="catalog-error" role="alert">
                 <strong>{buildSpecificationErrorCode}</strong>
@@ -562,6 +644,13 @@ function DatasetVersionDetailContent() {
                 <strong>{buildSnapshotErrorCode}</strong>
                 <span>{buildSnapshotErrorMessage}</span>
                 {buildSnapshotRequestId ? <small>请求标识：{buildSnapshotRequestId}</small> : null}
+              </div>
+            ) : null}
+            {validationState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{validationErrorCode}</strong>
+                <span>{validationErrorMessage}</span>
+                {validationRequestId ? <small>请求标识：{validationRequestId}</small> : null}
               </div>
             ) : null}
             {currentAdmissionState === 'idle' ? (
@@ -771,6 +860,73 @@ function BuildSnapshotEvidence({
             <dd>
               <code>{snapshot.snapshot_digest}</code>
             </dd>
+          </div>
+        </dl>
+      </details>
+    </>
+  )
+}
+
+function ValidationEvidence({
+  validation,
+}: {
+  validation: NonNullable<DatasetVersionDetail['validation']>
+}) {
+  const passed = validation.outcome === 'PASS'
+  return (
+    <>
+      <div className={`readiness-result${passed ? ' readiness-result-ready' : ''}`}>
+        <div>
+          <strong>{passed ? '冻结前校验已通过' : '冻结前校验未通过'}</strong>
+          <span>
+            {passed
+              ? '当前版本已通过技术校验，仍需单独审批后才能冻结。'
+              : '当前版本不能进入冻结审批；请根据原因修正数据后新建版本。'}
+          </span>
+          {validation.reason_codes.length > 0 ? (
+            <ul>
+              {validation.reason_codes.map((reason) => (
+                <li key={reason}>{validationReasonLabels[reason]}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <Tag color={passed ? 'success' : 'error'}>{passed ? '通过' : '未通过'}</Tag>
+      </div>
+      <details className="technical-facts">
+        <summary>查看校验标识</summary>
+        <dl>
+          <div>
+            <dt>Validation ID</dt>
+            <dd>
+              <code>{validation.dataset_version_validation_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>校验规范</dt>
+            <dd>
+              <code>{validation.validation_profile_version}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>快照摘要</dt>
+            <dd>
+              <code>{validation.validated_snapshot_digest}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>执行检查</dt>
+            <dd>
+              <code>{validation.executed_checks.join(', ')}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>执行人</dt>
+            <dd>{validation.validated_by}</dd>
+          </div>
+          <div>
+            <dt>执行时间</dt>
+            <dd>{formatDateTime(validation.validated_at)}</dd>
           </div>
         </dl>
       </details>

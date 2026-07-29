@@ -14,6 +14,7 @@ import {
   listDatasetVersions,
   requestClipAssetMediaProbe,
   startDatasetVersionBuild,
+  validateDatasetVersion,
 } from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
@@ -349,6 +350,51 @@ describe('catalog API', () => {
         cache: 'no-store',
         headers: expect.objectContaining({
           'Idempotency-Key': 'dataset-build-snapshot-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
+  })
+
+  it('records dataset freeze validation with CSRF protection and the caller-owned idempotency key', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_validation_id: '94000000-0000-4000-8000-000000000001',
+          dataset_version_id: datasetVersionId,
+          dataset_build_snapshot_id: '91000000-0000-4000-8000-000000000001',
+          validation_profile_version: 'DATASET_FREEZE_VALIDATION_V1',
+          outcome: 'PASS',
+          reason_codes: [],
+          executed_checks: [
+            'CURRENT_ADMISSION',
+            'REFERENCE_INTEGRITY',
+            'SNAPSHOT_DIGEST',
+            'SPLIT_ISOLATION',
+            'BUILD_CONTRACT',
+          ],
+          validated_snapshot_digest: 'a'.repeat(64),
+          validated_by: 'local-admin',
+          validated_at: '2026-07-30T01:00:00Z',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      validateDatasetVersion(projectId, datasetVersionId, 'dataset-validation-0001'),
+    ).resolves.toMatchObject({ outcome: 'PASS' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/validations`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-validation-0001',
           'X-XSRF-TOKEN': 'csrf-test-token',
         }),
       }),

@@ -22,6 +22,7 @@ class DatasetVersionQueryService {
 	private final DatasetSplitAssignmentRepository splitAssignmentRepository;
 	private final DatasetBuildSpecificationRepository buildSpecificationRepository;
 	private final DatasetBuildSnapshotRepository buildSnapshotRepository;
+	private final DatasetVersionValidationRepository validationRepository;
 
 	DatasetVersionQueryService(
 			ProjectAccessService projectAccessService,
@@ -31,7 +32,8 @@ class DatasetVersionQueryService {
 			DatasetSplitPlanRepository splitPlanRepository,
 			DatasetSplitAssignmentRepository splitAssignmentRepository,
 			DatasetBuildSpecificationRepository buildSpecificationRepository,
-			DatasetBuildSnapshotRepository buildSnapshotRepository) {
+			DatasetBuildSnapshotRepository buildSnapshotRepository,
+			DatasetVersionValidationRepository validationRepository) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
@@ -40,6 +42,7 @@ class DatasetVersionQueryService {
 		this.splitAssignmentRepository = splitAssignmentRepository;
 		this.buildSpecificationRepository = buildSpecificationRepository;
 		this.buildSnapshotRepository = buildSnapshotRepository;
+		this.validationRepository = validationRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -92,6 +95,8 @@ class DatasetVersionQueryService {
 				.orElse(null);
 		var buildSnapshot = this.buildSnapshotRepository.findByDatasetVersionId(datasetVersionId)
 				.orElse(null);
+		var validation = this.validationRepository.findByDatasetVersionId(datasetVersionId)
+				.orElse(null);
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		return DatasetVersionDetailResponse.from(
 				version,
@@ -110,7 +115,11 @@ class DatasetVersionQueryService {
 				buildSnapshot == null ? null : DatasetBuildSnapshotResponse.from(buildSnapshot),
 				role == ProjectRole.ADMIN
 						&& version.getStatus() == DatasetVersionStatus.BUILDING
-						&& buildSnapshot == null);
+						&& buildSnapshot == null,
+				validation == null ? null : DatasetVersionValidationResponse.from(validation),
+				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.VALIDATING
+						&& validation == null);
 	}
 
 	private static DatasetVersionException notFound() {

@@ -291,6 +291,11 @@ V42 增加关系快照封印。项目管理员在 `BUILDING` 状态显式执行�
 `VALIDATING` 状态和审计在同一事务提交。P0 的 `RAW_CLIP_ASSET_V1` 只表示使用草稿已固定的原始输入，
 不创建派生 AssetVariant、文件、Worker 或队列；冻结前仍必须另行完成当前准入、引用、摘要和防泄漏校验。
 
+V43 增加一次性冻结前技术校验。项目管理员在 `VALIDATING` 状态显式执行后，Core API 重新检查当前准入、
+固定引用、关系快照摘要、CaptureSession 级 split 隔离和已批准构建契约，并保存不可变 `PASS/FAIL`、
+稳定原因码、检查项、受检摘要、操作者和时间。结果不会改变 DatasetVersion 状态；`PASS` 仍需独立冻结
+审批，`FAIL` 不得覆盖或重跑，修正只能创建新 DatasetVersion。该命令不创建文件、Worker、队列或导出。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport

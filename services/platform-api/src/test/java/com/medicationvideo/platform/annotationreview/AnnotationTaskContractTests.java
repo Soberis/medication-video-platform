@@ -340,7 +340,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void administratorStartsAndSealsAReadyDatasetBuildExactlyOnce() throws Exception {
+	void administratorStartsSealsAndValidatesAReadyDatasetBuildExactlyOnce() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
 		var draftResponse = createDatasetDraft(
@@ -466,13 +466,64 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.status").value("VALIDATING"))
 				.andExpect(jsonPath("$.build_snapshot.dataset_build_snapshot_id").value(buildSnapshotId))
 				.andExpect(jsonPath("$.build_snapshot.snapshot_digest").value(snapshotDigest))
-				.andExpect(jsonPath("$.can_create_build_snapshot").value(false));
+				.andExpect(jsonPath("$.can_create_build_snapshot").value(false))
+				.andExpect(jsonPath("$.validation").value(org.hamcrest.Matchers.nullValue()))
+				.andExpect(jsonPath("$.can_validate").value(true));
 		assertEquals(1, count(
 				"SELECT count(*) FROM dataset_build_snapshot WHERE dataset_version_id = ?",
 				datasetVersionId));
 		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
 				UPDATE dataset_version
 				SET build_snapshot_id = NULL
+				WHERE dataset_version_id = ?
+				""", datasetVersionId));
+
+		var validationIdempotencyKey = "dataset-validation-" + UUID.randomUUID();
+		validateDatasetVersion(MEMBER_TOKEN, datasetVersionId, validationIdempotencyKey)
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var validationResponse = validateDatasetVersion(
+				ADMIN_TOKEN, datasetVersionId, validationIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.dataset_build_snapshot_id").value(buildSnapshotId))
+				.andExpect(jsonPath("$.validation_profile_version").value("DATASET_FREEZE_VALIDATION_V1"))
+				.andExpect(jsonPath("$.outcome").value("PASS"))
+				.andExpect(jsonPath("$.reason_codes").isEmpty())
+				.andExpect(jsonPath("$.executed_checks.length()").value(5))
+				.andExpect(jsonPath("$.validated_snapshot_digest").value(snapshotDigest))
+				.andReturn().getResponse().getContentAsString();
+		var validationId = com.jayway.jsonpath.JsonPath.<String>read(
+				validationResponse, "$.dataset_version_validation_id");
+
+		validateDatasetVersion(ADMIN_TOKEN, datasetVersionId, validationIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_version_validation_id").value(validationId))
+				.andExpect(jsonPath("$.outcome").value("PASS"));
+		validateDatasetVersion(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				"dataset-validation-second-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_VALIDATION_ALREADY_EXISTS"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("VALIDATING"))
+				.andExpect(jsonPath("$.validation.dataset_version_validation_id").value(validationId))
+				.andExpect(jsonPath("$.validation.outcome").value("PASS"))
+				.andExpect(jsonPath("$.can_validate").value(false));
+		assertEquals(1, count(
+				"SELECT count(*) FROM dataset_version_validation WHERE dataset_version_id = ?",
+				datasetVersionId));
+		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
+				UPDATE dataset_version_validation
+				SET outcome = 'FAIL'
 				WHERE dataset_version_id = ?
 				""", datasetVersionId));
 		assertEquals(1, count("""
@@ -485,6 +536,11 @@ class AnnotationTaskContractTests {
 				WHERE action = 'DATASET_BUILD_SNAPSHOT_CREATED'
 				  AND object_id = ?
 				""", buildSnapshotId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_VERSION_VALIDATION_COMPLETED'
+				  AND object_id = ?
+				""", validationId));
 	}
 
 	@Test
@@ -1391,6 +1447,19 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "dataset-build-snapshot-request-" + UUID.randomUUID()));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions validateDatasetVersion(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/validations",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-validation-request-" + UUID.randomUUID()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1568,6 +1637,7 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM dataset_version_validation WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("""
 				UPDATE dataset_version
 				SET dataset_version_status = 'BUILDING', build_snapshot_id = NULL

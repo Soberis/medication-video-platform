@@ -215,6 +215,35 @@ export interface DatasetBuildSnapshot {
   created_at: string
 }
 
+export type DatasetVersionValidationReason =
+  | 'CURRENT_ADMISSION_NOT_ELIGIBLE'
+  | 'SNAPSHOT_EVIDENCE_CHANGED'
+  | 'SNAPSHOT_REFERENCE_MISMATCH'
+  | 'SNAPSHOT_STRUCTURE_INVALID'
+  | 'SNAPSHOT_DIGEST_MISMATCH'
+  | 'SPLIT_LEAKAGE_DETECTED'
+  | 'BUILD_CONTRACT_MISMATCH'
+
+export type DatasetVersionValidationCheck =
+  | 'CURRENT_ADMISSION'
+  | 'REFERENCE_INTEGRITY'
+  | 'SNAPSHOT_DIGEST'
+  | 'SPLIT_ISOLATION'
+  | 'BUILD_CONTRACT'
+
+export interface DatasetVersionValidation {
+  dataset_version_validation_id: string
+  dataset_version_id: string
+  dataset_build_snapshot_id: string
+  validation_profile_version: 'DATASET_FREEZE_VALIDATION_V1'
+  outcome: 'PASS' | 'FAIL'
+  reason_codes: DatasetVersionValidationReason[]
+  executed_checks: DatasetVersionValidationCheck[]
+  validated_snapshot_digest: string
+  validated_by: string
+  validated_at: string
+}
+
 export interface DatasetVersionDetail extends DatasetVersionSummary {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
@@ -223,6 +252,8 @@ export interface DatasetVersionDetail extends DatasetVersionSummary {
   can_create_build_specification: boolean
   build_snapshot: DatasetBuildSnapshot | null
   can_create_build_snapshot: boolean
+  validation: DatasetVersionValidation | null
+  can_validate: boolean
 }
 
 export interface DatasetVersionCurrentAdmissionEvidenceChange {
@@ -447,6 +478,10 @@ const errorMessages: Record<string, string> = {
   DATASET_BUILD_SNAPSHOT_STATUS_INVALID: '当前版本不处于构建阶段，请刷新页面查看。',
   DATASET_BUILD_SNAPSHOT_ALREADY_EXISTS: '该版本已经生成构建快照，请刷新页面查看。',
   DATASET_BUILD_SNAPSHOT_IDEMPOTENCY_KEY_REUSED: '本次快照请求与已提交请求冲突，请刷新后重试。',
+  DATASET_VERSION_VALIDATION_INCOMPLETE: '固定快照不完整，无法执行冻结前校验。',
+  DATASET_VERSION_VALIDATION_STATUS_INVALID: '当前版本不处于校验阶段，请刷新页面查看。',
+  DATASET_VERSION_VALIDATION_ALREADY_EXISTS: '该版本已经完成冻结前校验，请刷新页面查看。',
+  DATASET_VERSION_VALIDATION_IDEMPOTENCY_KEY_REUSED: '本次校验请求与已提交请求冲突，请刷新后重试。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -660,6 +695,29 @@ export async function createDatasetBuildSnapshot(
     },
   )
   if (response.ok) return (await response.json()) as DatasetBuildSnapshot
+  throw await toCatalogError(response)
+}
+
+export async function validateDatasetVersion(
+  projectId: string,
+  datasetVersionId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetVersionValidation> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/validations`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetVersionValidation
   throw await toCatalogError(response)
 }
 

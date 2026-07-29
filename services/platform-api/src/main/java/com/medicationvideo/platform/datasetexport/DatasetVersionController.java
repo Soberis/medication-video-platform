@@ -56,6 +56,7 @@ class DatasetVersionController {
 	private final DatasetBuildSpecificationService buildSpecificationService;
 	private final DatasetVersionBuildService buildService;
 	private final DatasetBuildSnapshotService buildSnapshotService;
+	private final DatasetVersionValidationService validationService;
 	private final DatasetVersionQueryService queryService;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
@@ -65,6 +66,7 @@ class DatasetVersionController {
 			DatasetBuildSpecificationService buildSpecificationService,
 			DatasetVersionBuildService buildService,
 			DatasetBuildSnapshotService buildSnapshotService,
+			DatasetVersionValidationService validationService,
 			DatasetVersionQueryService queryService,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
@@ -72,6 +74,7 @@ class DatasetVersionController {
 		this.buildSpecificationService = buildSpecificationService;
 		this.buildService = buildService;
 		this.buildSnapshotService = buildSnapshotService;
+		this.validationService = validationService;
 		this.queryService = queryService;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
@@ -208,6 +211,27 @@ class DatasetVersionController {
 			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.buildSnapshotService.create(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"));
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
+	@PostMapping("/{datasetVersionId}/validations")
+	ResponseEntity<DatasetVersionValidationResponse> validateDatasetVersion(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			Authentication authentication) {
+		var response = this.validationService.validate(
 				projectId,
 				datasetVersionId,
 				requireActor(authentication).actorId(),

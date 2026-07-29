@@ -291,7 +291,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot | 选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
+| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
 | ExportProfile | export_profile | 格式、采样、目录和字段版本 |
 | DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
 
@@ -329,7 +329,9 @@ flowchart LR
   leakage group、split 和构建配置的完整关系，以 `DATASET_RELATIONAL_SNAPSHOT_V1` 生成确定性摘要并保存
   一条 `DatasetBuildSnapshot`，随后在同一事务把该快照引用绑定到 DatasetVersion 并进入 `VALIDATING`。
   V1.5 明确退出 P0 的派生隐私 Variant 不会因此被提前创建；`RAW_CLIP_ASSET_V1` 是当前输入策略而非放行结论。
-- VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
+- V43 允许项目管理员在 `VALIDATING` 内执行一次 `DATASET_FREEZE_VALIDATION_V1`。校验重算当前准入、
+  引用完整性、关系快照摘要、CaptureSession 级 split 隔离和构建契约，保存不可变结果、稳定原因码、
+  受检摘要、操作者、幂等指纹和时间。`PASS` 不推进状态或替代审批；`FAIL` 不得改写，修正必须创建新版本。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
 - 导出只读取 FROZEN 快照；导出失败不改变冻结版本。
 

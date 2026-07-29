@@ -124,6 +124,10 @@ class DatasetBuildSnapshot {
 		return this.datasetVersionId;
 	}
 
+	UUID getProjectId() {
+		return this.projectId;
+	}
+
 	UUID getDatasetBuildSpecificationId() {
 		return this.datasetBuildSpecificationId;
 	}

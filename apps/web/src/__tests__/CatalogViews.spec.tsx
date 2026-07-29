@@ -818,11 +818,12 @@ describe('catalog views', () => {
     )
   })
 
-  it('starts a ready build and seals its snapshot only after separate confirmations', async () => {
+  it('starts, seals and validates a ready build only after separate confirmations', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
     const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`
     const buildPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build`
     const snapshotPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build-snapshots`
+    const validationPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/validations`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
     const buildSpecification = {
       dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
@@ -850,8 +851,27 @@ describe('catalog views', () => {
       created_by: 'local-admin',
       created_at: '2026-07-29T06:00:00Z',
     }
+    const validation = {
+      dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+      dataset_version_id: datasetVersionId,
+      dataset_build_snapshot_id: buildSnapshot.dataset_build_snapshot_id,
+      validation_profile_version: 'DATASET_FREEZE_VALIDATION_V1' as const,
+      outcome: 'PASS' as const,
+      reason_codes: [],
+      executed_checks: [
+        'CURRENT_ADMISSION',
+        'REFERENCE_INTEGRITY',
+        'SNAPSHOT_DIGEST',
+        'SPLIT_ISOLATION',
+        'BUILD_CONTRACT',
+      ] as const,
+      validated_snapshot_digest: buildSnapshot.snapshot_digest,
+      validated_by: 'local-admin',
+      validated_at: '2026-07-30T01:00:00Z',
+    }
     let started = false
     let snapshotted = false
+    let validated = false
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       if (String(input) === currentAdmissionPath) {
         return Promise.resolve(
@@ -887,12 +907,18 @@ describe('catalog views', () => {
         snapshotted = true
         return Promise.resolve(jsonResponse(buildSnapshot, 201))
       }
+      if (String(input) === validationPath) {
+        validated = true
+        return Promise.resolve(jsonResponse(validation, 201))
+      }
       return Promise.resolve(
         jsonResponse({
           ...detail,
           status: snapshotted ? 'VALIDATING' : started ? 'BUILDING' : 'DRAFT',
           build_snapshot: snapshotted ? buildSnapshot : null,
           can_create_build_snapshot: started && !snapshotted,
+          validation: validated ? validation : null,
+          can_validate: snapshotted && !validated,
         }),
       )
     })
@@ -901,7 +927,8 @@ describe('catalog views', () => {
       randomUUID: vi
         .fn()
         .mockReturnValueOnce('dataset-build-start-0001')
-        .mockReturnValueOnce('dataset-build-snapshot-0001'),
+        .mockReturnValueOnce('dataset-build-snapshot-0001')
+        .mockReturnValueOnce('dataset-validation-0001'),
     })
     const user = userEvent.setup()
 
@@ -941,12 +968,40 @@ describe('catalog views', () => {
     expect(screen.getByText('已封存')).toBeInTheDocument()
     expect(screen.getByText('查看构建快照标识')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '生成构建快照' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '执行冻结前校验' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       snapshotPath,
       expect.objectContaining({
         method: 'POST',
         cache: 'no-store',
         headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-snapshot-0001' }),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '执行冻结前校验' }))
+    const validationDialog = (await screen.findAllByRole('dialog')).find((dialog) =>
+      within(dialog).queryAllByText('执行冻结前校验？').length > 0,
+    )
+    expect(validationDialog).toBeDefined()
+    if (!validationDialog) throw new Error('Validation confirmation dialog was not rendered.')
+    expect(within(validationDialog).getByText(/通过也不会自动冻结/)).toBeInTheDocument()
+    await user.click(within(validationDialog).getByRole('button', { name: '执行冻结前校验' }))
+
+    expect(await screen.findByText('冻结前校验已通过')).toBeInTheDocument()
+    expect(screen.getByText(/仍需单独审批后才能冻结/)).toBeInTheDocument()
+    const validationFacts = screen.getByText('查看校验标识').closest('details')
+    expect(validationFacts).not.toBeNull()
+    if (!validationFacts) throw new Error('Validation facts were not rendered.')
+    expect(within(validationFacts).getByText('执行人')).toBeInTheDocument()
+    expect(within(validationFacts).getByText('local-admin')).toBeInTheDocument()
+    expect(within(validationFacts).getByText('执行时间')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '执行冻结前校验' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      validationPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-validation-0001' }),
       }),
     )
   })
@@ -1629,6 +1684,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string): Da
     can_create_build_specification: false,
     build_snapshot: null,
     can_create_build_snapshot: false,
+    validation: null,
+    can_validate: false,
     members: [
       {
         capture_session_id: sessionId,
