@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.42.0
+  version: 0.43.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -28,7 +28,8 @@ info:
     later immutable revision, or complete an approved task with a persisted post-cleaning result,
     let project administrators snapshot eligible CaptureSessions into a DRAFT DatasetVersion and
     fix one reproducible CaptureSession-level pilot/holdout split plan while members read its
-    immutable evidence separately from current admission facts,
+    immutable evidence separately from current admission facts and read a non-mutating build-readiness
+    preflight that explains every remaining DRAFT-to-BUILDING blocker,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -329,19 +330,20 @@ paths:
       operationId: getDatasetVersionCurrentAdmission
       tags:
         - Dataset Admission
-      summary: Read a dataset draft's current admission facts separately from its immutable snapshot
+      summary: Read current admission facts and the draft's build-readiness preflight
       description: >-
         Requires ACTIVE project membership. Re-evaluates every persisted DRAFT member against current
-        admission facts and reports the stable evidence differences from its immutable candidate
-        snapshot. This is a read-only observation: it does not write audit events, change the draft,
-        assign splits, approve an exception, freeze a DatasetVersion, create an export, authorize data
-        release, or state that the draft can be frozen.
+        admission facts, reports stable evidence differences from its immutable candidate snapshot and
+        summarizes the remaining DRAFT-to-BUILDING prerequisites. This is a read-only observation: it
+        does not fix a selection, label, cleaning or export profile, write audit events, change the
+        draft, assign splits, approve an exception, freeze a DatasetVersion, create an export or
+        authorize data release.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetVersionId"
       responses:
         "200":
-          description: Current admission facts and differences from the immutable candidate snapshot.
+          description: Current facts, snapshot differences and the non-mutating build-readiness preflight.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -5475,6 +5477,7 @@ components:
         - dataset_version_id
         - all_members_currently_admission_eligible
         - members
+        - build_readiness
       properties:
         dataset_version_id:
           type: string
@@ -5489,6 +5492,56 @@ components:
           maxItems: 100
           items:
             $ref: "#/components/schemas/DatasetVersionCurrentAdmissionMember"
+        build_readiness:
+          $ref: "#/components/schemas/DatasetVersionBuildReadiness"
+    DatasetVersionBuildReadiness:
+      type: object
+      additionalProperties: false
+      required:
+        - ready_for_build
+        - blocking_reasons
+        - immutable_evidence_still_current
+        - uniform_label_schema_digest
+        - uniform_cleaning_rule_set_digest
+        - dataset_split_plan_id
+      properties:
+        ready_for_build:
+          type: boolean
+          description: >-
+            True only when every current DRAFT-to-BUILDING prerequisite reported by this contract is
+            satisfied. It does not mean the DatasetVersion is validated, frozen, approved or exportable.
+        blocking_reasons:
+          type: array
+          maxItems: 9
+          uniqueItems: true
+          description: Stable, deterministic reasons that currently prevent DRAFT-to-BUILDING.
+          items:
+            type: string
+            enum:
+              - SELECTION_RULE_NOT_FIXED
+              - LABEL_SCHEMA_NOT_FIXED
+              - LABEL_SCHEMA_NOT_UNIFORM
+              - CLEANING_RULE_SET_NOT_FIXED
+              - CLEANING_RULE_SET_NOT_UNIFORM
+              - SPLIT_PLAN_NOT_FIXED
+              - EXPORT_PROFILE_NOT_FIXED
+              - CURRENT_ADMISSION_NOT_ELIGIBLE
+              - SNAPSHOT_EVIDENCE_CHANGED
+        immutable_evidence_still_current:
+          type: boolean
+          description: True when no tracked current fact differs from the immutable candidate snapshot.
+        uniform_label_schema_digest:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+          description: The common candidate digest when every snapshot stream uses one label schema; otherwise null.
+        uniform_cleaning_rule_set_digest:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+          description: The common candidate digest when every snapshot stream uses one cleaning rule set; otherwise null.
+        dataset_split_plan_id:
+          type: [string, "null"]
+          format: uuid
+          description: The fixed immutable split plan, or null when the draft has none.
     DatasetVersionCurrentAdmissionMember:
       type: object
       additionalProperties: false

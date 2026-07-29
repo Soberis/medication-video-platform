@@ -201,10 +201,31 @@ export interface DatasetVersionCurrentAdmissionMember {
   evidence_changes: DatasetVersionCurrentAdmissionEvidenceChange[]
 }
 
+export type DatasetVersionBuildBlocker =
+  | 'SELECTION_RULE_NOT_FIXED'
+  | 'LABEL_SCHEMA_NOT_FIXED'
+  | 'LABEL_SCHEMA_NOT_UNIFORM'
+  | 'CLEANING_RULE_SET_NOT_FIXED'
+  | 'CLEANING_RULE_SET_NOT_UNIFORM'
+  | 'SPLIT_PLAN_NOT_FIXED'
+  | 'EXPORT_PROFILE_NOT_FIXED'
+  | 'CURRENT_ADMISSION_NOT_ELIGIBLE'
+  | 'SNAPSHOT_EVIDENCE_CHANGED'
+
+export interface DatasetVersionBuildReadiness {
+  ready_for_build: boolean
+  blocking_reasons: DatasetVersionBuildBlocker[]
+  immutable_evidence_still_current: boolean
+  uniform_label_schema_digest: string | null
+  uniform_cleaning_rule_set_digest: string | null
+  dataset_split_plan_id: string | null
+}
+
 export interface DatasetVersionCurrentAdmission {
   dataset_version_id: string
   all_members_currently_admission_eligible: boolean
   members: DatasetVersionCurrentAdmissionMember[]
+  build_readiness: DatasetVersionBuildReadiness
 }
 
 export interface ClipAssetSessionBinding {

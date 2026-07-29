@@ -35,6 +35,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var versions = mock(DatasetVersionRepository.class);
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
+		var splitPlans = mock(DatasetSplitPlanRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 		var evidence = evidence(STREAM_ONE_ID, 0, 1, 'a', "QUALIFIED", "PASS");
@@ -50,7 +51,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				.thenReturn(List.of(snapshotStream));
 		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID)).thenReturn(current);
 
-		var response = service(access, versions, sessions, streams, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertEquals(version.getDatasetVersionId(), response.datasetVersionId());
@@ -60,6 +61,18 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		assertEquals(0, response.members().getFirst().candidateIndex());
 		assertEquals(current.preview(), response.members().getFirst().currentAdmission());
 		assertTrue(response.members().getFirst().evidenceChanges().isEmpty());
+		assertFalse(response.buildReadiness().readyForBuild());
+		assertEquals(List.of(
+				DatasetVersionBuildBlocker.SELECTION_RULE_NOT_FIXED,
+				DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_FIXED,
+				DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_FIXED,
+				DatasetVersionBuildBlocker.SPLIT_PLAN_NOT_FIXED,
+				DatasetVersionBuildBlocker.EXPORT_PROFILE_NOT_FIXED),
+				response.buildReadiness().blockingReasons());
+		assertTrue(response.buildReadiness().immutableEvidenceStillCurrent());
+		assertEquals(digest('a'), response.buildReadiness().uniformLabelSchemaDigest());
+		assertEquals(digest('a'), response.buildReadiness().uniformCleaningRuleSetDigest());
+		assertNull(response.buildReadiness().datasetSplitPlanId());
 		verify(access).requireMember(PROJECT_ID, ACTOR_ID);
 	}
 
@@ -69,6 +82,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var versions = mock(DatasetVersionRepository.class);
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
+		var splitPlans = mock(DatasetSplitPlanRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 		var snapshotEvidence = evidence(STREAM_ONE_ID, 0, 1, 'a', "QUALIFIED", "PASS");
@@ -86,7 +100,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID))
 				.thenReturn(evaluation(currentFacts, false, List.of(currentEvidence)));
 
-		var response = service(access, versions, sessions, streams, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertFalse(response.allMembersCurrentlyAdmissionEligible());
@@ -112,6 +126,11 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				"STREAM_CLEANING_RUN_CHANGED",
 				"STREAM_CLEANING_RULE_SET_DIGEST_CHANGED",
 				"STREAM_POST_CLEANING_OUTCOME_CHANGED"), changes.get(1).changeCodes());
+		assertFalse(response.buildReadiness().immutableEvidenceStillCurrent());
+		assertTrue(response.buildReadiness().blockingReasons()
+				.contains(DatasetVersionBuildBlocker.CURRENT_ADMISSION_NOT_ELIGIBLE));
+		assertTrue(response.buildReadiness().blockingReasons()
+				.contains(DatasetVersionBuildBlocker.SNAPSHOT_EVIDENCE_CHANGED));
 	}
 
 	@Test
@@ -120,6 +139,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var versions = mock(DatasetVersionRepository.class);
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
+		var splitPlans = mock(DatasetSplitPlanRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 
@@ -149,8 +169,17 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID)).thenReturn(evaluation(firstFacts, true, List.of(firstEvidence)));
 		when(admission.evaluate(PROJECT_ID, SESSION_TWO_ID))
 				.thenReturn(evaluation(secondCurrentFacts, true, List.of(addedEvidence, changedCurrentEvidence)));
+		var splitPlan = DatasetSplitPlan.create(
+				version,
+				20260729,
+				1,
+				"dataset.admin",
+				"dataset-split-readiness-0001",
+				digest('f'),
+				Instant.EPOCH);
+		when(splitPlans.findByDatasetVersionId(version.getDatasetVersionId())).thenReturn(Optional.of(splitPlan));
 
-		var response = service(access, versions, sessions, streams, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertTrue(response.allMembersCurrentlyAdmissionEligible());
@@ -171,6 +200,15 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				"STREAM_CLEANING_RESULT_CHANGED",
 				"STREAM_CLEANING_RUN_CHANGED",
 				"STREAM_CLEANING_RULE_SET_DIGEST_CHANGED"), changes.get(2).changeCodes());
+		assertEquals(splitPlan.getDatasetSplitPlanId(), response.buildReadiness().datasetSplitPlanId());
+		assertFalse(response.buildReadiness().blockingReasons()
+				.contains(DatasetVersionBuildBlocker.SPLIT_PLAN_NOT_FIXED));
+		assertTrue(response.buildReadiness().blockingReasons()
+				.contains(DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_UNIFORM));
+		assertTrue(response.buildReadiness().blockingReasons()
+				.contains(DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_UNIFORM));
+		assertNull(response.buildReadiness().uniformLabelSchemaDigest());
+		assertNull(response.buildReadiness().uniformCleaningRuleSetDigest());
 	}
 
 	private static DatasetVersionCurrentAdmissionQueryService service(
@@ -178,8 +216,10 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 			DatasetVersionRepository versions,
 			DatasetMemberSessionRepository sessions,
 			DatasetMemberStreamRepository streams,
+			DatasetSplitPlanRepository splitPlans,
 			DatasetAdmissionPreviewService admission) {
-		return new DatasetVersionCurrentAdmissionQueryService(access, versions, sessions, streams, admission);
+		return new DatasetVersionCurrentAdmissionQueryService(
+				access, versions, sessions, streams, splitPlans, admission);
 	}
 
 	private static DatasetVersion version() {

@@ -301,6 +301,19 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.split_plan.dataset_split_plan_id").value(splitPlanId.toString()))
 				.andExpect(jsonPath("$.split_plan.assignments.length()").value(3))
 				.andExpect(jsonPath("$.can_create_split_plan").value(false));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.build_readiness.ready_for_build").value(false))
+				.andExpect(jsonPath("$.build_readiness.dataset_split_plan_id").value(splitPlanId.toString()))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons.length()").value(4))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[0]")
+						.value("SELECTION_RULE_NOT_FIXED"))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[3]")
+						.value("EXPORT_PROFILE_NOT_FIXED"));
 	}
 
 	@Test
@@ -736,7 +749,17 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.members[0].capture_session_id").value(captureSessionId.toString()))
 				.andExpect(jsonPath("$.members[0].candidate_index").value(0))
 				.andExpect(jsonPath("$.members[0].current_admission.eligible").value(true))
-				.andExpect(jsonPath("$.members[0].evidence_changes").isEmpty());
+				.andExpect(jsonPath("$.members[0].evidence_changes").isEmpty())
+				.andExpect(jsonPath("$.build_readiness.ready_for_build").value(false))
+				.andExpect(jsonPath("$.build_readiness.immutable_evidence_still_current").value(true))
+				.andExpect(jsonPath("$.build_readiness.uniform_label_schema_digest")
+						.value(CURRENT_LABEL_SCHEMA_DIGEST))
+				.andExpect(jsonPath("$.build_readiness.uniform_cleaning_rule_set_digest").exists())
+				.andExpect(jsonPath("$.build_readiness.dataset_split_plan_id").isEmpty())
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons.length()").value(5))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[0]")
+						.value("SELECTION_RULE_NOT_FIXED"))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[3]").value("SPLIT_PLAN_NOT_FIXED"));
 		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
 						PROJECT_ID,
@@ -804,7 +827,12 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.members[0].evidence_changes[0].scope").value("STREAM"))
 				.andExpect(jsonPath("$.members[0].evidence_changes[0].camera_stream_id").isNotEmpty())
 				.andExpect(jsonPath("$.members[0].evidence_changes[0].change_codes[0]")
-						.value("STREAM_QUALITY_REVIEW_VERSION_CHANGED"));
+						.value("STREAM_QUALITY_REVIEW_VERSION_CHANGED"))
+				.andExpect(jsonPath("$.build_readiness.immutable_evidence_still_current").value(false))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[5]")
+						.value("CURRENT_ADMISSION_NOT_ELIGIBLE"))
+				.andExpect(jsonPath("$.build_readiness.blocking_reasons[6]")
+						.value("SNAPSHOT_EVIDENCE_CHANGED"));
 		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
 						PROJECT_ID,

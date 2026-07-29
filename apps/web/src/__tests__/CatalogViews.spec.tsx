@@ -600,6 +600,22 @@ describe('catalog views', () => {
           jsonResponse({
             dataset_version_id: datasetVersionId,
             all_members_currently_admission_eligible: false,
+            build_readiness: {
+              ready_for_build: false,
+              blocking_reasons: [
+                'SELECTION_RULE_NOT_FIXED',
+                'LABEL_SCHEMA_NOT_FIXED',
+                'CLEANING_RULE_SET_NOT_FIXED',
+                'SPLIT_PLAN_NOT_FIXED',
+                'EXPORT_PROFILE_NOT_FIXED',
+                'CURRENT_ADMISSION_NOT_ELIGIBLE',
+                'SNAPSHOT_EVIDENCE_CHANGED',
+              ],
+              immutable_evidence_still_current: false,
+              uniform_label_schema_digest: 'c'.repeat(64),
+              uniform_cleaning_rule_set_digest: 'd'.repeat(64),
+              dataset_split_plan_id: null,
+            },
             members: [
               {
                 capture_session_id: sessionId,
@@ -658,17 +674,20 @@ describe('catalog views', () => {
 
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
     expect(fetchMock).not.toHaveBeenCalledWith(currentAdmissionPath, expect.any(Object))
-    expect(screen.getByText('尚未核对当前事实。')).toBeInTheDocument()
+    expect(screen.getByText('尚未检查构建准备。')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+    await user.click(screen.getByRole('button', { name: '检查构建准备' }))
 
-    expect(await screen.findByText('至少一条候选操作当前不满足草稿创建前提。')).toBeInTheDocument()
+    expect(await screen.findByText('尚未具备开始构建条件')).toBeInTheDocument()
+    expect(screen.getByText('尚未固定候选选择规则')).toBeInTheDocument()
+    expect(screen.getByText('尚未固定必需导出配置')).toBeInTheDocument()
+    expect(await screen.findByText('当前有阻断')).toBeInTheDocument()
     expect(screen.getByText('本次配药操作的技术检测尚未通过')).toBeInTheDocument()
     expect(screen.getByText('有视频尚未通过人工质量判断')).toBeInTheDocument()
     expect(screen.getByText(/技术检测状态已变化/)).toBeInTheDocument()
     expect(screen.getByText(/后置清洗结论已变化/)).toBeInTheDocument()
     expect(screen.getByText(/UNKNOWN_CHANGE_CODE/)).toBeInTheDocument()
-    expect(screen.getByText(/当前草稿创建前提，不代表可冻结\/可导出/)).toBeInTheDocument()
+    expect(screen.getByText(/通过本检查也不代表已经冻结或可以导出/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /拆分|冻结|导出/ })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       currentAdmissionPath,
@@ -696,6 +715,14 @@ describe('catalog views', () => {
             : jsonResponse({
                 dataset_version_id: datasetVersionId,
                 all_members_currently_admission_eligible: true,
+                build_readiness: {
+                  ready_for_build: false,
+                  blocking_reasons: ['SELECTION_RULE_NOT_FIXED', 'EXPORT_PROFILE_NOT_FIXED'],
+                  immutable_evidence_still_current: true,
+                  uniform_label_schema_digest: 'c'.repeat(64),
+                  uniform_cleaning_rule_set_digest: 'd'.repeat(64),
+                  dataset_split_plan_id: '92000000-0000-4000-8000-000000000001',
+                },
                 members: [],
               }),
         )
@@ -708,7 +735,7 @@ describe('catalog views', () => {
     renderDatasetDetail(datasetVersionId)
 
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
-    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+    await user.click(screen.getByRole('button', { name: '检查构建准备' }))
 
     expect(await screen.findByText('DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE')).toBeInTheDocument()
     expect(screen.getByText('请求标识：request-current-admission-0001')).toBeInTheDocument()
@@ -716,7 +743,7 @@ describe('catalog views', () => {
 
     await user.click(screen.getByRole('button', { name: /重\s*试/ }))
 
-    expect(await screen.findByText('所有候选操作当前仍满足草稿创建前提。')).toBeInTheDocument()
+    expect(await screen.findByText('尚未具备开始构建条件')).toBeInTheDocument()
     expect(currentAdmissionAttempts).toBe(2)
   })
 
@@ -741,7 +768,7 @@ describe('catalog views', () => {
     const { router } = renderDatasetDetail(firstDatasetVersionId)
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
 
-    await user.click(screen.getByRole('button', { name: '核对当前事实' }))
+    await user.click(screen.getByRole('button', { name: '检查构建准备' }))
     await waitFor(() => expect(currentAdmissionSignal).toBeDefined())
     await router.navigate(`/projects/${projectId}/datasets/${secondDatasetVersionId}`)
 

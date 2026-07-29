@@ -276,6 +276,10 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 `BUILDING`；选择规则、label/clean/export profile 等其余守卫仍须全部固定。计划不可改写，调整划分必须
 创建新 DatasetVersion。
 
+当前只读构建准备检查会按上述 `DRAFT → BUILDING` 守卫报告尚未固定的配置，并同时提示当前准入
+失败或固定证据变化。它不写 DatasetVersion、不产生审计，也不执行状态迁移；“检查通过”仍不等同于
+`VALIDATING → FROZEN` 的校验和审批通过。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport

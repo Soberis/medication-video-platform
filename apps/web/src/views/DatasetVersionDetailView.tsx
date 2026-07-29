@@ -9,6 +9,7 @@ import {
   getDatasetVersionCurrentAdmission,
   type DatasetAdmissionPreview,
   type DatasetVersionDetail,
+  type DatasetVersionBuildBlocker,
   type DatasetVersionCurrentAdmission,
   type DatasetVersionCurrentAdmissionEvidenceChange,
   type DatasetVersionCurrentAdmissionMember,
@@ -53,6 +54,18 @@ const evidenceChangeLabels: Record<string, string> = {
   STREAM_CLEANING_RUN_CHANGED: '清洗运行已变化',
   STREAM_CLEANING_RULE_SET_DIGEST_CHANGED: '清洗规则摘要已变化',
   STREAM_POST_CLEANING_OUTCOME_CHANGED: '后置清洗结论已变化',
+}
+
+const buildBlockerLabels: Record<DatasetVersionBuildBlocker, string> = {
+  SELECTION_RULE_NOT_FIXED: '尚未固定候选选择规则',
+  LABEL_SCHEMA_NOT_FIXED: '尚未把统一标签规范固定为数据集配置',
+  LABEL_SCHEMA_NOT_UNIFORM: '候选视频使用了不同的标签规范',
+  CLEANING_RULE_SET_NOT_FIXED: '尚未把统一清洗规则固定为数据集配置',
+  CLEANING_RULE_SET_NOT_UNIFORM: '候选视频使用了不同的清洗规则',
+  SPLIT_PLAN_NOT_FIXED: '尚未固定试用组和留出组划分',
+  EXPORT_PROFILE_NOT_FIXED: '尚未固定必需导出配置',
+  CURRENT_ADMISSION_NOT_ELIGIBLE: '至少一条候选操作当前不再满足准入条件',
+  SNAPSHOT_EVIDENCE_CHANGED: '当前事实与草稿固定证据存在变化',
 }
 
 export default function DatasetVersionDetailView() {
@@ -143,7 +156,7 @@ function DatasetVersionDetailContent() {
         setCurrentAdmissionRequestId(error.requestId)
       } else {
         setCurrentAdmissionErrorCode('DATASET_VERSION_CURRENT_ADMISSION_FAILED')
-        setCurrentAdmissionErrorMessage('暂时无法核对当前准入事实，请稍后重试。')
+        setCurrentAdmissionErrorMessage('暂时无法检查构建准备，请稍后重试。')
       }
     } finally {
       if (currentAdmissionRequest.current === request) currentAdmissionRequest.current = null
@@ -309,19 +322,19 @@ function DatasetVersionDetailContent() {
             className="detail-card"
             extra={
               <Button loading={currentAdmissionState === 'loading'} onClick={() => void checkCurrentAdmission()}>
-                核对当前事实
+                检查构建准备
               </Button>
             }
-            title={<strong>当前准入复核</strong>}
+            title={<strong>构建准备</strong>}
             variant="outlined"
           >
             <p className="form-hint">
-              此核对只读取当前服务端事实，不会修改不可变候选快照。结果只说明当前草稿创建前提，不代表可冻结/可导出。
+              只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。
             </p>
-            {currentAdmissionState === 'idle' ? <p>尚未核对当前事实。</p> : null}
+            {currentAdmissionState === 'idle' ? <p>尚未检查构建准备。</p> : null}
             {currentAdmissionState === 'loading' ? (
               <div className="catalog-notice" role="status" aria-live="polite">
-                正在核对当前准入事实…
+                正在检查构建准备…
               </div>
             ) : null}
             {currentAdmissionState === 'error' ? (
@@ -485,14 +498,23 @@ function CurrentAdmissionEvidence({
 }) {
   return (
     <>
-      <p>
-        <Tag color={admission.all_members_currently_admission_eligible ? 'success' : 'warning'}>
-          {admission.all_members_currently_admission_eligible ? '当前仍满足草稿创建前提' : '当前存在准入阻断'}
-        </Tag>
-        {admission.all_members_currently_admission_eligible
-          ? '所有候选操作当前仍满足草稿创建前提。'
-          : '至少一条候选操作当前不满足草稿创建前提。'}
-      </p>
+      <div className={`readiness-result${admission.build_readiness.ready_for_build ? ' readiness-result-ready' : ''}`}>
+        <div>
+          <strong>{admission.build_readiness.ready_for_build ? '已具备开始构建条件' : '尚未具备开始构建条件'}</strong>
+          <span>
+            {admission.build_readiness.ready_for_build
+              ? '草稿配置与当前证据已通过构建前检查。'
+              : `还有 ${admission.build_readiness.blocking_reasons.length} 项需要处理。`}
+          </span>
+          {admission.build_readiness.blocking_reasons.length > 0 ? (
+            <ul>
+              {admission.build_readiness.blocking_reasons.map((reason) => (
+                <li key={reason}>{buildBlockerLabels[reason]}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
       <Table<DatasetVersionCurrentAdmissionMember>
         dataSource={admission.members}
         rowKey="capture_session_id"

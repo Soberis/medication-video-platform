@@ -317,6 +317,8 @@ flowchart LR
 - 当前 V39 仅在 `DRAFT` 内建立一次不可变 `CAPTURE_SESSION_HASH_RANK_V1` pilot/holdout 计划：
   CaptureSession 同时作为成员和泄漏组，算法版本、正整数 seed、排名与实际结果全部保存；计划不可更新，
   调整留出数量必须创建新 DatasetVersion。该计划不触发 `BUILDING`，也不代表准入、冻结或导出已完成。
+- 构建准备检查是从草稿快照、划分和当前准入事实计算出的只读投影；它只解释
+  `DRAFT → BUILDING` 阻断项，不拥有状态、不回写聚合，也不能代替冻结校验或审批。
 - VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
 - 导出只读取 FROZEN 快照；导出失败不改变冻结版本。

@@ -16,7 +16,7 @@ import com.medicationvideo.platform.assetcapture.CaptureSessionDatasetAdmissionF
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 /**
- * Read-only comparison between a dataset draft's immutable admission evidence and current facts.
+ * Read-only comparison of a dataset draft with current admission facts and DRAFT build prerequisites.
  */
 @Service
 class DatasetVersionCurrentAdmissionQueryService {
@@ -29,6 +29,7 @@ class DatasetVersionCurrentAdmissionQueryService {
 	private final DatasetVersionRepository versionRepository;
 	private final DatasetMemberSessionRepository memberSessionRepository;
 	private final DatasetMemberStreamRepository memberStreamRepository;
+	private final DatasetSplitPlanRepository splitPlanRepository;
 	private final DatasetAdmissionPreviewService admissionService;
 
 	DatasetVersionCurrentAdmissionQueryService(
@@ -36,11 +37,13 @@ class DatasetVersionCurrentAdmissionQueryService {
 			DatasetVersionRepository versionRepository,
 			DatasetMemberSessionRepository memberSessionRepository,
 			DatasetMemberStreamRepository memberStreamRepository,
+			DatasetSplitPlanRepository splitPlanRepository,
 			DatasetAdmissionPreviewService admissionService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
 		this.memberStreamRepository = memberStreamRepository;
+		this.splitPlanRepository = splitPlanRepository;
 		this.admissionService = admissionService;
 	}
 
@@ -49,7 +52,9 @@ class DatasetVersionCurrentAdmissionQueryService {
 		this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 				.orElseThrow(DatasetVersionCurrentAdmissionQueryService::notFound);
-		var streamsByMemberId = streamsByMemberId(datasetVersionId);
+		var snapshotStreams = this.memberStreamRepository
+				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
+		var streamsByMemberId = streamsByMemberId(snapshotStreams);
 		var members = this.memberSessionRepository
 				.findByDatasetVersionIdOrderByCandidateIndexAsc(datasetVersionId)
 				.stream()
@@ -58,16 +63,21 @@ class DatasetVersionCurrentAdmissionQueryService {
 						member,
 						streamsByMemberId.getOrDefault(member.getDatasetMemberSessionId(), List.of())))
 				.toList();
+		var buildReadiness = DatasetVersionBuildReadinessResponse.from(
+				members,
+				snapshotStreams,
+				this.splitPlanRepository.findByDatasetVersionId(datasetVersionId).orElse(null));
 		return new DatasetVersionCurrentAdmissionResponse(
 				version.getDatasetVersionId(),
 				members.stream().allMatch(member -> member.currentAdmission().eligible()),
-				members);
+				members,
+				buildReadiness);
 	}
 
-	private Map<UUID, List<DatasetMemberStream>> streamsByMemberId(UUID datasetVersionId) {
+	private static Map<UUID, List<DatasetMemberStream>> streamsByMemberId(
+			List<DatasetMemberStream> snapshotStreams) {
 		var streamsByMemberId = new HashMap<UUID, List<DatasetMemberStream>>();
-		for (var stream : this.memberStreamRepository
-				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId)) {
+		for (var stream : snapshotStreams) {
 			streamsByMemberId.computeIfAbsent(stream.getDatasetMemberSessionId(), ignored -> new ArrayList<>())
 					.add(stream);
 		}
@@ -212,7 +222,8 @@ class DatasetVersionCurrentAdmissionQueryService {
 record DatasetVersionCurrentAdmissionResponse(
 		UUID datasetVersionId,
 		boolean allMembersCurrentlyAdmissionEligible,
-		List<DatasetVersionCurrentAdmissionMemberResponse> members) {
+		List<DatasetVersionCurrentAdmissionMemberResponse> members,
+		DatasetVersionBuildReadinessResponse buildReadiness) {
 
 	DatasetVersionCurrentAdmissionResponse {
 		members = List.copyOf(members);

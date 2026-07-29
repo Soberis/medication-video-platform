@@ -352,6 +352,14 @@ describe('catalog API', () => {
           dataset_version_id: datasetVersionId,
           all_members_currently_admission_eligible: false,
           members: [],
+          build_readiness: {
+            ready_for_build: false,
+            blocking_reasons: ['SPLIT_PLAN_NOT_FIXED'],
+            immutable_evidence_still_current: true,
+            uniform_label_schema_digest: 'a'.repeat(64),
+            uniform_cleaning_rule_set_digest: 'b'.repeat(64),
+            dataset_split_plan_id: null,
+          },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
@@ -364,6 +372,10 @@ describe('catalog API', () => {
     ).resolves.toMatchObject({
       dataset_version_id: datasetVersionId,
       all_members_currently_admission_eligible: false,
+      build_readiness: {
+        ready_for_build: false,
+        blocking_reasons: ['SPLIT_PLAN_NOT_FIXED'],
+      },
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
