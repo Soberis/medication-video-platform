@@ -88,6 +88,9 @@ describe('annotation task list view', () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
+    expect(await screen.findByLabelText('项目标注任务进度')).toHaveTextContent(
+      '项目任务1待提交1待修改0待复核0已完成0',
+    )
     expect(screen.getByText('已分配')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: assetId })).toHaveAttribute(
@@ -105,7 +108,7 @@ describe('annotation task list view', () => {
       const url = String(input)
       if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
       if (url.endsWith('/annotation-tasks') && init?.method === 'GET')
-        return jsonResponse({ items: [assignedTask] })
+        return jsonResponse(taskList([assignedTask]))
       if (url.endsWith(`/annotation-tasks/${taskId}/revisions`) && init?.method === 'POST')
         return jsonResponse({
           annotation_revision_id: '80000000-0000-4000-8000-000000000001',
@@ -192,7 +195,7 @@ describe('annotation task list view', () => {
           Promise.resolve(
             String(input).endsWith('/annotation-label-schema')
               ? jsonResponse({ error_code: 'ANNOTATION_LABEL_SCHEMA_NOT_FOUND' }, { status: 404 })
-              : jsonResponse({ items: [assignedTask] }),
+              : jsonResponse(taskList([assignedTask])),
           ),
         ),
     )
@@ -215,11 +218,35 @@ function stubTasks(tasks: object[], schema: object) {
       Promise.resolve(
         String(input).endsWith('/annotation-label-schema')
           ? jsonResponse(schema)
-          : jsonResponse({ items: tasks }),
+          : jsonResponse(taskList(tasks)),
       ),
     )
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+function taskList(tasks: object[]) {
+  const queue = tasks as Array<{
+    status?: string
+    annotation_revision?: { review?: { decision?: string } | null } | null
+  }>
+  const reworkRequired = queue.filter(
+    (task) =>
+      task.status === 'ASSIGNED' && task.annotation_revision?.review?.decision === 'REJECTED',
+  ).length
+  return {
+    items: tasks,
+    progress: {
+      scope: 'PROJECT',
+      total: tasks.length,
+      awaiting_submission: queue.filter(
+        (task) =>
+          task.status === 'ASSIGNED' && task.annotation_revision?.review?.decision !== 'REJECTED',
+      ).length,
+      rework_required: reworkRequired,
+      awaiting_review: queue.filter((task) => task.status === 'SUBMITTED').length,
+      completed: queue.filter((task) => task.status === 'COMPLETED').length,
+    },
+  }
 }
 function jsonResponse(body: object, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {

@@ -18,6 +18,20 @@ export interface AnnotationTask {
   version: number
 }
 
+export interface AnnotationTaskProgress {
+  scope: 'PROJECT' | 'ASSIGNEE'
+  total: number
+  awaiting_submission: number
+  rework_required: number
+  awaiting_review: number
+  completed: number
+}
+
+export interface AnnotationTaskList {
+  items: AnnotationTask[]
+  progress: AnnotationTaskProgress
+}
+
 export interface AnnotationSegment {
   start_ms: number
   end_ms: number
@@ -101,14 +115,17 @@ export class AnnotationTaskApiError extends Error {
   }
 }
 
-export async function listAnnotationTasks(projectId: string, signal?: AbortSignal): Promise<AnnotationTask[]> {
+export async function listAnnotationTasks(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<AnnotationTaskList> {
   const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
     signal,
   })
-  if (response.ok) return ((await response.json()) as { items: AnnotationTask[] }).items
+  if (response.ok) return (await response.json()) as AnnotationTaskList
   throw await annotationTaskApiError(response)
 }
 

@@ -76,7 +76,7 @@
 | FR-012 任务拆分和分配 | P0 | `annotationreview` | annotation tasks | annotation_task | 当前先按单个 ClipAsset 创建一个直接分配任务；重复创建受唯一约束保护 | PI |
 | FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API | annotation_task、annotation_revision | `ASSIGNED → SUBMITTED` 只允许受理人；`APPROVED` 推进为 `COMPLETED`；重复提交不覆盖既有修订 | PI |
 | FR-014 标注指南绑定 | P0 | `annotationreview` | guideline versions | annotation_guideline_version | 提交 revision 可追溯到实际使用的指南摘要 | D1 |
-| FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation progress query | annotation_progress_projection | 与任务事实表对账一致；统计不反向写业务表 | D1 |
+| FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation task list + progress | annotation_task、annotation_revision、annotation_review（只读聚合） | 管理员项目范围与成员个人范围正确；四个互斥状态计数之和等于可见任务总数 | PI |
 | FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision、annotation_task | 独立项目管理员记录一次通过/不通过；标注提交者不能自审；通过只完成当前任务，不等于数据集准入 | PI |
 | FR-017 退回重标并保留历史 | P0 | `annotationreview` | rework command | annotation_task、annotation_revision、annotation_review | `REJECTED` 退回任务；再次提交创建递增 revision，旧记录不可覆盖 | PI |
 | FR-018 基础一致性检查 | P0 | `annotationreview`、`qualitycleaning` | 提交守卫；post-clean run/result | annotation_revision、cleaning_rule_set、cleaning_run、cleaning_result | 提交时阻断时间和标签错误；复核通过后以冻结输入重验，缺少已验证媒体时长产生 `WARNING`，非法事实产生 `REJECT` | PI |
@@ -124,7 +124,7 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-011/FR-012/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、独立复核、返工与同步 post-clean。Flyway V37/V39～V45 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、职责分离冻结和冻结版本导出申请。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、WARNING 批准例外、更强泄漏组或导出审批后作业与产物。
+FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、独立复核、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V45 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、职责分离冻结和冻结版本导出申请。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、WARNING 批准例外、更强泄漏组或导出审批后作业与产物。
 
 Flyway V43 补充 `DATASET_FREEZE_VALIDATION_V1`：它在 `VALIDATING` 内保存一次当前准入、引用、
 关系快照摘要、CaptureSession 级 split 隔离和构建契约的不可变技术结论。该预检本身不迁移状态；

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.50.0
+  version: 0.51.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -3385,7 +3385,9 @@ paths:
       summary: List annotation tasks visible to the current project member
       description: >-
         Requires an ACTIVE project membership. Project administrators receive the project queue;
-        ordinary members receive only tasks assigned to their own internal account.
+        ordinary members receive only tasks assigned to their own internal account. The response
+        includes mutually exclusive progress counts over exactly the same visible tasks and from
+        the same consistent read; the browser does not calculate project workload from other pages.
       security:
         - sessionCookie: []
       parameters:
@@ -7409,11 +7411,57 @@ components:
       additionalProperties: false
       required:
         - items
+        - progress
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/AnnotationTask"
+        progress:
+          $ref: "#/components/schemas/AnnotationTaskProgress"
+    AnnotationTaskProgress:
+      type: object
+      additionalProperties: false
+      description: >-
+        A complete partition of the visible task queue. total equals awaiting_submission plus
+        rework_required plus awaiting_review plus completed.
+      required:
+        - scope
+        - total
+        - awaiting_submission
+        - rework_required
+        - awaiting_review
+        - completed
+      properties:
+        scope:
+          type: string
+          enum:
+            - PROJECT
+            - ASSIGNEE
+          description: PROJECT for an administrator queue; ASSIGNEE for an ordinary member queue.
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+        awaiting_submission:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Assigned tasks without a rejected latest revision.
+        rework_required:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Assigned tasks whose latest revision was rejected and retained for evidence.
+        awaiting_review:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Submitted tasks waiting for an independent administrator review.
+        completed:
+          type: integer
+          format: int64
+          minimum: 0
     AnnotationSegment:
       type: object
       additionalProperties: false

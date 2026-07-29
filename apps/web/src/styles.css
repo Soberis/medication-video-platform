@@ -908,6 +908,38 @@ code {
   gap: 12px;
 }
 
+.annotation-progress {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.annotation-progress > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.annotation-progress dt {
+  color: var(--app-text-secondary);
+  font-size: 0.875rem;
+}
+
+.annotation-progress dd {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.annotation-progress > div:first-child dd {
+  color: var(--app-color-primary);
+}
+
 .annotation-segment-row {
   display: grid;
   grid-template-columns: 150px 150px minmax(180px, 1fr) auto;

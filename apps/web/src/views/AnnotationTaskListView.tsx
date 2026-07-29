@@ -24,6 +24,7 @@ import {
   type AnnotationLabelSchema,
   type AnnotationSegment,
   type AnnotationTask,
+  type AnnotationTaskProgress,
 } from '@/api/annotation'
 import { paths } from '@/app/paths'
 import { formatDateTime } from '@/catalog-presentation'
@@ -108,6 +109,7 @@ export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const { message, modal } = AntdApp.useApp()
   const [items, setItems] = useState<AnnotationTask[]>([])
+  const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
   const sortedLabels = useMemo(
     () =>
@@ -133,16 +135,18 @@ export default function AnnotationTaskListView() {
     const request = new AbortController()
     activeRequest.current = request
     setLoadState('loading')
+    setProgress(null)
     setLabelSchema(null)
     setErrorCode('')
     setErrorMessage('')
     try {
-      const [tasks, schema] = await Promise.all([
+      const [taskList, schema] = await Promise.all([
         listAnnotationTasks(projectId, request.signal),
         getAnnotationLabelSchema(projectId, request.signal),
       ])
       if (activeRequest.current !== request) return
-      setItems(tasks)
+      setItems(taskList.items)
+      setProgress(taskList.progress)
       setLabelSchema(schema)
       setLoadState('success')
     } catch (error) {
@@ -311,6 +315,33 @@ export default function AnnotationTaskListView() {
           <span>{errorMessage}</span>
           <Button onClick={() => void loadTasks()}>重试</Button>
         </div>
+      ) : null}
+      {loadState === 'success' && progress ? (
+        <dl
+          className="annotation-progress"
+          aria-label={progress.scope === 'PROJECT' ? '项目标注任务进度' : '我的标注任务进度'}
+        >
+          <div>
+            <dt>{progress.scope === 'PROJECT' ? '项目任务' : '我的任务'}</dt>
+            <dd>{progress.total}</dd>
+          </div>
+          <div>
+            <dt>待提交</dt>
+            <dd>{progress.awaiting_submission}</dd>
+          </div>
+          <div>
+            <dt>待修改</dt>
+            <dd>{progress.rework_required}</dd>
+          </div>
+          <div>
+            <dt>待复核</dt>
+            <dd>{progress.awaiting_review}</dd>
+          </div>
+          <div>
+            <dt>已完成</dt>
+            <dd>{progress.completed}</dd>
+          </div>
+        </dl>
       ) : null}
       {loadState === 'success' && items.length ? (
         <Card className="table-card" variant="outlined">

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.medicationvideo.platform.assetcapture.ClipAssetReviewQueryService;
@@ -66,7 +67,7 @@ class AnnotationTaskService {
 		this.auditRecorder = auditRecorder;
 	}
 
-	@Transactional(readOnly = true)
+	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	AnnotationTaskListResponse list(UUID projectId, String actorId) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		List<AnnotationTask> tasks = role == ProjectRole.ADMIN
@@ -74,7 +75,10 @@ class AnnotationTaskService {
 				: this.repository.findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(
 						projectId, actorId);
 		if (tasks.isEmpty()) {
-			return new AnnotationTaskListResponse(List.of());
+			var items = List.<AnnotationTaskResponse>of();
+			return new AnnotationTaskListResponse(
+					items,
+					AnnotationTaskProgressResponse.from(role, items));
 		}
 		var revisionsByTaskId = this.revisionRepository.findAllByAnnotationTaskIdIn(tasks.stream()
 				.map(AnnotationTask::getAnnotationTaskId)
@@ -95,7 +99,7 @@ class AnnotationTaskService {
 				: this.postCleaningQueryService.findLatestByAnnotationRevisionIds(
 						revisionsByTaskId.values()
 								.stream().map(AnnotationRevision::getAnnotationRevisionId).toList());
-		return new AnnotationTaskListResponse(tasks.stream()
+		var items = tasks.stream()
 				.map(task -> {
 					var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
 					return AnnotationTaskResponse.from(
@@ -108,7 +112,10 @@ class AnnotationTaskService {
 									? null
 									: postCleaningByRevisionId.get(revision.getAnnotationRevisionId()));
 				})
-				.toList());
+				.toList();
+		return new AnnotationTaskListResponse(
+				items,
+				AnnotationTaskProgressResponse.from(role, items));
 	}
 
 	@Transactional
@@ -664,7 +671,52 @@ record AnnotationTaskResponse(
 	}
 }
 
-record AnnotationTaskListResponse(List<AnnotationTaskResponse> items) {
+record AnnotationTaskListResponse(
+		List<AnnotationTaskResponse> items,
+		AnnotationTaskProgressResponse progress) {
+}
+
+record AnnotationTaskProgressResponse(
+		String scope,
+		long total,
+		long awaitingSubmission,
+		long reworkRequired,
+		long awaitingReview,
+		long completed) {
+
+	static AnnotationTaskProgressResponse from(
+			ProjectRole role, List<AnnotationTaskResponse> items) {
+		long awaitingSubmission = 0;
+		long reworkRequired = 0;
+		long awaitingReview = 0;
+		long completed = 0;
+		for (var item : items) {
+			switch (item.status()) {
+				case "ASSIGNED" -> {
+					var revision = item.annotationRevision();
+					if (revision != null
+							&& revision.review() != null
+							&& "REJECTED".equals(revision.review().decision())) {
+						reworkRequired++;
+					}
+					else {
+						awaitingSubmission++;
+					}
+				}
+				case "SUBMITTED" -> awaitingReview++;
+				case "COMPLETED" -> completed++;
+				default -> throw new IllegalStateException(
+						"Unsupported annotation task status: " + item.status());
+			}
+		}
+		return new AnnotationTaskProgressResponse(
+				role == ProjectRole.ADMIN ? "PROJECT" : "ASSIGNEE",
+				items.size(),
+				awaitingSubmission,
+				reworkRequired,
+				awaitingReview,
+				completed);
+	}
 }
 
 record AnnotationRevisionSummary(

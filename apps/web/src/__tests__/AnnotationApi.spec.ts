@@ -13,6 +13,14 @@ const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 const labelSchemaId = '70000000-0000-4000-8000-000000000001'
 const labelSchemaDigest = 'b'.repeat(64)
+const emptyProgress = {
+  scope: 'ASSIGNEE',
+  total: 0,
+  awaiting_submission: 0,
+  rework_required: 0,
+  awaiting_review: 0,
+  completed: 0,
+} as const
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -56,11 +64,14 @@ describe('annotation task API', () => {
   it('lists the visible task queue and explains a qualified-state rejection', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(jsonResponse({ items: [], progress: emptyProgress }))
       .mockResolvedValueOnce(jsonResponse({ error_code: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED' }, { status: 409 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(listAnnotationTasks(projectId)).resolves.toEqual([])
+    await expect(listAnnotationTasks(projectId)).resolves.toEqual({
+      items: [],
+      progress: emptyProgress,
+    })
     await expect(createAnnotationTask(projectId, assetId, 'local-synthetic-uploader')).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
       message: '只有已判定合格的视频才能创建标注任务。',
@@ -83,6 +94,12 @@ describe('annotation task API', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
+          progress: {
+            ...emptyProgress,
+            scope: 'PROJECT',
+            total: 1,
+            completed: 1,
+          },
           items: [
             {
               annotation_task_id: 'a0000000-0000-4000-8000-000000000001',
@@ -127,12 +144,15 @@ describe('annotation task API', () => {
       ),
     )
 
-    await expect(listAnnotationTasks(projectId)).resolves.toMatchObject([
-      {
-        status: 'COMPLETED',
-        annotation_revision: { post_cleaning_result: cleaningResult },
-      },
-    ])
+    await expect(listAnnotationTasks(projectId)).resolves.toMatchObject({
+      progress: { scope: 'PROJECT', total: 1, completed: 1 },
+      items: [
+        {
+          status: 'COMPLETED',
+          annotation_revision: { post_cleaning_result: cleaningResult },
+        },
+      ],
+    })
   })
 
   it('loads the project primary-step label schema without caching', async () => {

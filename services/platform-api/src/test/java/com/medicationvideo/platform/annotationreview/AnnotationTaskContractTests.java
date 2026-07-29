@@ -87,7 +87,13 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
-				.andExpect(jsonPath("$.items[0].clip_asset_id").value(clipAssetId.toString()));
+				.andExpect(jsonPath("$.items[0].clip_asset_id").value(clipAssetId.toString()))
+				.andExpect(jsonPath("$.progress.scope").value("ASSIGNEE"))
+				.andExpect(jsonPath("$.progress.total").value(1))
+				.andExpect(jsonPath("$.progress.awaiting_submission").value(1))
+				.andExpect(jsonPath("$.progress.rework_required").value(0))
+				.andExpect(jsonPath("$.progress.awaiting_review").value(0))
+				.andExpect(jsonPath("$.progress.completed").value(0));
 
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
@@ -994,7 +1000,9 @@ class AnnotationTaskContractTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items[0].annotation_revision.annotation_revision_id").value(revisionId.toString()))
 				.andExpect(jsonPath("$.items[0].annotation_revision.annotation_document.segments.length()").value(1))
-				.andExpect(jsonPath("$.items[0].can_review").value(true));
+				.andExpect(jsonPath("$.items[0].can_review").value(true))
+				.andExpect(jsonPath("$.progress.scope").value("PROJECT"))
+				.andExpect(jsonPath("$.progress.awaiting_review").value(1));
 
 		var response = review(ADMIN_TOKEN, revisionId, idempotencyKey,
 				"{\"decision\":\"APPROVED\",\"review_note\":\"时间段与画面一致\"}")
@@ -1023,7 +1031,10 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.items[0].annotation_revision.post_cleaning_result.rule_set_key")
 						.value("p0-post-annotation"))
 				.andExpect(jsonPath("$.items[0].can_review").value(false))
-				.andExpect(jsonPath("$.items[0].can_recheck_post_cleaning").value(true));
+				.andExpect(jsonPath("$.items[0].can_recheck_post_cleaning").value(true))
+				.andExpect(jsonPath("$.progress.total").value(1))
+				.andExpect(jsonPath("$.progress.awaiting_review").value(0))
+				.andExpect(jsonPath("$.progress.completed").value(1));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
 		assertEquals(1, count("SELECT count(*) FROM cleaning_run WHERE annotation_revision_id = ?", revisionId));
@@ -1495,7 +1506,9 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items[0].can_submit").value(true))
-				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("REJECTED"));
+				.andExpect(jsonPath("$.items[0].annotation_revision.review.decision").value("REJECTED"))
+				.andExpect(jsonPath("$.progress.awaiting_submission").value(0))
+				.andExpect(jsonPath("$.progress.rework_required").value(1));
 
 		submit(MEMBER_TOKEN, taskId, "annotation-revision-second-" + UUID.randomUUID(),
 				"{\"segments\":[{\"start_ms\":120,\"end_ms\":360,\"label\":\"retrieve_medicine\"}]}")
@@ -1521,11 +1534,16 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items.length()").value(1))
-				.andExpect(jsonPath("$.items[0].assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR));
+				.andExpect(jsonPath("$.items[0].assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andExpect(jsonPath("$.progress.scope").value("ASSIGNEE"))
+				.andExpect(jsonPath("$.progress.total").value(1));
 		this.mockMvc.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.items.length()").value(2));
+				.andExpect(jsonPath("$.items.length()").value(2))
+				.andExpect(jsonPath("$.progress.scope").value("PROJECT"))
+				.andExpect(jsonPath("$.progress.total").value(2))
+				.andExpect(jsonPath("$.progress.awaiting_submission").value(2));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions create(
