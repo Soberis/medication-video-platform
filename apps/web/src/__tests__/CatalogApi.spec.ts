@@ -7,6 +7,7 @@ import {
   createDatasetVersionDraft,
   createDatasetSplitPlan,
   freezeDatasetVersion,
+  getDatasetExportApprovalReadiness,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
@@ -480,6 +481,38 @@ describe('catalog API', () => {
           'X-XSRF-TOKEN': 'csrf-test-token',
         }),
       }),
+    )
+  })
+
+  it('reads export approval readiness without mutating the pending request', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_export_id: '97000000-0000-4000-8000-000000000001',
+          dataset_version_id: datasetVersionId,
+          approval_request_id: '98000000-0000-4000-8000-000000000001',
+          ready_for_approval: false,
+          blocking_reasons: ['SELF_APPROVAL_FORBIDDEN'],
+          checked_at: '2026-07-30T03:00:00Z',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getDatasetExportApprovalReadiness(projectId, datasetVersionId, controller.signal),
+    ).resolves.toMatchObject({
+      dataset_version_id: datasetVersionId,
+      ready_for_approval: false,
+      blocking_reasons: ['SELF_APPROVAL_FORBIDDEN'],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store', signal: controller.signal }),
     )
   })
 

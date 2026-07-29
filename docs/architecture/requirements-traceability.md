@@ -4,7 +4,7 @@
 > 当前需求基线：`docs/requirements/baselines/V1.9/配药视频数据管理平台需求文档_V1.9.md`
 > 继承需求基线：V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-07-29
+> 最后更新：2026-07-30
 
 ## 1. 目的
 
@@ -96,7 +96,7 @@
 | FR-027 创建数据集版本 | P0 | `datasetexport` | create/read DatasetVersion；read current admission/build readiness；create/read split plan、build specification、build snapshot 和 freeze-preflight validation；start build | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 管理员仅可为 1–100 个明确选择且全部当前 eligible 的 CaptureSession 创建 `DRAFT` 候选快照；成员可读取固定证据并比较当前事实。至少两个成员时可固定一次可复现 pilot/holdout 划分；随后可把显式候选规则、统一 label/clean 摘要、split 和 P0 export profile 固定为一次不可变构建配置。管理员显式开始构建时，服务端重新校验全部当前准入和证据差异，零阻断才迁移到 `BUILDING`；随后验证 session/stream、原始输入、revision、清洗和 leakage/split 关系完整性，以版本化确定性摘要封印快照并进入 `VALIDATING`。管理员可在该状态记录一次当前准入、引用、摘要、防泄漏和构建契约技术校验；创建、配置、启动、封印、校验、幂等和审计事实均保存 | PI |
 | FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview；draft creation；draft current-admission/build-readiness read；freeze-preflight validation | dataset_member_session、dataset_member_stream、dataset_version_validation | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；管理员创建草稿时服务端重新校验所有当前事实，并保存证据快照。草稿准备检查逐成员返回当前预览和相对快照的稳定证据变化，同时汇总当前准入/证据漂移阻断，且不修改草稿或写入审计。进入 `VALIDATING` 后，一次性技术校验及冻结批准命令都会重新核对当前准入和证据变化。未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可进入草稿；WARNING 批准例外仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | create/read immutable split plan | dataset_split_plan、dataset_split_assignment | 已实现 `CAPTURE_SESSION_HASH_RANK_V1`：CaptureSession 同时作为最小成员和泄漏组，服务端保存正整数 seed、稳定哈希排名及 pilot/holdout 实际结果；同一草稿只允许一个计划，冲突失败且不会自动降级。操作者/设备/批次等更强分组和正式比例仍待样本设计批准 | PI |
-| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/jobs | dataset_build_specification、dataset_export；export_artifact（计划） | `p0-dataset-export-v1` 已固定 README、label schema、manifest、action segments、COCO、split、clean video 和 SHA256SUMS；管理员现可为 FROZEN 版本提交唯一 `MODEL_TRAINING`、显式到期的 `REQUESTED` 记录和待审批请求。独立导出审批、后台作业、实际产物及 Golden 校验仍待实现 | PI |
+| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/jobs | dataset_build_specification、dataset_export；export_artifact（计划） | `p0-dataset-export-v1` 已固定 README、label schema、manifest、action segments、COCO、split、clean video 和 SHA256SUMS；管理员现可为 FROZEN 版本提交唯一 `MODEL_TRAINING`、显式到期的 `REQUESTED` 记录和待审批请求。项目成员可按需读取审批准备度，稳定区分管理员角色、自批、到期和冻结证据阻断，查询无副作用。独立导出审批、后台作业、实际产物及 Golden 校验仍待实现 | PI |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze-preflight validation；freeze command/approval | dataset_version_validation、dataset_version、approval_request、approval_decision | `PASS` 自动创建绑定该 validation 的待审批请求；申请人不能自批，另一位当前项目管理员批准时重新执行全部技术检查，并原子记录唯一决定、审计和 `FROZEN` 状态。证据变化不产生部分审批，冻结后成员、revision、split 和规则不可修改，只能新建版本；冻结不授权导出 | I |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
 
@@ -138,6 +138,11 @@ Flyway V45 和 OpenAPI 0.49 增加冻结版本导出申请：仅项目管理员�
 `MODEL_TRAINING` 用途和未来到期时间；服务端绑定既有构建规范、快照、通过的 validation 与
 `p0-dataset-export-v1`，并原子保存 `REQUESTED` DatasetExport、`PENDING` 审批请求和审计。合同测试
 覆盖项目角色、幂等重放、唯一申请及详情展示；当前不推进 `QUEUED`，也不生成文件或下载授权。
+
+OpenAPI 0.50 增加导出审批准备检查：ACTIVE 项目成员显式请求后，服务端以 `REPEATABLE_READ` 只读事务
+核对当前角色、申请人与审批人分离、用途有效期、`FROZEN` 状态、导出/审批绑定以及 V43 全部当前证据。
+后端单元/合同测试和 React 交互测试覆盖申请人、普通成员、另一位管理员、过期授权和证据漂移；检查不写
+审批决定、审计、Outbox 或业务状态，也不能替代未来批准命令的事务内复核。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
 

@@ -9,6 +9,7 @@ import {
   createDatasetBuildSpecification,
   createDatasetSplitPlan,
   freezeDatasetVersion,
+  getDatasetExportApprovalReadiness,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   requestDatasetExport,
@@ -16,6 +17,8 @@ import {
   validateDatasetVersion,
   type DatasetAdmissionPreview,
   type DatasetExport,
+  type DatasetExportApprovalBlocker,
+  type DatasetExportApprovalReadiness,
   type DatasetVersionDetail,
   type DatasetVersionBuildBlocker,
   type DatasetVersionCurrentAdmission,
@@ -95,6 +98,30 @@ const validationReasonLabels: Record<DatasetVersionValidationReason, string> = {
   SPLIT_LEAKAGE_DETECTED: '同一配药操作泄漏组出现在不同数据划分中',
   BUILD_CONTRACT_MISMATCH: '固定构建规范与当前批准的 P0 契约不一致',
 }
+
+const exportApprovalBlockerLabels: Record<DatasetExportApprovalBlocker, string> = {
+  APPROVER_ADMIN_REQUIRED: '只有当前项目管理员可以批准导出',
+  SELF_APPROVAL_FORBIDDEN: '导出申请人不能审批自己的申请',
+  EXPORT_AUTHORIZATION_EXPIRED: '本次训练用途授权已经到期',
+  DATASET_VERSION_NOT_FROZEN: '数据集版本当前不是冻结状态',
+  EXPORT_REQUEST_INVALID: '导出申请与当前数据集版本不一致',
+  APPROVAL_REQUEST_INVALID: '待审批记录与导出申请不一致',
+  FROZEN_EVIDENCE_INVALID: '冻结版本缺少一致的构建、快照或校验证据',
+  SNAPSHOT_VALIDATION_MISMATCH: '冻结校验与当前快照不一致',
+  CURRENT_ADMISSION_NOT_ELIGIBLE: validationReasonLabels.CURRENT_ADMISSION_NOT_ELIGIBLE,
+  SNAPSHOT_EVIDENCE_CHANGED: validationReasonLabels.SNAPSHOT_EVIDENCE_CHANGED,
+  SNAPSHOT_REFERENCE_MISMATCH: validationReasonLabels.SNAPSHOT_REFERENCE_MISMATCH,
+  SNAPSHOT_STRUCTURE_INVALID: validationReasonLabels.SNAPSHOT_STRUCTURE_INVALID,
+  SNAPSHOT_DIGEST_MISMATCH: validationReasonLabels.SNAPSHOT_DIGEST_MISMATCH,
+  SPLIT_LEAKAGE_DETECTED: validationReasonLabels.SPLIT_LEAKAGE_DETECTED,
+  BUILD_CONTRACT_MISMATCH: validationReasonLabels.BUILD_CONTRACT_MISMATCH,
+}
+
+type ExportApprovalReadinessState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; value: DatasetExportApprovalReadiness }
+  | { status: 'error'; errorCode: string; errorMessage: string; requestId: string | null }
 
 export default function DatasetVersionDetailView() {
   const { projectId = '', id: datasetVersionId = '' } = useParams()
@@ -951,6 +978,50 @@ function DatasetVersionDetailContent() {
 }
 
 function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport }) {
+  const [readinessState, setReadinessState] = useState<ExportApprovalReadinessState>({ status: 'idle' })
+  const readinessRequest = useRef<AbortController | null>(null)
+
+  const checkReadiness = useCallback(async () => {
+    readinessRequest.current?.abort()
+    const request = new AbortController()
+    readinessRequest.current = request
+    setReadinessState({ status: 'loading' })
+    try {
+      const response = await getDatasetExportApprovalReadiness(
+        exportRequest.project_id,
+        exportRequest.dataset_version_id,
+        request.signal,
+      )
+      setReadinessState({ status: 'success', value: response })
+    } catch (error) {
+      if (request.signal.aborted) return
+      if (error instanceof CatalogApiError) {
+        setReadinessState({
+          status: 'error',
+          errorCode: error.errorCode,
+          errorMessage: error.message,
+          requestId: error.requestId,
+        })
+      } else {
+        setReadinessState({
+          status: 'error',
+          errorCode: 'DATASET_EXPORT_APPROVAL_READINESS_FAILED',
+          errorMessage: '暂时无法检查导出审批准备，请稍后重试。',
+          requestId: null,
+        })
+      }
+    } finally {
+      if (readinessRequest.current === request) readinessRequest.current = null
+    }
+  }, [exportRequest.dataset_version_id, exportRequest.project_id])
+
+  useEffect(
+    () => () => {
+      readinessRequest.current?.abort()
+    },
+    [],
+  )
+
   return (
     <>
       <div className="readiness-result">
@@ -969,6 +1040,46 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
           { key: 'requested', label: '申请时间', children: formatDateTime(exportRequest.requested_at) },
         ]}
       />
+      <div className="dataset-draft-selection-toolbar">
+        <div>
+          <strong>审批前检查</strong>
+          <span>按需重新核对职责分离、授权有效期和冻结证据；检查不会批准或入队。</span>
+        </div>
+        <Button loading={readinessState.status === 'loading'} onClick={() => void checkReadiness()}>
+          检查审批准备
+        </Button>
+      </div>
+      {readinessState.status === 'success' ? (
+        <div
+          className={`readiness-result${readinessState.value.ready_for_approval ? ' readiness-result-ready' : ''}`}
+        >
+          <div>
+            <strong>{readinessState.value.ready_for_approval ? '审批证据当前满足条件' : '审批准备仍有阻断项'}</strong>
+            <span>
+              {readinessState.value.ready_for_approval
+                ? '这是只读检查结果；实际批准、后台生成和下载仍未启用。'
+                : `本次检查发现 ${readinessState.value.blocking_reasons.length} 项阻断。`}
+            </span>
+            {readinessState.value.blocking_reasons.length > 0 ? (
+              <ul>
+                {readinessState.value.blocking_reasons.map((reason) => (
+                  <li key={reason}>{exportApprovalBlockerLabels[reason]}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <Tag color={readinessState.value.ready_for_approval ? 'success' : 'warning'}>
+            {readinessState.value.ready_for_approval ? '证据通过' : '暂不可审批'}
+          </Tag>
+        </div>
+      ) : null}
+      {readinessState.status === 'error' ? (
+        <div className="catalog-error" role="alert">
+          <strong>{readinessState.errorCode}</strong>
+          <span>{readinessState.errorMessage}</span>
+          {readinessState.requestId ? <small>请求标识：{readinessState.requestId}</small> : null}
+        </div>
+      ) : null}
       <details className="technical-facts">
         <summary>查看导出申请标识</summary>
         <dl>

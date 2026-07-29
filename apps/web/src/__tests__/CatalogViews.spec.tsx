@@ -1128,6 +1128,7 @@ describe('catalog views', () => {
 
   it('shows a requested dataset export as pending approval rather than queued work', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const readinessPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
     detail.status = 'FROZEN'
     detail.export_request = {
@@ -1153,7 +1154,23 @@ describe('catalog views', () => {
       requested_by: 'local-admin',
       requested_at: '2026-07-30T02:00:00Z',
     }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(detail)))
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === readinessPath) {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_export_id: detail.export_request?.dataset_export_id,
+            dataset_version_id: datasetVersionId,
+            approval_request_id: detail.export_request?.approval.approval_request_id,
+            ready_for_approval: false,
+            blocking_reasons: ['SELF_APPROVAL_FORBIDDEN'],
+            checked_at: '2026-07-30T03:00:00Z',
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
 
     renderDatasetDetail(datasetVersionId)
 
@@ -1165,6 +1182,14 @@ describe('catalog views', () => {
     expect(exportFacts).not.toBeNull()
     if (!exportFacts) throw new Error('Dataset export facts were not rendered.')
     expect(within(exportFacts).getByText('p0-dataset-export-v1')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '检查审批准备' }))
+    expect(await screen.findByText('审批准备仍有阻断项')).toBeInTheDocument()
+    expect(screen.getByText('导出申请人不能审批自己的申请')).toBeInTheDocument()
+    expect(screen.getByText(/检查不会批准或入队/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      readinessPath,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
   })
 
   it('submits one explicit future expiry for a frozen dataset export request', async () => {

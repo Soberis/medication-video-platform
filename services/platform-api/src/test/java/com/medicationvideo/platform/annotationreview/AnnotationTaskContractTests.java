@@ -671,6 +671,34 @@ class AnnotationTaskContractTests {
 				exportExpiry)
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error_code").value("DATASET_EXPORT_ALREADY_REQUESTED"));
+		getDatasetExportApprovalReadiness(ADMIN_TOKEN, datasetVersionId)
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
+				.andExpect(jsonPath("$.approval_request_id").value(exportApprovalRequestId))
+				.andExpect(jsonPath("$.ready_for_approval").value(false))
+				.andExpect(jsonPath("$.blocking_reasons[0]").value("SELF_APPROVAL_FORBIDDEN"));
+		getDatasetExportApprovalReadiness(MEMBER_TOKEN, datasetVersionId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.ready_for_approval").value(false))
+				.andExpect(jsonPath("$.blocking_reasons[0]").value("APPROVER_ADMIN_REQUIRED"));
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET role = 'ADMIN',
+				    updated_by = ?,
+				    updated_at = ?,
+				    row_version = row_version + 1
+				WHERE project_id = ? AND actor_id = ?
+				""",
+				ProjectMembershipTestData.ADMIN_ACTOR,
+				Timestamp.from(BASE_TIME.plusSeconds(41)),
+				PROJECT_ID,
+				ProjectMembershipTestData.MEMBER_ACTOR);
+		getDatasetExportApprovalReadiness(MEMBER_TOKEN, datasetVersionId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
+				.andExpect(jsonPath("$.ready_for_approval").value(true))
+				.andExpect(jsonPath("$.blocking_reasons").isEmpty());
 
 		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
@@ -1661,6 +1689,16 @@ class AnnotationTaskContractTests {
 				.content("""
 						{"purpose":"MODEL_TRAINING","expires_at":"%s"}
 						""".formatted(expiresAt)));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions getDatasetExportApprovalReadiness(
+			String token,
+			UUID datasetVersionId) throws Exception {
+		return this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/exports/approval-readiness",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(

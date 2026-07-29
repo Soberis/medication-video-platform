@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.49.0
+  version: 0.50.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -35,7 +35,9 @@ info:
     one immutable freeze-preflight validation over current admission, references, the snapshot digest,
     CaptureSession split isolation and the approved build contract; a PASS creates a pending request
     that a different ACTIVE project administrator can approve only after atomic revalidation, then
-    freeze the version without creating export artifacts or starting a Worker,
+    freeze the version without creating export artifacts or starting a Worker, then record one
+    purpose-bound export request and read a non-mutating approval-readiness check that re-evaluates
+    role separation, expiry and the frozen evidence without approving or queuing the export,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -95,7 +97,8 @@ tags:
       recorded. A PASS creates a pending request; a different ACTIVE project administrator can
       revalidate, approve and atomically freeze the version. An administrator can then request the
       fixed P0 export profile for the explicit MODEL_TRAINING purpose and expiry; REQUESTED is still
-      a pending approval record, not an export artifact or queued job.
+      a pending approval record, not an export artifact or queued job. Members can explicitly run a
+      no-store approval-readiness check; it reports stable blockers without recording a decision.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -753,6 +756,49 @@ paths:
           description: >-
             The DatasetVersion is not FROZEN, its approved evidence is inconsistent, the expiry is
             not in the future, an export request already exists, or the idempotency key conflicts.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/exports/approval-readiness:
+    get:
+      operationId: getDatasetExportApprovalReadiness
+      tags:
+        - Dataset Admission
+      summary: Check whether a frozen export request is ready for independent approval
+      description: >-
+        Requires ACTIVE project membership. Re-evaluates the current actor role, requester/approver
+        separation, purpose expiry, DatasetVersion FROZEN state, immutable export bindings and all
+        current freeze-evidence checks. The response is a read-only point-in-time preflight: it does
+        not approve the request, create an approval decision, queue a job, start a Worker or create
+        export files. A future approval command must repeat these checks transactionally.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+      responses:
+        "200":
+          description: Point-in-time export approval readiness and stable blocking reasons.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportApprovalReadiness"
+        "400":
+          description: A path parameter is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project, DatasetVersion or export request is not visible to the actor.
           content:
             application/problem+json:
               schema:
@@ -6206,6 +6252,56 @@ components:
           type: string
           maxLength: 128
         requested_at:
+          type: string
+          format: date-time
+    DatasetExportApprovalReadiness:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_export_id
+        - dataset_version_id
+        - approval_request_id
+        - ready_for_approval
+        - blocking_reasons
+        - checked_at
+      properties:
+        dataset_export_id:
+          type: string
+          format: uuid
+        dataset_version_id:
+          type: string
+          format: uuid
+        approval_request_id:
+          type: string
+          format: uuid
+        ready_for_approval:
+          type: boolean
+          description: >-
+            True only when this actor and the current point-in-time evidence satisfy the approval
+            preflight. It is not an approval decision or a promise that a background job is enabled.
+        blocking_reasons:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - APPROVER_ADMIN_REQUIRED
+              - SELF_APPROVAL_FORBIDDEN
+              - EXPORT_AUTHORIZATION_EXPIRED
+              - DATASET_VERSION_NOT_FROZEN
+              - EXPORT_REQUEST_INVALID
+              - APPROVAL_REQUEST_INVALID
+              - FROZEN_EVIDENCE_INVALID
+              - SNAPSHOT_VALIDATION_MISMATCH
+              - CURRENT_ADMISSION_NOT_ELIGIBLE
+              - SNAPSHOT_EVIDENCE_CHANGED
+              - SNAPSHOT_REFERENCE_MISMATCH
+              - SNAPSHOT_STRUCTURE_INVALID
+              - SNAPSHOT_DIGEST_MISMATCH
+              - SPLIT_LEAKAGE_DETECTED
+              - BUILD_CONTRACT_MISMATCH
+        checked_at:
           type: string
           format: date-time
     DatasetMemberSession:

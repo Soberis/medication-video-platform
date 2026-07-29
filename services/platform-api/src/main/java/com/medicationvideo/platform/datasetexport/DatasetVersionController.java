@@ -59,6 +59,7 @@ class DatasetVersionController {
 	private final DatasetVersionValidationService validationService;
 	private final DatasetVersionFreezeService freezeService;
 	private final DatasetExportService exportService;
+	private final DatasetExportApprovalReadinessService exportApprovalReadinessService;
 	private final DatasetVersionQueryService queryService;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
@@ -71,6 +72,7 @@ class DatasetVersionController {
 			DatasetVersionValidationService validationService,
 			DatasetVersionFreezeService freezeService,
 			DatasetExportService exportService,
+			DatasetExportApprovalReadinessService exportApprovalReadinessService,
 			DatasetVersionQueryService queryService,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
@@ -81,6 +83,7 @@ class DatasetVersionController {
 		this.validationService = validationService;
 		this.freezeService = freezeService;
 		this.exportService = exportService;
+		this.exportApprovalReadinessService = exportApprovalReadinessService;
 		this.queryService = queryService;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
@@ -290,6 +293,20 @@ class DatasetVersionController {
 				request.purpose(),
 				request.expiresAt());
 		return ResponseEntity.status(HttpStatus.CREATED)
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
+	@GetMapping("/{datasetVersionId}/exports/approval-readiness")
+	ResponseEntity<DatasetExportApprovalReadinessResponse> getDatasetExportApprovalReadiness(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			Authentication authentication) {
+		var response = this.exportApprovalReadinessService.get(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId());
+		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
 				.body(response);
 	}

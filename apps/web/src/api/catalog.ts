@@ -292,6 +292,32 @@ export interface DatasetExport {
   requested_at: string
 }
 
+export type DatasetExportApprovalBlocker =
+  | 'APPROVER_ADMIN_REQUIRED'
+  | 'SELF_APPROVAL_FORBIDDEN'
+  | 'EXPORT_AUTHORIZATION_EXPIRED'
+  | 'DATASET_VERSION_NOT_FROZEN'
+  | 'EXPORT_REQUEST_INVALID'
+  | 'APPROVAL_REQUEST_INVALID'
+  | 'FROZEN_EVIDENCE_INVALID'
+  | 'SNAPSHOT_VALIDATION_MISMATCH'
+  | 'CURRENT_ADMISSION_NOT_ELIGIBLE'
+  | 'SNAPSHOT_EVIDENCE_CHANGED'
+  | 'SNAPSHOT_REFERENCE_MISMATCH'
+  | 'SNAPSHOT_STRUCTURE_INVALID'
+  | 'SNAPSHOT_DIGEST_MISMATCH'
+  | 'SPLIT_LEAKAGE_DETECTED'
+  | 'BUILD_CONTRACT_MISMATCH'
+
+export interface DatasetExportApprovalReadiness {
+  dataset_export_id: string
+  dataset_version_id: string
+  approval_request_id: string
+  ready_for_approval: boolean
+  blocking_reasons: DatasetExportApprovalBlocker[]
+  checked_at: string
+}
+
 export interface DatasetVersionDetail extends DatasetVersionSummary {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
@@ -829,6 +855,17 @@ export async function requestDatasetExport(
   )
   if (response.ok) return (await response.json()) as DatasetExport
   throw await toCatalogError(response)
+}
+
+export function getDatasetExportApprovalReadiness(
+  projectId: string,
+  datasetVersionId: string,
+  signal?: AbortSignal,
+): Promise<DatasetExportApprovalReadiness> {
+  return readJson<DatasetExportApprovalReadiness>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/exports/approval-readiness`,
+    signal,
+  )
 }
 
 export function listClipAssets(
