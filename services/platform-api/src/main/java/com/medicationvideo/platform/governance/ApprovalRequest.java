@@ -50,6 +50,7 @@ class ApprovalRequest {
 	}
 
 	private ApprovalRequest(
+			ApprovalRequestType requestType,
 			UUID projectId,
 			UUID datasetVersionId,
 			UUID validationId,
@@ -57,7 +58,7 @@ class ApprovalRequest {
 			Instant requestedAt) {
 		this.approvalRequestId = UUID.randomUUID();
 		this.projectId = projectId;
-		this.requestType = ApprovalRequestType.DATASET_VERSION_FREEZE;
+		this.requestType = requestType;
 		this.objectType = DATASET_VERSION_OBJECT_TYPE;
 		this.objectId = datasetVersionId;
 		this.objectVersion = validationId;
@@ -72,7 +73,28 @@ class ApprovalRequest {
 			UUID validationId,
 			String requestedBy,
 			Instant requestedAt) {
-		return new ApprovalRequest(projectId, datasetVersionId, validationId, requestedBy, requestedAt);
+		return new ApprovalRequest(
+				ApprovalRequestType.DATASET_VERSION_FREEZE,
+				projectId,
+				datasetVersionId,
+				validationId,
+				requestedBy,
+				requestedAt);
+	}
+
+	static ApprovalRequest requestDatasetExport(
+			UUID projectId,
+			UUID datasetVersionId,
+			UUID validationId,
+			String requestedBy,
+			Instant requestedAt) {
+		return new ApprovalRequest(
+				ApprovalRequestType.DATASET_EXPORT,
+				projectId,
+				datasetVersionId,
+				validationId,
+				requestedBy,
+				requestedAt);
 	}
 
 	boolean matchesDatasetFreeze(
@@ -94,6 +116,19 @@ class ApprovalRequest {
 				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType)
 				&& this.objectId.equals(datasetVersionId)
 				&& this.objectVersion.equals(validationId);
+	}
+
+	boolean matchesDatasetExport(
+			UUID projectId,
+			UUID datasetVersionId,
+			UUID validationId,
+			String requestedBy) {
+		return this.projectId.equals(projectId)
+				&& this.requestType == ApprovalRequestType.DATASET_EXPORT
+				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType)
+				&& this.objectId.equals(datasetVersionId)
+				&& this.objectVersion.equals(validationId)
+				&& this.requestedBy.equals(requestedBy);
 	}
 
 	void approve() {
@@ -133,7 +168,8 @@ class ApprovalRequest {
 }
 
 enum ApprovalRequestType {
-	DATASET_VERSION_FREEZE
+	DATASET_VERSION_FREEZE,
+	DATASET_EXPORT
 }
 
 enum ApprovalRequestStatus {

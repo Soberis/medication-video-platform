@@ -1126,6 +1126,121 @@ describe('catalog views', () => {
     )
   })
 
+  it('shows a requested dataset export as pending approval rather than queued work', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.status = 'FROZEN'
+    detail.export_request = {
+      dataset_export_id: '98000000-0000-4000-8000-000000000001',
+      project_id: projectId,
+      dataset_version_id: datasetVersionId,
+      status: 'REQUESTED',
+      purpose: 'MODEL_TRAINING',
+      expires_at: '2026-08-06T02:00:00Z',
+      dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
+      dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
+      snapshot_digest: 'f'.repeat(64),
+      dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+      export_profile_key: 'p0-dataset-export-v1',
+      export_profile_digest: 'e'.repeat(64),
+      approval: {
+        approval_request_id: '99000000-0000-4000-8000-000000000001',
+        validation_id: '95000000-0000-4000-8000-000000000001',
+        status: 'PENDING',
+        requested_by: 'local-admin',
+        requested_at: '2026-07-30T02:00:00Z',
+      },
+      requested_by: 'local-admin',
+      requested_at: '2026-07-30T02:00:00Z',
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(detail)))
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByText('导出申请等待独立审批')).toBeInTheDocument()
+    expect(screen.getByText(/尚未进入后台队列，也没有可下载文件/)).toBeInTheDocument()
+    expect(screen.getByText('内部模型训练')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '提交导出申请' })).not.toBeInTheDocument()
+    const exportFacts = screen.getByText('查看导出申请标识').closest('details')
+    expect(exportFacts).not.toBeNull()
+    if (!exportFacts) throw new Error('Dataset export facts were not rendered.')
+    expect(within(exportFacts).getByText('p0-dataset-export-v1')).toBeInTheDocument()
+  })
+
+  it('submits one explicit future expiry for a frozen dataset export request', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const exportPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.status = 'FROZEN'
+    detail.can_request_export = true
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === exportPath && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { expires_at: string }
+        return Promise.resolve(
+          jsonResponse(
+            {
+              dataset_export_id: '98000000-0000-4000-8000-000000000001',
+              project_id: projectId,
+              dataset_version_id: datasetVersionId,
+              status: 'REQUESTED',
+              purpose: 'MODEL_TRAINING',
+              expires_at: body.expires_at,
+              dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
+              dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
+              snapshot_digest: 'f'.repeat(64),
+              dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+              export_profile_key: 'p0-dataset-export-v1',
+              export_profile_digest: 'e'.repeat(64),
+              approval: {
+                approval_request_id: '99000000-0000-4000-8000-000000000001',
+                validation_id: '95000000-0000-4000-8000-000000000001',
+                status: 'PENDING',
+                requested_by: 'local-admin',
+                requested_at: '2026-07-30T02:00:00Z',
+              },
+              requested_by: 'local-admin',
+              requested_at: '2026-07-30T02:00:00Z',
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('dataset-export-request-0001'),
+    })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    const expiryInput = await screen.findByPlaceholderText('选择到期时间')
+    fireEvent.change(expiryInput, { target: { value: '2099-08-06 10:00' } })
+    fireEvent.keyDown(expiryInput, { key: 'Enter', code: 'Enter' })
+    await user.click(screen.getByRole('button', { name: '提交导出申请' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    expect(within(confirmDialog).getByText(/不会立即生成或下载文件/)).toBeInTheDocument()
+    await user.click(within(confirmDialog).getByRole('button', { name: '提交申请' }))
+
+    expect(await screen.findByText('导出申请等待独立审批')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      exportPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-export-request-0001' }),
+      }),
+    )
+    const exportCall = fetchMock.mock.calls.find(
+      ([input, init]) => String(input) === exportPath && (init as RequestInit | undefined)?.method === 'POST',
+    )
+    expect(JSON.parse(String((exportCall?.[1] as RequestInit | undefined)?.body))).toMatchObject({
+      purpose: 'MODEL_TRAINING',
+      expires_at: expect.stringMatching(/^2099-08-06T/),
+    })
+  })
+
   it('aborts an in-flight current-admission check when leaving the draft detail route', async () => {
     const firstDatasetVersionId = '91000000-0000-4000-8000-000000000001'
     const secondDatasetVersionId = '92000000-0000-4000-8000-000000000001'
@@ -1808,6 +1923,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string): Da
     can_validate: false,
     freeze_approval: null,
     can_freeze: false,
+    export_request: null,
+    can_request_export: false,
     members: [
       {
         capture_session_id: sessionId,

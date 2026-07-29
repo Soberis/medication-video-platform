@@ -597,7 +597,9 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.freeze_approval.approval_decision_id").value(approvalDecisionId))
 				.andExpect(jsonPath("$.freeze_approval.approved_by")
 						.value(ProjectMembershipTestData.MEMBER_ACTOR))
-				.andExpect(jsonPath("$.can_freeze").value(false));
+				.andExpect(jsonPath("$.can_freeze").value(false))
+				.andExpect(jsonPath("$.export_request").value(org.hamcrest.Matchers.nullValue()))
+				.andExpect(jsonPath("$.can_request_export").value(true));
 		assertEquals(1, count(
 				"SELECT count(*) FROM approval_decision WHERE approval_request_id = ?",
 				UUID.fromString(approvalRequestId)));
@@ -606,6 +608,86 @@ class AnnotationTaskContractTests {
 				SET frozen_by = NULL
 				WHERE dataset_version_id = ?
 				""", datasetVersionId));
+
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET role = 'MEMBER',
+				    updated_by = ?,
+				    updated_at = ?,
+				    row_version = row_version + 1
+				WHERE project_id = ? AND actor_id = ?
+				""",
+				ProjectMembershipTestData.ADMIN_ACTOR,
+				Timestamp.from(BASE_TIME.plusSeconds(40)),
+				PROJECT_ID,
+				ProjectMembershipTestData.MEMBER_ACTOR);
+		var exportExpiry = Instant.now()
+				.plusSeconds(3600)
+				.truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+				.toString();
+		var exportIdempotencyKey = "dataset-export-" + UUID.randomUUID();
+		requestDatasetExport(
+				MEMBER_TOKEN,
+				datasetVersionId,
+				exportIdempotencyKey,
+				exportExpiry)
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var exportResponse = requestDatasetExport(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				exportIdempotencyKey,
+				exportExpiry)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.status").value("REQUESTED"))
+				.andExpect(jsonPath("$.purpose").value("MODEL_TRAINING"))
+				.andExpect(jsonPath("$.expires_at").value(exportExpiry))
+				.andExpect(jsonPath("$.dataset_build_snapshot_id").value(buildSnapshotId))
+				.andExpect(jsonPath("$.snapshot_digest").value(snapshotDigest))
+				.andExpect(jsonPath("$.dataset_version_validation_id").value(validationId))
+				.andExpect(jsonPath("$.export_profile_key").value("p0-dataset-export-v1"))
+				.andExpect(jsonPath("$.approval.status").value("PENDING"))
+				.andExpect(jsonPath("$.approval.requested_by")
+						.value(ProjectMembershipTestData.ADMIN_ACTOR))
+				.andReturn().getResponse().getContentAsString();
+		var datasetExportId = com.jayway.jsonpath.JsonPath.<String>read(
+				exportResponse, "$.dataset_export_id");
+		var exportApprovalRequestId = com.jayway.jsonpath.JsonPath.<String>read(
+				exportResponse, "$.approval.approval_request_id");
+		requestDatasetExport(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				exportIdempotencyKey,
+				exportExpiry)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
+				.andExpect(jsonPath("$.approval.approval_request_id").value(exportApprovalRequestId));
+		requestDatasetExport(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				"dataset-export-second-" + UUID.randomUUID(),
+				exportExpiry)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_EXPORT_ALREADY_REQUESTED"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.export_request.dataset_export_id").value(datasetExportId))
+				.andExpect(jsonPath("$.export_request.status").value("REQUESTED"))
+				.andExpect(jsonPath("$.export_request.approval.status").value("PENDING"))
+				.andExpect(jsonPath("$.can_request_export").value(false));
+		assertEquals(1, count(
+				"SELECT count(*) FROM dataset_export WHERE dataset_version_id = ?",
+				datasetVersionId));
+		assertEquals(2, count(
+				"SELECT count(*) FROM approval_request WHERE object_id = ?",
+				datasetVersionId));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'DATASET_VERSION_BUILD_STARTED'
@@ -626,6 +708,11 @@ class AnnotationTaskContractTests {
 				WHERE action = 'DATASET_VERSION_FROZEN'
 				  AND object_id = ?
 				""", datasetVersionId.toString()));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_EXPORT_REQUESTED'
+				  AND object_id = ?
+				""", datasetExportId));
 	}
 
 	@Test
@@ -1558,6 +1645,24 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "dataset-freeze-request-" + UUID.randomUUID()));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions requestDatasetExport(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey,
+			String expiresAt) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/exports",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-export-request-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"purpose":"MODEL_TRAINING","expires_at":"%s"}
+						""".formatted(expiresAt)));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1735,6 +1840,7 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM dataset_export WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("""
 				UPDATE dataset_version
 				SET dataset_version_status = 'VALIDATING',

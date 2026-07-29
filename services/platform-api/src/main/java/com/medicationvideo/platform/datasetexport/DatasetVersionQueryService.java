@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medicationvideo.platform.governance.DatasetExportApprovalService;
 import com.medicationvideo.platform.governance.DatasetFreezeApprovalService;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
@@ -25,6 +26,8 @@ class DatasetVersionQueryService {
 	private final DatasetBuildSnapshotRepository buildSnapshotRepository;
 	private final DatasetVersionValidationRepository validationRepository;
 	private final DatasetFreezeApprovalService freezeApprovalService;
+	private final DatasetExportRepository exportRepository;
+	private final DatasetExportApprovalService exportApprovalService;
 
 	DatasetVersionQueryService(
 			ProjectAccessService projectAccessService,
@@ -36,7 +39,9 @@ class DatasetVersionQueryService {
 			DatasetBuildSpecificationRepository buildSpecificationRepository,
 			DatasetBuildSnapshotRepository buildSnapshotRepository,
 			DatasetVersionValidationRepository validationRepository,
-			DatasetFreezeApprovalService freezeApprovalService) {
+			DatasetFreezeApprovalService freezeApprovalService,
+			DatasetExportRepository exportRepository,
+			DatasetExportApprovalService exportApprovalService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
@@ -47,6 +52,8 @@ class DatasetVersionQueryService {
 		this.buildSnapshotRepository = buildSnapshotRepository;
 		this.validationRepository = validationRepository;
 		this.freezeApprovalService = freezeApprovalService;
+		this.exportRepository = exportRepository;
+		this.exportApprovalService = exportApprovalService;
 	}
 
 	@Transactional(readOnly = true)
@@ -103,6 +110,13 @@ class DatasetVersionQueryService {
 				.orElse(null);
 		var freezeApproval = this.freezeApprovalService.find(projectId, datasetVersionId)
 				.orElse(null);
+		var exportRequest = this.exportRepository.findByDatasetVersionId(datasetVersionId)
+				.orElse(null);
+		var exportApproval = exportRequest == null
+				? null
+				: this.exportApprovalService.find(projectId, datasetVersionId)
+						.orElseThrow(() -> new IllegalStateException(
+								"The dataset export approval request is missing."));
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		return DatasetVersionDetailResponse.from(
 				version,
@@ -135,7 +149,13 @@ class DatasetVersionQueryService {
 						&& validation.getOutcome() == DatasetVersionValidationOutcome.PASS
 						&& freezeApproval != null
 						&& freezeApproval.pending()
-						&& !freezeApproval.requestedBy().equals(actorId));
+						&& !freezeApproval.requestedBy().equals(actorId),
+				exportRequest == null
+						? null
+						: DatasetExportResponse.from(exportRequest, exportApproval),
+				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.FROZEN
+						&& exportRequest == null);
 	}
 
 	private static DatasetVersionException notFound() {

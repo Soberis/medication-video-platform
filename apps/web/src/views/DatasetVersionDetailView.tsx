@@ -1,4 +1,5 @@
-import { App as AntdApp, Button, Card, Descriptions, Empty, InputNumber, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Card, DatePicker, Descriptions, Empty, InputNumber, Table, Tag } from 'antd'
+import type { Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -10,9 +11,11 @@ import {
   freezeDatasetVersion,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
+  requestDatasetExport,
   startDatasetVersionBuild,
   validateDatasetVersion,
   type DatasetAdmissionPreview,
+  type DatasetExport,
   type DatasetVersionDetail,
   type DatasetVersionBuildBlocker,
   type DatasetVersionCurrentAdmission,
@@ -138,6 +141,11 @@ function DatasetVersionDetailContent() {
   const [freezeErrorCode, setFreezeErrorCode] = useState('')
   const [freezeErrorMessage, setFreezeErrorMessage] = useState('')
   const [freezeRequestId, setFreezeRequestId] = useState<string | null>(null)
+  const [exportExpiresAt, setExportExpiresAt] = useState<Dayjs | null>(null)
+  const [exportRequestState, setExportRequestState] = useState<'idle' | 'requesting' | 'error'>('idle')
+  const [exportErrorCode, setExportErrorCode] = useState('')
+  const [exportErrorMessage, setExportErrorMessage] = useState('')
+  const [exportRequestId, setExportRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
@@ -146,6 +154,7 @@ function DatasetVersionDetailContent() {
   const buildSnapshotIntent = useRef<string | null>(null)
   const validationIntent = useRef<string | null>(null)
   const freezeIntent = useRef<string | null>(null)
+  const exportIntent = useRef<{ expiresAt: string; idempotencyKey: string } | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -471,6 +480,68 @@ function DatasetVersionDetailContent() {
     })
   }, [modal, runFreeze])
 
+  const submitExportRequest = useCallback(async () => {
+    if (!exportExpiresAt || exportExpiresAt.valueOf() <= Date.now()) {
+      void message.error('请选择晚于当前时间的授权到期时间。')
+      return
+    }
+    const expiresAt = exportExpiresAt.toISOString()
+    const intent =
+      exportIntent.current?.expiresAt === expiresAt
+        ? exportIntent.current
+        : { expiresAt, idempotencyKey: crypto.randomUUID() }
+    exportIntent.current = intent
+    setExportRequestState('requesting')
+    setExportErrorCode('')
+    setExportErrorMessage('')
+    setExportRequestId(null)
+    try {
+      const exportRequest = await requestDatasetExport(
+        projectId,
+        datasetVersionId,
+        intent.expiresAt,
+        intent.idempotencyKey,
+      )
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              export_request: exportRequest,
+              can_request_export: false,
+            }
+          : current,
+      )
+      exportIntent.current = null
+      setExportExpiresAt(null)
+      setExportRequestState('idle')
+      void message.success('导出申请已提交，正在等待独立审批。')
+    } catch (error) {
+      setExportRequestState('error')
+      if (error instanceof CatalogApiError) {
+        setExportErrorCode(error.errorCode)
+        setExportErrorMessage(error.message)
+        setExportRequestId(error.requestId)
+      } else {
+        setExportErrorCode('DATASET_EXPORT_REQUEST_FAILED')
+        setExportErrorMessage('暂时无法提交导出申请，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, exportExpiresAt, message, projectId])
+
+  const confirmExportRequest = useCallback(() => {
+    if (!exportExpiresAt || exportExpiresAt.valueOf() <= Date.now()) {
+      void message.error('请选择晚于当前时间的授权到期时间。')
+      return
+    }
+    modal.confirm({
+      title: '提交数据集导出申请？',
+      content: `申请用途为“内部模型训练”，授权到期时间为 ${exportExpiresAt.format('YYYY-MM-DD HH:mm')}。提交后只记录待审批申请，不会立即生成或下载文件。`,
+      okText: '提交申请',
+      cancelText: '取消',
+      onOk: submitExportRequest,
+    })
+  }, [exportExpiresAt, message, modal, submitExportRequest])
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
@@ -761,6 +832,53 @@ function DatasetVersionDetailContent() {
               </div>
             ) : null}
           </Card>
+          {detail.status === 'FROZEN' ? (
+            <Card className="detail-card" title={<strong>数据集导出</strong>} variant="outlined">
+              <p className="form-hint">
+                当前 P0 只允许申请内部模型训练用途。申请、独立审批、后台生成和可下载是不同状态。
+              </p>
+              {detail.export_request ? (
+                <ExportRequestEvidence exportRequest={detail.export_request} />
+              ) : detail.can_request_export ? (
+                <div className="dataset-draft-selection-toolbar">
+                  <div>
+                    <strong>申请 P0 训练包</strong>
+                    <span>绑定当前冻结版本和固定导出配置，并明确授权到期时间。</span>
+                  </div>
+                  <div className="dataset-draft-selection-actions">
+                    <DatePicker
+                      aria-label="导出授权到期时间"
+                      disabledDate={(current) => current.endOf('day').valueOf() < Date.now()}
+                      format="YYYY-MM-DD HH:mm"
+                      minuteStep={5}
+                      placeholder="选择到期时间"
+                      showNow={false}
+                      showTime
+                      value={exportExpiresAt}
+                      onChange={setExportExpiresAt}
+                    />
+                    <Button
+                      type="primary"
+                      disabled={!exportExpiresAt}
+                      loading={exportRequestState === 'requesting'}
+                      onClick={confirmExportRequest}
+                    >
+                      提交导出申请
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p>尚未提交导出申请，请由项目管理员处理。</p>
+              )}
+              {exportRequestState === 'error' ? (
+                <div className="catalog-error" role="alert">
+                  <strong>{exportErrorCode}</strong>
+                  <span>{exportErrorMessage}</span>
+                  {exportRequestId ? <small>请求标识：{exportRequestId}</small> : null}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
           <Card
             className="detail-card table-card"
             variant="outlined"
@@ -828,6 +946,70 @@ function DatasetVersionDetailContent() {
           </Card>
         </>
       ) : null}
+    </>
+  )
+}
+
+function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport }) {
+  return (
+    <>
+      <div className="readiness-result">
+        <div>
+          <strong>导出申请等待独立审批</strong>
+          <span>当前只记录申请和用途授权；尚未进入后台队列，也没有可下载文件。</span>
+        </div>
+        <Tag color="processing">待审批</Tag>
+      </div>
+      <Descriptions
+        column={{ xs: 1, sm: 2, lg: 4 }}
+        items={[
+          { key: 'purpose', label: '用途', children: '内部模型训练' },
+          { key: 'expiry', label: '授权到期', children: formatDateTime(exportRequest.expires_at) },
+          { key: 'requester', label: '申请人', children: exportRequest.requested_by },
+          { key: 'requested', label: '申请时间', children: formatDateTime(exportRequest.requested_at) },
+        ]}
+      />
+      <details className="technical-facts">
+        <summary>查看导出申请标识</summary>
+        <dl>
+          <div>
+            <dt>DatasetExport ID</dt>
+            <dd>
+              <code>{exportRequest.dataset_export_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>ApprovalRequest ID</dt>
+            <dd>
+              <code>{exportRequest.approval.approval_request_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Validation ID</dt>
+            <dd>
+              <code>{exportRequest.dataset_version_validation_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>构建快照摘要</dt>
+            <dd>
+              <code>{exportRequest.snapshot_digest}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>导出配置</dt>
+            <dd>
+              <code>{exportRequest.export_profile_key}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>导出配置摘要</dt>
+            <dd>
+              <code>{exportRequest.export_profile_digest}</code>
+            </dd>
+          </div>
+        </dl>
+      </details>
     </>
   )
 }

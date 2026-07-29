@@ -302,6 +302,12 @@ V44 在 `PASS` 技术校验的同一事务创建一条绑定该 validation 的 `
 请求没有独立有效期，因为它只绑定一个不可变 validation，且批准与冻结在一个命令内原子完成。冻结不等于
 导出授权，也不创建文件、Worker 或队列。
 
+V45 允许项目管理员为 `FROZEN` 版本提交一次 `MODEL_TRAINING` 导出申请。申请固定
+`p0-dataset-export-v1`、构建规范、关系快照、通过的 validation、用途和未来到期时间，并在同一事务创建
+`REQUESTED` DatasetExport、`PENDING` 独立审批请求和审计。相同幂等请求返回原记录；同一版本和 profile
+不建立第二个申请。`REQUESTED` 不进入 `QUEUED`，也不创建文件、Worker 消息、下载授权或导出路径；
+只有后续审批与作业消费者一起落地时才允许推进。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport

@@ -21,7 +21,9 @@ record DatasetVersionDetailResponse(
 		DatasetVersionValidationResponse validation,
 		boolean canValidate,
 		DatasetVersionFreezeApprovalResponse freezeApproval,
-		boolean canFreeze) {
+		boolean canFreeze,
+		DatasetExportResponse exportRequest,
+		boolean canRequestExport) {
 
 	DatasetVersionDetailResponse {
 		members = List.copyOf(members);
@@ -39,7 +41,9 @@ record DatasetVersionDetailResponse(
 			DatasetVersionValidationResponse validation,
 			boolean canValidate,
 			DatasetVersionFreezeApprovalResponse freezeApproval,
-			boolean canFreeze) {
+			boolean canFreeze,
+			DatasetExportResponse exportRequest,
+			boolean canRequestExport) {
 		return new DatasetVersionDetailResponse(
 				version.getDatasetVersionId(),
 				version.getProjectId(),
@@ -57,7 +61,9 @@ record DatasetVersionDetailResponse(
 				validation,
 				canValidate,
 				freezeApproval,
-				canFreeze);
+				canFreeze,
+				exportRequest,
+				canRequestExport);
 	}
 }
 

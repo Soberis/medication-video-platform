@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.48.0
+  version: 0.49.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -93,7 +93,9 @@ tags:
       versions can fix build prerequisites and explicitly enter BUILDING; a completed relational
       snapshot seal advances to VALIDATING, where one technical freeze-preflight result can be
       recorded. A PASS creates a pending request; a different ACTIVE project administrator can
-      revalidate, approve and atomically freeze the version. FROZEN is still not an export artifact.
+      revalidate, approve and atomically freeze the version. An administrator can then request the
+      fixed P0 export profile for the explicit MODEL_TRAINING purpose and expiry; REQUESTED is still
+      a pending approval record, not an export artifact or queued job.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -685,6 +687,72 @@ paths:
             The version is not VALIDATING, validation did not pass, approval is missing or invalid,
             requester and approver are the same, evidence changed, the version is already frozen,
             or the idempotency key was used for another dataset version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/exports:
+    post:
+      operationId: requestDatasetExport
+      tags:
+        - Dataset Admission
+      summary: Request the approved P0 export profile for a frozen dataset version
+      description: >-
+        Requires ACTIVE ADMIN membership and a FROZEN DatasetVersion. Creates exactly one REQUESTED
+        DatasetExport bound to the immutable build specification, relational snapshot, PASS
+        validation and p0-dataset-export-v1 profile, together with a pending independent approval
+        request and audit event. P0 accepts only MODEL_TRAINING and an explicit future expiry.
+        This command does not approve, queue, generate, publish or authorize download of any file.
+        Replaying the same idempotency key and request returns the original record.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetExportCreateRequest"
+      responses:
+        "201":
+          description: The immutable export request and pending approval were recorded.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExport"
+        "400":
+          description: The path, required headers, purpose or expiry syntax is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The DatasetVersion is not FROZEN, its approved evidence is inconsistent, the expiry is
+            not in the future, an export request already exists, or the idempotency key conflicts.
           content:
             application/problem+json:
               schema:
@@ -5580,6 +5648,8 @@ components:
         - can_validate
         - freeze_approval
         - can_freeze
+        - export_request
+        - can_request_export
       properties:
         dataset_version_id:
           type: string
@@ -5659,6 +5729,18 @@ components:
           description: >-
             True only for an ACTIVE project administrator other than the requester while a PASS-bound
             freeze request is pending. The command still revalidates every technical guard.
+        export_request:
+          description: >-
+            The immutable P0 export request and its pending approval, or null before an administrator
+            requests export of the FROZEN version. REQUESTED does not mean queued or available.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetExport"
+            - type: "null"
+        can_request_export:
+          type: boolean
+          description: >-
+            True only when the current actor is an ACTIVE project administrator, the DatasetVersion
+            is FROZEN and no export request exists. The command still validates expiry and evidence.
     DatasetSplitPlanCreateRequest:
       type: object
       additionalProperties: false
@@ -6018,6 +6100,112 @@ components:
           type: string
           maxLength: 128
         frozen_at:
+          type: string
+          format: date-time
+    DatasetExportCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - purpose
+        - expires_at
+      properties:
+        purpose:
+          type: string
+          const: MODEL_TRAINING
+          description: The only approved P0 use is internal model training.
+        expires_at:
+          type: string
+          format: date-time
+          description: Explicit purpose-grant expiry; the server rejects values that are not in the future.
+    DatasetExportApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - approval_request_id
+        - validation_id
+        - status
+        - requested_by
+        - requested_at
+      properties:
+        approval_request_id:
+          type: string
+          format: uuid
+        validation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: PENDING
+          description: Approval is intentionally not exposed by this request-only slice.
+        requested_by:
+          type: string
+          maxLength: 128
+        requested_at:
+          type: string
+          format: date-time
+    DatasetExport:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_export_id
+        - project_id
+        - dataset_version_id
+        - status
+        - purpose
+        - expires_at
+        - dataset_build_specification_id
+        - dataset_build_snapshot_id
+        - snapshot_digest
+        - dataset_version_validation_id
+        - export_profile_key
+        - export_profile_digest
+        - approval
+        - requested_by
+        - requested_at
+      properties:
+        dataset_export_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        dataset_version_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: REQUESTED
+          description: The request awaits independent approval and has not entered a Worker queue.
+        purpose:
+          type: string
+          const: MODEL_TRAINING
+        expires_at:
+          type: string
+          format: date-time
+        dataset_build_specification_id:
+          type: string
+          format: uuid
+        dataset_build_snapshot_id:
+          type: string
+          format: uuid
+        snapshot_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        dataset_version_validation_id:
+          type: string
+          format: uuid
+        export_profile_key:
+          type: string
+          const: p0-dataset-export-v1
+        export_profile_digest:
+          type: string
+          const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+        approval:
+          $ref: "#/components/schemas/DatasetExportApproval"
+        requested_by:
+          type: string
+          maxLength: 128
+        requested_at:
           type: string
           format: date-time
     DatasetMemberSession:

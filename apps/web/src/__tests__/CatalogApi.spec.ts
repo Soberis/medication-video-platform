@@ -13,6 +13,7 @@ import {
   listClipAssetActivity,
   listCaptureEventLogs,
   listDatasetVersions,
+  requestDatasetExport,
   requestClipAssetMediaProbe,
   startDatasetVersionBuild,
   validateDatasetVersion,
@@ -433,6 +434,49 @@ describe('catalog API', () => {
         cache: 'no-store',
         headers: expect.objectContaining({
           'Idempotency-Key': 'dataset-freeze-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
+  })
+
+  it('requests a frozen dataset export with an explicit purpose expiry and idempotency key', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const expiresAt = '2026-08-06T02:00:00.000Z'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_export_id: '97000000-0000-4000-8000-000000000001',
+          project_id: projectId,
+          dataset_version_id: datasetVersionId,
+          status: 'REQUESTED',
+          purpose: 'MODEL_TRAINING',
+          expires_at: expiresAt,
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      requestDatasetExport(
+        projectId,
+        datasetVersionId,
+        expiresAt,
+        'dataset-export-request-0001',
+      ),
+    ).resolves.toMatchObject({ status: 'REQUESTED', purpose: 'MODEL_TRAINING' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ purpose: 'MODEL_TRAINING', expires_at: expiresAt }),
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'dataset-export-request-0001',
           'X-XSRF-TOKEN': 'csrf-test-token',
         }),
       }),

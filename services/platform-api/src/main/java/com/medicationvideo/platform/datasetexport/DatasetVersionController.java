@@ -58,6 +58,7 @@ class DatasetVersionController {
 	private final DatasetBuildSnapshotService buildSnapshotService;
 	private final DatasetVersionValidationService validationService;
 	private final DatasetVersionFreezeService freezeService;
+	private final DatasetExportService exportService;
 	private final DatasetVersionQueryService queryService;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
@@ -69,6 +70,7 @@ class DatasetVersionController {
 			DatasetBuildSnapshotService buildSnapshotService,
 			DatasetVersionValidationService validationService,
 			DatasetVersionFreezeService freezeService,
+			DatasetExportService exportService,
 			DatasetVersionQueryService queryService,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
@@ -78,6 +80,7 @@ class DatasetVersionController {
 		this.buildSnapshotService = buildSnapshotService;
 		this.validationService = validationService;
 		this.freezeService = freezeService;
+		this.exportService = exportService;
 		this.queryService = queryService;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
@@ -267,6 +270,30 @@ class DatasetVersionController {
 				.body(response);
 	}
 
+	@PostMapping("/{datasetVersionId}/exports")
+	ResponseEntity<DatasetExportResponse> requestDatasetExport(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody DatasetExportCreateRequest request,
+			Authentication authentication) {
+		var response = this.exportService.request(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
+				request.purpose(),
+				request.expiresAt());
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new DatasetVersionException(
@@ -288,6 +315,11 @@ record DatasetVersionCreateRequest(
 }
 
 record DatasetSplitPlanCreateRequest(@Min(1) @Max(99) int holdoutCount) {
+}
+
+record DatasetExportCreateRequest(
+		@NotNull DatasetExportPurpose purpose,
+		@NotNull java.time.Instant expiresAt) {
 }
 
 final class DatasetVersionException extends RuntimeException {

@@ -266,6 +266,32 @@ export interface DatasetVersionFreeze {
   frozen_at: string
 }
 
+export interface DatasetExportApproval {
+  approval_request_id: string
+  validation_id: string
+  status: 'PENDING'
+  requested_by: string
+  requested_at: string
+}
+
+export interface DatasetExport {
+  dataset_export_id: string
+  project_id: string
+  dataset_version_id: string
+  status: 'REQUESTED'
+  purpose: 'MODEL_TRAINING'
+  expires_at: string
+  dataset_build_specification_id: string
+  dataset_build_snapshot_id: string
+  snapshot_digest: string
+  dataset_version_validation_id: string
+  export_profile_key: 'p0-dataset-export-v1'
+  export_profile_digest: string
+  approval: DatasetExportApproval
+  requested_by: string
+  requested_at: string
+}
+
 export interface DatasetVersionDetail extends DatasetVersionSummary {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
@@ -278,6 +304,8 @@ export interface DatasetVersionDetail extends DatasetVersionSummary {
   can_validate: boolean
   freeze_approval: DatasetVersionFreezeApproval | null
   can_freeze: boolean
+  export_request: DatasetExport | null
+  can_request_export: boolean
 }
 
 export interface DatasetVersionCurrentAdmissionEvidenceChange {
@@ -774,6 +802,32 @@ export async function freezeDatasetVersion(
     },
   )
   if (response.ok) return (await response.json()) as DatasetVersionFreeze
+  throw await toCatalogError(response)
+}
+
+export async function requestDatasetExport(
+  projectId: string,
+  datasetVersionId: string,
+  expiresAt: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetExport> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/exports`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ purpose: 'MODEL_TRAINING', expires_at: expiresAt }),
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetExport
   throw await toCatalogError(response)
 }
 
