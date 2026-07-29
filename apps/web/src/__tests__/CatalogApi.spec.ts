@@ -12,6 +12,7 @@ import {
   listCaptureEventLogs,
   listDatasetVersions,
   requestClipAssetMediaProbe,
+  startDatasetVersionBuild,
 } from '@/api/catalog'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
@@ -278,6 +279,39 @@ describe('catalog API', () => {
         'dataset-version-idempotency-uncertain-0001',
       ),
     ).rejects.toMatchObject({ retryable: true, status: 503 })
+  })
+
+  it('starts a dataset build with CSRF protection and the caller-owned idempotency key', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_id: datasetVersionId,
+          status: 'BUILDING',
+          started_by: 'local-admin',
+          started_at: '2026-07-29T05:00:00Z',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      startDatasetVersionBuild(projectId, datasetVersionId, 'dataset-build-start-0001'),
+    ).resolves.toMatchObject({ status: 'BUILDING' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-build-start-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
   })
 
   it('reads dataset-draft metadata and its immutable evidence snapshot without caching', async () => {

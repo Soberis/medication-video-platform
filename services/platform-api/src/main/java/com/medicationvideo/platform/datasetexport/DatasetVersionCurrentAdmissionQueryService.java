@@ -14,9 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.medicationvideo.platform.assetcapture.CaptureSessionDatasetAdmissionFacts;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 
 /**
- * Read-only comparison of a dataset draft with current admission facts and DRAFT build prerequisites.
+ * Read-only comparison of a DatasetVersion snapshot with current admission facts and build prerequisites.
  */
 @Service
 class DatasetVersionCurrentAdmissionQueryService {
@@ -52,7 +53,7 @@ class DatasetVersionCurrentAdmissionQueryService {
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	DatasetVersionCurrentAdmissionResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
-		this.projectAccessService.requireMember(projectId, actorId);
+		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 				.orElseThrow(DatasetVersionCurrentAdmissionQueryService::notFound);
 		var snapshotStreams = this.memberStreamRepository
@@ -75,7 +76,10 @@ class DatasetVersionCurrentAdmissionQueryService {
 				version.getDatasetVersionId(),
 				members.stream().allMatch(member -> member.currentAdmission().eligible()),
 				members,
-				buildReadiness);
+				buildReadiness,
+				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.DRAFT
+						&& buildReadiness.readyForBuild());
 	}
 
 	private static Map<UUID, List<DatasetMemberStream>> streamsByMemberId(
@@ -227,7 +231,8 @@ record DatasetVersionCurrentAdmissionResponse(
 		UUID datasetVersionId,
 		boolean allMembersCurrentlyAdmissionEligible,
 		List<DatasetVersionCurrentAdmissionMemberResponse> members,
-		DatasetVersionBuildReadinessResponse buildReadiness) {
+		DatasetVersionBuildReadinessResponse buildReadiness,
+		boolean canStartBuild) {
 
 	DatasetVersionCurrentAdmissionResponse {
 		members = List.copyOf(members);

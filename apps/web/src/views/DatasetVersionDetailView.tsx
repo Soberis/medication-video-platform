@@ -8,6 +8,7 @@ import {
   createDatasetSplitPlan,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
+  startDatasetVersionBuild,
   type DatasetAdmissionPreview,
   type DatasetVersionDetail,
   type DatasetVersionBuildBlocker,
@@ -16,6 +17,7 @@ import {
   type DatasetVersionCurrentAdmissionMember,
   type DatasetVersionMemberSession,
   type DatasetVersionMemberStream,
+  type DatasetVersionStatus,
   type DatasetSplitAssignment,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
@@ -69,6 +71,11 @@ const buildBlockerLabels: Record<DatasetVersionBuildBlocker, string> = {
   SNAPSHOT_EVIDENCE_CHANGED: '当前事实与草稿固定证据存在变化',
 }
 
+const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
+  DRAFT: '草稿',
+  BUILDING: '构建中',
+}
+
 export default function DatasetVersionDetailView() {
   const { projectId = '', id: datasetVersionId = '' } = useParams()
   return <DatasetVersionDetailContent key={`${projectId}:${datasetVersionId}`} />
@@ -98,10 +105,15 @@ function DatasetVersionDetailContent() {
   const [buildSpecificationErrorCode, setBuildSpecificationErrorCode] = useState('')
   const [buildSpecificationErrorMessage, setBuildSpecificationErrorMessage] = useState('')
   const [buildSpecificationRequestId, setBuildSpecificationRequestId] = useState<string | null>(null)
+  const [buildStartState, setBuildStartState] = useState<'idle' | 'starting' | 'error'>('idle')
+  const [buildStartErrorCode, setBuildStartErrorCode] = useState('')
+  const [buildStartErrorMessage, setBuildStartErrorMessage] = useState('')
+  const [buildStartRequestId, setBuildStartRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
   const buildSpecificationIntent = useRef<string | null>(null)
+  const buildStartIntent = useRef<string | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -147,6 +159,10 @@ function DatasetVersionDetailContent() {
     setCurrentAdmissionErrorCode('')
     setCurrentAdmissionErrorMessage('')
     setCurrentAdmissionRequestId(null)
+    setBuildStartState('idle')
+    setBuildStartErrorCode('')
+    setBuildStartErrorMessage('')
+    setBuildStartRequestId(null)
     try {
       const response = await getDatasetVersionCurrentAdmission(projectId, datasetVersionId, request.signal)
       if (currentAdmissionRequest.current !== request) return
@@ -265,6 +281,43 @@ function DatasetVersionDetailContent() {
     })
   }, [fixBuildSpecification, modal])
 
+  const startBuild = useCallback(async () => {
+    const idempotencyKey = buildStartIntent.current ?? crypto.randomUUID()
+    buildStartIntent.current = idempotencyKey
+    setBuildStartState('starting')
+    setBuildStartErrorCode('')
+    setBuildStartErrorMessage('')
+    setBuildStartRequestId(null)
+    try {
+      const result = await startDatasetVersionBuild(projectId, datasetVersionId, idempotencyKey)
+      setDetail((current) => (current ? { ...current, status: result.status } : current))
+      setCurrentAdmission((current) => (current ? { ...current, can_start_build: false } : current))
+      buildStartIntent.current = null
+      setBuildStartState('idle')
+      void message.success('数据集已进入构建阶段。')
+    } catch (error) {
+      setBuildStartState('error')
+      if (error instanceof CatalogApiError) {
+        setBuildStartErrorCode(error.errorCode)
+        setBuildStartErrorMessage(error.message)
+        setBuildStartRequestId(error.requestId)
+      } else {
+        setBuildStartErrorCode('DATASET_VERSION_BUILD_FAILED')
+        setBuildStartErrorMessage('暂时无法开始构建，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, message, projectId])
+
+  const confirmBuildStart = useCallback(() => {
+    modal.confirm({
+      title: '开始构建当前数据集？',
+      content: '系统会再次核对当前准入和固定证据。通过后版本进入构建阶段，既有划分和配置不能修改；此操作不会冻结或导出数据。',
+      okText: '开始构建',
+      cancelText: '取消',
+      onOk: startBuild,
+    })
+  }, [modal, startBuild])
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
@@ -279,7 +332,7 @@ function DatasetVersionDetailContent() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑">
-        <Link to={paths.datasets(projectId)}>数据集草稿</Link>
+        <Link to={paths.datasets(projectId)}>数据集版本</Link>
         <span aria-hidden="true">/</span>
         <span>证据详情</span>
       </nav>
@@ -300,15 +353,25 @@ function DatasetVersionDetailContent() {
         <>
           <section className="page-heading detail-heading" aria-labelledby="dataset-version-title">
             <div>
-              <p className="app-eyebrow">不可变候选快照</p>
+              <p className="app-eyebrow">{detail.status === 'DRAFT' ? '不可变候选快照' : '数据集构建'}</p>
               <h1 id="dataset-version-title">{detail.display_name}</h1>
-              <p>以下证据只反映创建草稿时的事实；数据划分与构建配置可依次固定，冻结和导出仍须后续验证。</p>
+              <p>
+                {detail.status === 'DRAFT'
+                  ? '以下证据只反映创建草稿时的事实；数据划分与构建配置可依次固定，冻结和导出仍须后续验证。'
+                  : '构建配置已经封存；构建快照、校验、冻结和导出仍须后续完成。'}
+              </p>
             </div>
             <div className="heading-tags">
-              <Tag color="blue">草稿</Tag>
+              <Tag color={detail.status === 'DRAFT' ? 'blue' : 'processing'}>
+                {datasetVersionStatusLabels[detail.status]}
+              </Tag>
             </div>
           </section>
-          <Card className="detail-card" title={<strong>草稿事实</strong>} variant="outlined">
+          <Card
+            className="detail-card"
+            title={<strong>{detail.status === 'DRAFT' ? '草稿事实' : '版本事实'}</strong>}
+            variant="outlined"
+          >
             <Descriptions
               column={{ xs: 1, sm: 2, lg: 4 }}
               items={[
@@ -377,7 +440,11 @@ function DatasetVersionDetailContent() {
           <Card
             className="detail-card"
             extra={
-              <Button loading={currentAdmissionState === 'loading'} onClick={() => void checkCurrentAdmission()}>
+              <Button
+                disabled={buildStartState === 'starting'}
+                loading={currentAdmissionState === 'loading'}
+                onClick={() => void checkCurrentAdmission()}
+              >
                 检查构建准备
               </Button>
             }
@@ -430,7 +497,20 @@ function DatasetVersionDetailContent() {
               </div>
             ) : null}
             {currentAdmissionState === 'success' && currentAdmission ? (
-              <CurrentAdmissionEvidence projectId={projectId} admission={currentAdmission} />
+              <CurrentAdmissionEvidence
+                projectId={projectId}
+                admission={currentAdmission}
+                status={detail.status}
+                starting={buildStartState === 'starting'}
+                onStart={confirmBuildStart}
+              />
+            ) : null}
+            {buildStartState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{buildStartErrorCode}</strong>
+                <span>{buildStartErrorMessage}</span>
+                {buildStartRequestId ? <small>请求标识：{buildStartRequestId}</small> : null}
+              </div>
             ) : null}
           </Card>
           <Card
@@ -637,18 +717,36 @@ function SplitPlanEvidence({
 function CurrentAdmissionEvidence({
   projectId,
   admission,
+  status,
+  starting,
+  onStart,
 }: {
   projectId: string
   admission: DatasetVersionCurrentAdmission
+  status: DatasetVersionStatus
+  starting: boolean
+  onStart: () => void
 }) {
+  const ready = admission.build_readiness.ready_for_build
+  const building = status === 'BUILDING'
   return (
     <>
-      <div className={`readiness-result${admission.build_readiness.ready_for_build ? ' readiness-result-ready' : ''}`}>
+      <div className={`readiness-result${ready ? ' readiness-result-ready' : ''}`}>
         <div>
-          <strong>{admission.build_readiness.ready_for_build ? '已具备开始构建条件' : '尚未具备开始构建条件'}</strong>
+          <strong>
+            {building
+              ? ready
+                ? '当前构建证据仍一致'
+                : '构建证据需要处理'
+              : ready
+                ? '已具备开始构建条件'
+                : '尚未具备开始构建条件'}
+          </strong>
           <span>
-            {admission.build_readiness.ready_for_build
-              ? '草稿配置与当前证据已通过构建前检查。'
+            {ready
+              ? building
+                ? '固定配置与当前事实仍然一致，后续仍须完成构建校验。'
+                : '草稿配置与当前证据已通过构建前检查。'
               : `还有 ${admission.build_readiness.blocking_reasons.length} 项需要处理。`}
           </span>
           {admission.build_readiness.blocking_reasons.length > 0 ? (
@@ -659,6 +757,11 @@ function CurrentAdmissionEvidence({
             </ul>
           ) : null}
         </div>
+        {admission.can_start_build && status === 'DRAFT' ? (
+          <Button type="primary" loading={starting} onClick={onStart}>
+            开始构建
+          </Button>
+        ) : null}
       </div>
       <Table<DatasetVersionCurrentAdmissionMember>
         dataSource={admission.members}

@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.datasetexport;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -41,6 +42,18 @@ class DatasetVersion {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	@Column(name = "build_started_by", length = 128)
+	private String buildStartedBy;
+
+	@Column(name = "build_start_idempotency_key", length = 128)
+	private String buildStartIdempotencyKey;
+
+	@Column(name = "build_start_request_fingerprint", length = 64)
+	private String buildStartRequestFingerprint;
+
+	@Column(name = "build_started_at")
+	private Instant buildStartedAt;
+
 	@Version
 	@Column(name = "row_version", nullable = false)
 	private long version;
@@ -79,6 +92,23 @@ class DatasetVersion {
 		return this.requestFingerprint.equals(requestFingerprint);
 	}
 
+	boolean matchesBuildStartRequest(String actorId, String idempotencyKey, String requestFingerprint) {
+		return Objects.equals(this.buildStartedBy, actorId)
+				&& Objects.equals(this.buildStartIdempotencyKey, idempotencyKey)
+				&& Objects.equals(this.buildStartRequestFingerprint, requestFingerprint);
+	}
+
+	void startBuild(String actorId, String idempotencyKey, String requestFingerprint, Instant startedAt) {
+		if (this.status != DatasetVersionStatus.DRAFT || this.buildStartedAt != null) {
+			throw new IllegalStateException("Only a dataset draft can start building.");
+		}
+		this.status = DatasetVersionStatus.BUILDING;
+		this.buildStartedBy = actorId;
+		this.buildStartIdempotencyKey = idempotencyKey;
+		this.buildStartRequestFingerprint = requestFingerprint;
+		this.buildStartedAt = startedAt;
+	}
+
 	UUID getDatasetVersionId() {
 		return this.datasetVersionId;
 	}
@@ -103,11 +133,20 @@ class DatasetVersion {
 		return this.createdAt;
 	}
 
+	String getBuildStartedBy() {
+		return this.buildStartedBy;
+	}
+
+	Instant getBuildStartedAt() {
+		return this.buildStartedAt;
+	}
+
 	long getVersion() {
 		return this.version;
 	}
 }
 
 enum DatasetVersionStatus {
-	DRAFT
+	DRAFT,
+	BUILDING
 }

@@ -124,13 +124,19 @@ export interface DatasetAdmissionPreview {
   streams: DatasetAdmissionPreviewStream[]
 }
 
-export interface DatasetVersionDraft {
+export type DatasetVersionStatus = 'DRAFT' | 'BUILDING'
+
+export interface DatasetVersionSummary {
   dataset_version_id: string
   project_id: string
   display_name: string
-  status: 'DRAFT'
+  status: DatasetVersionStatus
   created_by: string
   created_at: string
+}
+
+export interface DatasetVersionDraft extends DatasetVersionSummary {
+  status: 'DRAFT'
 }
 
 export interface DatasetVersionMemberStream {
@@ -195,7 +201,7 @@ export interface DatasetBuildSpecification {
   created_at: string
 }
 
-export interface DatasetVersionDetail extends DatasetVersionDraft {
+export interface DatasetVersionDetail extends DatasetVersionSummary {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
   can_create_split_plan: boolean
@@ -242,6 +248,14 @@ export interface DatasetVersionCurrentAdmission {
   all_members_currently_admission_eligible: boolean
   members: DatasetVersionCurrentAdmissionMember[]
   build_readiness: DatasetVersionBuildReadiness
+  can_start_build: boolean
+}
+
+export interface DatasetVersionBuildStart {
+  dataset_version_id: string
+  status: 'BUILDING'
+  started_by: string
+  started_at: string
 }
 
 export interface ClipAssetSessionBinding {
@@ -410,6 +424,9 @@ const errorMessages: Record<string, string> = {
   DATASET_BUILD_LABEL_SCHEMA_NOT_UNIFORM: '候选视频的标签规范不一致，请重新选择候选数据。',
   DATASET_BUILD_CLEANING_RULE_SET_NOT_UNIFORM: '候选视频的清洗规则不一致，请重新选择候选数据。',
   DATASET_BUILD_SPECIFICATION_STATUS_INVALID: '只有草稿状态的数据集可以固定构建配置。',
+  DATASET_VERSION_BUILD_BLOCKED: '当前准入或固定证据已经变化，请重新检查构建准备。',
+  DATASET_VERSION_BUILD_STATUS_INVALID: '该数据集已不再是草稿状态，请刷新页面查看。',
+  DATASET_VERSION_BUILD_IDEMPOTENCY_KEY_REUSED: '本次开始构建请求与已提交请求冲突，请刷新后重试。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -503,7 +520,7 @@ export async function createDatasetVersionDraft(
 export function listDatasetVersions(projectId: string, cursor: string | null, signal?: AbortSignal) {
   const query = new URLSearchParams({ limit: '20' })
   add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<DatasetVersionDraft>>(
+  return readJson<CatalogPage<DatasetVersionSummary>>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions?${query.toString()}`,
     signal,
   )
@@ -577,6 +594,29 @@ export async function createDatasetBuildSpecification(
     },
   )
   if (response.ok) return (await response.json()) as DatasetBuildSpecification
+  throw await toCatalogError(response)
+}
+
+export async function startDatasetVersionBuild(
+  projectId: string,
+  datasetVersionId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetVersionBuildStart> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/build`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetVersionBuildStart
   throw await toCatalogError(response)
 }
 

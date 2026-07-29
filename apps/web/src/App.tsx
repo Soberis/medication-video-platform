@@ -42,7 +42,7 @@ export default function AppShell() {
           {projectId ? <NavLink to={paths.sessions(projectId)}>配药操作</NavLink> : null}
           {projectId ? <NavLink to={paths.assets(projectId)}>视频资产</NavLink> : null}
           {projectId ? <NavLink to={paths.annotationTasks(projectId)}>标注任务</NavLink> : null}
-          {projectId ? <NavLink to={paths.datasets(projectId)}>数据集草稿</NavLink> : null}
+          {projectId ? <NavLink to={paths.datasets(projectId)}>数据集版本</NavLink> : null}
           <NavLink to={paths.localUpload}>本地上传</NavLink>
           <details className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}>
             <summary>管理</summary>

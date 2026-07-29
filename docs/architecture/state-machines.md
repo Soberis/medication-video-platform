@@ -281,6 +281,10 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 失败或固定证据变化。它不写 DatasetVersion、不产生审计，也不执行状态迁移；“检查通过”仍不等同于
 `VALIDATING → FROZEN` 的校验和审批通过。
 
+V41 增加显式开始构建命令。项目管理员确认后，服务端锁定项目并在同一事务重新执行当前准入和
+固定证据比较；只有零阻断且状态仍为 `DRAFT` 时，才记录启动人、启动时间、幂等指纹和审计，并迁移到
+`BUILDING`。该命令只封存草稿配置，不创建文件、不启动 Worker、不进入 `VALIDATING`，也不批准冻结或导出。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport

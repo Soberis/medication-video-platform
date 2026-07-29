@@ -429,10 +429,10 @@ describe('catalog views', () => {
 
     renderDatasetList()
 
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('数据集草稿')
-    expect(screen.getByText(/草稿尚未拆分、冻结或导出/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('数据集版本')
+    expect(screen.getByText(/只有完成校验和冻结后/)).toBeInTheDocument()
     expect(await screen.findByText('配药操作训练候选')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /查看数据集草稿：配药操作训练候选/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /查看数据集版本：配药操作训练候选/ })).toHaveAttribute(
       'href',
       `/projects/${projectId}/datasets/${datasetVersionId}`,
     )
@@ -814,6 +814,84 @@ describe('catalog views', () => {
         method: 'POST',
         cache: 'no-store',
         headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-spec-0001' }),
+      }),
+    )
+  })
+
+  it('starts a ready dataset build only after explicit confirmation', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`
+    const buildPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    const buildSpecification = {
+      dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
+      dataset_version_id: datasetVersionId,
+      selection_rule_version: 'EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1' as const,
+      label_schema_digest: 'c'.repeat(64),
+      cleaning_rule_set_digest: 'd'.repeat(64),
+      dataset_split_plan_id: '92000000-0000-4000-8000-000000000001',
+      export_profile_key: 'p0-dataset-export-v1' as const,
+      export_profile_digest: 'e'.repeat(64),
+      created_by: 'local-admin',
+      created_at: '2026-07-29T04:00:00Z',
+    }
+    detail.build_specification = buildSpecification
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === currentAdmissionPath) {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_version_id: datasetVersionId,
+            all_members_currently_admission_eligible: true,
+            members: [],
+            build_readiness: {
+              ready_for_build: true,
+              blocking_reasons: [],
+              immutable_evidence_still_current: true,
+              uniform_label_schema_digest: 'c'.repeat(64),
+              uniform_cleaning_rule_set_digest: 'd'.repeat(64),
+              dataset_split_plan_id: buildSpecification.dataset_split_plan_id,
+              build_specification: buildSpecification,
+            },
+            can_start_build: true,
+          }),
+        )
+      }
+      if (String(input) === buildPath) {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_version_id: datasetVersionId,
+            status: 'BUILDING',
+            started_by: 'local-admin',
+            started_at: '2026-07-29T05:00:00Z',
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-build-start-0001') })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
+    await user.click(screen.getByRole('button', { name: '检查构建准备' }))
+    expect(await screen.findByRole('button', { name: '开始构建' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '开始构建' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    expect(within(confirmDialog).getByText(/不会冻结或导出数据/)).toBeInTheDocument()
+    await user.click(within(confirmDialog).getByRole('button', { name: '开始构建' }))
+
+    expect(await screen.findByText('当前构建证据仍一致')).toBeInTheDocument()
+    expect(screen.getByText('构建中')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '开始构建' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      buildPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-start-0001' }),
       }),
     )
   })

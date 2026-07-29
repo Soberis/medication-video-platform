@@ -92,9 +92,13 @@ class DatasetVersionQueryService {
 				version,
 				members,
 				splitPlan,
-				role == ProjectRole.ADMIN && splitPlan == null && members.size() >= 2,
+				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.DRAFT
+						&& splitPlan == null
+						&& members.size() >= 2,
 				specification == null ? null : DatasetBuildSpecificationResponse.from(specification),
 				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.DRAFT
 						&& splitPlan != null
 						&& specification == null
 						&& buildEvidence.isComplete());

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.44.0
+  version: 0.45.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -29,8 +29,9 @@ info:
     let project administrators snapshot eligible CaptureSessions into a DRAFT DatasetVersion and
     fix one reproducible CaptureSession-level pilot/holdout split plan and one immutable minimum
     build specification while members read its immutable evidence separately from current admission
-    facts and read a non-mutating build-readiness preflight that explains every remaining
-    DRAFT-to-BUILDING blocker,
+    facts, read a non-mutating build-readiness preflight that explains every remaining
+    DRAFT-to-BUILDING blocker, and explicitly advance a still-ready draft to BUILDING without
+    creating export artifacts or starting a Worker,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -84,8 +85,9 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Dataset Admission
     description: >-
-      Current-state previews and administrator-created DRAFT candidate snapshots. A draft is not
-      frozen, split, approved or exportable; those governance transitions remain unavailable.
+      Current-state previews and administrator-created DatasetVersion candidate snapshots. DRAFT
+      versions can fix build prerequisites and explicitly enter BUILDING; neither state is frozen,
+      approved or exportable.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -107,10 +109,10 @@ paths:
       operationId: listDatasetVersions
       tags:
         - Dataset Admission
-      summary: List project-scoped dataset drafts
+      summary: List project-scoped dataset versions
       description: >-
-        Requires ACTIVE project membership. Returns immutable DRAFT metadata only; it does not
-        assign splits, freeze a DatasetVersion, create an export or authorize data release.
+        Requires ACTIVE project membership. Returns DRAFT and BUILDING metadata; it does not
+        mutate a DatasetVersion, create an export or authorize data release.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - name: cursor
@@ -129,7 +131,7 @@ paths:
             default: 20
       responses:
         "200":
-          description: Dataset drafts visible to the current active project member.
+          description: Dataset versions visible to the current active project member.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -223,9 +225,9 @@ paths:
       operationId: getDatasetVersion
       tags:
         - Dataset Admission
-      summary: Read an immutable dataset-draft evidence snapshot
+      summary: Read an immutable DatasetVersion evidence snapshot
       description: >-
-        Requires ACTIVE project membership. Returns the DRAFT's persisted session and stream
+        Requires ACTIVE project membership. Returns the DatasetVersion's persisted session and stream
         evidence snapshot and its immutable split plan when one exists, without resolving current
         mutable facts or exposing media URLs.
       parameters:
@@ -331,13 +333,14 @@ paths:
       operationId: getDatasetVersionCurrentAdmission
       tags:
         - Dataset Admission
-      summary: Read current admission facts and the draft's build-readiness preflight
+      summary: Read current admission facts and DatasetVersion build readiness
       description: >-
-        Requires ACTIVE project membership. Re-evaluates every persisted DRAFT member against current
+        Requires ACTIVE project membership. Re-evaluates every persisted DatasetVersion member against current
         admission facts, reports stable evidence differences from its immutable candidate snapshot and
-        summarizes the remaining DRAFT-to-BUILDING prerequisites. This is a read-only observation: it
+        summarizes the DRAFT-to-BUILDING prerequisites. This remains useful after start for detecting
+        later evidence changes and is a read-only observation: it
         does not fix a selection, label, cleaning or export profile, write audit events, change the
-        draft, assign splits, approve an exception, freeze a DatasetVersion, create an export or
+        DatasetVersion, assign splits, approve an exception, freeze a DatasetVersion, create an export or
         authorize data release.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -426,6 +429,68 @@ paths:
           description: >-
             The draft has no split plan, its label or cleaning evidence is not uniform, a build
             specification already exists, its status is not DRAFT, or the idempotency key conflicts.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/build:
+    post:
+      operationId: startDatasetVersionBuild
+      tags:
+        - Dataset Admission
+      summary: Advance one ready dataset draft to BUILDING
+      description: >-
+        Requires ACTIVE ADMIN membership. Locks the project, verifies that the DatasetVersion is
+        still DRAFT, re-evaluates current admission and every immutable-evidence difference, and
+        advances the version to BUILDING only when the fixed selection, label, cleaning, split and
+        export-profile prerequisites remain satisfied. The command records the actor, time,
+        idempotency fingerprint and an audit event in the same transaction. Replaying the same
+        request returns the original result. BUILDING seals the draft configuration; this command
+        does not create files, start a Worker, validate or freeze the dataset, approve release or
+        export data.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "200":
+          description: The build was started or the same command was replayed idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionBuildStart"
+        "400":
+          description: A path parameter or required header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The version is no longer DRAFT, a current admission or immutable-evidence prerequisite
+            is blocked, or the idempotency key was used for another dataset version.
           content:
             application/problem+json:
               schema:
@@ -5279,7 +5344,7 @@ components:
           maxLength: 128
         status:
           type: string
-          enum: [DRAFT]
+          enum: [DRAFT, BUILDING]
         created_by:
           type: string
           maxLength: 128
@@ -5327,7 +5392,7 @@ components:
           maxLength: 128
         status:
           type: string
-          enum: [DRAFT]
+          enum: [DRAFT, BUILDING]
         created_by:
           type: string
           maxLength: 128
@@ -5500,6 +5565,27 @@ components:
         created_at:
           type: string
           format: date-time
+    DatasetVersionBuildStart:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_id
+        - status
+        - started_by
+        - started_at
+      properties:
+        dataset_version_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: BUILDING
+        started_by:
+          type: string
+          maxLength: 128
+        started_at:
+          type: string
+          format: date-time
     DatasetMemberSession:
       type: object
       additionalProperties: false
@@ -5598,6 +5684,7 @@ components:
         - all_members_currently_admission_eligible
         - members
         - build_readiness
+        - can_start_build
       properties:
         dataset_version_id:
           type: string
@@ -5614,6 +5701,12 @@ components:
             $ref: "#/components/schemas/DatasetVersionCurrentAdmissionMember"
         build_readiness:
           $ref: "#/components/schemas/DatasetVersionBuildReadiness"
+        can_start_build:
+          type: boolean
+          description: >-
+            True only when the current actor is an ACTIVE project administrator, the DatasetVersion
+            is still DRAFT and this response's build readiness has no blocker. The start command
+            rechecks every prerequisite in its own transaction.
     DatasetVersionBuildReadiness:
       type: object
       additionalProperties: false

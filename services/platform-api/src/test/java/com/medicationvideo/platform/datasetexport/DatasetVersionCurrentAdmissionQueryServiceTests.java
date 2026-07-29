@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import com.medicationvideo.platform.assetcapture.CaptureSessionDatasetAdmissionFacts;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 
 class DatasetVersionCurrentAdmissionQueryServiceTests {
 
@@ -247,6 +248,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				Instant.EPOCH);
 		when(versions.findByProjectIdAndDatasetVersionId(PROJECT_ID, version.getDatasetVersionId()))
 				.thenReturn(Optional.of(version));
+		when(access.requireMember(PROJECT_ID, ACTOR_ID)).thenReturn(ProjectRole.ADMIN);
 		when(sessions.findByDatasetVersionIdOrderByCandidateIndexAsc(version.getDatasetVersionId()))
 				.thenReturn(List.of(member));
 		when(streams.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(version.getDatasetVersionId()))
@@ -262,6 +264,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertTrue(response.buildReadiness().readyForBuild());
+		assertTrue(response.canStartBuild());
 		assertTrue(response.buildReadiness().blockingReasons().isEmpty());
 		assertEquals(
 				specification.getDatasetBuildSpecificationId(),

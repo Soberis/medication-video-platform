@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.annotationreview;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -335,6 +337,98 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_IDEMPOTENCY_KEY_REUSED"));
 
 		assertEquals(1, count("SELECT count(*) FROM dataset_version WHERE project_id = ?", PROJECT_ID));
+	}
+
+	@Test
+	void administratorStartsAReadyDatasetBuildExactlyOnce() throws Exception {
+		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
+		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
+		var draftResponse = createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(firstSessionId, secondSessionId),
+				"dataset-build-start-draft-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var datasetVersionId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.read(draftResponse, "$.dataset_version_id"));
+		createDatasetSplitPlan(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				1,
+				"dataset-build-start-split-" + UUID.randomUUID())
+				.andExpect(status().isCreated());
+		createDatasetBuildSpecification(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				"dataset-build-start-spec-" + UUID.randomUUID())
+				.andExpect(status().isCreated());
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.build_readiness.ready_for_build").value(true))
+				.andExpect(jsonPath("$.can_start_build").value(true));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.can_start_build").value(false));
+
+		var idempotencyKey = "dataset-build-start-" + UUID.randomUUID();
+		startDatasetBuild(MEMBER_TOKEN, datasetVersionId, idempotencyKey)
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var startedResponse = startDatasetBuild(ADMIN_TOKEN, datasetVersionId, idempotencyKey)
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.status").value("BUILDING"))
+				.andExpect(jsonPath("$.started_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
+				.andExpect(jsonPath("$.started_at").exists())
+				.andReturn().getResponse().getContentAsString();
+		var startedAt = com.jayway.jsonpath.JsonPath.<String>read(startedResponse, "$.started_at");
+
+		startDatasetBuild(ADMIN_TOKEN, datasetVersionId, idempotencyKey)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("BUILDING"))
+				.andExpect(jsonPath("$.started_at").value(startedAt));
+		startDatasetBuild(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				"dataset-build-start-second-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_BUILD_STATUS_INVALID"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("BUILDING"));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/current-admission",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.build_readiness.ready_for_build").value(true))
+				.andExpect(jsonPath("$.can_start_build").value(false));
+		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
+				UPDATE dataset_version
+				SET build_started_at = NULL
+				WHERE dataset_version_id = ?
+				""", datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_VERSION_BUILD_STARTED'
+				  AND object_id = ?
+				""", datasetVersionId.toString()));
 	}
 
 	@Test
@@ -1202,6 +1296,32 @@ class AnnotationTaskContractTests {
 				.content("{\"holdout_count\":" + holdoutCount + "}"));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions createDatasetBuildSpecification(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/build-specifications",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-build-spec-request-" + UUID.randomUUID()));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions startDatasetBuild(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/build",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-build-start-request-" + UUID.randomUUID()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1379,6 +1499,7 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM dataset_build_specification WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_split_assignment WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_split_plan WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_member_stream WHERE project_id = ?", projectId);
