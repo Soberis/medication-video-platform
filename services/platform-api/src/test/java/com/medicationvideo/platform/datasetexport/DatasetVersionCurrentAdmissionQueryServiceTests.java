@@ -36,6 +36,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
 		var splitPlans = mock(DatasetSplitPlanRepository.class);
+		var buildSpecifications = mock(DatasetBuildSpecificationRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 		var evidence = evidence(STREAM_ONE_ID, 0, 1, 'a', "QUALIFIED", "PASS");
@@ -51,7 +52,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				.thenReturn(List.of(snapshotStream));
 		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID)).thenReturn(current);
 
-		var response = service(access, versions, sessions, streams, splitPlans, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, buildSpecifications, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertEquals(version.getDatasetVersionId(), response.datasetVersionId());
@@ -83,6 +84,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
 		var splitPlans = mock(DatasetSplitPlanRepository.class);
+		var buildSpecifications = mock(DatasetBuildSpecificationRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 		var snapshotEvidence = evidence(STREAM_ONE_ID, 0, 1, 'a', "QUALIFIED", "PASS");
@@ -100,7 +102,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID))
 				.thenReturn(evaluation(currentFacts, false, List.of(currentEvidence)));
 
-		var response = service(access, versions, sessions, streams, splitPlans, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, buildSpecifications, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertFalse(response.allMembersCurrentlyAdmissionEligible());
@@ -140,6 +142,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		var sessions = mock(DatasetMemberSessionRepository.class);
 		var streams = mock(DatasetMemberStreamRepository.class);
 		var splitPlans = mock(DatasetSplitPlanRepository.class);
+		var buildSpecifications = mock(DatasetBuildSpecificationRepository.class);
 		var admission = mock(DatasetAdmissionPreviewService.class);
 		var version = version();
 
@@ -179,7 +182,7 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 				Instant.EPOCH);
 		when(splitPlans.findByDatasetVersionId(version.getDatasetVersionId())).thenReturn(Optional.of(splitPlan));
 
-		var response = service(access, versions, sessions, streams, splitPlans, admission)
+		var response = service(access, versions, sessions, streams, splitPlans, buildSpecifications, admission)
 				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
 
 		assertTrue(response.allMembersCurrentlyAdmissionEligible());
@@ -211,15 +214,70 @@ class DatasetVersionCurrentAdmissionQueryServiceTests {
 		assertNull(response.buildReadiness().uniformCleaningRuleSetDigest());
 	}
 
+	@Test
+	void reportsReadyOnlyAfterTheImmutableBuildSpecificationIsFixed() {
+		var access = mock(ProjectAccessService.class);
+		var versions = mock(DatasetVersionRepository.class);
+		var sessions = mock(DatasetMemberSessionRepository.class);
+		var streams = mock(DatasetMemberStreamRepository.class);
+		var splitPlans = mock(DatasetSplitPlanRepository.class);
+		var buildSpecifications = mock(DatasetBuildSpecificationRepository.class);
+		var admission = mock(DatasetAdmissionPreviewService.class);
+		var version = version();
+		var evidence = evidence(STREAM_ONE_ID, 0, 1, 'a', "QUALIFIED", "PASS");
+		var facts = facts(SESSION_ONE_ID, 1, 1, "COMPLETE", "PASS", List.of(evidence));
+		var member = DatasetMemberSession.snapshot(version, 0, facts);
+		var snapshotStream = DatasetMemberStream.snapshot(version, member, evidence);
+		var splitPlan = DatasetSplitPlan.create(
+				version,
+				20260729,
+				1,
+				"dataset.admin",
+				"dataset-split-readiness-0002",
+				digest('f'),
+				Instant.EPOCH);
+		var specification = DatasetBuildSpecification.create(
+				version,
+				digest('a'),
+				digest('a'),
+				splitPlan,
+				"dataset.admin",
+				"dataset-build-readiness-0001",
+				digest('e'),
+				Instant.EPOCH);
+		when(versions.findByProjectIdAndDatasetVersionId(PROJECT_ID, version.getDatasetVersionId()))
+				.thenReturn(Optional.of(version));
+		when(sessions.findByDatasetVersionIdOrderByCandidateIndexAsc(version.getDatasetVersionId()))
+				.thenReturn(List.of(member));
+		when(streams.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(version.getDatasetVersionId()))
+				.thenReturn(List.of(snapshotStream));
+		when(splitPlans.findByDatasetVersionId(version.getDatasetVersionId())).thenReturn(Optional.of(splitPlan));
+		when(buildSpecifications.findByDatasetVersionId(version.getDatasetVersionId()))
+				.thenReturn(Optional.of(specification));
+		when(admission.evaluate(PROJECT_ID, SESSION_ONE_ID))
+				.thenReturn(evaluation(facts, true, List.of(evidence)));
+
+		var response = service(
+				access, versions, sessions, streams, splitPlans, buildSpecifications, admission)
+				.get(PROJECT_ID, version.getDatasetVersionId(), ACTOR_ID);
+
+		assertTrue(response.buildReadiness().readyForBuild());
+		assertTrue(response.buildReadiness().blockingReasons().isEmpty());
+		assertEquals(
+				specification.getDatasetBuildSpecificationId(),
+				response.buildReadiness().buildSpecification().datasetBuildSpecificationId());
+	}
+
 	private static DatasetVersionCurrentAdmissionQueryService service(
 			ProjectAccessService access,
 			DatasetVersionRepository versions,
 			DatasetMemberSessionRepository sessions,
 			DatasetMemberStreamRepository streams,
 			DatasetSplitPlanRepository splitPlans,
+			DatasetBuildSpecificationRepository buildSpecifications,
 			DatasetAdmissionPreviewService admission) {
 		return new DatasetVersionCurrentAdmissionQueryService(
-				access, versions, sessions, streams, splitPlans, admission);
+				access, versions, sessions, streams, splitPlans, buildSpecifications, admission);
 	}
 
 	private static DatasetVersion version() {

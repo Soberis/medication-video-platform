@@ -272,9 +272,10 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 | VALIDATING → FROZEN | 准入、引用、摘要、隐私、split、防泄漏和格式校验全部通过；冻结审批完成 |
 | FROZEN → RETIRED | 管理员批准；不修改历史导出和审计 |
 
-当前 V39 允许在 `DRAFT` 内固定一次 CaptureSession 级 pilot/holdout 计划，但不会仅凭这一事实推进
-`BUILDING`；选择规则、label/clean/export profile 等其余守卫仍须全部固定。计划不可改写，调整划分必须
-创建新 DatasetVersion。
+当前 V39 允许在 `DRAFT` 内固定一次 CaptureSession 级 pilot/holdout 计划。V40 允许管理员在 split
+存在且候选 stream 使用统一 label/clean 摘要时，再固定一次不可变 `DatasetBuildSpecification`，绑定
+显式候选快照、统一摘要、split 与 `p0-dataset-export-v1`。两个命令都不会自动推进 `BUILDING`；调整
+任一已固定事实必须创建新 DatasetVersion。
 
 当前只读构建准备检查会按上述 `DRAFT → BUILDING` 守卫报告尚未固定的配置，并同时提示当前准入
 失败或固定证据变化。它不写 DatasetVersion、不产生审计，也不执行状态迁移；“检查通过”仍不等同于

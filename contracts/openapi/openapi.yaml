@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.43.0
+  version: 0.44.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -27,9 +27,10 @@ info:
     independent project administrator record one review decision, return a rejected task for a
     later immutable revision, or complete an approved task with a persisted post-cleaning result,
     let project administrators snapshot eligible CaptureSessions into a DRAFT DatasetVersion and
-    fix one reproducible CaptureSession-level pilot/holdout split plan while members read its
-    immutable evidence separately from current admission facts and read a non-mutating build-readiness
-    preflight that explains every remaining DRAFT-to-BUILDING blocker,
+    fix one reproducible CaptureSession-level pilot/holdout split plan and one immutable minimum
+    build specification while members read its immutable evidence separately from current admission
+    facts and read a non-mutating build-readiness preflight that explains every remaining
+    DRAFT-to-BUILDING blocker,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -365,6 +366,66 @@ paths:
                 $ref: "#/components/schemas/DatasetVersionError"
         "404":
           description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/build-specifications:
+    post:
+      operationId: createDatasetBuildSpecification
+      tags:
+        - Dataset Admission
+      summary: Fix the minimum immutable build configuration for a dataset draft
+      description: >-
+        Requires ACTIVE ADMIN membership. After one immutable split plan exists, binds the explicit
+        candidate snapshot selection rule, the one common label-schema digest, the one common
+        cleaning-rule digest, that split plan and p0-dataset-export-v1 to the DRAFT. Replaying the
+        same request with the same idempotency key returns the same specification. The command does
+        not advance the DatasetVersion to BUILDING, re-evaluate current admission, freeze data,
+        create files, start a Worker or authorize data release.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "201":
+          description: The immutable build specification was created or replayed idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetBuildSpecification"
+        "400":
+          description: A path parameter or required header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The draft has no split plan, its label or cleaning evidence is not uniform, a build
+            specification already exists, its status is not DRAFT, or the idempotency key conflicts.
           content:
             application/problem+json:
               schema:
@@ -5252,6 +5313,8 @@ components:
         - members
         - split_plan
         - can_create_split_plan
+        - build_specification
+        - can_create_build_specification
       properties:
         dataset_version_id:
           type: string
@@ -5287,6 +5350,17 @@ components:
             True only when the current actor is an ACTIVE project administrator, the DRAFT has at
             least two members and no split plan exists. This is UI capability metadata, not freeze
             or release authorization.
+        build_specification:
+          description: The immutable minimum build configuration, or null before it is fixed.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetBuildSpecification"
+            - type: "null"
+        can_create_build_specification:
+          type: boolean
+          description: >-
+            True only when the current actor is an ACTIVE project administrator, an immutable split
+            plan exists, no build specification exists and all snapshot streams use one label schema
+            and one cleaning rule set. This does not authorize state transition, freeze or export.
     DatasetSplitPlanCreateRequest:
       type: object
       additionalProperties: false
@@ -5380,6 +5454,52 @@ components:
           type: integer
           minimum: 0
           maximum: 99
+    DatasetBuildSpecification:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_build_specification_id
+        - dataset_version_id
+        - selection_rule_version
+        - label_schema_digest
+        - cleaning_rule_set_digest
+        - dataset_split_plan_id
+        - export_profile_key
+        - export_profile_digest
+        - created_by
+        - created_at
+      properties:
+        dataset_build_specification_id:
+          type: string
+          format: uuid
+        dataset_version_id:
+          type: string
+          format: uuid
+        selection_rule_version:
+          type: string
+          const: EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1
+          description: Uses the DRAFT's persisted CaptureSession member snapshot as the candidate set.
+        label_schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        cleaning_rule_set_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        dataset_split_plan_id:
+          type: string
+          format: uuid
+        export_profile_key:
+          type: string
+          const: p0-dataset-export-v1
+        export_profile_digest:
+          type: string
+          const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+        created_by:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
     DatasetMemberSession:
       type: object
       additionalProperties: false
@@ -5504,6 +5624,7 @@ components:
         - uniform_label_schema_digest
         - uniform_cleaning_rule_set_digest
         - dataset_split_plan_id
+        - build_specification
       properties:
         ready_for_build:
           type: boolean
@@ -5542,6 +5663,11 @@ components:
           type: [string, "null"]
           format: uuid
           description: The fixed immutable split plan, or null when the draft has none.
+        build_specification:
+          description: The fixed immutable minimum build configuration, or null when the draft has none.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetBuildSpecification"
+            - type: "null"
     DatasetVersionCurrentAdmissionMember:
       type: object
       additionalProperties: false

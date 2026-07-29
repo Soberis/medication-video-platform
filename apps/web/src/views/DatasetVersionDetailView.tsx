@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  createDatasetBuildSpecification,
   createDatasetSplitPlan,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
@@ -93,9 +94,14 @@ function DatasetVersionDetailContent() {
   const [splitPlanErrorCode, setSplitPlanErrorCode] = useState('')
   const [splitPlanErrorMessage, setSplitPlanErrorMessage] = useState('')
   const [splitPlanRequestId, setSplitPlanRequestId] = useState<string | null>(null)
+  const [buildSpecificationState, setBuildSpecificationState] = useState<'idle' | 'creating' | 'error'>('idle')
+  const [buildSpecificationErrorCode, setBuildSpecificationErrorCode] = useState('')
+  const [buildSpecificationErrorMessage, setBuildSpecificationErrorMessage] = useState('')
+  const [buildSpecificationRequestId, setBuildSpecificationRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
+  const buildSpecificationIntent = useRef<string | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -209,6 +215,56 @@ function DatasetVersionDetailContent() {
     })
   }, [createSplit, holdoutCount, modal])
 
+  const fixBuildSpecification = useCallback(async () => {
+    const idempotencyKey = buildSpecificationIntent.current ?? crypto.randomUUID()
+    buildSpecificationIntent.current = idempotencyKey
+    setBuildSpecificationState('creating')
+    setBuildSpecificationErrorCode('')
+    setBuildSpecificationErrorMessage('')
+    setBuildSpecificationRequestId(null)
+    try {
+      const specification = await createDatasetBuildSpecification(
+        projectId,
+        datasetVersionId,
+        idempotencyKey,
+      )
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              build_specification: specification,
+              can_create_build_specification: false,
+            }
+          : current,
+      )
+      setCurrentAdmission(null)
+      setCurrentAdmissionState('idle')
+      buildSpecificationIntent.current = null
+      setBuildSpecificationState('idle')
+      void message.success('构建配置已固定到当前草稿。')
+    } catch (error) {
+      setBuildSpecificationState('error')
+      if (error instanceof CatalogApiError) {
+        setBuildSpecificationErrorCode(error.errorCode)
+        setBuildSpecificationErrorMessage(error.message)
+        setBuildSpecificationRequestId(error.requestId)
+      } else {
+        setBuildSpecificationErrorCode('DATASET_BUILD_SPECIFICATION_FAILED')
+        setBuildSpecificationErrorMessage('暂时无法固定构建配置，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, message, projectId])
+
+  const confirmBuildSpecification = useCallback(() => {
+    modal.confirm({
+      title: '固定当前构建配置？',
+      content: '将当前候选快照、统一标签规范、清洗规则、数据划分和 P0 必需导出绑定到该草稿。固定后如需调整，应新建草稿。',
+      okText: '固定构建配置',
+      cancelText: '取消',
+      onOk: fixBuildSpecification,
+    })
+  }, [fixBuildSpecification, modal])
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
@@ -246,7 +302,7 @@ function DatasetVersionDetailContent() {
             <div>
               <p className="app-eyebrow">不可变候选快照</p>
               <h1 id="dataset-version-title">{detail.display_name}</h1>
-              <p>以下证据只反映创建草稿时的事实；数据划分可单独固定，冻结和导出仍须后续验证。</p>
+              <p>以下证据只反映创建草稿时的事实；数据划分与构建配置可依次固定，冻结和导出仍须后续验证。</p>
             </div>
             <div className="heading-tags">
               <Tag color="blue">草稿</Tag>
@@ -331,6 +387,34 @@ function DatasetVersionDetailContent() {
             <p className="form-hint">
               只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。
             </p>
+            {detail.build_specification ? (
+              <BuildSpecificationEvidence specification={detail.build_specification} />
+            ) : detail.can_create_build_specification ? (
+              <div className="dataset-draft-selection-toolbar">
+                <div>
+                  <strong>固定构建配置</strong>
+                  <span>绑定当前候选、统一规则、数据划分和 P0 必需导出；固定后不可修改。</span>
+                </div>
+                <Button
+                  type="primary"
+                  loading={buildSpecificationState === 'creating'}
+                  onClick={confirmBuildSpecification}
+                >
+                  固定构建配置
+                </Button>
+              </div>
+            ) : detail.split_plan ? (
+              <p>尚未固定构建配置，请由项目管理员确认候选视频使用统一的标签规范和清洗规则。</p>
+            ) : (
+              <p>请先固定数据划分，再固定构建配置。</p>
+            )}
+            {buildSpecificationState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{buildSpecificationErrorCode}</strong>
+                <span>{buildSpecificationErrorMessage}</span>
+                {buildSpecificationRequestId ? <small>请求标识：{buildSpecificationRequestId}</small> : null}
+              </div>
+            ) : null}
             {currentAdmissionState === 'idle' ? <p>尚未检查构建准备。</p> : null}
             {currentAdmissionState === 'loading' ? (
               <div className="catalog-notice" role="status" aria-live="polite">
@@ -416,6 +500,67 @@ function DatasetVersionDetailContent() {
           </Card>
         </>
       ) : null}
+    </>
+  )
+}
+
+function BuildSpecificationEvidence({
+  specification,
+}: {
+  specification: NonNullable<DatasetVersionDetail['build_specification']>
+}) {
+  return (
+    <>
+      <Descriptions
+        column={{ xs: 1, sm: 2, lg: 4 }}
+        items={[
+          { key: 'selection', label: '候选规则', children: '当前草稿快照' },
+          { key: 'split', label: '数据划分', children: '已绑定' },
+          { key: 'export', label: '必需导出', children: 'P0 训练包' },
+          { key: 'creator', label: '固定人', children: specification.created_by },
+        ]}
+      />
+      <details className="technical-facts">
+        <summary>查看构建配置标识</summary>
+        <dl>
+          <div>
+            <dt>BuildSpecification ID</dt>
+            <dd>
+              <code>{specification.dataset_build_specification_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>选择规则版本</dt>
+            <dd>
+              <code>{specification.selection_rule_version}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>标签规范摘要</dt>
+            <dd>
+              <code>{specification.label_schema_digest}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>清洗规则摘要</dt>
+            <dd>
+              <code>{specification.cleaning_rule_set_digest}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>导出配置</dt>
+            <dd>
+              <code>{specification.export_profile_key}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>导出配置摘要</dt>
+            <dd>
+              <code>{specification.export_profile_digest}</code>
+            </dd>
+          </div>
+        </dl>
+      </details>
     </>
   )
 }

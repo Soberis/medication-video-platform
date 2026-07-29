@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { DatasetVersionDetail } from '@/api/catalog'
 import {
   clearDatasetDraftIntent,
   getDatasetDraftIntent,
@@ -453,6 +454,10 @@ describe('catalog views', () => {
           status: 'DRAFT',
           created_by: 'local-admin',
           created_at: '2026-07-28T03:00:00Z',
+          split_plan: null,
+          can_create_split_plan: false,
+          build_specification: null,
+          can_create_build_specification: false,
           members: [
             {
               capture_session_id: sessionId,
@@ -615,6 +620,7 @@ describe('catalog views', () => {
               uniform_label_schema_digest: 'c'.repeat(64),
               uniform_cleaning_rule_set_digest: 'd'.repeat(64),
               dataset_split_plan_id: null,
+              build_specification: null,
             },
             members: [
               {
@@ -722,6 +728,7 @@ describe('catalog views', () => {
                   uniform_label_schema_digest: 'c'.repeat(64),
                   uniform_cleaning_rule_set_digest: 'd'.repeat(64),
                   dataset_split_plan_id: '92000000-0000-4000-8000-000000000001',
+                  build_specification: null,
                 },
                 members: [],
               }),
@@ -745,6 +752,70 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('尚未具备开始构建条件')).toBeInTheDocument()
     expect(currentAdmissionAttempts).toBe(2)
+  })
+
+  it('fixes the minimum build configuration only after explicit confirmation', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const buildPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build-specifications`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.split_plan = {
+      dataset_split_plan_id: '92000000-0000-4000-8000-000000000001',
+      dataset_version_id: datasetVersionId,
+      policy_version: 'CAPTURE_SESSION_HASH_RANK_V1',
+      split_seed: 20260729,
+      pilot_count: 1,
+      holdout_count: 1,
+      created_by: 'local-admin',
+      created_at: '2026-07-29T03:00:00Z',
+      assignments: [],
+    }
+    detail.can_create_build_specification = true
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === buildPath) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
+              dataset_version_id: datasetVersionId,
+              selection_rule_version: 'EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1',
+              label_schema_digest: 'c'.repeat(64),
+              cleaning_rule_set_digest: 'd'.repeat(64),
+              dataset_split_plan_id: detail.split_plan?.dataset_split_plan_id,
+              export_profile_key: 'p0-dataset-export-v1',
+              export_profile_digest: 'e'.repeat(64),
+              created_by: 'local-admin',
+              created_at: '2026-07-29T04:00:00Z',
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-build-spec-0001') })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('button', { name: '固定构建配置' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '固定构建配置' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    expect(within(confirmDialog).getByText(/固定后如需调整，应新建草稿/)).toBeInTheDocument()
+    await user.click(within(confirmDialog).getByRole('button', { name: '固定构建配置' }))
+
+    expect(await screen.findByText('P0 训练包')).toBeInTheDocument()
+    expect(screen.getByText('查看构建配置标识')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '固定构建配置' })).not.toBeInTheDocument()
+    expect(screen.getByText('尚未检查构建准备。')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      buildPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-spec-0001' }),
+      }),
+    )
   })
 
   it('aborts an in-flight current-admission check when leaving the draft detail route', async () => {
@@ -1411,7 +1482,7 @@ function eligibleAdmissionPreview() {
   }
 }
 
-function datasetVersionDetail(datasetVersionId: string, displayName: string) {
+function datasetVersionDetail(datasetVersionId: string, displayName: string): DatasetVersionDetail {
   return {
     dataset_version_id: datasetVersionId,
     project_id: projectId,
@@ -1421,6 +1492,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string) {
     created_at: '2026-07-28T03:00:00Z',
     split_plan: null,
     can_create_split_plan: false,
+    build_specification: null,
+    can_create_build_specification: false,
     members: [
       {
         capture_session_id: sessionId,

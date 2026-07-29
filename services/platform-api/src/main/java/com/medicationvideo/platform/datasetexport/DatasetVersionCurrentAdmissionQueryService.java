@@ -30,6 +30,7 @@ class DatasetVersionCurrentAdmissionQueryService {
 	private final DatasetMemberSessionRepository memberSessionRepository;
 	private final DatasetMemberStreamRepository memberStreamRepository;
 	private final DatasetSplitPlanRepository splitPlanRepository;
+	private final DatasetBuildSpecificationRepository buildSpecificationRepository;
 	private final DatasetAdmissionPreviewService admissionService;
 
 	DatasetVersionCurrentAdmissionQueryService(
@@ -38,12 +39,14 @@ class DatasetVersionCurrentAdmissionQueryService {
 			DatasetMemberSessionRepository memberSessionRepository,
 			DatasetMemberStreamRepository memberStreamRepository,
 			DatasetSplitPlanRepository splitPlanRepository,
+			DatasetBuildSpecificationRepository buildSpecificationRepository,
 			DatasetAdmissionPreviewService admissionService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
 		this.memberStreamRepository = memberStreamRepository;
 		this.splitPlanRepository = splitPlanRepository;
+		this.buildSpecificationRepository = buildSpecificationRepository;
 		this.admissionService = admissionService;
 	}
 
@@ -66,7 +69,8 @@ class DatasetVersionCurrentAdmissionQueryService {
 		var buildReadiness = DatasetVersionBuildReadinessResponse.from(
 				members,
 				snapshotStreams,
-				this.splitPlanRepository.findByDatasetVersionId(datasetVersionId).orElse(null));
+				this.splitPlanRepository.findByDatasetVersionId(datasetVersionId).orElse(null),
+				this.buildSpecificationRepository.findByDatasetVersionId(datasetVersionId).orElse(null));
 		return new DatasetVersionCurrentAdmissionResponse(
 				version.getDatasetVersionId(),
 				members.stream().allMatch(member -> member.currentAdmission().eligible()),

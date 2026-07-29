@@ -291,7 +291,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment | 选择、准入、防泄漏、验证和冻结 |
+| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification | 选择、准入、防泄漏、构建配置、验证和冻结 |
 | ExportProfile | export_profile | 格式、采样、目录和字段版本 |
 | DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
 
@@ -317,6 +317,9 @@ flowchart LR
 - 当前 V39 仅在 `DRAFT` 内建立一次不可变 `CAPTURE_SESSION_HASH_RANK_V1` pilot/holdout 计划：
   CaptureSession 同时作为成员和泄漏组，算法版本、正整数 seed、排名与实际结果全部保存；计划不可更新，
   调整留出数量必须创建新 DatasetVersion。该计划不触发 `BUILDING`，也不代表准入、冻结或导出已完成。
+- V40 允许管理员在已有 split 且候选 stream 的标签/清洗摘要各自统一时固定一次
+  `DatasetBuildSpecification`：选择规则为当前显式候选快照，同时绑定 label digest、cleaning digest、
+  split plan 与 `p0-dataset-export-v1` 摘要。配置不可改写；创建成功仍保持 `DRAFT`，不会创建产物或作业。
 - 构建准备检查是从草稿快照、划分和当前准入事实计算出的只读投影；它只解释
   `DRAFT → BUILDING` 阻断项，不拥有状态、不回写聚合，也不能代替冻结校验或审批。
 - VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。

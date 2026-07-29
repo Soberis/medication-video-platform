@@ -182,10 +182,25 @@ export interface DatasetSplitPlan {
   assignments: DatasetSplitAssignment[]
 }
 
+export interface DatasetBuildSpecification {
+  dataset_build_specification_id: string
+  dataset_version_id: string
+  selection_rule_version: 'EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1'
+  label_schema_digest: string
+  cleaning_rule_set_digest: string
+  dataset_split_plan_id: string
+  export_profile_key: 'p0-dataset-export-v1'
+  export_profile_digest: string
+  created_by: string
+  created_at: string
+}
+
 export interface DatasetVersionDetail extends DatasetVersionDraft {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
   can_create_split_plan: boolean
+  build_specification: DatasetBuildSpecification | null
+  can_create_build_specification: boolean
 }
 
 export interface DatasetVersionCurrentAdmissionEvidenceChange {
@@ -219,6 +234,7 @@ export interface DatasetVersionBuildReadiness {
   uniform_label_schema_digest: string | null
   uniform_cleaning_rule_set_digest: string | null
   dataset_split_plan_id: string | null
+  build_specification: DatasetBuildSpecification | null
 }
 
 export interface DatasetVersionCurrentAdmission {
@@ -387,6 +403,13 @@ const errorMessages: Record<string, string> = {
   DATASET_SPLIT_PLAN_HOLDOUT_COUNT_INVALID: '留出组数量必须小于候选配药操作总数。',
   DATASET_SPLIT_PLAN_ALREADY_EXISTS: '该草稿已经固定数据划分，请刷新页面查看。',
   DATASET_SPLIT_PLAN_IDEMPOTENCY_KEY_REUSED: '本次划分请求与已提交请求冲突，请刷新后重试。',
+  DATASET_BUILD_SPECIFICATION_ALREADY_EXISTS: '该草稿已经固定构建配置，请刷新页面查看。',
+  DATASET_BUILD_SPECIFICATION_IDEMPOTENCY_KEY_REUSED: '本次构建配置请求与已提交请求冲突，请刷新后重试。',
+  DATASET_BUILD_SPLIT_PLAN_REQUIRED: '请先固定试用组和留出组划分。',
+  DATASET_BUILD_EVIDENCE_MISSING: '草稿缺少可固定的视频证据，请新建数据集草稿。',
+  DATASET_BUILD_LABEL_SCHEMA_NOT_UNIFORM: '候选视频的标签规范不一致，请重新选择候选数据。',
+  DATASET_BUILD_CLEANING_RULE_SET_NOT_UNIFORM: '候选视频的清洗规则不一致，请重新选择候选数据。',
+  DATASET_BUILD_SPECIFICATION_STATUS_INVALID: '只有草稿状态的数据集可以固定构建配置。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -531,6 +554,29 @@ export async function createDatasetSplitPlan(
     },
   )
   if (response.ok) return (await response.json()) as DatasetSplitPlan
+  throw await toCatalogError(response)
+}
+
+export async function createDatasetBuildSpecification(
+  projectId: string,
+  datasetVersionId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetBuildSpecification> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/build-specifications`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetBuildSpecification
   throw await toCatalogError(response)
 }
 

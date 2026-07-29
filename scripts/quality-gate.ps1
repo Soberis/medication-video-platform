@@ -55,6 +55,7 @@ $requiredFiles = @(
     'contracts/events/media-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
     'contracts/profiles/p0-post-annotation-cleaning-v1.json',
+    'contracts/profiles/p0-dataset-export-v1.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
@@ -171,6 +172,24 @@ try {
 }
 catch {
     Add-Failure "P0 post-annotation cleaning profile is invalid: $($_.Exception.Message)"
+}
+
+try {
+    $datasetExportProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/p0-dataset-export-v1.json') -Raw).TrimEnd("`r", "`n")
+    $datasetExportProfileContent | ConvertFrom-Json | Out-Null
+    Add-Pass 'P0 dataset export profile is valid JSON'
+
+    $datasetExportProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($datasetExportProfileContent)
+    $datasetExportProfileDigest = Get-Sha256Hex $datasetExportProfileBytes
+    if ($datasetExportProfileDigest -eq '3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888') {
+        Add-Pass 'P0 dataset export profile digest matches the server contract'
+    }
+    else {
+        Add-Failure "P0 dataset export profile digest changed unexpectedly: $datasetExportProfileDigest"
+    }
+}
+catch {
+    Add-Failure "P0 dataset export profile is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {

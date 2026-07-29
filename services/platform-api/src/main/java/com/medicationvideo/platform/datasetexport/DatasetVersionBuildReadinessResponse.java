@@ -1,10 +1,8 @@
 package com.medicationvideo.platform.datasetexport;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Function;
 
 record DatasetVersionBuildReadinessResponse(
 		boolean readyForBuild,
@@ -12,7 +10,8 @@ record DatasetVersionBuildReadinessResponse(
 		boolean immutableEvidenceStillCurrent,
 		String uniformLabelSchemaDigest,
 		String uniformCleaningRuleSetDigest,
-		UUID datasetSplitPlanId) {
+		UUID datasetSplitPlanId,
+		DatasetBuildSpecificationResponse buildSpecification) {
 
 	DatasetVersionBuildReadinessResponse {
 		blockingReasons = List.copyOf(blockingReasons);
@@ -21,26 +20,39 @@ record DatasetVersionBuildReadinessResponse(
 	static DatasetVersionBuildReadinessResponse from(
 			List<DatasetVersionCurrentAdmissionMemberResponse> currentMembers,
 			List<DatasetMemberStream> snapshotStreams,
-			DatasetSplitPlan splitPlan) {
+			DatasetSplitPlan splitPlan,
+			DatasetBuildSpecification specification) {
 		var allMembersEligible = currentMembers.stream()
 				.allMatch(member -> member.currentAdmission().eligible());
 		var evidenceStillCurrent = currentMembers.stream()
 				.allMatch(member -> member.evidenceChanges().isEmpty());
-		var labelSchemaDigest = onlyDistinct(snapshotStreams, DatasetMemberStream::getLabelSchemaDigest);
-		var cleaningRuleSetDigest = onlyDistinct(snapshotStreams, DatasetMemberStream::getCleaningRuleSetDigest);
+		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
+		var labelSchemaDigest = buildEvidence.uniformLabelSchemaDigest();
+		var cleaningRuleSetDigest = buildEvidence.uniformCleaningRuleSetDigest();
 		var blockers = new ArrayList<DatasetVersionBuildBlocker>();
 
-		blockers.add(DatasetVersionBuildBlocker.SELECTION_RULE_NOT_FIXED);
-		blockers.add(labelSchemaDigest == null
-				? DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_UNIFORM
-				: DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_FIXED);
-		blockers.add(cleaningRuleSetDigest == null
-				? DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_UNIFORM
-				: DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_FIXED);
+		if (specification == null) {
+			blockers.add(DatasetVersionBuildBlocker.SELECTION_RULE_NOT_FIXED);
+		}
+		if (labelSchemaDigest == null) {
+			blockers.add(DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_UNIFORM);
+		}
+		else if (specification == null || !labelSchemaDigest.equals(specification.getLabelSchemaDigest())) {
+			blockers.add(DatasetVersionBuildBlocker.LABEL_SCHEMA_NOT_FIXED);
+		}
+		if (cleaningRuleSetDigest == null) {
+			blockers.add(DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_UNIFORM);
+		}
+		else if (specification == null
+				|| !cleaningRuleSetDigest.equals(specification.getCleaningRuleSetDigest())) {
+			blockers.add(DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_FIXED);
+		}
 		if (splitPlan == null) {
 			blockers.add(DatasetVersionBuildBlocker.SPLIT_PLAN_NOT_FIXED);
 		}
-		blockers.add(DatasetVersionBuildBlocker.EXPORT_PROFILE_NOT_FIXED);
+		if (specification == null) {
+			blockers.add(DatasetVersionBuildBlocker.EXPORT_PROFILE_NOT_FIXED);
+		}
 		if (!allMembersEligible) {
 			blockers.add(DatasetVersionBuildBlocker.CURRENT_ADMISSION_NOT_ELIGIBLE);
 		}
@@ -54,20 +66,10 @@ record DatasetVersionBuildReadinessResponse(
 				evidenceStillCurrent,
 				labelSchemaDigest,
 				cleaningRuleSetDigest,
-				splitPlan == null ? null : splitPlan.getDatasetSplitPlanId());
+				splitPlan == null ? null : splitPlan.getDatasetSplitPlanId(),
+				specification == null ? null : DatasetBuildSpecificationResponse.from(specification));
 	}
 
-	private static String onlyDistinct(
-			List<DatasetMemberStream> streams, Function<DatasetMemberStream, String> value) {
-		var values = new LinkedHashSet<String>();
-		for (var stream : streams) {
-			values.add(value.apply(stream));
-			if (values.size() > 1) {
-				return null;
-			}
-		}
-		return values.size() == 1 ? values.getFirst() : null;
-	}
 }
 
 enum DatasetVersionBuildBlocker {

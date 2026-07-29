@@ -20,6 +20,7 @@ class DatasetVersionQueryService {
 	private final DatasetMemberStreamRepository memberStreamRepository;
 	private final DatasetSplitPlanRepository splitPlanRepository;
 	private final DatasetSplitAssignmentRepository splitAssignmentRepository;
+	private final DatasetBuildSpecificationRepository buildSpecificationRepository;
 
 	DatasetVersionQueryService(
 			ProjectAccessService projectAccessService,
@@ -27,13 +28,15 @@ class DatasetVersionQueryService {
 			DatasetMemberSessionRepository memberSessionRepository,
 			DatasetMemberStreamRepository memberStreamRepository,
 			DatasetSplitPlanRepository splitPlanRepository,
-			DatasetSplitAssignmentRepository splitAssignmentRepository) {
+			DatasetSplitAssignmentRepository splitAssignmentRepository,
+			DatasetBuildSpecificationRepository buildSpecificationRepository) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
 		this.memberStreamRepository = memberStreamRepository;
 		this.splitPlanRepository = splitPlanRepository;
 		this.splitAssignmentRepository = splitAssignmentRepository;
+		this.buildSpecificationRepository = buildSpecificationRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -62,9 +65,10 @@ class DatasetVersionQueryService {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 				.orElseThrow(DatasetVersionQueryService::notFound);
+		var snapshotStreams = this.memberStreamRepository
+				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
 		var streamsByMemberId = new HashMap<UUID, List<DatasetMemberStreamResponse>>();
-		for (var stream : this.memberStreamRepository
-				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId)) {
+		for (var stream : snapshotStreams) {
 			streamsByMemberId.computeIfAbsent(stream.getDatasetMemberSessionId(), ignored -> new ArrayList<>())
 					.add(DatasetMemberStreamResponse.from(stream));
 		}
@@ -81,11 +85,19 @@ class DatasetVersionQueryService {
 						this.splitAssignmentRepository.findByDatasetSplitPlanIdOrderByCandidateIndexAsc(
 								plan.getDatasetSplitPlanId())))
 				.orElse(null);
+		var specification = this.buildSpecificationRepository.findByDatasetVersionId(datasetVersionId)
+				.orElse(null);
+		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		return DatasetVersionDetailResponse.from(
 				version,
 				members,
 				splitPlan,
-				role == ProjectRole.ADMIN && splitPlan == null && members.size() >= 2);
+				role == ProjectRole.ADMIN && splitPlan == null && members.size() >= 2,
+				specification == null ? null : DatasetBuildSpecificationResponse.from(specification),
+				role == ProjectRole.ADMIN
+						&& splitPlan != null
+						&& specification == null
+						&& buildEvidence.isComplete());
 	}
 
 	private static DatasetVersionException notFound() {
