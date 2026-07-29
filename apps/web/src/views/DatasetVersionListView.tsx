@@ -14,6 +14,7 @@ import { formatDateTime, shortId } from '@/catalog-presentation'
 const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
   DRAFT: '草稿',
   BUILDING: '构建中',
+  VALIDATING: '校验中',
 }
 
 export default function DatasetVersionListView() {

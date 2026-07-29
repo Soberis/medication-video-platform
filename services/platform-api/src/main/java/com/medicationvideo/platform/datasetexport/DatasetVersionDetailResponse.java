@@ -15,7 +15,9 @@ record DatasetVersionDetailResponse(
 		DatasetSplitPlanResponse splitPlan,
 		boolean canCreateSplitPlan,
 		DatasetBuildSpecificationResponse buildSpecification,
-		boolean canCreateBuildSpecification) {
+		boolean canCreateBuildSpecification,
+		DatasetBuildSnapshotResponse buildSnapshot,
+		boolean canCreateBuildSnapshot) {
 
 	DatasetVersionDetailResponse {
 		members = List.copyOf(members);
@@ -27,7 +29,9 @@ record DatasetVersionDetailResponse(
 			DatasetSplitPlanResponse splitPlan,
 			boolean canCreateSplitPlan,
 			DatasetBuildSpecificationResponse buildSpecification,
-			boolean canCreateBuildSpecification) {
+			boolean canCreateBuildSpecification,
+			DatasetBuildSnapshotResponse buildSnapshot,
+			boolean canCreateBuildSnapshot) {
 		return new DatasetVersionDetailResponse(
 				version.getDatasetVersionId(),
 				version.getProjectId(),
@@ -39,7 +43,9 @@ record DatasetVersionDetailResponse(
 				splitPlan,
 				canCreateSplitPlan,
 				buildSpecification,
-				canCreateBuildSpecification);
+				canCreateBuildSpecification,
+				buildSnapshot,
+				canCreateBuildSnapshot);
 	}
 }
 

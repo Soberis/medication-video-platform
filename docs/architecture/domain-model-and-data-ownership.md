@@ -291,7 +291,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification | 选择、准入、防泄漏、构建配置、验证和冻结 |
+| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot | 选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
 | ExportProfile | export_profile | 格式、采样、目录和字段版本 |
 | DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
 
@@ -325,6 +325,10 @@ flowchart LR
 - V41 的开始构建命令由 DatasetVersion 聚合拥有。它在项目管理员锁和单一数据库事务内重算上述投影，
   只有零阻断时才把状态改为 `BUILDING`，并在聚合上保存启动人、时间和幂等指纹，同时写追加式审计。
   该状态变化不创建独立空作业、文件或队列消息。
+- V42 不复制已经不可变的成员关系。它验证 session、stream、原始 ClipAsset ID/摘要、revision、清洗证据、
+  leakage group、split 和构建配置的完整关系，以 `DATASET_RELATIONAL_SNAPSHOT_V1` 生成确定性摘要并保存
+  一条 `DatasetBuildSnapshot`，随后在同一事务把该快照引用绑定到 DatasetVersion 并进入 `VALIDATING`。
+  V1.5 明确退出 P0 的派生隐私 Variant 不会因此被提前创建；`RAW_CLIP_ASSET_V1` 是当前输入策略而非放行结论。
 - VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
 - 导出只读取 FROZEN 快照；导出失败不改变冻结版本。

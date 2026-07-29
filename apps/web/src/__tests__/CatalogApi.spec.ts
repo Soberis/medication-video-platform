@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   authorizeClipAssetPlayback,
+  createDatasetBuildSnapshot,
   deleteClipAsset,
   createDatasetVersionDraft,
   createDatasetSplitPlan,
@@ -308,6 +309,46 @@ describe('catalog API', () => {
         cache: 'no-store',
         headers: expect.objectContaining({
           'Idempotency-Key': 'dataset-build-start-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
+  })
+
+  it('creates a dataset build snapshot with CSRF protection and the caller-owned idempotency key', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_build_snapshot_id: '91000000-0000-4000-8000-000000000001',
+          dataset_version_id: datasetVersionId,
+          dataset_build_specification_id: '92000000-0000-4000-8000-000000000001',
+          dataset_split_plan_id: '93000000-0000-4000-8000-000000000001',
+          snapshot_schema_version: 'DATASET_RELATIONAL_SNAPSHOT_V1',
+          input_variant_policy: 'RAW_CLIP_ASSET_V1',
+          member_count: 2,
+          stream_count: 2,
+          snapshot_digest: 'a'.repeat(64),
+          created_by: 'local-admin',
+          created_at: '2026-07-29T06:00:00Z',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      createDatasetBuildSnapshot(projectId, datasetVersionId, 'dataset-build-snapshot-0001'),
+    ).resolves.toMatchObject({ snapshot_schema_version: 'DATASET_RELATIONAL_SNAPSHOT_V1' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build-snapshots`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-build-snapshot-0001',
           'X-XSRF-TOKEN': 'csrf-test-token',
         }),
       }),

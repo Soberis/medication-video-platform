@@ -818,10 +818,11 @@ describe('catalog views', () => {
     )
   })
 
-  it('starts a ready dataset build only after explicit confirmation', async () => {
+  it('starts a ready build and seals its snapshot only after separate confirmations', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
     const currentAdmissionPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`
     const buildPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build`
+    const snapshotPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/build-snapshots`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
     const buildSpecification = {
       dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
@@ -836,6 +837,21 @@ describe('catalog views', () => {
       created_at: '2026-07-29T04:00:00Z',
     }
     detail.build_specification = buildSpecification
+    const buildSnapshot = {
+      dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
+      dataset_version_id: datasetVersionId,
+      dataset_build_specification_id: buildSpecification.dataset_build_specification_id,
+      dataset_split_plan_id: buildSpecification.dataset_split_plan_id,
+      snapshot_schema_version: 'DATASET_RELATIONAL_SNAPSHOT_V1' as const,
+      input_variant_policy: 'RAW_CLIP_ASSET_V1' as const,
+      member_count: 1,
+      stream_count: 1,
+      snapshot_digest: 'f'.repeat(64),
+      created_by: 'local-admin',
+      created_at: '2026-07-29T06:00:00Z',
+    }
+    let started = false
+    let snapshotted = false
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       if (String(input) === currentAdmissionPath) {
         return Promise.resolve(
@@ -857,6 +873,7 @@ describe('catalog views', () => {
         )
       }
       if (String(input) === buildPath) {
+        started = true
         return Promise.resolve(
           jsonResponse({
             dataset_version_id: datasetVersionId,
@@ -866,10 +883,26 @@ describe('catalog views', () => {
           }),
         )
       }
-      return Promise.resolve(jsonResponse(detail))
+      if (String(input) === snapshotPath) {
+        snapshotted = true
+        return Promise.resolve(jsonResponse(buildSnapshot, 201))
+      }
+      return Promise.resolve(
+        jsonResponse({
+          ...detail,
+          status: snapshotted ? 'VALIDATING' : started ? 'BUILDING' : 'DRAFT',
+          build_snapshot: snapshotted ? buildSnapshot : null,
+          can_create_build_snapshot: started && !snapshotted,
+        }),
+      )
     })
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-build-start-0001') })
+    vi.stubGlobal('crypto', {
+      randomUUID: vi
+        .fn()
+        .mockReturnValueOnce('dataset-build-start-0001')
+        .mockReturnValueOnce('dataset-build-snapshot-0001'),
+    })
     const user = userEvent.setup()
 
     renderDatasetDetail(datasetVersionId)
@@ -883,15 +916,37 @@ describe('catalog views', () => {
     expect(within(confirmDialog).getByText(/不会冻结或导出数据/)).toBeInTheDocument()
     await user.click(within(confirmDialog).getByRole('button', { name: '开始构建' }))
 
-    expect(await screen.findByText('当前构建证据仍一致')).toBeInTheDocument()
-    expect(screen.getByText('构建中')).toBeInTheDocument()
+    expect(await screen.findByText('构建中')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '开始构建' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生成构建快照' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       buildPath,
       expect.objectContaining({
         method: 'POST',
         cache: 'no-store',
         headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-start-0001' }),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '生成构建快照' }))
+    const snapshotDialog = (await screen.findAllByRole('dialog')).find((dialog) =>
+      within(dialog).queryAllByText('生成当前构建快照？').length > 0,
+    )
+    expect(snapshotDialog).toBeDefined()
+    if (!snapshotDialog) throw new Error('Snapshot confirmation dialog was not rendered.')
+    expect(within(snapshotDialog).getByText(/不会冻结或导出数据/)).toBeInTheDocument()
+    await user.click(within(snapshotDialog).getByRole('button', { name: '生成构建快照' }))
+
+    expect(await screen.findByText('校验中')).toBeInTheDocument()
+    expect(screen.getByText('已封存')).toBeInTheDocument()
+    expect(screen.getByText('查看构建快照标识')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '生成构建快照' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      snapshotPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-build-snapshot-0001' }),
       }),
     )
   })
@@ -1572,6 +1627,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string): Da
     can_create_split_plan: false,
     build_specification: null,
     can_create_build_specification: false,
+    build_snapshot: null,
+    can_create_build_snapshot: false,
     members: [
       {
         capture_session_id: sessionId,

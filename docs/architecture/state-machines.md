@@ -285,6 +285,12 @@ V41 增加显式开始构建命令。项目管理员确认后，服务端锁定�
 固定证据比较；只有零阻断且状态仍为 `DRAFT` 时，才记录启动人、启动时间、幂等指纹和审计，并迁移到
 `BUILDING`。该命令只封存草稿配置，不创建文件、不启动 Worker、不进入 `VALIDATING`，也不批准冻结或导出。
 
+V42 增加关系快照封印。项目管理员在 `BUILDING` 状态显式执行后，Core API 复用既有不可变成员、stream、
+原始 ClipAsset ID/摘要、revision、清洗证据、泄漏组、split 和构建配置，先校验关系完整性，再按
+`DATASET_RELATIONAL_SNAPSHOT_V1` 生成确定性 SHA-256。封印记录、DatasetVersion 的快照引用、
+`VALIDATING` 状态和审计在同一事务提交。P0 的 `RAW_CLIP_ASSET_V1` 只表示使用草稿已固定的原始输入，
+不创建派生 AssetVariant、文件、Worker 或队列；冻结前仍必须另行完成当前准入、引用、摘要和防泄漏校验。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport

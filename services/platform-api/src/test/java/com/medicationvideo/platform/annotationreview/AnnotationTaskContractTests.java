@@ -340,7 +340,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void administratorStartsAReadyDatasetBuildExactlyOnce() throws Exception {
+	void administratorStartsAndSealsAReadyDatasetBuildExactlyOnce() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
 		var draftResponse = createDatasetDraft(
@@ -424,11 +424,67 @@ class AnnotationTaskContractTests {
 				SET build_started_at = NULL
 				WHERE dataset_version_id = ?
 				""", datasetVersionId));
+
+		var snapshotIdempotencyKey = "dataset-build-snapshot-" + UUID.randomUUID();
+		createDatasetBuildSnapshot(MEMBER_TOKEN, datasetVersionId, snapshotIdempotencyKey)
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var snapshotResponse = createDatasetBuildSnapshot(
+				ADMIN_TOKEN, datasetVersionId, snapshotIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.snapshot_schema_version")
+						.value("DATASET_RELATIONAL_SNAPSHOT_V1"))
+				.andExpect(jsonPath("$.input_variant_policy").value("RAW_CLIP_ASSET_V1"))
+				.andExpect(jsonPath("$.member_count").value(2))
+				.andExpect(jsonPath("$.stream_count").value(2))
+				.andExpect(jsonPath("$.snapshot_digest").value(org.hamcrest.Matchers.matchesPattern("[a-f0-9]{64}")))
+				.andReturn().getResponse().getContentAsString();
+		var buildSnapshotId = com.jayway.jsonpath.JsonPath.<String>read(
+				snapshotResponse, "$.dataset_build_snapshot_id");
+		var snapshotDigest = com.jayway.jsonpath.JsonPath.<String>read(
+				snapshotResponse, "$.snapshot_digest");
+
+		createDatasetBuildSnapshot(ADMIN_TOKEN, datasetVersionId, snapshotIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_build_snapshot_id").value(buildSnapshotId))
+				.andExpect(jsonPath("$.snapshot_digest").value(snapshotDigest));
+		createDatasetBuildSnapshot(
+				ADMIN_TOKEN,
+				datasetVersionId,
+				"dataset-build-snapshot-second-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_BUILD_SNAPSHOT_STATUS_INVALID"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("VALIDATING"))
+				.andExpect(jsonPath("$.build_snapshot.dataset_build_snapshot_id").value(buildSnapshotId))
+				.andExpect(jsonPath("$.build_snapshot.snapshot_digest").value(snapshotDigest))
+				.andExpect(jsonPath("$.can_create_build_snapshot").value(false));
+		assertEquals(1, count(
+				"SELECT count(*) FROM dataset_build_snapshot WHERE dataset_version_id = ?",
+				datasetVersionId));
+		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
+				UPDATE dataset_version
+				SET build_snapshot_id = NULL
+				WHERE dataset_version_id = ?
+				""", datasetVersionId));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'DATASET_VERSION_BUILD_STARTED'
 				  AND object_id = ?
 				""", datasetVersionId.toString()));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_BUILD_SNAPSHOT_CREATED'
+				  AND object_id = ?
+				""", buildSnapshotId));
 	}
 
 	@Test
@@ -1322,6 +1378,19 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "dataset-build-start-request-" + UUID.randomUUID()));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions createDatasetBuildSnapshot(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/build-snapshots",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-build-snapshot-request-" + UUID.randomUUID()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1499,6 +1568,12 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("""
+				UPDATE dataset_version
+				SET dataset_version_status = 'BUILDING', build_snapshot_id = NULL
+				WHERE project_id = ? AND dataset_version_status = 'VALIDATING'
+				""", projectId);
+		this.jdbcTemplate.update("DELETE FROM dataset_build_snapshot WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_build_specification WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_split_assignment WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_split_plan WHERE project_id = ?", projectId);

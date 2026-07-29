@@ -72,6 +72,10 @@ class DatasetSplitAssignment {
 		return new DatasetSplitAssignment(plan, member, split, assignmentRank);
 	}
 
+	UUID getDatasetMemberSessionId() {
+		return this.datasetMemberSessionId;
+	}
+
 	UUID getCaptureSessionId() {
 		return this.captureSessionId;
 	}

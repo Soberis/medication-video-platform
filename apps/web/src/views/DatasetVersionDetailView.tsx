@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  createDatasetBuildSnapshot,
   createDatasetBuildSpecification,
   createDatasetSplitPlan,
   getDatasetVersion,
@@ -74,6 +75,7 @@ const buildBlockerLabels: Record<DatasetVersionBuildBlocker, string> = {
 const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
   DRAFT: '草稿',
   BUILDING: '构建中',
+  VALIDATING: '校验中',
 }
 
 export default function DatasetVersionDetailView() {
@@ -109,11 +111,16 @@ function DatasetVersionDetailContent() {
   const [buildStartErrorCode, setBuildStartErrorCode] = useState('')
   const [buildStartErrorMessage, setBuildStartErrorMessage] = useState('')
   const [buildStartRequestId, setBuildStartRequestId] = useState<string | null>(null)
+  const [buildSnapshotState, setBuildSnapshotState] = useState<'idle' | 'creating' | 'error'>('idle')
+  const [buildSnapshotErrorCode, setBuildSnapshotErrorCode] = useState('')
+  const [buildSnapshotErrorMessage, setBuildSnapshotErrorMessage] = useState('')
+  const [buildSnapshotRequestId, setBuildSnapshotRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
   const buildSpecificationIntent = useRef<string | null>(null)
   const buildStartIntent = useRef<string | null>(null)
+  const buildSnapshotIntent = useRef<string | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -289,11 +296,12 @@ function DatasetVersionDetailContent() {
     setBuildStartErrorMessage('')
     setBuildStartRequestId(null)
     try {
-      const result = await startDatasetVersionBuild(projectId, datasetVersionId, idempotencyKey)
-      setDetail((current) => (current ? { ...current, status: result.status } : current))
-      setCurrentAdmission((current) => (current ? { ...current, can_start_build: false } : current))
+      await startDatasetVersionBuild(projectId, datasetVersionId, idempotencyKey)
       buildStartIntent.current = null
       setBuildStartState('idle')
+      setCurrentAdmission(null)
+      setCurrentAdmissionState('idle')
+      await loadDetail()
       void message.success('数据集已进入构建阶段。')
     } catch (error) {
       setBuildStartState('error')
@@ -306,7 +314,7 @@ function DatasetVersionDetailContent() {
         setBuildStartErrorMessage('暂时无法开始构建，请稍后重试。')
       }
     }
-  }, [datasetVersionId, message, projectId])
+  }, [datasetVersionId, loadDetail, message, projectId])
 
   const confirmBuildStart = useCallback(() => {
     modal.confirm({
@@ -317,6 +325,44 @@ function DatasetVersionDetailContent() {
       onOk: startBuild,
     })
   }, [modal, startBuild])
+
+  const sealBuildSnapshot = useCallback(async () => {
+    const idempotencyKey = buildSnapshotIntent.current ?? crypto.randomUUID()
+    buildSnapshotIntent.current = idempotencyKey
+    setBuildSnapshotState('creating')
+    setBuildSnapshotErrorCode('')
+    setBuildSnapshotErrorMessage('')
+    setBuildSnapshotRequestId(null)
+    try {
+      await createDatasetBuildSnapshot(projectId, datasetVersionId, idempotencyKey)
+      buildSnapshotIntent.current = null
+      setBuildSnapshotState('idle')
+      setCurrentAdmission(null)
+      setCurrentAdmissionState('idle')
+      await loadDetail()
+      void message.success('构建快照已生成，数据集进入校验阶段。')
+    } catch (error) {
+      setBuildSnapshotState('error')
+      if (error instanceof CatalogApiError) {
+        setBuildSnapshotErrorCode(error.errorCode)
+        setBuildSnapshotErrorMessage(error.message)
+        setBuildSnapshotRequestId(error.requestId)
+      } else {
+        setBuildSnapshotErrorCode('DATASET_BUILD_SNAPSHOT_FAILED')
+        setBuildSnapshotErrorMessage('暂时无法生成构建快照，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, loadDetail, message, projectId])
+
+  const confirmBuildSnapshot = useCallback(() => {
+    modal.confirm({
+      title: '生成当前构建快照？',
+      content: '系统会封存已固定的配药操作、视频、标注、清洗和划分摘要。完成后版本进入校验阶段；此操作不会冻结或导出数据。',
+      okText: '生成构建快照',
+      cancelText: '取消',
+      onOk: sealBuildSnapshot,
+    })
+  }, [modal, sealBuildSnapshot])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
@@ -353,12 +399,20 @@ function DatasetVersionDetailContent() {
         <>
           <section className="page-heading detail-heading" aria-labelledby="dataset-version-title">
             <div>
-              <p className="app-eyebrow">{detail.status === 'DRAFT' ? '不可变候选快照' : '数据集构建'}</p>
+              <p className="app-eyebrow">
+                {detail.status === 'DRAFT'
+                  ? '不可变候选快照'
+                  : detail.status === 'BUILDING'
+                    ? '数据集构建'
+                    : '数据集校验'}
+              </p>
               <h1 id="dataset-version-title">{detail.display_name}</h1>
               <p>
                 {detail.status === 'DRAFT'
                   ? '以下证据只反映创建草稿时的事实；数据划分与构建配置可依次固定，冻结和导出仍须后续验证。'
-                  : '构建配置已经封存；构建快照、校验、冻结和导出仍须后续完成。'}
+                  : detail.status === 'BUILDING'
+                    ? '构建配置已经封存；生成不可变快照后才能进入校验，冻结和导出仍须后续完成。'
+                    : '构建快照已经封存并进入校验阶段；当前状态不代表已经冻结或可以导出。'}
               </p>
             </div>
             <div className="heading-tags">
@@ -441,18 +495,20 @@ function DatasetVersionDetailContent() {
             className="detail-card"
             extra={
               <Button
-                disabled={buildStartState === 'starting'}
+                disabled={buildStartState === 'starting' || buildSnapshotState === 'creating'}
                 loading={currentAdmissionState === 'loading'}
                 onClick={() => void checkCurrentAdmission()}
               >
-                检查构建准备
+                {detail.status === 'DRAFT' ? '检查构建准备' : '检查当前证据'}
               </Button>
             }
             title={<strong>构建准备</strong>}
             variant="outlined"
           >
             <p className="form-hint">
-              只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。
+              {detail.status === 'DRAFT'
+                ? '只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。'
+                : '固定证据与当前事实分开显示；构建和校验不会自动冻结或导出数据。'}
             </p>
             {detail.build_specification ? (
               <BuildSpecificationEvidence specification={detail.build_specification} />
@@ -475,6 +531,25 @@ function DatasetVersionDetailContent() {
             ) : (
               <p>请先固定数据划分，再固定构建配置。</p>
             )}
+            {detail.build_snapshot ? (
+              <BuildSnapshotEvidence snapshot={detail.build_snapshot} />
+            ) : detail.can_create_build_snapshot ? (
+              <div className="dataset-draft-selection-toolbar">
+                <div>
+                  <strong>生成构建快照</strong>
+                  <span>封存当前成员、视频、标注、清洗和划分摘要，并进入校验阶段。</span>
+                </div>
+                <Button
+                  type="primary"
+                  loading={buildSnapshotState === 'creating'}
+                  onClick={confirmBuildSnapshot}
+                >
+                  生成构建快照
+                </Button>
+              </div>
+            ) : detail.status === 'BUILDING' ? (
+              <p>构建配置已经封存，请由项目管理员生成构建快照。</p>
+            ) : null}
             {buildSpecificationState === 'error' ? (
               <div className="catalog-error" role="alert">
                 <strong>{buildSpecificationErrorCode}</strong>
@@ -482,7 +557,16 @@ function DatasetVersionDetailContent() {
                 {buildSpecificationRequestId ? <small>请求标识：{buildSpecificationRequestId}</small> : null}
               </div>
             ) : null}
-            {currentAdmissionState === 'idle' ? <p>尚未检查构建准备。</p> : null}
+            {buildSnapshotState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{buildSnapshotErrorCode}</strong>
+                <span>{buildSnapshotErrorMessage}</span>
+                {buildSnapshotRequestId ? <small>请求标识：{buildSnapshotRequestId}</small> : null}
+              </div>
+            ) : null}
+            {currentAdmissionState === 'idle' ? (
+              <p>{detail.status === 'DRAFT' ? '尚未检查构建准备。' : '尚未检查当前证据。'}</p>
+            ) : null}
             {currentAdmissionState === 'loading' ? (
               <div className="catalog-notice" role="status" aria-live="polite">
                 正在检查构建准备…
@@ -645,6 +729,55 @@ function BuildSpecificationEvidence({
   )
 }
 
+function BuildSnapshotEvidence({
+  snapshot,
+}: {
+  snapshot: NonNullable<DatasetVersionDetail['build_snapshot']>
+}) {
+  return (
+    <>
+      <Descriptions
+        column={{ xs: 1, sm: 2, lg: 4 }}
+        items={[
+          { key: 'state', label: '构建快照', children: '已封存' },
+          { key: 'members', label: '配药操作', children: `${snapshot.member_count} 组` },
+          { key: 'streams', label: '视频流', children: `${snapshot.stream_count} 路` },
+          { key: 'creator', label: '生成人', children: snapshot.created_by },
+        ]}
+      />
+      <details className="technical-facts">
+        <summary>查看构建快照标识</summary>
+        <dl>
+          <div>
+            <dt>BuildSnapshot ID</dt>
+            <dd>
+              <code>{snapshot.dataset_build_snapshot_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>快照规范</dt>
+            <dd>
+              <code>{snapshot.snapshot_schema_version}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>输入策略</dt>
+            <dd>
+              <code>{snapshot.input_variant_policy}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>快照摘要</dt>
+            <dd>
+              <code>{snapshot.snapshot_digest}</code>
+            </dd>
+          </div>
+        </dl>
+      </details>
+    </>
+  )
+}
+
 function SplitPlanEvidence({
   projectId,
   splitPlan,
@@ -728,13 +861,13 @@ function CurrentAdmissionEvidence({
   onStart: () => void
 }) {
   const ready = admission.build_readiness.ready_for_build
-  const building = status === 'BUILDING'
+  const afterBuildStart = status !== 'DRAFT'
   return (
     <>
       <div className={`readiness-result${ready ? ' readiness-result-ready' : ''}`}>
         <div>
           <strong>
-            {building
+            {afterBuildStart
               ? ready
                 ? '当前构建证据仍一致'
                 : '构建证据需要处理'
@@ -744,7 +877,7 @@ function CurrentAdmissionEvidence({
           </strong>
           <span>
             {ready
-              ? building
+              ? afterBuildStart
                 ? '固定配置与当前事实仍然一致，后续仍须完成构建校验。'
                 : '草稿配置与当前证据已通过构建前检查。'
               : `还有 ${admission.build_readiness.blocking_reasons.length} 项需要处理。`}

@@ -54,6 +54,9 @@ class DatasetVersion {
 	@Column(name = "build_started_at")
 	private Instant buildStartedAt;
 
+	@Column(name = "build_snapshot_id")
+	private UUID buildSnapshotId;
+
 	@Version
 	@Column(name = "row_version", nullable = false)
 	private long version;
@@ -99,7 +102,7 @@ class DatasetVersion {
 	}
 
 	void startBuild(String actorId, String idempotencyKey, String requestFingerprint, Instant startedAt) {
-		if (this.status != DatasetVersionStatus.DRAFT || this.buildStartedAt != null) {
+		if (this.status != DatasetVersionStatus.DRAFT || this.buildStartedAt != null || this.buildSnapshotId != null) {
 			throw new IllegalStateException("Only a dataset draft can start building.");
 		}
 		this.status = DatasetVersionStatus.BUILDING;
@@ -107,6 +110,14 @@ class DatasetVersion {
 		this.buildStartIdempotencyKey = idempotencyKey;
 		this.buildStartRequestFingerprint = requestFingerprint;
 		this.buildStartedAt = startedAt;
+	}
+
+	void beginValidation(UUID buildSnapshotId) {
+		if (this.status != DatasetVersionStatus.BUILDING || this.buildSnapshotId != null) {
+			throw new IllegalStateException("Only a building dataset version can begin validation.");
+		}
+		this.status = DatasetVersionStatus.VALIDATING;
+		this.buildSnapshotId = Objects.requireNonNull(buildSnapshotId, "buildSnapshotId");
 	}
 
 	UUID getDatasetVersionId() {
@@ -141,6 +152,10 @@ class DatasetVersion {
 		return this.buildStartedAt;
 	}
 
+	UUID getBuildSnapshotId() {
+		return this.buildSnapshotId;
+	}
+
 	long getVersion() {
 		return this.version;
 	}
@@ -148,5 +163,6 @@ class DatasetVersion {
 
 enum DatasetVersionStatus {
 	DRAFT,
-	BUILDING
+	BUILDING,
+	VALIDATING
 }
