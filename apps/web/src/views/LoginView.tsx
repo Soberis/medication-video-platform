@@ -17,6 +17,15 @@ export default function LoginView() {
   const navigate = useNavigate()
   const [form] = Form.useForm<LoginFields>()
   const [errorMessage, setErrorMessage] = useState('')
+  const redirect = new URLSearchParams(location.search).get('redirect') ?? paths.projects
+  const redirectPath = redirect.split(/[?#]/, 1)[0]
+  const safeRedirect =
+    redirect.startsWith('/') &&
+    !redirect.startsWith('//') &&
+    !redirect.startsWith('/\\') &&
+    redirectPath !== paths.login
+      ? redirect
+      : paths.projects
 
   if (!auth.initialized && auth.loading) {
     return (
@@ -25,17 +34,12 @@ export default function LoginView() {
       </div>
     )
   }
-  if (auth.isAuthenticated) return <Navigate replace to={paths.projects} />
+  if (auth.isAuthenticated) return <Navigate replace to={safeRedirect} />
 
   async function submitLogin(values: LoginFields) {
     setErrorMessage('')
     try {
       await auth.login(values.username.trim(), values.password)
-      const redirect = new URLSearchParams(location.search).get('redirect') ?? paths.projects
-      const safeRedirect =
-        redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/\\')
-          ? redirect
-          : paths.projects
       await navigate(safeRedirect, { replace: true })
     } catch (error) {
       setErrorMessage(
