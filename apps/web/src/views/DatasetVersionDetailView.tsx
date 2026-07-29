@@ -7,6 +7,7 @@ import {
   createDatasetBuildSnapshot,
   createDatasetBuildSpecification,
   createDatasetSplitPlan,
+  freezeDatasetVersion,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   startDatasetVersionBuild,
@@ -17,6 +18,7 @@ import {
   type DatasetVersionCurrentAdmission,
   type DatasetVersionCurrentAdmissionEvidenceChange,
   type DatasetVersionCurrentAdmissionMember,
+  type DatasetVersionFreezeApproval,
   type DatasetVersionMemberSession,
   type DatasetVersionMemberStream,
   type DatasetVersionStatus,
@@ -78,6 +80,7 @@ const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
   DRAFT: '草稿',
   BUILDING: '构建中',
   VALIDATING: '校验中',
+  FROZEN: '已冻结',
 }
 
 const validationReasonLabels: Record<DatasetVersionValidationReason, string> = {
@@ -131,6 +134,10 @@ function DatasetVersionDetailContent() {
   const [validationErrorCode, setValidationErrorCode] = useState('')
   const [validationErrorMessage, setValidationErrorMessage] = useState('')
   const [validationRequestId, setValidationRequestId] = useState<string | null>(null)
+  const [freezeState, setFreezeState] = useState<'idle' | 'freezing' | 'error'>('idle')
+  const [freezeErrorCode, setFreezeErrorCode] = useState('')
+  const [freezeErrorMessage, setFreezeErrorMessage] = useState('')
+  const [freezeRequestId, setFreezeRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
   const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
@@ -138,6 +145,7 @@ function DatasetVersionDetailContent() {
   const buildStartIntent = useRef<string | null>(null)
   const buildSnapshotIntent = useRef<string | null>(null)
   const validationIntent = useRef<string | null>(null)
+  const freezeIntent = useRef<string | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -396,7 +404,7 @@ function DatasetVersionDetailContent() {
       setCurrentAdmissionState('idle')
       await loadDetail()
       if (result.outcome === 'PASS') {
-        void message.success('冻结前校验已通过。')
+        void message.success('冻结前校验已通过，已提交独立审批。')
       } else {
         void message.warning('冻结前校验未通过，请根据结果新建数据集版本。')
       }
@@ -416,12 +424,52 @@ function DatasetVersionDetailContent() {
   const confirmValidation = useCallback(() => {
     modal.confirm({
       title: '执行冻结前校验？',
-      content: '系统会核对当前准入、固定引用、快照摘要、数据划分和构建契约，并保存一次不可覆盖的结果。未通过时应新建版本；通过也不会自动冻结。',
+      content:
+        '系统会核对当前准入、固定引用、快照摘要、数据划分和构建契约，并保存一次不可覆盖的结果。未通过时应新建版本；通过也不会自动冻结，只会提交独立审批请求。',
       okText: '执行冻结前校验',
       cancelText: '取消',
       onOk: runValidation,
     })
   }, [modal, runValidation])
+
+  const runFreeze = useCallback(async () => {
+    const idempotencyKey = freezeIntent.current ?? crypto.randomUUID()
+    freezeIntent.current = idempotencyKey
+    setFreezeState('freezing')
+    setFreezeErrorCode('')
+    setFreezeErrorMessage('')
+    setFreezeRequestId(null)
+    try {
+      await freezeDatasetVersion(projectId, datasetVersionId, idempotencyKey)
+      freezeIntent.current = null
+      setFreezeState('idle')
+      setCurrentAdmission(null)
+      setCurrentAdmissionState('idle')
+      await loadDetail()
+      void message.success('独立审批已记录，数据集版本已冻结。')
+    } catch (error) {
+      setFreezeState('error')
+      if (error instanceof CatalogApiError) {
+        setFreezeErrorCode(error.errorCode)
+        setFreezeErrorMessage(error.message)
+        setFreezeRequestId(error.requestId)
+      } else {
+        setFreezeErrorCode('DATASET_VERSION_FREEZE_FAILED')
+        setFreezeErrorMessage('暂时无法批准并冻结数据集版本，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, loadDetail, message, projectId])
+
+  const confirmFreeze = useCallback(() => {
+    modal.confirm({
+      title: '批准并冻结当前数据集版本？',
+      content:
+        '系统会重新核对全部技术证据，由当前管理员记录独立审批并立即冻结。冻结后不可修改，只能新建版本；此操作不会导出数据。',
+      okText: '批准并冻结',
+      cancelText: '取消',
+      onOk: runFreeze,
+    })
+  }, [modal, runFreeze])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
@@ -463,7 +511,9 @@ function DatasetVersionDetailContent() {
                   ? '不可变候选快照'
                   : detail.status === 'BUILDING'
                     ? '数据集构建'
-                    : '数据集校验'}
+                    : detail.status === 'VALIDATING'
+                      ? '数据集校验'
+                      : '冻结数据集'}
               </p>
               <h1 id="dataset-version-title">{detail.display_name}</h1>
               <p>
@@ -471,11 +521,13 @@ function DatasetVersionDetailContent() {
                   ? '以下证据只反映创建草稿时的事实；数据划分与构建配置可依次固定，冻结和导出仍须后续验证。'
                   : detail.status === 'BUILDING'
                     ? '构建配置已经封存；生成不可变快照后才能进入校验，冻结和导出仍须后续完成。'
-                    : '构建快照已经封存并进入校验阶段；当前状态不代表已经冻结或可以导出。'}
+                    : detail.status === 'VALIDATING'
+                      ? '构建快照已经封存并进入校验阶段；当前状态不代表已经冻结或可以导出。'
+                      : '版本已完成独立审批并冻结；成员、标注、规则和划分不可修改，当前仍未导出。'}
               </p>
             </div>
             <div className="heading-tags">
-              <Tag color={detail.status === 'DRAFT' ? 'blue' : 'processing'}>
+              <Tag color={detail.status === 'FROZEN' ? 'success' : detail.status === 'DRAFT' ? 'blue' : 'processing'}>
                 {datasetVersionStatusLabels[detail.status]}
               </Tag>
             </div>
@@ -495,7 +547,7 @@ function DatasetVersionDetailContent() {
               ]}
             />
             <details className="technical-facts">
-              <summary>查看草稿标识</summary>
+              <summary>{detail.status === 'DRAFT' ? '查看草稿标识' : '查看版本标识'}</summary>
               <dl>
                 <div>
                   <dt>DatasetVersion ID</dt>
@@ -553,17 +605,20 @@ function DatasetVersionDetailContent() {
           <Card
             className="detail-card"
             extra={
-              <Button
-                disabled={
-                  buildStartState === 'starting'
-                  || buildSnapshotState === 'creating'
-                  || validationState === 'validating'
-                }
-                loading={currentAdmissionState === 'loading'}
-                onClick={() => void checkCurrentAdmission()}
-              >
-                {detail.status === 'DRAFT' ? '检查构建准备' : '检查当前证据'}
-              </Button>
+              detail.status === 'FROZEN' ? null : (
+                <Button
+                  disabled={
+                    buildStartState === 'starting'
+                    || buildSnapshotState === 'creating'
+                    || validationState === 'validating'
+                    || freezeState === 'freezing'
+                  }
+                  loading={currentAdmissionState === 'loading'}
+                  onClick={() => void checkCurrentAdmission()}
+                >
+                  {detail.status === 'DRAFT' ? '检查构建准备' : '检查当前证据'}
+                </Button>
+              )
             }
             title={<strong>构建准备</strong>}
             variant="outlined"
@@ -571,7 +626,9 @@ function DatasetVersionDetailContent() {
             <p className="form-hint">
               {detail.status === 'DRAFT'
                 ? '只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。'
-                : '固定证据与当前事实分开显示；构建和校验不会自动冻结或导出数据。'}
+                : detail.status === 'FROZEN'
+                  ? '以下记录共同证明该版本经过技术校验、独立审批并冻结；冻结不会自动导出数据。'
+                  : '固定证据与当前事实分开显示；构建和校验不会自动冻结或导出数据。'}
             </p>
             {detail.build_specification ? (
               <BuildSpecificationEvidence specification={detail.build_specification} />
@@ -614,7 +671,10 @@ function DatasetVersionDetailContent() {
               <p>构建配置已经封存，请由项目管理员生成构建快照。</p>
             ) : null}
             {detail.validation ? (
-              <ValidationEvidence validation={detail.validation} />
+              <ValidationEvidence
+                validation={detail.validation}
+                approved={detail.freeze_approval?.status === 'APPROVED'}
+              />
             ) : detail.can_validate ? (
               <div className="dataset-draft-selection-toolbar">
                 <div>
@@ -631,6 +691,14 @@ function DatasetVersionDetailContent() {
               </div>
             ) : detail.status === 'VALIDATING' ? (
               <p>构建快照已封存，请由项目管理员执行冻结前校验。</p>
+            ) : null}
+            {detail.freeze_approval ? (
+              <FreezeApprovalEvidence
+                approval={detail.freeze_approval}
+                canFreeze={detail.can_freeze}
+                freezing={freezeState === 'freezing'}
+                onFreeze={confirmFreeze}
+              />
             ) : null}
             {buildSpecificationState === 'error' ? (
               <div className="catalog-error" role="alert">
@@ -653,15 +721,22 @@ function DatasetVersionDetailContent() {
                 {validationRequestId ? <small>请求标识：{validationRequestId}</small> : null}
               </div>
             ) : null}
-            {currentAdmissionState === 'idle' ? (
+            {freezeState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{freezeErrorCode}</strong>
+                <span>{freezeErrorMessage}</span>
+                {freezeRequestId ? <small>请求标识：{freezeRequestId}</small> : null}
+              </div>
+            ) : null}
+            {detail.status !== 'FROZEN' && currentAdmissionState === 'idle' ? (
               <p>{detail.status === 'DRAFT' ? '尚未检查构建准备。' : '尚未检查当前证据。'}</p>
             ) : null}
-            {currentAdmissionState === 'loading' ? (
+            {detail.status !== 'FROZEN' && currentAdmissionState === 'loading' ? (
               <div className="catalog-notice" role="status" aria-live="polite">
                 正在检查构建准备…
               </div>
             ) : null}
-            {currentAdmissionState === 'error' ? (
+            {detail.status !== 'FROZEN' && currentAdmissionState === 'error' ? (
               <div className="catalog-error" role="alert">
                 <strong>{currentAdmissionErrorCode}</strong>
                 <span>{currentAdmissionErrorMessage}</span>
@@ -669,7 +744,7 @@ function DatasetVersionDetailContent() {
                 <Button onClick={() => void checkCurrentAdmission()}>重试</Button>
               </div>
             ) : null}
-            {currentAdmissionState === 'success' && currentAdmission ? (
+            {detail.status !== 'FROZEN' && currentAdmissionState === 'success' && currentAdmission ? (
               <CurrentAdmissionEvidence
                 projectId={projectId}
                 admission={currentAdmission}
@@ -869,8 +944,10 @@ function BuildSnapshotEvidence({
 
 function ValidationEvidence({
   validation,
+  approved,
 }: {
   validation: NonNullable<DatasetVersionDetail['validation']>
+  approved: boolean
 }) {
   const passed = validation.outcome === 'PASS'
   return (
@@ -880,7 +957,9 @@ function ValidationEvidence({
           <strong>{passed ? '冻结前校验已通过' : '冻结前校验未通过'}</strong>
           <span>
             {passed
-              ? '当前版本已通过技术校验，仍需单独审批后才能冻结。'
+              ? approved
+                ? '技术校验通过，独立审批已完成。'
+                : '当前版本已通过技术校验，仍需单独审批后才能冻结。'
               : '当前版本不能进入冻结审批；请根据原因修正数据后新建版本。'}
           </span>
           {validation.reason_codes.length > 0 ? (
@@ -928,6 +1007,87 @@ function ValidationEvidence({
             <dt>执行时间</dt>
             <dd>{formatDateTime(validation.validated_at)}</dd>
           </div>
+        </dl>
+      </details>
+    </>
+  )
+}
+
+function FreezeApprovalEvidence({
+  approval,
+  canFreeze,
+  freezing,
+  onFreeze,
+}: {
+  approval: DatasetVersionFreezeApproval
+  canFreeze: boolean
+  freezing: boolean
+  onFreeze: () => void
+}) {
+  const approved = approval.status === 'APPROVED'
+  return (
+    <>
+      <div className={`readiness-result${approved ? ' readiness-result-ready' : ''}`}>
+        <div>
+          <strong>{approved ? '数据集已冻结' : '等待独立审批'}</strong>
+          <span>
+            {approved
+              ? '审批决定已记录，当前版本保持不可变；如需调整，请新建数据集版本。'
+              : canFreeze
+                ? '技术校验已经通过。批准时会重新核对全部证据，并在同一事务内冻结版本。'
+                : '需由校验执行人以外的另一位项目管理员处理。'}
+          </span>
+        </div>
+        <div className="dataset-draft-selection-actions">
+          <Tag color={approved ? 'success' : 'processing'}>{approved ? '已批准' : '待审批'}</Tag>
+          {canFreeze ? (
+            <Button type="primary" loading={freezing} onClick={onFreeze}>
+              批准并冻结
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <details className="technical-facts">
+        <summary>查看冻结审批记录</summary>
+        <dl>
+          <div>
+            <dt>ApprovalRequest ID</dt>
+            <dd>
+              <code>{approval.approval_request_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Validation ID</dt>
+            <dd>
+              <code>{approval.validation_id}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>申请人</dt>
+            <dd>{approval.requested_by}</dd>
+          </div>
+          <div>
+            <dt>申请时间</dt>
+            <dd>{formatDateTime(approval.requested_at)}</dd>
+          </div>
+          {approved ? (
+            <>
+              <div>
+                <dt>ApprovalDecision ID</dt>
+                <dd>
+                  <code>{approval.approval_decision_id}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>审批人</dt>
+                <dd>{approval.approved_by ?? '未提供'}</dd>
+              </div>
+              <div>
+                <dt>审批时间</dt>
+                <dd>{formatDateTime(approval.approved_at)}</dd>
+              </div>
+            </>
+          ) : null}
         </dl>
       </details>
     </>

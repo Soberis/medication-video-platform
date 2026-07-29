@@ -19,7 +19,9 @@ record DatasetVersionDetailResponse(
 		DatasetBuildSnapshotResponse buildSnapshot,
 		boolean canCreateBuildSnapshot,
 		DatasetVersionValidationResponse validation,
-		boolean canValidate) {
+		boolean canValidate,
+		DatasetVersionFreezeApprovalResponse freezeApproval,
+		boolean canFreeze) {
 
 	DatasetVersionDetailResponse {
 		members = List.copyOf(members);
@@ -35,7 +37,9 @@ record DatasetVersionDetailResponse(
 			DatasetBuildSnapshotResponse buildSnapshot,
 			boolean canCreateBuildSnapshot,
 			DatasetVersionValidationResponse validation,
-			boolean canValidate) {
+			boolean canValidate,
+			DatasetVersionFreezeApprovalResponse freezeApproval,
+			boolean canFreeze) {
 		return new DatasetVersionDetailResponse(
 				version.getDatasetVersionId(),
 				version.getProjectId(),
@@ -51,7 +55,9 @@ record DatasetVersionDetailResponse(
 				buildSnapshot,
 				canCreateBuildSnapshot,
 				validation,
-				canValidate);
+				canValidate,
+				freezeApproval,
+				canFreeze);
 	}
 }
 

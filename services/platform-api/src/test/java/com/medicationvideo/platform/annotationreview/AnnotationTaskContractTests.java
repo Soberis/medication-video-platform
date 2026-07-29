@@ -340,7 +340,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void administratorStartsSealsAndValidatesAReadyDatasetBuildExactlyOnce() throws Exception {
+	void administratorsStartSealValidateAndFreezeAReadyDatasetBuildExactlyOnce() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
 		var draftResponse = createDatasetDraft(
@@ -517,13 +517,93 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.status").value("VALIDATING"))
 				.andExpect(jsonPath("$.validation.dataset_version_validation_id").value(validationId))
 				.andExpect(jsonPath("$.validation.outcome").value("PASS"))
-				.andExpect(jsonPath("$.can_validate").value(false));
+				.andExpect(jsonPath("$.can_validate").value(false))
+				.andExpect(jsonPath("$.freeze_approval.status").value("PENDING"))
+				.andExpect(jsonPath("$.freeze_approval.requested_by")
+						.value(ProjectMembershipTestData.ADMIN_ACTOR))
+				.andExpect(jsonPath("$.can_freeze").value(false));
 		assertEquals(1, count(
 				"SELECT count(*) FROM dataset_version_validation WHERE dataset_version_id = ?",
+				datasetVersionId));
+		assertEquals(1, count(
+				"SELECT count(*) FROM approval_request WHERE object_id = ?",
 				datasetVersionId));
 		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
 				UPDATE dataset_version_validation
 				SET outcome = 'FAIL'
+				WHERE dataset_version_id = ?
+				""", datasetVersionId));
+
+		var freezeIdempotencyKey = "dataset-freeze-" + UUID.randomUUID();
+		freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, freezeIdempotencyKey)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code")
+						.value("DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN"));
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET role = 'ADMIN',
+				    updated_by = ?,
+				    updated_at = ?,
+				    row_version = row_version + 1
+				WHERE project_id = ? AND actor_id = ?
+				""",
+				ProjectMembershipTestData.ADMIN_ACTOR,
+				Timestamp.from(BASE_TIME.plusSeconds(30)),
+				PROJECT_ID,
+				ProjectMembershipTestData.MEMBER_ACTOR);
+		var pendingApprovalResponse = this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("VALIDATING"))
+				.andExpect(jsonPath("$.freeze_approval.status").value("PENDING"))
+				.andExpect(jsonPath("$.can_freeze").value(true))
+				.andReturn().getResponse().getContentAsString();
+		var approvalRequestId = com.jayway.jsonpath.JsonPath.<String>read(
+				pendingApprovalResponse, "$.freeze_approval.approval_request_id");
+
+		var freezeResponse = freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, freezeIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.status").value("FROZEN"))
+				.andExpect(jsonPath("$.validation_id").value(validationId))
+				.andExpect(jsonPath("$.approval_request_id").value(approvalRequestId))
+				.andExpect(jsonPath("$.frozen_by").value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andReturn().getResponse().getContentAsString();
+		var approvalDecisionId = com.jayway.jsonpath.JsonPath.<String>read(
+				freezeResponse, "$.approval_decision_id");
+		freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, freezeIdempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.approval_decision_id").value(approvalDecisionId))
+				.andExpect(jsonPath("$.status").value("FROZEN"));
+		freezeDatasetVersion(
+				MEMBER_TOKEN,
+				datasetVersionId,
+				"dataset-freeze-second-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_ALREADY_FROZEN"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("FROZEN"))
+				.andExpect(jsonPath("$.freeze_approval.status").value("APPROVED"))
+				.andExpect(jsonPath("$.freeze_approval.approval_decision_id").value(approvalDecisionId))
+				.andExpect(jsonPath("$.freeze_approval.approved_by")
+						.value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andExpect(jsonPath("$.can_freeze").value(false));
+		assertEquals(1, count(
+				"SELECT count(*) FROM approval_decision WHERE approval_request_id = ?",
+				UUID.fromString(approvalRequestId)));
+		assertThrows(DataIntegrityViolationException.class, () -> this.jdbcTemplate.update("""
+				UPDATE dataset_version
+				SET frozen_by = NULL
 				WHERE dataset_version_id = ?
 				""", datasetVersionId));
 		assertEquals(1, count("""
@@ -541,6 +621,11 @@ class AnnotationTaskContractTests {
 				WHERE action = 'DATASET_VERSION_VALIDATION_COMPLETED'
 				  AND object_id = ?
 				""", validationId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_VERSION_FROZEN'
+				  AND object_id = ?
+				""", datasetVersionId.toString()));
 	}
 
 	@Test
@@ -1460,6 +1545,19 @@ class AnnotationTaskContractTests {
 				.header("X-Request-Id", "dataset-validation-request-" + UUID.randomUUID()));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions freezeDatasetVersion(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/freezes",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-freeze-request-" + UUID.randomUUID()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1637,6 +1735,19 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("""
+				UPDATE dataset_version
+				SET dataset_version_status = 'VALIDATING',
+				    freeze_approval_request_id = NULL,
+				    freeze_approval_decision_id = NULL,
+				    frozen_by = NULL,
+				    freeze_idempotency_key = NULL,
+				    freeze_request_fingerprint = NULL,
+				    frozen_at = NULL
+				WHERE project_id = ? AND dataset_version_status = 'FROZEN'
+				""", projectId);
+		this.jdbcTemplate.update("DELETE FROM approval_decision WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM approval_request WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_version_validation WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("""
 				UPDATE dataset_version

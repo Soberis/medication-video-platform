@@ -57,6 +57,24 @@ class DatasetVersion {
 	@Column(name = "build_snapshot_id")
 	private UUID buildSnapshotId;
 
+	@Column(name = "freeze_approval_request_id")
+	private UUID freezeApprovalRequestId;
+
+	@Column(name = "freeze_approval_decision_id")
+	private UUID freezeApprovalDecisionId;
+
+	@Column(name = "frozen_by", length = 128)
+	private String frozenBy;
+
+	@Column(name = "freeze_idempotency_key", length = 128)
+	private String freezeIdempotencyKey;
+
+	@Column(name = "freeze_request_fingerprint", length = 64)
+	private String freezeRequestFingerprint;
+
+	@Column(name = "frozen_at")
+	private Instant frozenAt;
+
 	@Version
 	@Column(name = "row_version", nullable = false)
 	private long version;
@@ -101,6 +119,12 @@ class DatasetVersion {
 				&& Objects.equals(this.buildStartRequestFingerprint, requestFingerprint);
 	}
 
+	boolean matchesFreezeRequest(String actorId, String idempotencyKey, String requestFingerprint) {
+		return Objects.equals(this.frozenBy, actorId)
+				&& Objects.equals(this.freezeIdempotencyKey, idempotencyKey)
+				&& Objects.equals(this.freezeRequestFingerprint, requestFingerprint);
+	}
+
 	void startBuild(String actorId, String idempotencyKey, String requestFingerprint, Instant startedAt) {
 		if (this.status != DatasetVersionStatus.DRAFT || this.buildStartedAt != null || this.buildSnapshotId != null) {
 			throw new IllegalStateException("Only a dataset draft can start building.");
@@ -118,6 +142,29 @@ class DatasetVersion {
 		}
 		this.status = DatasetVersionStatus.VALIDATING;
 		this.buildSnapshotId = Objects.requireNonNull(buildSnapshotId, "buildSnapshotId");
+	}
+
+	void freeze(
+			UUID approvalRequestId,
+			UUID approvalDecisionId,
+			String actorId,
+			String idempotencyKey,
+			String requestFingerprint,
+			Instant frozenAt) {
+		if (this.status != DatasetVersionStatus.VALIDATING
+				|| this.buildSnapshotId == null
+				|| this.freezeApprovalRequestId != null
+				|| this.freezeApprovalDecisionId != null
+				|| this.frozenAt != null) {
+			throw new IllegalStateException("Only a validated dataset version can be frozen.");
+		}
+		this.status = DatasetVersionStatus.FROZEN;
+		this.freezeApprovalRequestId = Objects.requireNonNull(approvalRequestId, "approvalRequestId");
+		this.freezeApprovalDecisionId = Objects.requireNonNull(approvalDecisionId, "approvalDecisionId");
+		this.frozenBy = actorId;
+		this.freezeIdempotencyKey = idempotencyKey;
+		this.freezeRequestFingerprint = requestFingerprint;
+		this.frozenAt = frozenAt;
 	}
 
 	UUID getDatasetVersionId() {
@@ -156,6 +203,18 @@ class DatasetVersion {
 		return this.buildSnapshotId;
 	}
 
+	UUID getFreezeApprovalDecisionId() {
+		return this.freezeApprovalDecisionId;
+	}
+
+	String getFrozenBy() {
+		return this.frozenBy;
+	}
+
+	Instant getFrozenAt() {
+		return this.frozenAt;
+	}
+
 	long getVersion() {
 		return this.version;
 	}
@@ -164,5 +223,6 @@ class DatasetVersion {
 enum DatasetVersionStatus {
 	DRAFT,
 	BUILDING,
-	VALIDATING
+	VALIDATING,
+	FROZEN
 }

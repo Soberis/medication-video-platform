@@ -122,6 +122,11 @@ class DatasetVersionValidation {
 		return this.requestFingerprint.equals(fingerprint);
 	}
 
+	boolean matchesSnapshot(DatasetBuildSnapshot snapshot) {
+		return this.datasetBuildSnapshotId.equals(snapshot.getDatasetBuildSnapshotId())
+				&& this.validatedSnapshotDigest.equals(snapshot.getSnapshotDigest());
+	}
+
 	UUID getDatasetVersionValidationId() {
 		return this.datasetVersionValidationId;
 	}

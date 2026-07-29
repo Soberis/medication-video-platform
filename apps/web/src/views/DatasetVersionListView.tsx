@@ -15,6 +15,7 @@ const datasetVersionStatusLabels: Record<DatasetVersionStatus, string> = {
   DRAFT: '草稿',
   BUILDING: '构建中',
   VALIDATING: '校验中',
+  FROZEN: '已冻结',
 }
 
 export default function DatasetVersionListView() {
@@ -125,7 +126,7 @@ function DatasetVersionListContent() {
                 title: '状态',
                 width: 120,
                 render: (_, row) => (
-                  <Tag color={row.status === 'DRAFT' ? 'blue' : 'processing'}>
+                  <Tag color={row.status === 'FROZEN' ? 'success' : row.status === 'DRAFT' ? 'blue' : 'processing'}>
                     {datasetVersionStatusLabels[row.status]}
                   </Tag>
                 ),

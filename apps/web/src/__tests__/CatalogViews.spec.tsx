@@ -869,6 +869,16 @@ describe('catalog views', () => {
       validated_by: 'local-admin',
       validated_at: '2026-07-30T01:00:00Z',
     }
+    const freezeApproval = {
+      approval_request_id: '96000000-0000-4000-8000-000000000001',
+      validation_id: validation.dataset_version_validation_id,
+      status: 'PENDING' as const,
+      requested_by: 'local-admin',
+      requested_at: '2026-07-30T01:00:00Z',
+      approval_decision_id: null,
+      approved_by: null,
+      approved_at: null,
+    }
     let started = false
     let snapshotted = false
     let validated = false
@@ -919,6 +929,8 @@ describe('catalog views', () => {
           can_create_build_snapshot: started && !snapshotted,
           validation: validated ? validation : null,
           can_validate: snapshotted && !validated,
+          freeze_approval: validated ? freezeApproval : null,
+          can_freeze: false,
         }),
       )
     })
@@ -989,6 +1001,9 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('冻结前校验已通过')).toBeInTheDocument()
     expect(screen.getByText(/仍需单独审批后才能冻结/)).toBeInTheDocument()
+    expect(screen.getByText('等待独立审批')).toBeInTheDocument()
+    expect(screen.getByText(/另一位项目管理员/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '批准并冻结' })).not.toBeInTheDocument()
     const validationFacts = screen.getByText('查看校验标识').closest('details')
     expect(validationFacts).not.toBeNull()
     if (!validationFacts) throw new Error('Validation facts were not rendered.')
@@ -1002,6 +1017,111 @@ describe('catalog views', () => {
         method: 'POST',
         cache: 'no-store',
         headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-validation-0001' }),
+      }),
+    )
+  })
+
+  it('lets a different administrator revalidate, approve and freeze one version atomically', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const freezePath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/freezes`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    const validation = {
+      dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+      dataset_version_id: datasetVersionId,
+      dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
+      validation_profile_version: 'DATASET_FREEZE_VALIDATION_V1' as const,
+      outcome: 'PASS' as const,
+      reason_codes: [],
+      executed_checks: [
+        'CURRENT_ADMISSION',
+        'REFERENCE_INTEGRITY',
+        'SNAPSHOT_DIGEST',
+        'SPLIT_ISOLATION',
+        'BUILD_CONTRACT',
+      ] as const,
+      validated_snapshot_digest: 'f'.repeat(64),
+      validated_by: 'other-admin',
+      validated_at: '2026-07-30T01:00:00Z',
+    }
+    const pendingApproval = {
+      approval_request_id: '96000000-0000-4000-8000-000000000001',
+      validation_id: validation.dataset_version_validation_id,
+      status: 'PENDING' as const,
+      requested_by: 'other-admin',
+      requested_at: '2026-07-30T01:00:00Z',
+      approval_decision_id: null,
+      approved_by: null,
+      approved_at: null,
+    }
+    const approvedApproval = {
+      ...pendingApproval,
+      status: 'APPROVED' as const,
+      approval_decision_id: '97000000-0000-4000-8000-000000000001',
+      approved_by: 'local-admin',
+      approved_at: '2026-07-30T02:00:00Z',
+    }
+    let frozen = false
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === freezePath && init?.method === 'POST') {
+        frozen = true
+        return Promise.resolve(
+          jsonResponse(
+            {
+              dataset_version_id: datasetVersionId,
+              project_id: projectId,
+              status: 'FROZEN',
+              validation_id: validation.dataset_version_validation_id,
+              approval_request_id: pendingApproval.approval_request_id,
+              approval_decision_id: approvedApproval.approval_decision_id,
+              frozen_by: 'local-admin',
+              frozen_at: approvedApproval.approved_at,
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(
+        jsonResponse({
+          ...detail,
+          status: frozen ? 'FROZEN' : 'VALIDATING',
+          validation,
+          can_validate: false,
+          freeze_approval: frozen ? approvedApproval : pendingApproval,
+          can_freeze: !frozen,
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('dataset-freeze-0001'),
+    })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByText('等待独立审批')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '批准并冻结' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    expect(within(confirmDialog).getByText(/冻结后不可修改，只能新建版本/)).toBeInTheDocument()
+    expect(within(confirmDialog).getByText(/不会导出数据/)).toBeInTheDocument()
+    await user.click(within(confirmDialog).getByRole('button', { name: '批准并冻结' }))
+
+    expect(await screen.findByText('数据集已冻结')).toBeInTheDocument()
+    expect(screen.getByText('已冻结')).toBeInTheDocument()
+    expect(screen.getByText('技术校验通过，独立审批已完成。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '批准并冻结' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '检查当前证据' })).not.toBeInTheDocument()
+    const approvalFacts = screen.getByText('查看冻结审批记录').closest('details')
+    expect(approvalFacts).not.toBeNull()
+    if (!approvalFacts) throw new Error('Freeze approval facts were not rendered.')
+    expect(within(approvalFacts).getByText('审批人')).toBeInTheDocument()
+    expect(within(approvalFacts).getByText('local-admin')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      freezePath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-freeze-0001' }),
       }),
     )
   })
@@ -1686,6 +1806,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string): Da
     can_create_build_snapshot: false,
     validation: null,
     can_validate: false,
+    freeze_approval: null,
+    can_freeze: false,
     members: [
       {
         capture_session_id: sessionId,

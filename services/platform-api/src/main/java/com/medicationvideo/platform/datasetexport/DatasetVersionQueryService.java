@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medicationvideo.platform.governance.DatasetFreezeApprovalService;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
 
@@ -23,6 +24,7 @@ class DatasetVersionQueryService {
 	private final DatasetBuildSpecificationRepository buildSpecificationRepository;
 	private final DatasetBuildSnapshotRepository buildSnapshotRepository;
 	private final DatasetVersionValidationRepository validationRepository;
+	private final DatasetFreezeApprovalService freezeApprovalService;
 
 	DatasetVersionQueryService(
 			ProjectAccessService projectAccessService,
@@ -33,7 +35,8 @@ class DatasetVersionQueryService {
 			DatasetSplitAssignmentRepository splitAssignmentRepository,
 			DatasetBuildSpecificationRepository buildSpecificationRepository,
 			DatasetBuildSnapshotRepository buildSnapshotRepository,
-			DatasetVersionValidationRepository validationRepository) {
+			DatasetVersionValidationRepository validationRepository,
+			DatasetFreezeApprovalService freezeApprovalService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
@@ -43,6 +46,7 @@ class DatasetVersionQueryService {
 		this.buildSpecificationRepository = buildSpecificationRepository;
 		this.buildSnapshotRepository = buildSnapshotRepository;
 		this.validationRepository = validationRepository;
+		this.freezeApprovalService = freezeApprovalService;
 	}
 
 	@Transactional(readOnly = true)
@@ -97,6 +101,8 @@ class DatasetVersionQueryService {
 				.orElse(null);
 		var validation = this.validationRepository.findByDatasetVersionId(datasetVersionId)
 				.orElse(null);
+		var freezeApproval = this.freezeApprovalService.find(projectId, datasetVersionId)
+				.orElse(null);
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		return DatasetVersionDetailResponse.from(
 				version,
@@ -119,7 +125,17 @@ class DatasetVersionQueryService {
 				validation == null ? null : DatasetVersionValidationResponse.from(validation),
 				role == ProjectRole.ADMIN
 						&& version.getStatus() == DatasetVersionStatus.VALIDATING
-						&& validation == null);
+						&& validation == null,
+				freezeApproval == null
+						? null
+						: DatasetVersionFreezeApprovalResponse.from(freezeApproval),
+				role == ProjectRole.ADMIN
+						&& version.getStatus() == DatasetVersionStatus.VALIDATING
+						&& validation != null
+						&& validation.getOutcome() == DatasetVersionValidationOutcome.PASS
+						&& freezeApproval != null
+						&& freezeApproval.pending()
+						&& !freezeApproval.requestedBy().equals(actorId));
 	}
 
 	private static DatasetVersionException notFound() {

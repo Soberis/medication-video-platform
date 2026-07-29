@@ -6,6 +6,7 @@ import {
   deleteClipAsset,
   createDatasetVersionDraft,
   createDatasetSplitPlan,
+  freezeDatasetVersion,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
@@ -395,6 +396,43 @@ describe('catalog API', () => {
         cache: 'no-store',
         headers: expect.objectContaining({
           'Idempotency-Key': 'dataset-validation-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
+  })
+
+  it('independently approves and freezes a dataset version with CSRF and idempotency', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_id: datasetVersionId,
+          project_id: projectId,
+          status: 'FROZEN',
+          validation_id: '94000000-0000-4000-8000-000000000001',
+          approval_request_id: '95000000-0000-4000-8000-000000000001',
+          approval_decision_id: '96000000-0000-4000-8000-000000000001',
+          frozen_by: 'independent-admin',
+          frozen_at: '2026-07-30T02:00:00Z',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      freezeDatasetVersion(projectId, datasetVersionId, 'dataset-freeze-0001'),
+    ).resolves.toMatchObject({ status: 'FROZEN' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/freezes`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-freeze-0001',
           'X-XSRF-TOKEN': 'csrf-test-token',
         }),
       }),

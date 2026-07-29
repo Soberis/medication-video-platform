@@ -269,7 +269,7 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 | --- | --- |
 | DRAFT → BUILDING | 选择规则、label/clean/split/export profile 已固定 |
 | BUILDING → VALIDATING | session、stream、variant、revision 和泄漏分组快照完成 |
-| VALIDATING → FROZEN | 准入、引用、摘要、隐私、split、防泄漏和格式校验全部通过；冻结审批完成 |
+| VALIDATING → FROZEN | 当前准入、引用、摘要、split、防泄漏和构建契约全部通过；冻结审批完成 |
 | FROZEN → RETIRED | 管理员批准；不修改历史导出和审计 |
 
 当前 V39 允许在 `DRAFT` 内固定一次 CaptureSession 级 pilot/holdout 计划。V40 允许管理员在 split
@@ -295,6 +295,12 @@ V43 增加一次性冻结前技术校验。项目管理员在 `VALIDATING` 状�
 固定引用、关系快照摘要、CaptureSession 级 split 隔离和已批准构建契约，并保存不可变 `PASS/FAIL`、
 稳定原因码、检查项、受检摘要、操作者和时间。结果不会改变 DatasetVersion 状态；`PASS` 仍需独立冻结
 审批，`FAIL` 不得覆盖或重跑，修正只能创建新 DatasetVersion。该命令不创建文件、Worker、队列或导出。
+
+V44 在 `PASS` 技术校验的同一事务创建一条绑定该 validation 的 `PENDING` 冻结请求，校验执行人即申请人。
+另一位当前项目管理员批准时，Core API 锁定项目并重新执行 V43 的全部检查；只有证据仍一致时，才在同一
+事务写入唯一 `APPROVED` 决定、冻结事实和审计，并迁移到 `FROZEN`。申请人不能自批，失败不产生部分决定；
+请求没有独立有效期，因为它只绑定一个不可变 validation，且批准与冻结在一个命令内原子完成。冻结不等于
+导出授权，也不创建文件、Worker 或队列。
 
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 

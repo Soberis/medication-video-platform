@@ -124,7 +124,7 @@ export interface DatasetAdmissionPreview {
   streams: DatasetAdmissionPreviewStream[]
 }
 
-export type DatasetVersionStatus = 'DRAFT' | 'BUILDING' | 'VALIDATING'
+export type DatasetVersionStatus = 'DRAFT' | 'BUILDING' | 'VALIDATING' | 'FROZEN'
 
 export interface DatasetVersionSummary {
   dataset_version_id: string
@@ -244,6 +244,28 @@ export interface DatasetVersionValidation {
   validated_at: string
 }
 
+export interface DatasetVersionFreezeApproval {
+  approval_request_id: string
+  validation_id: string
+  status: 'PENDING' | 'APPROVED'
+  requested_by: string
+  requested_at: string
+  approval_decision_id: string | null
+  approved_by: string | null
+  approved_at: string | null
+}
+
+export interface DatasetVersionFreeze {
+  dataset_version_id: string
+  project_id: string
+  status: 'FROZEN'
+  validation_id: string
+  approval_request_id: string
+  approval_decision_id: string
+  frozen_by: string
+  frozen_at: string
+}
+
 export interface DatasetVersionDetail extends DatasetVersionSummary {
   members: DatasetVersionMemberSession[]
   split_plan: DatasetSplitPlan | null
@@ -254,6 +276,8 @@ export interface DatasetVersionDetail extends DatasetVersionSummary {
   can_create_build_snapshot: boolean
   validation: DatasetVersionValidation | null
   can_validate: boolean
+  freeze_approval: DatasetVersionFreezeApproval | null
+  can_freeze: boolean
 }
 
 export interface DatasetVersionCurrentAdmissionEvidenceChange {
@@ -482,6 +506,15 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_VALIDATION_STATUS_INVALID: '当前版本不处于校验阶段，请刷新页面查看。',
   DATASET_VERSION_VALIDATION_ALREADY_EXISTS: '该版本已经完成冻结前校验，请刷新页面查看。',
   DATASET_VERSION_VALIDATION_IDEMPOTENCY_KEY_REUSED: '本次校验请求与已提交请求冲突，请刷新后重试。',
+  DATASET_VERSION_FREEZE_STATUS_INVALID: '当前版本不处于可冻结阶段，请刷新页面查看。',
+  DATASET_VERSION_FREEZE_VALIDATION_REQUIRED: '请先完成冻结前技术校验。',
+  DATASET_VERSION_FREEZE_VALIDATION_FAILED: '冻结前技术校验未通过，当前版本不能冻结。',
+  DATASET_VERSION_FREEZE_APPROVAL_MISSING: '冻结审批请求缺失，请刷新页面后重试。',
+  DATASET_VERSION_FREEZE_APPROVAL_INVALID: '冻结审批请求已失效，请刷新页面查看。',
+  DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN: '申请人与审批人必须不同，请由另一位项目管理员处理。',
+  DATASET_VERSION_FREEZE_EVIDENCE_CHANGED: '校验后数据证据发生变化，请修正后新建数据集版本。',
+  DATASET_VERSION_ALREADY_FROZEN: '该数据集版本已经冻结。',
+  DATASET_VERSION_FREEZE_IDEMPOTENCY_KEY_REUSED: '本次冻结请求与已提交请求冲突，请刷新后重试。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -718,6 +751,29 @@ export async function validateDatasetVersion(
     },
   )
   if (response.ok) return (await response.json()) as DatasetVersionValidation
+  throw await toCatalogError(response)
+}
+
+export async function freezeDatasetVersion(
+  projectId: string,
+  datasetVersionId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetVersionFreeze> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/freezes`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetVersionFreeze
   throw await toCatalogError(response)
 }
 

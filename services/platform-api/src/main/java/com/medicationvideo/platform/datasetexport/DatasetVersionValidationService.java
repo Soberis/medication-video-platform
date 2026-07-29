@@ -19,6 +19,7 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+import com.medicationvideo.platform.governance.DatasetFreezeApprovalService;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 @Service
@@ -44,6 +45,7 @@ class DatasetVersionValidationService {
 	private final DatasetBuildSnapshotRepository snapshotRepository;
 	private final DatasetVersionValidationRepository validationRepository;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
+	private final DatasetFreezeApprovalService approvalService;
 	private final AuditEventRecorder auditRecorder;
 
 	DatasetVersionValidationService(
@@ -57,6 +59,7 @@ class DatasetVersionValidationService {
 			DatasetBuildSnapshotRepository snapshotRepository,
 			DatasetVersionValidationRepository validationRepository,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService,
+			DatasetFreezeApprovalService approvalService,
 			AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
@@ -68,6 +71,7 @@ class DatasetVersionValidationService {
 		this.snapshotRepository = snapshotRepository;
 		this.validationRepository = validationRepository;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
+		this.approvalService = approvalService;
 		this.auditRecorder = auditRecorder;
 	}
 
@@ -108,6 +112,57 @@ class DatasetVersionValidationService {
 					409);
 		}
 
+		var evaluation = evaluateCurrent(projectId, version, actorId);
+		var snapshot = evaluation.snapshot();
+		var reasons = evaluation.reasons();
+
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var validation = this.validationRepository.saveAndFlush(DatasetVersionValidation.record(
+				version,
+				snapshot,
+				reasons,
+				snapshot.getSnapshotDigest(),
+				actorId,
+				idempotencyKey,
+				fingerprint,
+				now));
+		var approval = validation.getOutcome() == DatasetVersionValidationOutcome.PASS
+				? this.approvalService.request(
+						projectId,
+						datasetVersionId,
+						validation.getDatasetVersionValidationId(),
+						actorId,
+						now)
+				: null;
+		this.auditRecorder.record(new AuditEventCommand(
+				now,
+				AuditActorType.USER,
+				actorId,
+				projectId,
+				"DATASET_VERSION_VALIDATION_COMPLETED",
+				"DatasetVersionValidation",
+				validation.getDatasetVersionValidationId().toString(),
+				DatasetVersionValidation.PROFILE_VERSION,
+				AuditOutcome.SUCCEEDED,
+				"DATASET_VALIDATION_" + validation.getOutcome().name(),
+				requestId,
+				traceId,
+				"PROJECT_MEMBERSHIP_ADMIN",
+				Map.of(
+						"dataset_version_id", datasetVersionId.toString(),
+						"dataset_build_snapshot_id", snapshot.getDatasetBuildSnapshotId().toString(),
+						"snapshot_digest", snapshot.getSnapshotDigest(),
+						"outcome", validation.getOutcome().name(),
+						"reason_codes", String.join(",", validation.getReasonCodes()),
+						"approval_request_id",
+						approval == null ? "" : approval.approvalRequestId().toString(),
+						"request_fingerprint", fingerprint)));
+		return DatasetVersionValidationResponse.from(validation);
+	}
+
+	DatasetVersionValidationEvaluation evaluateCurrent(
+			UUID projectId, DatasetVersion version, String actorId) {
+		var datasetVersionId = version.getDatasetVersionId();
 		var snapshot = this.snapshotRepository.findByDatasetVersionId(datasetVersionId)
 				.orElseThrow(() -> incomplete("BUILD_SNAPSHOT_MISSING"));
 		var specification = this.specificationRepository.findByDatasetVersionId(datasetVersionId)
@@ -129,39 +184,7 @@ class DatasetVersionValidationService {
 				streams,
 				assignments,
 				currentAdmission);
-
-		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var validation = this.validationRepository.saveAndFlush(DatasetVersionValidation.record(
-				version,
-				snapshot,
-				reasons,
-				snapshot.getSnapshotDigest(),
-				actorId,
-				idempotencyKey,
-				fingerprint,
-				now));
-		this.auditRecorder.record(new AuditEventCommand(
-				now,
-				AuditActorType.USER,
-				actorId,
-				projectId,
-				"DATASET_VERSION_VALIDATION_COMPLETED",
-				"DatasetVersionValidation",
-				validation.getDatasetVersionValidationId().toString(),
-				DatasetVersionValidation.PROFILE_VERSION,
-				AuditOutcome.SUCCEEDED,
-				"DATASET_VALIDATION_" + validation.getOutcome().name(),
-				requestId,
-				traceId,
-				"PROJECT_MEMBERSHIP_ADMIN",
-				Map.of(
-						"dataset_version_id", datasetVersionId.toString(),
-						"dataset_build_snapshot_id", snapshot.getDatasetBuildSnapshotId().toString(),
-						"snapshot_digest", snapshot.getSnapshotDigest(),
-						"outcome", validation.getOutcome().name(),
-						"reason_codes", String.join(",", validation.getReasonCodes()),
-						"request_fingerprint", fingerprint)));
-		return DatasetVersionValidationResponse.from(validation);
+		return new DatasetVersionValidationEvaluation(snapshot, reasons);
 	}
 
 	static List<String> evaluate(
@@ -266,5 +289,14 @@ class DatasetVersionValidationService {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 must be available.", exception);
 		}
+	}
+}
+
+record DatasetVersionValidationEvaluation(
+		DatasetBuildSnapshot snapshot,
+		List<String> reasons) {
+
+	DatasetVersionValidationEvaluation {
+		reasons = List.copyOf(reasons);
 	}
 }

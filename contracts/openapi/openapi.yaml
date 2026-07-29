@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.47.0
+  version: 0.48.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -33,8 +33,9 @@ info:
     DRAFT-to-BUILDING blocker, explicitly advance a still-ready draft to BUILDING, and seal its
     persisted relational evidence with a deterministic digest before entering VALIDATING, then run
     one immutable freeze-preflight validation over current admission, references, the snapshot digest,
-    CaptureSession split isolation and the approved build contract, without freezing the version,
-    creating export artifacts or starting a Worker,
+    CaptureSession split isolation and the approved build contract; a PASS creates a pending request
+    that a different ACTIVE project administrator can approve only after atomic revalidation, then
+    freeze the version without creating export artifacts or starting a Worker,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -91,7 +92,8 @@ tags:
       Current-state previews and administrator-created DatasetVersion candidate snapshots. DRAFT
       versions can fix build prerequisites and explicitly enter BUILDING; a completed relational
       snapshot seal advances to VALIDATING, where one technical freeze-preflight result can be
-      recorded. A PASS still requires separate approval before freezing and is not exportable.
+      recorded. A PASS creates a pending request; a different ACTIVE project administrator can
+      revalidate, approve and atomically freeze the version. FROZEN is still not an export artifact.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -115,7 +117,7 @@ paths:
         - Dataset Admission
       summary: List project-scoped dataset versions
       description: >-
-        Requires ACTIVE project membership. Returns DRAFT, BUILDING and VALIDATING metadata; it does not
+        Requires ACTIVE project membership. Returns DRAFT, BUILDING, VALIDATING and FROZEN metadata; it does not
         mutate a DatasetVersion, create an export or authorize data release.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -573,9 +575,10 @@ paths:
         integrity, the recomputed relational snapshot digest, CaptureSession-level split isolation
         and the approved P0 build contract. It stores exactly one immutable PASS or FAIL result and
         an audit event. A created result may be FAIL; HTTP 201 only means the validation fact was
-        recorded. PASS does not approve, freeze or export the version, and FAIL must be addressed in
-        a new DatasetVersion rather than by overwriting this result. Replaying the same idempotency
-        key returns the original result.
+        recorded. PASS also creates one pending freeze request with the validator as requester, but
+        does not approve, freeze or export the version. FAIL must be addressed in a new DatasetVersion
+        rather than by overwriting this result. Replaying the same idempotency key returns the
+        original result.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetVersionId"
@@ -619,6 +622,69 @@ paths:
           description: >-
             The version is not VALIDATING, its fixed snapshot is unavailable, a validation result
             already exists, or the idempotency key was used for another dataset version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/freezes:
+    post:
+      operationId: freezeDatasetVersion
+      tags:
+        - Dataset Admission
+      summary: Independently approve and freeze a validated dataset version
+      description: >-
+        Requires ACTIVE ADMIN membership, a VALIDATING DatasetVersion, an immutable PASS result and
+        its pending freeze request. The approver must differ from the requester who ran the
+        freeze-preflight validation. The command locks the project, reruns current admission,
+        reference, snapshot-digest, CaptureSession split-isolation and build-contract checks, records
+        one APPROVED decision and advances the version to FROZEN in the same transaction. A changed
+        fact blocks the command and requires a new DatasetVersion. FROZEN members, revisions, rules
+        and split remain immutable; this command creates no files, export authorization, Worker or
+        queue task. Replaying the same idempotency key returns the original frozen result.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "201":
+          description: The independent approval was recorded and the DatasetVersion is FROZEN.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionFreeze"
+        "400":
+          description: A path parameter or required header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The version is not VALIDATING, validation did not pass, approval is missing or invalid,
+            requester and approver are the same, evidence changed, the version is already frozen,
+            or the idempotency key was used for another dataset version.
           content:
             application/problem+json:
               schema:
@@ -5472,7 +5538,7 @@ components:
           maxLength: 128
         status:
           type: string
-          enum: [DRAFT, BUILDING, VALIDATING]
+          enum: [DRAFT, BUILDING, VALIDATING, FROZEN]
         created_by:
           type: string
           maxLength: 128
@@ -5512,6 +5578,8 @@ components:
         - can_create_build_snapshot
         - validation
         - can_validate
+        - freeze_approval
+        - can_freeze
       properties:
         dataset_version_id:
           type: string
@@ -5524,7 +5592,7 @@ components:
           maxLength: 128
         status:
           type: string
-          enum: [DRAFT, BUILDING, VALIDATING]
+          enum: [DRAFT, BUILDING, VALIDATING, FROZEN]
         created_by:
           type: string
           maxLength: 128
@@ -5579,6 +5647,18 @@ components:
             True only when the current actor is an ACTIVE project administrator, the DatasetVersion
             is VALIDATING and no validation result exists. It does not authorize approval, freeze
             or export.
+        freeze_approval:
+          description: >-
+            The pending or approved freeze request bound to the PASS validation, or null when no
+            passing validation exists.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetVersionFreezeApproval"
+            - type: "null"
+        can_freeze:
+          type: boolean
+          description: >-
+            True only for an ACTIVE project administrator other than the requester while a PASS-bound
+            freeze request is pending. The command still revalidates every technical guard.
     DatasetSplitPlanCreateRequest:
       type: object
       additionalProperties: false
@@ -5858,6 +5938,86 @@ components:
           type: string
           maxLength: 128
         validated_at:
+          type: string
+          format: date-time
+    DatasetVersionFreezeApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - approval_request_id
+        - validation_id
+        - status
+        - requested_by
+        - requested_at
+        - approval_decision_id
+        - approved_by
+        - approved_at
+      properties:
+        approval_request_id:
+          type: string
+          format: uuid
+        validation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, APPROVED]
+        requested_by:
+          type: string
+          maxLength: 128
+        requested_at:
+          type: string
+          format: date-time
+        approval_decision_id:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        approved_by:
+          oneOf:
+            - type: string
+              maxLength: 128
+            - type: "null"
+        approved_at:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+    DatasetVersionFreeze:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_version_id
+        - project_id
+        - status
+        - validation_id
+        - approval_request_id
+        - approval_decision_id
+        - frozen_by
+        - frozen_at
+      properties:
+        dataset_version_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: FROZEN
+        validation_id:
+          type: string
+          format: uuid
+        approval_request_id:
+          type: string
+          format: uuid
+        approval_decision_id:
+          type: string
+          format: uuid
+        frozen_by:
+          type: string
+          maxLength: 128
+        frozen_at:
           type: string
           format: date-time
     DatasetMemberSession:

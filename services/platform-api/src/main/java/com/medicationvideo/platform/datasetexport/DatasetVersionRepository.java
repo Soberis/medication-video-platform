@@ -17,6 +17,9 @@ interface DatasetVersionRepository extends JpaRepository<DatasetVersion, UUID> {
 	Optional<DatasetVersion> findByProjectIdAndBuildStartedByAndBuildStartIdempotencyKey(
 			UUID projectId, String buildStartedBy, String buildStartIdempotencyKey);
 
+	Optional<DatasetVersion> findByProjectIdAndFrozenByAndFreezeIdempotencyKey(
+			UUID projectId, String frozenBy, String freezeIdempotencyKey);
+
 	Optional<DatasetVersion> findByProjectIdAndDatasetVersionId(UUID projectId, UUID datasetVersionId);
 
 	@Query(value = """
