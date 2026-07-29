@@ -52,14 +52,17 @@ class DatasetVersionController {
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
 
 	private final DatasetVersionService service;
+	private final DatasetSplitPlanService splitPlanService;
 	private final DatasetVersionQueryService queryService;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
 	DatasetVersionController(
 			DatasetVersionService service,
+			DatasetSplitPlanService splitPlanService,
 			DatasetVersionQueryService queryService,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
+		this.splitPlanService = splitPlanService;
 		this.queryService = queryService;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
@@ -121,6 +124,29 @@ class DatasetVersionController {
 				.body(response);
 	}
 
+	@PostMapping("/{datasetVersionId}/split-plans")
+	ResponseEntity<DatasetSplitPlanResponse> createSplitPlan(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody DatasetSplitPlanCreateRequest request,
+			Authentication authentication) {
+		var response = this.splitPlanService.create(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
+				request.holdoutCount());
+		return ResponseEntity.status(HttpStatus.CREATED)
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new DatasetVersionException(
@@ -139,6 +165,9 @@ record DatasetVersionCreateRequest(
 		@NotEmpty
 		@Size(max = 100)
 		List<@NotNull UUID> captureSessionIds) {
+}
+
+record DatasetSplitPlanCreateRequest(@Min(1) @Max(99) int holdoutCount) {
 }
 
 final class DatasetVersionException extends RuntimeException {

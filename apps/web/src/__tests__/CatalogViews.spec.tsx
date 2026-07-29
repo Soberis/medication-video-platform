@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -491,6 +491,104 @@ describe('catalog views', () => {
     expect(screen.getByText('不可变候选快照')).toBeInTheDocument()
     expect(screen.getByText('1 / 1 路')).toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain('media_url')
+  })
+
+  it('retries one immutable split command with the same idempotency key and renders the fixed plan', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const secondSessionId = '41000000-0000-4000-8000-000000000002'
+    const splitPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/split-plans`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.can_create_split_plan = true
+    detail.members.push({
+      ...detail.members[0]!,
+      capture_session_id: secondSessionId,
+      candidate_index: 1,
+      streams: [],
+    })
+    let splitAttempts = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === splitPath) {
+        splitAttempts += 1
+        if (splitAttempts === 1) {
+          return Promise.resolve(
+            jsonResponse(
+              {
+                error_code: 'DATASET_SPLIT_PLAN_TEMPORARILY_UNAVAILABLE',
+                retryable: true,
+                request_id: 'request-dataset-split-0001',
+              },
+              503,
+            ),
+          )
+        }
+        return Promise.resolve(
+          jsonResponse(
+            {
+              dataset_split_plan_id: '92000000-0000-4000-8000-000000000001',
+              dataset_version_id: datasetVersionId,
+              policy_version: 'CAPTURE_SESSION_HASH_RANK_V1',
+              split_seed: 20260729,
+              pilot_count: 1,
+              holdout_count: 1,
+              created_by: 'local-admin',
+              created_at: '2026-07-29T03:00:00Z',
+              assignments: [
+                {
+                  capture_session_id: sessionId,
+                  candidate_index: 0,
+                  leakage_group_type: 'CAPTURE_SESSION',
+                  leakage_group_id: sessionId,
+                  split: 'PILOT',
+                  assignment_rank: 1,
+                },
+                {
+                  capture_session_id: secondSessionId,
+                  candidate_index: 1,
+                  leakage_group_type: 'CAPTURE_SESSION',
+                  leakage_group_id: secondSessionId,
+                  split: 'HOLDOUT',
+                  assignment_rank: 0,
+                },
+              ],
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('dataset-split-plan-0001') })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    expect(await screen.findByRole('button', { name: '固定划分' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '固定划分' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    await user.click(within(confirmDialog).getByRole('button', { name: '固定划分' }))
+
+    expect(await screen.findByText('DATASET_SPLIT_PLAN_TEMPORARILY_UNAVAILABLE')).toBeInTheDocument()
+    expect(screen.getByText('请求标识：request-dataset-split-0001')).toBeInTheDocument()
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /固定划分/ }))
+
+    expect(await screen.findByText('划分种子')).toBeInTheDocument()
+    expect(screen.getByText('20260729')).toBeInTheDocument()
+    expect(screen.getAllByText('试用组')).not.toHaveLength(0)
+    expect(screen.getAllByText('留出组')).not.toHaveLength(0)
+    expect(screen.queryByText('固定当前划分')).not.toBeInTheDocument()
+    const splitCalls = fetchMock.mock.calls.filter(([input]) => String(input) === splitPath)
+    expect(splitCalls).toHaveLength(2)
+    for (const [, init] of splitCalls) {
+      expect(init).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ holdout_count: 1 }),
+          headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-split-plan-0001' }),
+        }),
+      )
+    }
   })
 
   it('checks current admission only after an explicit action and explains changed evidence', async () => {
@@ -1294,6 +1392,8 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string) {
     status: 'DRAFT',
     created_by: 'local-admin',
     created_at: '2026-07-28T03:00:00Z',
+    split_plan: null,
+    can_create_split_plan: false,
     members: [
       {
         capture_session_id: sessionId,

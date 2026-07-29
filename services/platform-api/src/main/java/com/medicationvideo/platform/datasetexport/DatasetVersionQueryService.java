@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 
 @Service
 class DatasetVersionQueryService {
@@ -17,16 +18,22 @@ class DatasetVersionQueryService {
 	private final DatasetVersionRepository versionRepository;
 	private final DatasetMemberSessionRepository memberSessionRepository;
 	private final DatasetMemberStreamRepository memberStreamRepository;
+	private final DatasetSplitPlanRepository splitPlanRepository;
+	private final DatasetSplitAssignmentRepository splitAssignmentRepository;
 
 	DatasetVersionQueryService(
 			ProjectAccessService projectAccessService,
 			DatasetVersionRepository versionRepository,
 			DatasetMemberSessionRepository memberSessionRepository,
-			DatasetMemberStreamRepository memberStreamRepository) {
+			DatasetMemberStreamRepository memberStreamRepository,
+			DatasetSplitPlanRepository splitPlanRepository,
+			DatasetSplitAssignmentRepository splitAssignmentRepository) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberSessionRepository = memberSessionRepository;
 		this.memberStreamRepository = memberStreamRepository;
+		this.splitPlanRepository = splitPlanRepository;
+		this.splitAssignmentRepository = splitAssignmentRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -52,7 +59,7 @@ class DatasetVersionQueryService {
 
 	@Transactional(readOnly = true)
 	DatasetVersionDetailResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
-		this.projectAccessService.requireMember(projectId, actorId);
+		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 				.orElseThrow(DatasetVersionQueryService::notFound);
 		var streamsByMemberId = new HashMap<UUID, List<DatasetMemberStreamResponse>>();
@@ -68,7 +75,17 @@ class DatasetVersionQueryService {
 						member,
 						streamsByMemberId.getOrDefault(member.getDatasetMemberSessionId(), List.of())))
 				.toList();
-		return DatasetVersionDetailResponse.from(version, members);
+		var splitPlan = this.splitPlanRepository.findByDatasetVersionId(datasetVersionId)
+				.map(plan -> DatasetSplitPlanResponse.from(
+						plan,
+						this.splitAssignmentRepository.findByDatasetSplitPlanIdOrderByCandidateIndexAsc(
+								plan.getDatasetSplitPlanId())))
+				.orElse(null);
+		return DatasetVersionDetailResponse.from(
+				version,
+				members,
+				splitPlan,
+				role == ProjectRole.ADMIN && splitPlan == null && members.size() >= 2);
 	}
 
 	private static DatasetVersionException notFound() {

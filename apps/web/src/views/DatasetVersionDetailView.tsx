@@ -1,9 +1,10 @@
-import { Button, Card, Descriptions, Empty, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Card, Descriptions, Empty, InputNumber, Table, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  createDatasetSplitPlan,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   type DatasetAdmissionPreview,
@@ -13,6 +14,7 @@ import {
   type DatasetVersionCurrentAdmissionMember,
   type DatasetVersionMemberSession,
   type DatasetVersionMemberStream,
+  type DatasetSplitAssignment,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { assemblyStatusLabels, formatDateTime, qualityStatusLabels, shortId, statusTone } from '@/catalog-presentation'
@@ -60,6 +62,7 @@ export default function DatasetVersionDetailView() {
 
 function DatasetVersionDetailContent() {
   const { projectId = '', id: datasetVersionId = '' } = useParams()
+  const { message, modal } = AntdApp.useApp()
   const [detail, setDetail] = useState<DatasetVersionDetail | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
@@ -72,8 +75,14 @@ function DatasetVersionDetailContent() {
   const [currentAdmissionErrorCode, setCurrentAdmissionErrorCode] = useState('')
   const [currentAdmissionErrorMessage, setCurrentAdmissionErrorMessage] = useState('')
   const [currentAdmissionRequestId, setCurrentAdmissionRequestId] = useState<string | null>(null)
+  const [holdoutCount, setHoldoutCount] = useState(1)
+  const [splitPlanState, setSplitPlanState] = useState<'idle' | 'creating' | 'error'>('idle')
+  const [splitPlanErrorCode, setSplitPlanErrorCode] = useState('')
+  const [splitPlanErrorMessage, setSplitPlanErrorMessage] = useState('')
+  const [splitPlanRequestId, setSplitPlanRequestId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const currentAdmissionRequest = useRef<AbortController | null>(null)
+  const splitPlanIntent = useRef<{ holdoutCount: number; idempotencyKey: string } | null>(null)
 
   const streamCount = useMemo(
     () => detail?.members.reduce((total, member) => total + member.streams.length, 0) ?? 0,
@@ -141,6 +150,52 @@ function DatasetVersionDetailContent() {
     }
   }, [datasetVersionId, projectId])
 
+  const createSplit = useCallback(async () => {
+    const intent =
+      splitPlanIntent.current?.holdoutCount === holdoutCount
+        ? splitPlanIntent.current
+        : { holdoutCount, idempotencyKey: crypto.randomUUID() }
+    splitPlanIntent.current = intent
+    setSplitPlanState('creating')
+    setSplitPlanErrorCode('')
+    setSplitPlanErrorMessage('')
+    setSplitPlanRequestId(null)
+    try {
+      const splitPlan = await createDatasetSplitPlan(
+        projectId,
+        datasetVersionId,
+        intent.holdoutCount,
+        intent.idempotencyKey,
+      )
+      setDetail((current) =>
+        current ? { ...current, split_plan: splitPlan, can_create_split_plan: false } : current,
+      )
+      splitPlanIntent.current = null
+      setSplitPlanState('idle')
+      void message.success('数据划分已固定到当前草稿。')
+    } catch (error) {
+      setSplitPlanState('error')
+      if (error instanceof CatalogApiError) {
+        setSplitPlanErrorCode(error.errorCode)
+        setSplitPlanErrorMessage(error.message)
+        setSplitPlanRequestId(error.requestId)
+      } else {
+        setSplitPlanErrorCode('DATASET_SPLIT_PLAN_FAILED')
+        setSplitPlanErrorMessage('暂时无法生成数据划分，请稍后重试。')
+      }
+    }
+  }, [datasetVersionId, holdoutCount, message, projectId])
+
+  const confirmSplit = useCallback(() => {
+    modal.confirm({
+      title: '固定当前数据划分？',
+      content: `将 ${holdoutCount} 组设为留出组，其余设为试用组。划分在当前草稿内不可修改；如需其他划分，应新建草稿。`,
+      okText: '固定划分',
+      cancelText: '取消',
+      onOk: createSplit,
+    })
+  }, [createSplit, holdoutCount, modal])
+
   useEffect(() => {
     const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
@@ -178,7 +233,7 @@ function DatasetVersionDetailContent() {
             <div>
               <p className="app-eyebrow">不可变候选快照</p>
               <h1 id="dataset-version-title">{detail.display_name}</h1>
-              <p>以下证据只反映创建草稿时的事实；后续拆分、冻结和导出仍须单独验证。</p>
+              <p>以下证据只反映创建草稿时的事实；数据划分可单独固定，冻结和导出仍须后续验证。</p>
             </div>
             <div className="heading-tags">
               <Tag color="blue">草稿</Tag>
@@ -205,6 +260,50 @@ function DatasetVersionDetailContent() {
                 </div>
               </dl>
             </details>
+          </Card>
+          <Card className="detail-card" title={<strong>数据划分</strong>} variant="outlined">
+            <p className="form-hint">
+              每条配药操作只会进入一个组，避免同一操作同时出现在试用组和留出组；结果只属于当前草稿。
+            </p>
+            {detail.split_plan ? (
+              <SplitPlanEvidence projectId={projectId} splitPlan={detail.split_plan} />
+            ) : detail.members.length < 2 ? (
+              <p>当前只有一条候选配药操作，暂时无法同时建立试用组和留出组。</p>
+            ) : detail.can_create_split_plan ? (
+              <div className="dataset-draft-selection-toolbar">
+                <div>
+                  <strong>固定当前划分</strong>
+                  <span>至少保留一组作为试用组；固定后如需调整，应新建数据集草稿。</span>
+                </div>
+                <div className="dataset-draft-selection-actions">
+                  <label htmlFor="dataset-holdout-count">留出组数</label>
+                  <InputNumber
+                    id="dataset-holdout-count"
+                    min={1}
+                    max={detail.members.length - 1}
+                    precision={0}
+                    value={holdoutCount}
+                    onChange={(value) => setHoldoutCount(value ?? 1)}
+                  />
+                  <Button
+                    type="primary"
+                    loading={splitPlanState === 'creating'}
+                    onClick={confirmSplit}
+                  >
+                    固定划分
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p>尚未建立数据划分，请由项目管理员完成。</p>
+            )}
+            {splitPlanState === 'error' ? (
+              <div className="catalog-error" role="alert">
+                <strong>{splitPlanErrorCode}</strong>
+                <span>{splitPlanErrorMessage}</span>
+                {splitPlanRequestId ? <small>请求标识：{splitPlanRequestId}</small> : null}
+              </div>
+            ) : null}
           </Card>
           <Card
             className="detail-card"
@@ -304,6 +403,75 @@ function DatasetVersionDetailContent() {
           </Card>
         </>
       ) : null}
+    </>
+  )
+}
+
+function SplitPlanEvidence({
+  projectId,
+  splitPlan,
+}: {
+  projectId: string
+  splitPlan: NonNullable<DatasetVersionDetail['split_plan']>
+}) {
+  return (
+    <>
+      <Descriptions
+        column={{ xs: 1, sm: 2, lg: 4 }}
+        items={[
+          { key: 'pilot', label: '试用组', children: `${splitPlan.pilot_count} 组` },
+          { key: 'holdout', label: '留出组', children: `${splitPlan.holdout_count} 组` },
+          { key: 'seed', label: '划分种子', children: splitPlan.split_seed },
+          { key: 'creator', label: '固定人', children: splitPlan.created_by },
+        ]}
+      />
+      <Table<DatasetSplitAssignment>
+        dataSource={splitPlan.assignments}
+        rowKey="capture_session_id"
+        pagination={false}
+        size="small"
+        columns={[
+          {
+            title: '候选顺序',
+            width: 110,
+            render: (_, row) => row.candidate_index + 1,
+          },
+          {
+            title: '配药操作',
+            render: (_, row) => (
+              <Link className="text-link table-action-link" to={paths.session(projectId, row.capture_session_id)}>
+                {shortId(row.capture_session_id)}
+              </Link>
+            ),
+          },
+          {
+            title: '分组',
+            width: 130,
+            render: (_, row) => (
+              <Tag color={row.split === 'HOLDOUT' ? 'gold' : 'blue'}>
+                {row.split === 'HOLDOUT' ? '留出组' : '试用组'}
+              </Tag>
+            ),
+          },
+        ]}
+      />
+      <details className="technical-facts">
+        <summary>查看划分标识</summary>
+        <dl>
+          <div>
+            <dt>策略版本</dt>
+            <dd>
+              <code>{splitPlan.policy_version}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>SplitPlan ID</dt>
+            <dd>
+              <code>{splitPlan.dataset_split_plan_id}</code>
+            </dd>
+          </div>
+        </dl>
+      </details>
     </>
   )
 }

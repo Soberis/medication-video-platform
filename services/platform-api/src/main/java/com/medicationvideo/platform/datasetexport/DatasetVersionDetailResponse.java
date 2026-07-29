@@ -11,14 +11,19 @@ record DatasetVersionDetailResponse(
 		DatasetVersionStatus status,
 		String createdBy,
 		Instant createdAt,
-		List<DatasetMemberSessionResponse> members) {
+		List<DatasetMemberSessionResponse> members,
+		DatasetSplitPlanResponse splitPlan,
+		boolean canCreateSplitPlan) {
 
 	DatasetVersionDetailResponse {
 		members = List.copyOf(members);
 	}
 
 	static DatasetVersionDetailResponse from(
-			DatasetVersion version, List<DatasetMemberSessionResponse> members) {
+			DatasetVersion version,
+			List<DatasetMemberSessionResponse> members,
+			DatasetSplitPlanResponse splitPlan,
+			boolean canCreateSplitPlan) {
 		return new DatasetVersionDetailResponse(
 				version.getDatasetVersionId(),
 				version.getProjectId(),
@@ -26,7 +31,9 @@ record DatasetVersionDetailResponse(
 				version.getStatus(),
 				version.getCreatedBy(),
 				version.getCreatedAt(),
-				members);
+				members,
+				splitPlan,
+				canCreateSplitPlan);
 	}
 }
 

@@ -204,6 +204,106 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void administratorCreatesOneReproducibleCaptureSessionSplitPlan() throws Exception {
+		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
+		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
+		var thirdSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(30));
+		var draftResponse = createDatasetDraft(
+				ADMIN_TOKEN,
+				List.of(firstSessionId, secondSessionId, thirdSessionId),
+				"dataset-version-split-plan-" + UUID.randomUUID())
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		var datasetVersionId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.<String>read(draftResponse, "$.dataset_version_id"));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.split_plan").isEmpty())
+				.andExpect(jsonPath("$.can_create_split_plan").value(true));
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.can_create_split_plan").value(false));
+
+		createDatasetSplitPlan(
+				MEMBER_TOKEN, datasetVersionId, 1, "dataset-split-member-" + UUID.randomUUID())
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		createDatasetSplitPlan(
+				ADMIN_TOKEN, datasetVersionId, 3, "dataset-split-invalid-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_SPLIT_PLAN_HOLDOUT_COUNT_INVALID"));
+		assertEquals(0, count("SELECT count(*) FROM dataset_split_plan WHERE project_id = ?", PROJECT_ID));
+
+		var idempotencyKey = "dataset-split-plan-" + UUID.randomUUID();
+		var splitResponse = createDatasetSplitPlan(ADMIN_TOKEN, datasetVersionId, 1, idempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
+				.andExpect(jsonPath("$.policy_version").value("CAPTURE_SESSION_HASH_RANK_V1"))
+				.andExpect(jsonPath("$.split_seed").isNumber())
+				.andExpect(jsonPath("$.pilot_count").value(2))
+				.andExpect(jsonPath("$.holdout_count").value(1))
+				.andExpect(jsonPath("$.assignments.length()").value(3))
+				.andExpect(jsonPath("$.assignments[0].candidate_index").value(0))
+				.andExpect(jsonPath("$.assignments[1].candidate_index").value(1))
+				.andExpect(jsonPath("$.assignments[2].candidate_index").value(2))
+				.andExpect(jsonPath("$.assignments[0].leakage_group_type").value("CAPTURE_SESSION"))
+				.andReturn().getResponse().getContentAsString();
+		var splitPlanId = UUID.fromString(
+				com.jayway.jsonpath.JsonPath.<String>read(splitResponse, "$.dataset_split_plan_id"));
+
+		assertEquals(1, count("SELECT count(*) FROM dataset_split_plan WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(3, count("SELECT count(*) FROM dataset_split_assignment WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM dataset_split_assignment
+				WHERE dataset_version_id = ? AND split = 'HOLDOUT'
+				""", datasetVersionId));
+		assertEquals(3, count("""
+				SELECT count(*) FROM dataset_split_assignment
+				WHERE dataset_version_id = ? AND leakage_group_id = capture_session_id
+				""", datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_SPLIT_PLAN_CREATED' AND object_id = ?
+				""", splitPlanId.toString()));
+
+		createDatasetSplitPlan(ADMIN_TOKEN, datasetVersionId, 1, idempotencyKey)
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_split_plan_id").value(splitPlanId.toString()));
+		createDatasetSplitPlan(ADMIN_TOKEN, datasetVersionId, 2, idempotencyKey)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_SPLIT_PLAN_IDEMPOTENCY_KEY_REUSED"));
+		createDatasetSplitPlan(
+				ADMIN_TOKEN, datasetVersionId, 1, "dataset-split-second-" + UUID.randomUUID())
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_SPLIT_PLAN_ALREADY_EXISTS"));
+		assertEquals(1, count("SELECT count(*) FROM dataset_split_plan WHERE dataset_version_id = ?", datasetVersionId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_SPLIT_PLAN_CREATED' AND object_id = ?
+				""", splitPlanId.toString()));
+
+		this.mockMvc.perform(get(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.split_plan.dataset_split_plan_id").value(splitPlanId.toString()))
+				.andExpect(jsonPath("$.split_plan.assignments.length()").value(3))
+				.andExpect(jsonPath("$.can_create_split_plan").value(false));
+	}
+
+	@Test
 	void datasetDraftRejectsAnIdempotencyReplayWhoseSessionOrderChanged() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
@@ -1058,6 +1158,22 @@ class AnnotationTaskContractTests {
 		return createDatasetDraft(token, List.of(captureSessionId), idempotencyKey);
 	}
 
+	private org.springframework.test.web.servlet.ResultActions createDatasetSplitPlan(
+			String token,
+			UUID datasetVersionId,
+			int holdoutCount,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/split-plans",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-split-request-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"holdout_count\":" + holdoutCount + "}"));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1235,6 +1351,8 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM dataset_split_assignment WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM dataset_split_plan WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_member_stream WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_member_session WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_version WHERE project_id = ?", projectId);

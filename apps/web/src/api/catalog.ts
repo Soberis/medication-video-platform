@@ -159,8 +159,33 @@ export interface DatasetVersionMemberSession {
   streams: DatasetVersionMemberStream[]
 }
 
+export type DatasetSplit = 'PILOT' | 'HOLDOUT'
+
+export interface DatasetSplitAssignment {
+  capture_session_id: string
+  candidate_index: number
+  leakage_group_type: 'CAPTURE_SESSION'
+  leakage_group_id: string
+  split: DatasetSplit
+  assignment_rank: number
+}
+
+export interface DatasetSplitPlan {
+  dataset_split_plan_id: string
+  dataset_version_id: string
+  policy_version: 'CAPTURE_SESSION_HASH_RANK_V1'
+  split_seed: number
+  pilot_count: number
+  holdout_count: number
+  created_by: string
+  created_at: string
+  assignments: DatasetSplitAssignment[]
+}
+
 export interface DatasetVersionDetail extends DatasetVersionDraft {
   members: DatasetVersionMemberSession[]
+  split_plan: DatasetSplitPlan | null
+  can_create_split_plan: boolean
 }
 
 export interface DatasetVersionCurrentAdmissionEvidenceChange {
@@ -337,6 +362,10 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_ACCESS_DENIED: '只有项目管理员可以创建数据集草稿。',
   DATASET_VERSION_NOT_FOUND: '未找到该数据集草稿，或它不属于当前项目。',
   DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE: '暂时无法核对当前准入事实，请稍后重试。',
+  DATASET_SPLIT_PLAN_TOO_FEW_MEMBERS: '至少需要两条候选配药操作才能建立试用组和留出组。',
+  DATASET_SPLIT_PLAN_HOLDOUT_COUNT_INVALID: '留出组数量必须小于候选配药操作总数。',
+  DATASET_SPLIT_PLAN_ALREADY_EXISTS: '该草稿已经固定数据划分，请刷新页面查看。',
+  DATASET_SPLIT_PLAN_IDEMPOTENCY_KEY_REUSED: '本次划分请求与已提交请求冲突，请刷新后重试。',
   INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
@@ -456,6 +485,32 @@ export function getDatasetVersionCurrentAdmission(
     `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/current-admission`,
     signal,
   )
+}
+
+export async function createDatasetSplitPlan(
+  projectId: string,
+  datasetVersionId: string,
+  holdoutCount: number,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetSplitPlan> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/split-plans`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ holdout_count: holdoutCount }),
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetSplitPlan
+  throw await toCatalogError(response)
 }
 
 export function listClipAssets(

@@ -4,6 +4,7 @@ import {
   authorizeClipAssetPlayback,
   deleteClipAsset,
   createDatasetVersionDraft,
+  createDatasetSplitPlan,
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
@@ -368,6 +369,43 @@ describe('catalog API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/current-admission`,
       expect.objectContaining({ method: 'GET', cache: 'no-store', signal: controller.signal }),
+    )
+  })
+
+  it('creates one idempotent pilot/holdout split plan for a dataset draft', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const idempotencyKey = 'dataset-split-plan-0001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_split_plan_id: '91000000-0000-4000-8000-000000000001',
+          dataset_version_id: datasetVersionId,
+          policy_version: 'CAPTURE_SESSION_HASH_RANK_V1',
+          split_seed: 20260729,
+          pilot_count: 1,
+          holdout_count: 1,
+          created_by: 'local-admin',
+          created_at: '2026-07-29T03:00:00Z',
+          assignments: [],
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createDatasetSplitPlan(projectId, datasetVersionId, 1, idempotencyKey)).resolves.toMatchObject({
+      policy_version: 'CAPTURE_SESSION_HASH_RANK_V1',
+      holdout_count: 1,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/split-plans`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        body: JSON.stringify({ holdout_count: 1 }),
+        headers: expect.objectContaining({ 'Idempotency-Key': idempotencyKey }),
+      }),
     )
   })
 })

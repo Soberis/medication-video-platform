@@ -1,7 +1,7 @@
 # 状态机与领域守卫
 
 > 文档状态：P0 详细设计（评审稿）  
-> 最后更新：2026-07-23
+> 最后更新：2026-07-29
 
 ## 1. 原则
 
@@ -271,6 +271,10 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 | BUILDING → VALIDATING | session、stream、variant、revision 和泄漏分组快照完成 |
 | VALIDATING → FROZEN | 准入、引用、摘要、隐私、split、防泄漏和格式校验全部通过；冻结审批完成 |
 | FROZEN → RETIRED | 管理员批准；不修改历史导出和审计 |
+
+当前 V39 允许在 `DRAFT` 内固定一次 CaptureSession 级 pilot/holdout 计划，但不会仅凭这一事实推进
+`BUILDING`；选择规则、label/clean/export profile 等其余守卫仍须全部固定。计划不可改写，调整划分必须
+创建新 DatasetVersion。
 
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 

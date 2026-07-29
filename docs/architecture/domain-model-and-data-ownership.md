@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-26
+> 最后更新：2026-07-29
 
 ## 1. 目标与边界
 
@@ -291,7 +291,7 @@ flowchart LR
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_assignment | 选择、准入、防泄漏、验证和冻结 |
+| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment | 选择、准入、防泄漏、验证和冻结 |
 | ExportProfile | export_profile | 格式、采样、目录和字段版本 |
 | DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
 
@@ -314,6 +314,9 @@ flowchart LR
 - 当前单 ClipAsset AnnotationTask 和 post-clean 结果不能直接成为正式数据集成员；正式准入以
   CaptureSession 为成员与 split 最小单位，并聚合实际纳入的全部 CameraStream。
 - 同一 `leakage_group_id` 不得跨 split。
+- 当前 V39 仅在 `DRAFT` 内建立一次不可变 `CAPTURE_SESSION_HASH_RANK_V1` pilot/holdout 计划：
+  CaptureSession 同时作为成员和泄漏组，算法版本、正整数 seed、排名与实际结果全部保存；计划不可更新，
+  调整留出数量必须创建新 DatasetVersion。该计划不触发 `BUILDING`，也不代表准入、冻结或导出已完成。
 - VALIDATING 发现摘要变化、引用缺失或规则冲突时必须失败，不能自动使用最新数据替换。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
 - 导出只读取 FROZEN 快照；导出失败不改变冻结版本。

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.41.0
+  version: 0.42.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -26,6 +26,9 @@ info:
     label schema, let an assignee submit one schema-bound non-overlapping time-range revision, let an
     independent project administrator record one review decision, return a rejected task for a
     later immutable revision, or complete an approved task with a persisted post-cleaning result,
+    let project administrators snapshot eligible CaptureSessions into a DRAFT DatasetVersion and
+    fix one reproducible CaptureSession-level pilot/holdout split plan while members read its
+    immutable evidence separately from current admission facts,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -221,7 +224,8 @@ paths:
       summary: Read an immutable dataset-draft evidence snapshot
       description: >-
         Requires ACTIVE project membership. Returns the DRAFT's persisted session and stream
-        evidence snapshot, without resolving current mutable facts or exposing media URLs.
+        evidence snapshot and its immutable split plan when one exists, without resolving current
+        mutable facts or exposing media URLs.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetVersionId"
@@ -249,6 +253,73 @@ paths:
                 $ref: "#/components/schemas/DatasetVersionError"
         "404":
           description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/split-plans:
+    post:
+      operationId: createDatasetSplitPlan
+      tags:
+        - Dataset Admission
+      summary: Fix one reproducible pilot/holdout plan for a dataset draft
+      description: >-
+        Requires ACTIVE ADMIN membership. Creates exactly one immutable split plan for a DRAFT with
+        at least two candidate CaptureSessions. CAPTURE_SESSION_HASH_RANK_V1 treats each
+        CaptureSession as one leakage group, persists a positive random seed, ranks all groups by a
+        stable SHA-256 key and assigns the requested number of lowest-ranked groups to HOLDOUT; all
+        remaining groups are PILOT. Replaying the same request with the same idempotency key returns
+        the same plan. A different plan requires a new DatasetVersion. This endpoint does not freeze
+        the draft, create an export or authorize data release.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetSplitPlanCreateRequest"
+      responses:
+        "201":
+          description: The immutable split plan was created or replayed idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetSplitPlan"
+        "400":
+          description: The request syntax, path parameter, header or holdout count is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project or DatasetVersion is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The draft has too few members, the holdout count would leave a split empty, a plan
+            already exists, or the idempotency key conflicts.
           content:
             application/problem+json:
               schema:
@@ -5177,6 +5248,8 @@ components:
         - created_by
         - created_at
         - members
+        - split_plan
+        - can_create_split_plan
       properties:
         dataset_version_id:
           type: string
@@ -5198,8 +5271,113 @@ components:
           format: date-time
         members:
           type: array
+          maxItems: 100
           items:
             $ref: "#/components/schemas/DatasetMemberSession"
+        split_plan:
+          description: The immutable pilot/holdout plan, or null before an administrator creates it.
+          oneOf:
+            - $ref: "#/components/schemas/DatasetSplitPlan"
+            - type: "null"
+        can_create_split_plan:
+          type: boolean
+          description: >-
+            True only when the current actor is an ACTIVE project administrator, the DRAFT has at
+            least two members and no split plan exists. This is UI capability metadata, not freeze
+            or release authorization.
+    DatasetSplitPlanCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - holdout_count
+      properties:
+        holdout_count:
+          type: integer
+          minimum: 1
+          maximum: 99
+          description: >-
+            Number of CaptureSession leakage groups assigned to HOLDOUT. It must be lower than the
+            persisted candidate-member count so PILOT remains non-empty.
+    DatasetSplitPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_split_plan_id
+        - dataset_version_id
+        - policy_version
+        - split_seed
+        - pilot_count
+        - holdout_count
+        - created_by
+        - created_at
+        - assignments
+      properties:
+        dataset_split_plan_id:
+          type: string
+          format: uuid
+        dataset_version_id:
+          type: string
+          format: uuid
+        policy_version:
+          type: string
+          const: CAPTURE_SESSION_HASH_RANK_V1
+        split_seed:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+          description: Persisted seed used to reproduce the SHA-256 rank keys.
+        pilot_count:
+          type: integer
+          minimum: 1
+          maximum: 99
+        holdout_count:
+          type: integer
+          minimum: 1
+          maximum: 99
+        created_by:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+        assignments:
+          type: array
+          minItems: 2
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/DatasetSplitAssignment"
+    DatasetSplitAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - candidate_index
+        - leakage_group_type
+        - leakage_group_id
+        - split
+        - assignment_rank
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+        candidate_index:
+          type: integer
+          minimum: 0
+          maximum: 99
+        leakage_group_type:
+          type: string
+          const: CAPTURE_SESSION
+        leakage_group_id:
+          type: string
+          format: uuid
+          description: Equal to capture_session_id for CAPTURE_SESSION_HASH_RANK_V1.
+        split:
+          type: string
+          enum: [PILOT, HOLDOUT]
+        assignment_rank:
+          type: integer
+          minimum: 0
+          maximum: 99
     DatasetMemberSession:
       type: object
       additionalProperties: false
