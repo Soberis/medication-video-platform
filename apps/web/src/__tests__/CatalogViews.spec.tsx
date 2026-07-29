@@ -832,6 +832,30 @@ describe('catalog views', () => {
     expect((await screen.findAllByText('符合训练数据要求')).length).toBeGreaterThan(0)
   })
 
+  it('loads minimized asset activity only after an explicit request', async () => {
+    const fetchMock = stubAsset({
+      role: 'MEMBER',
+      status: 'UPLOADED',
+      activity: true,
+    })
+    const user = userEvent.setup()
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+    const button = await screen.findByRole('button', { name: '查看操作记录' })
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).includes(`/clip-assets/${assetId}/activity`)),
+    ).toBe(false)
+
+    await user.click(button)
+
+    expect(await screen.findByText('获取视频播放授权')).toBeInTheDocument()
+    expect(screen.getByText('用户 · reviewer')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/clip-assets/${assetId}/activity?limit=20`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+    expect(screen.queryByText('must-not-be-returned')).not.toBeInTheDocument()
+  })
+
   it('lets a project member play an uploaded video and separately start media detection', async () => {
     const fetchMock = stubAsset({
       role: 'MEMBER',
@@ -982,6 +1006,7 @@ function stubAsset(options: {
   playback?: boolean
   mediaProbe?: boolean
   annotationTask?: boolean
+  activity?: boolean
 }) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -1001,6 +1026,27 @@ function stubAsset(options: {
       return Promise.resolve(jsonResponse({ items: options.memberships ?? [] }))
     if (url.endsWith('/media-report'))
       return Promise.resolve(jsonResponse(options.mediaReport ?? verifiedMediaReport()))
+    if (url.includes(`/clip-assets/${assetId}/activity`) && options.activity)
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              event_id: 'f0000000-0000-4000-8000-000000000001',
+              occurred_at_utc: '2026-07-29T02:00:00Z',
+              actor_type: 'USER',
+              actor_id: 'reviewer',
+              action: 'CLIP_ASSET_PLAYBACK_GRANTED',
+              object_type: 'ClipAsset',
+              object_id: assetId,
+              object_version: '1',
+              outcome: 'SUCCEEDED',
+              reason_code: 'DATA_REVIEW',
+              request_id: 'playback-request-0001',
+            },
+          ],
+          next_cursor: null,
+        }),
+      )
     if (url.endsWith('/playback-grants') && options.playback)
       return Promise.resolve(
         jsonResponse({

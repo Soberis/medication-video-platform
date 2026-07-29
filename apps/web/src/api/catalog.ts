@@ -211,6 +211,20 @@ export interface ClipAssetRead {
   updated_at: string
 }
 
+export interface ClipAssetActivityItem {
+  event_id: string
+  occurred_at_utc: string
+  actor_type: 'USER' | 'SERVICE' | 'SYSTEM'
+  actor_id: string
+  action: string
+  object_type: string
+  object_id: string
+  object_version: string | null
+  outcome: 'SUCCEEDED' | 'DENIED' | 'FAILED'
+  reason_code: string
+  request_id: string
+}
+
 export interface CaptureEventLogRead {
   capture_event_log_id: string
   batch_id: string
@@ -486,8 +500,22 @@ export function listCaptureEventLogs(
 }
 
 export function getClipAsset(projectId: string, clipAssetId: string, signal?: AbortSignal) {
-  return readJson<ClipAssetRead>(
+	return readJson<ClipAssetRead>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
+    signal,
+	)
+}
+
+export function listClipAssetActivity(
+  projectId: string,
+  clipAssetId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ limit: '20' })
+  add(query, 'cursor', cursor ?? undefined)
+  return readJson<CatalogPage<ClipAssetActivityItem>>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/activity?${query.toString()}`,
     signal,
   )
 }

@@ -34,6 +34,7 @@ import {
 } from '@/api/quality'
 import { paths } from '@/app/paths'
 import { assetStatusLabels, statusTone } from '@/catalog-presentation'
+import { AssetActivityCard } from '@/components/AssetActivityCard'
 import {
   AnnotationTaskCard,
   AssetFacts,
@@ -612,6 +613,7 @@ export default function AssetDetailView() {
             />
           ) : null}
           <AssetFacts detail={detail} projectId={projectId} />
+          <AssetActivityCard key={assetId} assetId={assetId} projectId={projectId} />
           {canDelete ? (
             <DangerZoneCard isDeleting={isDeleting} onDelete={() => void confirmDelete()} />
           ) : null}

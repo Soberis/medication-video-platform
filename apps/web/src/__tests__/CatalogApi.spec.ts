@@ -7,6 +7,7 @@ import {
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
+  listClipAssetActivity,
   listCaptureEventLogs,
   listDatasetVersions,
   requestClipAssetMediaProbe,
@@ -175,6 +176,50 @@ describe('catalog API', () => {
     expect(requestUrl.searchParams.get('device_id')).toBe('synthetic-edge-01')
     expect(requestUrl.searchParams.get('indexed_from')).toBe('2026-07-28T00:00:00Z')
     expect(requestUrl.searchParams.get('indexed_before')).toBe('2026-07-29T00:00:00Z')
+    expect(requestUrl.searchParams.get('cursor')).toBe('opaque-previous-cursor')
+    expect(options).toMatchObject({ method: 'GET', cache: 'no-store', signal: controller.signal })
+  })
+
+  it('reads minimized asset activity with an opaque cursor and no-store semantics', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              event_id: '71000000-0000-4000-8000-000000000001',
+              occurred_at_utc: '2026-07-29T02:00:00Z',
+              actor_type: 'USER',
+              actor_id: 'reviewer',
+              action: 'CLIP_ASSET_PLAYBACK_GRANTED',
+              object_type: 'ClipAsset',
+              object_id: clipAssetId,
+              object_version: '1',
+              outcome: 'SUCCEEDED',
+              reason_code: 'DATA_REVIEW',
+              request_id: 'playback-request-0001',
+            },
+          ],
+          next_cursor: 'opaque-next-cursor',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+
+    await expect(
+      listClipAssetActivity(projectId, clipAssetId, 'opaque-previous-cursor', controller.signal),
+    ).resolves.toMatchObject({
+      items: [{ action: 'CLIP_ASSET_PLAYBACK_GRANTED' }],
+      next_cursor: 'opaque-next-cursor',
+    })
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const requestUrl = new URL(url, 'http://localhost')
+    expect(requestUrl.pathname).toBe(
+      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/activity`,
+    )
+    expect(requestUrl.searchParams.get('limit')).toBe('20')
     expect(requestUrl.searchParams.get('cursor')).toBe('opaque-previous-cursor')
     expect(options).toMatchObject({ method: 'GET', cache: 'no-store', signal: controller.signal })
   })

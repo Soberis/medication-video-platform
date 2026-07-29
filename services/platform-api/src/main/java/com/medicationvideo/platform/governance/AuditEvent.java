@@ -95,4 +95,44 @@ class AuditEvent {
 	UUID getEventId() {
 		return this.eventId;
 	}
+
+	Instant getOccurredAtUtc() {
+		return this.occurredAtUtc;
+	}
+
+	AuditActorType getActorType() {
+		return this.actorType;
+	}
+
+	String getActorId() {
+		return this.actorId;
+	}
+
+	String getAction() {
+		return this.action;
+	}
+
+	String getObjectType() {
+		return this.objectType;
+	}
+
+	String getObjectId() {
+		return this.objectId;
+	}
+
+	String getObjectVersion() {
+		return this.objectVersion;
+	}
+
+	AuditOutcome getOutcome() {
+		return this.outcome;
+	}
+
+	String getReasonCode() {
+		return this.reasonCode;
+	}
+
+	String getRequestId() {
+		return this.requestId;
+	}
 }

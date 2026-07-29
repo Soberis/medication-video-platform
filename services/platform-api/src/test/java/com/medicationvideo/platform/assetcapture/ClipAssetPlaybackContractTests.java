@@ -1,6 +1,8 @@
 package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.jayway.jsonpath.JsonPath;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
@@ -97,6 +100,110 @@ class ClipAssetPlaybackContractTests {
 				  AND authorization_reference = 'PROJECT_MEMBERSHIP_MEMBER'
 				  AND details_json::text NOT LIKE '%storage.invalid%'
 				""", PROJECT_ID, requestId));
+	}
+
+	@Test
+	void listsDirectAndExplicitlyRelatedAuditActivityWithoutSensitiveDetails() throws Exception {
+		var clipAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
+		var playbackRequestId = "playback-activity-" + UUID.randomUUID();
+		grant(clipAssetId, MEMBER_TOKEN, playbackRequestId)
+				.andExpect(status().isOk());
+		var relatedEventId = UUID.randomUUID();
+		this.jdbcTemplate.update("""
+				INSERT INTO audit_event (
+				    event_id, occurred_at_utc, actor_type, actor_id, project_id, action,
+				    object_type, object_id, object_version, outcome, reason_code, request_id,
+				    trace_id, authorization_reference, details_json)
+				VALUES (?, ?, 'USER', ?, ?, 'CLIP_ASSET_QUALITY_REVIEWED',
+				        'QualityReview', ?, '1', 'SUCCEEDED', 'MEETS_REQUIREMENTS', ?,
+				        'trace-must-not-be-returned', 'PROJECT_MEMBERSHIP_MEMBER',
+				        CAST(? AS jsonb))
+				""",
+				relatedEventId,
+				Timestamp.from(BASE_TIME.plusSeconds(10)),
+				ProjectMembershipTestData.MEMBER_ACTOR,
+				PROJECT_ID,
+				UUID.randomUUID().toString(),
+				"quality-activity-" + UUID.randomUUID(),
+				"{\"clip_asset_id\":\"" + clipAssetId + "\",\"private_detail\":\"must-not-be-returned\"}");
+
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/activity",
+					PROJECT_ID,
+					clipAssetId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.items.length()").value(2))
+				.andExpect(jsonPath("$.items[0].action").value("CLIP_ASSET_PLAYBACK_GRANTED"))
+				.andExpect(jsonPath("$.items[1].event_id").value(relatedEventId.toString()))
+				.andExpect(jsonPath("$.items[1].action").value("CLIP_ASSET_QUALITY_REVIEWED"))
+				.andExpect(jsonPath("$.items[1].actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andExpect(jsonPath("$.items[1].request_id").exists())
+				.andExpect(jsonPath("$.items[1].details_json").doesNotExist())
+				.andExpect(jsonPath("$.items[1].trace_id").doesNotExist())
+				.andExpect(jsonPath("$.items[1].authorization_reference").doesNotExist())
+				.andExpect(jsonPath("$.items[1].media_url").doesNotExist())
+				.andExpect(jsonPath("$.next_cursor").doesNotExist());
+	}
+
+	@Test
+	void paginatesAssetActivityWithAnOpaqueResourceSpecificCursor() throws Exception {
+		var clipAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
+		grant(clipAssetId, MEMBER_TOKEN, "playback-page-one-" + UUID.randomUUID())
+				.andExpect(status().isOk());
+		grant(clipAssetId, ADMIN_TOKEN, "playback-page-two-" + UUID.randomUUID())
+				.andExpect(status().isOk());
+
+		var firstPage = this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/activity",
+					PROJECT_ID,
+					clipAssetId)
+				.param("limit", "1")
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.next_cursor").isNotEmpty())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String cursor = JsonPath.read(firstPage, "$.next_cursor");
+		String firstEventId = JsonPath.read(firstPage, "$.items[0].event_id");
+
+		var secondPage = this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/activity",
+					PROJECT_ID,
+					clipAssetId)
+				.param("limit", "1")
+				.param("cursor", cursor)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.next_cursor").doesNotExist())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String secondEventId = JsonPath.read(secondPage, "$.items[0].event_id");
+		assertNotEquals(firstEventId, secondEventId);
+
+		var anotherAssetId = insertClipAsset("UPLOADED", "video/mp4", false);
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/activity",
+					PROJECT_ID,
+					anotherAssetId)
+				.param("cursor", cursor)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
+
+		this.mockMvc.perform(get(
+					"/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/activity",
+					PROJECT_ID,
+					clipAssetId)
+				.param("cursor", "not-a-valid-cursor")
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
 	}
 
 	@Test
