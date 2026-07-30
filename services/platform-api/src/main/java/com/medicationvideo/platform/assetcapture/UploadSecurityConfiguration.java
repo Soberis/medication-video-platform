@@ -58,8 +58,11 @@ class PlatformSecurityConfiguration {
 		var csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
 		csrfTokenRepository.setCookiePath("/");
 		http
-				.securityMatcher(request -> !request.getRequestURI()
-						.startsWith("/api/v1/internal/media-jobs/"))
+				.securityMatcher(request -> {
+					var requestUri = request.getRequestURI();
+					return !requestUri.startsWith("/api/v1/internal/media-jobs/")
+							&& !requestUri.startsWith("/api/v1/internal/dataset-exports/");
+				})
 				.securityContext(context -> context
 						.securityContextRepository(securityContextRepository)
 						.requireExplicitSave(false))

@@ -4,18 +4,19 @@
 
 ## 当前阶段
 
-Sprint 0 已完成，上传/资产和最小人工审核、标注、独立复核、后置清洗已形成可运行切片；Sprint 3 已交付可解释的数据集准入、`DRAFT` 草稿、可复现划分、不可变构建配置、显式启动、关系快照封印、冻结前技术校验、独立冻结审批、冻结版本导出申请和按需审批准备检查。`DatasetVersion` 当前可从 `DRAFT → BUILDING → VALIDATING → FROZEN`；冻结后可建立状态为 `REQUESTED` 的 `DatasetExport`，仅表示导出申请等待审批。下一步把独立导出审批与真实后台生成消费者作为一个闭环实现。
+Sprint 0 已完成，上传/资产和最小人工审核、标注、独立复核、后置清洗已形成可运行切片；Sprint 3 已交付可解释的数据集准入、`DRAFT` 草稿、可复现划分、不可变构建配置、显式启动、关系快照封印、冻结前技术校验、独立冻结审批，以及 Step-only 训练包的申请、独立审批、后台生成、服务端校验和短期下载授权。`DatasetVersion` 当前可从 `DRAFT → BUILDING → VALIDATING → FROZEN`，`DatasetExport` 可从 `REQUESTED → QUEUED → RUNNING → AVAILABLE/FAILED`，可重试错误经 `RETRY_WAIT` 创建新 attempt。
 
 - Core API 是 Java 21、Spring Boot 和 Spring Modulith 模块化单体；
 - Web 已支持授权项目、Session、视频资产、文件夹筛选和平台本地上传；
-- PostgreSQL、S3 兼容对象存储、RabbitMQ 和 Media Worker 已用于本地合成数据闭环；
-- Redis、CVAT、Export Worker、外部 IdP 集成和 AI 插件尚未启用；
+- PostgreSQL、S3 兼容对象存储、RabbitMQ、Media Worker 和 Export Worker 已用于本地合成数据闭环；
+- Redis、CVAT、外部 IdP 集成和 AI 插件尚未启用；
 - 已完成项目内视频人工查看：ACTIVE 项目 ADMIN/MEMBER 可在上传完整性校验完成后显式申请短期只读地址，媒体检测不阻断查看；签发会审计且 URL 不落库。P0 不再运行独立隐私评估或隔离子系统，意外敏感内容按质量不合格处理并由管理员软删除。
 - 项目管理员可以修改项目名称或归档项目；归档从日常列表移除并停止后续访问，但不物理删除视频、对象存储对象或审计。视频删除同样是可审计软删除；物理销毁不属于 P0 用户功能。
 - 已完成最小人工质量判断、主 Step 标注、独立复核与返工：项目成员可对已入库视频记录合格、不合格或需复核及固定原因；管理员只能为合格视频创建并分配一个标注任务；受分配成员可提交时间段标注与可选说明；另一名项目管理员可记录一次通过/不通过决定。不通过会把任务退回受分配成员，下一次提交产生新 revision；所有提交和复核都保留审计。任务列表在同一次服务端一致读中返回当前可见范围的待提交、待修改、待复核和已完成数量，不由浏览器拼接统计。对象框与 COCO 已按 V1.10 后置到 P1。
 - 媒体探测结果会投影为 CameraStream/CaptureSession 的入库数量、组装状态和技术检测状态；配药操作详情展示训练数据准备度及阻断证据。项目管理员可为当前符合条件的 CaptureSession 显式创建 `DRAFT` DatasetVersion，服务端重新校验并固定成员与证据快照；拥有至少两个成员的草稿可固定一次 CaptureSession 级 pilot/holdout 划分，并在标签、清洗证据一致后固定一次最小构建配置。项目成员可按需运行只读构建准备检查；管理员明确确认后，服务端在同一事务再次核对当前准入与证据，只有零阻断时才进入 `BUILDING`。随后可把既有 session、stream、原始 ClipAsset 摘要、revision、清洗和泄漏分组关系封印为确定性快照，并进入 `VALIDATING`。管理员可再显式执行一次冻结前技术校验，服务端保存不可变 `PASS/FAIL`；`PASS` 自动建立一条待审批请求，另一位当前项目管理员批准时再次核对全部技术证据，并在同一事务记录决定、审计和 `FROZEN` 状态。申请人不能自批，证据变化或 `FAIL` 都必须新建 DatasetVersion。冻结不创建导出文件、不授权导出，也不启动 Worker。
-- 项目管理员可对 `FROZEN` 版本提交唯一的 `MODEL_TRAINING` 导出申请，明确用途和未来到期时间；新构建规范绑定 Step-only `p0-dataset-export-v2`，历史 v1 记录仍可重放、校验和导出。服务端在同一事务建立待审批请求和审计。`REQUESTED` 不代表已审批、已入队、已生成或可下载，当前仍没有 Export Worker 和导出产物。
-- 项目成员可按需执行无副作用的导出审批准备检查；它重新核对管理员角色、申请人与审批人分离、用途授权有效期、冻结状态及全部当前证据，返回稳定阻断码。检查不写审批决定、不入队，也不能替代未来批准命令中的事务内复核。
+- 项目管理员可对 `FROZEN` 版本提交唯一的 `MODEL_TRAINING` 导出申请，明确用途和未来到期时间；另一位管理员批准时，服务端在同一事务重验冻结证据并记录审批、首次 attempt、Outbox 与审计。Export Worker 只通过独立身份和 attempt 租约读取固定输入，生成确定性 ZIP；Core API 校验文件集合、输入与输出摘要、批准的软件摘要后才登记 `ExportArtifact`。管理员显式下载时才签发 5 分钟地址，URL 不落库。
+- 新构建规范绑定 Step-only `p0-dataset-export-v2`。历史 v1 事实保持可读和可校验，但因仓库没有真实 Object/COCO 与 `videos/clean/` 生产者，当前不会把原视频伪装成 clean 或生成空 COCO，v1 执行仍是 V1.10 的已知缺口。
+- 项目成员可按需执行无副作用的导出审批准备检查；它重新核对管理员角色、申请人与审批人分离、用途授权有效期、冻结状态及全部当前证据，返回稳定阻断码。检查不写审批决定、不入队，也不能替代批准命令中的事务内复核。
 
 详细完成度、缺口和验收证据见[需求追踪矩阵](./docs/architecture/requirements-traceability.md)。
 
@@ -27,7 +28,7 @@ React Web
 Java 21 + Spring Boot + Spring Modulith Core API
     ├── PostgreSQL
     ├── S3 Compatible Object Storage
-    └── Outbox → RabbitMQ → Python Media Worker
+    └── Outbox → RabbitMQ → Python Media / Export Worker
 ```
 
 核心业务保持一个 Core API。只有耗时、跨进程或需要重试的任务才进入 Worker；其他基础设施按阶段启用。

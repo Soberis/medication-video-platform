@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/dataset-export-job-v1.schema.json",
+  "title": "DatasetExportJobV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_id",
+    "export_id",
+    "job_type",
+    "attempt",
+    "lease_token",
+    "project_id",
+    "dataset_version_id",
+    "snapshot_digest",
+    "export_profile_key",
+    "export_profile_digest",
+    "requested_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "dataset-export-job.v1" },
+    "message_id": { "type": "string", "format": "uuid" },
+    "export_id": { "type": "string", "format": "uuid" },
+    "job_type": { "const": "DATASET_EXPORT" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "lease_token": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "project_id": { "type": "string", "format": "uuid" },
+    "dataset_version_id": { "type": "string", "format": "uuid" },
+    "snapshot_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "export_profile_key": {
+      "type": "string",
+      "enum": ["p0-dataset-export-v1", "p0-dataset-export-v2"]
+    },
+    "export_profile_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "requested_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "export_profile_key": { "const": "p0-dataset-export-v1" } },
+        "required": ["export_profile_key"]
+      },
+      "then": {
+        "properties": {
+          "export_profile_digest": {
+            "const": "3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "export_profile_key": { "const": "p0-dataset-export-v2" } },
+        "required": ["export_profile_key"]
+      },
+      "then": {
+        "properties": {
+          "export_profile_digest": {
+            "const": "5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96"
+          }
+        }
+      }
+    }
+  ]
+}

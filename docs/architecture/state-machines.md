@@ -315,21 +315,31 @@ OpenAPI 0.52 提供按需、只读的审批准备检查。它在同一个 `REPEA
 稳定阻断码。该查询不写审批决定、审计或业务状态；即使结果为 ready，后续批准命令仍必须在入队事务中
 重新执行全部检查。
 
+V47 与 OpenAPI 0.53 增加 v2 导出执行闭环。另一位当前项目管理员批准时，服务端在同一事务重新执行
+全部准备检查，并原子记录唯一审批决定、首次 `QUEUED` attempt、Outbox 和审计。Export Worker 通过
+独立服务身份与 attempt-scoped 租约换取短期输入、输出能力，生成确定性 ZIP；Core API 接受结果时再次
+校验 attempt、租约、固定摘要、批准的软件摘要、输出对象和 Profile 文件集合，全部通过后才登记
+`ExportArtifact`。历史 v1 事实保持可读、可校验；在真实 Object/COCO 和 clean video 生产者缺失时，
+审批准备明确阻断 v1 执行，不能用空文件或重命名原视频冒充历史 Profile。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport
 
 ```text
-REQUESTED → QUEUED → RUNNING → VALIDATING → AVAILABLE → EXPIRED
-                      │             └→ FAILED
-                      ├→ CANCEL_REQUESTED → CANCELLED
-                      └→ FAILED
+REQUESTED → QUEUED → RUNNING → AVAILABLE
+               ↑         ├→ RETRY_WAIT
+               └─────────┘
+                         └→ FAILED
 ```
 
-- AVAILABLE 前，临时前缀中的文件不可下载。
-- VALIDATING 校验文件集合、schema、引用和 SHA256SUMS。
-- 发布通过不可变最终前缀或发布清单完成；不能依赖对象存储目录 rename。
-- EXPIRED 使下载授权失效；导出包的物理保留按策略独立处理。
+- `REQUESTED` 只表示待独立审批；批准与首次 attempt/Outbox 在同一事务提交。
+- Worker 只写 attempt 临时前缀；`AVAILABLE` 前不可签发下载地址。
+- 当前切片在结果接受事务中校验文件集合、固定输入、对象大小/SHA-256、ZIP 摘要和软件摘要，不增加一个
+  仅用于展示的 `VALIDATING` 状态。
+- 只有 Worker 明确返回的可重试错误进入 `RETRY_WAIT` 并创建新 attempt；超过上限或不可重试错误进入
+  `FAILED`。
+- `expires_at` 到期后拒绝新的下载授权；当前不伪造 `EXPIRED` 或取消状态，导出包物理保留按策略独立处理。
 
 ## 9. 通用异步作业状态
 

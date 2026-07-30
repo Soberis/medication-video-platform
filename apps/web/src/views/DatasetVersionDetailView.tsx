@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import {
+  approveDatasetExport,
+  authorizeDatasetExportDownload,
   CatalogApiError,
   createDatasetBuildSnapshot,
   createDatasetBuildSpecification,
@@ -32,7 +34,14 @@ import {
   type DatasetSplitAssignment,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
-import { assemblyStatusLabels, formatDateTime, qualityStatusLabels, shortId, statusTone } from '@/catalog-presentation'
+import {
+  assemblyStatusLabels,
+  formatBytes,
+  formatDateTime,
+  qualityStatusLabels,
+  shortId,
+  statusTone,
+} from '@/catalog-presentation'
 
 const admissionReasonLabels: Record<string, string> = {
   SESSION_ASSEMBLY_INCOMPLETE: '本次配药操作的视频流尚未组装完整',
@@ -106,6 +115,7 @@ const exportApprovalBlockerLabels: Record<DatasetExportApprovalBlocker, string> 
   DATASET_VERSION_NOT_FROZEN: '数据集版本当前不是冻结状态',
   EXPORT_REQUEST_INVALID: '导出申请与当前数据集版本不一致',
   APPROVAL_REQUEST_INVALID: '待审批记录与导出申请不一致',
+  EXPORT_PROFILE_NOT_EXECUTABLE: '该历史导出配置当前没有经过批准的真实生成器',
   FROZEN_EVIDENCE_INVALID: '冻结版本缺少一致的构建、快照或校验证据',
   SNAPSHOT_VALIDATION_MISMATCH: '冻结校验与当前快照不一致',
   CURRENT_ADMISSION_NOT_ELIGIBLE: validationReasonLabels.CURRENT_ADMISSION_NOT_ELIGIBLE,
@@ -865,7 +875,13 @@ function DatasetVersionDetailContent() {
                 当前 P0 只允许申请内部模型训练用途。申请、独立审批、后台生成和可下载是不同状态。
               </p>
               {detail.export_request ? (
-                <ExportRequestEvidence exportRequest={detail.export_request} />
+                <ExportRequestEvidence
+                  exportRequest={detail.export_request}
+                  onChange={(exportRequest) =>
+                    setDetail((current) => (current ? { ...current, export_request: exportRequest } : current))
+                  }
+                  onRefresh={loadDetail}
+                />
               ) : detail.can_request_export ? (
                 <div className="dataset-draft-selection-toolbar">
                   <div>
@@ -977,9 +993,28 @@ function DatasetVersionDetailContent() {
   )
 }
 
-function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport }) {
+function ExportRequestEvidence({
+  exportRequest,
+  onChange,
+  onRefresh,
+}: {
+  exportRequest: DatasetExport
+  onChange: (exportRequest: DatasetExport) => void
+  onRefresh: () => Promise<void>
+}) {
+  const { message, modal } = AntdApp.useApp()
   const [readinessState, setReadinessState] = useState<ExportApprovalReadinessState>({ status: 'idle' })
+  const [operationState, setOperationState] = useState<
+    'idle' | 'approving' | 'refreshing' | 'downloading' | 'error'
+  >('idle')
+  const [operationError, setOperationError] = useState<{
+    code: string
+    message: string
+    requestId: string | null
+  } | null>(null)
   const readinessRequest = useRef<AbortController | null>(null)
+  const operationRequest = useRef<AbortController | null>(null)
+  const approvalIntent = useRef<string | null>(null)
 
   const checkReadiness = useCallback(async () => {
     readinessRequest.current?.abort()
@@ -1015,21 +1050,130 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
     }
   }, [exportRequest.dataset_version_id, exportRequest.project_id])
 
+  const approve = useCallback(async () => {
+    const idempotencyKey = approvalIntent.current ?? crypto.randomUUID()
+    approvalIntent.current = idempotencyKey
+    operationRequest.current?.abort()
+    const request = new AbortController()
+    operationRequest.current = request
+    setOperationState('approving')
+    setOperationError(null)
+    try {
+      const response = await approveDatasetExport(
+        exportRequest.project_id,
+        exportRequest.dataset_version_id,
+        idempotencyKey,
+        request.signal,
+      )
+      approvalIntent.current = null
+      setReadinessState({ status: 'idle' })
+      setOperationState('idle')
+      onChange(response)
+      void message.success('导出已批准，训练包已进入后台生成队列。')
+    } catch (error) {
+      if (request.signal.aborted) return
+      setOperationState('error')
+      setOperationError(toExportOperationError(error, '暂时无法批准导出，请稍后重试。'))
+    } finally {
+      if (operationRequest.current === request) operationRequest.current = null
+    }
+  }, [exportRequest.dataset_version_id, exportRequest.project_id, message, onChange])
+
+  const confirmApproval = useCallback(() => {
+    modal.confirm({
+      title: '批准并开始生成训练包？',
+      content: `批准后会立即记录审批并进入后台队列。训练包只用于内部模型训练，授权到期时间为 ${formatDateTime(exportRequest.expires_at)}。`,
+      okText: '批准并开始导出',
+      cancelText: '取消',
+      onOk: approve,
+    })
+  }, [approve, exportRequest.expires_at, modal])
+
+  const refresh = useCallback(async () => {
+    setOperationState('refreshing')
+    setOperationError(null)
+    await onRefresh()
+    setOperationState('idle')
+  }, [onRefresh])
+
+  const download = useCallback(async () => {
+    operationRequest.current?.abort()
+    const request = new AbortController()
+    operationRequest.current = request
+    setOperationState('downloading')
+    setOperationError(null)
+    try {
+      const grant = await authorizeDatasetExportDownload(
+        exportRequest.project_id,
+        exportRequest.dataset_version_id,
+        request.signal,
+      )
+      const link = document.createElement('a')
+      link.href = grant.download_url
+      link.download = grant.file_name
+      link.rel = 'noopener'
+      link.hidden = true
+      document.body.append(link)
+      link.click()
+      link.remove()
+      setOperationState('idle')
+      void message.success('短期下载授权已签发。')
+    } catch (error) {
+      if (request.signal.aborted) return
+      setOperationState('error')
+      setOperationError(toExportOperationError(error, '暂时无法下载训练包，请稍后重试。'))
+    } finally {
+      if (operationRequest.current === request) operationRequest.current = null
+    }
+  }, [exportRequest.dataset_version_id, exportRequest.project_id, message])
+
+  const confirmDownload = useCallback(() => {
+    modal.confirm({
+      title: '下载内部训练包？',
+      content:
+        '系统会记录本次下载授权，并签发一个短期地址。训练包包含冻结的原始视频，只能在批准的内部模型训练范围内使用。',
+      okText: '下载训练包',
+      cancelText: '取消',
+      onOk: download,
+    })
+  }, [download, modal])
+
   useEffect(
     () => () => {
       readinessRequest.current?.abort()
+      operationRequest.current?.abort()
     },
     [],
   )
 
+  const status = exportStatusPresentation(exportRequest.status)
+  const canRefresh = ['QUEUED', 'RUNNING', 'RETRY_WAIT'].includes(exportRequest.status)
+
   return (
     <>
-      <div className="readiness-result">
+      <div className={`readiness-result${exportRequest.status === 'AVAILABLE' ? ' readiness-result-ready' : ''}`}>
         <div>
-          <strong>导出申请等待独立审批</strong>
-          <span>当前只记录申请和用途授权；尚未进入后台队列，也没有可下载文件。</span>
+          <strong>{status.title}</strong>
+          <span>{status.description}</span>
+          {exportRequest.attempt ? (
+            <small>
+              第 {exportRequest.attempt.attempt} 次生成 · {exportRequest.attempt.status}
+            </small>
+          ) : null}
         </div>
-        <Tag color="processing">待审批</Tag>
+        <div className="dataset-draft-selection-actions">
+          <Tag color={status.color}>{status.label}</Tag>
+          {canRefresh ? (
+            <Button loading={operationState === 'refreshing'} onClick={() => void refresh()}>
+              刷新状态
+            </Button>
+          ) : null}
+          {exportRequest.status === 'AVAILABLE' ? (
+            <Button type="primary" loading={operationState === 'downloading'} onClick={confirmDownload}>
+              下载训练包
+            </Button>
+          ) : null}
+        </div>
       </div>
       <Descriptions
         column={{ xs: 1, sm: 2, lg: 4 }}
@@ -1037,18 +1181,33 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
           { key: 'purpose', label: '用途', children: '内部模型训练' },
           { key: 'expiry', label: '授权到期', children: formatDateTime(exportRequest.expires_at) },
           { key: 'requester', label: '申请人', children: exportRequest.requested_by },
-          { key: 'requested', label: '申请时间', children: formatDateTime(exportRequest.requested_at) },
+          {
+            key: 'approver',
+            label: '审批人',
+            children: exportRequest.approved_by ?? '等待独立审批',
+          },
+          ...(exportRequest.artifact
+            ? [
+                {
+                  key: 'artifact',
+                  label: '训练包',
+                  children: `${formatBytes(exportRequest.artifact.size_bytes)} · SHA-256 已核对`,
+                },
+              ]
+            : []),
         ]}
       />
-      <div className="dataset-draft-selection-toolbar">
-        <div>
-          <strong>审批前检查</strong>
-          <span>按需重新核对职责分离、授权有效期和冻结证据；检查不会批准或入队。</span>
+      {exportRequest.status === 'REQUESTED' ? (
+        <div className="dataset-draft-selection-toolbar">
+          <div>
+            <strong>独立审批</strong>
+            <span>先核对职责分离、授权有效期和冻结证据；批准时会在同一事务内再次检查。</span>
+          </div>
+          <Button loading={readinessState.status === 'loading'} onClick={() => void checkReadiness()}>
+            检查审批准备
+          </Button>
         </div>
-        <Button loading={readinessState.status === 'loading'} onClick={() => void checkReadiness()}>
-          检查审批准备
-        </Button>
-      </div>
+      ) : null}
       {readinessState.status === 'success' ? (
         <div
           className={`readiness-result${readinessState.value.ready_for_approval ? ' readiness-result-ready' : ''}`}
@@ -1057,7 +1216,7 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
             <strong>{readinessState.value.ready_for_approval ? '审批证据当前满足条件' : '审批准备仍有阻断项'}</strong>
             <span>
               {readinessState.value.ready_for_approval
-                ? '这是只读检查结果；实际批准、后台生成和下载仍未启用。'
+                ? '批准时会再次核对这些事实，并原子记录审批、首次任务和后台消息。'
                 : `本次检查发现 ${readinessState.value.blocking_reasons.length} 项阻断。`}
             </span>
             {readinessState.value.blocking_reasons.length > 0 ? (
@@ -1068,9 +1227,23 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
               </ul>
             ) : null}
           </div>
-          <Tag color={readinessState.value.ready_for_approval ? 'success' : 'warning'}>
-            {readinessState.value.ready_for_approval ? '证据通过' : '暂不可审批'}
-          </Tag>
+          <div className="dataset-draft-selection-actions">
+            <Tag color={readinessState.value.ready_for_approval ? 'success' : 'warning'}>
+              {readinessState.value.ready_for_approval ? '可以审批' : '暂不可审批'}
+            </Tag>
+            {readinessState.value.ready_for_approval ? (
+              <Button type="primary" loading={operationState === 'approving'} onClick={confirmApproval}>
+                批准并开始导出
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {operationState === 'error' && operationError ? (
+        <div className="catalog-error" role="alert">
+          <strong>{operationError.code}</strong>
+          <span>{operationError.message}</span>
+          {operationError.requestId ? <small>请求标识：{operationError.requestId}</small> : null}
         </div>
       ) : null}
       {readinessState.status === 'error' ? (
@@ -1119,10 +1292,88 @@ function ExportRequestEvidence({ exportRequest }: { exportRequest: DatasetExport
               <code>{exportRequest.export_profile_digest}</code>
             </dd>
           </div>
+          {exportRequest.approval.approval_decision_id ? (
+            <div>
+              <dt>ApprovalDecision ID</dt>
+              <dd>
+                <code>{exportRequest.approval.approval_decision_id}</code>
+              </dd>
+            </div>
+          ) : null}
+          {exportRequest.attempt ? (
+            <div>
+              <dt>ExportAttempt ID</dt>
+              <dd>
+                <code>{exportRequest.attempt.dataset_export_attempt_id}</code>
+              </dd>
+            </div>
+          ) : null}
+          {exportRequest.artifact ? (
+            <div>
+              <dt>训练包 SHA-256</dt>
+              <dd>
+                <code>{exportRequest.artifact.sha256}</code>
+              </dd>
+            </div>
+          ) : null}
         </dl>
       </details>
     </>
   )
+}
+
+function exportStatusPresentation(status: DatasetExport['status']) {
+  switch (status) {
+    case 'REQUESTED':
+      return {
+        title: '导出申请等待独立审批',
+        description: '用途和有效期已经固定，尚未进入后台队列。',
+        label: '待审批',
+        color: 'processing',
+      } as const
+    case 'QUEUED':
+      return {
+        title: '已批准，等待生成训练包',
+        description: '审批决定和首次任务已经记录，后台 Worker 尚未开始读取冻结输入。',
+        label: '等待生成',
+        color: 'processing',
+      } as const
+    case 'RUNNING':
+      return {
+        title: '正在生成训练包',
+        description: '后台正在核对冻结输入、生成 ZIP 并上传；完成前不会提供下载。',
+        label: '生成中',
+        color: 'processing',
+      } as const
+    case 'RETRY_WAIT':
+      return {
+        title: '生成暂时中断',
+        description: '本次后台任务未完成，系统已安排有上限的重试。',
+        label: '等待重试',
+        color: 'warning',
+      } as const
+    case 'AVAILABLE':
+      return {
+        title: '训练包已通过校验',
+        description: '文件集合、冻结视频摘要和 ZIP 摘要均已由服务端核对，可以申请短期下载。',
+        label: '可下载',
+        color: 'success',
+      } as const
+    case 'FAILED':
+      return {
+        title: '训练包生成未完成',
+        description: '后台任务已停止，当前没有可下载文件；请根据审计记录处理。',
+        label: '生成失败',
+        color: 'error',
+      } as const
+  }
+}
+
+function toExportOperationError(error: unknown, fallback: string) {
+  if (error instanceof CatalogApiError) {
+    return { code: error.errorCode, message: error.message, requestId: error.requestId }
+  }
+  return { code: 'DATASET_EXPORT_OPERATION_FAILED', message: fallback, requestId: null }
 }
 
 function BuildSpecificationEvidence({

@@ -12,4 +12,6 @@ interface AnnotationLabelSchemaRepository extends JpaRepository<AnnotationLabelS
 	Optional<AnnotationLabelSchema> findByLabelSchemaIdAndSchemaDigest(
 			UUID labelSchemaId,
 			String schemaDigest);
+
+	Optional<AnnotationLabelSchema> findBySchemaDigest(String schemaDigest);
 }

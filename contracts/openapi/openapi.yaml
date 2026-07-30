@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.52.0
+  version: 0.53.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -36,8 +36,9 @@ info:
     CaptureSession split isolation and the approved build contract; a PASS creates a pending request
     that a different ACTIVE project administrator can approve only after atomic revalidation, then
     freeze the version without creating export artifacts or starting a Worker, then record one
-    purpose-bound export request and read a non-mutating approval-readiness check that re-evaluates
-    role separation, expiry and the frozen evidence without approving or queuing the export,
+    purpose-bound export request, re-evaluate independent approval readiness, atomically approve
+    and queue its first attempt through the Outbox, validate a deterministic Step-only package from
+    an independently authenticated Export Worker, and issue an audited short-lived download grant,
     and create and read project-scoped media probe jobs that freeze the input
     digest and size of an uploaded clip asset, exchange a lease-matched Worker identity for a
     short-lived read grant, accept an idempotent media probe result, and query immutable successful
@@ -96,9 +97,10 @@ tags:
       snapshot seal advances to VALIDATING, where one technical freeze-preflight result can be
       recorded. A PASS creates a pending request; a different ACTIVE project administrator can
       revalidate, approve and atomically freeze the version. An administrator can then request the
-      fixed P0 export profile for the explicit MODEL_TRAINING purpose and expiry; REQUESTED is still
-      a pending approval record, not an export artifact or queued job. Members can explicitly run a
-      no-store approval-readiness check; it reports stable blockers without recording a decision.
+      fixed P0 export profile for the explicit MODEL_TRAINING purpose and expiry. Members can run a
+      no-store approval-readiness check; an independent administrator may then atomically approve
+      and queue v2. AVAILABLE means the Core API verified the package before an administrator can
+      request a short-lived audited download grant.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -799,6 +801,117 @@ paths:
                 $ref: "#/components/schemas/DatasetVersionError"
         "404":
           description: The project, DatasetVersion or export request is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/exports/approvals:
+    post:
+      operationId: approveDatasetExport
+      tags:
+        - Dataset Admission
+      summary: Independently approve and queue the current v2 dataset export
+      description: >-
+        Requires an ACTIVE project administrator other than the requester. Repeats all readiness
+        checks in one transaction, records the immutable approval decision, moves the export to
+        QUEUED, creates attempt 1 and writes dataset-export-job.v1 to the Transactional Outbox.
+        It does not run packaging synchronously. The same Idempotency-Key and command replay the
+        original result; another command using that key is rejected.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "202":
+          description: Approval, first attempt and Outbox dispatch were recorded atomically.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExport"
+        "400":
+          description: A path or required header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an eligible independent project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project, DatasetVersion or export request is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: The request is no longer ready, executable or pending, or idempotency conflicts.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+  /projects/{project_id}/dataset-versions/{dataset_version_id}/exports/download-authorizations:
+    post:
+      operationId: authorizeDatasetExportDownload
+      tags:
+        - Dataset Admission
+      summary: Authorize one short-lived download of a verified export package
+      description: >-
+        Requires ACTIVE ADMIN membership, an unexpired MODEL_TRAINING purpose grant and an AVAILABLE
+        artifact. Returns a short-lived object-store URL without persisting it and appends an audit
+        event. The URL must remain in transient client memory and must not be logged or stored.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/DatasetVersionId"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      responses:
+        "200":
+          description: Short-lived audited download authorization.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportDownloadAuthorization"
+        "400":
+          description: A path or header is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The actor is not an ACTIVE project administrator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The project, DatasetVersion or export request is not visible to the actor.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: The package is unavailable or its purpose authorization has expired.
           content:
             application/problem+json:
               schema:
@@ -4355,6 +4468,228 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/lease:
+    post:
+      operationId: acquireDatasetExportLease
+      tags:
+        - Dataset Admission
+      summary: Acquire frozen inputs and initialize one export output upload
+      description: >-
+        Internal Export Worker endpoint. Verifies its independent service identity and opaque attempt
+        capability, starts the current attempt, initializes one restricted multipart upload, and
+        returns short-lived read URLs plus the exact frozen schema/session/stream graph. Neither URLs
+        nor storage identifiers enter the broker message or public read model.
+      security:
+        - exportWorkerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetExportId"
+        - $ref: "#/components/parameters/DatasetExportAttempt"
+        - $ref: "#/components/parameters/ExportLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetExportWorkerLeaseRequest"
+      responses:
+        "200":
+          description: Current attempt lease and frozen export inputs.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportWorkerLease"
+        "400":
+          description: The path, capability or request body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Export Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The export or attempt was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt, capability, frozen evidence or Worker ownership is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/heartbeat:
+    post:
+      operationId: renewDatasetExportLease
+      tags:
+        - Dataset Admission
+      summary: Renew the current Export Worker's active attempt lease
+      security:
+        - exportWorkerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetExportId"
+        - $ref: "#/components/parameters/DatasetExportAttempt"
+        - $ref: "#/components/parameters/ExportLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetExportWorkerLeaseRequest"
+      responses:
+        "200":
+          description: Active attempt lease renewed from server time.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportWorkerHeartbeat"
+        "400":
+          description: The path, capability or request body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Export Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The export or attempt was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt, lease or Worker ownership is stale, expired or terminal.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/output-parts/{part_number}/authorization:
+    post:
+      operationId: authorizeDatasetExportOutputPart
+      tags:
+        - Dataset Admission
+      summary: Authorize one multipart output write for the current attempt
+      description: >-
+        Returns a short-lived URL scoped to exactly one part of the output upload already bound to
+        this attempt. The Export Worker must request each part explicitly and must not persist URLs.
+      security:
+        - exportWorkerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetExportId"
+        - $ref: "#/components/parameters/DatasetExportAttempt"
+        - $ref: "#/components/parameters/DatasetExportPartNumber"
+        - $ref: "#/components/parameters/ExportLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetExportWorkerLeaseRequest"
+      responses:
+        "200":
+          description: Short-lived upload authorization for exactly one part.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportPartAuthorization"
+        "400":
+          description: A path, part number, capability or request body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Export Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The export or attempt was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt, lease, Worker or output upload is not current.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/result:
+    put:
+      operationId: acceptDatasetExportResult
+      tags:
+        - Dataset Admission
+      summary: Idempotently verify and accept one dataset export attempt result
+      description: >-
+        Validates the service identity, attempt capability, message/profile/snapshot/software digests,
+        timestamps, exact file set and raw-video hashes. A successful result completes the multipart
+        object, independently hashes the stored ZIP and registers one immutable artifact before the
+        export becomes AVAILABLE. Retryable failures schedule a bounded new attempt through Outbox.
+      security:
+        - exportWorkerBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DatasetExportId"
+        - $ref: "#/components/parameters/DatasetExportAttempt"
+        - $ref: "#/components/parameters/ExportLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../events/dataset-export-result-v1.schema.json"
+      responses:
+        "200":
+          description: Result accepted, or an exact Inbox replay returned.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportResultAccepted"
+        "400":
+          description: The result violates the frozen request contract.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: The Export Worker service identity is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The export or attempt was not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The attempt/result is stale, mismatched, expired or reuses a message ID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   parameters:
     ProjectId:
@@ -4438,6 +4773,38 @@ components:
         minLength: 43
         maxLength: 128
         pattern: ^[A-Za-z0-9_-]+$
+    DatasetExportId:
+      name: dataset_export_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DatasetExportAttempt:
+      name: attempt
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    DatasetExportPartNumber:
+      name: part_number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+    ExportLeaseToken:
+      name: X-Export-Lease-Token
+      in: header
+      required: true
+      description: Opaque capability from the restricted export envelope; never log or persist it.
+      schema:
+        type: string
+        minLength: 43
+        maxLength: 128
+        pattern: ^[A-Za-z0-9_-]+$
   securitySchemes:
     bearerAuth:
       type: http
@@ -4458,6 +4825,13 @@ components:
       description: >-
         Independent Worker service identity. It is not a user/project bearer token and is accepted
         only by the internal media job endpoints.
+    exportWorkerBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ServiceToken
+      description: >-
+        Independent Export Worker service identity. It must differ from browser, edge and Media
+        Worker credentials and is accepted only by internal dataset export endpoints.
   headers:
     NoStore:
       description: Prevents clients and intermediaries from retaining authorization-sensitive data.
@@ -6190,6 +6564,9 @@ components:
         - status
         - requested_by
         - requested_at
+        - approval_decision_id
+        - decided_by
+        - decided_at
       properties:
         approval_request_id:
           type: string
@@ -6199,13 +6576,21 @@ components:
           format: uuid
         status:
           type: string
-          const: PENDING
-          description: Approval is intentionally not exposed by this request-only slice.
+          enum: [PENDING, APPROVED]
         requested_by:
           type: string
           maxLength: 128
         requested_at:
           type: string
+          format: date-time
+        approval_decision_id:
+          type: [string, "null"]
+          format: uuid
+        decided_by:
+          type: [string, "null"]
+          maxLength: 128
+        decided_at:
+          type: [string, "null"]
           format: date-time
     DatasetExport:
       type: object
@@ -6239,6 +6624,12 @@ components:
         - approval
         - requested_by
         - requested_at
+        - approved_by
+        - approved_at
+        - started_at
+        - completed_at
+        - attempt
+        - artifact
       properties:
         dataset_export_id:
           type: string
@@ -6251,8 +6642,8 @@ components:
           format: uuid
         status:
           type: string
-          const: REQUESTED
-          description: The request awaits independent approval and has not entered a Worker queue.
+          enum: [REQUESTED, QUEUED, RUNNING, RETRY_WAIT, AVAILABLE, FAILED]
+          description: Durable business status; AVAILABLE requires a Core API-verified artifact.
         purpose:
           type: string
           const: MODEL_TRAINING
@@ -6287,6 +6678,120 @@ components:
         requested_at:
           type: string
           format: date-time
+        approved_by:
+          type: [string, "null"]
+          maxLength: 128
+        approved_at:
+          type: [string, "null"]
+          format: date-time
+        started_at:
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        attempt:
+          oneOf:
+            - $ref: "#/components/schemas/DatasetExportAttemptRead"
+            - type: "null"
+        artifact:
+          oneOf:
+            - $ref: "#/components/schemas/DatasetExportArtifact"
+            - type: "null"
+    DatasetExportAttemptRead:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_export_attempt_id
+        - attempt
+        - status
+        - started_at
+        - completed_at
+      properties:
+        dataset_export_attempt_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, LOST]
+        started_at:
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+    DatasetExportArtifact:
+      type: object
+      additionalProperties: false
+      required:
+        - export_artifact_id
+        - file_name
+        - media_type
+        - size_bytes
+        - sha256
+        - created_at
+      properties:
+        export_artifact_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+          const: dataset-export.zip
+        media_type:
+          type: string
+          const: application/zip
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        created_at:
+          type: string
+          format: date-time
+    DatasetExportDownloadAuthorization:
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_export_id
+        - export_artifact_id
+        - download_url
+        - expires_at
+        - file_name
+        - media_type
+        - size_bytes
+        - sha256
+      properties:
+        dataset_export_id:
+          type: string
+          format: uuid
+        export_artifact_id:
+          type: string
+          format: uuid
+        download_url:
+          type: string
+          format: uri
+          description: Ephemeral read grant; clients must not persist or log it.
+        expires_at:
+          type: string
+          format: date-time
+        file_name:
+          type: string
+          const: dataset-export.zip
+        media_type:
+          type: string
+          const: application/zip
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
     DatasetExportApprovalReadiness:
       type: object
       additionalProperties: false
@@ -6311,7 +6816,7 @@ components:
           type: boolean
           description: >-
             True only when this actor and the current point-in-time evidence satisfy the approval
-            preflight. It is not an approval decision or a promise that a background job is enabled.
+            preflight. The approval command still repeats every check in its write transaction.
         blocking_reasons:
           type: array
           maxItems: 16
@@ -6325,6 +6830,7 @@ components:
               - DATASET_VERSION_NOT_FROZEN
               - EXPORT_REQUEST_INVALID
               - APPROVAL_REQUEST_INVALID
+              - EXPORT_PROFILE_NOT_EXECUTABLE
               - FROZEN_EVIDENCE_INVALID
               - SNAPSHOT_VALIDATION_MISMATCH
               - CURRENT_ADMISSION_NOT_ELIGIBLE
@@ -6335,6 +6841,300 @@ components:
               - SPLIT_LEAKAGE_DETECTED
               - BUILD_CONTRACT_MISMATCH
         checked_at:
+          type: string
+          format: date-time
+    DatasetExportWorkerLeaseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - worker_id
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
+    DatasetExportLabel:
+      type: object
+      additionalProperties: false
+      required:
+        - label_id
+        - label_type
+        - display_name
+        - description
+        - sort_order
+      properties:
+        label_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        label_type:
+          type: string
+          const: PRIMARY_STEP
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description:
+          type: string
+          minLength: 1
+          maxLength: 512
+        sort_order:
+          type: integer
+          minimum: 1
+    DatasetExportLabelSchema:
+      type: object
+      additionalProperties: false
+      required:
+        - label_schema_id
+        - schema_key
+        - schema_version
+        - schema_digest
+        - labels
+      properties:
+        label_schema_id:
+          type: string
+          format: uuid
+        schema_key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        schema_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        schema_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        labels:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/DatasetExportLabel"
+    DatasetExportAnnotationDocument:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - segments
+      properties:
+        schema_version:
+          type: string
+          const: annotation-document.v1
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/StoredAnnotationSegment"
+        note:
+          type: string
+          maxLength: 1000
+    DatasetExportStreamInput:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_stream_id
+        - clip_asset_id
+        - camera_index
+        - content_type
+        - size_bytes
+        - sha256
+        - input_url
+        - video_path
+        - annotation_revision_id
+        - annotation_schema_version
+        - annotation_document_sha256
+        - annotation_document
+      properties:
+        camera_stream_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        camera_index:
+          type: integer
+          minimum: 0
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        input_url:
+          type: string
+          format: uri
+          description: Ephemeral read-only URL; never persist or log it.
+        video_path:
+          type: string
+          pattern: ^videos/raw/[A-Za-z0-9._/-]+$
+        annotation_revision_id:
+          type: string
+          format: uuid
+        annotation_schema_version:
+          type: string
+          const: annotation-document.v1
+        annotation_document_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        annotation_document:
+          $ref: "#/components/schemas/DatasetExportAnnotationDocument"
+    DatasetExportSessionInput:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_session_id
+        - split
+        - streams
+      properties:
+        capture_session_id:
+          type: string
+          format: uuid
+        split:
+          type: string
+          enum: [PILOT, HOLDOUT]
+        streams:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            $ref: "#/components/schemas/DatasetExportStreamInput"
+    DatasetExportWorkerLease:
+      type: object
+      additionalProperties: false
+      required:
+        - export_id
+        - attempt
+        - lease_until
+        - heartbeat_interval_seconds
+        - input_urls_expire_at
+        - output_part_size_bytes
+        - package_file_name
+        - snapshot_digest
+        - export_profile_key
+        - export_profile_digest
+        - label_schema
+        - sessions
+      properties:
+        export_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        lease_until:
+          type: string
+          format: date-time
+        heartbeat_interval_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+        input_urls_expire_at:
+          type: string
+          format: date-time
+        output_part_size_bytes:
+          type: integer
+          format: int64
+          minimum: 5242880
+        package_file_name:
+          type: string
+          const: dataset-export.zip
+        snapshot_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        export_profile_key:
+          type: string
+          const: p0-dataset-export-v2
+        export_profile_digest:
+          type: string
+          const: 5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96
+        label_schema:
+          $ref: "#/components/schemas/DatasetExportLabelSchema"
+        sessions:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/DatasetExportSessionInput"
+    DatasetExportWorkerHeartbeat:
+      type: object
+      additionalProperties: false
+      required:
+        - export_id
+        - attempt
+        - lease_until
+        - heartbeat_interval_seconds
+      properties:
+        export_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        lease_until:
+          type: string
+          format: date-time
+        heartbeat_interval_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+    DatasetExportPartAuthorization:
+      type: object
+      additionalProperties: false
+      required:
+        - export_id
+        - attempt
+        - part_number
+        - upload_url
+        - expires_at
+      properties:
+        export_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        part_number:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        upload_url:
+          type: string
+          format: uri
+          description: Ephemeral single-part write grant; never persist or log it.
+        expires_at:
+          type: string
+          format: date-time
+    DatasetExportResultAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - message_id
+        - export_id
+        - attempt
+        - status
+        - export_status
+        - processed_at
+      properties:
+        message_id:
+          type: string
+          format: uuid
+        export_id:
+          type: string
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [SUCCEEDED, FAILED]
+        export_status:
+          type: string
+          enum: [RETRY_WAIT, AVAILABLE, FAILED]
+        processed_at:
           type: string
           format: date-time
     DatasetMemberSession:

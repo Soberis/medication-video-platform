@@ -11,9 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class DatasetExportApprovalService {
 
 	private final ApprovalRequestRepository requestRepository;
+	private final ApprovalDecisionRepository decisionRepository;
 
-	DatasetExportApprovalService(ApprovalRequestRepository requestRepository) {
+	DatasetExportApprovalService(
+			ApprovalRequestRepository requestRepository,
+			ApprovalDecisionRepository decisionRepository) {
 		this.requestRepository = requestRepository;
+		this.decisionRepository = decisionRepository;
 	}
 
 	@Transactional
@@ -39,7 +43,37 @@ public class DatasetExportApprovalService {
 
 	@Transactional(readOnly = true)
 	public Optional<DatasetExportApprovalSnapshot> find(UUID projectId, UUID datasetVersionId) {
-		return findRequest(projectId, datasetVersionId).map(DatasetExportApprovalService::snapshot);
+		return findRequest(projectId, datasetVersionId).map(this::snapshot);
+	}
+
+	@Transactional
+	public DatasetExportApprovalSnapshot approve(
+			UUID projectId,
+			UUID datasetVersionId,
+			UUID validationId,
+			String approvedBy,
+			Instant approvedAt) {
+		var request = findRequest(projectId, datasetVersionId)
+				.orElseThrow(() -> new IllegalStateException(
+						"The dataset export approval request is missing."));
+		if (!request.matchesDatasetExport(
+				projectId, datasetVersionId, validationId, request.getRequestedBy())) {
+			throw new IllegalStateException(
+					"The dataset export approval request does not match its frozen version.");
+		}
+		if (request.getRequestedBy().equals(approvedBy)) {
+			throw new IllegalArgumentException(
+					"The dataset export requester cannot approve the same request.");
+		}
+		if (request.getStatus() != ApprovalRequestStatus.PENDING) {
+			throw new IllegalStateException(
+					"The dataset export approval request is no longer pending.");
+		}
+		var decision = this.decisionRepository.saveAndFlush(
+				ApprovalDecision.approve(request, approvedBy, approvedAt));
+		request.approve();
+		this.requestRepository.saveAndFlush(request);
+		return snapshot(request, decision);
 	}
 
 	private Optional<ApprovalRequest> findRequest(UUID projectId, UUID datasetVersionId) {
@@ -47,13 +81,26 @@ public class DatasetExportApprovalService {
 				projectId, ApprovalRequestType.DATASET_EXPORT, datasetVersionId);
 	}
 
-	private static DatasetExportApprovalSnapshot snapshot(ApprovalRequest request) {
+	private DatasetExportApprovalSnapshot snapshot(ApprovalRequest request) {
+		var decision = this.decisionRepository.findByApprovalRequestId(request.getApprovalRequestId())
+				.orElse(null);
+		if (request.getStatus() == ApprovalRequestStatus.APPROVED && decision == null) {
+			throw new IllegalStateException("An approved request must have one approval decision.");
+		}
+		return snapshot(request, decision);
+	}
+
+	private static DatasetExportApprovalSnapshot snapshot(
+			ApprovalRequest request, ApprovalDecision decision) {
 		return new DatasetExportApprovalSnapshot(
 				request.getApprovalRequestId(),
 				request.getDatasetVersionId(),
 				request.getValidationId(),
 				request.getStatus().name(),
 				request.getRequestedBy(),
-				request.getRequestedAt());
+				request.getRequestedAt(),
+				decision == null ? null : decision.getApprovalDecisionId(),
+				decision == null ? null : decision.getDecidedBy(),
+				decision == null ? null : decision.getDecidedAt());
 	}
 }

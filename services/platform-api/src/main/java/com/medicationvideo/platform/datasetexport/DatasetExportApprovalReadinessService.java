@@ -24,6 +24,7 @@ class DatasetExportApprovalReadinessService {
 	static final String APPROVAL_REQUEST_INVALID = "APPROVAL_REQUEST_INVALID";
 	static final String FROZEN_EVIDENCE_INVALID = "FROZEN_EVIDENCE_INVALID";
 	static final String SNAPSHOT_VALIDATION_MISMATCH = "SNAPSHOT_VALIDATION_MISMATCH";
+	static final String EXPORT_PROFILE_NOT_EXECUTABLE = "EXPORT_PROFILE_NOT_EXECUTABLE";
 
 	private final ProjectAccessService projectAccessService;
 	private final DatasetVersionRepository versionRepository;
@@ -87,7 +88,7 @@ class DatasetExportApprovalReadinessService {
 				|| !export.getDatasetVersionId().equals(datasetVersionId)) {
 			blockers.add(EXPORT_REQUEST_INVALID);
 		}
-		if (!"PENDING".equals(approval.status())
+		if (!approval.pending()
 				|| !export.getApprovalRequestId().equals(approval.approvalRequestId())
 				|| !datasetVersionId.equals(approval.datasetVersionId())
 				|| !export.getDatasetVersionValidationId().equals(approval.validationId())
@@ -98,6 +99,10 @@ class DatasetExportApprovalReadinessService {
 		var specification = this.specificationRepository.findByDatasetVersionId(datasetVersionId);
 		var snapshot = this.snapshotRepository.findByDatasetVersionId(datasetVersionId);
 		var validation = this.validationRepository.findByDatasetVersionId(datasetVersionId);
+		if (!DatasetExportProfile.CURRENT_KEY.equals(export.getExportProfileKey())
+				|| !DatasetExportProfile.CURRENT_DIGEST.equals(export.getExportProfileDigest())) {
+			blockers.add(EXPORT_PROFILE_NOT_EXECUTABLE);
+		}
 		if (specification.isEmpty()
 				|| snapshot.isEmpty()
 				|| validation.isEmpty()

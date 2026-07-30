@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > 适用范围：媒体探测/转码/抽帧、批量或耗时清洗、数据集导出；P1 AI 复用同一协议
-> 最后更新：2026-07-26
+> 最后更新：2026-07-30
 
 ## 1. 核心决策
 
@@ -35,7 +35,7 @@ Python Worker 不连接业务数据库。所有正式状态、AssetVariant、Cle
 | --- | --- | --- |
 | 媒体探测、转码、抽帧、脱敏 | `mediaprivacy` | media_job、media_job_attempt |
 | 批量/耗时清洗和重复检测 | `qualitycleaning` | cleaning_run、cleaning_result |
-| 数据集构建/导出 | `datasetexport` | dataset_export、export_artifact |
+| 数据集构建/导出 | `datasetexport` | dataset_export、dataset_export_attempt、export_artifact |
 | AI 推理与评估 | `aicandidate` | ai_job、ai_job_attempt、ai_evaluation |
 
 共享代码只提供 `JobEnvelope`、`JobResult`、状态枚举、错误分类和幂等工具，不拥有业务决策。
@@ -242,6 +242,15 @@ attempt `FAILED`、job `RETRY_WAIT`、新 attempt/新 capability 和 Outbox 写�
 确定性抖动；默认 base delay 为 5 秒、max delay 为 5 分钟。Worker 接受结果响应后 ACK 当前
 消息，不在消费者进程中 sleep 或重复执行旧 attempt。不可重试错误或第 3 次 attempt 失败时，
 job 与资产入库状态才进入终态失败。
+
+数据集 v2 导出使用同一原则，但使用独立的
+`dataset-export-job.v1`、`dataset-export-result.v1`、`dataset-export-dead-letter.v1` 契约、
+RabbitMQ 路由和 Worker 身份。批准命令原子创建首次 attempt 与 Outbox；Worker 领取后通过
+attempt-scoped 租约换取短期输入和 multipart 输出能力，不能读取对象 key 或业务数据库。成功结果必须
+包含包摘要及准确文件清单，Core API 核对临时对象、Profile、固定输入和批准软件摘要后才登记正式
+`ExportArtifact`。Worker 明确报告的可重试错误会创建新 attempt；当前尚未实现导出 attempt 的过期
+租约恢复扫描，因此 Worker 进程在未回传结果前崩溃仍可能使导出停留在 `RUNNING`，这是下一项必须补齐
+的故障恢复能力，不能靠 UI 轮询或人工改库掩盖。
 
 ## 9. 取消协议
 

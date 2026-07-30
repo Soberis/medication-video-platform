@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { DatasetVersionDetail } from '@/api/catalog'
+import type { DatasetExport, DatasetVersionDetail } from '@/api/catalog'
 import {
   clearDatasetDraftIntent,
   getDatasetDraftIntent,
@@ -1131,29 +1131,9 @@ describe('catalog views', () => {
     const readinessPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
     detail.status = 'FROZEN'
-    detail.export_request = {
-      dataset_export_id: '98000000-0000-4000-8000-000000000001',
-      project_id: projectId,
-      dataset_version_id: datasetVersionId,
-      status: 'REQUESTED',
-      purpose: 'MODEL_TRAINING',
-      expires_at: '2026-08-06T02:00:00Z',
-      dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
-      dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
-      snapshot_digest: 'f'.repeat(64),
-      dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+    detail.export_request = datasetExport(datasetVersionId, {
       export_profile_key: 'p0-dataset-export-v1',
-      export_profile_digest: 'e'.repeat(64),
-      approval: {
-        approval_request_id: '99000000-0000-4000-8000-000000000001',
-        validation_id: '95000000-0000-4000-8000-000000000001',
-        status: 'PENDING',
-        requested_by: 'local-admin',
-        requested_at: '2026-07-30T02:00:00Z',
-      },
-      requested_by: 'local-admin',
-      requested_at: '2026-07-30T02:00:00Z',
-    }
+    })
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       if (String(input) === readinessPath) {
         return Promise.resolve(
@@ -1175,7 +1155,7 @@ describe('catalog views', () => {
     renderDatasetDetail(datasetVersionId)
 
     expect(await screen.findByText('导出申请等待独立审批')).toBeInTheDocument()
-    expect(screen.getByText(/尚未进入后台队列，也没有可下载文件/)).toBeInTheDocument()
+    expect(screen.getByText(/尚未进入后台队列/)).toBeInTheDocument()
     expect(screen.getByText('内部模型训练')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '提交导出申请' })).not.toBeInTheDocument()
     const exportFacts = screen.getByText('查看导出申请标识').closest('details')
@@ -1185,11 +1165,140 @@ describe('catalog views', () => {
     await user.click(screen.getByRole('button', { name: '检查审批准备' }))
     expect(await screen.findByText('审批准备仍有阻断项')).toBeInTheDocument()
     expect(screen.getByText('导出申请人不能审批自己的申请')).toBeInTheDocument()
-    expect(screen.getByText(/检查不会批准或入队/)).toBeInTheDocument()
+    expect(screen.getByText('暂不可审批')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '批准并开始导出' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       readinessPath,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
+  })
+
+  it('approves a ready dataset export and exposes the queued state without polling', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const readinessPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`
+    const approvalPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approvals`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.status = 'FROZEN'
+    detail.export_request = datasetExport(datasetVersionId, { requested_by: 'requester-admin' })
+    const queuedExport = datasetExport(datasetVersionId, {
+      status: 'QUEUED',
+      approved_by: 'independent-admin',
+      approved_at: '2026-07-30T03:01:00Z',
+      approval: {
+        ...datasetExport(datasetVersionId).approval,
+        status: 'APPROVED',
+        requested_by: 'requester-admin',
+        approval_decision_id: '9a000000-0000-4000-8000-000000000001',
+        decided_by: 'independent-admin',
+        decided_at: '2026-07-30T03:01:00Z',
+      },
+      attempt: {
+        dataset_export_attempt_id: '9b000000-0000-4000-8000-000000000001',
+        attempt: 1,
+        status: 'QUEUED',
+        started_at: null,
+        completed_at: null,
+      },
+    })
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path === readinessPath) {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_export_id: detail.export_request?.dataset_export_id,
+            dataset_version_id: datasetVersionId,
+            approval_request_id: detail.export_request?.approval.approval_request_id,
+            ready_for_approval: true,
+            blocking_reasons: [],
+            checked_at: '2026-07-30T03:00:00Z',
+          }),
+        )
+      }
+      if (path === approvalPath && init?.method === 'POST') {
+        return Promise.resolve(jsonResponse(queuedExport, 201))
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('dataset-export-approval-0001'),
+    })
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    await user.click(await screen.findByRole('button', { name: '检查审批准备' }))
+    expect(await screen.findByText('审批证据当前满足条件')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '批准并开始导出' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    await user.click(within(confirmDialog).getByRole('button', { name: '批准并开始导出' }))
+
+    expect(await screen.findByText('已批准，等待生成训练包')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      approvalPath,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'Idempotency-Key': 'dataset-export-approval-0001' }),
+      }),
+    )
+  })
+
+  it('downloads an available dataset export through one transient authorization', async () => {
+    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
+    const downloadPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/download-authorizations`
+    const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
+    detail.status = 'FROZEN'
+    detail.export_request = datasetExport(datasetVersionId, {
+      status: 'AVAILABLE',
+      approved_by: 'independent-admin',
+      approved_at: '2026-07-30T03:01:00Z',
+      completed_at: '2026-07-30T03:03:00Z',
+      artifact: {
+        export_artifact_id: '9c000000-0000-4000-8000-000000000001',
+        file_name: 'dataset-export.zip',
+        media_type: 'application/zip',
+        size_bytes: 1024,
+        sha256: 'a'.repeat(64),
+        created_at: '2026-07-30T03:03:00Z',
+      },
+    })
+    const downloadUrl = 'https://storage.invalid/dataset-export.zip?signature=synthetic'
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === downloadPath && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            dataset_export_id: detail.export_request?.dataset_export_id,
+            export_artifact_id: detail.export_request?.artifact?.export_artifact_id,
+            download_url: downloadUrl,
+            expires_at: '2026-07-30T03:08:00Z',
+            file_name: 'dataset-export.zip',
+            media_type: 'application/zip',
+            size_bytes: 1024,
+            sha256: 'a'.repeat(64),
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(detail))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const user = userEvent.setup()
+
+    renderDatasetDetail(datasetVersionId)
+
+    await user.click(await screen.findByRole('button', { name: '下载训练包' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    await user.click(within(confirmDialog).getByRole('button', { name: '下载训练包' }))
+
+    await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
+    expect((anchorClick.mock.instances[0] as HTMLAnchorElement).href).toBe(downloadUrl)
+    expect(document.body.contains(anchorClick.mock.instances[0] as HTMLAnchorElement)).toBe(false)
+    expect(fetchMock).toHaveBeenCalledWith(
+      downloadPath,
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
+    )
+    anchorClick.mockRestore()
   })
 
   it('submits one explicit future expiry for a frozen dataset export request', async () => {
@@ -1222,9 +1331,18 @@ describe('catalog views', () => {
                 status: 'PENDING',
                 requested_by: 'local-admin',
                 requested_at: '2026-07-30T02:00:00Z',
+                approval_decision_id: null,
+                decided_by: null,
+                decided_at: null,
               },
               requested_by: 'local-admin',
               requested_at: '2026-07-30T02:00:00Z',
+              approved_by: null,
+              approved_at: null,
+              started_at: null,
+              completed_at: null,
+              attempt: null,
+              artifact: null,
             },
             201,
           ),
@@ -1977,5 +2095,44 @@ function datasetVersionDetail(datasetVersionId: string, displayName: string): Da
         ],
       },
     ],
+  }
+}
+
+function datasetExport(
+  datasetVersionId: string,
+  overrides: Partial<DatasetExport> = {},
+): DatasetExport {
+  return {
+    dataset_export_id: '98000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    dataset_version_id: datasetVersionId,
+    status: 'REQUESTED',
+    purpose: 'MODEL_TRAINING',
+    expires_at: '2026-08-06T02:00:00Z',
+    dataset_build_specification_id: '93000000-0000-4000-8000-000000000001',
+    dataset_build_snapshot_id: '94000000-0000-4000-8000-000000000001',
+    snapshot_digest: 'f'.repeat(64),
+    dataset_version_validation_id: '95000000-0000-4000-8000-000000000001',
+    export_profile_key: 'p0-dataset-export-v2',
+    export_profile_digest: 'e'.repeat(64),
+    approval: {
+      approval_request_id: '99000000-0000-4000-8000-000000000001',
+      validation_id: '95000000-0000-4000-8000-000000000001',
+      status: 'PENDING',
+      requested_by: 'local-admin',
+      requested_at: '2026-07-30T02:00:00Z',
+      approval_decision_id: null,
+      decided_by: null,
+      decided_at: null,
+    },
+    requested_by: 'local-admin',
+    requested_at: '2026-07-30T02:00:00Z',
+    approved_by: null,
+    approved_at: null,
+    started_at: null,
+    completed_at: null,
+    attempt: null,
+    artifact: null,
+    ...overrides,
   }
 }

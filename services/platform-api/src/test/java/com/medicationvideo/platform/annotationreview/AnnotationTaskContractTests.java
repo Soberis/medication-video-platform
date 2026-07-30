@@ -705,6 +705,36 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
 				.andExpect(jsonPath("$.ready_for_approval").value(true))
 				.andExpect(jsonPath("$.blocking_reasons").isEmpty());
+		var exportApprovalIdempotencyKey = "dataset-export-approval-" + UUID.randomUUID();
+		var approvedExportResponse = approveDatasetExport(
+				MEMBER_TOKEN,
+				datasetVersionId,
+				exportApprovalIdempotencyKey)
+				.andExpect(status().isAccepted())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
+				.andExpect(jsonPath("$.status").value("QUEUED"))
+				.andExpect(jsonPath("$.approval.status").value("APPROVED"))
+				.andExpect(jsonPath("$.approval.decided_by")
+						.value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andExpect(jsonPath("$.approved_by")
+						.value(ProjectMembershipTestData.MEMBER_ACTOR))
+				.andExpect(jsonPath("$.attempt.attempt").value(1))
+				.andExpect(jsonPath("$.attempt.status").value("QUEUED"))
+				.andReturn().getResponse().getContentAsString();
+		var datasetExportAttemptId = com.jayway.jsonpath.JsonPath.<String>read(
+				approvedExportResponse, "$.attempt.dataset_export_attempt_id");
+		approveDatasetExport(
+				MEMBER_TOKEN,
+				datasetVersionId,
+				exportApprovalIdempotencyKey)
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.attempt.dataset_export_attempt_id")
+						.value(datasetExportAttemptId))
+				.andExpect(jsonPath("$.status").value("QUEUED"));
+		authorizeDatasetExportDownload(MEMBER_TOKEN, datasetVersionId)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error_code").value("DATASET_EXPORT_NOT_AVAILABLE"));
 
 		this.mockMvc.perform(get(
 						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}",
@@ -713,8 +743,10 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.export_request.dataset_export_id").value(datasetExportId))
-				.andExpect(jsonPath("$.export_request.status").value("REQUESTED"))
-				.andExpect(jsonPath("$.export_request.approval.status").value("PENDING"))
+				.andExpect(jsonPath("$.export_request.status").value("QUEUED"))
+				.andExpect(jsonPath("$.export_request.approval.status").value("APPROVED"))
+				.andExpect(jsonPath("$.export_request.attempt.dataset_export_attempt_id")
+						.value(datasetExportAttemptId))
 				.andExpect(jsonPath("$.can_request_export").value(false));
 		assertEquals(1, count(
 				"SELECT count(*) FROM dataset_export WHERE dataset_version_id = ?",
@@ -722,6 +754,19 @@ class AnnotationTaskContractTests {
 		assertEquals(2, count(
 				"SELECT count(*) FROM approval_request WHERE object_id = ?",
 				datasetVersionId));
+		assertEquals(1, count(
+				"SELECT count(*) FROM approval_decision WHERE approval_request_id = ?",
+				UUID.fromString(exportApprovalRequestId)));
+		assertEquals(1, count(
+				"SELECT count(*) FROM dataset_export_attempt WHERE dataset_export_id = ?",
+				UUID.fromString(datasetExportId)));
+		assertEquals(1, count("""
+				SELECT count(*) FROM outbox_event
+				WHERE aggregate_type = 'DatasetExport'
+				  AND aggregate_id = ?
+				  AND schema_version = 'dataset-export-job.v1'
+				  AND jsonb_exists(payload_json, 'lease_token')
+				""", UUID.fromString(datasetExportId)));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'DATASET_VERSION_BUILD_STARTED'
@@ -745,6 +790,11 @@ class AnnotationTaskContractTests {
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'DATASET_EXPORT_REQUESTED'
+				  AND object_id = ?
+				""", datasetExportId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_EXPORT_APPROVED_AND_QUEUED'
 				  AND object_id = ?
 				""", datasetExportId));
 	}
@@ -1719,6 +1769,30 @@ class AnnotationTaskContractTests {
 				.header("Authorization", "Bearer " + token));
 	}
 
+	private org.springframework.test.web.servlet.ResultActions approveDatasetExport(
+			String token,
+			UUID datasetVersionId,
+			String idempotencyKey) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/exports/approvals",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "dataset-export-approval-request-" + UUID.randomUUID()));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions authorizeDatasetExportDownload(
+			String token,
+			UUID datasetVersionId) throws Exception {
+		return this.mockMvc.perform(post(
+						"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/exports/download-authorizations",
+						PROJECT_ID,
+						datasetVersionId)
+				.header("Authorization", "Bearer " + token)
+				.header("X-Request-Id", "dataset-export-download-request-" + UUID.randomUUID()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(
 			String token,
 			List<UUID> captureSessionIds,
@@ -1896,6 +1970,28 @@ class AnnotationTaskContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("""
+				DELETE FROM export_artifact
+				WHERE dataset_export_id IN (
+				    SELECT dataset_export_id FROM dataset_export WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM inbox_message
+				WHERE consumer_name = 'dataset-export-result-v1'
+				  AND aggregate_id IN (
+				      SELECT dataset_export_id FROM dataset_export WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM outbox_event
+				WHERE aggregate_type = 'DatasetExport'
+				  AND aggregate_id IN (
+				      SELECT dataset_export_id FROM dataset_export WHERE project_id = ?)
+				""", projectId);
+		this.jdbcTemplate.update("""
+				DELETE FROM dataset_export_attempt
+				WHERE dataset_export_id IN (
+				    SELECT dataset_export_id FROM dataset_export WHERE project_id = ?)
+				""", projectId);
 		this.jdbcTemplate.update("DELETE FROM dataset_export WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("""
 				UPDATE dataset_version

@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/dataset-export-result-v1.schema.json",
+  "title": "DatasetExportResultV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "message_id",
+    "export_id",
+    "attempt",
+    "lease_token",
+    "status",
+    "snapshot_digest",
+    "export_profile_digest",
+    "package_sha256",
+    "package_size_bytes",
+    "files",
+    "software_digest",
+    "started_at",
+    "completed_at",
+    "error"
+  ],
+  "properties": {
+    "schema_version": { "const": "dataset-export-result.v1" },
+    "message_id": { "type": "string", "format": "uuid" },
+    "export_id": { "type": "string", "format": "uuid" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "lease_token": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "status": { "enum": ["SUCCEEDED", "FAILED"] },
+    "snapshot_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "export_profile_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "package_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "package_size_bytes": { "type": ["integer", "null"], "minimum": 1 },
+    "files": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "software_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "error": {
+      "oneOf": [
+        { "$ref": "#/$defs/error" },
+        { "type": "null" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "SUCCEEDED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "package_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "package_size_bytes": { "type": "integer", "minimum": 1 },
+          "files": { "minItems": 1 },
+          "error": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "FAILED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "package_sha256": { "type": "null" },
+          "package_size_bytes": { "type": "null" },
+          "files": { "maxItems": 0 },
+          "error": { "$ref": "#/$defs/error" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error_class", "error_code", "safe_message", "retryable"],
+      "properties": {
+        "error_class": {
+          "enum": [
+            "RETRYABLE_TRANSIENT",
+            "RETRYABLE_RESOURCE",
+            "NON_RETRYABLE_INPUT",
+            "NON_RETRYABLE_POLICY",
+            "INTERNAL_BUG"
+          ]
+        },
+        "error_code": {
+          "enum": [
+            "INPUT_DOWNLOAD_FAILED",
+            "INPUT_DIGEST_MISMATCH",
+            "PACKAGE_BUILD_FAILED",
+            "OUTPUT_UPLOAD_FAILED",
+            "OUTPUT_DIGEST_MISMATCH",
+            "CONTRACT_INVALID",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "safe_message": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "retryable": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "error_class": { "enum": ["RETRYABLE_TRANSIENT", "RETRYABLE_RESOURCE"] }
+            },
+            "required": ["error_class"]
+          },
+          "then": { "properties": { "retryable": { "const": true } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_class": { "enum": ["NON_RETRYABLE_INPUT", "NON_RETRYABLE_POLICY"] }
+            },
+            "required": ["error_class"]
+          },
+          "then": { "properties": { "retryable": { "const": false } } }
+        }
+      ]
+    }
+  }
+}

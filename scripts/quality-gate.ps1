@@ -53,6 +53,9 @@ $requiredFiles = @(
     'contracts/events/media-probe-job-v1.schema.json',
     'contracts/events/media-probe-result-v1.schema.json',
     'contracts/events/media-dead-letter-v1.schema.json',
+    'contracts/events/dataset-export-job-v1.schema.json',
+    'contracts/events/dataset-export-result-v1.schema.json',
+    'contracts/events/dataset-export-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
     'contracts/profiles/p0-post-annotation-cleaning-v1.json',
     'contracts/profiles/p0-dataset-export-v1.json',
@@ -69,6 +72,12 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/__main__.py',
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
+    'workers/export-worker/pyproject.toml',
+    'workers/export-worker/uv.lock',
+    'workers/export-worker/README.md',
+    'workers/export-worker/src/medication_export_worker/__main__.py',
+    'workers/export-worker/src/medication_export_worker/processor.py',
+    'workers/export-worker/src/medication_export_worker/package_builder.py',
     'docs/requirements/README.md',
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md',
     'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md',
@@ -138,6 +147,21 @@ try {
 }
 catch {
     Add-Failure "Media dead-letter JSON Schema is invalid: $($_.Exception.Message)"
+}
+
+foreach ($datasetExportEventContract in @(
+    'dataset-export-job-v1.schema.json',
+    'dataset-export-result-v1.schema.json',
+    'dataset-export-dead-letter-v1.schema.json'
+)) {
+    try {
+        Get-Content -LiteralPath (Join-Path $root "contracts/events/$datasetExportEventContract") -Raw |
+            ConvertFrom-Json | Out-Null
+        Add-Pass "Dataset export event JSON Schema is valid JSON: $datasetExportEventContract"
+    }
+    catch {
+        Add-Failure "Dataset export event JSON Schema is invalid ($datasetExportEventContract): $($_.Exception.Message)"
+    }
 }
 
 try {
@@ -449,6 +473,32 @@ else {
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "pytest failed: $projectDir"
+            }
+            if ((Split-Path -Leaf $projectDir) -eq 'export-worker') {
+                $digestOutput = @(& uv run python -c "from pathlib import Path; from medication_export_worker.config import calculate_software_digest; print(calculate_software_digest(Path('.').resolve()))")
+                if ($LASTEXITCODE -ne 0 -or $digestOutput.Count -eq 0) {
+                    $projectFailed = $true
+                    Add-Failure 'Export Worker software digest could not be calculated'
+                }
+                else {
+                    $computedDigest = $digestOutput[-1].Trim()
+                    $environmentExample = Get-Content -LiteralPath (Join-Path $root '.env.example') -Raw
+                    $runtimeDigest = [regex]::Match(
+                        $environmentExample,
+                        '(?m)^EXPORT_WORKER_SOFTWARE_DIGEST=(sha256:[a-f0-9]{64})\r?$'
+                    ).Groups[1].Value
+                    $approvedDigest = [regex]::Match(
+                        $environmentExample,
+                        '(?m)^EXPORT_WORKER_APPROVED_SOFTWARE_DIGEST=(sha256:[a-f0-9]{64})\r?$'
+                    ).Groups[1].Value
+                    if ($computedDigest -eq $runtimeDigest -and $computedDigest -eq $approvedDigest) {
+                        Add-Pass 'Export Worker runtime and approved software digests match source'
+                    }
+                    else {
+                        $projectFailed = $true
+                        Add-Failure 'Export Worker software digests in .env.example are stale'
+                    }
+                }
             }
             if (-not $projectFailed) { Add-Pass "Python gates: $projectDir" }
         }

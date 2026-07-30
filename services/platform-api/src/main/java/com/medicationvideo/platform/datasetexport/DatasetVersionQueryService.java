@@ -27,6 +27,8 @@ class DatasetVersionQueryService {
 	private final DatasetVersionValidationRepository validationRepository;
 	private final DatasetFreezeApprovalService freezeApprovalService;
 	private final DatasetExportRepository exportRepository;
+	private final DatasetExportAttemptRepository exportAttemptRepository;
+	private final ExportArtifactRepository exportArtifactRepository;
 	private final DatasetExportApprovalService exportApprovalService;
 
 	DatasetVersionQueryService(
@@ -41,6 +43,8 @@ class DatasetVersionQueryService {
 			DatasetVersionValidationRepository validationRepository,
 			DatasetFreezeApprovalService freezeApprovalService,
 			DatasetExportRepository exportRepository,
+			DatasetExportAttemptRepository exportAttemptRepository,
+			ExportArtifactRepository exportArtifactRepository,
 			DatasetExportApprovalService exportApprovalService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
@@ -53,6 +57,8 @@ class DatasetVersionQueryService {
 		this.validationRepository = validationRepository;
 		this.freezeApprovalService = freezeApprovalService;
 		this.exportRepository = exportRepository;
+		this.exportAttemptRepository = exportAttemptRepository;
+		this.exportArtifactRepository = exportArtifactRepository;
 		this.exportApprovalService = exportApprovalService;
 	}
 
@@ -117,6 +123,15 @@ class DatasetVersionQueryService {
 				: this.exportApprovalService.find(projectId, datasetVersionId)
 						.orElseThrow(() -> new IllegalStateException(
 								"The dataset export approval request is missing."));
+		var exportAttempt = exportRequest == null
+				? null
+				: this.exportAttemptRepository
+						.findTopByDatasetExportIdOrderByAttemptDesc(exportRequest.getDatasetExportId())
+						.orElse(null);
+		var exportArtifact = exportRequest == null
+				? null
+				: this.exportArtifactRepository.findByDatasetExportId(exportRequest.getDatasetExportId())
+						.orElse(null);
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		return DatasetVersionDetailResponse.from(
 				version,
@@ -152,7 +167,8 @@ class DatasetVersionQueryService {
 						&& !freezeApproval.requestedBy().equals(actorId),
 				exportRequest == null
 						? null
-						: DatasetExportResponse.from(exportRequest, exportApproval),
+						: DatasetExportResponse.from(
+								exportRequest, exportApproval, exportAttempt, exportArtifact),
 				role == ProjectRole.ADMIN
 						&& version.getStatus() == DatasetVersionStatus.FROZEN
 						&& exportRequest == null);

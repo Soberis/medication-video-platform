@@ -91,11 +91,46 @@ class DatasetExportApprovalReadinessServiceTests {
 				response.blockingReasons());
 	}
 
+	@Test
+	void blocksLegacyProfileExecutionUntilItsRealProducersExist() {
+		var fixture = fixture(
+				APPROVER_ID,
+				ProjectRole.ADMIN,
+				Instant.now().plusSeconds(3600),
+				List.of(),
+				DatasetExportProfile.LEGACY_V1_KEY,
+				DatasetExportProfile.LEGACY_V1_DIGEST);
+
+		var response = fixture.service().get(
+				PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID);
+
+		assertFalse(response.readyForApproval());
+		assertEquals(
+				List.of(DatasetExportApprovalReadinessService.EXPORT_PROFILE_NOT_EXECUTABLE),
+				response.blockingReasons());
+	}
+
 	private static Fixture fixture(
 			String actorId,
 			ProjectRole role,
 			Instant expiresAt,
 			List<String> currentEvidenceBlockers) {
+		return fixture(
+				actorId,
+				role,
+				expiresAt,
+				currentEvidenceBlockers,
+				DatasetExportProfile.CURRENT_KEY,
+				DatasetExportProfile.CURRENT_DIGEST);
+	}
+
+	private static Fixture fixture(
+			String actorId,
+			ProjectRole role,
+			Instant expiresAt,
+			List<String> currentEvidenceBlockers,
+			String exportProfileKey,
+			String exportProfileDigest) {
 		var access = mock(ProjectAccessService.class);
 		var versions = mock(DatasetVersionRepository.class);
 		var specifications = mock(DatasetBuildSpecificationRepository.class);
@@ -110,8 +145,8 @@ class DatasetExportApprovalReadinessServiceTests {
 		var validation = mock(DatasetVersionValidation.class);
 
 		when(specification.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);
-		when(specification.getExportProfileKey()).thenReturn(DatasetExportProfile.CURRENT_KEY);
-		when(specification.getExportProfileDigest()).thenReturn(DatasetExportProfile.CURRENT_DIGEST);
+		when(specification.getExportProfileKey()).thenReturn(exportProfileKey);
+		when(specification.getExportProfileDigest()).thenReturn(exportProfileDigest);
 		when(snapshot.getDatasetBuildSnapshotId()).thenReturn(SNAPSHOT_ID);
 		when(snapshot.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);
 		when(snapshot.getSnapshotDigest()).thenReturn(digest('c'));

@@ -70,6 +70,27 @@ class DatasetExport {
 	@Column(name = "requested_at", nullable = false, updatable = false)
 	private Instant requestedAt;
 
+	@Column(name = "approval_decision_id")
+	private UUID approvalDecisionId;
+
+	@Column(name = "approved_by", length = 128)
+	private String approvedBy;
+
+	@Column(name = "approval_idempotency_key", length = 128)
+	private String approvalIdempotencyKey;
+
+	@Column(name = "approval_request_fingerprint", length = 64)
+	private String approvalRequestFingerprint;
+
+	@Column(name = "approved_at")
+	private Instant approvedAt;
+
+	@Column(name = "started_at")
+	private Instant startedAt;
+
+	@Column(name = "completed_at")
+	private Instant completedAt;
+
 	@Version
 	@Column(name = "row_version", nullable = false)
 	private long version;
@@ -140,6 +161,71 @@ class DatasetExport {
 				&& this.requestFingerprint.equals(requestFingerprint);
 	}
 
+	boolean matchesApproval(String approvedBy, String idempotencyKey, String requestFingerprint) {
+		return Objects.equals(this.approvedBy, approvedBy)
+				&& Objects.equals(this.approvalIdempotencyKey, idempotencyKey)
+				&& Objects.equals(this.approvalRequestFingerprint, requestFingerprint);
+	}
+
+	void queue(
+			UUID approvalDecisionId,
+			String approvedBy,
+			String idempotencyKey,
+			String requestFingerprint,
+			Instant approvedAt) {
+		if (this.status != DatasetExportStatus.REQUESTED) {
+			throw new IllegalStateException("Only a requested dataset export can be queued.");
+		}
+		this.approvalDecisionId = Objects.requireNonNull(approvalDecisionId, "approvalDecisionId");
+		this.approvedBy = approvedBy;
+		this.approvalIdempotencyKey = idempotencyKey;
+		this.approvalRequestFingerprint = requestFingerprint;
+		this.approvedAt = approvedAt;
+		this.status = DatasetExportStatus.QUEUED;
+	}
+
+	void start(Instant startedAt) {
+		if (this.status == DatasetExportStatus.RUNNING) {
+			return;
+		}
+		if (this.status == DatasetExportStatus.RETRY_WAIT) {
+			this.status = DatasetExportStatus.QUEUED;
+		}
+		if (this.status != DatasetExportStatus.QUEUED) {
+			throw new DatasetExportExecutionException(
+					"STALE_ATTEMPT", "The dataset export is not queued for this attempt.", false);
+		}
+		this.status = DatasetExportStatus.RUNNING;
+		if (this.startedAt == null) {
+			this.startedAt = startedAt;
+		}
+	}
+
+	void waitForRetry() {
+		if (this.status != DatasetExportStatus.RUNNING) {
+			throw new DatasetExportExecutionException(
+					"STALE_ATTEMPT", "The dataset export is no longer running.", false);
+		}
+		this.status = DatasetExportStatus.RETRY_WAIT;
+	}
+
+	void makeAvailable(Instant completedAt) {
+		complete(DatasetExportStatus.AVAILABLE, completedAt);
+	}
+
+	void fail(Instant completedAt) {
+		complete(DatasetExportStatus.FAILED, completedAt);
+	}
+
+	private void complete(DatasetExportStatus target, Instant completedAt) {
+		if (this.status != DatasetExportStatus.RUNNING) {
+			throw new DatasetExportExecutionException(
+					"STALE_ATTEMPT", "The dataset export is no longer running.", false);
+		}
+		this.status = target;
+		this.completedAt = completedAt;
+	}
+
 	UUID getDatasetExportId() {
 		return this.datasetExportId;
 	}
@@ -200,6 +286,26 @@ class DatasetExport {
 		return this.requestedAt;
 	}
 
+	UUID getApprovalDecisionId() {
+		return this.approvalDecisionId;
+	}
+
+	String getApprovedBy() {
+		return this.approvedBy;
+	}
+
+	Instant getApprovedAt() {
+		return this.approvedAt;
+	}
+
+	Instant getStartedAt() {
+		return this.startedAt;
+	}
+
+	Instant getCompletedAt() {
+		return this.completedAt;
+	}
+
 	long getVersion() {
 		return this.version;
 	}
@@ -210,5 +316,10 @@ enum DatasetExportPurpose {
 }
 
 enum DatasetExportStatus {
-	REQUESTED
+	REQUESTED,
+	QUEUED,
+	RUNNING,
+	RETRY_WAIT,
+	AVAILABLE,
+	FAILED
 }

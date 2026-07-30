@@ -60,6 +60,8 @@ class DatasetVersionController {
 	private final DatasetVersionFreezeService freezeService;
 	private final DatasetExportService exportService;
 	private final DatasetExportApprovalReadinessService exportApprovalReadinessService;
+	private final DatasetExportApprovalCommandService exportApprovalCommandService;
+	private final DatasetExportDownloadService exportDownloadService;
 	private final DatasetVersionQueryService queryService;
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
 
@@ -73,6 +75,8 @@ class DatasetVersionController {
 			DatasetVersionFreezeService freezeService,
 			DatasetExportService exportService,
 			DatasetExportApprovalReadinessService exportApprovalReadinessService,
+			DatasetExportApprovalCommandService exportApprovalCommandService,
+			DatasetExportDownloadService exportDownloadService,
 			DatasetVersionQueryService queryService,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService) {
 		this.service = service;
@@ -84,6 +88,8 @@ class DatasetVersionController {
 		this.freezeService = freezeService;
 		this.exportService = exportService;
 		this.exportApprovalReadinessService = exportApprovalReadinessService;
+		this.exportApprovalCommandService = exportApprovalCommandService;
+		this.exportDownloadService = exportDownloadService;
 		this.queryService = queryService;
 		this.currentAdmissionQueryService = currentAdmissionQueryService;
 	}
@@ -306,6 +312,45 @@ class DatasetVersionController {
 				projectId,
 				datasetVersionId,
 				requireActor(authentication).actorId());
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
+	@PostMapping("/{datasetVersionId}/exports/approvals")
+	ResponseEntity<DatasetExportResponse> approveDatasetExport(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			@RequestHeader(name = "Idempotency-Key")
+			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			Authentication authentication) {
+		var response = this.exportApprovalCommandService.approve(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId(),
+				idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"));
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
+				.cacheControl(CacheControl.noStore())
+				.body(response);
+	}
+
+	@PostMapping("/{datasetVersionId}/exports/download-authorizations")
+	ResponseEntity<DatasetExportDownloadAuthorizationResponse> authorizeDatasetExportDownload(
+			@PathVariable UUID projectId,
+			@PathVariable UUID datasetVersionId,
+			@RequestHeader(name = "X-Request-Id", required = false)
+			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			Authentication authentication) {
+		var response = this.exportDownloadService.authorize(
+				projectId,
+				datasetVersionId,
+				requireActor(authentication).actorId(),
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"));
 		return ResponseEntity.ok()
 				.cacheControl(CacheControl.noStore())
 				.body(response);

@@ -229,6 +229,12 @@ if (-not $SkipWorker) {
     else {
         Start-LocalProcess 'worker' 'Media Worker' 'cmd.exe' "/c uv run --directory workers/media-worker media-worker" (Join-Path $logDirectory 'worker.log')
     }
+    if (Test-ManagedProcessRunning 'export-worker') {
+        Write-Host "Export Worker is already managed by this script (PID $($managedProcesses['export-worker'].processId))." -ForegroundColor Yellow
+    }
+    else {
+        Start-LocalProcess 'export-worker' 'Export Worker' 'cmd.exe' "/c uv run --directory workers/export-worker export-worker" (Join-Path $logDirectory 'export-worker.log')
+    }
 }
 
 if (Test-TcpPortInUse $webPort) {

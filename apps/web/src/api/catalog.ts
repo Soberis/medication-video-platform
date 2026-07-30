@@ -270,16 +270,36 @@ export interface DatasetVersionFreeze {
 export interface DatasetExportApproval {
   approval_request_id: string
   validation_id: string
-  status: 'PENDING'
+  status: 'PENDING' | 'APPROVED'
   requested_by: string
   requested_at: string
+  approval_decision_id: string | null
+  decided_by: string | null
+  decided_at: string | null
+}
+
+export interface DatasetExportAttempt {
+  dataset_export_attempt_id: string
+  attempt: number
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'LOST'
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface DatasetExportArtifact {
+  export_artifact_id: string
+  file_name: 'dataset-export.zip'
+  media_type: 'application/zip'
+  size_bytes: number
+  sha256: string
+  created_at: string
 }
 
 export interface DatasetExport {
   dataset_export_id: string
   project_id: string
   dataset_version_id: string
-  status: 'REQUESTED'
+  status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'AVAILABLE' | 'FAILED'
   purpose: 'MODEL_TRAINING'
   expires_at: string
   dataset_build_specification_id: string
@@ -291,6 +311,23 @@ export interface DatasetExport {
   approval: DatasetExportApproval
   requested_by: string
   requested_at: string
+  approved_by: string | null
+  approved_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  attempt: DatasetExportAttempt | null
+  artifact: DatasetExportArtifact | null
+}
+
+export interface DatasetExportDownloadAuthorization {
+  dataset_export_id: string
+  export_artifact_id: string
+  download_url: string
+  expires_at: string
+  file_name: 'dataset-export.zip'
+  media_type: 'application/zip'
+  size_bytes: number
+  sha256: string
 }
 
 export type DatasetExportApprovalBlocker =
@@ -300,6 +337,7 @@ export type DatasetExportApprovalBlocker =
   | 'DATASET_VERSION_NOT_FROZEN'
   | 'EXPORT_REQUEST_INVALID'
   | 'APPROVAL_REQUEST_INVALID'
+  | 'EXPORT_PROFILE_NOT_EXECUTABLE'
   | 'FROZEN_EVIDENCE_INVALID'
   | 'SNAPSHOT_VALIDATION_MISMATCH'
   | 'CURRENT_ADMISSION_NOT_ELIGIBLE'
@@ -867,6 +905,50 @@ export function getDatasetExportApprovalReadiness(
     `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/exports/approval-readiness`,
     signal,
   )
+}
+
+export async function approveDatasetExport(
+  projectId: string,
+  datasetVersionId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<DatasetExport> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/exports/approvals`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetExport
+  throw await toCatalogError(response)
+}
+
+export async function authorizeDatasetExportDownload(
+  projectId: string,
+  datasetVersionId: string,
+  signal?: AbortSignal,
+): Promise<DatasetExportDownloadAuthorization> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions/${encodeURIComponent(datasetVersionId)}/exports/download-authorizations`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as DatasetExportDownloadAuthorization
+  throw await toCatalogError(response)
 }
 
 export function listClipAssets(

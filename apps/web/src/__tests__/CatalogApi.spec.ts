@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  approveDatasetExport,
   authorizeClipAssetPlayback,
+  authorizeDatasetExportDownload,
   createDatasetBuildSnapshot,
   deleteClipAsset,
   createDatasetVersionDraft,
@@ -513,6 +515,74 @@ describe('catalog API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`,
       expect.objectContaining({ method: 'GET', cache: 'no-store', signal: controller.signal }),
+    )
+  })
+
+  it('approves a ready dataset export with one explicit idempotency key', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_export_id: '97000000-0000-4000-8000-000000000001',
+          project_id: projectId,
+          dataset_version_id: datasetVersionId,
+          status: 'QUEUED',
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(
+      approveDatasetExport(projectId, datasetVersionId, 'dataset-export-approval-0001'),
+    ).resolves.toMatchObject({ status: 'QUEUED' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approvals`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'dataset-export-approval-0001',
+          'X-XSRF-TOKEN': 'csrf-test-token',
+        }),
+      }),
+    )
+  })
+
+  it('requests a short-lived download authorization only after an explicit action', async () => {
+    const datasetVersionId = '90000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_export_id: '97000000-0000-4000-8000-000000000001',
+          export_artifact_id: '98000000-0000-4000-8000-000000000001',
+          download_url: 'https://storage.invalid/dataset-export.zip?signature=synthetic',
+          expires_at: '2026-07-30T03:05:00Z',
+          file_name: 'dataset-export.zip',
+          media_type: 'application/zip',
+          size_bytes: 1024,
+          sha256: 'a'.repeat(64),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+
+    await expect(authorizeDatasetExportDownload(projectId, datasetVersionId)).resolves.toMatchObject({
+      file_name: 'dataset-export.zip',
+      size_bytes: 1024,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/download-authorizations`,
+      expect.objectContaining({
+        method: 'POST',
+        cache: 'no-store',
+        headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'csrf-test-token' }),
+      }),
     )
   })
 
