@@ -125,6 +125,7 @@ export interface DatasetAdmissionPreview {
 }
 
 export type DatasetVersionStatus = 'DRAFT' | 'BUILDING' | 'VALIDATING' | 'FROZEN'
+export type DatasetExportProfileKey = 'p0-dataset-export-v1' | 'p0-dataset-export-v2'
 
 export interface DatasetVersionSummary {
   dataset_version_id: string
@@ -195,7 +196,7 @@ export interface DatasetBuildSpecification {
   label_schema_digest: string
   cleaning_rule_set_digest: string
   dataset_split_plan_id: string
-  export_profile_key: 'p0-dataset-export-v1'
+  export_profile_key: DatasetExportProfileKey
   export_profile_digest: string
   created_by: string
   created_at: string
@@ -285,7 +286,7 @@ export interface DatasetExport {
   dataset_build_snapshot_id: string
   snapshot_digest: string
   dataset_version_validation_id: string
-  export_profile_key: 'p0-dataset-export-v1'
+  export_profile_key: DatasetExportProfileKey
   export_profile_digest: string
   approval: DatasetExportApproval
   requested_by: string

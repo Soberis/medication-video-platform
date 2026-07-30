@@ -139,6 +139,9 @@ class DatasetExportApprovalReadinessService {
 				&& export.getDatasetBuildSnapshotId().equals(snapshot.getDatasetBuildSnapshotId())
 				&& export.getDatasetVersionValidationId()
 						.equals(validation.getDatasetVersionValidationId())
+				&& DatasetExportProfile.isApproved(
+						specification.getExportProfileKey(),
+						specification.getExportProfileDigest())
 				&& export.getExportProfileKey().equals(specification.getExportProfileKey())
 				&& export.getExportProfileDigest().equals(specification.getExportProfileDigest())
 				&& export.getSnapshotDigest().equals(snapshot.getSnapshotDigest())

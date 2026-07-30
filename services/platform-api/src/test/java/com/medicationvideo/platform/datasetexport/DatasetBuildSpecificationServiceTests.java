@@ -43,8 +43,8 @@ class DatasetBuildSpecificationServiceTests {
 		assertEquals(digest('a'), response.labelSchemaDigest());
 		assertEquals(digest('d'), response.cleaningRuleSetDigest());
 		assertEquals(fixture.splitPlan().getDatasetSplitPlanId(), response.datasetSplitPlanId());
-		assertEquals(DatasetExportProfile.PROFILE_KEY, response.exportProfileKey());
-		assertEquals(DatasetExportProfile.PROFILE_DIGEST, response.exportProfileDigest());
+		assertEquals(DatasetExportProfile.CURRENT_KEY, response.exportProfileKey());
+		assertEquals(DatasetExportProfile.CURRENT_DIGEST, response.exportProfileDigest());
 		verify(fixture.access()).lockAndRequireAdministrator(PROJECT_ID, ACTOR_ID);
 		verify(fixture.specifications()).saveAndFlush(any(DatasetBuildSpecification.class));
 		verify(fixture.audit()).record(any());

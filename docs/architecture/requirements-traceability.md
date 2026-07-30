@@ -1,8 +1,8 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.9/配药视频数据管理平台需求文档_V1.9.md`
-> 继承需求基线：V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
+> 当前需求基线：`docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md`
+> 继承需求基线：V1.9、V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-07-30
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集构建。V1.9 继承 V1.8 的内部训练数据平台边界和桌面视口验收范围，并把历史 Vue 门禁替换为 React 门禁。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为 1–100 个明确选择且均当前 eligible 的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。草稿详情与按需准备检查严格分离：项目成员可只读比较每个草稿成员的当前准入事实和固定证据的稳定差异码，查询不写入草稿、不产生审计。拥有至少两个成员的草稿可由项目管理员固定一次 `pilot/holdout` 划分：当前策略以 CaptureSession 为泄漏组，持久化算法版本、随机种子和实际分配，重试受幂等键保护。已有划分且候选 stream 的标签、清洗摘要各自统一时，管理员还可固定一次不可变构建配置，绑定显式候选快照、统一摘要、split 和版本化 `p0-dataset-export-v1`。同一只读查询按 `DRAFT → BUILDING` 守卫列出剩余配置阻断，以及当前准入或固定证据变化；零阻断时，项目管理员可显式开始构建，服务端在同一事务再次校验后记录启动事实与审计并迁移到 `BUILDING`。管理员随后可验证既有关系快照完整性，以版本化规范生成确定性摘要并进入 `VALIDATING`；该步骤复用原始 ClipAsset ID/摘要，不复制成员数据或创建派生 Variant。冻结前 `PASS` 会建立绑定该校验的待审批请求；另一位当前项目管理员批准时重新执行全部技术检查，并原子记录决定、审计和 `FROZEN` 状态。当前仍不提供 WARNING override，不生成或导出构建文件，也不新增 Worker 或队列。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核与后置清洗切片，正在交付 Sprint 3 的数据集构建。V1.10 继承 V1.9 的内部训练数据平台、React 和桌面视口边界，并把 P0 收敛为主 Step 训练数据。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为 1–100 个明确选择且均当前 eligible 的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。草稿详情与按需准备检查严格分离：项目成员可只读比较每个草稿成员的当前准入事实和固定证据的稳定差异码，查询不写入草稿、不产生审计。拥有至少两个成员的草稿可由项目管理员固定一次 `pilot/holdout` 划分：当前策略以 CaptureSession 为泄漏组，持久化算法版本、随机种子和实际分配，重试受幂等键保护。已有划分且候选 stream 的标签、清洗摘要各自统一时，管理员还可固定一次不可变构建配置，绑定显式候选快照、统一摘要、split 和当前 `p0-dataset-export-v2`；历史 v1 保持兼容。同一只读查询按 `DRAFT → BUILDING` 守卫列出剩余配置阻断，以及当前准入或固定证据变化；零阻断时，项目管理员可显式开始构建，服务端在同一事务再次校验后记录启动事实与审计并迁移到 `BUILDING`。管理员随后可验证既有关系快照完整性，以版本化规范生成确定性摘要并进入 `VALIDATING`；该步骤复用原始 ClipAsset ID/摘要，不复制成员数据或创建派生 Variant。冻结前 `PASS` 会建立绑定该校验的待审批请求；另一位当前项目管理员批准时重新执行全部技术检查，并原子记录决定、审计和 `FROZEN` 状态。当前仍不提供 WARNING override，不生成或导出构建文件，也不新增 Worker 或队列。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 ## 2. 状态定义
 
@@ -84,6 +84,8 @@
 | FR-020 冲突标注对比 | P1 | `annotationreview` | comparison query | annotation_comparison | 同源 revision 对齐且不混用不同 schema | DEFERRED |
 | FR-021 标注质检报告 | P1 | `annotationreview` | quality report API | annotation_quality_report | 指标口径、分母、时间窗和 schema 版本明确 | DEFERRED |
 
+V1.10 明确 P0 标注只包含主 Step 时间段。Object 框及其 COCO 导出属于 P1，进入实现前必须先批准真实训练用例、工具边界、标签规范和验收样本。
+
 ### 3.3 清洗、隐私和数据集
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
@@ -96,15 +98,15 @@
 | FR-027 创建数据集版本 | P0 | `datasetexport` | create/read DatasetVersion；read current admission/build readiness；create/read split plan、build specification、build snapshot 和 freeze-preflight validation；start build | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 管理员仅可为 1–100 个明确选择且全部当前 eligible 的 CaptureSession 创建 `DRAFT` 候选快照；成员可读取固定证据并比较当前事实。至少两个成员时可固定一次可复现 pilot/holdout 划分；随后可把显式候选规则、统一 label/clean 摘要、split 和 P0 export profile 固定为一次不可变构建配置。管理员显式开始构建时，服务端重新校验全部当前准入和证据差异，零阻断才迁移到 `BUILDING`；随后验证 session/stream、原始输入、revision、清洗和 leakage/split 关系完整性，以版本化确定性摘要封印快照并进入 `VALIDATING`。管理员可在该状态记录一次当前准入、引用、摘要、防泄漏和构建契约技术校验；创建、配置、启动、封印、校验、幂等和审计事实均保存 | PI |
 | FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview；draft creation；draft current-admission/build-readiness read；freeze-preflight validation | dataset_member_session、dataset_member_stream、dataset_version_validation | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；管理员创建草稿时服务端重新校验所有当前事实，并保存证据快照。草稿准备检查逐成员返回当前预览和相对快照的稳定证据变化，同时汇总当前准入/证据漂移阻断，且不修改草稿或写入审计。进入 `VALIDATING` 后，一次性技术校验及冻结批准命令都会重新核对当前准入和证据变化。未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可进入草稿；WARNING 批准例外仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | create/read immutable split plan | dataset_split_plan、dataset_split_assignment | 已实现 `CAPTURE_SESSION_HASH_RANK_V1`：CaptureSession 同时作为最小成员和泄漏组，服务端保存正整数 seed、稳定哈希排名及 pilot/holdout 实际结果；同一草稿只允许一个计划，冲突失败且不会自动降级。操作者/设备/批次等更强分组和正式比例仍待样本设计批准 | PI |
-| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/jobs | dataset_build_specification、dataset_export；export_artifact（计划） | `p0-dataset-export-v1` 已固定 README、label schema、manifest、action segments、COCO、split、clean video 和 SHA256SUMS；管理员现可为 FROZEN 版本提交唯一 `MODEL_TRAINING`、显式到期的 `REQUESTED` 记录和待审批请求。项目成员可按需读取审批准备度，稳定区分管理员角色、自批、到期和冻结证据阻断，查询无副作用。独立导出审批、后台作业、实际产物及 Golden 校验仍待实现 | PI |
+| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/jobs | dataset_build_specification、dataset_export；export_artifact（计划） | `p0-dataset-export-v2` 固定 README、label schema、含 streams 的 manifest、action segments、split、与 `RAW_CLIP_ASSET_V1` 一致的 raw video 和 SHA256SUMS；v1 历史记录保持兼容。管理员现可为 FROZEN 版本提交唯一 `MODEL_TRAINING`、显式到期的 `REQUESTED` 记录和待审批请求。项目成员可按需读取无副作用的审批准备度。独立导出审批、后台作业、实际产物及 Golden 校验仍待实现 | PI |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze-preflight validation；freeze command/approval | dataset_version_validation、dataset_version、approval_request、approval_decision | `PASS` 自动创建绑定该 validation 的待审批请求；申请人不能自批，另一位当前项目管理员批准时重新执行全部技术检查，并原子记录唯一决定、审计和 `FROZEN` 状态。证据变化不产生部分审批，冻结后成员、revision、split 和规则不可修改，只能新建版本；冻结不授权导出 | I |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
 
 FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移链不可变，运行 API、前端客户端、策略 profile 和状态投影已从 P0 删除。未来若重新启用，必须重新建立需求、威胁模型、用途边界、契约和迁移，不能直接恢复历史代码。
 
-### 3.4 V1.2～V1.9 新增与细化需求
+### 3.4 V1.2～V1.10 新增与细化需求
 
-V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁；V1.10 将 P0 收敛为主 Step 训练包并后置 Object/COCO。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -124,7 +126,7 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、独立复核、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V45 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、职责分离冻结和冻结版本导出申请。当前仍不含 AnnotationProject、指南版本、对象框、抽样复核、WARNING 批准例外、更强泄漏组或导出审批后作业与产物。
+FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、独立复核、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V46 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、职责分离冻结、冻结版本导出申请和 Step-only Profile 演进。当前仍不含 AnnotationProject、指南版本、抽样复核、WARNING 批准例外、更强泄漏组或导出审批后作业与产物；对象框已按 V1.10 明确后置为 P1。
 
 Flyway V43 补充 `DATASET_FREEZE_VALIDATION_V1`：它在 `VALIDATING` 内保存一次当前准入、引用、
 关系快照摘要、CaptureSession 级 split 隔离和构建契约的不可变技术结论。该预检本身不迁移状态；
@@ -139,7 +141,11 @@ Flyway V45 和 OpenAPI 0.49 增加冻结版本导出申请：仅项目管理员�
 `p0-dataset-export-v1`，并原子保存 `REQUESTED` DatasetExport、`PENDING` 审批请求和审计。合同测试
 覆盖项目角色、幂等重放、唯一申请及详情展示；当前不推进 `QUEUED`，也不生成文件或下载授权。
 
-OpenAPI 0.50 增加导出审批准备检查：ACTIVE 项目成员显式请求后，服务端以 `REPEATABLE_READ` 只读事务
+Flyway V46 和 OpenAPI 0.52 将新建构建配置切换为 `p0-dataset-export-v2`，以准确 key/digest
+配对保留 v1 历史兼容，并同步 React 类型。v2 只承诺主 Step、CaptureSession split 和
+`RAW_CLIP_ASSET_V1`；不伪装 Object、COCO、帧或派生清洗视频已经存在。
+
+OpenAPI 0.50 首次增加导出审批准备检查；当前 OpenAPI 0.52 继续该语义。ACTIVE 项目成员显式请求后，服务端以 `REPEATABLE_READ` 只读事务
 核对当前角色、申请人与审批人分离、用途有效期、`FROZEN` 状态、导出/审批绑定以及 V43 全部当前证据。
 后端单元/合同测试和 React 交互测试覆盖申请人、普通成员、另一位管理员、过期授权和证据漂移；检查不写
 审批决定、审计、Outbox 或业务状态，也不能替代未来批准命令的事务内复核。
@@ -207,9 +213,9 @@ AI 启用决策前必须冻结：
 
 ### 5.3 需求基线归一化决策
 
-V1.9 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.9 对继承条款的实现归一化口径，不修改历史基线。
+V1.10 是当前业务需求基线，未变更条款按版本链继承。下表记录 TD-V1.10 对继承条款的实现归一化口径，不修改历史基线。
 
-| 继承的 V1.1.13 表述 | TD-V1.9 实现口径 | 原因 |
+| 继承的 V1.1.13 表述 | TD-V1.10 实现口径 | 原因 |
 | --- | --- | --- |
 | 通用 `confidence` | 人工标注使用明确的确定性/不确定性字段；AI 分数必须记录任务、来源和语义版本 | 不同来源的分数不可直接比较 |
 | 秒或 0.01 秒粒度 | UI 可显示秒，小数输入在边界转换；存储和契约统一使用整数毫秒 | 避免浮点累计误差和跨语言歧义 |
@@ -219,8 +225,10 @@ V1.9 是当前业务需求基线，未变更条款按版本链继承。下表记
 | 默认 70/15/15 划分 | 小样本验收采用 pilot/holdout；正式比例由样本设计批准，并按 session/操作者/批次等泄漏组隔离 | 固定比例不等于科学抽样 |
 | 隐私漏检为 0 | 仅表示批准样本经最终人工检查后观察到 0 个漏检，不外推为总体风险绝对为零 | 避免统计结论越界 |
 | 采集视频按规范不包含敏感信息 | 上传完整性校验后允许项目成员直接审核播放；若意外发现不应保留的敏感内容，则记录人工质量 `REJECTED` 和固定原因，并由管理员软删除 | 不把低风险假设变成“绝对没有风险”，也不恢复已经移出 P0 的独立隔离状态机 |
+| P0 同时交付 Step、Object 和 COCO | P0 只交付主 Step 训练包；Object/COCO 在真实用例、工具和验收样本获批后进入 P1 | 当前只有 Step 生产者和可执行校验，避免把缺失能力写入交付契约 |
+| 导出 `videos/clean/` | 当前 Profile 使用与冻结快照一致的 `videos/raw/`；派生清洗视频等待真实生产者 | `RAW_CLIP_ASSET_V1` 是当前可验证输入事实 |
 
-V1.2～V1.9 新增需求归一化：
+V1.2～V1.10 新增需求归一化：
 
 | 新增业务表达 | 技术/验收口径 | 原因 |
 | --- | --- | --- |

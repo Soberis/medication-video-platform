@@ -65,11 +65,16 @@ class DatasetExportServiceTests {
 
 	@Test
 	void replaysTheSameExportRequestWithoutCreatingAnotherApproval() {
-		var fixture = fixture(true);
+		var fixture = fixture(
+				true,
+				DatasetExportProfile.LEGACY_V1_KEY,
+				DatasetExportProfile.LEGACY_V1_DIGEST);
 		var expiresAt = Instant.now().plusSeconds(3600).truncatedTo(ChronoUnit.MICROS);
 		var idempotencyKey = "dataset-export-request-0002";
 		var fingerprint = DatasetExportService.requestFingerprint(
 				fixture.version().getDatasetVersionId(),
+				DatasetExportProfile.LEGACY_V1_KEY,
+				DatasetExportProfile.LEGACY_V1_DIGEST,
 				DatasetExportPurpose.MODEL_TRAINING,
 				expiresAt);
 		var existing = DatasetExport.request(
@@ -183,6 +188,14 @@ class DatasetExportServiceTests {
 	}
 
 	private static Fixture fixture(boolean frozen) {
+		return fixture(
+				frozen,
+				DatasetExportProfile.CURRENT_KEY,
+				DatasetExportProfile.CURRENT_DIGEST);
+	}
+
+	private static Fixture fixture(
+			boolean frozen, String exportProfileKey, String exportProfileDigest) {
 		var access = mock(ProjectAccessService.class);
 		var versions = mock(DatasetVersionRepository.class);
 		var specifications = mock(DatasetBuildSpecificationRepository.class);
@@ -216,8 +229,8 @@ class DatasetExportServiceTests {
 
 		var specification = mock(DatasetBuildSpecification.class);
 		when(specification.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);
-		when(specification.getExportProfileKey()).thenReturn(DatasetExportProfile.PROFILE_KEY);
-		when(specification.getExportProfileDigest()).thenReturn(DatasetExportProfile.PROFILE_DIGEST);
+		when(specification.getExportProfileKey()).thenReturn(exportProfileKey);
+		when(specification.getExportProfileDigest()).thenReturn(exportProfileDigest);
 		var snapshot = mock(DatasetBuildSnapshot.class);
 		when(snapshot.getDatasetBuildSnapshotId()).thenReturn(SNAPSHOT_ID);
 		when(snapshot.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);

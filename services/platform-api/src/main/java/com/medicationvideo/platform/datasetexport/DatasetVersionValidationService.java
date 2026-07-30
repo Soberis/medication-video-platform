@@ -258,8 +258,9 @@ class DatasetVersionValidationService {
 				&& DatasetBuildSnapshot.INPUT_VARIANT_POLICY.equals(snapshot.getInputVariantPolicy())
 				&& specification.getSelectionRuleVersion()
 						== DatasetSelectionRuleVersion.EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1
-				&& DatasetExportProfile.PROFILE_KEY.equals(specification.getExportProfileKey())
-				&& DatasetExportProfile.PROFILE_DIGEST.equals(specification.getExportProfileDigest())
+				&& DatasetExportProfile.isApproved(
+						specification.getExportProfileKey(),
+						specification.getExportProfileDigest())
 				&& splitPlan.getPolicyVersion() == DatasetSplitPolicy.CAPTURE_SESSION_HASH_RANK_V1;
 	}
 

@@ -56,6 +56,7 @@ $requiredFiles = @(
     'contracts/profiles/media-probe-baseline-v1.json',
     'contracts/profiles/p0-post-annotation-cleaning-v1.json',
     'contracts/profiles/p0-dataset-export-v1.json',
+    'contracts/profiles/p0-dataset-export-v2.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
@@ -69,6 +70,7 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
     'docs/requirements/README.md',
+    'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md',
     'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md',
     'docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx',
     'docs/architecture/README.md',
@@ -174,22 +176,35 @@ catch {
     Add-Failure "P0 post-annotation cleaning profile is invalid: $($_.Exception.Message)"
 }
 
-try {
-    $datasetExportProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/p0-dataset-export-v1.json') -Raw).TrimEnd("`r", "`n")
-    $datasetExportProfileContent | ConvertFrom-Json | Out-Null
-    Add-Pass 'P0 dataset export profile is valid JSON'
+foreach ($datasetExportProfile in @(
+    @{
+        Name = 'v1'
+        Path = 'contracts/profiles/p0-dataset-export-v1.json'
+        Digest = '3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888'
+    },
+    @{
+        Name = 'v2'
+        Path = 'contracts/profiles/p0-dataset-export-v2.json'
+        Digest = '5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96'
+    }
+)) {
+    try {
+        $datasetExportProfileContent = (Get-Content -LiteralPath (Join-Path $root $datasetExportProfile.Path) -Raw).TrimEnd("`r", "`n")
+        $datasetExportProfileContent | ConvertFrom-Json | Out-Null
+        Add-Pass "P0 dataset export profile $($datasetExportProfile.Name) is valid JSON"
 
-    $datasetExportProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($datasetExportProfileContent)
-    $datasetExportProfileDigest = Get-Sha256Hex $datasetExportProfileBytes
-    if ($datasetExportProfileDigest -eq '3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888') {
-        Add-Pass 'P0 dataset export profile digest matches the server contract'
+        $datasetExportProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($datasetExportProfileContent)
+        $datasetExportProfileDigest = Get-Sha256Hex $datasetExportProfileBytes
+        if ($datasetExportProfileDigest -eq $datasetExportProfile.Digest) {
+            Add-Pass "P0 dataset export profile $($datasetExportProfile.Name) digest matches the server contract"
+        }
+        else {
+            Add-Failure "P0 dataset export profile $($datasetExportProfile.Name) digest changed unexpectedly: $datasetExportProfileDigest"
+        }
     }
-    else {
-        Add-Failure "P0 dataset export profile digest changed unexpectedly: $datasetExportProfileDigest"
+    catch {
+        Add-Failure "P0 dataset export profile $($datasetExportProfile.Name) is invalid: $($_.Exception.Message)"
     }
-}
-catch {
-    Add-Failure "P0 dataset export profile is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {

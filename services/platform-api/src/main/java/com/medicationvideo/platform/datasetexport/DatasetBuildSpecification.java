@@ -74,8 +74,8 @@ class DatasetBuildSpecification {
 		this.labelSchemaDigest = labelSchemaDigest;
 		this.cleaningRuleSetDigest = cleaningRuleSetDigest;
 		this.datasetSplitPlanId = splitPlan.getDatasetSplitPlanId();
-		this.exportProfileKey = DatasetExportProfile.PROFILE_KEY;
-		this.exportProfileDigest = DatasetExportProfile.PROFILE_DIGEST;
+		this.exportProfileKey = DatasetExportProfile.CURRENT_KEY;
+		this.exportProfileDigest = DatasetExportProfile.CURRENT_DIGEST;
 		this.createdBy = createdBy;
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;

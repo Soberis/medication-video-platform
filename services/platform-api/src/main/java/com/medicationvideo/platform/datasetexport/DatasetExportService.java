@@ -65,10 +65,15 @@ class DatasetExportService {
 			Instant expiresAt) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var normalizedExpiry = expiresAt.truncatedTo(ChronoUnit.MICROS);
-		var fingerprint = requestFingerprint(datasetVersionId, purpose, normalizedExpiry);
 		var replay = this.exportRepository.findByProjectIdAndRequestedByAndIdempotencyKey(
 				projectId, actorId, idempotencyKey);
 		if (replay.isPresent()) {
+			var fingerprint = requestFingerprint(
+					datasetVersionId,
+					replay.get().getExportProfileKey(),
+					replay.get().getExportProfileDigest(),
+					purpose,
+					normalizedExpiry);
 			if (!replay.get().matchesRequest(actorId, idempotencyKey, fingerprint)) {
 				throw new DatasetVersionException(
 						"DATASET_EXPORT_IDEMPOTENCY_KEY_REUSED",
@@ -102,10 +107,17 @@ class DatasetExportService {
 
 		var specification = this.specificationRepository.findByDatasetVersionId(datasetVersionId)
 				.orElseThrow(DatasetExportService::frozenEvidenceMissing);
-		if (!DatasetExportProfile.PROFILE_KEY.equals(specification.getExportProfileKey())
-				|| !DatasetExportProfile.PROFILE_DIGEST.equals(specification.getExportProfileDigest())) {
+		if (!DatasetExportProfile.isApproved(
+				specification.getExportProfileKey(),
+				specification.getExportProfileDigest())) {
 			throw frozenEvidenceMissing();
 		}
+		var fingerprint = requestFingerprint(
+				datasetVersionId,
+				specification.getExportProfileKey(),
+				specification.getExportProfileDigest(),
+				purpose,
+				normalizedExpiry);
 		var snapshot = this.snapshotRepository.findByDatasetVersionId(datasetVersionId)
 				.orElseThrow(DatasetExportService::frozenEvidenceMissing);
 		if (!snapshot.getDatasetBuildSnapshotId().equals(version.getBuildSnapshotId())
@@ -188,12 +200,26 @@ class DatasetExportService {
 
 	static String requestFingerprint(
 			UUID datasetVersionId, DatasetExportPurpose purpose, Instant expiresAt) {
+		return requestFingerprint(
+				datasetVersionId,
+				DatasetExportProfile.CURRENT_KEY,
+				DatasetExportProfile.CURRENT_DIGEST,
+				purpose,
+				expiresAt);
+	}
+
+	static String requestFingerprint(
+			UUID datasetVersionId,
+			String exportProfileKey,
+			String exportProfileDigest,
+			DatasetExportPurpose purpose,
+			Instant expiresAt) {
 		var canonical = String.join(
 				"\n",
 				COMMAND_VERSION,
 				datasetVersionId.toString(),
-				DatasetExportProfile.PROFILE_KEY,
-				DatasetExportProfile.PROFILE_DIGEST,
+				exportProfileKey,
+				exportProfileDigest,
 				purpose.name(),
 				expiresAt.truncatedTo(ChronoUnit.MICROS).toString());
 		try {

@@ -110,8 +110,8 @@ class DatasetExportApprovalReadinessServiceTests {
 		var validation = mock(DatasetVersionValidation.class);
 
 		when(specification.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);
-		when(specification.getExportProfileKey()).thenReturn(DatasetExportProfile.PROFILE_KEY);
-		when(specification.getExportProfileDigest()).thenReturn(DatasetExportProfile.PROFILE_DIGEST);
+		when(specification.getExportProfileKey()).thenReturn(DatasetExportProfile.CURRENT_KEY);
+		when(specification.getExportProfileDigest()).thenReturn(DatasetExportProfile.CURRENT_DIGEST);
 		when(snapshot.getDatasetBuildSnapshotId()).thenReturn(SNAPSHOT_ID);
 		when(snapshot.getDatasetBuildSpecificationId()).thenReturn(SPECIFICATION_ID);
 		when(snapshot.getSnapshotDigest()).thenReturn(digest('c'));

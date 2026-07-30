@@ -81,7 +81,8 @@ class DatasetBuildSpecificationContractTests {
 				.andExpect(jsonPath("$.label_schema_digest").value(LABEL_DIGEST))
 				.andExpect(jsonPath("$.cleaning_rule_set_digest").value(CLEANING_DIGEST))
 				.andExpect(jsonPath("$.dataset_split_plan_id").value(SPLIT_PLAN_ID.toString()))
-				.andExpect(jsonPath("$.export_profile_key").value("p0-dataset-export-v1"))
+				.andExpect(jsonPath("$.export_profile_key").value(DatasetExportProfile.CURRENT_KEY))
+				.andExpect(jsonPath("$.export_profile_digest").value(DatasetExportProfile.CURRENT_DIGEST))
 				.andReturn();
 		var specificationId = com.jayway.jsonpath.JsonPath.read(
 				firstResponse.getResponse().getContentAsString(), "$.dataset_build_specification_id").toString();
@@ -116,6 +117,65 @@ class DatasetBuildSpecificationContractTests {
 				Integer.class,
 				PROJECT_ID,
 				specificationId));
+	}
+
+	@Test
+	void replaysAHistoricalV1BuildSpecificationWithoutRewritingIt() throws Exception {
+		var specificationId = new UUID(0, 704);
+		var idempotencyKey = "dataset-build-contract-v1-replay";
+		this.jdbcTemplate.update("""
+				INSERT INTO dataset_build_specification (
+				    dataset_build_specification_id, dataset_version_id, project_id,
+				    selection_rule_version, label_schema_digest, cleaning_rule_set_digest,
+				    dataset_split_plan_id, export_profile_key, export_profile_digest,
+				    created_by, idempotency_key, request_fingerprint, created_at)
+				VALUES (?, ?, ?, 'EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""",
+				specificationId,
+				DATASET_VERSION_ID,
+				PROJECT_ID,
+				LABEL_DIGEST,
+				CLEANING_DIGEST,
+				SPLIT_PLAN_ID,
+				DatasetExportProfile.LEGACY_V1_KEY,
+				DatasetExportProfile.LEGACY_V1_DIGEST,
+				ProjectMembershipTestData.ADMIN_ACTOR,
+				idempotencyKey,
+				DatasetBuildSpecificationService.requestFingerprint(
+						DATASET_VERSION_ID,
+						DatasetExportProfile.LEGACY_V1_KEY,
+						DatasetExportProfile.LEGACY_V1_DIGEST),
+				Timestamp.from(CREATED_AT));
+		var auditCountBeforeReplay = this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*)
+				FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'DATASET_BUILD_SPECIFICATION_CREATED'
+				""",
+				Integer.class,
+				PROJECT_ID);
+
+		this.mockMvc.perform(post(
+				"/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}/build-specifications",
+				PROJECT_ID,
+				DATASET_VERSION_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.dataset_build_specification_id").value(specificationId.toString()))
+				.andExpect(jsonPath("$.export_profile_key").value(DatasetExportProfile.LEGACY_V1_KEY))
+				.andExpect(jsonPath("$.export_profile_digest").value(DatasetExportProfile.LEGACY_V1_DIGEST));
+
+		assertEquals(auditCountBeforeReplay, this.jdbcTemplate.queryForObject(
+				"""
+				SELECT count(*)
+				FROM audit_event
+				WHERE project_id = ?
+				  AND action = 'DATASET_BUILD_SPECIFICATION_CREATED'
+				""",
+				Integer.class,
+				PROJECT_ID));
 	}
 
 	private void insertDraftWithSplit() {

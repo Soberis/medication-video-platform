@@ -175,8 +175,8 @@ class DatasetVersionBuildServiceTests {
 				digest('c'),
 				digest('d'),
 				SPLIT_PLAN_ID,
-				DatasetExportProfile.PROFILE_KEY,
-				DatasetExportProfile.PROFILE_DIGEST,
+				DatasetExportProfile.CURRENT_KEY,
+				DatasetExportProfile.CURRENT_DIGEST,
 				ACTOR_ID,
 				Instant.EPOCH);
 	}

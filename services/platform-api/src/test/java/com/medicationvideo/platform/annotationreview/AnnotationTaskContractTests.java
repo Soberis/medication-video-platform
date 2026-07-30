@@ -653,7 +653,7 @@ class AnnotationTaskContractTests {
 				.andExpect(jsonPath("$.dataset_build_snapshot_id").value(buildSnapshotId))
 				.andExpect(jsonPath("$.snapshot_digest").value(snapshotDigest))
 				.andExpect(jsonPath("$.dataset_version_validation_id").value(validationId))
-				.andExpect(jsonPath("$.export_profile_key").value("p0-dataset-export-v1"))
+				.andExpect(jsonPath("$.export_profile_key").value("p0-dataset-export-v2"))
 				.andExpect(jsonPath("$.approval.status").value("PENDING"))
 				.andExpect(jsonPath("$.approval.requested_by")
 						.value(ProjectMembershipTestData.ADMIN_ACTOR))

@@ -1,0 +1,1 @@
+{"annotation_scope":"STEP_ONLY","input_variant_policy":"RAW_CLIP_ASSET_V1","manifest_streams_required":true,"profile_key":"p0-dataset-export-v2","required_artifacts":["README.md","label_schema.json","manifest.jsonl","action_segments.jsonl","splits/","videos/raw/","SHA256SUMS"],"schema_version":"dataset-export-profile.v1","split_unit":"CAPTURE_SESSION"}

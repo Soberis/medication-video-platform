@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.51.0
+  version: 0.52.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -393,10 +393,10 @@ paths:
       description: >-
         Requires ACTIVE ADMIN membership. After one immutable split plan exists, binds the explicit
         candidate snapshot selection rule, the one common label-schema digest, the one common
-        cleaning-rule digest, that split plan and p0-dataset-export-v1 to the DRAFT. Replaying the
-        same request with the same idempotency key returns the same specification. The command does
-        not advance the DatasetVersion to BUILDING, re-evaluate current admission, freeze data,
-        create files, start a Worker or authorize data release.
+        cleaning-rule digest, that split plan and the current p0-dataset-export-v2 Step-only profile
+        to the DRAFT. Historical v1 specifications remain readable and idempotently replayable. The
+        command does not advance the DatasetVersion to BUILDING, re-evaluate current admission,
+        freeze data, create files, start a Worker or authorize data release.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetVersionId"
@@ -703,10 +703,10 @@ paths:
       description: >-
         Requires ACTIVE ADMIN membership and a FROZEN DatasetVersion. Creates exactly one REQUESTED
         DatasetExport bound to the immutable build specification, relational snapshot, PASS
-        validation and p0-dataset-export-v1 profile, together with a pending independent approval
-        request and audit event. P0 accepts only MODEL_TRAINING and an explicit future expiry.
-        This command does not approve, queue, generate, publish or authorize download of any file.
-        Replaying the same idempotency key and request returns the original record.
+        validation and its approved v1 or v2 export profile, together with a pending independent
+        approval request and audit event. P0 accepts only MODEL_TRAINING and an explicit future
+        expiry. This command does not approve, queue, generate, publish or authorize download of
+        any file. Replaying the same idempotency key and request returns the original record.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - $ref: "#/components/parameters/DatasetVersionId"
@@ -5885,6 +5885,19 @@ components:
     DatasetBuildSpecification:
       type: object
       additionalProperties: false
+      oneOf:
+        - title: Historical P0 export profile v1
+          properties:
+            export_profile_key:
+              const: p0-dataset-export-v1
+            export_profile_digest:
+              const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+        - title: Current Step-only P0 export profile v2
+          properties:
+            export_profile_key:
+              const: p0-dataset-export-v2
+            export_profile_digest:
+              const: 5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96
       required:
         - dataset_build_specification_id
         - dataset_version_id
@@ -5918,10 +5931,13 @@ components:
           format: uuid
         export_profile_key:
           type: string
-          const: p0-dataset-export-v1
+          enum: [p0-dataset-export-v1, p0-dataset-export-v2]
+          description: New specifications use v2; v1 is retained only for historical records.
         export_profile_digest:
           type: string
-          const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+          enum:
+            - 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+            - 5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96
         created_by:
           type: string
           maxLength: 128
@@ -6194,6 +6210,19 @@ components:
     DatasetExport:
       type: object
       additionalProperties: false
+      oneOf:
+        - title: Historical P0 export profile v1
+          properties:
+            export_profile_key:
+              const: p0-dataset-export-v1
+            export_profile_digest:
+              const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+        - title: Current Step-only P0 export profile v2
+          properties:
+            export_profile_key:
+              const: p0-dataset-export-v2
+            export_profile_digest:
+              const: 5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96
       required:
         - dataset_export_id
         - project_id
@@ -6244,10 +6273,12 @@ components:
           format: uuid
         export_profile_key:
           type: string
-          const: p0-dataset-export-v1
+          enum: [p0-dataset-export-v1, p0-dataset-export-v2]
         export_profile_digest:
           type: string
-          const: 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+          enum:
+            - 3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888
+            - 5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96
         approval:
           $ref: "#/components/schemas/DatasetExportApproval"
         requested_by:

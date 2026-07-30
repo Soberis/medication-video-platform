@@ -274,8 +274,9 @@ DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
 
 当前 V39 允许在 `DRAFT` 内固定一次 CaptureSession 级 pilot/holdout 计划。V40 允许管理员在 split
 存在且候选 stream 使用统一 label/clean 摘要时，再固定一次不可变 `DatasetBuildSpecification`，绑定
-显式候选快照、统一摘要、split 与 `p0-dataset-export-v1`。两个命令都不会自动推进 `BUILDING`；调整
-任一已固定事实必须创建新 DatasetVersion。
+显式候选快照、统一摘要、split 与导出 Profile。V46 后的新配置固定 Step-only
+`p0-dataset-export-v2`；历史 v1 配置保持不可变且兼容。两个命令都不会自动推进 `BUILDING`；
+调整任一已固定事实必须创建新 DatasetVersion。
 
 当前只读构建准备检查会按上述 `DRAFT → BUILDING` 守卫报告尚未固定的配置，并同时提示当前准入
 失败或固定证据变化。它不写 DatasetVersion、不产生审计，也不执行状态迁移；“检查通过”仍不等同于
@@ -303,12 +304,13 @@ V44 在 `PASS` 技术校验的同一事务创建一条绑定该 validation 的 `
 导出授权，也不创建文件、Worker 或队列。
 
 V45 允许项目管理员为 `FROZEN` 版本提交一次 `MODEL_TRAINING` 导出申请。申请固定
-`p0-dataset-export-v1`、构建规范、关系快照、通过的 validation、用途和未来到期时间，并在同一事务创建
+构建规范中的导出 Profile、关系快照、通过的 validation、用途和未来到期时间，并在同一事务创建
 `REQUESTED` DatasetExport、`PENDING` 独立审批请求和审计。相同幂等请求返回原记录；同一版本和 profile
 不建立第二个申请。`REQUESTED` 不进入 `QUEUED`，也不创建文件、Worker 消息、下载授权或导出路径；
 只有后续审批与作业消费者一起落地时才允许推进。
 
-OpenAPI 0.50 增加按需、只读的审批准备检查。它在同一个 `REPEATABLE_READ` 视图中核对当前项目角色、
+V46 将新建构建配置切换为 v2，并用准确 key/digest 配对兼容 v1 历史记录；状态机没有变化。
+OpenAPI 0.52 提供按需、只读的审批准备检查。它在同一个 `REPEATABLE_READ` 视图中核对当前项目角色、
 申请人与审批人分离、purpose 到期时间、`FROZEN` 状态、导出申请/审批引用和 V43 全部当前证据，返回
 稳定阻断码。该查询不写审批决定、审计或业务状态；即使结果为 ready，后续批准命令仍必须在入队事务中
 重新执行全部检查。

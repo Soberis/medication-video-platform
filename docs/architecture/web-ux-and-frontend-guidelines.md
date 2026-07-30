@@ -8,8 +8,8 @@
 
 发生冲突时按以下顺序处理：
 
-1. `docs/requirements/baselines/V1.9/配药视频数据管理平台需求文档_V1.9.md`；
-2. V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 V1.1.13（V1.9 未变更条款的继承来源）；
+1. `docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md`；
+2. V1.9、V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 V1.1.13（V1.10 未变更条款的继承来源）；
 3. [总体技术设计](./配药平台技术设计.md)；
 4. `docs/adr/` 中已批准的技术决策；
 5. [状态机与领域守卫](./state-machines.md)、[安全、隐私与保留销毁](./security-privacy-retention.md)等专题设计；

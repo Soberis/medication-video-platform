@@ -56,7 +56,11 @@ class DatasetBuildSpecificationService {
 		var replay = this.specificationRepository.findByProjectIdAndCreatedByAndIdempotencyKey(
 				projectId, actorId, idempotencyKey);
 		if (replay.isPresent()) {
-			if (!replay.get().matchesCreateRequest(fingerprint)) {
+			var replayFingerprint = requestFingerprint(
+					datasetVersionId,
+					replay.get().getExportProfileKey(),
+					replay.get().getExportProfileDigest());
+			if (!replay.get().matchesCreateRequest(replayFingerprint)) {
 				throw new DatasetVersionException(
 						"DATASET_BUILD_SPECIFICATION_IDEMPOTENCY_KEY_REUSED",
 						"The idempotency key was already used for a different build specification.", 409);
@@ -130,8 +134,8 @@ class DatasetBuildSpecificationService {
 						"dataset_split_plan_id", splitPlan.getDatasetSplitPlanId().toString(),
 						"label_schema_digest", labelSchemaDigest,
 						"cleaning_rule_set_digest", cleaningRuleSetDigest,
-						"export_profile_key", DatasetExportProfile.PROFILE_KEY,
-						"export_profile_digest", DatasetExportProfile.PROFILE_DIGEST,
+						"export_profile_key", specification.getExportProfileKey(),
+						"export_profile_digest", specification.getExportProfileDigest(),
 						"request_fingerprint", fingerprint)));
 		return DatasetBuildSpecificationResponse.from(specification);
 	}
@@ -144,10 +148,18 @@ class DatasetBuildSpecificationService {
 	}
 
 	static String requestFingerprint(UUID datasetVersionId) {
+		return requestFingerprint(
+				datasetVersionId,
+				DatasetExportProfile.CURRENT_KEY,
+				DatasetExportProfile.CURRENT_DIGEST);
+	}
+
+	static String requestFingerprint(
+			UUID datasetVersionId, String exportProfileKey, String exportProfileDigest) {
 		var canonical = DatasetSelectionRuleVersion.EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1.name()
 				+ "\n" + datasetVersionId
-				+ "\n" + DatasetExportProfile.PROFILE_KEY
-				+ "\n" + DatasetExportProfile.PROFILE_DIGEST;
+				+ "\n" + exportProfileKey
+				+ "\n" + exportProfileDigest;
 		try {
 			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
 					.digest(canonical.getBytes(StandardCharsets.UTF_8)));
