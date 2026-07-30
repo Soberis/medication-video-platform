@@ -29,6 +29,7 @@ describe('LocalUploadView', () => {
     stubCatalog([project])
     const user = userEvent.setup()
     renderRoute(<LocalUploadView />)
+    await selectProject(user, '合成测试项目')
     await user.upload(screen.getByLabelText('本机视频'), [
       new File(['video-a'], 'first.mp4', { type: 'video/mp4' }),
       new File(['video-b'], 'second.mp4', { type: 'video/mp4' }),
@@ -37,6 +38,21 @@ describe('LocalUploadView', () => {
     expect(screen.getByText('second.mp4')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '开始上传（2 个视频）' })).toBeInTheDocument()
     expect(screen.getByText(/按顺序分别上传/)).toBeInTheDocument()
+  })
+
+  it('requires a project before local videos can be selected', async () => {
+    stubCatalog([project])
+    const user = userEvent.setup()
+    renderRoute(<LocalUploadView />)
+
+    const fileInput = screen.getByLabelText('本机视频')
+    expect(fileInput).toBeDisabled()
+    expect(screen.getByText('请先选择所属项目，再选择本机视频。')).toBeInTheDocument()
+
+    await selectProject(user, '合成测试项目')
+
+    expect(fileInput).not.toBeDisabled()
+    expect(screen.getByText(/平台会按顺序分别上传/)).toBeInTheDocument()
   })
 
   it('clears a project that is no longer authorized after refresh', async () => {

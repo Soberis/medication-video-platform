@@ -334,11 +334,14 @@ export default function LocalUploadView() {
                 type="file"
                 accept="video/*"
                 multiple
-                disabled={isUploading}
+                aria-describedby="local-upload-files-hint"
+                disabled={isUploading || !selectedProjectId}
                 onChange={selectFiles}
               />
-              <p className="form-hint">
-                可一次选择多个视频；平台会按顺序分别上传，避免把多个视频误组装为同一次拍摄。
+              <p id="local-upload-files-hint" className="form-hint">
+                {selectedProjectId
+                  ? '可一次选择多个视频；平台会按顺序分别上传，避免把多个视频误组装为同一次拍摄。'
+                  : '请先选择所属项目，再选择本机视频。'}
               </p>
             </div>
             {selectedFiles.length > 0 && tasks.length === 0 ? (

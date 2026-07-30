@@ -88,12 +88,44 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '采集事件日志' })).toHaveAttribute(
+    const eventLogLink = within(navigation).getByRole('link', { name: '采集事件日志' })
+    expect(eventLogLink).toHaveAttribute(
       'href',
       `/projects/${projectId}/event-logs`,
     )
+    expect(eventLogLink).toHaveAttribute('aria-current', 'page')
+    expect(within(navigation).getByText('管理').closest('details')).toHaveClass('nav-more-active')
+    expect(within(navigation).getByRole('link', { name: '项目' })).not.toHaveAttribute(
+      'aria-current',
+    )
     expect(within(navigation).queryByText('项目成员')).not.toBeInTheDocument()
     expect(screen.getByText('采集事件日志页面')).toBeInTheDocument()
+  })
+
+  it('only highlights local upload on the local-upload page', () => {
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [{ path: 'uploads/new', element: <div>本地上传页面</div> }],
+        },
+      ],
+      ['/uploads/new'],
+      { username: 'platform-admin', role: 'ADMIN' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '本地上传' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByText('管理').closest('details')).not.toHaveClass(
+      'nav-more-active',
+    )
+    expect(within(navigation).getByText('上传排障').closest('a')).not.toHaveAttribute(
+      'aria-current',
+    )
   })
 
   it('only exposes project rename and archive commands to project administrators', async () => {

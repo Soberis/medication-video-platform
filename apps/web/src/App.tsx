@@ -1,10 +1,24 @@
 import { App as AntdApp, Button, Tag } from 'antd'
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
+import {
+  Link,
+  matchPath,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router'
 
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 
-const managementPaths = ['/folders', '/members', '/event-logs', '/uploads', '/admin/users']
+const managementRoutePatterns = [
+  '/projects/:projectId/folders',
+  '/projects/:projectId/members',
+  '/projects/:projectId/event-logs',
+  paths.uploads,
+  paths.accounts,
+] as const
 
 export default function AppShell() {
   const auth = useAuth()
@@ -13,7 +27,9 @@ export default function AppShell() {
   const location = useLocation()
   const { projectId = '' } = useParams()
   const isAdministrator = auth.session?.role === 'ADMIN'
-  const isManagementRoute = managementPaths.some((path) => location.pathname.includes(path))
+  const isManagementRoute = managementRoutePatterns.some(
+    (path) => matchPath({ path, end: true }, location.pathname) !== null,
+  )
 
   async function handleLogout() {
     try {
@@ -38,35 +54,39 @@ export default function AppShell() {
           配药视频数据管理平台
         </Link>
         <nav className="primary-nav" aria-label="主导航">
-          <NavLink to={paths.projects}>项目</NavLink>
+          <NavLink end to={paths.projects}>
+            项目
+          </NavLink>
           {projectId ? <NavLink to={paths.sessions(projectId)}>配药操作</NavLink> : null}
           {projectId ? <NavLink to={paths.assets(projectId)}>视频资产</NavLink> : null}
           {projectId ? <NavLink to={paths.annotationTasks(projectId)}>标注任务</NavLink> : null}
           {projectId ? <NavLink to={paths.datasets(projectId)}>数据集版本</NavLink> : null}
-          <NavLink to={paths.localUpload}>本地上传</NavLink>
+          <NavLink end to={paths.localUpload}>
+            本地上传
+          </NavLink>
           <details className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}>
             <summary>管理</summary>
             <div className="nav-more-menu">
               {projectId ? (
-                <NavLink to={paths.folders(projectId)} onClick={closeManagementMenu}>
+                <NavLink end to={paths.folders(projectId)} onClick={closeManagementMenu}>
                   文件夹
                 </NavLink>
               ) : null}
               {projectId && isAdministrator ? (
-                <NavLink to={paths.memberships(projectId)} onClick={closeManagementMenu}>
+                <NavLink end to={paths.memberships(projectId)} onClick={closeManagementMenu}>
                   项目成员
                 </NavLink>
               ) : null}
               {projectId ? (
-                <NavLink to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
+                <NavLink end to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
                   采集事件日志
                 </NavLink>
               ) : null}
-              <NavLink to={paths.uploads} onClick={closeManagementMenu}>
+              <NavLink end to={paths.uploads} onClick={closeManagementMenu}>
                 上传排障
               </NavLink>
               {isAdministrator ? (
-                <NavLink to={paths.accounts} onClick={closeManagementMenu}>
+                <NavLink end to={paths.accounts} onClick={closeManagementMenu}>
                   账号管理
                 </NavLink>
               ) : null}
