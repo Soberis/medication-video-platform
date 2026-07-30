@@ -56,6 +56,7 @@ class DatasetExportExecutionService {
 	private final ClipAssetExportReadService assetReadService;
 	private final AnnotationExportQueryService annotationQueryService;
 	private final DatasetExportStoragePort storage;
+	private final DatasetExportOutputCleanup outputCleanup;
 	private final DatasetExportResultInboxPort inbox;
 	private final DatasetExportAttemptQueueService attemptQueue;
 	private final DatasetExportRetryPolicy retryPolicy;
@@ -78,6 +79,7 @@ class DatasetExportExecutionService {
 			ClipAssetExportReadService assetReadService,
 			AnnotationExportQueryService annotationQueryService,
 			DatasetExportStoragePort storage,
+			DatasetExportOutputCleanup outputCleanup,
 			DatasetExportResultInboxPort inbox,
 			DatasetExportAttemptQueueService attemptQueue,
 			DatasetExportRetryPolicy retryPolicy,
@@ -101,6 +103,7 @@ class DatasetExportExecutionService {
 		this.assetReadService = assetReadService;
 		this.annotationQueryService = annotationQueryService;
 		this.storage = storage;
+		this.outputCleanup = outputCleanup;
 		this.inbox = inbox;
 		this.attemptQueue = attemptQueue;
 		this.retryPolicy = retryPolicy;
@@ -344,10 +347,7 @@ class DatasetExportExecutionService {
 
 		var error = request.error();
 		attempt.fail(error, now);
-		var upload = attempt.getUpload();
-		if (upload != null) {
-			this.storage.abort(upload);
-		}
+		this.outputCleanup.discard(attempt);
 		if (this.retryPolicy.shouldRetry(error, attemptNumber)) {
 			export.waitForRetry();
 			var nextAttempt = attemptNumber + 1;
@@ -373,7 +373,7 @@ class DatasetExportExecutionService {
 			Instant now) {
 		var manifestError = validateFileManifest(export, request.files());
 		if (manifestError != null) {
-			deleteOrAbort(attempt);
+			this.outputCleanup.discard(attempt);
 			return manifestError;
 		}
 		var upload = attempt.getUpload();
@@ -480,20 +480,6 @@ class DatasetExportExecutionService {
 			}
 		}
 		return null;
-	}
-
-	private void deleteOrAbort(DatasetExportAttempt attempt) {
-		var upload = attempt.getUpload();
-		if (upload == null) {
-			return;
-		}
-		if (this.storage.findCompletedObject(upload).isPresent()) {
-			this.storage.delete(new DatasetExportStoragePort.ObjectReference(
-					upload.bucket(), upload.objectKey()));
-		}
-		else {
-			this.storage.abort(upload);
-		}
 	}
 
 	private DatasetExportInboxReceipt recordReceipt(

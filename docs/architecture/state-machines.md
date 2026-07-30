@@ -322,6 +322,11 @@ V47 与 OpenAPI 0.53 增加 v2 导出执行闭环。另一位当前项目管理�
 `ExportArtifact`。历史 v1 事实保持可读、可校验；在真实 Object/COCO 和 clean video 生产者缺失时，
 审批准备明确阻断 v1 执行，不能用空文件或重命名原视频冒充历史 Profile。
 
+V48 增加导出 attempt 过期租约恢复。调度器只选择超过 grace period 的 `RUNNING` 候选，并在锁定
+DatasetExport 与最新 attempt 后再次确认；旧 attempt 原子进入 `LOST`，其临时输出被清理。未达上限时，
+导出进入 `RETRY_WAIT` 并立即创建新的 `QUEUED` attempt、message ID、lease capability 和 Outbox；
+达到上限时导出进入 `FAILED`。旧租约、旧心跳和迟到结果永久失效。
+
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
 ### 8.2 DatasetExport
@@ -337,8 +342,8 @@ REQUESTED → QUEUED → RUNNING → AVAILABLE
 - Worker 只写 attempt 临时前缀；`AVAILABLE` 前不可签发下载地址。
 - 当前切片在结果接受事务中校验文件集合、固定输入、对象大小/SHA-256、ZIP 摘要和软件摘要，不增加一个
   仅用于展示的 `VALIDATING` 状态。
-- 只有 Worker 明确返回的可重试错误进入 `RETRY_WAIT` 并创建新 attempt；超过上限或不可重试错误进入
-  `FAILED`。
+- Worker 明确返回的可重试错误，或超过 grace period 的失联租约，都会进入 `RETRY_WAIT` 并创建新
+  attempt；超过上限或不可重试错误进入 `FAILED`。
 - `expires_at` 到期后拒绝新的下载授权；当前不伪造 `EXPIRED` 或取消状态，导出包物理保留按策略独立处理。
 
 ## 9. 通用异步作业状态

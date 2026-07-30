@@ -85,9 +85,14 @@ class DatasetExportExecutionModelTests {
 		assertTrue(policy.shouldRetry(transientFailure, 2));
 		assertFalse(policy.shouldRetry(transientFailure, 3));
 		assertFalse(policy.shouldRetry(inputFailure, 1));
+		assertTrue(policy.hasAttemptsRemaining(2));
+		assertFalse(policy.hasAttemptsRemaining(3));
 		assertEquals(
 				Instant.EPOCH.plusSeconds(10),
 				policy.nextAvailableAt(3, Instant.EPOCH));
+		assertThrows(
+				IllegalArgumentException.class,
+				() -> policy.nextAvailableAt(4, Instant.EPOCH));
 	}
 
 	@Test

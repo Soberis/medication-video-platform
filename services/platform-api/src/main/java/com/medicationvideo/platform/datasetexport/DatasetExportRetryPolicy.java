@@ -30,12 +30,20 @@ class DatasetExportRetryPolicy {
 
 	boolean shouldRetry(DatasetExportErrorPayload error, int attempt) {
 		return error.retryable()
-				&& attempt < this.maxAttempts
+				&& hasAttemptsRemaining(attempt)
 				&& (error.errorClass() == DatasetExportErrorClass.RETRYABLE_TRANSIENT
 						|| error.errorClass() == DatasetExportErrorClass.RETRYABLE_RESOURCE);
 	}
 
+	boolean hasAttemptsRemaining(int completedAttempt) {
+		return completedAttempt < this.maxAttempts;
+	}
+
 	Instant nextAvailableAt(int nextAttempt, Instant now) {
+		if (nextAttempt < 2 || nextAttempt > this.maxAttempts) {
+			throw new IllegalArgumentException(
+					"The next dataset export attempt is outside the retry policy.");
+		}
 		var multiplier = 1L << Math.min(nextAttempt - 2, 20);
 		var delay = this.baseDelay.multipliedBy(multiplier);
 		return now.plus(delay.compareTo(this.maxDelay) > 0 ? this.maxDelay : delay);

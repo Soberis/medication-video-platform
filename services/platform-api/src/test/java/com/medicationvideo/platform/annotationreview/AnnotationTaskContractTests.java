@@ -22,11 +22,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.medicationvideo.platform.support.CaptureMediaProjectionTestData;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
@@ -53,6 +55,9 @@ class AnnotationTaskContractTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private ApplicationContext applicationContext;
 
 	@BeforeEach
 	void setUp() {
@@ -346,7 +351,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void administratorsStartSealValidateAndFreezeAReadyDatasetBuildExactlyOnce() throws Exception {
+	void administratorsBuildFreezeApproveAndRecoverDatasetExportExactlyOnce() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
 		var draftResponse = createDatasetDraft(
@@ -795,6 +800,61 @@ class AnnotationTaskContractTests {
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE action = 'DATASET_EXPORT_APPROVED_AND_QUEUED'
+				  AND object_id = ?
+				""", datasetExportId));
+
+		var exportId = UUID.fromString(datasetExportId);
+		for (var attemptNumber = 1; attemptNumber <= 3; attemptNumber++) {
+			var recoveredAt = Instant.now()
+					.plusSeconds(attemptNumber)
+					.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+			expireDatasetExportAttempt(exportId, attemptNumber, recoveredAt);
+			assertEquals(1, recoverExpiredDatasetExports(recoveredAt));
+			assertEquals("LOST", this.jdbcTemplate.queryForObject("""
+					SELECT status FROM dataset_export_attempt
+					WHERE dataset_export_id = ? AND attempt = ?
+					""", String.class, exportId, attemptNumber));
+			assertEquals("WORKER_LEASE_LOST", this.jdbcTemplate.queryForObject("""
+					SELECT error_code FROM dataset_export_attempt
+					WHERE dataset_export_id = ? AND attempt = ?
+					""", String.class, exportId, attemptNumber));
+			if (attemptNumber < 3) {
+				assertEquals("RETRY_WAIT", this.jdbcTemplate.queryForObject(
+						"SELECT status FROM dataset_export WHERE dataset_export_id = ?",
+						String.class,
+						exportId));
+				assertEquals(attemptNumber + 1, count("""
+						SELECT count(*) FROM dataset_export_attempt
+						WHERE dataset_export_id = ?
+						""", exportId));
+			}
+		}
+		assertEquals("FAILED", this.jdbcTemplate.queryForObject(
+				"SELECT status FROM dataset_export WHERE dataset_export_id = ?",
+				String.class,
+				exportId));
+		assertEquals(3, count("""
+				SELECT count(*) FROM outbox_event
+				WHERE aggregate_type = 'DatasetExport'
+				  AND aggregate_id = ?
+				  AND schema_version = 'dataset-export-job.v1'
+				""", exportId));
+		assertEquals(3, count("""
+				SELECT count(DISTINCT payload_json ->> 'lease_token') FROM outbox_event
+				WHERE aggregate_type = 'DatasetExport'
+				  AND aggregate_id = ?
+				  AND schema_version = 'dataset-export-job.v1'
+				""", exportId));
+		assertEquals(2, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_EXPORT_RETRY_SCHEDULED'
+				  AND reason_code = 'WORKER_LEASE_LOST'
+				  AND object_id = ?
+				""", datasetExportId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'DATASET_EXPORT_FAILED'
+				  AND reason_code = 'WORKER_LEASE_LOST'
 				  AND object_id = ?
 				""", datasetExportId));
 	}
@@ -1791,6 +1851,44 @@ class AnnotationTaskContractTests {
 						datasetVersionId)
 				.header("Authorization", "Bearer " + token)
 				.header("X-Request-Id", "dataset-export-download-request-" + UUID.randomUUID()));
+	}
+
+	private void expireDatasetExportAttempt(
+			UUID exportId, int attemptNumber, Instant recoveredAt) {
+		var leaseStartedAt = recoveredAt.minusSeconds(20);
+		this.jdbcTemplate.update("""
+				UPDATE dataset_export
+				SET status = 'RUNNING',
+				    started_at = COALESCE(started_at, ?),
+				    row_version = row_version + 1
+				WHERE dataset_export_id = ?
+				""", Timestamp.from(leaseStartedAt), exportId);
+		this.jdbcTemplate.update("""
+				UPDATE dataset_export_attempt
+				SET status = 'RUNNING',
+				    worker_id = 'synthetic-export-worker',
+				    lease_started_at = ?,
+				    lease_until = ?,
+				    last_heartbeat_at = ?,
+				    started_at = ?,
+				    updated_at = ?,
+				    row_version = row_version + 1
+				WHERE dataset_export_id = ? AND attempt = ?
+				""",
+				Timestamp.from(leaseStartedAt),
+				Timestamp.from(recoveredAt.minusSeconds(10)),
+				Timestamp.from(leaseStartedAt),
+				Timestamp.from(leaseStartedAt),
+				Timestamp.from(leaseStartedAt),
+				exportId,
+				attemptNumber);
+	}
+
+	private int recoverExpiredDatasetExports(Instant recoveredAt) {
+		return ReflectionTestUtils.invokeMethod(
+				this.applicationContext.getBean("datasetExportRecoveryService"),
+				"recoverExpiredAttempts",
+				recoveredAt);
 	}
 
 	private org.springframework.test.web.servlet.ResultActions createDatasetDraft(

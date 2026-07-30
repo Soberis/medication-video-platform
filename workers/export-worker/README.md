@@ -9,6 +9,8 @@
 4. 向 Core API 提交文件清单和包摘要；只有服务端复核通过后才会成为 `AVAILABLE`。
 
 Worker 不连接业务数据库，不接触账号会话，也不记录签名 URL、lease token 或对象 key。
+如果 Worker 未能继续心跳，Core API 会在租约和 grace period 到期后将旧 attempt 标记为
+`LOST`，清理其临时输出，并按最大尝试次数决定重新入队或终止导出；旧租约不能复活。
 
 本地运行由仓库根目录的 `scripts/start-local.ps1` 管理。单独运行：
 

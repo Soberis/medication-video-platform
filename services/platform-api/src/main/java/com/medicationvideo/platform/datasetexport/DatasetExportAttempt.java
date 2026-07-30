@@ -190,6 +190,26 @@ class DatasetExportAttempt {
 		this.updatedAt = now;
 	}
 
+	void lose(Instant now) {
+		if (this.status != DatasetExportAttemptStatus.RUNNING) {
+			throw new DatasetExportExecutionException(
+					"STALE_ATTEMPT", "The dataset export attempt is no longer running.", false);
+		}
+		this.status = DatasetExportAttemptStatus.LOST;
+		this.errorClass = "RETRYABLE_RESOURCE";
+		this.errorCode = "WORKER_LEASE_LOST";
+		this.safeErrorMessage = "The Worker stopped renewing its dataset export lease.";
+		this.errorRetryable = true;
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
+	boolean isRecoverableAt(Instant cutoff) {
+		return this.status == DatasetExportAttemptStatus.RUNNING
+				&& this.leaseUntil != null
+				&& !this.leaseUntil.isAfter(cutoff);
+	}
+
 	void requireActiveLease(Instant now) {
 		if (this.status != DatasetExportAttemptStatus.RUNNING
 				|| this.leaseUntil == null

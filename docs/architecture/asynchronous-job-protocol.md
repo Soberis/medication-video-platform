@@ -248,9 +248,10 @@ job 与资产入库状态才进入终态失败。
 RabbitMQ 路由和 Worker 身份。批准命令原子创建首次 attempt 与 Outbox；Worker 领取后通过
 attempt-scoped 租约换取短期输入和 multipart 输出能力，不能读取对象 key 或业务数据库。成功结果必须
 包含包摘要及准确文件清单，Core API 核对临时对象、Profile、固定输入和批准软件摘要后才登记正式
-`ExportArtifact`。Worker 明确报告的可重试错误会创建新 attempt；当前尚未实现导出 attempt 的过期
-租约恢复扫描，因此 Worker 进程在未回传结果前崩溃仍可能使导出停留在 `RUNNING`，这是下一项必须补齐
-的故障恢复能力，不能靠 UI 轮询或人工改库掩盖。
+`ExportArtifact`。Worker 明确报告的可重试错误会创建新 attempt。失联 attempt 超过 lease 和 grace
+period 后，恢复扫描会在锁定导出及最新 attempt 的事务中再次确认过期，将旧 attempt 标为 `LOST`，
+清理其 multipart 或已完成临时对象，并立即创建新 capability、attempt 与 Outbox；达到最大尝试次数时
+导出进入 `FAILED`。默认 grace period 为 5 分钟、每 30 秒扫描最多 20 个候选；旧心跳和迟到结果不能复活。
 
 ## 9. 取消协议
 
