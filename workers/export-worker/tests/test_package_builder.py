@@ -87,7 +87,7 @@ def lease(video: bytes, *, document: dict[str, object] | None = None) -> LeaseGr
     )
 
 
-def test_builds_byte_identical_verified_package(tmp_path: Path) -> None:
+def test_builds_byte_identical_v2_golden_package(tmp_path: Path) -> None:
     video = b"synthetic-video-bytes"
     grant = lease(video)
     source = tmp_path / "input.mp4"
@@ -100,17 +100,72 @@ def test_builds_byte_identical_verified_package(tmp_path: Path) -> None:
 
     assert first.sha256 == second.sha256
     assert first.path.read_bytes() == second.path.read_bytes()
+    video_path = (
+        "videos/raw/00000000-0000-0000-0000-000000000207/"
+        "camera-0-00000000-0000-0000-0000-000000000206.mp4"
+    )
+    assert grant.sessions[0].streams[0].video_path == video_path
+    video_sha256 = hashlib.sha256(video).hexdigest()
+    golden_files = {
+        "README.md": (
+            "# P0 Step Dataset\n\n"
+            "Internal MODEL_TRAINING export. This package contains frozen raw ClipAsset bytes "
+            "and independently reviewed primary Step segments. It does not imply privacy release "
+            "or external sharing approval.\n\n"
+            "- Dataset version: 00000000-0000-0000-0000-000000000204\n"
+            f"- Snapshot SHA-256: {'b' * 64}\n"
+            "- Export profile: p0-dataset-export-v2\n"
+            "- Export profile SHA-256: "
+            "5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96\n"
+            "- Split unit: CAPTURE_SESSION\n"
+            "- Input policy: RAW_CLIP_ASSET_V1\n"
+        ).encode(),
+        "label_schema.json": (
+            '{"label_schema_id":"00000000-0000-0000-0000-000000000209",'
+            '"labels":[{"description":"合成测试标签","display_name":"准备药品",'
+            '"label_id":"prepare_dose","label_type":"PRIMARY_STEP","sort_order":1}],'
+            f'"schema_digest":"{'d' * 64}","schema_key":"p0-primary-step",'
+            '"schema_version":"v1"}\n'
+        ).encode(),
+        "manifest.jsonl": (
+            '{"capture_session_id":"00000000-0000-0000-0000-000000000207",'
+            '"split":"pilot","streams":[{'
+            f'"annotation_document_sha256":"{'c' * 64}",'
+            '"annotation_revision_id":"00000000-0000-0000-0000-000000000208",'
+            '"camera_index":0,'
+            '"camera_stream_id":"00000000-0000-0000-0000-000000000205",'
+            '"clip_asset_id":"00000000-0000-0000-0000-000000000206",'
+            '"content_type":"video/mp4",'
+            f'"sha256":"{video_sha256}","size_bytes":21,"video_path":"{video_path}"'
+            "}]}\n"
+        ).encode(),
+        "action_segments.jsonl": (
+            f'{{"annotation_document_sha256":"{'c' * 64}",'
+            '"annotation_revision_id":"00000000-0000-0000-0000-000000000208",'
+            '"annotation_schema_version":"annotation-document.v1",'
+            '"camera_stream_id":"00000000-0000-0000-0000-000000000205",'
+            '"capture_session_id":"00000000-0000-0000-0000-000000000207",'
+            '"clip_asset_id":"00000000-0000-0000-0000-000000000206",'
+            '"segments":[{"end_ms":900,"label":"prepare_dose","start_ms":10}]}\n'
+        ).encode(),
+        "splits/holdout.txt": b"",
+        "splits/pilot.txt": b"00000000-0000-0000-0000-000000000207\n",
+        video_path: video,
+    }
+    golden_files["SHA256SUMS"] = "".join(
+        f"{hashlib.sha256(content).hexdigest()}  {path}\n"
+        for path, content in sorted(golden_files.items())
+    ).encode()
+
     with zipfile.ZipFile(first.path) as archive:
         names = set(archive.namelist())
-        assert names == {file.path for file in first.files}
-        manifest = json.loads(archive.read("manifest.jsonl"))
+        assert names == set(golden_files)
+        assert {file.path for file in first.files} == set(golden_files)
+        for path, expected_content in golden_files.items():
+            assert archive.read(path) == expected_content
+
+        manifest = json.loads(golden_files["manifest.jsonl"])
         assert manifest["streams"][0]["sha256"] == hashlib.sha256(video).hexdigest()
-        assert archive.read("splits/pilot.txt").decode().strip() == str(
-            grant.sessions[0].capture_session_id
-        )
-        checksums = archive.read("SHA256SUMS").decode()
-        assert "manifest.jsonl" in checksums
-        assert grant.sessions[0].streams[0].video_path in checksums
 
 
 def test_rejects_missing_step_segments(tmp_path: Path) -> None:
