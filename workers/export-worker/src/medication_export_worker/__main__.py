@@ -6,7 +6,11 @@ from medication_export_worker.api import CoreApiClient
 from medication_export_worker.config import Settings
 from medication_export_worker.consumer import DatasetExportConsumer
 from medication_export_worker.package_builder import DatasetPackageBuilder
-from medication_export_worker.processor import JobProcessor
+from medication_export_worker.processor import (
+    JobProcessor,
+    PackageBuilder,
+    SyntheticFirstAttemptFailureBuilder,
+)
 
 
 def main() -> None:
@@ -20,9 +24,12 @@ def main() -> None:
         settings.worker_bearer_token,
         settings.worker_id,
     )
+    builder: PackageBuilder = DatasetPackageBuilder()
+    if settings.synthetic_fail_first_attempt:
+        builder = SyntheticFirstAttemptFailureBuilder(builder)
     processor = JobProcessor(
         client,
-        DatasetPackageBuilder(),
+        builder,
         settings.software_digest,
         settings.temp_dir,
     )

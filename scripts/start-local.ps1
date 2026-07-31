@@ -4,6 +4,8 @@ param(
     [switch]$SkipWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
+    [switch]$RestartExportWorker,
+    [switch]$ExportWorkerSyntheticFailFirstAttempt,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
@@ -133,6 +135,23 @@ function Restart-ManagedApi {
     Save-ManagedProcesses
 }
 
+function Restart-ManagedExportWorker {
+    if (-not $managedProcesses.Contains('export-worker')) {
+        return
+    }
+
+    $processId = [int]$managedProcesses['export-worker'].processId
+    if ($null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+        & taskkill.exe /PID $processId /T /F | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not stop the managed Export Worker process (PID $processId)."
+        }
+        Write-Host "Stopped managed Export Worker (PID $processId)." -ForegroundColor Yellow
+    }
+    $managedProcesses.Remove('export-worker')
+    Save-ManagedProcesses
+}
+
 Import-LocalEnvironment $exampleEnvFile
 if (Test-Path -LiteralPath $localEnvFile) {
     Import-LocalEnvironment $localEnvFile
@@ -189,8 +208,39 @@ $webPort = [int]($env:WEB_PORT ?? '5173')
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
 
+if ($Worker -and $SkipWorker) {
+    throw 'Use either -Worker or -SkipWorker, not both.'
+}
+if ($RestartExportWorker -and $SkipWorker) {
+    throw 'Restarting the Export Worker requires workers to be enabled.'
+}
+if ($ExportWorkerSyntheticFailFirstAttempt -and $SkipWorker) {
+    throw 'Synthetic Export Worker failure injection requires workers to be enabled.'
+}
+if ($InfrastructureOnly -and ($RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt)) {
+    throw 'Infrastructure-only startup cannot restart or configure the Export Worker.'
+}
+if ($ExportWorkerSyntheticFailFirstAttempt -and -not $RestartExportWorker) {
+    throw 'Synthetic Export Worker failure injection requires -RestartExportWorker.'
+}
+if ($ExportWorkerSyntheticFailFirstAttempt -and $env:DATA_PROFILE -ne 'synthetic') {
+    throw 'Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic.'
+}
+
+$env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'false'
+$env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'false'
+if ($ExportWorkerSyntheticFailFirstAttempt) {
+    $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
+    $env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'true'
+    $env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'true'
+    Write-Host 'Export Worker will inject one synthetic first-attempt failure for recovery acceptance.' -ForegroundColor Yellow
+}
+
 if ($RestartApi) {
     Restart-ManagedApi
+}
+if ($RestartExportWorker) {
+    Restart-ManagedExportWorker
 }
 
 if ($InfrastructureOnly) {
@@ -211,10 +261,6 @@ elseif (Test-ManagedProcessRunning 'api') {
 else {
     Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\platform-api\\mvnw.cmd -f services\\platform-api\\pom.xml -Dspring-boot.run.profiles=local spring-boot:run" $apiLogPath
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
-}
-
-if ($Worker -and $SkipWorker) {
-    throw 'Use either -Worker or -SkipWorker, not both.'
 }
 
 if (-not $SkipWorker) {

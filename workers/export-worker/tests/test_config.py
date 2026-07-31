@@ -53,3 +53,35 @@ def test_rejects_an_invalid_configured_digest(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(ValueError, match="must use sha256"):
         Settings.from_environment(environment(EXPORT_WORKER_SOFTWARE_DIGEST="not-a-digest"))
+
+
+def test_enables_synthetic_failure_injection_only_with_all_explicit_guards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    settings = Settings.from_environment(
+        environment(
+            DATA_PROFILE="synthetic",
+            RUN_DATASET_EXPORT_ACCEPTANCE="true",
+            RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE="true",
+            EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT="true",
+        ),
+    )
+
+    assert settings.synthetic_fail_first_attempt is True
+
+
+def test_rejects_synthetic_failure_injection_outside_explicit_recovery_acceptance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    with pytest.raises(ValueError, match="recovery acceptance authorization"):
+        Settings.from_environment(
+            environment(
+                DATA_PROFILE="synthetic",
+                RUN_DATASET_EXPORT_ACCEPTANCE="true",
+                EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT="true",
+            ),
+        )

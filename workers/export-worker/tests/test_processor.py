@@ -30,6 +30,7 @@ from medication_export_worker.processor import (
     DeadLetterReason,
     DeliveryDisposition,
     JobProcessor,
+    SyntheticFirstAttemptFailureBuilder,
 )
 
 MESSAGE_ID = UUID("00000000-0000-0000-0000-000000000301")
@@ -49,6 +50,7 @@ SOFTWARE_DIGEST = "sha256:" + "d" * 64
 
 def job_body(
     *,
+    attempt: int = 1,
     profile_key: str = CURRENT_PROFILE_KEY,
     profile_digest: str = CURRENT_PROFILE_DIGEST,
 ) -> bytes:
@@ -58,7 +60,7 @@ def job_body(
             "message_id": str(MESSAGE_ID),
             "export_id": str(EXPORT_ID),
             "job_type": "DATASET_EXPORT",
-            "attempt": 1,
+            "attempt": attempt,
             "lease_token": LEASE_TOKEN,
             "project_id": str(PROJECT_ID),
             "dataset_version_id": str(DATASET_VERSION_ID),
@@ -237,6 +239,33 @@ def test_reports_transient_output_failure_for_core_api_retry_policy(tmp_path: Pa
         "safe_message": "Dataset package could not be uploaded to object storage",
         "retryable": True,
     }
+
+
+def test_synthetic_first_attempt_failure_builder_allows_the_second_attempt_to_succeed(
+    tmp_path: Path,
+) -> None:
+    client = RecordingClient(b"synthetic-video-bytes")
+    processor = JobProcessor(
+        client,
+        SyntheticFirstAttemptFailureBuilder(DatasetPackageBuilder()),
+        SOFTWARE_DIGEST,
+        tmp_path,
+    )
+
+    first = processor.process(job_body(attempt=1))
+    second = processor.process(job_body(attempt=2))
+
+    assert first.disposition is DeliveryDisposition.ACK
+    assert client.results[0]["status"] == "FAILED"
+    assert client.results[0]["error"] == {
+        "error_class": "RETRYABLE_RESOURCE",
+        "error_code": "PACKAGE_BUILD_FAILED",
+        "safe_message": "Dataset package could not be built on Worker temporary storage",
+        "retryable": True,
+    }
+    assert len(client.uploaded_packages) == 1
+    assert second.disposition is DeliveryDisposition.ACK
+    assert client.results[1]["status"] == "SUCCEEDED"
 
 
 def test_requeues_when_result_submission_is_temporarily_unavailable(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ Worker 不连接业务数据库，不接触账号会话，也不记录签名 URL
 如果 Worker 未能继续心跳，Core API 会在租约和 grace period 到期后将旧 attempt 标记为
 `LOST`，清理其临时输出，并按最大尝试次数决定重新入队或终止导出；旧租约不能复活。
 启动时会计算当前源码摘要；若配置了 `EXPORT_WORKER_SOFTWARE_DIGEST`，它必须与计算值完全一致，不能用旧摘要冒充当前 Worker 版本。
+`EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT` 仅供本地恢复验收使用，且必须同时具备合成数据和显式验收授权；正常启动会关闭该开关。
 
 本地运行由仓库根目录的 `scripts/start-local.ps1` 管理。单独运行：
 

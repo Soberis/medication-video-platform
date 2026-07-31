@@ -48,10 +48,27 @@ pnpm run dataset-export:acceptance
 
 失败时不要手工修改数据库、伪造结果或重用下载 URL。保留脱敏错误码、运行时间和合成项目 ID，再按同一提交定位故障；成功输出应与提交 SHA 一起记录为本地验收证据。
 
-## 5. 尚未覆盖
+## 5. 可重试失败恢复演练
+
+以下演练只用于已经批准的本地合成环境。它会停止并重启**受本地脚本管理的 Export Worker**，并创建新的合成项目、Session、DatasetVersion 和导出审计事实；环境中不得同时有其他导出任务。它不会修改 Core API、数据库或对象存储配置，也不会访问真实视频。
+
+先确认未提交的本地 `.env` 若覆盖了 Export Worker 两个摘要，已与当前 `.env.example` 一致。环境负责人再手动执行：
+
+```powershell
+.\scripts\start-local.ps1 -RestartExportWorker -ExportWorkerSyntheticFailFirstAttempt
+$env:RUN_DATASET_EXPORT_ACCEPTANCE='true'
+pnpm run dataset-export:recovery-acceptance
+.\scripts\start-local.ps1 -RestartExportWorker
+```
+
+第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic` 和两项显式验收授权，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。
+
+这项演练尚未执行前不能把它写为已通过；失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
+
+## 6. 尚未覆盖
 
 - 生产身份、生产 S3、医院网络和真实视频；
-- 导出失败后的人工恢复、长租约丢失和 DLQ 演练；
+- 不可重试失败后的人工恢复、长租约丢失和 DLQ 演练；
 - 大数据集吞吐、并发导出、限带宽或断网；
 - 正式 UAT、性能 SLO 与生产发布审批。
 

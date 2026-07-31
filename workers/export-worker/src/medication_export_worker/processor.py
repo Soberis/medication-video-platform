@@ -98,6 +98,26 @@ class PackageBuilder(Protocol):
     ) -> PackageResult: ...
 
 
+class SyntheticFirstAttemptFailureBuilder:
+    """Fails exactly one first attempt for the isolated local recovery rehearsal."""
+
+    def __init__(self, delegate: PackageBuilder) -> None:
+        self._delegate = delegate
+        self._failed = False
+
+    def build(
+        self,
+        job: DatasetExportJob,
+        grant: LeaseGrant,
+        downloaded_inputs: dict[str, Path],
+        target: Path,
+    ) -> PackageResult:
+        if job.attempt == 1 and not self._failed:
+            self._failed = True
+            raise PackageBuildError("Synthetic recovery acceptance requested one retryable failure")
+        return self._delegate.build(job, grant, downloaded_inputs, target)
+
+
 @dataclass(frozen=True, slots=True)
 class ExportFailure:
     error_class: str

@@ -21,6 +21,7 @@ class Settings:
     dead_letter_exchange: str
     dead_letter_routing_key: str
     temp_dir: Path | None
+    synthetic_fail_first_attempt: bool
     software_digest: str
 
     @classmethod
@@ -54,6 +55,7 @@ class Settings:
             raise ValueError(
                 "EXPORT_WORKER_SOFTWARE_DIGEST must match the calculated source digest"
             )
+        synthetic_fail_first_attempt = _synthetic_fail_first_attempt(values)
 
         return cls(
             platform_api_base_url=base_url,
@@ -64,6 +66,7 @@ class Settings:
             dead_letter_exchange="platform.dead-letter.v1",
             dead_letter_routing_key="dataset-export.dead-letter.v1",
             temp_dir=temp_dir,
+            synthetic_fail_first_attempt=synthetic_fail_first_attempt,
             software_digest=calculated_digest,
         )
 
@@ -105,4 +108,23 @@ def _is_software_digest(value: str) -> bool:
         int(value.removeprefix("sha256:"), 16)
     except ValueError:
         return False
+    return True
+
+
+def _synthetic_fail_first_attempt(values: Mapping[str, str]) -> bool:
+    enabled = values.get("EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT", "false")
+    if enabled not in {"false", "true"}:
+        raise ValueError("EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT must be true or false")
+    if enabled == "false":
+        return False
+    if values.get("DATA_PROFILE") != "synthetic":
+        raise ValueError("Synthetic export failure injection requires DATA_PROFILE=synthetic")
+    if values.get("RUN_DATASET_EXPORT_ACCEPTANCE") != "true":
+        raise ValueError(
+            "Synthetic export failure injection requires explicit acceptance authorization"
+        )
+    if values.get("RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE") != "true":
+        raise ValueError(
+            "Synthetic export failure injection requires recovery acceptance authorization"
+        )
     return True

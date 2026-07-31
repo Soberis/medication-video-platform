@@ -15,6 +15,12 @@ const MEDIA_INGEST_TIMEOUT_MS = 120_000
 const EXPORT_TIMEOUT_MS = 180_000
 const POLL_INTERVAL_MS = 1_000
 
+export function parseAcceptanceMode(argv) {
+  if (argv.length === 0) return { recovery: false }
+  if (argv.length === 1 && argv[0] === '--recovery') return { recovery: true }
+  throw new Error('Usage: dataset-export-acceptance [--recovery]')
+}
+
 export function assertAcceptanceEnvironment({
   enabled,
   dataProfile,
@@ -74,6 +80,21 @@ export function requireMediaProbeJob(mediaProbe) {
   return mediaJobId
 }
 
+export function matchesExpectedExportCompletion(exportRequest, recovery, observedStatuses) {
+  if (exportRequest?.status === 'FAILED') {
+    throw new Error('Dataset export Worker reported FAILED')
+  }
+  if (exportRequest?.status !== 'AVAILABLE') return false
+  if (!recovery) return true
+  if (!observedStatuses.includes('RETRY_WAIT')) {
+    throw new Error('Recovery acceptance did not observe RETRY_WAIT')
+  }
+  if (exportRequest.attempt?.attempt !== 2) {
+    throw new Error('Recovery acceptance did not complete on the second Worker attempt')
+  }
+  return true
+}
+
 export function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
@@ -122,6 +143,7 @@ class CoreApiClient {
 
 async function main() {
   loadLocalEnvironment()
+  const mode = parseAcceptanceMode(process.argv.slice(2))
   const environment = assertAcceptanceEnvironment({
     enabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
     dataProfile: process.env.DATA_PROFILE,
@@ -279,6 +301,7 @@ async function main() {
       throw new Error('Dataset export approval did not queue its first Worker attempt')
     }
 
+    const observedExportStatuses = [approvedExport.status]
     const detail = await waitFor(
       'dataset export Worker completion',
       async () => administrator.request(
@@ -286,10 +309,11 @@ async function main() {
         `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
       ),
       (response) => {
-        if (response.export_request?.status === 'FAILED') {
-          throw new Error('Dataset export Worker reported FAILED')
+        const status = response.export_request?.status
+        if (typeof status === 'string' && !observedExportStatuses.includes(status)) {
+          observedExportStatuses.push(status)
         }
-        return response.export_request?.status === 'AVAILABLE'
+        return matchesExpectedExportCompletion(response.export_request, mode.recovery, observedExportStatuses)
       },
       EXPORT_TIMEOUT_MS,
     )
@@ -311,6 +335,8 @@ async function main() {
       dataset_export_id: detail.export_request.dataset_export_id,
       capture_session_count: uploadedSessions.length,
       independent_approvals: true,
+      recovery_mode: mode.recovery,
+      observed_export_statuses: observedExportStatuses,
       worker_attempt: detail.export_request.attempt?.attempt,
       export_status: detail.export_request.status,
       artifact_size_bytes: artifact.size_bytes,

@@ -3,11 +3,19 @@ import test from 'node:test'
 
 import {
   assertAcceptanceEnvironment,
+  matchesExpectedExportCompletion,
   mergeEnvironment,
+  parseAcceptanceMode,
   requireAvailableArtifact,
   requireMediaProbeJob,
   sha256Hex,
 } from './index.mjs'
+
+test('acceptance mode keeps the normal path explicit and rejects unknown options', () => {
+  assert.deepEqual(parseAcceptanceMode([]), { recovery: false })
+  assert.deepEqual(parseAcceptanceMode(['--recovery']), { recovery: true })
+  assert.throws(() => parseAcceptanceMode(['--unexpected']), /Usage/)
+})
 
 test('acceptance environment requires explicit synthetic localhost authorization', () => {
   const environment = assertAcceptanceEnvironment({
@@ -68,6 +76,20 @@ test('available export must expose one valid artifact', () => {
       artifact: { size_bytes: 0, sha256: 'not-a-sha256' },
     }),
     /valid artifact/,
+  )
+})
+
+test('recovery acceptance requires RETRY_WAIT and a successful second attempt', () => {
+  const completedExport = { status: 'AVAILABLE', attempt: { attempt: 2 } }
+
+  assert.equal(matchesExpectedExportCompletion(completedExport, true, ['QUEUED', 'RETRY_WAIT']), true)
+  assert.throws(
+    () => matchesExpectedExportCompletion(completedExport, true, ['QUEUED', 'AVAILABLE']),
+    /did not observe RETRY_WAIT/,
+  )
+  assert.throws(
+    () => matchesExpectedExportCompletion({ status: 'AVAILABLE', attempt: { attempt: 1 } }, true, ['RETRY_WAIT']),
+    /second Worker attempt/,
   )
 })
 
