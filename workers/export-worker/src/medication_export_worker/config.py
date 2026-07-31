@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import os
 import socket
 from collections.abc import Mapping
@@ -55,7 +56,11 @@ class Settings:
             raise ValueError(
                 "EXPORT_WORKER_SOFTWARE_DIGEST must match the calculated source digest"
             )
-        synthetic_fail_first_attempt = _synthetic_fail_first_attempt(values)
+        synthetic_fail_first_attempt = _synthetic_fail_first_attempt(
+            values,
+            base_url,
+            rabbitmq_url,
+        )
 
         return cls(
             platform_api_base_url=base_url,
@@ -111,7 +116,11 @@ def _is_software_digest(value: str) -> bool:
     return True
 
 
-def _synthetic_fail_first_attempt(values: Mapping[str, str]) -> bool:
+def _synthetic_fail_first_attempt(
+    values: Mapping[str, str],
+    platform_api_base_url: str,
+    rabbitmq_url: str,
+) -> bool:
     enabled = values.get("EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT", "false")
     if enabled not in {"false", "true"}:
         raise ValueError("EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT must be true or false")
@@ -127,4 +136,20 @@ def _synthetic_fail_first_attempt(values: Mapping[str, str]) -> bool:
         raise ValueError(
             "Synthetic export failure injection requires recovery acceptance authorization"
         )
+    if not _is_loopback_url(platform_api_base_url) or not _is_loopback_url(rabbitmq_url):
+        raise ValueError(
+            "Synthetic export failure injection requires loopback Core API and RabbitMQ"
+        )
     return True
+
+
+def _is_loopback_url(value: str) -> bool:
+    hostname = urlparse(value).hostname
+    if hostname is None:
+        return False
+    if hostname.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
