@@ -46,10 +46,14 @@ class Settings:
 
         temp_dir_value = values.get("EXPORT_WORKER_TEMP_DIR")
         temp_dir = Path(temp_dir_value).resolve() if temp_dir_value else None
+        calculated_digest = calculate_software_digest(root)
         configured_digest = values.get("EXPORT_WORKER_SOFTWARE_DIGEST")
-        software_digest = configured_digest or calculate_software_digest(root)
-        if not _is_software_digest(software_digest):
+        if configured_digest is not None and not _is_software_digest(configured_digest):
             raise ValueError("EXPORT_WORKER_SOFTWARE_DIGEST must use sha256:<64 hex>")
+        if configured_digest is not None and configured_digest != calculated_digest:
+            raise ValueError(
+                "EXPORT_WORKER_SOFTWARE_DIGEST must match the calculated source digest"
+            )
 
         return cls(
             platform_api_base_url=base_url,
@@ -60,7 +64,7 @@ class Settings:
             dead_letter_exchange="platform.dead-letter.v1",
             dead_letter_routing_key="dataset-export.dead-letter.v1",
             temp_dir=temp_dir,
-            software_digest=software_digest,
+            software_digest=calculated_digest,
         )
 
 
