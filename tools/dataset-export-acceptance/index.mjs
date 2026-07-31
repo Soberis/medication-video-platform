@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { loadEnvFile } from 'node:process'
 import process from 'node:process'
+import { parseEnv } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 import { generateSyntheticVideo } from '../synthetic-upload-client/synthetic-video.mjs'
@@ -64,6 +64,14 @@ export function requireAvailableArtifact(exportRequest) {
     throw new Error('AVAILABLE dataset export is missing a valid artifact')
   }
   return artifact
+}
+
+export function requireMediaProbeJob(mediaProbe) {
+  const mediaJobId = requireUuid(mediaProbe?.media_job_id, 'Synthetic media probe')
+  if (!['REQUESTED', 'QUEUED', 'RUNNING', 'SUCCEEDED'].includes(mediaProbe.status)) {
+    throw new Error('Synthetic media probe did not enter an executable state')
+  }
+  return mediaJobId
 }
 
 export function sha256Hex(bytes) {
@@ -321,14 +329,25 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
   if (typeof clipAssetId !== 'string') {
     throw new Error('Synthetic upload did not return a clip asset')
   }
+  const mediaProbe = await administrator.request(
+    'request synthetic media probe',
+    `/projects/${projectId}/clip-assets/${clipAssetId}/media-probe-jobs`,
+    { method: 'POST', idempotencyKey: key('dataset-export-acceptance-media-probe') },
+  )
+  requireMediaProbeJob(mediaProbe)
   await waitFor(
     'media ingestion',
     async () => administrator.request(
       'read capture-session admission preview',
       `/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
     ),
-    (preview) => preview.streams?.length === 1
-      && preview.streams.every((stream) => stream.asset_status === 'INGESTED'),
+    (preview) => {
+      const streams = preview.streams ?? []
+      if (streams.some((stream) => stream.asset_status === 'INGEST_FAILED')) {
+        throw new Error('Synthetic media probe reported INGEST_FAILED')
+      }
+      return streams.length === 1 && streams.every((stream) => stream.asset_status === 'INGESTED')
+    },
     MEDIA_INGEST_TIMEOUT_MS,
   )
   await administrator.request(
@@ -441,17 +460,29 @@ async function readJson(response, operation) {
 
 function loadLocalEnvironment() {
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-  const environmentFile = selectEnvironmentFile(repositoryRoot)
-  if (existsSync(environmentFile)) {
-    loadEnvFile(environmentFile)
+  const exampleEnvironment = readEnvironmentFile(path.join(repositoryRoot, '.env.example'))
+  const localEnvironment = readEnvironmentFile(path.join(repositoryRoot, '.env'))
+  const resolvedEnvironment = mergeEnvironment(exampleEnvironment, localEnvironment, process.env)
+  for (const name of new Set([
+    ...Object.keys(exampleEnvironment),
+    ...Object.keys(localEnvironment),
+  ])) {
+    process.env[name] = resolvedEnvironment[name]
   }
 }
 
-export function selectEnvironmentFile(repositoryRoot, fileExists = existsSync) {
-  const localEnvironmentFile = path.join(repositoryRoot, '.env')
-  return fileExists(localEnvironmentFile)
-    ? localEnvironmentFile
-    : path.join(repositoryRoot, '.env.example')
+function readEnvironmentFile(environmentFile) {
+  return existsSync(environmentFile)
+    ? parseEnv(readFileSync(environmentFile, 'utf8'))
+    : {}
+}
+
+export function mergeEnvironment(exampleEnvironment, localEnvironment, explicitEnvironment) {
+  return {
+    ...exampleEnvironment,
+    ...localEnvironment,
+    ...explicitEnvironment,
+  }
 }
 
 function key(prefix) {

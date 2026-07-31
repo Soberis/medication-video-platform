@@ -2,7 +2,7 @@
 
 ## 1. 目的与边界
 
-本手册验证已实现的 P0 `p0-dataset-export-v2` 最小闭环：Core API 创建项目和合成采集数据，Media Worker 完成技术检测，两个独立的合成身份完成标注、冻结和导出审批，Outbox 经 RabbitMQ 交给 Export Worker，最后由 Core API 登记 ZIP 并签发一次短期下载授权。
+本手册验证已实现的 P0 `p0-dataset-export-v2` 最小闭环：Core API 创建项目和合成采集数据，并显式发起每段视频的媒体检测；Media Worker 完成技术检测，两个独立的合成身份完成标注、冻结和导出审批，Outbox 经 RabbitMQ 交给 Export Worker，最后由 Core API 登记 ZIP 并签发一次短期下载授权。
 
 它只使用运行时生成的合成 MP4，只允许连接 `localhost`/loopback 且 `DATA_PROFILE=synthetic`。工具不接受视频路径、不读取真实数据、不输出或持久化任何预签名 URL、lease token 或账号密码。
 
@@ -54,3 +54,28 @@ pnpm run dataset-export:acceptance
 - 导出失败后的人工恢复、长租约丢失和 DLQ 演练；
 - 大数据集吞吐、并发导出、限带宽或断网；
 - 正式 UAT、性能 SLO 与生产发布审批。
+
+## 6. 2026-07-31 本地合成基线结果
+
+本次在 Windows 本机 loopback、Core API `local` profile、Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2，以及 Node.js 22.22.2、Media Worker、Export Worker 全部运行时执行。输入为工具即时生成的两段合成 MP4；未使用真实视频、生产凭证或外部对象存储。
+
+最终运行结果：
+
+```json
+{
+  "schema_version": "dataset-export-cross-process-acceptance-v1",
+  "project_id": "029ccab4-b13d-4b15-832e-e6c93b1d0f95",
+  "dataset_version_id": "83ca646f-762b-48df-967d-67c8da10df6f",
+  "dataset_export_id": "cbf3b148-1f32-47cd-abb1-f9680d42cf8d",
+  "capture_session_count": 2,
+  "independent_approvals": true,
+  "worker_attempt": 1,
+  "export_status": "AVAILABLE",
+  "artifact_size_bytes": 381064,
+  "artifact_sha256": "b53abbf36a572d237a6d320d5c10b8034a873f1a3db5cc887ff26b8d8770c865",
+  "downloaded_sha256": "b53abbf36a572d237a6d320d5c10b8034a873f1a3db5cc887ff26b8d8770c865",
+  "duration_ms": 115263
+}
+```
+
+这证明了 Core API、Outbox、RabbitMQ、两个 Worker、独立审批和短期下载校验的本地合成实现闭环；它不替代正式 UAT、生产对象存储演练或性能验证。

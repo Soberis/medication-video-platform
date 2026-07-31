@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import path from 'node:path'
 
 import {
   assertAcceptanceEnvironment,
+  mergeEnvironment,
   requireAvailableArtifact,
-  selectEnvironmentFile,
+  requireMediaProbeJob,
   sha256Hex,
 } from './index.mjs'
 
@@ -71,6 +71,22 @@ test('available export must expose one valid artifact', () => {
   )
 })
 
+test('media probe must start from an executable state', () => {
+  const mediaJobId = requireMediaProbeJob({
+    media_job_id: '1c7763bd-e4f1-4cb1-842a-8431b0cd2fd2',
+    status: 'QUEUED',
+  })
+
+  assert.equal(mediaJobId, '1c7763bd-e4f1-4cb1-842a-8431b0cd2fd2')
+  assert.throws(
+    () => requireMediaProbeJob({
+      media_job_id: '1c7763bd-e4f1-4cb1-842a-8431b0cd2fd2',
+      status: 'FAILED',
+    }),
+    /executable state/,
+  )
+})
+
 test('artifact digest uses the registered SHA-256 representation', () => {
   assert.equal(
     sha256Hex(Buffer.from('synthetic dataset export artifact', 'utf8')),
@@ -78,14 +94,18 @@ test('artifact digest uses the registered SHA-256 representation', () => {
   )
 })
 
-test('local environment file takes precedence over the example configuration', () => {
-  const repositoryRoot = 'synthetic-repository'
-  assert.equal(
-    selectEnvironmentFile(repositoryRoot, (candidate) => candidate.endsWith('.env')),
-    path.join(repositoryRoot, '.env'),
+test('explicit and local configuration override example defaults deterministically', () => {
+  const environment = mergeEnvironment(
+    { DATA_PROFILE: 'synthetic', PLATFORM_BASE_URL: 'http://localhost:8080', DEV_BEARER_TOKEN: 'example' },
+    { DEV_BEARER_TOKEN: 'local', LOCAL_ONLY: 'true' },
+    { DEV_BEARER_TOKEN: 'explicit', RUN_DATASET_EXPORT_ACCEPTANCE: 'true' },
   )
-  assert.equal(
-    selectEnvironmentFile(repositoryRoot, () => false),
-    path.join(repositoryRoot, '.env.example'),
-  )
+
+  assert.deepEqual(environment, {
+    DATA_PROFILE: 'synthetic',
+    PLATFORM_BASE_URL: 'http://localhost:8080',
+    DEV_BEARER_TOKEN: 'explicit',
+    LOCAL_ONLY: 'true',
+    RUN_DATASET_EXPORT_ACCEPTANCE: 'true',
+  })
 })
