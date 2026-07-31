@@ -12,6 +12,8 @@
     "synthetic-upload": "node tools/synthetic-upload-client/index.mjs",
     "synthetic-upload:2gb": "node tools/synthetic-upload-client/large-upload-acceptance.mjs",
     "synthetic-upload:test": "node --test tools/synthetic-upload-client/*.test.mjs",
+    "dataset-export:acceptance": "node tools/dataset-export-acceptance/index.mjs",
+    "dataset-export:acceptance:test": "node --test tools/dataset-export-acceptance/*.test.mjs",
     "contract:lint": "redocly lint contracts/openapi/openapi.yaml",
     "api:test": "node scripts/run-bruno.mjs"
   },

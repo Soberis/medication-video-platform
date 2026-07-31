@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -6,59 +5,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import { PlatformApiError, SyntheticUploadClient } from './upload-client.mjs'
-
-function run(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true })
-    let stderr = ''
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk
-    })
-    child.on('error', reject)
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(new Error(`FFmpeg exited with code ${code}: ${stderr.trim()}`))
-      }
-    })
-  })
-}
-
-async function generateSyntheticVideo(outputPath) {
-  const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg'
-  await run(ffmpeg, [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-y',
-    '-f',
-    'lavfi',
-    '-i',
-    'testsrc2=size=640x360:rate=25',
-    '-f',
-    'lavfi',
-    '-i',
-    'sine=frequency=880:sample_rate=48000',
-    '-t',
-    '2',
-    '-c:v',
-    'libx264',
-    '-preset',
-    'veryfast',
-    '-pix_fmt',
-    'yuv420p',
-    '-c:a',
-    'aac',
-    '-shortest',
-    '-movflags',
-    '+faststart',
-    '-metadata',
-    'title=synthetic-medication-preparation-test-pattern',
-    outputPath,
-  ])
-}
+import { generateSyntheticVideo } from './synthetic-video.mjs'
 
 async function main() {
   if (process.argv.length > 2) {

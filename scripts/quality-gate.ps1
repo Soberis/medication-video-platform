@@ -62,10 +62,13 @@ $requiredFiles = @(
     'contracts/profiles/p0-dataset-export-v2.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
+    'tools/synthetic-upload-client/synthetic-video.mjs',
     'tools/synthetic-upload-client/upload-client.test.mjs',
     'tools/synthetic-upload-client/large-upload-acceptance.mjs',
     'tools/synthetic-upload-client/large-upload-acceptance.test.mjs',
     'tools/synthetic-upload-client/README.md',
+    'tools/dataset-export-acceptance/index.mjs',
+    'tools/dataset-export-acceptance/index.test.mjs',
     'workers/media-worker/pyproject.toml',
     'workers/media-worker/uv.lock',
     'workers/media-worker/README.md',
@@ -92,7 +95,8 @@ $requiredFiles = @(
     'docs/architecture/security-privacy-retention.md',
     'docs/architecture/deployment-capacity-and-dr.md',
     'docs/architecture/web-ux-and-frontend-guidelines.md',
-    'docs/runbooks/large-upload-resume-acceptance.md'
+    'docs/runbooks/large-upload-resume-acceptance.md',
+    'docs/runbooks/dataset-export-cross-process-acceptance.md'
 )
 
 foreach ($relativePath in $requiredFiles) {
@@ -442,6 +446,20 @@ if (Test-Path -LiteralPath $syntheticUploadClient -PathType Leaf) {
 }
 else {
     Add-Skip 'Synthetic upload client has not been generated yet'
+}
+
+$datasetExportAcceptance = Join-Path $root 'tools/dataset-export-acceptance/index.mjs'
+if (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
+    & pnpm --dir $root run dataset-export:acceptance:test
+    if ($LASTEXITCODE -eq 0) {
+        Add-Pass 'Dataset export acceptance guard unit tests'
+    }
+    else {
+        Add-Failure "Dataset export acceptance guard unit tests exited with code $LASTEXITCODE"
+    }
+}
+else {
+    Add-Skip 'Dataset export acceptance tool has not been generated yet'
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
