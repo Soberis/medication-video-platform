@@ -23,16 +23,14 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final byte[] expectedUploaderToken;
+
 	private final byte[] expectedAdminToken;
+
 	private final UUID projectId;
 
-	LocalBearerAuthenticationFilter(
-			String expectedUploaderToken,
-			String expectedAdminToken,
-			UUID projectId) {
+	LocalBearerAuthenticationFilter(String expectedUploaderToken, String expectedAdminToken, UUID projectId) {
 		if (!expectedAdminToken.isEmpty() && expectedAdminToken.equals(expectedUploaderToken)) {
-			throw new IllegalArgumentException(
-					"Local uploader and administrator bearer tokens must be different.");
+			throw new IllegalArgumentException("Local uploader and administrator bearer tokens must be different.");
 		}
 		this.expectedUploaderToken = expectedUploaderToken.getBytes(StandardCharsets.UTF_8);
 		this.expectedAdminToken = expectedAdminToken.getBytes(StandardCharsets.UTF_8);
@@ -42,16 +40,13 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
 		var requestUri = request.getRequestURI();
-		return !requestUri.startsWith("/api/v1/")
-				|| requestUri.startsWith("/api/v1/internal/media-jobs/")
+		return !requestUri.startsWith("/api/v1/") || requestUri.startsWith("/api/v1/internal/media-jobs/")
 				|| requestUri.startsWith("/api/v1/internal/dataset-exports/");
 	}
 
 	@Override
-	protected void doFilterInternal(
-			HttpServletRequest request,
-			HttpServletResponse response,
-			FilterChain filterChain) throws ServletException, IOException {
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
 		var authorization = request.getHeader("Authorization");
 		if (authorization == null || authorization.isBlank()) {
 			filterChain.doFilter(request, response);
@@ -62,8 +57,7 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		var presentedToken = authorization.substring(BEARER_PREFIX.length())
-				.getBytes(StandardCharsets.UTF_8);
+		var presentedToken = authorization.substring(BEARER_PREFIX.length()).getBytes(StandardCharsets.UTF_8);
 		var admin = this.expectedAdminToken.length > 0
 				&& MessageDigest.isEqual(presentedToken, this.expectedAdminToken);
 		var uploader = this.expectedUploaderToken.length > 0
@@ -73,12 +67,8 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		var actor = new PlatformActor(
-				this.projectId,
-				admin ? "local-synthetic-admin" : "local-synthetic-uploader");
-		var authentication = new UsernamePasswordAuthenticationToken(
-				actor,
-				null,
+		var actor = new PlatformActor(this.projectId, admin ? "local-synthetic-admin" : "local-synthetic-uploader");
+		var authentication = new UsernamePasswordAuthenticationToken(actor, null,
 				List.of(new SimpleGrantedAuthority(admin ? "ROLE_ADMIN" : "ROLE_MEMBER")));
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		filterChain.doFilter(request, response);
@@ -88,9 +78,9 @@ final class LocalBearerAuthenticationFilter extends OncePerRequestFilter {
 		response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 		response.setHeader("WWW-Authenticate", "Bearer");
 		response.setContentType("application/problem+json");
-		response.getWriter().write("{\"error_code\":\"UNAUTHORIZED\","
-				+ "\"error_message\":\"A valid bearer token is required.\","
-				+ "\"retryable\":false,"
-				+ "\"request_id\":\"" + UUID.randomUUID() + "\"}");
+		response.getWriter()
+			.write("{\"error_code\":\"UNAUTHORIZED\"," + "\"error_message\":\"A valid bearer token is required.\","
+					+ "\"retryable\":false," + "\"request_id\":\"" + UUID.randomUUID() + "\"}");
 	}
+
 }

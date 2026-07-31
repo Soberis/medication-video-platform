@@ -21,7 +21,7 @@
 可用以下命令启动本地依赖：
 
 ```powershell
-.\scripts\start-local.ps1
+.\scripts\start-local.ps1 -Worker
 ```
 
 ## 3. 执行
@@ -55,10 +55,10 @@ pnpm run dataset-export:acceptance
 先确认未提交的本地 `.env` 若覆盖了 Export Worker 两个摘要，已与当前 `.env.example` 一致。环境负责人再手动执行：
 
 ```powershell
-.\scripts\start-local.ps1 -RestartExportWorker -ExportWorkerSyntheticFailFirstAttempt
+.\scripts\start-local.ps1 -Worker -RestartExportWorker -ExportWorkerSyntheticFailFirstAttempt
 $env:RUN_DATASET_EXPORT_ACCEPTANCE='true'
 pnpm run dataset-export:recovery-acceptance
-.\scripts\start-local.ps1 -RestartExportWorker
+.\scripts\start-local.ps1 -Worker -RestartExportWorker
 ```
 
 第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic`、两项显式验收授权以及 loopback Core API/RabbitMQ，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。

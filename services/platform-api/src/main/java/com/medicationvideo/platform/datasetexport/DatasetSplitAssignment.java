@@ -52,8 +52,8 @@ class DatasetSplitAssignment {
 	protected DatasetSplitAssignment() {
 	}
 
-	private DatasetSplitAssignment(
-			DatasetSplitPlan plan, DatasetMemberSession member, DatasetSplit split, int assignmentRank) {
+	private DatasetSplitAssignment(DatasetSplitPlan plan, DatasetMemberSession member, DatasetSplit split,
+			int assignmentRank) {
 		this.datasetSplitAssignmentId = UUID.randomUUID();
 		this.datasetSplitPlanId = plan.getDatasetSplitPlanId();
 		this.datasetVersionId = plan.getDatasetVersionId();
@@ -67,8 +67,8 @@ class DatasetSplitAssignment {
 		this.assignmentRank = assignmentRank;
 	}
 
-	static DatasetSplitAssignment assign(
-			DatasetSplitPlan plan, DatasetMemberSession member, DatasetSplit split, int assignmentRank) {
+	static DatasetSplitAssignment assign(DatasetSplitPlan plan, DatasetMemberSession member, DatasetSplit split,
+			int assignmentRank) {
 		return new DatasetSplitAssignment(plan, member, split, assignmentRank);
 	}
 
@@ -99,13 +99,17 @@ class DatasetSplitAssignment {
 	int getAssignmentRank() {
 		return this.assignmentRank;
 	}
+
 }
 
 enum DatasetLeakageGroupType {
+
 	CAPTURE_SESSION
+
 }
 
 enum DatasetSplit {
-	PILOT,
-	HOLDOUT
+
+	PILOT, HOLDOUT
+
 }

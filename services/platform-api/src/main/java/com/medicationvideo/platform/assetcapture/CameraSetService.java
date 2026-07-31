@@ -17,14 +17,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CameraSetService {
 
 	private final CameraSetConfigurationRepository configurationRepository;
+
 	private final CameraSetMemberRepository memberRepository;
+
 	private final CameraChannelRepository channelRepository;
+
 	private final TransactionTemplate transactionTemplate;
 
-	CameraSetService(
-			CameraSetConfigurationRepository configurationRepository,
-			CameraSetMemberRepository memberRepository,
-			CameraChannelRepository channelRepository,
+	CameraSetService(CameraSetConfigurationRepository configurationRepository,
+			CameraSetMemberRepository memberRepository, CameraChannelRepository channelRepository,
 			TransactionTemplate transactionTemplate) {
 		this.configurationRepository = configurationRepository;
 		this.memberRepository = memberRepository;
@@ -32,10 +33,7 @@ class CameraSetService {
 		this.transactionTemplate = transactionTemplate;
 	}
 
-	CameraSetResponse configure(
-			UUID projectId,
-			String cameraSetKey,
-			int configurationVersion,
+	CameraSetResponse configure(UUID projectId, String cameraSetKey, int configurationVersion,
 			CameraSetRequest request) {
 		validateMembers(request);
 		var fingerprint = fingerprint(cameraSetKey, configurationVersion, request);
@@ -45,12 +43,8 @@ class CameraSetService {
 		}
 
 		try {
-			var response = this.transactionTemplate.execute(status -> create(
-					projectId,
-					cameraSetKey,
-					configurationVersion,
-					request,
-					fingerprint));
+			var response = this.transactionTemplate
+				.execute(status -> create(projectId, cameraSetKey, configurationVersion, request, fingerprint));
 			if (response == null) {
 				throw new IllegalStateException("Camera set transaction returned no result.");
 			}
@@ -65,63 +59,44 @@ class CameraSetService {
 		}
 	}
 
-	private CameraSetResponse create(
-			UUID projectId,
-			String cameraSetKey,
-			int configurationVersion,
-			CameraSetRequest request,
-			String fingerprint) {
+	private CameraSetResponse create(UUID projectId, String cameraSetKey, int configurationVersion,
+			CameraSetRequest request, String fingerprint) {
 		var existing = find(projectId, cameraSetKey, configurationVersion);
 		if (existing != null) {
 			return requireSameConfiguration(existing, fingerprint);
 		}
-		var channelIds = request.members().stream()
-				.map(CameraSetMemberRequest::cameraChannelId)
-				.toList();
+		var channelIds = request.members().stream().map(CameraSetMemberRequest::cameraChannelId).toList();
 		var ownedChannels = this.channelRepository.findAllByProjectIdAndCameraChannelIdIn(projectId, channelIds);
 		if (ownedChannels.size() != channelIds.size()) {
-			throw failure(
-					"CAMERA_SET_CHANNEL_NOT_FOUND",
+			throw failure("CAMERA_SET_CHANNEL_NOT_FOUND",
 					"Every camera set member must reference a channel in the authenticated project.");
 		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var configuration = CameraSetConfiguration.create(
-				projectId,
-				cameraSetKey,
-				configurationVersion,
-				request.layoutVersion(),
-				fingerprint,
-				now);
+		var configuration = CameraSetConfiguration.create(projectId, cameraSetKey, configurationVersion,
+				request.layoutVersion(), fingerprint, now);
 		this.configurationRepository.saveAndFlush(configuration);
-		var members = request.members().stream()
-				.map(member -> CameraSetMember.create(configuration.getCameraSetId(), member, now))
-				.toList();
+		var members = request.members()
+			.stream()
+			.map(member -> CameraSetMember.create(configuration.getCameraSetId(), member, now))
+			.toList();
 		this.memberRepository.saveAllAndFlush(members);
 		return CameraSetResponse.from(configuration, members);
 	}
 
 	private CameraSetConfiguration find(UUID projectId, String cameraSetKey, int configurationVersion) {
 		return this.configurationRepository
-				.findByProjectIdAndCameraSetKeyAndConfigurationVersion(
-						projectId,
-						cameraSetKey,
-						configurationVersion)
-				.orElse(null);
+			.findByProjectIdAndCameraSetKeyAndConfigurationVersion(projectId, cameraSetKey, configurationVersion)
+			.orElse(null);
 	}
 
-	private CameraSetResponse requireSameConfiguration(
-			CameraSetConfiguration configuration,
-			String fingerprint) {
-		if (!MessageDigest.isEqual(
-				configuration.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
+	private CameraSetResponse requireSameConfiguration(CameraSetConfiguration configuration, String fingerprint) {
+		if (!MessageDigest.isEqual(configuration.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
 				fingerprint.getBytes(StandardCharsets.US_ASCII))) {
-			throw failure(
-					"CAMERA_SET_VERSION_CONFLICT",
+			throw failure("CAMERA_SET_VERSION_CONFLICT",
 					"The immutable camera set version already exists with different content.");
 		}
-		var members = this.memberRepository.findAllByCameraSetIdOrderByCameraIndexAsc(
-				configuration.getCameraSetId());
+		var members = this.memberRepository.findAllByCameraSetIdOrderByCameraIndexAsc(configuration.getCameraSetId());
 		return CameraSetResponse.from(configuration, members);
 	}
 
@@ -131,7 +106,8 @@ class CameraSetService {
 		var hasEnabledMember = false;
 		for (var member : request.members()) {
 			if (!channelIds.add(member.cameraChannelId())) {
-				throw failure("CAMERA_SET_DUPLICATE_CHANNEL", "A camera channel can appear only once in a set version.");
+				throw failure("CAMERA_SET_DUPLICATE_CHANNEL",
+						"A camera channel can appear only once in a set version.");
 			}
 			if (!indexes.add(member.cameraIndex())) {
 				throw failure("CAMERA_SET_DUPLICATE_INDEX", "A camera index can appear only once in a set version.");
@@ -144,20 +120,28 @@ class CameraSetService {
 	}
 
 	private static String fingerprint(String cameraSetKey, int configurationVersion, CameraSetRequest request) {
-		var canonical = new StringBuilder("camera-set-v1\n")
-				.append(cameraSetKey).append('\n')
-				.append(configurationVersion).append('\n')
-				.append(request.layoutVersion()).append('\n');
-		request.members().stream()
-				.sorted(java.util.Comparator.comparingInt(CameraSetMemberRequest::cameraIndex))
-				.forEach(member -> canonical
-						.append(member.cameraChannelId()).append('\t')
-						.append(member.cameraIndex()).append('\t')
-						.append(member.cameraRole()).append('\t')
-						.append(member.mountPosition()).append('\t')
-						.append(member.enabled()).append('\n'));
+		var canonical = new StringBuilder("camera-set-v1\n").append(cameraSetKey)
+			.append('\n')
+			.append(configurationVersion)
+			.append('\n')
+			.append(request.layoutVersion())
+			.append('\n');
+		request.members()
+			.stream()
+			.sorted(java.util.Comparator.comparingInt(CameraSetMemberRequest::cameraIndex))
+			.forEach(member -> canonical.append(member.cameraChannelId())
+				.append('\t')
+				.append(member.cameraIndex())
+				.append('\t')
+				.append(member.cameraRole())
+				.append('\t')
+				.append(member.mountPosition())
+				.append('\t')
+				.append(member.enabled())
+				.append('\n'));
 		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+			return HexFormat.of()
+				.formatHex(MessageDigest.getInstance("SHA-256")
 					.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
 		}
 		catch (NoSuchAlgorithmException exception) {
@@ -168,4 +152,5 @@ class CameraSetService {
 	private static CameraConfigurationException failure(String errorCode, String message) {
 		return new CameraConfigurationException(errorCode, message);
 	}
+
 }

@@ -98,18 +98,10 @@ class DatasetExport {
 	protected DatasetExport() {
 	}
 
-	private DatasetExport(
-			DatasetVersion datasetVersion,
-			DatasetBuildSpecification specification,
-			DatasetBuildSnapshot snapshot,
-			DatasetVersionValidation validation,
-			UUID approvalRequestId,
-			DatasetExportPurpose purpose,
-			Instant expiresAt,
-			String requestedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant requestedAt) {
+	private DatasetExport(DatasetVersion datasetVersion, DatasetBuildSpecification specification,
+			DatasetBuildSnapshot snapshot, DatasetVersionValidation validation, UUID approvalRequestId,
+			DatasetExportPurpose purpose, Instant expiresAt, String requestedBy, String idempotencyKey,
+			String requestFingerprint, Instant requestedAt) {
 		this.datasetExportId = UUID.randomUUID();
 		this.projectId = datasetVersion.getProjectId();
 		this.datasetVersionId = datasetVersion.getDatasetVersionId();
@@ -129,35 +121,16 @@ class DatasetExport {
 		this.requestedAt = requestedAt;
 	}
 
-	static DatasetExport request(
-			DatasetVersion datasetVersion,
-			DatasetBuildSpecification specification,
-			DatasetBuildSnapshot snapshot,
-			DatasetVersionValidation validation,
-			UUID approvalRequestId,
-			DatasetExportPurpose purpose,
-			Instant expiresAt,
-			String requestedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant requestedAt) {
-		return new DatasetExport(
-				datasetVersion,
-				specification,
-				snapshot,
-				validation,
-				approvalRequestId,
-				purpose,
-				expiresAt,
-				requestedBy,
-				idempotencyKey,
-				requestFingerprint,
-				requestedAt);
+	static DatasetExport request(DatasetVersion datasetVersion, DatasetBuildSpecification specification,
+			DatasetBuildSnapshot snapshot, DatasetVersionValidation validation, UUID approvalRequestId,
+			DatasetExportPurpose purpose, Instant expiresAt, String requestedBy, String idempotencyKey,
+			String requestFingerprint, Instant requestedAt) {
+		return new DatasetExport(datasetVersion, specification, snapshot, validation, approvalRequestId, purpose,
+				expiresAt, requestedBy, idempotencyKey, requestFingerprint, requestedAt);
 	}
 
 	boolean matchesRequest(String requestedBy, String idempotencyKey, String requestFingerprint) {
-		return this.requestedBy.equals(requestedBy)
-				&& this.idempotencyKey.equals(idempotencyKey)
+		return this.requestedBy.equals(requestedBy) && this.idempotencyKey.equals(idempotencyKey)
 				&& this.requestFingerprint.equals(requestFingerprint);
 	}
 
@@ -167,11 +140,7 @@ class DatasetExport {
 				&& Objects.equals(this.approvalRequestFingerprint, requestFingerprint);
 	}
 
-	void queue(
-			UUID approvalDecisionId,
-			String approvedBy,
-			String idempotencyKey,
-			String requestFingerprint,
+	void queue(UUID approvalDecisionId, String approvedBy, String idempotencyKey, String requestFingerprint,
 			Instant approvedAt) {
 		if (this.status != DatasetExportStatus.REQUESTED) {
 			throw new IllegalStateException("Only a requested dataset export can be queued.");
@@ -192,8 +161,8 @@ class DatasetExport {
 			this.status = DatasetExportStatus.QUEUED;
 		}
 		if (this.status != DatasetExportStatus.QUEUED) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export is not queued for this attempt.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT",
+					"The dataset export is not queued for this attempt.", false);
 		}
 		this.status = DatasetExportStatus.RUNNING;
 		if (this.startedAt == null) {
@@ -203,8 +172,8 @@ class DatasetExport {
 
 	void waitForRetry() {
 		if (this.status != DatasetExportStatus.RUNNING) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export is no longer running.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT", "The dataset export is no longer running.",
+					false);
 		}
 		this.status = DatasetExportStatus.RETRY_WAIT;
 	}
@@ -219,8 +188,8 @@ class DatasetExport {
 
 	private void complete(DatasetExportStatus target, Instant completedAt) {
 		if (this.status != DatasetExportStatus.RUNNING) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export is no longer running.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT", "The dataset export is no longer running.",
+					false);
 		}
 		this.status = target;
 		this.completedAt = completedAt;
@@ -309,17 +278,17 @@ class DatasetExport {
 	long getVersion() {
 		return this.version;
 	}
+
 }
 
 enum DatasetExportPurpose {
+
 	MODEL_TRAINING
+
 }
 
 enum DatasetExportStatus {
-	REQUESTED,
-	QUEUED,
-	RUNNING,
-	RETRY_WAIT,
-	AVAILABLE,
-	FAILED
+
+	REQUESTED, QUEUED, RUNNING, RETRY_WAIT, AVAILABLE, FAILED
+
 }

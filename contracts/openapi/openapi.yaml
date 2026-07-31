@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.53.0
+  version: 0.54.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, create and manage internal
@@ -4821,17 +4821,21 @@ components:
     workerBearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: ServiceToken
+      bearerFormat: JWT
       description: >-
-        Independent Worker service identity. It is not a user/project bearer token and is accepted
-        only by the internal media job endpoints.
+        Independent Media Worker service identity accepted only by internal media job endpoints.
+        Outside local/test it is a signed JWT with HTTPS issuer/JWK Set, a non-empty subject,
+        bounded validity and exactly the configured Media Worker audience. Local/test retains a
+        distinct synthetic static bearer for isolated development only.
     exportWorkerBearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: ServiceToken
+      bearerFormat: JWT
       description: >-
-        Independent Export Worker service identity. It must differ from browser, edge and Media
-        Worker credentials and is accepted only by internal dataset export endpoints.
+        Independent Export Worker service identity accepted only by internal dataset export
+        endpoints. Outside local/test it is a signed JWT with HTTPS issuer/JWK Set, a non-empty
+        subject, bounded validity and exactly the configured Export Worker audience. Its audience
+        must differ from Media Worker; local/test retains a distinct synthetic static bearer only.
   headers:
     NoStore:
       description: Prevents clients and intermediaries from retaining authorization-sensitive data.

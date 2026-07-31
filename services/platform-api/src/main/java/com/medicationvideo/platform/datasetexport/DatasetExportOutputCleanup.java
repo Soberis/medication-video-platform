@@ -16,8 +16,7 @@ class DatasetExportOutputCleanup {
 		if (upload == null) {
 			return;
 		}
-		var object = new DatasetExportStoragePort.ObjectReference(
-				upload.bucket(), upload.objectKey());
+		var object = new DatasetExportStoragePort.ObjectReference(upload.bucket(), upload.objectKey());
 		if (this.storage.findCompletedObject(upload).isPresent()) {
 			this.storage.delete(object);
 			return;
@@ -27,4 +26,5 @@ class DatasetExportOutputCleanup {
 			this.storage.delete(object);
 		}
 	}
+
 }

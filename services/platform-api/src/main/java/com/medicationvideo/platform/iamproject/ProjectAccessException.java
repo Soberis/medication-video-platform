@@ -3,6 +3,7 @@ package com.medicationvideo.platform.iamproject;
 public final class ProjectAccessException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final int statusCode;
 
 	public ProjectAccessException(String errorCode, String message, int statusCode) {
@@ -18,4 +19,5 @@ public final class ProjectAccessException extends RuntimeException {
 	public int getStatusCode() {
 		return this.statusCode;
 	}
+
 }

@@ -45,13 +45,8 @@ class DataProject {
 	protected DataProject() {
 	}
 
-	private DataProject(
-			UUID projectId,
-			String displayName,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
+	private DataProject(UUID projectId, String displayName, String createdBy, String idempotencyKey,
+			String requestFingerprint, Instant createdAt) {
 		this.projectId = projectId;
 		this.displayName = displayName;
 		this.status = ProjectStatus.ACTIVE;
@@ -61,29 +56,14 @@ class DataProject {
 		this.createdAt = createdAt;
 	}
 
-	static DataProject create(
-			String displayName,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
+	static DataProject create(String displayName, String createdBy, String idempotencyKey, String requestFingerprint,
 			Instant createdAt) {
 		return create(UUID.randomUUID(), displayName, createdBy, idempotencyKey, requestFingerprint, createdAt);
 	}
 
-	static DataProject create(
-			UUID projectId,
-			String displayName,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new DataProject(
-				projectId,
-				displayName,
-				createdBy,
-				idempotencyKey,
-				requestFingerprint,
-				createdAt);
+	static DataProject create(UUID projectId, String displayName, String createdBy, String idempotencyKey,
+			String requestFingerprint, Instant createdAt) {
+		return new DataProject(projectId, displayName, createdBy, idempotencyKey, requestFingerprint, createdAt);
 	}
 
 	UUID getProjectId() {
@@ -134,4 +114,5 @@ class DataProject {
 		}
 		this.status = ProjectStatus.ARCHIVED;
 	}
+
 }

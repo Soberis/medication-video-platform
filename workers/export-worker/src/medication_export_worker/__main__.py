@@ -21,7 +21,7 @@ def main() -> None:
     settings = Settings.from_environment()
     client = CoreApiClient(
         settings.platform_api_base_url,
-        settings.worker_bearer_token,
+        settings.read_worker_bearer_token,
         settings.worker_id,
     )
     builder: PackageBuilder = DatasetPackageBuilder()

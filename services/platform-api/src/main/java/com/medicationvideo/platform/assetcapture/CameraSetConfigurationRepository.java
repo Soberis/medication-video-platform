@@ -9,8 +9,7 @@ interface CameraSetConfigurationRepository extends JpaRepository<CameraSetConfig
 
 	Optional<CameraSetConfiguration> findByCameraSetIdAndProjectId(UUID cameraSetId, UUID projectId);
 
-	Optional<CameraSetConfiguration> findByProjectIdAndCameraSetKeyAndConfigurationVersion(
-			UUID projectId,
-			String cameraSetKey,
-			int configurationVersion);
+	Optional<CameraSetConfiguration> findByProjectIdAndCameraSetKeyAndConfigurationVersion(UUID projectId,
+			String cameraSetKey, int configurationVersion);
+
 }

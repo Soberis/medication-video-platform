@@ -5,6 +5,7 @@ class ProjectApiException extends RuntimeException {
 	private static final long serialVersionUID = 1L;
 
 	private final String errorCode;
+
 	private final int statusCode;
 
 	ProjectApiException(String errorCode, String message, int statusCode) {
@@ -20,4 +21,5 @@ class ProjectApiException extends RuntimeException {
 	int getStatusCode() {
 		return this.statusCode;
 	}
+
 }

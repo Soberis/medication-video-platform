@@ -66,7 +66,8 @@ class DatasetMemberStream {
 	protected DatasetMemberStream() {
 	}
 
-	private DatasetMemberStream(DatasetVersion version, DatasetMemberSession session, DatasetAdmissionStreamEvidence evidence) {
+	private DatasetMemberStream(DatasetVersion version, DatasetMemberSession session,
+			DatasetAdmissionStreamEvidence evidence) {
 		this.datasetMemberStreamId = UUID.randomUUID();
 		this.datasetMemberSessionId = session.getDatasetMemberSessionId();
 		this.datasetVersionId = version.getDatasetVersionId();
@@ -86,8 +87,8 @@ class DatasetMemberStream {
 		this.postCleaningOutcome = evidence.postCleaningOutcome();
 	}
 
-	static DatasetMemberStream snapshot(
-			DatasetVersion version, DatasetMemberSession session, DatasetAdmissionStreamEvidence evidence) {
+	static DatasetMemberStream snapshot(DatasetVersion version, DatasetMemberSession session,
+			DatasetAdmissionStreamEvidence evidence) {
 		return new DatasetMemberStream(version, session, evidence);
 	}
 
@@ -146,4 +147,5 @@ class DatasetMemberStream {
 	String getPostCleaningOutcome() {
 		return this.postCleaningOutcome;
 	}
+
 }

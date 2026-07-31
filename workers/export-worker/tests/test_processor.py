@@ -113,9 +113,7 @@ def lease_grant(video: bytes) -> LeaseGrant:
                         annotation_schema_version="annotation-document.v1",
                         annotation_document_sha256=DOCUMENT_DIGEST,
                         annotation_document={
-                            "segments": [
-                                {"start_ms": 10, "end_ms": 900, "label": "prepare_dose"}
-                            ]
+                            "segments": [{"start_ms": 10, "end_ms": 900, "label": "prepare_dose"}]
                         },
                     ),
                 ),

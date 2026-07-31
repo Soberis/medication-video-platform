@@ -37,13 +37,12 @@ import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignReque
 class S3MultipartObjectStorage implements MultipartObjectStorage {
 
 	private final S3Client s3Client;
+
 	private final S3Presigner presigner;
+
 	private final String bucket;
 
-	S3MultipartObjectStorage(
-			S3Client s3Client,
-			S3Presigner presigner,
-			S3ObjectStorageProperties properties) {
+	S3MultipartObjectStorage(S3Client s3Client, S3Presigner presigner, S3ObjectStorageProperties properties) {
 		this.s3Client = s3Client;
 		this.presigner = presigner;
 		this.bucket = properties.bucket();
@@ -53,13 +52,12 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	public CreatedUpload create(String objectKey, String contentType) {
 		try {
 			var response = this.s3Client.createMultipartUpload(CreateMultipartUploadRequest.builder()
-					.bucket(this.bucket)
-					.key(objectKey)
-					.contentType(contentType)
-					.build());
+				.bucket(this.bucket)
+				.key(objectKey)
+				.contentType(contentType)
+				.build());
 			if (response.uploadId() == null || response.uploadId().isBlank()) {
-				throw new MultipartObjectStorageException(
-						"Object storage returned no multipart upload identifier.",
+				throw new MultipartObjectStorageException("Object storage returned no multipart upload identifier.",
 						null);
 			}
 			return new CreatedUpload(this.bucket, objectKey, response.uploadId());
@@ -73,17 +71,15 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	public URI authorizePart(CreatedUpload upload, int partNumber, Duration lifetime) {
 		try {
 			var request = UploadPartRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.uploadId(upload.uploadId())
-					.partNumber(partNumber)
-					.build();
-			return URI.create(this.presigner.presignUploadPart(UploadPartPresignRequest.builder()
-					.signatureDuration(lifetime)
-					.uploadPartRequest(request)
-					.build())
-					.url()
-					.toExternalForm());
+				.bucket(upload.bucket())
+				.key(upload.objectKey())
+				.uploadId(upload.uploadId())
+				.partNumber(partNumber)
+				.build();
+			return URI.create(this.presigner.presignUploadPart(
+					UploadPartPresignRequest.builder().signatureDuration(lifetime).uploadPartRequest(request).build())
+				.url()
+				.toExternalForm());
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not authorize the upload part.", exception);
@@ -93,16 +89,12 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	@Override
 	public URI authorizeRead(ObjectReference object, Duration lifetime) {
 		try {
-			var request = GetObjectRequest.builder()
-					.bucket(object.bucket())
-					.key(object.objectKey())
-					.build();
-			return URI.create(this.presigner.presignGetObject(GetObjectPresignRequest.builder()
-					.signatureDuration(lifetime)
-					.getObjectRequest(request)
-					.build())
-					.url()
-					.toExternalForm());
+			var request = GetObjectRequest.builder().bucket(object.bucket()).key(object.objectKey()).build();
+			return URI.create(this.presigner
+				.presignGetObject(
+						GetObjectPresignRequest.builder().signatureDuration(lifetime).getObjectRequest(request).build())
+				.url()
+				.toExternalForm());
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not authorize the completed object.", exception);
@@ -113,25 +105,24 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	public Optional<StoredPart> findPart(CreatedUpload upload, int partNumber) {
 		try {
 			var response = this.s3Client.listParts(ListPartsRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.uploadId(upload.uploadId())
-					.partNumberMarker(partNumber - 1)
-					.maxParts(1)
-					.build());
-			var exactMatch = response.parts().stream()
-					.filter(part -> part.partNumber() == partNumber)
-					.findFirst()
-					.map(S3MultipartObjectStorage::storedPart);
+				.bucket(upload.bucket())
+				.key(upload.objectKey())
+				.uploadId(upload.uploadId())
+				.partNumberMarker(partNumber - 1)
+				.maxParts(1)
+				.build());
+			var exactMatch = response.parts()
+				.stream()
+				.filter(part -> part.partNumber() == partNumber)
+				.findFirst()
+				.map(S3MultipartObjectStorage::storedPart);
 			if (exactMatch.isPresent()) {
 				return exactMatch;
 			}
 			// SeaweedFS 4.29 can return an empty page for partNumberMarker + maxParts=1
 			// once a multipart upload has more than two parts. Fall back to the fully
 			// paginated authoritative list instead of accepting client-supplied metadata.
-			return listParts(upload).stream()
-					.filter(part -> part.partNumber() == partNumber)
-					.findFirst();
+			return listParts(upload).stream().filter(part -> part.partNumber() == partNumber).findFirst();
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not inspect the upload part.", exception);
@@ -145,12 +136,12 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 			Integer marker = null;
 			do {
 				var response = this.s3Client.listParts(ListPartsRequest.builder()
-						.bucket(upload.bucket())
-						.key(upload.objectKey())
-						.uploadId(upload.uploadId())
-						.partNumberMarker(marker)
-						.maxParts(1_000)
-						.build());
+					.bucket(upload.bucket())
+					.key(upload.objectKey())
+					.uploadId(upload.uploadId())
+					.partNumberMarker(marker)
+					.maxParts(1_000)
+					.build());
 				response.parts().stream().map(S3MultipartObjectStorage::storedPart).forEach(storedParts::add);
 				if (!Boolean.TRUE.equals(response.isTruncated())) {
 					break;
@@ -158,8 +149,7 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 				marker = response.nextPartNumberMarker();
 				if (marker == null) {
 					throw new MultipartObjectStorageException(
-							"Object storage returned a truncated part list without a continuation marker.",
-							null);
+							"Object storage returned a truncated part list without a continuation marker.", null);
 				}
 			}
 			while (true);
@@ -177,20 +167,16 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 		}
 		try {
 			var completedParts = parts.stream()
-					.map(part -> CompletedPart.builder()
-							.partNumber(part.partNumber())
-							.eTag(part.eTag())
-							.build())
-					.toList();
+				.map(part -> CompletedPart.builder().partNumber(part.partNumber()).eTag(part.eTag()).build())
+				.toList();
 			this.s3Client.completeMultipartUpload(CompleteMultipartUploadRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.uploadId(upload.uploadId())
-					.multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
-					.build());
+				.bucket(upload.bucket())
+				.key(upload.objectKey())
+				.uploadId(upload.uploadId())
+				.multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+				.build());
 			return findCompletedObject(upload).orElseThrow(() -> new MultipartObjectStorageException(
-					"Object storage completed the multipart upload but returned no final object.",
-					null));
+					"Object storage completed the multipart upload but returned no final object.", null));
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not complete the multipart upload.", exception);
@@ -200,10 +186,8 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	@Override
 	public Optional<CompletedObject> findCompletedObject(CreatedUpload upload) {
 		try {
-			var response = this.s3Client.headObject(HeadObjectRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.build());
+			var response = this.s3Client
+				.headObject(HeadObjectRequest.builder().bucket(upload.bucket()).key(upload.objectKey()).build());
 			return Optional.of(completedObject(response.contentLength(), response.eTag()));
 		}
 		catch (S3Exception exception) {
@@ -221,10 +205,8 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	public String calculateSha256(CreatedUpload upload) {
 		try {
 			var digest = MessageDigest.getInstance("SHA-256");
-			try (var input = this.s3Client.getObject(GetObjectRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.build())) {
+			try (var input = this.s3Client
+				.getObject(GetObjectRequest.builder().bucket(upload.bucket()).key(upload.objectKey()).build())) {
 				var buffer = new byte[1024 * 1024];
 				int count;
 				while ((count = input.read(buffer)) >= 0) {
@@ -240,8 +222,7 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 		}
 		catch (IOException | SdkException exception) {
 			throw new MultipartObjectStorageException(
-					"Object storage did not stream the completed object for integrity verification.",
-					exception);
+					"Object storage did not stream the completed object for integrity verification.", exception);
 		}
 	}
 
@@ -250,15 +231,11 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 		if (maxBytes < 1) {
 			throw new IllegalArgumentException("Maximum object size must be positive.");
 		}
-		try (var input = this.s3Client.getObject(GetObjectRequest.builder()
-				.bucket(object.bucket())
-				.key(object.objectKey())
-				.build())) {
+		try (var input = this.s3Client
+			.getObject(GetObjectRequest.builder().bucket(object.bucket()).key(object.objectKey()).build())) {
 			var declaredLength = input.response().contentLength();
 			if (declaredLength != null && declaredLength > maxBytes) {
-				throw new MultipartObjectStorageException(
-						"Completed object exceeds the permitted read size.",
-						null);
+				throw new MultipartObjectStorageException("Completed object exceeds the permitted read size.", null);
 			}
 			var output = new ByteArrayOutputStream(Math.min(maxBytes, 64 * 1024));
 			var buffer = new byte[64 * 1024];
@@ -268,8 +245,7 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 					continue;
 				}
 				if (output.size() + count > maxBytes) {
-					throw new MultipartObjectStorageException(
-							"Completed object exceeds the permitted read size.",
+					throw new MultipartObjectStorageException("Completed object exceeds the permitted read size.",
 							null);
 				}
 				output.write(buffer, 0, count);
@@ -280,9 +256,7 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 			throw exception;
 		}
 		catch (IOException | SdkException exception) {
-			throw new MultipartObjectStorageException(
-					"Object storage did not read the completed object.",
-					exception);
+			throw new MultipartObjectStorageException("Object storage did not read the completed object.", exception);
 		}
 	}
 
@@ -290,10 +264,10 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	public void abort(CreatedUpload upload) {
 		try {
 			this.s3Client.abortMultipartUpload(AbortMultipartUploadRequest.builder()
-					.bucket(upload.bucket())
-					.key(upload.objectKey())
-					.uploadId(upload.uploadId())
-					.build());
+				.bucket(upload.bucket())
+				.key(upload.objectKey())
+				.uploadId(upload.uploadId())
+				.build());
 		}
 		catch (S3Exception exception) {
 			if (exception.statusCode() == 404) {
@@ -309,10 +283,8 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 	@Override
 	public void delete(ObjectReference object) {
 		try {
-			this.s3Client.deleteObject(DeleteObjectRequest.builder()
-					.bucket(object.bucket())
-					.key(object.objectKey())
-					.build());
+			this.s3Client
+				.deleteObject(DeleteObjectRequest.builder().bucket(object.bucket()).key(object.objectKey()).build());
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not delete the abandoned upload object.", exception);
@@ -328,8 +300,7 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 			return new StoredPart(part.partNumber(), part.size(), part.eTag());
 		}
 		catch (IllegalArgumentException exception) {
-			throw new MultipartObjectStorageException(
-					"Object storage returned invalid upload part metadata.",
+			throw new MultipartObjectStorageException("Object storage returned invalid upload part metadata.",
 					exception);
 		}
 	}
@@ -339,9 +310,9 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 			return new CompletedObject(sizeBytes, eTag);
 		}
 		catch (IllegalArgumentException exception) {
-			throw new MultipartObjectStorageException(
-					"Object storage returned invalid completed object metadata.",
+			throw new MultipartObjectStorageException("Object storage returned invalid completed object metadata.",
 					exception);
 		}
 	}
+
 }

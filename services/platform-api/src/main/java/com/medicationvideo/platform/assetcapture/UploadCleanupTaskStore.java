@@ -28,8 +28,7 @@ class UploadCleanupTaskStore {
 				    attempt_count, available_at, created_at)
 				VALUES (?, ?, ?, 'PENDING', 0, ?, ?)
 				ON CONFLICT (upload_file_id) DO NOTHING
-				""",
-				UUID.randomUUID(), batchId, uploadFileId, Timestamp.from(now), Timestamp.from(now));
+				""", UUID.randomUUID(), batchId, uploadFileId, Timestamp.from(now), Timestamp.from(now));
 	}
 
 	void reactivate(UUID uploadFileId, Instant now) {
@@ -39,8 +38,7 @@ class UploadCleanupTaskStore {
 				    claim_token = NULL, claimed_until = NULL,
 				    last_error_code = NULL, completed_at = NULL
 				WHERE upload_file_id = ?
-				""",
-				Timestamp.from(now), uploadFileId);
+				""", Timestamp.from(now), uploadFileId);
 		if (updated != 1) {
 			throw new IllegalStateException("The upload cleanup task does not exist.");
 		}
@@ -59,9 +57,7 @@ class UploadCleanupTaskStore {
 				ORDER BY task.available_at, task.created_at, task.cleanup_task_id
 				LIMIT ?
 				FOR UPDATE OF task SKIP LOCKED
-				""",
-				this::map,
-				Timestamp.from(now), Timestamp.from(now), batchSize);
+				""", this::map, Timestamp.from(now), Timestamp.from(now), batchSize);
 		return rows.stream().map(row -> {
 			var claimToken = UUID.randomUUID();
 			var updated = this.jdbcTemplate.update("""
@@ -70,10 +66,7 @@ class UploadCleanupTaskStore {
 					    attempt_count = attempt_count + 1
 					WHERE cleanup_task_id = ?
 					  AND status IN ('PENDING', 'RUNNING')
-					""",
-					claimToken,
-					Timestamp.from(now.plus(claimDuration)),
-					row.cleanupTaskId());
+					""", claimToken, Timestamp.from(now.plus(claimDuration)), row.cleanupTaskId());
 			if (updated != 1) {
 				throw new IllegalStateException("The upload cleanup claim changed unexpectedly.");
 			}
@@ -88,33 +81,22 @@ class UploadCleanupTaskStore {
 				SET status = 'SUCCEEDED', claim_token = NULL, claimed_until = NULL,
 				    last_error_code = NULL, completed_at = ?
 				WHERE cleanup_task_id = ? AND claim_token = ? AND status = 'RUNNING'
-				""",
-				Timestamp.from(completedAt), cleanupTaskId, claimToken);
+				""", Timestamp.from(completedAt), cleanupTaskId, claimToken);
 		if (updated != 1) {
 			throw new IllegalStateException("The upload cleanup claim is no longer current.");
 		}
 	}
 
 	@Transactional
-	void releaseOrFail(
-			ClaimedCleanupTask task,
-			Instant now,
-			Instant availableAt,
-			int maxAttempts,
-			String errorCode) {
+	void releaseOrFail(ClaimedCleanupTask task, Instant now, Instant availableAt, int maxAttempts, String errorCode) {
 		var terminal = task.attemptCount() >= maxAttempts;
 		var updated = this.jdbcTemplate.update("""
 				UPDATE upload_cleanup_task
 				SET status = ?, available_at = ?, claim_token = NULL, claimed_until = NULL,
 				    last_error_code = ?, completed_at = ?
 				WHERE cleanup_task_id = ? AND claim_token = ? AND status = 'RUNNING'
-				""",
-				terminal ? "FAILED" : "PENDING",
-				Timestamp.from(availableAt),
-				errorCode,
-				terminal ? Timestamp.from(now) : null,
-				task.cleanupTaskId(),
-				task.claimToken());
+				""", terminal ? "FAILED" : "PENDING", Timestamp.from(availableAt), errorCode,
+				terminal ? Timestamp.from(now) : null, task.cleanupTaskId(), task.claimToken());
 		if (updated != 1) {
 			throw new IllegalStateException("The upload cleanup failure claim is no longer current.");
 		}
@@ -129,33 +111,24 @@ class UploadCleanupTaskStore {
 				FROM upload_cleanup_task
 				WHERE batch_id = ?
 				""",
-				(resultSet, rowNumber) -> UploadCleanupSummary.fromCounts(
-						resultSet.getInt("total"),
-						resultSet.getInt("running"),
-						resultSet.getInt("succeeded"),
-						resultSet.getInt("failed")),
+				(resultSet, rowNumber) -> UploadCleanupSummary.fromCounts(resultSet.getInt("total"),
+						resultSet.getInt("running"), resultSet.getInt("succeeded"), resultSet.getInt("failed")),
 				batchId);
 	}
 
 	private ClaimedCleanupTask map(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ClaimedCleanupTask(
-				resultSet.getObject("cleanup_task_id", UUID.class),
-				null,
+		return new ClaimedCleanupTask(resultSet.getObject("cleanup_task_id", UUID.class), null,
 				resultSet.getInt("attempt_count") + 1,
-				new MultipartObjectStorage.CreatedUpload(
-						resultSet.getString("storage_bucket"),
-						resultSet.getString("object_key"),
-						resultSet.getString("storage_upload_id")));
+				new MultipartObjectStorage.CreatedUpload(resultSet.getString("storage_bucket"),
+						resultSet.getString("object_key"), resultSet.getString("storage_upload_id")));
 	}
 
-	record ClaimedCleanupTask(
-			UUID cleanupTaskId,
-			UUID claimToken,
-			int attemptCount,
+	record ClaimedCleanupTask(UUID cleanupTaskId, UUID claimToken, int attemptCount,
 			MultipartObjectStorage.CreatedUpload upload) {
 
 		ClaimedCleanupTask claimed(UUID token) {
 			return new ClaimedCleanupTask(this.cleanupTaskId, token, this.attemptCount, this.upload);
 		}
 	}
+
 }

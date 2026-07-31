@@ -27,17 +27,18 @@ import jakarta.validation.constraints.Min;
 class UploadMultipartController {
 
 	private final UploadMultipartService multipartService;
+
 	private final UploadPartAuthorizationService authorizationService;
+
 	private final UploadPartReconciliationService reconciliationService;
+
 	private final UploadFileCompletionService completionService;
+
 	private final AssetCaptureProjectAuthorizer authorizer;
 
-	UploadMultipartController(
-			UploadMultipartService multipartService,
-			UploadPartAuthorizationService authorizationService,
-			UploadPartReconciliationService reconciliationService,
-			UploadFileCompletionService completionService,
-			AssetCaptureProjectAuthorizer authorizer) {
+	UploadMultipartController(UploadMultipartService multipartService,
+			UploadPartAuthorizationService authorizationService, UploadPartReconciliationService reconciliationService,
+			UploadFileCompletionService completionService, AssetCaptureProjectAuthorizer authorizer) {
 		this.multipartService = multipartService;
 		this.authorizationService = authorizationService;
 		this.reconciliationService = reconciliationService;
@@ -46,9 +47,7 @@ class UploadMultipartController {
 	}
 
 	@PutMapping("/multipart")
-	ResponseEntity<UploadMultipartSessionResponse> start(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
+	ResponseEntity<UploadMultipartSessionResponse> start(@PathVariable UUID batchId, @PathVariable UUID clientFileId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
@@ -57,34 +56,20 @@ class UploadMultipartController {
 	}
 
 	@PostMapping("/parts/{partNumber}/authorization")
-	ResponseEntity<UploadPartAuthorizationResponse> authorizePart(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			@PathVariable @Min(1) @Max(10_000) int partNumber,
-			@Valid @RequestBody UploadPartAuthorizationRequest request,
-			Authentication authentication) {
+	ResponseEntity<UploadPartAuthorizationResponse> authorizePart(@PathVariable UUID batchId,
+			@PathVariable UUID clientFileId, @PathVariable @Min(1) @Max(10_000) int partNumber,
+			@Valid @RequestBody UploadPartAuthorizationRequest request, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
-		var authorized = this.authorizationService.authorize(
-				projectId,
-				batchId,
-				clientFileId,
-				partNumber,
-				request);
+		var authorized = this.authorizationService.authorize(projectId, batchId, clientFileId, partNumber, request);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(UploadPartAuthorizationResponse.from(
-						authorized.file(),
-						authorized.part(),
-						authorized.uploadUrl()));
+			.cacheControl(CacheControl.noStore())
+			.body(UploadPartAuthorizationResponse.from(authorized.file(), authorized.part(), authorized.uploadUrl()));
 	}
 
 	@PutMapping("/parts/{partNumber}/confirmation")
-	ResponseEntity<UploadPartResponse> confirmPart(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			@PathVariable @Min(1) @Max(10_000) int partNumber,
-			Authentication authentication) {
+	ResponseEntity<UploadPartResponse> confirmPart(@PathVariable UUID batchId, @PathVariable UUID clientFileId,
+			@PathVariable @Min(1) @Max(10_000) int partNumber, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
 		var part = this.reconciliationService.confirm(projectId, batchId, clientFileId, partNumber);
@@ -92,44 +77,29 @@ class UploadMultipartController {
 	}
 
 	@GetMapping("/parts")
-	ResponseEntity<UploadPartProgressResponse> getPartProgress(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			Authentication authentication) {
+	ResponseEntity<UploadPartProgressResponse> getPartProgress(@PathVariable UUID batchId,
+			@PathVariable UUID clientFileId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.reconciliationService.getProgress(
-						projectId,
-						batchId,
-						clientFileId));
+			.cacheControl(CacheControl.noStore())
+			.body(this.reconciliationService.getProgress(projectId, batchId, clientFileId));
 	}
 
 	@PutMapping("/parts/reconciliation")
-	ResponseEntity<UploadPartProgressResponse> reconcileParts(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			Authentication authentication) {
+	ResponseEntity<UploadPartProgressResponse> reconcileParts(@PathVariable UUID batchId,
+			@PathVariable UUID clientFileId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
-		return ResponseEntity.ok(this.reconciliationService.reconcile(
-				projectId,
-				batchId,
-				clientFileId));
+		return ResponseEntity.ok(this.reconciliationService.reconcile(projectId, batchId, clientFileId));
 	}
 
 	@PutMapping("/completion")
-	ResponseEntity<UploadFileCompletionResponse> completeFile(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			Authentication authentication) {
+	ResponseEntity<UploadFileCompletionResponse> completeFile(@PathVariable UUID batchId,
+			@PathVariable UUID clientFileId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var projectId = requireProject(batchId, actor);
-		return ResponseEntity.ok(this.completionService.complete(
-				projectId,
-				batchId,
-				clientFileId));
+		return ResponseEntity.ok(this.completionService.complete(projectId, batchId, clientFileId));
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {
@@ -142,4 +112,5 @@ class UploadMultipartController {
 	private UUID requireProject(UUID batchId, PlatformActor actor) {
 		return this.authorizer.requireBatchMember(batchId, actor.actorId()).projectId();
 	}
+
 }

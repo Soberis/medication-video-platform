@@ -44,7 +44,8 @@ class DatasetMemberSession {
 	protected DatasetMemberSession() {
 	}
 
-	private DatasetMemberSession(DatasetVersion version, int candidateIndex, CaptureSessionDatasetAdmissionFacts facts) {
+	private DatasetMemberSession(DatasetVersion version, int candidateIndex,
+			CaptureSessionDatasetAdmissionFacts facts) {
 		this.datasetMemberSessionId = UUID.randomUUID();
 		this.datasetVersionId = version.getDatasetVersionId();
 		this.projectId = version.getProjectId();
@@ -56,7 +57,8 @@ class DatasetMemberSession {
 		this.qualityStatus = facts.qualityStatus();
 	}
 
-	static DatasetMemberSession snapshot(DatasetVersion version, int candidateIndex, CaptureSessionDatasetAdmissionFacts facts) {
+	static DatasetMemberSession snapshot(DatasetVersion version, int candidateIndex,
+			CaptureSessionDatasetAdmissionFacts facts) {
 		return new DatasetMemberSession(version, candidateIndex, facts);
 	}
 
@@ -91,4 +93,5 @@ class DatasetMemberSession {
 	String getQualityStatus() {
 		return this.qualityStatus;
 	}
+
 }

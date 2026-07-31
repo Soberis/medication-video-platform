@@ -58,14 +58,8 @@ class DatasetBuildSpecification {
 	protected DatasetBuildSpecification() {
 	}
 
-	private DatasetBuildSpecification(
-			DatasetVersion version,
-			String labelSchemaDigest,
-			String cleaningRuleSetDigest,
-			DatasetSplitPlan splitPlan,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
+	private DatasetBuildSpecification(DatasetVersion version, String labelSchemaDigest, String cleaningRuleSetDigest,
+			DatasetSplitPlan splitPlan, String createdBy, String idempotencyKey, String requestFingerprint,
 			Instant createdAt) {
 		this.datasetBuildSpecificationId = UUID.randomUUID();
 		this.datasetVersionId = version.getDatasetVersionId();
@@ -82,24 +76,11 @@ class DatasetBuildSpecification {
 		this.createdAt = createdAt;
 	}
 
-	static DatasetBuildSpecification create(
-			DatasetVersion version,
-			String labelSchemaDigest,
-			String cleaningRuleSetDigest,
-			DatasetSplitPlan splitPlan,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new DatasetBuildSpecification(
-				version,
-				labelSchemaDigest,
-				cleaningRuleSetDigest,
-				splitPlan,
-				createdBy,
-				idempotencyKey,
-				requestFingerprint,
-				createdAt);
+	static DatasetBuildSpecification create(DatasetVersion version, String labelSchemaDigest,
+			String cleaningRuleSetDigest, DatasetSplitPlan splitPlan, String createdBy, String idempotencyKey,
+			String requestFingerprint, Instant createdAt) {
+		return new DatasetBuildSpecification(version, labelSchemaDigest, cleaningRuleSetDigest, splitPlan, createdBy,
+				idempotencyKey, requestFingerprint, createdAt);
 	}
 
 	boolean matchesCreateRequest(String fingerprint) {
@@ -149,8 +130,11 @@ class DatasetBuildSpecification {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }
 
 enum DatasetSelectionRuleVersion {
+
 	EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1
+
 }

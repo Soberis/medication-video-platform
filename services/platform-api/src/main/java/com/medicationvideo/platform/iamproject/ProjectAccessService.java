@@ -10,11 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectAccessService {
 
 	private final DataProjectRepository projectRepository;
+
 	private final ProjectMembershipRepository membershipRepository;
 
-	ProjectAccessService(
-			DataProjectRepository projectRepository,
-			ProjectMembershipRepository membershipRepository) {
+	ProjectAccessService(DataProjectRepository projectRepository, ProjectMembershipRepository membershipRepository) {
 		this.projectRepository = projectRepository;
 		this.membershipRepository = membershipRepository;
 	}
@@ -28,15 +27,13 @@ public class ProjectAccessService {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireAdministrator(UUID projectId, String actorId) {
 		var project = this.projectRepository.findForUpdate(projectId)
-				.orElseThrow(ProjectAccessService::projectNotFound);
+			.orElseThrow(ProjectAccessService::projectNotFound);
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
 			throw projectNotFound();
 		}
 		var membership = requireActiveMembership(projectId, actorId);
 		if (membership.getRole() != ProjectRole.ADMIN) {
-			throw new ProjectAccessException(
-					"PROJECT_ACCESS_DENIED",
-					"Project administrator membership is required.",
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
 					403);
 		}
 		return membership.getRole();
@@ -44,19 +41,17 @@ public class ProjectAccessService {
 
 	private void requireActiveProject(UUID projectId) {
 		this.projectRepository.findByProjectIdAndStatus(projectId, ProjectStatus.ACTIVE)
-				.orElseThrow(ProjectAccessService::projectNotFound);
+			.orElseThrow(ProjectAccessService::projectNotFound);
 	}
 
 	private ProjectMembership requireActiveMembership(UUID projectId, String actorId) {
 		return this.membershipRepository.findByProjectIdAndActorId(projectId, actorId)
-				.filter(ProjectMembership::isActive)
-				.orElseThrow(ProjectAccessService::projectNotFound);
+			.filter(ProjectMembership::isActive)
+			.orElseThrow(ProjectAccessService::projectNotFound);
 	}
 
 	private static ProjectAccessException projectNotFound() {
-		return new ProjectAccessException(
-				"PROJECT_NOT_FOUND",
-				"The project was not found for the current actor.",
-				404);
+		return new ProjectAccessException("PROJECT_NOT_FOUND", "The project was not found for the current actor.", 404);
 	}
+
 }

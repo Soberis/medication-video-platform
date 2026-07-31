@@ -17,6 +17,7 @@ class UploadFileService {
 	private static final int MAX_PARTS = 10_000;
 
 	private final UploadBatchRepository batchRepository;
+
 	private final UploadFileRepository fileRepository;
 
 	UploadFileService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository) {
@@ -25,15 +26,11 @@ class UploadFileService {
 	}
 
 	@Transactional
-	UploadFile register(
-			UUID projectId,
-			UUID batchId,
-			UUID clientFileId,
-			String idempotencyKey,
+	UploadFile register(UUID projectId, UUID batchId, UUID clientFileId, String idempotencyKey,
 			UploadFileRegistrationRequest request) {
 		var fingerprint = fingerprint(batchId, clientFileId, request);
 		var batch = this.batchRepository.findForFileRegistration(batchId, projectId)
-				.orElseThrow(UploadBatchNotFoundException::new);
+			.orElseThrow(UploadBatchNotFoundException::new);
 
 		var byKey = this.fileRepository.findByBatchIdAndIdempotencyKey(batchId, idempotencyKey);
 		if (byKey.isPresent()) {
@@ -50,14 +47,12 @@ class UploadFileService {
 			throw new UploadFileRegistrationException("UPLOAD_BATCH_EXPIRED", "The upload batch has expired.");
 		}
 		if (batch.getStatus() != UploadBatchStatus.INITIATED) {
-			throw new UploadFileRegistrationException(
-					"UPLOAD_BATCH_NOT_ACCEPTING_FILES",
+			throw new UploadFileRegistrationException("UPLOAD_BATCH_NOT_ACCEPTING_FILES",
 					"The upload batch no longer accepts file manifest entries.");
 		}
 		if (batch.getUploadSourceType() == UploadSourceType.PLATFORM_LOCAL
 				&& request.fileKind() != UploadFileKind.VIDEO) {
-			throw new UploadFileRegistrationException(
-					"PLATFORM_LOCAL_VIDEO_REQUIRED",
+			throw new UploadFileRegistrationException("PLATFORM_LOCAL_VIDEO_REQUIRED",
 					"A platform-local upload batch accepts exactly one VIDEO file.");
 		}
 
@@ -65,34 +60,21 @@ class UploadFileService {
 		var registeredSize = this.fileRepository.sumSizeBytesByBatchId(batchId);
 		if (registeredCount >= batch.getFileCount()
 				|| exceedsDeclaredSize(registeredSize, request.sizeBytes(), batch.getTotalSizeBytes())) {
-			throw new UploadFileRegistrationException(
-					"UPLOAD_BATCH_LIMIT_EXCEEDED",
+			throw new UploadFileRegistrationException("UPLOAD_BATCH_LIMIT_EXCEEDED",
 					"The file would exceed the batch declaration.");
 		}
 
 		var totalParts = calculateTotalParts(request.sizeBytes(), request.partSizeBytes());
-		var file = UploadFile.register(
-				batchId,
-				clientFileId,
-				idempotencyKey,
-				fingerprint,
-				request,
-				totalParts,
-				now);
+		var file = UploadFile.register(batchId, clientFileId, idempotencyKey, fingerprint, request, totalParts, now);
 		return this.fileRepository.saveAndFlush(file);
 	}
 
-	private static UploadFile requireSameRegistration(
-			UploadFile file,
-			UUID clientFileId,
-			String fingerprint,
+	private static UploadFile requireSameRegistration(UploadFile file, UUID clientFileId, String fingerprint,
 			String conflictCode) {
 		if (!file.getClientFileId().equals(clientFileId)
-				|| !MessageDigest.isEqual(
-						file.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
+				|| !MessageDigest.isEqual(file.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
 						fingerprint.getBytes(StandardCharsets.US_ASCII))) {
-			throw new UploadFileRegistrationException(
-					conflictCode,
+			throw new UploadFileRegistrationException(conflictCode,
 					"The immutable upload file registration conflicts with an existing request.");
 		}
 		return file;
@@ -105,25 +87,15 @@ class UploadFileService {
 	private static int calculateTotalParts(long sizeBytes, long partSizeBytes) {
 		var totalParts = Math.floorDiv(sizeBytes - 1, partSizeBytes) + 1;
 		if (totalParts > MAX_PARTS) {
-			throw new UploadFileRegistrationException(
-					"UPLOAD_FILE_TOO_MANY_PARTS",
+			throw new UploadFileRegistrationException("UPLOAD_FILE_TOO_MANY_PARTS",
 					"The planned part count exceeds the supported maximum.");
 		}
 		return Math.toIntExact(totalParts);
 	}
 
-	private static String fingerprint(
-			UUID batchId,
-			UUID clientFileId,
-			UploadFileRegistrationRequest request) {
-		var canonical = String.join(
-				"\n",
-				batchId.toString(),
-				clientFileId.toString(),
-				request.fileKind().name(),
-				request.contentType(),
-				Long.toString(request.sizeBytes()),
-				request.sha256(),
+	private static String fingerprint(UUID batchId, UUID clientFileId, UploadFileRegistrationRequest request) {
+		var canonical = String.join("\n", batchId.toString(), clientFileId.toString(), request.fileKind().name(),
+				request.contentType(), Long.toString(request.sizeBytes()), request.sha256(),
 				Long.toString(request.partSizeBytes()));
 		try {
 			var digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
@@ -133,4 +105,5 @@ class UploadFileService {
 			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
 		}
 	}
+
 }

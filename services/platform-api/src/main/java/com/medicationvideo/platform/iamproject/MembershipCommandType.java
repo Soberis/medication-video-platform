@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.iamproject;
 
 enum MembershipCommandType {
-	UPSERT,
-	REMOVE
+
+	UPSERT, REMOVE
+
 }

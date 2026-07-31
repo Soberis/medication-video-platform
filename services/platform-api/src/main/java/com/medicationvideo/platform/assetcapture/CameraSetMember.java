@@ -74,4 +74,5 @@ class CameraSetMember {
 	boolean isEnabled() {
 		return this.enabled;
 	}
+
 }

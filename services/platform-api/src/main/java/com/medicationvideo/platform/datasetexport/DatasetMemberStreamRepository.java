@@ -9,4 +9,5 @@ interface DatasetMemberStreamRepository extends JpaRepository<DatasetMemberStrea
 
 	List<DatasetMemberStream> findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(
 			UUID datasetVersionId);
+
 }

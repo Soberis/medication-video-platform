@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 
 	private final JdbcTemplate jdbcTemplate;
+
 	private final ObjectMapper objectMapper;
 
 	JdbcMediaJobOutbox(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
@@ -27,8 +28,7 @@ class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 	@Override
 	public void enqueue(MediaProbeJobEnvelope envelope, Instant availableAt) {
 		if (availableAt.isBefore(envelope.requestedAt())) {
-			throw new IllegalArgumentException(
-					"An Outbox event cannot be available before it was requested.");
+			throw new IllegalArgumentException("An Outbox event cannot be available before it was requested.");
 		}
 		try {
 			this.jdbcTemplate.update("""
@@ -37,18 +37,13 @@ class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 					    schema_version, exchange_name, routing_key, payload_json,
 					    occurred_at, available_at)
 					VALUES (?, 'MediaJob', ?, 'MediaProbeJobRequestedV1', ?, ?, ?, CAST(? AS JSONB), ?, ?)
-					""",
-					UUID.randomUUID(),
-					envelope.jobId(),
-					envelope.schemaVersion(),
-					MediaMessagingTopology.EXCHANGE,
-					MediaMessagingTopology.PROBE_ROUTING_KEY,
-					this.objectMapper.writeValueAsString(envelope),
-					Timestamp.from(envelope.requestedAt()),
-					Timestamp.from(availableAt));
+					""", UUID.randomUUID(), envelope.jobId(), envelope.schemaVersion(), MediaMessagingTopology.EXCHANGE,
+					MediaMessagingTopology.PROBE_ROUTING_KEY, this.objectMapper.writeValueAsString(envelope),
+					Timestamp.from(envelope.requestedAt()), Timestamp.from(availableAt));
 		}
 		catch (JacksonException exception) {
 			throw new IllegalStateException("The media probe job envelope could not be serialized.", exception);
 		}
 	}
+
 }

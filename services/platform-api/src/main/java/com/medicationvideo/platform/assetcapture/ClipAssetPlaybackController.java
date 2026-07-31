@@ -32,29 +32,20 @@ class ClipAssetPlaybackController {
 	}
 
 	@PostMapping("/{clipAssetId}/playback-grants")
-	ResponseEntity<ClipAssetPlaybackGrantResponse> grant(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+	ResponseEntity<ClipAssetPlaybackGrantResponse> grant(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var response = this.service.grant(
-				projectId,
-				clipAssetId,
-				actor.actorId(),
-				resolveRequestId(requestId),
+		var response = this.service.grant(projectId, clipAssetId, actor.actorId(), resolveRequestId(requestId),
 				MDC.get("traceId"));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
-			throw new ClipAssetPlaybackException(
-					"PLAYBACK_ACCESS_DENIED",
-					"An authenticated platform account is required for video playback.",
-					403,
-					false);
+			throw new ClipAssetPlaybackException("PLAYBACK_ACCESS_DENIED",
+					"An authenticated platform account is required for video playback.", 403, false);
 		}
 		return actor;
 	}
@@ -62,4 +53,5 @@ class ClipAssetPlaybackController {
 	private static String resolveRequestId(String requestId) {
 		return Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString());
 	}
+
 }

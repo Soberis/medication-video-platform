@@ -14,21 +14,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = {
-		UploadBatchController.class,
-		UploadFileController.class,
-		UploadMultipartController.class,
-		CameraConfigurationController.class,
-		AssetCatalogController.class
-})
+@RestControllerAdvice(assignableTypes = { UploadBatchController.class, UploadFileController.class,
+		UploadMultipartController.class, CameraConfigurationController.class, AssetCatalogController.class })
 class UploadBatchExceptionHandler {
 
-	@ExceptionHandler({
-			MethodArgumentNotValidException.class,
-			HandlerMethodValidationException.class,
-			HttpMessageNotReadableException.class,
-			MethodArgumentTypeMismatchException.class
-	})
+	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
+			HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class })
 	ResponseEntity<ApiErrorResponse> invalidRequest(Exception exception) {
 		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The request is invalid.");
 	}
@@ -40,10 +31,7 @@ class UploadBatchExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)
 	ResponseEntity<ApiErrorResponse> projectAccess(ProjectAccessException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage());
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
 	}
 
 	@ExceptionHandler(UploadBatchConflictException.class)
@@ -83,11 +71,7 @@ class UploadBatchExceptionHandler {
 
 	@ExceptionHandler(UploadFileCompletionInProgressException.class)
 	ResponseEntity<ApiErrorResponse> completionInProgress(UploadFileCompletionInProgressException exception) {
-		return error(
-				HttpStatus.CONFLICT,
-				"UPLOAD_FILE_COMPLETION_IN_PROGRESS",
-				exception.getMessage(),
-				true);
+		return error(HttpStatus.CONFLICT, "UPLOAD_FILE_COMPLETION_IN_PROGRESS", exception.getMessage(), true);
 	}
 
 	@ExceptionHandler(UploadBatchCompletionException.class)
@@ -97,11 +81,7 @@ class UploadBatchExceptionHandler {
 
 	@ExceptionHandler(UploadBatchTerminationException.class)
 	ResponseEntity<ApiErrorResponse> batchTerminationConflict(UploadBatchTerminationException exception) {
-		return error(
-				HttpStatus.CONFLICT,
-				exception.getErrorCode(),
-				exception.getMessage(),
-				exception.isRetryable());
+		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage(), exception.isRetryable());
 	}
 
 	@ExceptionHandler(CameraConfigurationException.class)
@@ -124,24 +104,14 @@ class UploadBatchExceptionHandler {
 		return error(status, exception.getErrorCode(), exception.getMessage());
 	}
 
-	private static ResponseEntity<ApiErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
-			String errorMessage) {
+	private static ResponseEntity<ApiErrorResponse> error(HttpStatus status, String errorCode, String errorMessage) {
 		return error(status, errorCode, errorMessage, false);
 	}
 
-	private static ResponseEntity<ApiErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
-			String errorMessage,
+	private static ResponseEntity<ApiErrorResponse> error(HttpStatus status, String errorCode, String errorMessage,
 			boolean retryable) {
-		var body = new ApiErrorResponse(
-				errorCode,
-				errorMessage,
-				retryable,
-				UUID.randomUUID().toString(),
-				null);
+		var body = new ApiErrorResponse(errorCode, errorMessage, retryable, UUID.randomUUID().toString(), null);
 		return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body);
 	}
+
 }

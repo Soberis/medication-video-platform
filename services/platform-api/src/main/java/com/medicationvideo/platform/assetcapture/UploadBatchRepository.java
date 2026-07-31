@@ -36,19 +36,14 @@ interface UploadBatchRepository extends JpaRepository<UploadBatch, UUID> {
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select batch from UploadBatch batch where batch.batchId = :batchId and batch.projectId = :projectId")
-	Optional<UploadBatch> findForFileRegistration(
-			@Param("batchId") UUID batchId,
-			@Param("projectId") UUID projectId);
+	Optional<UploadBatch> findForFileRegistration(@Param("batchId") UUID batchId, @Param("projectId") UUID projectId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select batch from UploadBatch batch where batch.batchId = :batchId and batch.projectId = :projectId")
-	Optional<UploadBatch> findForCompletion(
-			@Param("batchId") UUID batchId,
-			@Param("projectId") UUID projectId);
+	Optional<UploadBatch> findForCompletion(@Param("batchId") UUID batchId, @Param("projectId") UUID projectId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select batch from UploadBatch batch where batch.batchId = :batchId and batch.projectId = :projectId")
-	Optional<UploadBatch> findForTermination(
-			@Param("batchId") UUID batchId,
-			@Param("projectId") UUID projectId);
+	Optional<UploadBatch> findForTermination(@Param("batchId") UUID batchId, @Param("projectId") UUID projectId);
+
 }

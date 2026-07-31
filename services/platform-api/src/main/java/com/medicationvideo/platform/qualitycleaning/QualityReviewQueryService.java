@@ -23,8 +23,8 @@ public class QualityReviewQueryService {
 	@Transactional(readOnly = true)
 	public CurrentDecision getCurrentDecision(UUID projectId, UUID clipAssetId) {
 		return this.repository.findByProjectIdAndClipAssetId(projectId, clipAssetId)
-				.map(review -> new CurrentDecision(review.getDecision().name(), review.getVersion()))
-				.orElseGet(() -> new CurrentDecision("UNREVIEWED", 0));
+			.map(review -> new CurrentDecision(review.getDecision().name(), review.getVersion()))
+			.orElseGet(() -> new CurrentDecision("UNREVIEWED", 0));
 	}
 
 	@Transactional(readOnly = true)
@@ -33,18 +33,17 @@ public class QualityReviewQueryService {
 			return Map.of();
 		}
 		return this.repository.findAllByProjectIdAndClipAssetIdIn(projectId, clipAssetIds)
-				.stream()
-				.collect(Collectors.toMap(
-						QualityReview::getClipAssetId,
-						review -> new CurrentDecision(review.getDecision().name(), review.getVersion()),
-						(existing, ignored) -> existing));
+			.stream()
+			.collect(Collectors.toMap(QualityReview::getClipAssetId,
+					review -> new CurrentDecision(review.getDecision().name(), review.getVersion()),
+					(existing, ignored) -> existing));
 	}
 
 	@Transactional
 	public CurrentDecision lockAndGetCurrentDecision(UUID projectId, UUID clipAssetId) {
 		return this.repository.findForUpdate(projectId, clipAssetId)
-				.map(review -> new CurrentDecision(review.getDecision().name(), review.getVersion()))
-				.orElseGet(() -> new CurrentDecision("UNREVIEWED", 0));
+			.map(review -> new CurrentDecision(review.getDecision().name(), review.getVersion()))
+			.orElseGet(() -> new CurrentDecision("UNREVIEWED", 0));
 	}
 
 	public record CurrentDecision(String decision, long version) {
@@ -53,4 +52,5 @@ public class QualityReviewQueryService {
 			return "QUALIFIED".equals(this.decision);
 		}
 	}
+
 }

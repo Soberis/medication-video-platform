@@ -27,22 +27,25 @@ class DatasetExportApprovalReadinessService {
 	static final String EXPORT_PROFILE_NOT_EXECUTABLE = "EXPORT_PROFILE_NOT_EXECUTABLE";
 
 	private final ProjectAccessService projectAccessService;
+
 	private final DatasetVersionRepository versionRepository;
+
 	private final DatasetBuildSpecificationRepository specificationRepository;
+
 	private final DatasetBuildSnapshotRepository snapshotRepository;
+
 	private final DatasetVersionValidationRepository validationRepository;
+
 	private final DatasetExportRepository exportRepository;
+
 	private final DatasetExportApprovalService approvalService;
+
 	private final DatasetVersionValidationService validationService;
 
-	DatasetExportApprovalReadinessService(
-			ProjectAccessService projectAccessService,
-			DatasetVersionRepository versionRepository,
-			DatasetBuildSpecificationRepository specificationRepository,
-			DatasetBuildSnapshotRepository snapshotRepository,
-			DatasetVersionValidationRepository validationRepository,
-			DatasetExportRepository exportRepository,
-			DatasetExportApprovalService approvalService,
+	DatasetExportApprovalReadinessService(ProjectAccessService projectAccessService,
+			DatasetVersionRepository versionRepository, DatasetBuildSpecificationRepository specificationRepository,
+			DatasetBuildSnapshotRepository snapshotRepository, DatasetVersionValidationRepository validationRepository,
+			DatasetExportRepository exportRepository, DatasetExportApprovalService approvalService,
 			DatasetVersionValidationService validationService) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
@@ -55,19 +58,15 @@ class DatasetExportApprovalReadinessService {
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	DatasetExportApprovalReadinessResponse get(
-			UUID projectId, UUID datasetVersionId, String actorId) {
+	DatasetExportApprovalReadinessResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
-				.orElseThrow(DatasetExportApprovalReadinessService::notFound);
+			.orElseThrow(DatasetExportApprovalReadinessService::notFound);
 		var export = this.exportRepository.findByDatasetVersionId(datasetVersionId)
-				.orElseThrow(() -> new DatasetVersionException(
-						"DATASET_EXPORT_NOT_FOUND",
-						"The dataset version does not have an export request.",
-						404));
+			.orElseThrow(() -> new DatasetVersionException("DATASET_EXPORT_NOT_FOUND",
+					"The dataset version does not have an export request.", 404));
 		var approval = this.approvalService.find(projectId, datasetVersionId)
-				.orElseThrow(() -> new IllegalStateException(
-						"The dataset export approval request is missing."));
+			.orElseThrow(() -> new IllegalStateException("The dataset export approval request is missing."));
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var blockers = new LinkedHashSet<String>();
 
@@ -83,13 +82,11 @@ class DatasetExportApprovalReadinessService {
 		if (version.getStatus() != DatasetVersionStatus.FROZEN) {
 			blockers.add(DATASET_VERSION_NOT_FROZEN);
 		}
-		if (export.getStatus() != DatasetExportStatus.REQUESTED
-				|| !export.getProjectId().equals(projectId)
+		if (export.getStatus() != DatasetExportStatus.REQUESTED || !export.getProjectId().equals(projectId)
 				|| !export.getDatasetVersionId().equals(datasetVersionId)) {
 			blockers.add(EXPORT_REQUEST_INVALID);
 		}
-		if (!approval.pending()
-				|| !export.getApprovalRequestId().equals(approval.approvalRequestId())
+		if (!approval.pending() || !export.getApprovalRequestId().equals(approval.approvalRequestId())
 				|| !datasetVersionId.equals(approval.datasetVersionId())
 				|| !export.getDatasetVersionValidationId().equals(approval.validationId())
 				|| !export.getRequestedBy().equals(approval.requestedBy())) {
@@ -103,9 +100,7 @@ class DatasetExportApprovalReadinessService {
 				|| !DatasetExportProfile.CURRENT_DIGEST.equals(export.getExportProfileDigest())) {
 			blockers.add(EXPORT_PROFILE_NOT_EXECUTABLE);
 		}
-		if (specification.isEmpty()
-				|| snapshot.isEmpty()
-				|| validation.isEmpty()
+		if (specification.isEmpty() || snapshot.isEmpty() || validation.isEmpty()
 				|| !frozenEvidenceMatches(export, version, specification.get(), snapshot.get(), validation.get())) {
 			blockers.add(FROZEN_EVIDENCE_INVALID);
 		}
@@ -122,30 +117,19 @@ class DatasetExportApprovalReadinessService {
 			}
 		}
 
-		return new DatasetExportApprovalReadinessResponse(
-				export.getDatasetExportId(),
-				datasetVersionId,
-				approval.approvalRequestId(),
-				blockers.isEmpty(),
-				blockers.stream().toList(),
-				now);
+		return new DatasetExportApprovalReadinessResponse(export.getDatasetExportId(), datasetVersionId,
+				approval.approvalRequestId(), blockers.isEmpty(), blockers.stream().toList(), now);
 	}
 
-	private static boolean frozenEvidenceMatches(
-			DatasetExport export,
-			DatasetVersion version,
-			DatasetBuildSpecification specification,
-			DatasetBuildSnapshot snapshot,
+	private static boolean frozenEvidenceMatches(DatasetExport export, DatasetVersion version,
+			DatasetBuildSpecification specification, DatasetBuildSnapshot snapshot,
 			DatasetVersionValidation validation) {
 		return version.getBuildSnapshotId() != null
 				&& version.getBuildSnapshotId().equals(snapshot.getDatasetBuildSnapshotId())
-				&& export.getDatasetBuildSpecificationId()
-						.equals(specification.getDatasetBuildSpecificationId())
+				&& export.getDatasetBuildSpecificationId().equals(specification.getDatasetBuildSpecificationId())
 				&& export.getDatasetBuildSnapshotId().equals(snapshot.getDatasetBuildSnapshotId())
-				&& export.getDatasetVersionValidationId()
-						.equals(validation.getDatasetVersionValidationId())
-				&& DatasetExportProfile.isApproved(
-						specification.getExportProfileKey(),
+				&& export.getDatasetVersionValidationId().equals(validation.getDatasetVersionValidationId())
+				&& DatasetExportProfile.isApproved(specification.getExportProfileKey(),
 						specification.getExportProfileDigest())
 				&& export.getExportProfileKey().equals(specification.getExportProfileKey())
 				&& export.getExportProfileDigest().equals(specification.getExportProfileDigest())
@@ -155,9 +139,8 @@ class DatasetExportApprovalReadinessService {
 	}
 
 	private static DatasetVersionException notFound() {
-		return new DatasetVersionException(
-				"DATASET_VERSION_NOT_FOUND",
-				"The dataset version was not found for the current project.",
-				404);
+		return new DatasetVersionException("DATASET_VERSION_NOT_FOUND",
+				"The dataset version was not found for the current project.", 404);
 	}
+
 }

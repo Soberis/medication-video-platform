@@ -10,11 +10,6 @@ import jakarta.validation.constraints.NotNull;
 
 @Validated
 @ConfigurationProperties("platform.object-storage")
-record S3ObjectStorageProperties(
-		@NotNull URI endpoint,
-		@NotBlank String region,
-		@NotBlank String bucket,
-		@NotBlank String accessKey,
-		@NotBlank String secretKey,
-		boolean pathStyleAccess) {
+record S3ObjectStorageProperties(@NotNull URI endpoint, @NotBlank String region, @NotBlank String bucket,
+		@NotBlank String accessKey, @NotBlank String secretKey, boolean pathStyleAccess) {
 }

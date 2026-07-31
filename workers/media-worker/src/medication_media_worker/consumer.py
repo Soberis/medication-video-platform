@@ -138,9 +138,7 @@ class MediaJobConsumer:
                 outcome.job_id,
             )
             channel.basic_nack(delivery_tag=delivery_tag, requeue=True)
-            raise DeadLetterPublishError(
-                "Sanitized dead-letter publish was not confirmed"
-            ) from exc
+            raise DeadLetterPublishError("Sanitized dead-letter publish was not confirmed") from exc
 
         LOGGER.warning(
             "Published sanitized dead-letter diagnostic reason=%s job_id=%s",

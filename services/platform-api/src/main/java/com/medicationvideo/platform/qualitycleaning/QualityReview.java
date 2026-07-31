@@ -46,33 +46,20 @@ class QualityReview {
 	protected QualityReview() {
 	}
 
-	private QualityReview(
-			UUID projectId,
-			UUID clipAssetId,
-			QualityReviewDecision decision,
-			QualityReviewReasonCode reasonCode,
-			String reviewedBy,
-			Instant reviewedAt) {
+	private QualityReview(UUID projectId, UUID clipAssetId, QualityReviewDecision decision,
+			QualityReviewReasonCode reasonCode, String reviewedBy, Instant reviewedAt) {
 		this.qualityReviewId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.clipAssetId = clipAssetId;
 		apply(decision, reasonCode, reviewedBy, reviewedAt);
 	}
 
-	static QualityReview create(
-			UUID projectId,
-			UUID clipAssetId,
-			QualityReviewDecision decision,
-			QualityReviewReasonCode reasonCode,
-			String reviewedBy,
-			Instant reviewedAt) {
+	static QualityReview create(UUID projectId, UUID clipAssetId, QualityReviewDecision decision,
+			QualityReviewReasonCode reasonCode, String reviewedBy, Instant reviewedAt) {
 		return new QualityReview(projectId, clipAssetId, decision, reasonCode, reviewedBy, reviewedAt);
 	}
 
-	void revise(
-			QualityReviewDecision newDecision,
-			QualityReviewReasonCode newReasonCode,
-			String actorId,
+	void revise(QualityReviewDecision newDecision, QualityReviewReasonCode newReasonCode, String actorId,
 			Instant changedAt) {
 		apply(newDecision, newReasonCode, actorId, changedAt);
 	}
@@ -81,16 +68,11 @@ class QualityReview {
 		return this.decision == candidateDecision && this.reasonCode == candidateReason;
 	}
 
-	private void apply(
-			QualityReviewDecision newDecision,
-			QualityReviewReasonCode newReasonCode,
-			String actorId,
+	private void apply(QualityReviewDecision newDecision, QualityReviewReasonCode newReasonCode, String actorId,
 			Instant changedAt) {
 		if (!newReasonCode.supports(newDecision)) {
-			throw new QualityReviewException(
-					"INVALID_QUALITY_REASON",
-					"The quality reason is not valid for the selected decision.",
-					400);
+			throw new QualityReviewException("INVALID_QUALITY_REASON",
+					"The quality reason is not valid for the selected decision.", 400);
 		}
 		this.decision = newDecision;
 		this.reasonCode = newReasonCode;
@@ -129,25 +111,22 @@ class QualityReview {
 	long getVersion() {
 		return this.version;
 	}
+
 }
 
 enum QualityReviewDecision {
-	QUALIFIED,
-	REJECTED,
-	NEEDS_REVIEW
+
+	QUALIFIED, REJECTED, NEEDS_REVIEW
+
 }
 
 enum QualityReviewReasonCode {
-	MEETS_REQUIREMENTS(QualityReviewDecision.QUALIFIED),
-	SENSITIVE_CONTENT(QualityReviewDecision.REJECTED),
-	BLURRY_OR_OUT_OF_FOCUS(QualityReviewDecision.REJECTED),
-	BLACK_OR_CORRUPTED_FRAMES(QualityReviewDecision.REJECTED),
-	SEVERE_OCCLUSION(QualityReviewDecision.REJECTED),
-	INCOMPLETE_ACTION(QualityReviewDecision.REJECTED),
-	WRONG_SCENE(QualityReviewDecision.REJECTED),
-	DUPLICATE(QualityReviewDecision.REJECTED),
-	OTHER_QUALITY_FAILURE(QualityReviewDecision.REJECTED),
-	UNCERTAIN_QUALITY(QualityReviewDecision.NEEDS_REVIEW),
+
+	MEETS_REQUIREMENTS(QualityReviewDecision.QUALIFIED), SENSITIVE_CONTENT(QualityReviewDecision.REJECTED),
+	BLURRY_OR_OUT_OF_FOCUS(QualityReviewDecision.REJECTED), BLACK_OR_CORRUPTED_FRAMES(QualityReviewDecision.REJECTED),
+	SEVERE_OCCLUSION(QualityReviewDecision.REJECTED), INCOMPLETE_ACTION(QualityReviewDecision.REJECTED),
+	WRONG_SCENE(QualityReviewDecision.REJECTED), DUPLICATE(QualityReviewDecision.REJECTED),
+	OTHER_QUALITY_FAILURE(QualityReviewDecision.REJECTED), UNCERTAIN_QUALITY(QualityReviewDecision.NEEDS_REVIEW),
 	METADATA_MISMATCH(QualityReviewDecision.NEEDS_REVIEW);
 
 	private final QualityReviewDecision decision;
@@ -159,4 +138,5 @@ enum QualityReviewReasonCode {
 	boolean supports(QualityReviewDecision candidateDecision) {
 		return this.decision == candidateDecision;
 	}
+
 }

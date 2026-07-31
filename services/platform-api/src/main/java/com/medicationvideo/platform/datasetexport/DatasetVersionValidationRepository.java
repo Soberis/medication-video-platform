@@ -9,6 +9,7 @@ interface DatasetVersionValidationRepository extends JpaRepository<DatasetVersio
 
 	Optional<DatasetVersionValidation> findByDatasetVersionId(UUID datasetVersionId);
 
-	Optional<DatasetVersionValidation> findByProjectIdAndValidatedByAndIdempotencyKey(
-			UUID projectId, String validatedBy, String idempotencyKey);
+	Optional<DatasetVersionValidation> findByProjectIdAndValidatedByAndIdempotencyKey(UUID projectId,
+			String validatedBy, String idempotencyKey);
+
 }

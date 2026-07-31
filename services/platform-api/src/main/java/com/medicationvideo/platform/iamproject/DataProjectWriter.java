@@ -21,13 +21,9 @@ class DataProjectWriter {
 				    request_fingerprint, created_at, row_version)
 				VALUES (?, ?, ?, ?, ?, ?, ?, 0)
 				ON CONFLICT (created_by, idempotency_key) DO NOTHING
-				""",
-				project.getProjectId(),
-				project.getDisplayName(),
-				project.getStatus().name(),
-				project.getCreatedBy(),
-				project.getIdempotencyKey(),
-				project.getRequestFingerprint(),
+				""", project.getProjectId(), project.getDisplayName(), project.getStatus().name(),
+				project.getCreatedBy(), project.getIdempotencyKey(), project.getRequestFingerprint(),
 				Timestamp.from(project.getCreatedAt())) == 1;
 	}
+
 }

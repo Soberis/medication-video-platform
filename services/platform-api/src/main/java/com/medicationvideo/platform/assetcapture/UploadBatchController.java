@@ -29,21 +29,23 @@ import jakarta.validation.constraints.Size;
 class UploadBatchController {
 
 	private final UploadBatchService service;
+
 	private final UploadProgressQueryService progressQueryService;
+
 	private final UploadBatchCompletionService completionService;
+
 	private final CaptureSessionIngestService captureSessionIngestService;
+
 	private final PlatformLocalCaptureSessionService platformLocalCaptureSessionService;
+
 	private final UploadBatchTerminationService terminationService;
+
 	private final AssetCaptureProjectAuthorizer authorizer;
 
-	UploadBatchController(
-			UploadBatchService service,
-			UploadProgressQueryService progressQueryService,
-			UploadBatchCompletionService completionService,
-			CaptureSessionIngestService captureSessionIngestService,
+	UploadBatchController(UploadBatchService service, UploadProgressQueryService progressQueryService,
+			UploadBatchCompletionService completionService, CaptureSessionIngestService captureSessionIngestService,
 			PlatformLocalCaptureSessionService platformLocalCaptureSessionService,
-			UploadBatchTerminationService terminationService,
-			AssetCaptureProjectAuthorizer authorizer) {
+			UploadBatchTerminationService terminationService, AssetCaptureProjectAuthorizer authorizer) {
 		this.service = service;
 		this.progressQueryService = progressQueryService;
 		this.completionService = completionService;
@@ -55,11 +57,9 @@ class UploadBatchController {
 
 	@PostMapping("/init")
 	ResponseEntity<UploadBatchResponse> initialize(
-			@RequestHeader("Idempotency-Key")
-			@Size(min = 16, max = 128)
-			@Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
-			@Valid @RequestBody UploadBatchInitRequest request,
-			Authentication authentication) {
+			@RequestHeader("Idempotency-Key") @Size(min = 16,
+					max = 128) @Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
+			@Valid @RequestBody UploadBatchInitRequest request, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(request.projectId(), actor.actorId());
 		var batch = this.service.initialize(actor, idempotencyKey, request);
@@ -67,24 +67,20 @@ class UploadBatchController {
 	}
 
 	@PutMapping("/{batchId}/abort")
-	ResponseEntity<UploadBatchTerminationResponse> abortBatch(
-			@PathVariable UUID batchId,
-			@RequestHeader("X-Request-Id")
-			@Size(min = 1, max = 128)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String requestId,
+	ResponseEntity<UploadBatchTerminationResponse> abortBatch(@PathVariable UUID batchId,
+			@RequestHeader("X-Request-Id") @Size(min = 1,
+					max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String requestId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
 		var administrator = access.role() == ProjectRole.ADMIN;
-		var response = this.terminationService.abort(
-				access.projectId(), actor.actorId(), administrator, batchId, requestId);
+		var response = this.terminationService.abort(access.projectId(), actor.actorId(), administrator, batchId,
+				requestId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/{batchId}")
-	ResponseEntity<UploadBatchProgressResponse> getBatch(
-			@PathVariable UUID batchId,
-			Authentication authentication) {
+	ResponseEntity<UploadBatchProgressResponse> getBatch(@PathVariable UUID batchId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
 		var response = this.progressQueryService.getBatch(batchId, access.projectId());
@@ -92,9 +88,7 @@ class UploadBatchController {
 	}
 
 	@GetMapping("/{batchId}/files")
-	ResponseEntity<UploadFileProgressListResponse> getFiles(
-			@PathVariable UUID batchId,
-			Authentication authentication) {
+	ResponseEntity<UploadFileProgressListResponse> getFiles(@PathVariable UUID batchId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
 		var response = this.progressQueryService.getFiles(batchId, access.projectId());
@@ -102,8 +96,7 @@ class UploadBatchController {
 	}
 
 	@PutMapping("/{batchId}/completion")
-	ResponseEntity<UploadBatchCompletionResponse> completeBatch(
-			@PathVariable UUID batchId,
+	ResponseEntity<UploadBatchCompletionResponse> completeBatch(@PathVariable UUID batchId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
@@ -112,8 +105,7 @@ class UploadBatchController {
 	}
 
 	@PutMapping("/{batchId}/capture-session")
-	ResponseEntity<CaptureSessionResponse> ingestCaptureSession(
-			@PathVariable UUID batchId,
+	ResponseEntity<CaptureSessionResponse> ingestCaptureSession(@PathVariable UUID batchId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
@@ -121,9 +113,7 @@ class UploadBatchController {
 		var response = batch.uploadSourceType() == UploadSourceType.PLATFORM_LOCAL
 				? this.platformLocalCaptureSessionService.ingest(access.projectId(), batchId)
 				: this.captureSessionIngestService.ingest(access.projectId(), batchId);
-		return ResponseEntity.status(HttpStatus.CREATED)
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {
@@ -132,4 +122,5 @@ class UploadBatchController {
 		}
 		return actor;
 	}
+
 }

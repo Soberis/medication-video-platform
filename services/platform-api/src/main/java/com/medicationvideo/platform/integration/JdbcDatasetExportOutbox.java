@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 class JdbcDatasetExportOutbox implements DatasetExportDispatchPort {
 
 	private final JdbcTemplate jdbcTemplate;
+
 	private final ObjectMapper objectMapper;
 
 	JdbcDatasetExportOutbox(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
@@ -27,8 +28,7 @@ class JdbcDatasetExportOutbox implements DatasetExportDispatchPort {
 	@Override
 	public void enqueue(DatasetExportJobEnvelope envelope, Instant availableAt) {
 		if (availableAt.isBefore(envelope.requestedAt())) {
-			throw new IllegalArgumentException(
-					"An Outbox event cannot be available before it was requested.");
+			throw new IllegalArgumentException("An Outbox event cannot be available before it was requested.");
 		}
 		try {
 			this.jdbcTemplate.update("""
@@ -38,19 +38,14 @@ class JdbcDatasetExportOutbox implements DatasetExportDispatchPort {
 					    occurred_at, available_at)
 					VALUES (?, 'DatasetExport', ?, 'DatasetExportRequestedV1', ?, ?, ?,
 					        CAST(? AS JSONB), ?, ?)
-					""",
-					UUID.randomUUID(),
-					envelope.exportId(),
-					envelope.schemaVersion(),
-					DatasetExportMessagingTopology.EXCHANGE,
-					DatasetExportMessagingTopology.ROUTING_KEY,
-					this.objectMapper.writeValueAsString(envelope),
-					Timestamp.from(envelope.requestedAt()),
+					""", UUID.randomUUID(), envelope.exportId(), envelope.schemaVersion(),
+					DatasetExportMessagingTopology.EXCHANGE, DatasetExportMessagingTopology.ROUTING_KEY,
+					this.objectMapper.writeValueAsString(envelope), Timestamp.from(envelope.requestedAt()),
 					Timestamp.from(availableAt));
 		}
 		catch (JacksonException exception) {
-			throw new IllegalStateException(
-					"The dataset export job envelope could not be serialized.", exception);
+			throw new IllegalStateException("The dataset export job envelope could not be serialized.", exception);
 		}
 	}
+
 }

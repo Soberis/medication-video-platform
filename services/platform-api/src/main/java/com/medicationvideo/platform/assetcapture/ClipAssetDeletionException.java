@@ -3,6 +3,7 @@ package com.medicationvideo.platform.assetcapture;
 final class ClipAssetDeletionException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final int statusCode;
 
 	ClipAssetDeletionException(String errorCode, String message, int statusCode) {
@@ -18,4 +19,5 @@ final class ClipAssetDeletionException extends RuntimeException {
 	int getStatusCode() {
 		return this.statusCode;
 	}
+
 }

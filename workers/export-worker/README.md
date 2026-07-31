@@ -20,6 +20,11 @@ Worker 不连接业务数据库，不接触账号会话，也不记录签名 URL
 uv run --directory workers/export-worker export-worker
 ```
 
+本地静态身份使用 `EXPORT_WORKER_BEARER_TOKEN`，且只允许 `DATA_PROFILE=synthetic`。非合成环境
+必须改用绝对路径 `EXPORT_WORKER_BEARER_TOKEN_FILE`：部署身份代理负责写入和原子轮换短期 JWT，
+Worker 每次 Core API 请求前重新读取；两种来源必须且只能配置一种。非 `local` / `test` 的 Core API
+还必须配置 HTTPS issuer/JWK Set 与互不相同的 Media/Export audience，具体变量见 Media Worker 文档。
+
 测试与静态检查：
 
 ```powershell

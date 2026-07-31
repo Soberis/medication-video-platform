@@ -14,15 +14,15 @@ import org.springframework.transaction.annotation.Transactional;
 class UploadProgressQueryService {
 
 	private final UploadBatchRepository batchRepository;
+
 	private final UploadFileRepository fileRepository;
+
 	private final UploadPartRepository partRepository;
+
 	private final UploadCleanupTaskStore cleanupStore;
 
-	UploadProgressQueryService(
-			UploadBatchRepository batchRepository,
-			UploadFileRepository fileRepository,
-			UploadPartRepository partRepository,
-			UploadCleanupTaskStore cleanupStore) {
+	UploadProgressQueryService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
+			UploadPartRepository partRepository, UploadCleanupTaskStore cleanupStore) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.partRepository = partRepository;
@@ -31,41 +31,35 @@ class UploadProgressQueryService {
 
 	UploadBatchProgressResponse getBatch(UUID batchId, UUID projectId) {
 		var snapshot = load(batchId, projectId);
-		return UploadBatchProgressResponse.from(
-				snapshot.batch(),
-				snapshot.files(),
-				snapshot.partProgress().values(),
+		return UploadBatchProgressResponse.from(snapshot.batch(), snapshot.files(), snapshot.partProgress().values(),
 				this.cleanupStore.summarize(batchId));
 	}
 
 	UploadFileProgressListResponse getFiles(UUID batchId, UUID projectId) {
 		var snapshot = load(batchId, projectId);
-		var responses = snapshot.files().stream()
-				.map(file -> UploadFileProgressResponse.from(
-						file,
-						snapshot.partProgress().get(file.getUploadFileId())))
-				.toList();
+		var responses = snapshot.files()
+			.stream()
+			.map(file -> UploadFileProgressResponse.from(file, snapshot.partProgress().get(file.getUploadFileId())))
+			.toList();
 		return new UploadFileProgressListResponse(batchId, responses.size(), responses);
 	}
 
 	private ProgressSnapshot load(UUID batchId, UUID projectId) {
 		var batch = this.batchRepository.findByBatchIdAndProjectId(batchId, projectId)
-				.orElseThrow(UploadBatchNotFoundException::new);
+			.orElseThrow(UploadBatchNotFoundException::new);
 		var files = this.fileRepository.findAllByBatchIdOrderByCreatedAtAscUploadFileIdAsc(batchId);
 		if (files.isEmpty()) {
 			return new ProgressSnapshot(batch, files, Map.of());
 		}
 		var uploadFileIds = files.stream().map(UploadFile::getUploadFileId).toList();
-		var partProgress = this.partRepository.summarizeByUploadFileIds(uploadFileIds).stream()
-				.collect(Collectors.toUnmodifiableMap(
-						UploadPartProgressSummary::getUploadFileId,
-						Function.identity()));
+		var partProgress = this.partRepository.summarizeByUploadFileIds(uploadFileIds)
+			.stream()
+			.collect(Collectors.toUnmodifiableMap(UploadPartProgressSummary::getUploadFileId, Function.identity()));
 		return new ProgressSnapshot(batch, files, partProgress);
 	}
 
-	private record ProgressSnapshot(
-			UploadBatch batch,
-			List<UploadFile> files,
+	private record ProgressSnapshot(UploadBatch batch, List<UploadFile> files,
 			Map<UUID, UploadPartProgressSummary> partProgress) {
 	}
+
 }

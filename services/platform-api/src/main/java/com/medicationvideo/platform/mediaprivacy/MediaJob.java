@@ -12,9 +12,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * Media job aggregate root. A durable Outbox entry moves a new job from REQUESTED to QUEUED in
- * the same transaction. Worker-driven RUNNING and terminal transitions require the current
- * attempt and lease token.
+ * Media job aggregate root. A durable Outbox entry moves a new job from REQUESTED to
+ * QUEUED in the same transaction. Worker-driven RUNNING and terminal transitions require
+ * the current attempt and lease token.
  */
 @Entity
 @Table(name = "media_job")
@@ -72,19 +72,9 @@ class MediaJob {
 	protected MediaJob() {
 	}
 
-	private MediaJob(
-			UUID mediaJobId,
-			UUID projectId,
-			UUID clipAssetId,
-			MediaJobType jobType,
-			String inputDigest,
-			long inputSizeBytes,
-			String contentType,
-			String probeProfileKey,
-			String recipeDigest,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
+	private MediaJob(UUID mediaJobId, UUID projectId, UUID clipAssetId, MediaJobType jobType, String inputDigest,
+			long inputSizeBytes, String contentType, String probeProfileKey, String recipeDigest, String idempotencyKey,
+			String requestFingerprint, Instant createdAt) {
 		this.mediaJobId = mediaJobId;
 		this.projectId = projectId;
 		this.clipAssetId = clipAssetId;
@@ -101,31 +91,11 @@ class MediaJob {
 		this.updatedAt = createdAt;
 	}
 
-	static MediaJob request(
-			UUID projectId,
-			UUID clipAssetId,
-			MediaJobType jobType,
-			String inputDigest,
-			long inputSizeBytes,
-			String contentType,
-			String probeProfileKey,
-			String recipeDigest,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new MediaJob(
-				UUID.randomUUID(),
-				projectId,
-				clipAssetId,
-				jobType,
-				inputDigest,
-				inputSizeBytes,
-				contentType,
-				probeProfileKey,
-				recipeDigest,
-				idempotencyKey,
-				requestFingerprint,
-				createdAt);
+	static MediaJob request(UUID projectId, UUID clipAssetId, MediaJobType jobType, String inputDigest,
+			long inputSizeBytes, String contentType, String probeProfileKey, String recipeDigest, String idempotencyKey,
+			String requestFingerprint, Instant createdAt) {
+		return new MediaJob(UUID.randomUUID(), projectId, clipAssetId, jobType, inputDigest, inputSizeBytes,
+				contentType, probeProfileKey, recipeDigest, idempotencyKey, requestFingerprint, createdAt);
 	}
 
 	void queue(Instant changedAt) {
@@ -144,8 +114,8 @@ class MediaJob {
 			this.status = MediaJobStatus.QUEUED;
 		}
 		if (this.status != MediaJobStatus.QUEUED) {
-			throw new MediaJobExecutionException(
-					"STALE_ATTEMPT", "The media job is not queued for this attempt.", false);
+			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is not queued for this attempt.",
+					false);
 		}
 		this.status = MediaJobStatus.RUNNING;
 		this.updatedAt = changedAt;
@@ -165,8 +135,7 @@ class MediaJob {
 
 	void requeueAfterLostAttempt(Instant changedAt) {
 		if (this.status != MediaJobStatus.RUNNING) {
-			throw new MediaJobExecutionException(
-					"STALE_ATTEMPT", "The media job is no longer running.", false);
+			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is no longer running.", false);
 		}
 		this.status = MediaJobStatus.RETRY_WAIT;
 		this.updatedAt = changedAt;
@@ -175,8 +144,7 @@ class MediaJob {
 
 	void requeueAfterDeadLetter(Instant changedAt) {
 		if (this.status != MediaJobStatus.QUEUED && this.status != MediaJobStatus.RUNNING) {
-			throw new MediaJobReplayException(
-					"MEDIA_JOB_REPLAY_STATE_CONFLICT",
+			throw new MediaJobReplayException("MEDIA_JOB_REPLAY_STATE_CONFLICT",
 					"Only a queued or running dead-lettered media job can be replayed.");
 		}
 		this.status = MediaJobStatus.QUEUED;
@@ -185,8 +153,7 @@ class MediaJob {
 
 	private void transitionFromRunning(MediaJobStatus target, Instant changedAt) {
 		if (this.status != MediaJobStatus.RUNNING) {
-			throw new MediaJobExecutionException(
-					"STALE_ATTEMPT", "The media job is no longer running.", false);
+			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is no longer running.", false);
 		}
 		this.status = target;
 		this.updatedAt = changedAt;
@@ -247,4 +214,5 @@ class MediaJob {
 	Instant getUpdatedAt() {
 		return this.updatedAt;
 	}
+
 }

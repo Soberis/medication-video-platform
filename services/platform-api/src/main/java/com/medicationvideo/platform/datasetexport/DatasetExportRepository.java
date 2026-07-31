@@ -12,13 +12,13 @@ import jakarta.persistence.LockModeType;
 
 interface DatasetExportRepository extends JpaRepository<DatasetExport, UUID> {
 
-	Optional<DatasetExport> findByProjectIdAndRequestedByAndIdempotencyKey(
-			UUID projectId, String requestedBy, String idempotencyKey);
+	Optional<DatasetExport> findByProjectIdAndRequestedByAndIdempotencyKey(UUID projectId, String requestedBy,
+			String idempotencyKey);
 
 	Optional<DatasetExport> findByDatasetVersionId(UUID datasetVersionId);
 
-	Optional<DatasetExport> findByProjectIdAndApprovedByAndApprovalIdempotencyKey(
-			UUID projectId, String approvedBy, String approvalIdempotencyKey);
+	Optional<DatasetExport> findByProjectIdAndApprovedByAndApprovalIdempotencyKey(UUID projectId, String approvedBy,
+			String approvalIdempotencyKey);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
@@ -32,7 +32,7 @@ interface DatasetExportRepository extends JpaRepository<DatasetExport, UUID> {
 			select export from DatasetExport export
 			where export.projectId = :projectId and export.datasetVersionId = :datasetVersionId
 			""")
-	Optional<DatasetExport> findForUpdateByProjectAndVersion(
-			@Param("projectId") UUID projectId,
+	Optional<DatasetExport> findForUpdateByProjectAndVersion(@Param("projectId") UUID projectId,
 			@Param("datasetVersionId") UUID datasetVersionId);
+
 }

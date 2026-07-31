@@ -21,9 +21,7 @@ interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
 			  )
 			ORDER BY event.occurred_at_utc DESC, event.event_id DESC
 			""", nativeQuery = true)
-	List<AuditEvent> findClipAssetActivity(
-			@Param("projectId") UUID projectId,
-			@Param("clipAssetId") String clipAssetId,
+	List<AuditEvent> findClipAssetActivity(@Param("projectId") UUID projectId, @Param("clipAssetId") String clipAssetId,
 			Pageable pageable);
 
 	@Query(value = """
@@ -43,10 +41,8 @@ interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
 			  )
 			ORDER BY event.occurred_at_utc DESC, event.event_id DESC
 			""", nativeQuery = true)
-	List<AuditEvent> findClipAssetActivityBefore(
-			@Param("projectId") UUID projectId,
-			@Param("clipAssetId") String clipAssetId,
-			@Param("cursorOccurredAt") Instant cursorOccurredAt,
-			@Param("cursorEventId") UUID cursorEventId,
-			Pageable pageable);
+	List<AuditEvent> findClipAssetActivityBefore(@Param("projectId") UUID projectId,
+			@Param("clipAssetId") String clipAssetId, @Param("cursorOccurredAt") Instant cursorOccurredAt,
+			@Param("cursorEventId") UUID cursorEventId, Pageable pageable);
+
 }

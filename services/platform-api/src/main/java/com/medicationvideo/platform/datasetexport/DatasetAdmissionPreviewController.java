@@ -23,86 +23,85 @@ import com.medicationvideo.platform.iamproject.ProjectActor;
 @RequestMapping("/api/v1/projects/{projectId}/capture-sessions/{captureSessionId}/dataset-admission-preview")
 class DatasetAdmissionPreviewController {
 
-    private final DatasetAdmissionPreviewService service;
-    private final ProjectAccessService projectAccessService;
+	private final DatasetAdmissionPreviewService service;
 
-    DatasetAdmissionPreviewController(
-            DatasetAdmissionPreviewService service,
-            ProjectAccessService projectAccessService) {
-        this.service = service;
-        this.projectAccessService = projectAccessService;
-    }
+	private final ProjectAccessService projectAccessService;
 
-    @GetMapping
-    ResponseEntity<DatasetAdmissionPreviewResponse> get(
-            @PathVariable UUID projectId,
-            @PathVariable UUID captureSessionId,
-            Authentication authentication) {
-        this.projectAccessService.requireMember(projectId, requireActor(authentication).actorId());
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(this.service.preview(projectId, captureSessionId));
-    }
+	DatasetAdmissionPreviewController(DatasetAdmissionPreviewService service,
+			ProjectAccessService projectAccessService) {
+		this.service = service;
+		this.projectAccessService = projectAccessService;
+	}
 
-    private static ProjectActor requireActor(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
-            throw new DatasetAdmissionPreviewException(
-                    "DATASET_ADMISSION_PREVIEW_ACCESS_DENIED",
-                    "An authenticated platform account is required for the dataset admission preview.", 403);
-        }
-        return actor;
-    }
+	@GetMapping
+	ResponseEntity<DatasetAdmissionPreviewResponse> get(@PathVariable UUID projectId,
+			@PathVariable UUID captureSessionId, Authentication authentication) {
+		this.projectAccessService.requireMember(projectId, requireActor(authentication).actorId());
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.preview(projectId, captureSessionId));
+	}
+
+	private static ProjectActor requireActor(Authentication authentication) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
+			throw new DatasetAdmissionPreviewException("DATASET_ADMISSION_PREVIEW_ACCESS_DENIED",
+					"An authenticated platform account is required for the dataset admission preview.", 403);
+		}
+		return actor;
+	}
+
 }
 
-record DatasetAdmissionPreviewErrorResponse(
-        String errorCode,
-        String errorMessage,
-        boolean retryable,
-        String requestId) {
+record DatasetAdmissionPreviewErrorResponse(String errorCode, String errorMessage, boolean retryable,
+		String requestId) {
 }
 
 final class DatasetAdmissionPreviewException extends RuntimeException {
 
-    private final String errorCode;
-    private final int statusCode;
+	private final String errorCode;
 
-    DatasetAdmissionPreviewException(String errorCode, String message, int statusCode) {
-        super(message);
-        this.errorCode = errorCode;
-        this.statusCode = statusCode;
-    }
+	private final int statusCode;
 
-    String getErrorCode() {
-        return this.errorCode;
-    }
+	DatasetAdmissionPreviewException(String errorCode, String message, int statusCode) {
+		super(message);
+		this.errorCode = errorCode;
+		this.statusCode = statusCode;
+	}
 
-    int getStatusCode() {
-        return this.statusCode;
-    }
+	String getErrorCode() {
+		return this.errorCode;
+	}
+
+	int getStatusCode() {
+		return this.statusCode;
+	}
+
 }
 
 @RestControllerAdvice(assignableTypes = DatasetAdmissionPreviewController.class)
 class DatasetAdmissionPreviewExceptionHandler {
 
-    @ExceptionHandler(ProjectAccessException.class)
-    ResponseEntity<DatasetAdmissionPreviewErrorResponse> projectAccess(ProjectAccessException exception) {
-        return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
-    }
+	@ExceptionHandler(ProjectAccessException.class)
+	ResponseEntity<DatasetAdmissionPreviewErrorResponse> projectAccess(ProjectAccessException exception) {
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
+	}
 
-    @ExceptionHandler(AssetCatalogQueryException.class)
-    ResponseEntity<DatasetAdmissionPreviewErrorResponse> sessionNotFound(AssetCatalogQueryException exception) {
-        return error(HttpStatus.NOT_FOUND, exception.getErrorCode(), exception.getMessage());
-    }
+	@ExceptionHandler(AssetCatalogQueryException.class)
+	ResponseEntity<DatasetAdmissionPreviewErrorResponse> sessionNotFound(AssetCatalogQueryException exception) {
+		return error(HttpStatus.NOT_FOUND, exception.getErrorCode(), exception.getMessage());
+	}
 
-    @ExceptionHandler(DatasetAdmissionPreviewException.class)
-    ResponseEntity<DatasetAdmissionPreviewErrorResponse> access(DatasetAdmissionPreviewException exception) {
-        return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
-    }
+	@ExceptionHandler(DatasetAdmissionPreviewException.class)
+	ResponseEntity<DatasetAdmissionPreviewErrorResponse> access(DatasetAdmissionPreviewException exception) {
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
+	}
 
-    private static ResponseEntity<DatasetAdmissionPreviewErrorResponse> error(
-            HttpStatus status, String errorCode, String message) {
-        return ResponseEntity.status(status)
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .cacheControl(CacheControl.noStore())
-                .body(new DatasetAdmissionPreviewErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
-    }
+	private static ResponseEntity<DatasetAdmissionPreviewErrorResponse> error(HttpStatus status, String errorCode,
+			String message) {
+		return ResponseEntity.status(status)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new DatasetAdmissionPreviewErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
+	}
+
 }

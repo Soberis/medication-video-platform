@@ -65,15 +65,8 @@ class MediaJobManualReplay {
 	protected MediaJobManualReplay() {
 	}
 
-	private MediaJobManualReplay(
-			UUID projectId,
-			UUID mediaJobId,
-			MediaJobReplayRequest request,
-			int newAttempt,
-			String actorId,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
+	private MediaJobManualReplay(UUID projectId, UUID mediaJobId, MediaJobReplayRequest request, int newAttempt,
+			String actorId, String idempotencyKey, String requestFingerprint, Instant createdAt) {
 		this.replayId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.mediaJobId = mediaJobId;
@@ -91,24 +84,10 @@ class MediaJobManualReplay {
 		this.createdAt = createdAt;
 	}
 
-	static MediaJobManualReplay create(
-			UUID projectId,
-			UUID mediaJobId,
-			MediaJobReplayRequest request,
-			int newAttempt,
-			String actorId,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new MediaJobManualReplay(
-				projectId,
-				mediaJobId,
-				request,
-				newAttempt,
-				actorId,
-				idempotencyKey,
-				requestFingerprint,
-				createdAt);
+	static MediaJobManualReplay create(UUID projectId, UUID mediaJobId, MediaJobReplayRequest request, int newAttempt,
+			String actorId, String idempotencyKey, String requestFingerprint, Instant createdAt) {
+		return new MediaJobManualReplay(projectId, mediaJobId, request, newAttempt, actorId, idempotencyKey,
+				requestFingerprint, createdAt);
 	}
 
 	UUID getReplayId() {
@@ -138,4 +117,5 @@ class MediaJobManualReplay {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }

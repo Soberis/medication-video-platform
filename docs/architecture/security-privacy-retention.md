@@ -2,7 +2,7 @@
 
 > 文档状态：安全设计基线（评审稿）  
 > 适用范围：研发、测试、UAT、院内部署或受控云端部署  
-> 最后更新：2026-07-17
+> 最后更新：2026-07-31
 
 ## 1. 适用声明
 
@@ -39,6 +39,12 @@ Codex、开发环境和 CI 只允许使用合成数据。未经明确授权和�
 - 使用平台内部管理账号；密码仅保存 BCrypt 哈希，浏览器使用 HttpOnly 会话 Cookie 与 CSRF 保护。医院边端使用独立服务凭据，不使用管理端账号。
 - 服务、Worker 和外部适配器使用独立机器身份，禁止共享个人账号。
 - token audience、issuer、signature、expiry 和 clock skew 必须验证。
+- `local` / `test` 之外的 Media Worker 与 Export Worker 内部接口只接受签名 JWT：issuer 与
+  JWK Set 必须是 HTTPS，`sub` 必填，Media/Export 使用互不相同且唯一的 audience；同时携带
+  多个 Worker audience 的 token 直接拒绝。允许时钟偏差为 0～5 分钟，默认 1 分钟。
+- 非合成数据环境禁止从进程环境变量读取长期 Worker bearer。部署身份代理应将短期 JWT 写入
+  绝对路径的受限文件并原子轮换；Worker 在每次 Core API 请求前重新读取。静态 bearer 只保留
+  给 `DATA_PROFILE=synthetic` 的本地联调，不得复用到 UAT 或生产。
 - 管理员也不能绕过 project/purpose/classification 守卫直接读取全部对象。
 
 ### 4.2 RBAC + ABAC

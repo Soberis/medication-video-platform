@@ -16,4 +16,5 @@ public class AuditEventRecorder {
 	public UUID record(AuditEventCommand command) {
 		return this.repository.save(AuditEvent.from(command)).getEventId();
 	}
+
 }

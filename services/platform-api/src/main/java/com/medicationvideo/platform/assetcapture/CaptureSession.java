@@ -80,13 +80,8 @@ class CaptureSession {
 	protected CaptureSession() {
 	}
 
-	private CaptureSession(
-			UUID projectId,
-			UUID batchId,
-			UploadFile metadataFile,
-			CaptureSessionMetadataV1 metadata,
-			int receivedCameraCount,
-			Instant createdAt) {
+	private CaptureSession(UUID projectId, UUID batchId, UploadFile metadataFile, CaptureSessionMetadataV1 metadata,
+			int receivedCameraCount, Instant createdAt) {
 		this.captureSessionId = metadata.captureSessionId();
 		this.projectId = projectId;
 		this.batchId = batchId;
@@ -101,48 +96,25 @@ class CaptureSession {
 		this.deviceTimeUtc = metadata.deviceTimeUtc();
 		this.deviceTimezone = metadata.deviceTimezone();
 		this.serverReceiveTime = createdAt;
-		this.assemblyStatus = receivedCameraCount == this.expectedCameraCount
-				? CaptureSessionAssemblyStatus.COMPLETE
+		this.assemblyStatus = receivedCameraCount == this.expectedCameraCount ? CaptureSessionAssemblyStatus.COMPLETE
 				: CaptureSessionAssemblyStatus.ASSEMBLING;
 		this.qualityStatus = CaptureQualityStatus.PENDING;
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
 	}
 
-	static CaptureSession assemble(
-			UUID projectId,
-			UUID batchId,
-			UploadFile metadataFile,
-			CaptureSessionMetadataV1 metadata,
-			int receivedCameraCount,
-			Instant createdAt) {
-		return new CaptureSession(
-				projectId,
-				batchId,
-				metadataFile,
-				metadata,
-				receivedCameraCount,
-				createdAt);
+	static CaptureSession assemble(UUID projectId, UUID batchId, UploadFile metadataFile,
+			CaptureSessionMetadataV1 metadata, int receivedCameraCount, Instant createdAt) {
+		return new CaptureSession(projectId, batchId, metadataFile, metadata, receivedCameraCount, createdAt);
 	}
 
-	static CaptureSession importLocal(
-			UUID projectId,
-			UploadBatch batch,
-			CameraSetConfiguration cameraSet,
+	static CaptureSession importLocal(UUID projectId, UploadBatch batch, CameraSetConfiguration cameraSet,
 			Instant createdAt) {
-		var session = new CaptureSession(
-				projectId,
-				batch.getBatchId(),
-				cameraSet,
-				createdAt);
+		var session = new CaptureSession(projectId, batch.getBatchId(), cameraSet, createdAt);
 		return session;
 	}
 
-	private CaptureSession(
-			UUID projectId,
-			UUID batchId,
-			CameraSetConfiguration cameraSet,
-			Instant createdAt) {
+	private CaptureSession(UUID projectId, UUID batchId, CameraSetConfiguration cameraSet, Instant createdAt) {
 		this.captureSessionId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.batchId = batchId;
@@ -228,28 +200,24 @@ class CaptureSession {
 
 	void refreshMediaProjection(List<CameraStream> streams, Instant changedAt) {
 		var received = Math.toIntExact(streams.stream()
-				.filter(stream -> stream.getStreamStatus() == CameraStreamStatus.INGESTED)
-				.map(CameraStream::getCameraChannelId)
-				.distinct()
-				.count());
+			.filter(stream -> stream.getStreamStatus() == CameraStreamStatus.INGESTED)
+			.map(CameraStream::getCameraChannelId)
+			.distinct()
+			.count());
 		var projectedAssembly = this.assemblyStatus;
 		if (this.assemblyStatus != CaptureSessionAssemblyStatus.CLOSED) {
-			if (this.assemblyStatus == CaptureSessionAssemblyStatus.INCOMPLETE
-					|| streams.stream()
-							.anyMatch(stream -> stream.getStreamStatus() == CameraStreamStatus.UNAVAILABLE)) {
+			if (this.assemblyStatus == CaptureSessionAssemblyStatus.INCOMPLETE || streams.stream()
+				.anyMatch(stream -> stream.getStreamStatus() == CameraStreamStatus.UNAVAILABLE)) {
 				projectedAssembly = CaptureSessionAssemblyStatus.INCOMPLETE;
 			}
 			else {
-				projectedAssembly = received == this.expectedCameraCount
-						&& streams.size() == this.expectedCameraCount
-								? CaptureSessionAssemblyStatus.COMPLETE
-								: CaptureSessionAssemblyStatus.ASSEMBLING;
+				projectedAssembly = received == this.expectedCameraCount && streams.size() == this.expectedCameraCount
+						? CaptureSessionAssemblyStatus.COMPLETE : CaptureSessionAssemblyStatus.ASSEMBLING;
 			}
 		}
 
 		var projectedQuality = technicalQuality(streams, received);
-		if (this.receivedCameraCount == received
-				&& this.assemblyStatus == projectedAssembly
+		if (this.receivedCameraCount == received && this.assemblyStatus == projectedAssembly
 				&& this.qualityStatus == projectedQuality) {
 			return;
 		}
@@ -263,8 +231,7 @@ class CaptureSession {
 		if (streams.stream().anyMatch(stream -> stream.getQualityStatus() == CaptureQualityStatus.REJECT)) {
 			return CaptureQualityStatus.REJECT;
 		}
-		if (streams.size() != this.expectedCameraCount
-				|| received != this.expectedCameraCount
+		if (streams.size() != this.expectedCameraCount || received != this.expectedCameraCount
 				|| streams.stream().anyMatch(stream -> stream.getQualityStatus() == CaptureQualityStatus.PENDING)) {
 			return CaptureQualityStatus.PENDING;
 		}
@@ -273,4 +240,5 @@ class CaptureSession {
 		}
 		return CaptureQualityStatus.PASS;
 	}
+
 }

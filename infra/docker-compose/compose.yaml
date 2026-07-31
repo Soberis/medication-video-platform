@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-medication_local}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
     ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
@@ -32,7 +32,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-change-me-local-only}
       S3_BUCKET: ${S3_BUCKET:-medication-platform-local}
     ports:
-      - "${S3_PORT:-9000}:8333"
+      - "127.0.0.1:${S3_PORT:-9000}:8333"
     volumes:
       - s3-data:/data
     healthcheck:
@@ -53,8 +53,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change-me-local-only}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-medication}
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:

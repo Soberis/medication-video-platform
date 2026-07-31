@@ -169,10 +169,8 @@ class ClipAsset {
 			return;
 		}
 		if (this.status != ClipAssetStatus.UPLOADED) {
-			throw new ClipAssetMediaIngestException(
-					"CLIP_ASSET_NOT_PROBEABLE",
-					"The clip asset is not available for media ingest.",
-					false);
+			throw new ClipAssetMediaIngestException("CLIP_ASSET_NOT_PROBEABLE",
+					"The clip asset is not available for media ingest.", false);
 		}
 		this.status = ClipAssetStatus.INGESTING;
 		this.updatedAt = changedAt;
@@ -181,10 +179,8 @@ class ClipAsset {
 	void completeMediaIngest(boolean succeeded, Instant changedAt) {
 		requireNotDeleted();
 		if (this.status != ClipAssetStatus.INGESTING) {
-			throw new ClipAssetMediaIngestException(
-					"CLIP_ASSET_INGEST_STATE_CONFLICT",
-					"The clip asset is not currently ingesting.",
-					false);
+			throw new ClipAssetMediaIngestException("CLIP_ASSET_INGEST_STATE_CONFLICT",
+					"The clip asset is not currently ingesting.", false);
 		}
 		this.status = succeeded ? ClipAssetStatus.INGESTED : ClipAssetStatus.INGEST_FAILED;
 		this.updatedAt = changedAt;
@@ -207,10 +203,9 @@ class ClipAsset {
 
 	private void requireNotDeleted() {
 		if (isDeleted()) {
-			throw new ClipAssetMediaIngestException(
-					"CLIP_ASSET_DELETED",
-					"The clip asset has been deleted and is unavailable for media processing.",
-					false);
+			throw new ClipAssetMediaIngestException("CLIP_ASSET_DELETED",
+					"The clip asset has been deleted and is unavailable for media processing.", false);
 		}
 	}
+
 }

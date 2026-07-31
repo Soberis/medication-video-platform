@@ -12,4 +12,5 @@ final class UploadBatchCompletionException extends RuntimeException {
 	String getErrorCode() {
 		return this.errorCode;
 	}
+
 }

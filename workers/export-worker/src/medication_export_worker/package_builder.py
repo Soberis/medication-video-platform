@@ -85,9 +85,7 @@ class DatasetPackageBuilder:
                 checksums = "".join(
                     f"{file_results[path].sha256}  {path}\n" for path in sorted(file_results)
                 ).encode()
-                file_results["SHA256SUMS"] = _write_bytes(
-                    archive, "SHA256SUMS", checksums
-                )
+                file_results["SHA256SUMS"] = _write_bytes(archive, "SHA256SUMS", checksums)
         except PackageBuildError:
             raise
         except (OSError, ValueError, zipfile.BadZipFile) as exc:
@@ -232,9 +230,10 @@ def _write_bytes(archive: zipfile.ZipFile, path: str, value: bytes) -> FileResul
 def _write_file(archive: zipfile.ZipFile, path: str, source: Path) -> FileResult:
     digest = hashlib.sha256()
     size = 0
-    with source.open("rb") as input_file, archive.open(
-        _zip_info(path), "w", force_zip64=True
-    ) as output:
+    with (
+        source.open("rb") as input_file,
+        archive.open(_zip_info(path), "w", force_zip64=True) as output,
+    ):
         while chunk := input_file.read(CHUNK_SIZE):
             output.write(chunk)
             digest.update(chunk)

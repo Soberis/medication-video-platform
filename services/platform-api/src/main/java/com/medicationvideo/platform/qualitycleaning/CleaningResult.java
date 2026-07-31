@@ -32,10 +32,7 @@ class CleaningResult {
 	private UUID cleaningRunId;
 
 	@OneToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(
-			name = "cleaning_run_id",
-			referencedColumnName = "cleaning_run_id",
-			insertable = false,
+	@JoinColumn(name = "cleaning_run_id", referencedColumnName = "cleaning_run_id", insertable = false,
 			updatable = false)
 	private CleaningRun cleaningRun;
 
@@ -60,11 +57,7 @@ class CleaningResult {
 	protected CleaningResult() {
 	}
 
-	private CleaningResult(
-			CleaningRun run,
-			CleaningOutcome outcome,
-			List<String> reasonCodes,
-			Instant evaluatedAt) {
+	private CleaningResult(CleaningRun run, CleaningOutcome outcome, List<String> reasonCodes, Instant evaluatedAt) {
 		this.cleaningResultId = UUID.randomUUID();
 		this.projectId = run.getProjectId();
 		this.cleaningRunId = run.getCleaningRunId();
@@ -76,10 +69,7 @@ class CleaningResult {
 		this.evaluatedAt = evaluatedAt;
 	}
 
-	static CleaningResult record(
-			CleaningRun run,
-			CleaningOutcome outcome,
-			List<String> reasonCodes,
+	static CleaningResult record(CleaningRun run, CleaningOutcome outcome, List<String> reasonCodes,
 			Instant evaluatedAt) {
 		return new CleaningResult(run, outcome, reasonCodes, evaluatedAt);
 	}
@@ -111,10 +101,11 @@ class CleaningResult {
 	Instant getEvaluatedAt() {
 		return this.evaluatedAt;
 	}
+
 }
 
 enum CleaningOutcome {
-	PASS,
-	WARNING,
-	REJECT
+
+	PASS, WARNING, REJECT
+
 }

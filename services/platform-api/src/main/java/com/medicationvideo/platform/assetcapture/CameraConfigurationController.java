@@ -27,12 +27,12 @@ import jakarta.validation.constraints.Size;
 class CameraConfigurationController {
 
 	private final CameraChannelService channelService;
+
 	private final CameraSetService cameraSetService;
+
 	private final AssetCaptureProjectAuthorizer authorizer;
 
-	CameraConfigurationController(
-			CameraChannelService channelService,
-			CameraSetService cameraSetService,
+	CameraConfigurationController(CameraChannelService channelService, CameraSetService cameraSetService,
 			AssetCaptureProjectAuthorizer authorizer) {
 		this.channelService = channelService;
 		this.cameraSetService = cameraSetService;
@@ -40,35 +40,26 @@ class CameraConfigurationController {
 	}
 
 	@PutMapping("/camera-channels/{provisioningKey}")
-	ResponseEntity<CameraChannelResponse> provisionChannel(
-			@PathVariable UUID projectId,
-			@PathVariable
-			@Size(min = 1, max = 128)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String provisioningKey,
+	ResponseEntity<CameraChannelResponse> provisionChannel(@PathVariable UUID projectId,
+			@PathVariable @Size(min = 1,
+					max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String provisioningKey,
 			Authentication authentication) {
 		requireAdministrator(authentication, projectId);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.cacheControl(CacheControl.noStore())
-				.body(this.channelService.provision(projectId, provisioningKey));
+			.cacheControl(CacheControl.noStore())
+			.body(this.channelService.provision(projectId, provisioningKey));
 	}
 
 	@PutMapping("/camera-sets/{cameraSetKey}/versions/{configurationVersion}")
-	ResponseEntity<CameraSetResponse> configureCameraSet(
-			@PathVariable UUID projectId,
-			@PathVariable
-			@Size(min = 1, max = 128)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String cameraSetKey,
+	ResponseEntity<CameraSetResponse> configureCameraSet(@PathVariable UUID projectId,
+			@PathVariable @Size(min = 1,
+					max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String cameraSetKey,
 			@PathVariable @Min(1) @Max(Integer.MAX_VALUE) int configurationVersion,
-			@Valid @RequestBody CameraSetRequest request,
-			Authentication authentication) {
+			@Valid @RequestBody CameraSetRequest request, Authentication authentication) {
 		requireAdministrator(authentication, projectId);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.cacheControl(CacheControl.noStore())
-				.body(this.cameraSetService.configure(
-						projectId,
-						cameraSetKey,
-						configurationVersion,
-						request));
+			.cacheControl(CacheControl.noStore())
+			.body(this.cameraSetService.configure(projectId, cameraSetKey, configurationVersion, request));
 	}
 
 	private void requireAdministrator(Authentication authentication, UUID projectId) {
@@ -77,4 +68,5 @@ class CameraConfigurationController {
 		}
 		this.authorizer.requireAdministrator(projectId, actor.actorId());
 	}
+
 }

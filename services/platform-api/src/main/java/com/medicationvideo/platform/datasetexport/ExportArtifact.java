@@ -64,15 +64,9 @@ class ExportArtifact {
 	protected ExportArtifact() {
 	}
 
-	private ExportArtifact(
-			DatasetExport export,
-			DatasetExportAttempt attempt,
-			long sizeBytes,
-			String sha256,
-			DatasetExportStoragePort.CreatedUpload upload,
-			Map<String, Object> artifactManifest,
-			String artifactManifestDigest,
-			Instant createdAt) {
+	private ExportArtifact(DatasetExport export, DatasetExportAttempt attempt, long sizeBytes, String sha256,
+			DatasetExportStoragePort.CreatedUpload upload, Map<String, Object> artifactManifest,
+			String artifactManifestDigest, Instant createdAt) {
 		this.exportArtifactId = UUID.randomUUID();
 		this.datasetExportId = export.getDatasetExportId();
 		this.datasetExportAttemptId = attempt.getDatasetExportAttemptId();
@@ -88,23 +82,10 @@ class ExportArtifact {
 		this.createdAt = createdAt;
 	}
 
-	static ExportArtifact register(
-			DatasetExport export,
-			DatasetExportAttempt attempt,
-			long sizeBytes,
-			String sha256,
-			DatasetExportStoragePort.CreatedUpload upload,
-			Map<String, Object> artifactManifest,
-			String artifactManifestDigest,
-			Instant createdAt) {
-		return new ExportArtifact(
-				export,
-				attempt,
-				sizeBytes,
-				sha256,
-				upload,
-				artifactManifest,
-				artifactManifestDigest,
+	static ExportArtifact register(DatasetExport export, DatasetExportAttempt attempt, long sizeBytes, String sha256,
+			DatasetExportStoragePort.CreatedUpload upload, Map<String, Object> artifactManifest,
+			String artifactManifestDigest, Instant createdAt) {
+		return new ExportArtifact(export, attempt, sizeBytes, sha256, upload, artifactManifest, artifactManifestDigest,
 				createdAt);
 	}
 
@@ -139,4 +120,5 @@ class ExportArtifact {
 	DatasetExportStoragePort.ObjectReference getObjectReference() {
 		return new DatasetExportStoragePort.ObjectReference(this.storageBucket, this.objectKey);
 	}
+
 }

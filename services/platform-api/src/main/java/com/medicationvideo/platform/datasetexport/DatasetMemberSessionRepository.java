@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface DatasetMemberSessionRepository extends JpaRepository<DatasetMemberSession, UUID> {
 
 	List<DatasetMemberSession> findByDatasetVersionIdOrderByCandidateIndexAsc(UUID datasetVersionId);
+
 }

@@ -25,4 +25,5 @@ class MediaJobRecoveryScheduler {
 			log.info("Recovered {} expired media job attempt(s).", recovered);
 		}
 	}
+
 }

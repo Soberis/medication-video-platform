@@ -29,6 +29,7 @@ import jakarta.validation.constraints.Pattern;
 class MediaJobController {
 
 	private final MediaJobService service;
+
 	private final ProjectAccessService projectAccessService;
 
 	MediaJobController(MediaJobService service, ProjectAccessService projectAccessService) {
@@ -37,62 +38,55 @@ class MediaJobController {
 	}
 
 	/**
-	 * Starts the one explicit P0 media check for an uploaded video. Playback remains a separate
-	 * user action after the Worker has accepted the media report.
+	 * Starts the one explicit P0 media check for an uploaded video. Playback remains a
+	 * separate user action after the Worker has accepted the media report.
 	 */
 	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-jobs")
-	ResponseEntity<MediaJobResponse> createClipAssetMediaProbe(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+	ResponseEntity<MediaJobResponse> createClipAssetMediaProbe(@PathVariable UUID projectId,
+			@PathVariable UUID clipAssetId, @RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.projectAccessService.requireMember(projectId, actor.actorId());
-		var job = this.service.create(
-				projectId,
-				idempotencyKey,
+		var job = this.service.create(projectId, idempotencyKey,
 				new MediaJobRequest(clipAssetId, MediaJobType.MEDIA_PROBE));
 		var body = MediaJobResponse.from(job, this.service.currentAttempt(job));
 		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
-				.cacheControl(CacheControl.noStore())
-				.location(location)
-				.body(body);
+			.cacheControl(CacheControl.noStore())
+			.location(location)
+			.body(body);
 	}
 
 	@PostMapping("/media-jobs")
 	ResponseEntity<MediaJobResponse> createMediaJob(
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
-			@RequestBody @Valid MediaJobRequest request,
-			Authentication authentication) {
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			@RequestBody @Valid MediaJobRequest request, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var job = this.service.create(actor.projectId(), idempotencyKey, request);
 		var body = MediaJobResponse.from(job, this.service.currentAttempt(job));
 		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
-				.cacheControl(CacheControl.noStore())
-				.location(location)
-				.body(body);
+			.cacheControl(CacheControl.noStore())
+			.location(location)
+			.body(body);
 	}
 
 	@GetMapping("/media-jobs/{mediaJobId}")
-	ResponseEntity<MediaJobResponse> getMediaJob(
-			@PathVariable UUID mediaJobId,
-			Authentication authentication) {
+	ResponseEntity<MediaJobResponse> getMediaJob(@PathVariable UUID mediaJobId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var job = this.service.get(actor.projectId(), mediaJobId);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(MediaJobResponse.from(job, this.service.currentAttempt(job)));
+			.cacheControl(CacheControl.noStore())
+			.body(MediaJobResponse.from(job, this.service.currentAttempt(job)));
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof PlatformActor actor)) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;
 	}
+
 }

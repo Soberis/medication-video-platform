@@ -12,4 +12,5 @@ interface CleaningResultRepository extends JpaRepository<CleaningResult, UUID> {
 	Optional<CleaningResult> findByCleaningRunId(UUID cleaningRunId);
 
 	List<CleaningResult> findAllByAnnotationRevisionIdIn(Collection<UUID> annotationRevisionIds);
+
 }

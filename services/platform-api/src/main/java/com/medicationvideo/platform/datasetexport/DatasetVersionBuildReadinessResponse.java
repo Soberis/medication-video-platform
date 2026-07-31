@@ -4,28 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-record DatasetVersionBuildReadinessResponse(
-		boolean readyForBuild,
-		List<DatasetVersionBuildBlocker> blockingReasons,
-		boolean immutableEvidenceStillCurrent,
-		String uniformLabelSchemaDigest,
-		String uniformCleaningRuleSetDigest,
-		UUID datasetSplitPlanId,
-		DatasetBuildSpecificationResponse buildSpecification) {
+record DatasetVersionBuildReadinessResponse(boolean readyForBuild, List<DatasetVersionBuildBlocker> blockingReasons,
+		boolean immutableEvidenceStillCurrent, String uniformLabelSchemaDigest, String uniformCleaningRuleSetDigest,
+		UUID datasetSplitPlanId, DatasetBuildSpecificationResponse buildSpecification) {
 
 	DatasetVersionBuildReadinessResponse {
 		blockingReasons = List.copyOf(blockingReasons);
 	}
 
-	static DatasetVersionBuildReadinessResponse from(
-			List<DatasetVersionCurrentAdmissionMemberResponse> currentMembers,
-			List<DatasetMemberStream> snapshotStreams,
-			DatasetSplitPlan splitPlan,
+	static DatasetVersionBuildReadinessResponse from(List<DatasetVersionCurrentAdmissionMemberResponse> currentMembers,
+			List<DatasetMemberStream> snapshotStreams, DatasetSplitPlan splitPlan,
 			DatasetBuildSpecification specification) {
-		var allMembersEligible = currentMembers.stream()
-				.allMatch(member -> member.currentAdmission().eligible());
-		var evidenceStillCurrent = currentMembers.stream()
-				.allMatch(member -> member.evidenceChanges().isEmpty());
+		var allMembersEligible = currentMembers.stream().allMatch(member -> member.currentAdmission().eligible());
+		var evidenceStillCurrent = currentMembers.stream().allMatch(member -> member.evidenceChanges().isEmpty());
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
 		var labelSchemaDigest = buildEvidence.uniformLabelSchemaDigest();
 		var cleaningRuleSetDigest = buildEvidence.uniformCleaningRuleSetDigest();
@@ -43,8 +34,7 @@ record DatasetVersionBuildReadinessResponse(
 		if (cleaningRuleSetDigest == null) {
 			blockers.add(DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_UNIFORM);
 		}
-		else if (specification == null
-				|| !cleaningRuleSetDigest.equals(specification.getCleaningRuleSetDigest())) {
+		else if (specification == null || !cleaningRuleSetDigest.equals(specification.getCleaningRuleSetDigest())) {
 			blockers.add(DatasetVersionBuildBlocker.CLEANING_RULE_SET_NOT_FIXED);
 		}
 		if (splitPlan == null) {
@@ -60,26 +50,17 @@ record DatasetVersionBuildReadinessResponse(
 			blockers.add(DatasetVersionBuildBlocker.SNAPSHOT_EVIDENCE_CHANGED);
 		}
 
-		return new DatasetVersionBuildReadinessResponse(
-				blockers.isEmpty(),
-				blockers,
-				evidenceStillCurrent,
-				labelSchemaDigest,
-				cleaningRuleSetDigest,
-				splitPlan == null ? null : splitPlan.getDatasetSplitPlanId(),
+		return new DatasetVersionBuildReadinessResponse(blockers.isEmpty(), blockers, evidenceStillCurrent,
+				labelSchemaDigest, cleaningRuleSetDigest, splitPlan == null ? null : splitPlan.getDatasetSplitPlanId(),
 				specification == null ? null : DatasetBuildSpecificationResponse.from(specification));
 	}
 
 }
 
 enum DatasetVersionBuildBlocker {
-	SELECTION_RULE_NOT_FIXED,
-	LABEL_SCHEMA_NOT_FIXED,
-	LABEL_SCHEMA_NOT_UNIFORM,
-	CLEANING_RULE_SET_NOT_FIXED,
-	CLEANING_RULE_SET_NOT_UNIFORM,
-	SPLIT_PLAN_NOT_FIXED,
-	EXPORT_PROFILE_NOT_FIXED,
-	CURRENT_ADMISSION_NOT_ELIGIBLE,
+
+	SELECTION_RULE_NOT_FIXED, LABEL_SCHEMA_NOT_FIXED, LABEL_SCHEMA_NOT_UNIFORM, CLEANING_RULE_SET_NOT_FIXED,
+	CLEANING_RULE_SET_NOT_UNIFORM, SPLIT_PLAN_NOT_FIXED, EXPORT_PROFILE_NOT_FIXED, CURRENT_ADMISSION_NOT_ELIGIBLE,
 	SNAPSHOT_EVIDENCE_CHANGED
+
 }

@@ -23,7 +23,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 
 @Configuration(proxyBeanMethods = false)
-@Profile({"local", "test"})
+@Profile({ "local", "test" })
 class LocalBearerSecurityConfiguration {
 
 	@Bean
@@ -33,6 +33,7 @@ class LocalBearerSecurityConfiguration {
 			@Value("${platform.security.local-project-id}") UUID projectId) {
 		return new LocalBearerAuthenticationFilter(bearerToken, adminBearerToken, projectId);
 	}
+
 }
 
 @Configuration(proxyBeanMethods = false)
@@ -50,57 +51,51 @@ class PlatformSecurityConfiguration {
 
 	@Bean
 	@Order(2)
-	SecurityFilterChain platformSecurityFilterChain(
-			HttpSecurity http,
+	SecurityFilterChain platformSecurityFilterChain(HttpSecurity http,
 			SecurityContextRepository securityContextRepository,
-			ObjectProvider<LocalBearerAuthenticationFilter> localBearerAuthenticationFilter)
-			throws Exception {
+			ObjectProvider<LocalBearerAuthenticationFilter> localBearerAuthenticationFilter) throws Exception {
 		var csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
 		csrfTokenRepository.setCookiePath("/");
-		http
-				.securityMatcher(request -> {
-					var requestUri = request.getRequestURI();
-					return !requestUri.startsWith("/api/v1/internal/media-jobs/")
-							&& !requestUri.startsWith("/api/v1/internal/dataset-exports/");
-				})
-				.securityContext(context -> context
-						.securityContextRepository(securityContextRepository)
-						.requireExplicitSave(false))
-				.csrf(csrf -> csrf
-						.csrfTokenRepository(csrfTokenRepository)
-						.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
-						.ignoringRequestMatchers("/api/v1/auth/login")
-						.ignoringRequestMatchers(new RequestHeaderRequestMatcher("Authorization")))
-				.sessionManagement(session -> session
-						.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-						.sessionFixation(fixation -> fixation.migrateSession()))
-				.requestCache(cache -> cache.disable())
-				.exceptionHandling(exception -> exception
-						.authenticationEntryPoint((request, response, failure) ->
-								writeAuthenticationRequired(response))
-						.accessDeniedHandler((request, response, failure) -> {
-							var authentication = SecurityContextHolder.getContext().getAuthentication();
-							if (authentication == null || authentication instanceof AnonymousAuthenticationToken) {
-								writeAuthenticationRequired(response);
-								return;
-							}
-							response.setStatus(403);
-							response.setContentType("application/problem+json");
-							response.getWriter().write("{\"error_code\":\"FORBIDDEN\","
-									+ "\"error_message\":\"The authenticated actor is not allowed to perform this operation.\","
-									+ "\"retryable\":false,\"request_id\":\""
-									+ java.util.UUID.randomUUID() + "\"}");
-						}))
-				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers("/actuator/health/**", "/api/v1/auth/login").permitAll()
-						.requestMatchers("/api/v1/**").authenticated()
-						.anyRequest().denyAll());
+		http.securityMatcher(request -> {
+			var requestUri = request.getRequestURI();
+			return !requestUri.startsWith("/api/v1/internal/media-jobs/")
+					&& !requestUri.startsWith("/api/v1/internal/dataset-exports/");
+		})
+			.securityContext(
+					context -> context.securityContextRepository(securityContextRepository).requireExplicitSave(false))
+			.csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository)
+				.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+				.ignoringRequestMatchers("/api/v1/auth/login")
+				.ignoringRequestMatchers(new RequestHeaderRequestMatcher("Authorization")))
+			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+				.sessionFixation(fixation -> fixation.migrateSession()))
+			.requestCache(cache -> cache.disable())
+			.exceptionHandling(exception -> exception
+				.authenticationEntryPoint((request, response, failure) -> writeAuthenticationRequired(response))
+				.accessDeniedHandler((request, response, failure) -> {
+					var authentication = SecurityContextHolder.getContext().getAuthentication();
+					if (authentication == null || authentication instanceof AnonymousAuthenticationToken) {
+						writeAuthenticationRequired(response);
+						return;
+					}
+					response.setStatus(403);
+					response.setContentType("application/problem+json");
+					response.getWriter()
+						.write("{\"error_code\":\"FORBIDDEN\","
+								+ "\"error_message\":\"The authenticated actor is not allowed to perform this operation.\","
+								+ "\"retryable\":false,\"request_id\":\"" + java.util.UUID.randomUUID() + "\"}");
+				}))
+			.authorizeHttpRequests(authorize -> authorize.requestMatchers("/actuator/health/**", "/api/v1/auth/login")
+				.permitAll()
+				.requestMatchers("/api/v1/**")
+				.authenticated()
+				.anyRequest()
+				.denyAll());
 		var localFilter = localBearerAuthenticationFilter.getIfAvailable();
 		if (localFilter != null) {
 			http.addFilterBefore(localFilter, UsernamePasswordAuthenticationFilter.class);
 		}
-		return http
-				.build();
+		return http.build();
 	}
 
 	private static void writeAuthenticationRequired(jakarta.servlet.http.HttpServletResponse response)
@@ -108,9 +103,10 @@ class PlatformSecurityConfiguration {
 		response.setStatus(401);
 		response.setHeader("WWW-Authenticate", "Bearer");
 		response.setContentType("application/problem+json");
-		response.getWriter().write("{\"error_code\":\"UNAUTHENTICATED\","
-				+ "\"error_message\":\"An authenticated platform session or service credential is required.\","
-				+ "\"retryable\":false,\"request_id\":\""
-				+ java.util.UUID.randomUUID() + "\"}");
+		response.getWriter()
+			.write("{\"error_code\":\"UNAUTHENTICATED\","
+					+ "\"error_message\":\"An authenticated platform session or service credential is required.\","
+					+ "\"retryable\":false,\"request_id\":\"" + java.util.UUID.randomUUID() + "\"}");
 	}
+
 }

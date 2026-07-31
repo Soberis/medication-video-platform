@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface AnnotationLabelDefinitionRepository extends JpaRepository<AnnotationLabelDefinition, UUID> {
 
 	List<AnnotationLabelDefinition> findAllByLabelSchemaIdOrderBySortOrder(UUID labelSchemaId);
+
 }

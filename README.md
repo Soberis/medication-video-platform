@@ -50,7 +50,7 @@ docs/                          需求、设计、ADR 和运行手册
 
 要求 Java 21、Node.js 22、pnpm 11、Python 3.12、uv 和 Docker Desktop。准确依赖版本由构建文件和 lockfile 冻结。
 
-Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API、Media Worker 和 Web，并统一记录后台进程与日志。
+Docker 只运行 PostgreSQL、RabbitMQ 和 S3；启动脚本以 Spring `local` profile 启动 Core API 并记录后台进程与日志。前端始终由 pnpm 单独启动；Media Worker 和 Export Worker 仅在需要媒体或导出流程时显式启动。
 
 macOS 首次准备（已安装 Homebrew）：
 
@@ -72,7 +72,7 @@ cd /path/to/medication-video-platform
 pnpm install --frozen-lockfile
 ```
 
-在 macOS / Linux 上启动全部本地服务：
+在 macOS / Linux 上启动本地基础设施和 Core API：
 
 ```bash
 cd /path/to/medication-video-platform
@@ -80,7 +80,7 @@ cd /path/to/medication-video-platform
 ./scripts/start-local.sh
 ```
 
-在 Windows PowerShell 上使用：
+在 Windows PowerShell 上启动本地基础设施和 Core API：
 
 ```powershell
 cd C:\Dev\Projects\medication-video-platform
@@ -88,7 +88,7 @@ cd C:\Dev\Projects\medication-video-platform
 .\scripts\start-local.ps1
 ```
 
-在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本会等待 Core API 健康后启动 Media Worker，再启动或确认 Web，默认最长等待 180 秒。这样平台本地上传的视频会继续完成媒体探测，而不会长期停留在“已上传，待入库”。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
+在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本默认最长等待 180 秒，直到 Core API 健康。前端需由 pnpm 单独启动；需要媒体探测或数据集导出时，再显式启动两个 Worker。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
 
 macOS / Linux 常用命令：
 
@@ -96,7 +96,7 @@ macOS / Linux 常用命令：
 ./scripts/status-local.sh
 ./scripts/stop-local.sh
 ./scripts/stop-local.sh --keep-infrastructure
-./scripts/start-local.sh --skip-worker
+./scripts/start-local.sh --worker
 ```
 
 Windows PowerShell 常用命令：
@@ -105,7 +105,7 @@ Windows PowerShell 常用命令：
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
 .\scripts\stop-local.ps1                # 停止脚本启动的后端/Worker 和本地容器，保留数据卷
 .\scripts\stop-local.ps1 -KeepInfrastructure
-.\scripts\start-local.ps1 -SkipWorker   # 仅做 API/Web 元数据开发时显式跳过 Worker
+.\scripts\start-local.ps1 -Worker       # 需要媒体探测或导出时显式启动两个 Worker
 .\scripts\start-local.ps1 -RestartApi   # 仅重启脚本启动的 Core API；保留前端、Worker 与容器
 ```
 

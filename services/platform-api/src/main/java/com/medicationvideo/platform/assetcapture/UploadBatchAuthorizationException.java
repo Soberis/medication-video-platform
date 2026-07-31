@@ -9,4 +9,5 @@ final class UploadBatchAuthorizationException extends RuntimeException {
 	UploadBatchAuthorizationException(String message) {
 		super(message);
 	}
+
 }

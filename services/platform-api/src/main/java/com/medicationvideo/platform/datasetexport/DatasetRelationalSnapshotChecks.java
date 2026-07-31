@@ -17,11 +17,8 @@ final class DatasetRelationalSnapshotChecks {
 	private DatasetRelationalSnapshotChecks() {
 	}
 
-	static List<String> structuralIssues(
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			List<DatasetMemberSession> members,
-			List<DatasetMemberStream> streams,
+	static List<String> structuralIssues(DatasetBuildSpecification specification, DatasetSplitPlan splitPlan,
+			List<DatasetMemberSession> members, List<DatasetMemberStream> streams,
 			List<DatasetSplitAssignment> assignments) {
 		var issues = new LinkedHashSet<String>();
 		if (!specification.getDatasetSplitPlanId().equals(splitPlan.getDatasetSplitPlanId())) {
@@ -62,16 +59,14 @@ final class DatasetRelationalSnapshotChecks {
 				issues.add(STREAM_EVIDENCE_INCOMPLETE);
 			}
 			var assignment = assignmentsByMember.get(member.getDatasetMemberSessionId());
-			if (assignment == null
-					|| !assignment.getCaptureSessionId().equals(member.getCaptureSessionId())
+			if (assignment == null || !assignment.getCaptureSessionId().equals(member.getCaptureSessionId())
 					|| assignment.getCandidateIndex() != member.getCandidateIndex()
 					|| assignment.getLeakageGroupType() != DatasetLeakageGroupType.CAPTURE_SESSION
 					|| !assignment.getLeakageGroupId().equals(member.getCaptureSessionId())) {
 				issues.add(SPLIT_ASSIGNMENT_INCOMPLETE);
 				continue;
 			}
-			var previousSplit = splitByLeakageGroup.putIfAbsent(
-					assignment.getLeakageGroupId(), assignment.getSplit());
+			var previousSplit = splitByLeakageGroup.putIfAbsent(assignment.getLeakageGroupId(), assignment.getSplit());
 			if (previousSplit != null && previousSplit != assignment.getSplit()) {
 				issues.add(SPLIT_LEAKAGE_DETECTED);
 			}
@@ -79,12 +74,12 @@ final class DatasetRelationalSnapshotChecks {
 		if (streams.isEmpty()) {
 			issues.add(STREAM_EVIDENCE_INCOMPLETE);
 		}
-		if (streams.stream().anyMatch(stream ->
-				!specification.getLabelSchemaDigest().equals(stream.getLabelSchemaDigest())
-						|| !specification.getCleaningRuleSetDigest().equals(
-								stream.getCleaningRuleSetDigest()))) {
+		if (streams.stream()
+			.anyMatch(stream -> !specification.getLabelSchemaDigest().equals(stream.getLabelSchemaDigest())
+					|| !specification.getCleaningRuleSetDigest().equals(stream.getCleaningRuleSetDigest()))) {
 			issues.add(BUILD_CONFIGURATION_MISMATCH);
 		}
 		return List.copyOf(issues);
 	}
+
 }

@@ -3,6 +3,7 @@ package com.medicationvideo.platform.mediaprivacy;
 final class MediaJobExecutionException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final boolean retryable;
 
 	MediaJobExecutionException(String errorCode, String message, boolean retryable) {
@@ -18,4 +19,5 @@ final class MediaJobExecutionException extends RuntimeException {
 	boolean isRetryable() {
 		return this.retryable;
 	}
+
 }

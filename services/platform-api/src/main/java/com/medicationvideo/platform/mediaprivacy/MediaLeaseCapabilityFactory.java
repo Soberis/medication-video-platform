@@ -23,8 +23,8 @@ class MediaLeaseCapabilityFactory {
 
 	static String hash(String token) {
 		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(token.getBytes(StandardCharsets.US_ASCII)));
+			return HexFormat.of()
+				.formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII)));
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable in this Java runtime.", exception);
@@ -33,4 +33,5 @@ class MediaLeaseCapabilityFactory {
 
 	record Capability(String token, String tokenHash) {
 	}
+
 }

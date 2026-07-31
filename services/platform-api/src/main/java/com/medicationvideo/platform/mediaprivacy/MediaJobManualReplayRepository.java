@@ -7,10 +7,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface MediaJobManualReplayRepository extends JpaRepository<MediaJobManualReplay, UUID> {
 
-	Optional<MediaJobManualReplay> findByProjectIdAndIdempotencyKey(
-			UUID projectId, String idempotencyKey);
+	Optional<MediaJobManualReplay> findByProjectIdAndIdempotencyKey(UUID projectId, String idempotencyKey);
 
 	Optional<MediaJobManualReplay> findByDeadLetterId(UUID deadLetterId);
 
 	long countByMediaJobId(UUID mediaJobId);
+
 }

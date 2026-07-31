@@ -22,9 +22,7 @@ interface MediaJobAttemptRepository extends JpaRepository<MediaJobAttempt, UUID>
 			ORDER BY media_job_id
 			LIMIT :batchSize
 			""", nativeQuery = true)
-	List<UUID> findRecoverableJobIds(
-			@Param("cutoff") Instant cutoff,
-			@Param("batchSize") int batchSize);
+	List<UUID> findRecoverableJobIds(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
@@ -34,15 +32,14 @@ interface MediaJobAttemptRepository extends JpaRepository<MediaJobAttempt, UUID>
 			      SELECT MAX(current.attempt) FROM MediaJobAttempt current
 			      WHERE current.mediaJobId = :mediaJobId)
 			""")
-	java.util.Optional<MediaJobAttempt> findCurrentForUpdate(
-			@Param("mediaJobId") UUID mediaJobId);
+	java.util.Optional<MediaJobAttempt> findCurrentForUpdate(@Param("mediaJobId") UUID mediaJobId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			SELECT attempt FROM MediaJobAttempt attempt
 			WHERE attempt.mediaJobId = :mediaJobId AND attempt.attempt = :attemptNumber
 			""")
-	java.util.Optional<MediaJobAttempt> findForUpdate(
-			@Param("mediaJobId") UUID mediaJobId,
+	java.util.Optional<MediaJobAttempt> findForUpdate(@Param("mediaJobId") UUID mediaJobId,
 			@Param("attemptNumber") int attemptNumber);
+
 }

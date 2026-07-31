@@ -117,4 +117,5 @@ class CaptureEventLog {
 	Instant getIndexedAt() {
 		return this.indexedAt;
 	}
+
 }

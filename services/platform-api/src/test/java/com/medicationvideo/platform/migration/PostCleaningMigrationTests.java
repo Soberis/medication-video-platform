@@ -17,21 +17,24 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 class PostCleaningMigrationTests {
 
-	private static final UUID PROJECT_ID =
-			UUID.fromString("00000000-0000-0000-0000-000000000134");
+	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000134");
+
 	private static final String SHA256 = "a".repeat(64);
+
 	private static final String DOCUMENT_SHA256 = "b".repeat(64);
+
 	private static final String LABEL_SCHEMA_ID = "10000000-0000-0000-0000-000000000001";
-	private static final String LABEL_SCHEMA_DIGEST =
-			"305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
+
+	private static final String LABEL_SCHEMA_DIGEST = "305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
+
 	private static final Instant CREATED_AT = Instant.parse("2026-07-25T02:00:00Z");
 
 	@Test
 	void upgradesApprovedRevisionToCompletedTaskWithTruthfulLegacyWarning() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
-			var dataSource = new DriverManagerDataSource(
-					postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+			var dataSource = new DriverManagerDataSource(postgres.getJdbcUrl(), postgres.getUsername(),
+					postgres.getPassword());
 			var jdbc = new JdbcTemplate(dataSource);
 
 			migrateTo(dataSource, "33");
@@ -47,11 +50,8 @@ class PostCleaningMigrationTests {
 			migrateTo(dataSource, "34");
 
 			assertEquals("COMPLETED", jdbc.queryForObject(
-					"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?",
-					String.class,
-					taskId));
-			assertEquals(1, jdbc.queryForObject(
-					"""
+					"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+			assertEquals(1, jdbc.queryForObject("""
 					SELECT count(*)
 					FROM cleaning_run
 					WHERE cleaning_run_id = ?
@@ -60,51 +60,35 @@ class PostCleaningMigrationTests {
 					  AND trigger_type = 'LEGACY_MIGRATION'
 					  AND asset_sha256 = ?
 					  AND document_sha256 = ?
-					""",
-					Integer.class,
-					revisionId,
-					revisionId,
-					reviewId,
-					SHA256,
-					DOCUMENT_SHA256));
-			assertEquals(0L, jdbc.queryForObject(
-					"SELECT verified_duration_microseconds FROM cleaning_run WHERE cleaning_run_id = ?",
-					Long.class,
-					revisionId));
-			assertEquals(1, jdbc.queryForObject(
-					"""
+					""", Integer.class, revisionId, revisionId, reviewId, SHA256, DOCUMENT_SHA256));
+			assertEquals(0L,
+					jdbc.queryForObject(
+							"SELECT verified_duration_microseconds FROM cleaning_run WHERE cleaning_run_id = ?",
+							Long.class, revisionId));
+			assertEquals(1, jdbc.queryForObject("""
 					SELECT count(*)
 					FROM cleaning_result
 					WHERE cleaning_result_id = ?
 					  AND outcome = 'WARNING'
 					  AND reason_codes @> '["LEGACY_APPROVED_REVISION_REQUIRES_REVALIDATION"]'::jsonb
-					""",
-					Integer.class,
-					reviewId));
-			assertTrue(jdbc.queryForObject(
-					"SELECT evaluated_at FROM cleaning_result WHERE cleaning_result_id = ?",
-					Timestamp.class,
-					reviewId).toInstant().isAfter(CREATED_AT.plusSeconds(20)));
-			assertEquals(1, jdbc.queryForObject(
-					"""
+					""", Integer.class, reviewId));
+			assertTrue(jdbc
+				.queryForObject("SELECT evaluated_at FROM cleaning_result WHERE cleaning_result_id = ?",
+						Timestamp.class, reviewId)
+				.toInstant()
+				.isAfter(CREATED_AT.plusSeconds(20)));
+			assertEquals(1, jdbc.queryForObject("""
 					SELECT count(*)
 					FROM audit_event
 					WHERE action = 'POST_ANNOTATION_CLEANING_MIGRATED'
 					  AND object_id = ?
 					  AND actor_type = 'SYSTEM'
-					""",
-					Integer.class,
-					reviewId.toString()));
+					""", Integer.class, reviewId.toString()));
 		}
 	}
 
 	private static void migrateTo(DriverManagerDataSource dataSource, String target) {
-		Flyway.configure()
-				.dataSource(dataSource)
-				.locations("classpath:db/migration")
-				.target(target)
-				.load()
-				.migrate();
+		Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").target(target).load().migrate();
 	}
 
 	private static UUID insertClipAsset(JdbcTemplate jdbc) {
@@ -119,18 +103,9 @@ class PostCleaningMigrationTests {
 				    status, expires_at, created_at, updated_at, verified_manifest_sha256, completed_at)
 				VALUES (?, ?, ?, ?, 'synthetic-cleaning-device', ?, 1, 1234, ?,
 				        'COMPLETED', ?, ?, ?, ?, ?)
-				""",
-				batchId,
-				PROJECT_ID,
-				"cleaning-batch-" + batchId,
-				SHA256,
-				ProjectMembershipTestData.ADMIN_ACTOR,
-				SHA256,
-				Timestamp.from(CREATED_AT.plusSeconds(3600)),
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT),
-				SHA256,
-				Timestamp.from(CREATED_AT));
+				""", batchId, PROJECT_ID, "cleaning-batch-" + batchId, SHA256, ProjectMembershipTestData.ADMIN_ACTOR,
+				SHA256, Timestamp.from(CREATED_AT.plusSeconds(3600)), Timestamp.from(CREATED_AT),
+				Timestamp.from(CREATED_AT), SHA256, Timestamp.from(CREATED_AT));
 		jdbc.update("""
 				INSERT INTO upload_file (
 				    upload_file_id, batch_id, client_file_id, idempotency_key, request_fingerprint,
@@ -140,21 +115,10 @@ class PostCleaningMigrationTests {
 				    verified_sha256, completed_storage_etag)
 				VALUES (?, ?, ?, ?, ?, 'VIDEO', 'video/mp4', 1234, ?, 8388608, 1,
 				        'UPLOADED', ?, ?, 'synthetic-bucket', ?, ?, ?, ?, ?, ?, 'synthetic-etag')
-				""",
-				uploadFileId,
-				batchId,
-				clientFileId,
-				"cleaning-file-" + uploadFileId,
-				SHA256,
-				SHA256,
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT),
-				"objects/" + uploadFileId,
-				"multipart-" + uploadFileId,
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT),
-				SHA256);
+				""", uploadFileId, batchId, clientFileId, "cleaning-file-" + uploadFileId, SHA256, SHA256,
+				Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT), "objects/" + uploadFileId,
+				"multipart-" + uploadFileId, Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT),
+				Timestamp.from(CREATED_AT), SHA256);
 		jdbc.update("""
 				INSERT INTO clip_asset (
 				    clip_asset_id, project_id, batch_id, source_upload_file_id, client_file_id,
@@ -162,16 +126,8 @@ class PostCleaningMigrationTests {
 				    asset_status, created_at, updated_at, version)
 				VALUES (?, ?, ?, ?, ?, 'video/mp4', 1234, ?, 'synthetic-bucket', ?,
 				        'synthetic-etag', 'INGESTED', ?, ?, 0)
-				""",
-				clipAssetId,
-				PROJECT_ID,
-				batchId,
-				uploadFileId,
-				clientFileId,
-				SHA256,
-				"objects/" + clipAssetId,
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT));
+				""", clipAssetId, PROJECT_ID, batchId, uploadFileId, clientFileId, SHA256, "objects/" + clipAssetId,
+				Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT));
 		return clipAssetId;
 	}
 
@@ -181,18 +137,11 @@ class PostCleaningMigrationTests {
 				    quality_review_id, project_id, clip_asset_id, decision, reason_code,
 				    reviewed_by, reviewed_at, version)
 				VALUES (?, ?, ?, 'QUALIFIED', 'MEETS_REQUIREMENTS', ?, ?, 2)
-				""",
-				UUID.randomUUID(),
-				PROJECT_ID,
-				clipAssetId,
-				ProjectMembershipTestData.MEMBER_ACTOR,
+				""", UUID.randomUUID(), PROJECT_ID, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
 				Timestamp.from(CREATED_AT));
 	}
 
-	private static void insertVerifiedMediaReport(
-			JdbcTemplate jdbc,
-			UUID clipAssetId,
-			long durationMicroseconds) {
+	private static void insertVerifiedMediaReport(JdbcTemplate jdbc, UUID clipAssetId, long durationMicroseconds) {
 		var mediaJobId = UUID.randomUUID();
 		jdbc.update("""
 				INSERT INTO media_job (
@@ -203,15 +152,8 @@ class PostCleaningMigrationTests {
 				VALUES (?, ?, ?, 'MEDIA_PROBE', ?, 1234, 'video/mp4', 'SUCCEEDED', ?, ?, ?, ?, 0,
 				        'media-probe-baseline-v1',
 				        '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765')
-				""",
-				mediaJobId,
-				PROJECT_ID,
-				clipAssetId,
-				SHA256,
-				"cleaning-media-job-" + mediaJobId,
-				SHA256,
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT));
+				""", mediaJobId, PROJECT_ID, clipAssetId, SHA256, "cleaning-media-job-" + mediaJobId, SHA256,
+				Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT));
 		jdbc.update("""
 				INSERT INTO media_report (
 				    media_report_id, media_job_id, project_id, clip_asset_id,
@@ -226,21 +168,11 @@ class PostCleaningMigrationTests {
 				        'sha256:207391c770bee4a8dfe3530ef5f31af07904950f9bc2dcb822fedb086222164a',
 				        'mov,mp4,m4a,3gp,3g2,mj2', ?, 1, 0, 'h264', 640, 360,
 				        1, 90000, false, 0, true, true, '[]'::jsonb, ?)
-				""",
-				UUID.randomUUID(),
-				mediaJobId,
-				PROJECT_ID,
-				clipAssetId,
-				SHA256,
-				durationMicroseconds,
+				""", UUID.randomUUID(), mediaJobId, PROJECT_ID, clipAssetId, SHA256, durationMicroseconds,
 				Timestamp.from(CREATED_AT.plusSeconds(5)));
 	}
 
-	private static void insertApprovedRevision(
-			JdbcTemplate jdbc,
-			UUID clipAssetId,
-			UUID taskId,
-			UUID revisionId,
+	private static void insertApprovedRevision(JdbcTemplate jdbc, UUID clipAssetId, UUID taskId, UUID revisionId,
 			UUID reviewId) {
 		jdbc.update("""
 				INSERT INTO annotation_task (
@@ -248,48 +180,30 @@ class PostCleaningMigrationTests {
 				    label_schema_digest, assignee_actor_id, created_by, idempotency_key,
 				    task_status, created_at, updated_at, version)
 				VALUES (?, ?, ?, ?::uuid, ?, ?, ?, ?, 'SUBMITTED', ?, ?, 1)
-				""",
-				taskId,
-				PROJECT_ID,
-				clipAssetId,
-				LABEL_SCHEMA_ID,
-				LABEL_SCHEMA_DIGEST,
-				ProjectMembershipTestData.MEMBER_ACTOR,
-				ProjectMembershipTestData.ADMIN_ACTOR,
-				"cleaning-task-" + taskId,
-				Timestamp.from(CREATED_AT),
-				Timestamp.from(CREATED_AT));
-		jdbc.update("""
-				INSERT INTO annotation_revision (
-				    annotation_revision_id, project_id, annotation_task_id, clip_asset_id,
-				    revision_number, annotation_schema_version, label_schema_id,
-				    label_schema_digest, annotation_document, document_sha256,
-				    submitted_by, idempotency_key, submitted_at)
-				VALUES (?, ?, ?, ?, 1, 'annotation-document.v1', ?::uuid, ?,
-				        '{"schema_version":"annotation-document.v1","segments":[{"start_ms":0,"end_ms":10,"label":"prepare_workspace"}]}'::jsonb,
-				        ?, ?, ?, ?)
-				""",
-				revisionId,
-				PROJECT_ID,
-				taskId,
-				clipAssetId,
-				LABEL_SCHEMA_ID,
-				LABEL_SCHEMA_DIGEST,
-				DOCUMENT_SHA256,
-				ProjectMembershipTestData.MEMBER_ACTOR,
-				"cleaning-revision-" + revisionId,
+				""", taskId, PROJECT_ID, clipAssetId, LABEL_SCHEMA_ID, LABEL_SCHEMA_DIGEST,
+				ProjectMembershipTestData.MEMBER_ACTOR, ProjectMembershipTestData.ADMIN_ACTOR,
+				"cleaning-task-" + taskId, Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT));
+		jdbc.update(
+				"""
+						INSERT INTO annotation_revision (
+						    annotation_revision_id, project_id, annotation_task_id, clip_asset_id,
+						    revision_number, annotation_schema_version, label_schema_id,
+						    label_schema_digest, annotation_document, document_sha256,
+						    submitted_by, idempotency_key, submitted_at)
+						VALUES (?, ?, ?, ?, 1, 'annotation-document.v1', ?::uuid, ?,
+						        '{"schema_version":"annotation-document.v1","segments":[{"start_ms":0,"end_ms":10,"label":"prepare_workspace"}]}'::jsonb,
+						        ?, ?, ?, ?)
+						""",
+				revisionId, PROJECT_ID, taskId, clipAssetId, LABEL_SCHEMA_ID, LABEL_SCHEMA_DIGEST, DOCUMENT_SHA256,
+				ProjectMembershipTestData.MEMBER_ACTOR, "cleaning-revision-" + revisionId,
 				Timestamp.from(CREATED_AT.plusSeconds(10)));
 		jdbc.update("""
 				INSERT INTO annotation_review (
 				    annotation_review_id, project_id, annotation_revision_id, decision,
 				    review_note, reviewed_by, idempotency_key, reviewed_at)
 				VALUES (?, ?, ?, 'APPROVED', NULL, ?, ?, ?)
-				""",
-				reviewId,
-				PROJECT_ID,
-				revisionId,
-				ProjectMembershipTestData.ADMIN_ACTOR,
-				"cleaning-review-" + reviewId,
-				Timestamp.from(CREATED_AT.plusSeconds(20)));
+				""", reviewId, PROJECT_ID, revisionId, ProjectMembershipTestData.ADMIN_ACTOR,
+				"cleaning-review-" + reviewId, Timestamp.from(CREATED_AT.plusSeconds(20)));
 	}
+
 }

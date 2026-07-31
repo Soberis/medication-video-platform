@@ -33,37 +33,24 @@ class JdbcDatasetExportResultInbox implements DatasetExportResultInboxPort {
 	}
 
 	@Override
-	public DatasetExportInboxReceipt record(
-			UUID messageId,
-			UUID exportId,
-			int attempt,
-			String resultFingerprint,
-			String resultStatus,
-			java.time.Instant processedAt) {
+	public DatasetExportInboxReceipt record(UUID messageId, UUID exportId, int attempt, String resultFingerprint,
+			String resultStatus, java.time.Instant processedAt) {
 		this.jdbcTemplate.update("""
 				INSERT INTO inbox_message (
 				    message_id, consumer_name, message_type, aggregate_id, attempt,
 				    result_fingerprint, result_status, processed_at)
 				VALUES (?, 'dataset-export-result-v1', 'DatasetExportResultV1', ?, ?, ?, ?, ?)
 				ON CONFLICT (message_id) DO NOTHING
-				""",
-				messageId,
-				exportId,
-				attempt,
-				resultFingerprint,
-				resultStatus,
-				Timestamp.from(processedAt));
-		return find(messageId).orElseThrow(() -> new IllegalStateException(
-				"The dataset export result Inbox receipt was not persisted."));
+				""", messageId, exportId, attempt, resultFingerprint, resultStatus, Timestamp.from(processedAt));
+		return find(messageId)
+			.orElseThrow(() -> new IllegalStateException("The dataset export result Inbox receipt was not persisted."));
 	}
 
 	private DatasetExportInboxReceipt map(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new DatasetExportInboxReceipt(
-				resultSet.getObject("message_id", UUID.class),
-				resultSet.getObject("aggregate_id", UUID.class),
-				resultSet.getInt("attempt"),
-				resultSet.getString("result_fingerprint"),
-				resultSet.getString("result_status"),
+		return new DatasetExportInboxReceipt(resultSet.getObject("message_id", UUID.class),
+				resultSet.getObject("aggregate_id", UUID.class), resultSet.getInt("attempt"),
+				resultSet.getString("result_fingerprint"), resultSet.getString("result_status"),
 				resultSet.getObject("processed_at", OffsetDateTime.class).toInstant());
 	}
+
 }

@@ -17,19 +17,17 @@ class PlatformAccountBootstrap {
 	@Bean
 	UserDetailsService platformAccountUserDetailsService(PlatformAccountRepository repository) {
 		return username -> repository.findByUsername(username)
-				.map(account -> User.withUsername(account.getUsername())
-						.password(account.getPasswordHash())
-						.authorities("ROLE_" + account.getRole().name())
-						.disabled(!account.isEnabled())
-						.build())
-				.orElseThrow(() -> new UsernameNotFoundException("Platform account not found."));
+			.map(account -> User.withUsername(account.getUsername())
+				.password(account.getPasswordHash())
+				.authorities("ROLE_" + account.getRole().name())
+				.disabled(!account.isEnabled())
+				.build())
+			.orElseThrow(() -> new UsernameNotFoundException("Platform account not found."));
 	}
 
 	@Bean
-	ApplicationRunner bootstrapPlatformAdministrator(
-			PlatformAccountRepository repository,
-			PasswordEncoder passwordEncoder,
-			@Value("${platform.security.bootstrap-admin-username:}") String username,
+	ApplicationRunner bootstrapPlatformAdministrator(PlatformAccountRepository repository,
+			PasswordEncoder passwordEncoder, @Value("${platform.security.bootstrap-admin-username:}") String username,
 			@Value("${platform.security.bootstrap-admin-password:}") String password) {
 		return arguments -> {
 			if (username.isBlank() && password.isBlank()) {
@@ -43,11 +41,10 @@ class PlatformAccountBootstrap {
 				throw new IllegalStateException(
 						"The bootstrap administrator username or password does not meet the minimum policy.");
 			}
-			repository.findByUsername(username).orElseGet(() -> repository.save(PlatformAccount.create(
-					username,
-					passwordEncoder.encode(password),
-					PlatformAccountRole.ADMIN,
-					Instant.now())));
+			repository.findByUsername(username)
+				.orElseGet(() -> repository.save(PlatformAccount.create(username, passwordEncoder.encode(password),
+						PlatformAccountRole.ADMIN, Instant.now())));
 		};
 	}
+
 }

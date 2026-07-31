@@ -68,12 +68,8 @@ class CameraStream {
 	protected CameraStream() {
 	}
 
-	private CameraStream(
-			UUID captureSessionId,
-			CameraSetSnapshotMember snapshotMember,
-			ClipAsset clipAsset,
-			CaptureSessionMetadataV1.Stream metadata,
-			Instant createdAt) {
+	private CameraStream(UUID captureSessionId, CameraSetSnapshotMember snapshotMember, ClipAsset clipAsset,
+			CaptureSessionMetadataV1.Stream metadata, Instant createdAt) {
 		this.cameraStreamId = UUID.randomUUID();
 		this.captureSessionId = captureSessionId;
 		this.cameraSetSnapshotMemberId = snapshotMember.getCameraSetSnapshotMemberId();
@@ -90,19 +86,12 @@ class CameraStream {
 		this.updatedAt = createdAt;
 	}
 
-	static CameraStream bind(
-			UUID captureSessionId,
-			CameraSetSnapshotMember snapshotMember,
-			ClipAsset clipAsset,
-			CaptureSessionMetadataV1.Stream metadata,
-			Instant createdAt) {
+	static CameraStream bind(UUID captureSessionId, CameraSetSnapshotMember snapshotMember, ClipAsset clipAsset,
+			CaptureSessionMetadataV1.Stream metadata, Instant createdAt) {
 		return new CameraStream(captureSessionId, snapshotMember, clipAsset, metadata, createdAt);
 	}
 
-	static CameraStream importLocal(
-			UUID captureSessionId,
-			CameraSetSnapshotMember snapshotMember,
-			ClipAsset clipAsset,
+	static CameraStream importLocal(UUID captureSessionId, CameraSetSnapshotMember snapshotMember, ClipAsset clipAsset,
 			Instant createdAt) {
 		var stream = new CameraStream();
 		stream.cameraStreamId = UUID.randomUUID();
@@ -171,10 +160,8 @@ class CameraStream {
 
 	void completeMediaIngest(boolean succeeded, Instant changedAt) {
 		if (this.streamStatus != CameraStreamStatus.BOUND) {
-			throw new ClipAssetMediaIngestException(
-					"CAMERA_STREAM_INGEST_STATE_CONFLICT",
-					"The camera stream is not awaiting media ingest.",
-					false);
+			throw new ClipAssetMediaIngestException("CAMERA_STREAM_INGEST_STATE_CONFLICT",
+					"The camera stream is not awaiting media ingest.", false);
 		}
 		this.streamStatus = succeeded ? CameraStreamStatus.INGESTED : CameraStreamStatus.INGEST_FAILED;
 		this.qualityStatus = succeeded ? CaptureQualityStatus.PASS : CaptureQualityStatus.REJECT;
@@ -204,4 +191,5 @@ class CameraStream {
 			case INGEST_FAILED -> CaptureQualityStatus.REJECT;
 		};
 	}
+
 }

@@ -29,20 +29,15 @@ class RabbitDatasetExportTopologyConfiguration {
 	}
 
 	@Bean
-	Binding datasetExportBinding(
-			@Qualifier("datasetExportQueue") Queue queue,
+	Binding datasetExportBinding(@Qualifier("datasetExportQueue") Queue queue,
 			@Qualifier("datasetExportExchange") DirectExchange exchange) {
-		return BindingBuilder.bind(queue)
-				.to(exchange)
-				.with(DatasetExportMessagingTopology.ROUTING_KEY);
+		return BindingBuilder.bind(queue).to(exchange).with(DatasetExportMessagingTopology.ROUTING_KEY);
 	}
 
 	@Bean
-	Binding datasetExportDeadLetterBinding(
-			@Qualifier("datasetExportDeadLetterQueue") Queue queue,
+	Binding datasetExportDeadLetterBinding(@Qualifier("datasetExportDeadLetterQueue") Queue queue,
 			@Qualifier("mediaDeadLetterExchange") DirectExchange exchange) {
-		return BindingBuilder.bind(queue)
-				.to(exchange)
-				.with(DatasetExportMessagingTopology.DEAD_LETTER_ROUTING_KEY);
+		return BindingBuilder.bind(queue).to(exchange).with(DatasetExportMessagingTopology.DEAD_LETTER_ROUTING_KEY);
 	}
+
 }

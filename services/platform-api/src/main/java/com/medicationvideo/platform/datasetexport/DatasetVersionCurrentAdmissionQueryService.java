@@ -17,29 +17,33 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
 
 /**
- * Read-only comparison of a DatasetVersion snapshot with current admission facts and build prerequisites.
+ * Read-only comparison of a DatasetVersion snapshot with current admission facts and
+ * build prerequisites.
  */
 @Service
 class DatasetVersionCurrentAdmissionQueryService {
 
 	private static final Comparator<StreamEvidenceChange> STREAM_CHANGE_ORDER = Comparator
-			.comparingInt(StreamEvidenceChange::cameraIndex)
-			.thenComparing(StreamEvidenceChange::cameraStreamId);
+		.comparingInt(StreamEvidenceChange::cameraIndex)
+		.thenComparing(StreamEvidenceChange::cameraStreamId);
 
 	private final ProjectAccessService projectAccessService;
+
 	private final DatasetVersionRepository versionRepository;
+
 	private final DatasetMemberSessionRepository memberSessionRepository;
+
 	private final DatasetMemberStreamRepository memberStreamRepository;
+
 	private final DatasetSplitPlanRepository splitPlanRepository;
+
 	private final DatasetBuildSpecificationRepository buildSpecificationRepository;
+
 	private final DatasetAdmissionPreviewService admissionService;
 
-	DatasetVersionCurrentAdmissionQueryService(
-			ProjectAccessService projectAccessService,
-			DatasetVersionRepository versionRepository,
-			DatasetMemberSessionRepository memberSessionRepository,
-			DatasetMemberStreamRepository memberStreamRepository,
-			DatasetSplitPlanRepository splitPlanRepository,
+	DatasetVersionCurrentAdmissionQueryService(ProjectAccessService projectAccessService,
+			DatasetVersionRepository versionRepository, DatasetMemberSessionRepository memberSessionRepository,
+			DatasetMemberStreamRepository memberStreamRepository, DatasetSplitPlanRepository splitPlanRepository,
 			DatasetBuildSpecificationRepository buildSpecificationRepository,
 			DatasetAdmissionPreviewService admissionService) {
 		this.projectAccessService = projectAccessService;
@@ -55,72 +59,56 @@ class DatasetVersionCurrentAdmissionQueryService {
 	DatasetVersionCurrentAdmissionResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
-				.orElseThrow(DatasetVersionCurrentAdmissionQueryService::notFound);
+			.orElseThrow(DatasetVersionCurrentAdmissionQueryService::notFound);
 		var snapshotStreams = this.memberStreamRepository
-				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
+			.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
 		var streamsByMemberId = streamsByMemberId(snapshotStreams);
-		var members = this.memberSessionRepository
-				.findByDatasetVersionIdOrderByCandidateIndexAsc(datasetVersionId)
-				.stream()
-				.map(member -> currentAdmission(
-						projectId,
-						member,
-						streamsByMemberId.getOrDefault(member.getDatasetMemberSessionId(), List.of())))
-				.toList();
-		var buildReadiness = DatasetVersionBuildReadinessResponse.from(
-				members,
-				snapshotStreams,
+		var members = this.memberSessionRepository.findByDatasetVersionIdOrderByCandidateIndexAsc(datasetVersionId)
+			.stream()
+			.map(member -> currentAdmission(projectId, member,
+					streamsByMemberId.getOrDefault(member.getDatasetMemberSessionId(), List.of())))
+			.toList();
+		var buildReadiness = DatasetVersionBuildReadinessResponse.from(members, snapshotStreams,
 				this.splitPlanRepository.findByDatasetVersionId(datasetVersionId).orElse(null),
 				this.buildSpecificationRepository.findByDatasetVersionId(datasetVersionId).orElse(null));
-		return new DatasetVersionCurrentAdmissionResponse(
-				version.getDatasetVersionId(),
-				members.stream().allMatch(member -> member.currentAdmission().eligible()),
-				members,
-				buildReadiness,
-				role == ProjectRole.ADMIN
-						&& version.getStatus() == DatasetVersionStatus.DRAFT
+		return new DatasetVersionCurrentAdmissionResponse(version.getDatasetVersionId(),
+				members.stream().allMatch(member -> member.currentAdmission().eligible()), members, buildReadiness,
+				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.DRAFT
 						&& buildReadiness.readyForBuild());
 	}
 
-	private static Map<UUID, List<DatasetMemberStream>> streamsByMemberId(
-			List<DatasetMemberStream> snapshotStreams) {
+	private static Map<UUID, List<DatasetMemberStream>> streamsByMemberId(List<DatasetMemberStream> snapshotStreams) {
 		var streamsByMemberId = new HashMap<UUID, List<DatasetMemberStream>>();
 		for (var stream : snapshotStreams) {
 			streamsByMemberId.computeIfAbsent(stream.getDatasetMemberSessionId(), ignored -> new ArrayList<>())
-					.add(stream);
+				.add(stream);
 		}
 		return streamsByMemberId;
 	}
 
-	private DatasetVersionCurrentAdmissionMemberResponse currentAdmission(
-			UUID projectId, DatasetMemberSession snapshot, List<DatasetMemberStream> snapshotStreams) {
+	private DatasetVersionCurrentAdmissionMemberResponse currentAdmission(UUID projectId, DatasetMemberSession snapshot,
+			List<DatasetMemberStream> snapshotStreams) {
 		var current = this.admissionService.evaluate(projectId, snapshot.getCaptureSessionId());
-		return new DatasetVersionCurrentAdmissionMemberResponse(
-				snapshot.getCaptureSessionId(),
-				snapshot.getCandidateIndex(),
-				current.preview(),
-				evidenceChanges(snapshot, snapshotStreams, current));
+		return new DatasetVersionCurrentAdmissionMemberResponse(snapshot.getCaptureSessionId(),
+				snapshot.getCandidateIndex(), current.preview(), evidenceChanges(snapshot, snapshotStreams, current));
 	}
 
-	private static List<DatasetVersionAdmissionEvidenceChange> evidenceChanges(
-			DatasetMemberSession snapshot,
-			List<DatasetMemberStream> snapshotStreams,
-			DatasetAdmissionEvaluation current) {
+	private static List<DatasetVersionAdmissionEvidenceChange> evidenceChanges(DatasetMemberSession snapshot,
+			List<DatasetMemberStream> snapshotStreams, DatasetAdmissionEvaluation current) {
 		var changes = new ArrayList<DatasetVersionAdmissionEvidenceChange>();
 		var sessionChangeCodes = sessionChangeCodes(snapshot, current.captureSession());
 		if (!sessionChangeCodes.isEmpty()) {
-			changes.add(new DatasetVersionAdmissionEvidenceChange(
-					DatasetAdmissionEvidenceChangeScope.SESSION, null, sessionChangeCodes));
+			changes.add(new DatasetVersionAdmissionEvidenceChange(DatasetAdmissionEvidenceChangeScope.SESSION, null,
+					sessionChangeCodes));
 		}
 		streamEvidenceChanges(snapshotStreams, current.streamEvidence()).stream()
-				.sorted(STREAM_CHANGE_ORDER)
-				.map(StreamEvidenceChange::response)
-				.forEach(changes::add);
+			.sorted(STREAM_CHANGE_ORDER)
+			.map(StreamEvidenceChange::response)
+			.forEach(changes::add);
 		return List.copyOf(changes);
 	}
 
-	private static List<String> sessionChangeCodes(
-			DatasetMemberSession snapshot,
+	private static List<String> sessionChangeCodes(DatasetMemberSession snapshot,
 			CaptureSessionDatasetAdmissionFacts current) {
 		var codes = new ArrayList<String>();
 		if (snapshot.getExpectedCameraCount() != current.expectedCameraCount()) {
@@ -138,17 +126,14 @@ class DatasetVersionCurrentAdmissionQueryService {
 		return List.copyOf(codes);
 	}
 
-	private static List<StreamEvidenceChange> streamEvidenceChanges(
-			List<DatasetMemberStream> snapshotStreams,
+	private static List<StreamEvidenceChange> streamEvidenceChanges(List<DatasetMemberStream> snapshotStreams,
 			List<DatasetAdmissionStreamEvidence> currentStreams) {
 		var currentByCameraStreamId = currentStreamsByCameraStreamId(currentStreams);
 		var changes = new ArrayList<StreamEvidenceChange>();
 		for (var snapshot : snapshotStreams) {
 			var current = currentByCameraStreamId.remove(snapshot.getCameraStreamId());
 			if (current == null) {
-				changes.add(new StreamEvidenceChange(
-						snapshot.getCameraIndex(),
-						snapshot.getCameraStreamId(),
+				changes.add(new StreamEvidenceChange(snapshot.getCameraIndex(), snapshot.getCameraStreamId(),
 						List.of("STREAM_REMOVED")));
 				continue;
 			}
@@ -158,8 +143,8 @@ class DatasetVersionCurrentAdmissionQueryService {
 			}
 		}
 		for (var current : currentByCameraStreamId.values()) {
-			changes.add(new StreamEvidenceChange(
-					current.cameraIndex(), current.cameraStreamId(), List.of("STREAM_ADDED")));
+			changes.add(
+					new StreamEvidenceChange(current.cameraIndex(), current.cameraStreamId(), List.of("STREAM_ADDED")));
 		}
 		return changes;
 	}
@@ -175,8 +160,8 @@ class DatasetVersionCurrentAdmissionQueryService {
 		return result;
 	}
 
-	private static List<String> streamChangeCodes(
-			DatasetMemberStream snapshot, DatasetAdmissionStreamEvidence current) {
+	private static List<String> streamChangeCodes(DatasetMemberStream snapshot,
+			DatasetAdmissionStreamEvidence current) {
 		var codes = new ArrayList<String>();
 		if (!Objects.equals(snapshot.getAssetSha256(), current.assetSha256())) {
 			codes.add("STREAM_ASSET_SHA256_CHANGED");
@@ -212,26 +197,22 @@ class DatasetVersionCurrentAdmissionQueryService {
 	}
 
 	private static DatasetVersionException notFound() {
-		return new DatasetVersionException(
-				"DATASET_VERSION_NOT_FOUND",
-				"The dataset version was not found for the current project.",
-				404);
+		return new DatasetVersionException("DATASET_VERSION_NOT_FOUND",
+				"The dataset version was not found for the current project.", 404);
 	}
 
 	private record StreamEvidenceChange(int cameraIndex, UUID cameraStreamId, List<String> changeCodes) {
 
 		DatasetVersionAdmissionEvidenceChange response() {
-			return new DatasetVersionAdmissionEvidenceChange(
-					DatasetAdmissionEvidenceChangeScope.STREAM, this.cameraStreamId, this.changeCodes);
+			return new DatasetVersionAdmissionEvidenceChange(DatasetAdmissionEvidenceChangeScope.STREAM,
+					this.cameraStreamId, this.changeCodes);
 		}
 	}
+
 }
 
-record DatasetVersionCurrentAdmissionResponse(
-		UUID datasetVersionId,
-		boolean allMembersCurrentlyAdmissionEligible,
-		List<DatasetVersionCurrentAdmissionMemberResponse> members,
-		DatasetVersionBuildReadinessResponse buildReadiness,
+record DatasetVersionCurrentAdmissionResponse(UUID datasetVersionId, boolean allMembersCurrentlyAdmissionEligible,
+		List<DatasetVersionCurrentAdmissionMemberResponse> members, DatasetVersionBuildReadinessResponse buildReadiness,
 		boolean canStartBuild) {
 
 	DatasetVersionCurrentAdmissionResponse {
@@ -239,20 +220,15 @@ record DatasetVersionCurrentAdmissionResponse(
 	}
 }
 
-record DatasetVersionCurrentAdmissionMemberResponse(
-		UUID captureSessionId,
-		int candidateIndex,
-		DatasetAdmissionPreviewResponse currentAdmission,
-		List<DatasetVersionAdmissionEvidenceChange> evidenceChanges) {
+record DatasetVersionCurrentAdmissionMemberResponse(UUID captureSessionId, int candidateIndex,
+		DatasetAdmissionPreviewResponse currentAdmission, List<DatasetVersionAdmissionEvidenceChange> evidenceChanges) {
 
 	DatasetVersionCurrentAdmissionMemberResponse {
 		evidenceChanges = List.copyOf(evidenceChanges);
 	}
 }
 
-record DatasetVersionAdmissionEvidenceChange(
-		DatasetAdmissionEvidenceChangeScope scope,
-		UUID cameraStreamId,
+record DatasetVersionAdmissionEvidenceChange(DatasetAdmissionEvidenceChangeScope scope, UUID cameraStreamId,
 		List<String> changeCodes) {
 
 	DatasetVersionAdmissionEvidenceChange {
@@ -261,6 +237,7 @@ record DatasetVersionAdmissionEvidenceChange(
 }
 
 enum DatasetAdmissionEvidenceChangeScope {
-	SESSION,
-	STREAM
+
+	SESSION, STREAM
+
 }

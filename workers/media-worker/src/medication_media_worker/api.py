@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,6 +32,24 @@ class ObjectDownloadError(RuntimeError):
 
 class InputDigestMismatchError(RuntimeError):
     """The downloaded bytes differ from the frozen job input."""
+
+
+class _BearerTokenAuth(httpx.Auth):
+    def __init__(self, provider: Callable[[], str]) -> None:
+        self._provider = provider
+
+    def auth_flow(
+        self,
+        request: httpx.Request,
+    ) -> Generator[httpx.Request, httpx.Response, None]:
+        try:
+            token = self._provider()
+        except (OSError, ValueError) as exc:
+            raise PermanentDeliveryError("Worker service identity is unavailable") from exc
+        if len(token) < 32 or any(character.isspace() for character in token):
+            raise PermanentDeliveryError("Worker service identity is unavailable")
+        request.headers["Authorization"] = f"Bearer {token}"
+        yield request
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,13 +134,22 @@ class LeaseMonitor:
 
 
 class CoreApiClient:
-    def __init__(self, base_url: str, bearer_token: str, worker_id: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        bearer_token: str | Callable[[], str],
+        worker_id: str,
+        *,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         self._worker_id = worker_id
+        token_provider = (lambda: bearer_token) if isinstance(bearer_token, str) else bearer_token
         self._client = httpx.Client(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {bearer_token}"},
+            auth=_BearerTokenAuth(token_provider),
             timeout=httpx.Timeout(30.0, read=60.0),
             follow_redirects=False,
+            transport=transport,
         )
 
     def close(self) -> None:

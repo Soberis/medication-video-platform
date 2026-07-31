@@ -12,11 +12,10 @@ import com.medicationvideo.platform.iamproject.ProjectRole;
 class AssetCaptureProjectAuthorizer {
 
 	private final ProjectAccessService projectAccessService;
+
 	private final UploadBatchRepository batchRepository;
 
-	AssetCaptureProjectAuthorizer(
-			ProjectAccessService projectAccessService,
-			UploadBatchRepository batchRepository) {
+	AssetCaptureProjectAuthorizer(ProjectAccessService projectAccessService, UploadBatchRepository batchRepository) {
 		this.projectAccessService = projectAccessService;
 		this.batchRepository = batchRepository;
 	}
@@ -27,16 +26,13 @@ class AssetCaptureProjectAuthorizer {
 
 	void requireAdministrator(UUID projectId, String actorId) {
 		if (requireMember(projectId, actorId) != ProjectRole.ADMIN) {
-			throw new ProjectAccessException(
-					"PROJECT_ACCESS_DENIED",
-					"Project administrator membership is required.",
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
 					403);
 		}
 	}
 
 	BatchAccess requireBatchMember(UUID batchId, String actorId) {
-		var batch = this.batchRepository.findById(batchId)
-				.orElseThrow(UploadBatchNotFoundException::new);
+		var batch = this.batchRepository.findById(batchId).orElseThrow(UploadBatchNotFoundException::new);
 		final ProjectRole role;
 		try {
 			role = requireMember(batch.getProjectId(), actorId);
@@ -49,4 +45,5 @@ class AssetCaptureProjectAuthorizer {
 
 	record BatchAccess(UUID projectId, ProjectRole role) {
 	}
+
 }

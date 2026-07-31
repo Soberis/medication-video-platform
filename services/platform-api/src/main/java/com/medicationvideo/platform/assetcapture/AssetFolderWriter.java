@@ -21,9 +21,7 @@ class AssetFolderWriter {
 				UPDATE clip_asset
 				SET folder_id = NULL, updated_at = ?, version = version + 1
 				WHERE project_id = ? AND folder_id = ?
-				""",
-				Timestamp.from(changedAt),
-				projectId,
-				folderId);
+				""", Timestamp.from(changedAt), projectId, folderId);
 	}
+
 }

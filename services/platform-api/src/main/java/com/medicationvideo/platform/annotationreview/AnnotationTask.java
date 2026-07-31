@@ -57,14 +57,8 @@ class AnnotationTask {
 	protected AnnotationTask() {
 	}
 
-	private AnnotationTask(
-			UUID projectId,
-			UUID clipAssetId,
-			String assigneeActorId,
-			String createdBy,
-			String idempotencyKey,
-			AnnotationLabelSchemaBinding labelSchema,
-			Instant now) {
+	private AnnotationTask(UUID projectId, UUID clipAssetId, String assigneeActorId, String createdBy,
+			String idempotencyKey, AnnotationLabelSchemaBinding labelSchema, Instant now) {
 		this.annotationTaskId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.clipAssetId = clipAssetId;
@@ -78,22 +72,9 @@ class AnnotationTask {
 		this.updatedAt = now;
 	}
 
-	static AnnotationTask create(
-			UUID projectId,
-			UUID clipAssetId,
-			String assigneeActorId,
-			String createdBy,
-			String idempotencyKey,
-			AnnotationLabelSchemaBinding labelSchema,
-			Instant now) {
-		return new AnnotationTask(
-				projectId,
-				clipAssetId,
-				assigneeActorId,
-				createdBy,
-				idempotencyKey,
-				labelSchema,
-				now);
+	static AnnotationTask create(UUID projectId, UUID clipAssetId, String assigneeActorId, String createdBy,
+			String idempotencyKey, AnnotationLabelSchemaBinding labelSchema, Instant now) {
+		return new AnnotationTask(projectId, clipAssetId, assigneeActorId, createdBy, idempotencyKey, labelSchema, now);
 	}
 
 	boolean matchesCreationRequest(UUID clipAssetId, String assigneeActorId) {
@@ -146,10 +127,8 @@ class AnnotationTask {
 
 	void submit(Instant now) {
 		if (this.status != AnnotationTaskStatus.ASSIGNED) {
-			throw new AnnotationTaskException(
-					"ANNOTATION_TASK_ALREADY_SUBMITTED",
-					"The annotation task has already been submitted.",
-					409);
+			throw new AnnotationTaskException("ANNOTATION_TASK_ALREADY_SUBMITTED",
+					"The annotation task has already been submitted.", 409);
 		}
 		this.status = AnnotationTaskStatus.SUBMITTED;
 		this.updatedAt = now;
@@ -157,10 +136,8 @@ class AnnotationTask {
 
 	void returnForRework(Instant now) {
 		if (this.status != AnnotationTaskStatus.SUBMITTED) {
-			throw new AnnotationTaskException(
-					"ANNOTATION_TASK_NOT_SUBMITTED",
-					"Only a submitted annotation task can be returned for rework.",
-					409);
+			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_SUBMITTED",
+					"Only a submitted annotation task can be returned for rework.", 409);
 		}
 		this.status = AnnotationTaskStatus.ASSIGNED;
 		this.updatedAt = now;
@@ -168,18 +145,17 @@ class AnnotationTask {
 
 	void complete(Instant now) {
 		if (this.status != AnnotationTaskStatus.SUBMITTED) {
-			throw new AnnotationTaskException(
-					"ANNOTATION_TASK_NOT_SUBMITTED",
-					"Only a submitted annotation task can be completed.",
-					409);
+			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_SUBMITTED",
+					"Only a submitted annotation task can be completed.", 409);
 		}
 		this.status = AnnotationTaskStatus.COMPLETED;
 		this.updatedAt = now;
 	}
+
 }
 
 enum AnnotationTaskStatus {
-	ASSIGNED,
-	SUBMITTED,
-	COMPLETED
+
+	ASSIGNED, SUBMITTED, COMPLETED
+
 }

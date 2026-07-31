@@ -14,10 +14,8 @@ import jakarta.persistence.LockModeType;
 
 interface AnnotationRevisionRepository extends JpaRepository<AnnotationRevision, UUID> {
 
-	Optional<AnnotationRevision> findByAnnotationTaskIdAndSubmittedByAndIdempotencyKey(
-			UUID annotationTaskId,
-			String submittedBy,
-			String idempotencyKey);
+	Optional<AnnotationRevision> findByAnnotationTaskIdAndSubmittedByAndIdempotencyKey(UUID annotationTaskId,
+			String submittedBy, String idempotencyKey);
 
 	List<AnnotationRevision> findAllByAnnotationTaskIdIn(Collection<UUID> annotationTaskIds);
 
@@ -30,7 +28,7 @@ interface AnnotationRevisionRepository extends JpaRepository<AnnotationRevision,
 			select revision from AnnotationRevision revision
 			where revision.projectId = :projectId and revision.annotationRevisionId = :annotationRevisionId
 			""")
-	Optional<AnnotationRevision> findForUpdate(
-			@Param("projectId") UUID projectId,
+	Optional<AnnotationRevision> findForUpdate(@Param("projectId") UUID projectId,
 			@Param("annotationRevisionId") UUID annotationRevisionId);
+
 }

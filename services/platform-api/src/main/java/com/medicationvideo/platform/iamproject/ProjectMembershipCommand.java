@@ -60,13 +60,8 @@ class ProjectMembershipCommand {
 	protected ProjectMembershipCommand() {
 	}
 
-	private ProjectMembershipCommand(
-			UUID projectId,
-			String performedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			MembershipCommandType commandType,
-			ProjectMembership result,
+	private ProjectMembershipCommand(UUID projectId, String performedBy, String idempotencyKey,
+			String requestFingerprint, MembershipCommandType commandType, ProjectMembership result,
 			Instant completedAt) {
 		this.commandId = UUID.randomUUID();
 		this.projectId = projectId;
@@ -83,22 +78,11 @@ class ProjectMembershipCommand {
 		this.completedAt = completedAt;
 	}
 
-	static ProjectMembershipCommand completed(
-			UUID projectId,
-			String performedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			MembershipCommandType commandType,
-			ProjectMembership result,
+	static ProjectMembershipCommand completed(UUID projectId, String performedBy, String idempotencyKey,
+			String requestFingerprint, MembershipCommandType commandType, ProjectMembership result,
 			Instant completedAt) {
-		return new ProjectMembershipCommand(
-				projectId,
-				performedBy,
-				idempotencyKey,
-				requestFingerprint,
-				commandType,
-				result,
-				completedAt);
+		return new ProjectMembershipCommand(projectId, performedBy, idempotencyKey, requestFingerprint, commandType,
+				result, completedAt);
 	}
 
 	String getRequestFingerprint() {
@@ -132,4 +116,5 @@ class ProjectMembershipCommand {
 	Instant getResultUpdatedAt() {
 		return this.resultUpdatedAt;
 	}
+
 }

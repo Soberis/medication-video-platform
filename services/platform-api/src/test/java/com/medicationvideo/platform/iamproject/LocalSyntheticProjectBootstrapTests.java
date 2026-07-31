@@ -24,17 +24,11 @@ class LocalSyntheticProjectBootstrapTests {
 		when(projects.findById(PROJECT_ID)).thenReturn(Optional.empty());
 		when(projects.save(any(DataProject.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(memberships.findByProjectIdAndActorId(PROJECT_ID, "local-synthetic-uploader"))
-				.thenReturn(Optional.empty());
-		when(memberships.findByProjectIdAndActorId(PROJECT_ID, "local-synthetic-admin"))
-				.thenReturn(Optional.empty());
+			.thenReturn(Optional.empty());
+		when(memberships.findByProjectIdAndActorId(PROJECT_ID, "local-synthetic-admin")).thenReturn(Optional.empty());
 
-		LocalSyntheticProjectBootstrap.bootstrap(
-				projects,
-				memberships,
-				true,
-				PROJECT_ID,
-				"synthetic-local-bearer-token-do-not-reuse",
-				"synthetic-local-admin-bearer-token-do-not-reuse");
+		LocalSyntheticProjectBootstrap.bootstrap(projects, memberships, true, PROJECT_ID,
+				"synthetic-local-bearer-token-do-not-reuse", "synthetic-local-admin-bearer-token-do-not-reuse");
 
 		var project = ArgumentCaptor.forClass(DataProject.class);
 		verify(projects).save(project.capture());
@@ -42,10 +36,11 @@ class LocalSyntheticProjectBootstrapTests {
 		assertEquals("本地合成上传验证", project.getValue().getDisplayName());
 		var membership = ArgumentCaptor.forClass(ProjectMembership.class);
 		verify(memberships, org.mockito.Mockito.times(2)).save(membership.capture());
-		assertEquals(
-				java.util.Set.of("local-synthetic-uploader", "local-synthetic-admin"),
-				membership.getAllValues().stream().map(ProjectMembership::getActorId)
-						.collect(java.util.stream.Collectors.toSet()));
+		assertEquals(java.util.Set.of("local-synthetic-uploader", "local-synthetic-admin"),
+				membership.getAllValues()
+					.stream()
+					.map(ProjectMembership::getActorId)
+					.collect(java.util.stream.Collectors.toSet()));
 	}
 
 	@Test
@@ -53,15 +48,11 @@ class LocalSyntheticProjectBootstrapTests {
 		var projects = mock(DataProjectRepository.class);
 		var memberships = mock(ProjectMembershipRepository.class);
 
-		LocalSyntheticProjectBootstrap.bootstrap(
-				projects,
-				memberships,
-				false,
-				PROJECT_ID,
-				"synthetic-local-bearer-token-do-not-reuse",
-				"synthetic-local-admin-bearer-token-do-not-reuse");
+		LocalSyntheticProjectBootstrap.bootstrap(projects, memberships, false, PROJECT_ID,
+				"synthetic-local-bearer-token-do-not-reuse", "synthetic-local-admin-bearer-token-do-not-reuse");
 
 		verify(projects, never()).findById(any());
 		verify(memberships, never()).findByProjectIdAndActorId(any(), any());
 	}
+
 }

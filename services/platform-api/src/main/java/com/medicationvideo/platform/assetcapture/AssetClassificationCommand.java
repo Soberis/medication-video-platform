@@ -58,19 +58,10 @@ class AssetClassificationCommand {
 	protected AssetClassificationCommand() {
 	}
 
-	private AssetClassificationCommand(
-			UUID projectId,
-			String performedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			AssetClassificationCommandType commandType,
-			UUID resultFolderId,
-			String resultDisplayName,
-			UUID resultClipAssetId,
-			long resultResourceVersion,
-			Instant resultCreatedAt,
-			Instant resultUpdatedAt,
-			Instant completedAt) {
+	private AssetClassificationCommand(UUID projectId, String performedBy, String idempotencyKey,
+			String requestFingerprint, AssetClassificationCommandType commandType, UUID resultFolderId,
+			String resultDisplayName, UUID resultClipAssetId, long resultResourceVersion, Instant resultCreatedAt,
+			Instant resultUpdatedAt, Instant completedAt) {
 		this.commandId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.performedBy = performedBy;
@@ -86,48 +77,18 @@ class AssetClassificationCommand {
 		this.completedAt = completedAt;
 	}
 
-	static AssetClassificationCommand forFolder(
-			AssetFolder folder,
-			String performedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			AssetClassificationCommandType commandType,
-			Instant completedAt) {
-		return new AssetClassificationCommand(
-				folder.getProjectId(),
-				performedBy,
-				idempotencyKey,
-				requestFingerprint,
-				commandType,
-				folder.getFolderId(),
-				folder.getDisplayName(),
-				null,
-				folder.getRowVersion(),
-				folder.getCreatedAt(),
-				folder.getUpdatedAt(),
-				completedAt);
+	static AssetClassificationCommand forFolder(AssetFolder folder, String performedBy, String idempotencyKey,
+			String requestFingerprint, AssetClassificationCommandType commandType, Instant completedAt) {
+		return new AssetClassificationCommand(folder.getProjectId(), performedBy, idempotencyKey, requestFingerprint,
+				commandType, folder.getFolderId(), folder.getDisplayName(), null, folder.getRowVersion(),
+				folder.getCreatedAt(), folder.getUpdatedAt(), completedAt);
 	}
 
-	static AssetClassificationCommand forClipAsset(
-			ClipAsset asset,
-			String performedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			AssetClassificationCommandType commandType,
-			Instant completedAt) {
-		return new AssetClassificationCommand(
-				asset.getProjectId(),
-				performedBy,
-				idempotencyKey,
-				requestFingerprint,
-				commandType,
-				asset.getFolderId(),
-				null,
-				asset.getClipAssetId(),
-				asset.getVersion(),
-				null,
-				asset.getUpdatedAt(),
-				completedAt);
+	static AssetClassificationCommand forClipAsset(ClipAsset asset, String performedBy, String idempotencyKey,
+			String requestFingerprint, AssetClassificationCommandType commandType, Instant completedAt) {
+		return new AssetClassificationCommand(asset.getProjectId(), performedBy, idempotencyKey, requestFingerprint,
+				commandType, asset.getFolderId(), null, asset.getClipAssetId(), asset.getVersion(), null,
+				asset.getUpdatedAt(), completedAt);
 	}
 
 	String getRequestFingerprint() {
@@ -165,4 +126,5 @@ class AssetClassificationCommand {
 	Instant getResultUpdatedAt() {
 		return this.resultUpdatedAt;
 	}
+
 }

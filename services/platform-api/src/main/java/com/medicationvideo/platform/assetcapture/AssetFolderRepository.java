@@ -14,6 +14,6 @@ interface AssetFolderRepository extends JpaRepository<AssetFolder, UUID> {
 
 	boolean existsByProjectIdAndDisplayNameIgnoreCase(UUID projectId, String displayName);
 
-	boolean existsByProjectIdAndDisplayNameIgnoreCaseAndFolderIdNot(
-			UUID projectId, String displayName, UUID folderId);
+	boolean existsByProjectIdAndDisplayNameIgnoreCaseAndFolderIdNot(UUID projectId, String displayName, UUID folderId);
+
 }

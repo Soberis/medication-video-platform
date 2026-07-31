@@ -1,9 +1,6 @@
 package com.medicationvideo.platform.assetcapture;
 
-record UploadCleanupBacklogSnapshot(
-		long pendingTasks,
-		long runningTasks,
-		long failedTasks,
+record UploadCleanupBacklogSnapshot(long pendingTasks, long runningTasks, long failedTasks,
 		long oldestActionableAgeSeconds) {
 
 	static UploadCleanupBacklogSnapshot empty() {

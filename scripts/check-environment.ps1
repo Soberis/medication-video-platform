@@ -57,6 +57,12 @@ Write-CheckResult 'Docker engine' ([bool]$dockerServer) ($dockerServer ? $docker
 $compose = Get-FirstOutputLine { docker compose version --short }
 Write-CheckResult 'Docker Compose' ([bool]$compose) ($compose ? $compose : 'not found')
 
+$ffmpeg = Get-FirstOutputLine { ffmpeg -version }
+Write-CheckResult 'FFmpeg' ($ffmpeg -match '^ffmpeg version\s+') ($ffmpeg ? $ffmpeg : 'not found')
+
+$ffprobe = Get-FirstOutputLine { ffprobe -version }
+Write-CheckResult 'FFprobe' ($ffprobe -match '^ffprobe version\s+') ($ffprobe ? $ffprobe : 'not found')
+
 if ($failures.Count -gt 0) {
     Write-Host "`nEnvironment check failed:" -ForegroundColor Red
     $failures | ForEach-Object { Write-Host "- $_" -ForegroundColor Red }

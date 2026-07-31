@@ -124,13 +124,13 @@ def test_builds_byte_identical_v2_golden_package(tmp_path: Path) -> None:
             '{"label_schema_id":"00000000-0000-0000-0000-000000000209",'
             '"labels":[{"description":"合成测试标签","display_name":"准备药品",'
             '"label_id":"prepare_dose","label_type":"PRIMARY_STEP","sort_order":1}],'
-            f'"schema_digest":"{'d' * 64}","schema_key":"p0-primary-step",'
+            f'"schema_digest":"{"d" * 64}","schema_key":"p0-primary-step",'
             '"schema_version":"v1"}\n'
         ).encode(),
         "manifest.jsonl": (
             '{"capture_session_id":"00000000-0000-0000-0000-000000000207",'
             '"split":"pilot","streams":[{'
-            f'"annotation_document_sha256":"{'c' * 64}",'
+            f'"annotation_document_sha256":"{"c" * 64}",'
             '"annotation_revision_id":"00000000-0000-0000-0000-000000000208",'
             '"camera_index":0,'
             '"camera_stream_id":"00000000-0000-0000-0000-000000000205",'
@@ -140,7 +140,7 @@ def test_builds_byte_identical_v2_golden_package(tmp_path: Path) -> None:
             "}]}\n"
         ).encode(),
         "action_segments.jsonl": (
-            f'{{"annotation_document_sha256":"{'c' * 64}",'
+            f'{{"annotation_document_sha256":"{"c" * 64}",'
             '"annotation_revision_id":"00000000-0000-0000-0000-000000000208",'
             '"annotation_schema_version":"annotation-document.v1",'
             '"camera_stream_id":"00000000-0000-0000-0000-000000000205",'

@@ -135,4 +135,5 @@ class AuditEvent {
 	String getRequestId() {
 		return this.requestId;
 	}
+
 }

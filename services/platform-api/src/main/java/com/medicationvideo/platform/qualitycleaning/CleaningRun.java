@@ -44,10 +44,7 @@ class CleaningRun {
 	private String inputFingerprint;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(
-			name = "cleaning_rule_set_id",
-			referencedColumnName = "cleaning_rule_set_id",
-			insertable = false,
+	@JoinColumn(name = "cleaning_rule_set_id", referencedColumnName = "cleaning_rule_set_id", insertable = false,
 			updatable = false)
 	private CleaningRuleSet ruleSet;
 
@@ -96,10 +93,7 @@ class CleaningRun {
 	protected CleaningRun() {
 	}
 
-	private CleaningRun(
-			PostCleaningService.EvaluationCommand command,
-			CleaningRuleSet ruleSet,
-			String inputFingerprint,
+	private CleaningRun(PostCleaningService.EvaluationCommand command, CleaningRuleSet ruleSet, String inputFingerprint,
 			Instant evaluatedAt) {
 		this.cleaningRunId = UUID.randomUUID();
 		this.projectId = command.projectId();
@@ -127,11 +121,8 @@ class CleaningRun {
 		this.completedAt = evaluatedAt;
 	}
 
-	static CleaningRun complete(
-			PostCleaningService.EvaluationCommand command,
-			CleaningRuleSet ruleSet,
-			String inputFingerprint,
-			Instant evaluatedAt) {
+	static CleaningRun complete(PostCleaningService.EvaluationCommand command, CleaningRuleSet ruleSet,
+			String inputFingerprint, Instant evaluatedAt) {
 		return new CleaningRun(command, ruleSet, inputFingerprint, evaluatedAt);
 	}
 
@@ -162,4 +153,5 @@ class CleaningRun {
 	Instant getCompletedAt() {
 		return this.completedAt;
 	}
+
 }

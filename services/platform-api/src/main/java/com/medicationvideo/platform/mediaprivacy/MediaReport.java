@@ -14,10 +14,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * Immutable accepted media-probe report. Failed probe diagnostics belong to the job attempt and
- * result envelope; a MediaReport exists only after input digest and full-stream decode checks have
- * succeeded. Timing fields preserve rational media time instead of deriving timestamps from a
- * floating-point FPS value.
+ * Immutable accepted media-probe report. Failed probe diagnostics belong to the job
+ * attempt and result envelope; a MediaReport exists only after input digest and
+ * full-stream decode checks have succeeded. Timing fields preserve rational media time
+ * instead of deriving timestamps from a floating-point FPS value.
  */
 @Immutable
 @Entity
@@ -188,14 +188,10 @@ class MediaReport {
 		this.createdAt = createdAt;
 	}
 
-	static MediaReport accept(
-			MediaJob job, MediaReportPayload payload, String softwareDigest, Instant createdAt) {
-		if (!Boolean.TRUE.equals(payload.decodeVerified())
-				|| !Boolean.TRUE.equals(payload.inputDigestVerified())) {
-			throw new MediaJobExecutionException(
-					"MEDIA_REPORT_VERIFICATION_REQUIRED",
-					"A successful media report must prove digest and full decode verification.",
-					false);
+	static MediaReport accept(MediaJob job, MediaReportPayload payload, String softwareDigest, Instant createdAt) {
+		if (!Boolean.TRUE.equals(payload.decodeVerified()) || !Boolean.TRUE.equals(payload.inputDigestVerified())) {
+			throw new MediaJobExecutionException("MEDIA_REPORT_VERIFICATION_REQUIRED",
+					"A successful media report must prove digest and full decode verification.", false);
 		}
 		return new MediaReport(job, payload, softwareDigest, createdAt);
 	}
@@ -355,4 +351,5 @@ class MediaReport {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }

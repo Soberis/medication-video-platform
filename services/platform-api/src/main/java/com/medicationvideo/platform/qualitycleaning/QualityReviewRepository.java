@@ -23,7 +23,6 @@ interface QualityReviewRepository extends JpaRepository<QualityReview, UUID> {
 			SELECT review FROM QualityReview review
 			WHERE review.projectId = :projectId AND review.clipAssetId = :clipAssetId
 			""")
-	Optional<QualityReview> findForUpdate(
-			@Param("projectId") UUID projectId,
-			@Param("clipAssetId") UUID clipAssetId);
+	Optional<QualityReview> findForUpdate(@Param("projectId") UUID projectId, @Param("clipAssetId") UUID clipAssetId);
+
 }

@@ -30,51 +30,42 @@ class MediaWorkerController {
 	}
 
 	@PostMapping("/{mediaJobId}/attempts/{attempt}/lease")
-	ResponseEntity<MediaLeaseResponse> acquire(
-			@PathVariable UUID mediaJobId,
-			@PathVariable @Min(1) int attempt,
-			@RequestHeader(name = "X-Media-Lease-Token")
-			@Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
-			@RequestBody @Valid MediaLeaseRequest request,
-			Authentication authentication) {
+	ResponseEntity<MediaLeaseResponse> acquire(@PathVariable UUID mediaJobId, @PathVariable @Min(1) int attempt,
+			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
+			@RequestBody @Valid MediaLeaseRequest request, Authentication authentication) {
 		requireWorker(authentication);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.service.acquire(mediaJobId, attempt, leaseToken, request));
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.acquire(mediaJobId, attempt, leaseToken, request));
 	}
 
 	@PostMapping("/{mediaJobId}/attempts/{attempt}/heartbeat")
-	ResponseEntity<MediaHeartbeatResponse> heartbeat(
-			@PathVariable UUID mediaJobId,
-			@PathVariable @Min(1) int attempt,
-			@RequestHeader(name = "X-Media-Lease-Token")
-			@Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
-			@RequestBody @Valid MediaLeaseRequest request,
-			Authentication authentication) {
+	ResponseEntity<MediaHeartbeatResponse> heartbeat(@PathVariable UUID mediaJobId, @PathVariable @Min(1) int attempt,
+			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
+			@RequestBody @Valid MediaLeaseRequest request, Authentication authentication) {
 		requireWorker(authentication);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.service.heartbeat(mediaJobId, attempt, leaseToken, request));
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.heartbeat(mediaJobId, attempt, leaseToken, request));
 	}
 
 	@PutMapping("/{mediaJobId}/attempts/{attempt}/result")
-	ResponseEntity<MediaResultAcceptedResponse> acceptResult(
-			@PathVariable UUID mediaJobId,
+	ResponseEntity<MediaResultAcceptedResponse> acceptResult(@PathVariable UUID mediaJobId,
 			@PathVariable @Min(1) int attempt,
-			@RequestHeader(name = "X-Media-Lease-Token")
-			@Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
-			@RequestBody @Valid MediaProbeResultRequest request,
-			Authentication authentication) {
+			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
+			@RequestBody @Valid MediaProbeResultRequest request, Authentication authentication) {
 		requireWorker(authentication);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.service.acceptResult(mediaJobId, attempt, leaseToken, request));
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.acceptResult(mediaJobId, attempt, leaseToken, request));
 	}
 
 	private static void requireWorker(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof MediaWorkerActor)) {
+		if (authentication == null || authentication.getAuthorities()
+			.stream()
+			.noneMatch(authority -> authority.getAuthority().equals("ROLE_MEDIA_WORKER"))) {
 			throw new MediaJobAuthorizationException();
 		}
 	}
+
 }

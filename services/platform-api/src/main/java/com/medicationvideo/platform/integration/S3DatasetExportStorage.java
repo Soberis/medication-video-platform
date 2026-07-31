@@ -31,25 +31,23 @@ class S3DatasetExportStorage implements DatasetExportStoragePort {
 
 	@Override
 	public List<StoredPart> listParts(CreatedUpload upload) {
-		return this.storage.listParts(to(upload)).stream()
-				.map(part -> new StoredPart(part.partNumber(), part.sizeBytes(), part.eTag()))
-				.toList();
+		return this.storage.listParts(to(upload))
+			.stream()
+			.map(part -> new StoredPart(part.partNumber(), part.sizeBytes(), part.eTag()))
+			.toList();
 	}
 
 	@Override
 	public Optional<CompletedObject> findCompletedObject(CreatedUpload upload) {
 		return this.storage.findCompletedObject(to(upload))
-				.map(value -> new CompletedObject(value.sizeBytes(), value.eTag()));
+			.map(value -> new CompletedObject(value.sizeBytes(), value.eTag()));
 	}
 
 	@Override
 	public CompletedObject complete(CreatedUpload upload, List<StoredPart> parts) {
-		var completed = this.storage.complete(
-				to(upload),
-				parts.stream()
-						.map(part -> new MultipartObjectStorage.StoredPart(
-								part.partNumber(), part.sizeBytes(), part.eTag()))
-						.toList());
+		var completed = this.storage.complete(to(upload), parts.stream()
+			.map(part -> new MultipartObjectStorage.StoredPart(part.partNumber(), part.sizeBytes(), part.eTag()))
+			.toList());
 		return new CompletedObject(completed.sizeBytes(), completed.eTag());
 	}
 
@@ -60,9 +58,8 @@ class S3DatasetExportStorage implements DatasetExportStoragePort {
 
 	@Override
 	public URI authorizeRead(ObjectReference object, Duration lifetime) {
-		return this.storage.authorizeRead(
-				new MultipartObjectStorage.ObjectReference(object.bucket(), object.objectKey()),
-				lifetime);
+		return this.storage
+			.authorizeRead(new MultipartObjectStorage.ObjectReference(object.bucket(), object.objectKey()), lifetime);
 	}
 
 	@Override
@@ -72,8 +69,7 @@ class S3DatasetExportStorage implements DatasetExportStoragePort {
 
 	@Override
 	public void delete(ObjectReference object) {
-		this.storage.delete(new MultipartObjectStorage.ObjectReference(
-				object.bucket(), object.objectKey()));
+		this.storage.delete(new MultipartObjectStorage.ObjectReference(object.bucket(), object.objectKey()));
 	}
 
 	private static CreatedUpload from(MultipartObjectStorage.CreatedUpload upload) {
@@ -81,7 +77,7 @@ class S3DatasetExportStorage implements DatasetExportStoragePort {
 	}
 
 	private static MultipartObjectStorage.CreatedUpload to(CreatedUpload upload) {
-		return new MultipartObjectStorage.CreatedUpload(
-				upload.bucket(), upload.objectKey(), upload.uploadId());
+		return new MultipartObjectStorage.CreatedUpload(upload.bucket(), upload.objectKey(), upload.uploadId());
 	}
+
 }

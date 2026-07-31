@@ -11,14 +11,14 @@ import org.springframework.data.repository.query.Param;
 
 interface DatasetVersionRepository extends JpaRepository<DatasetVersion, UUID> {
 
-	Optional<DatasetVersion> findByProjectIdAndCreatedByAndIdempotencyKey(
-			UUID projectId, String createdBy, String idempotencyKey);
+	Optional<DatasetVersion> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
+			String idempotencyKey);
 
-	Optional<DatasetVersion> findByProjectIdAndBuildStartedByAndBuildStartIdempotencyKey(
-			UUID projectId, String buildStartedBy, String buildStartIdempotencyKey);
+	Optional<DatasetVersion> findByProjectIdAndBuildStartedByAndBuildStartIdempotencyKey(UUID projectId,
+			String buildStartedBy, String buildStartIdempotencyKey);
 
-	Optional<DatasetVersion> findByProjectIdAndFrozenByAndFreezeIdempotencyKey(
-			UUID projectId, String frozenBy, String freezeIdempotencyKey);
+	Optional<DatasetVersion> findByProjectIdAndFrozenByAndFreezeIdempotencyKey(UUID projectId, String frozenBy,
+			String freezeIdempotencyKey);
 
 	Optional<DatasetVersion> findByProjectIdAndDatasetVersionId(UUID projectId, UUID datasetVersionId);
 
@@ -40,9 +40,7 @@ interface DatasetVersionRepository extends JpaRepository<DatasetVersion, UUID> {
 			ORDER BY created_at DESC, dataset_version_id DESC
 			LIMIT :limit
 			""", nativeQuery = true)
-	List<DatasetVersion> findPageAfter(
-			@Param("projectId") UUID projectId,
-			@Param("createdAt") Instant createdAt,
-			@Param("datasetVersionId") UUID datasetVersionId,
-			@Param("limit") int limit);
+	List<DatasetVersion> findPageAfter(@Param("projectId") UUID projectId, @Param("createdAt") Instant createdAt,
+			@Param("datasetVersionId") UUID datasetVersionId, @Param("limit") int limit);
+
 }

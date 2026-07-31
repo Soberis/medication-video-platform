@@ -11,36 +11,18 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-record MediaReportPayload(
-		@NotBlank @Size(max = 64) String containerFormat,
-		@NotNull @Min(0) Long durationMicroseconds,
-		Long containerStartTimeMicroseconds,
-		@NotNull @Min(1) Integer videoStreamCount,
-		@NotNull @Min(0) Integer primaryVideoStreamIndex,
-		@NotBlank @Size(max = 64) String videoCodec,
-		@Size(max = 64) String videoProfile,
-		@NotNull @Min(1) Integer width,
-		@NotNull @Min(1) Integer height,
-		@Size(max = 64) String pixelFormat,
-		@Size(max = 64) String colorSpace,
-		@Min(0) Long primaryVideoBitrateBps,
-		@JsonProperty("has_b_frames") Boolean hasBFrames,
-		Long streamStartTimeMicroseconds,
-		@NotNull @Min(1) Integer timeBaseNumerator,
-		@NotNull @Min(1) Integer timeBaseDenominator,
-		Long firstPts,
-		Long lastPts,
-		@Min(0) Integer nominalFrameRateNumerator,
-		@Min(1) Integer nominalFrameRateDenominator,
-		@Min(0) Integer averageFrameRateNumerator,
-		@Min(1) Integer averageFrameRateDenominator,
-		@Min(0) Long frameCount,
-		@NotNull Boolean variableFrameRate,
-		@NotNull @Min(0) Integer audioStreamCount,
-		@Min(1) Integer sampleAspectRatioNumerator,
-		@Min(1) Integer sampleAspectRatioDenominator,
-		@NotNull @AssertTrue Boolean decodeVerified,
-		@NotNull @AssertTrue Boolean inputDigestVerified,
+record MediaReportPayload(@NotBlank @Size(max = 64) String containerFormat, @NotNull @Min(0) Long durationMicroseconds,
+		Long containerStartTimeMicroseconds, @NotNull @Min(1) Integer videoStreamCount,
+		@NotNull @Min(0) Integer primaryVideoStreamIndex, @NotBlank @Size(max = 64) String videoCodec,
+		@Size(max = 64) String videoProfile, @NotNull @Min(1) Integer width, @NotNull @Min(1) Integer height,
+		@Size(max = 64) String pixelFormat, @Size(max = 64) String colorSpace, @Min(0) Long primaryVideoBitrateBps,
+		@JsonProperty("has_b_frames") Boolean hasBFrames, Long streamStartTimeMicroseconds,
+		@NotNull @Min(1) Integer timeBaseNumerator, @NotNull @Min(1) Integer timeBaseDenominator, Long firstPts,
+		Long lastPts, @Min(0) Integer nominalFrameRateNumerator, @Min(1) Integer nominalFrameRateDenominator,
+		@Min(0) Integer averageFrameRateNumerator, @Min(1) Integer averageFrameRateDenominator, @Min(0) Long frameCount,
+		@NotNull Boolean variableFrameRate, @NotNull @Min(0) Integer audioStreamCount,
+		@Min(1) Integer sampleAspectRatioNumerator, @Min(1) Integer sampleAspectRatioDenominator,
+		@NotNull @AssertTrue Boolean decodeVerified, @NotNull @AssertTrue Boolean inputDigestVerified,
 		@NotNull @Size(max = 6) List<@NotNull MediaProbeWarningCode> warningCodes) {
 
 	MediaReportPayload {
@@ -56,8 +38,7 @@ record MediaReportPayload(
 
 	@AssertTrue(message = "warning_codes must not contain duplicates.")
 	boolean uniqueWarnings() {
-		return this.warningCodes == null
-				|| new HashSet<>(this.warningCodes).size() == this.warningCodes.size();
+		return this.warningCodes == null || new HashSet<>(this.warningCodes).size() == this.warningCodes.size();
 	}
 
 	@AssertTrue(message = "primary_video_stream_index must identify an existing video stream.")

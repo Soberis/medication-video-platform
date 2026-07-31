@@ -12,15 +12,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 class UploadMultipartService {
 
 	private final UploadBatchRepository batchRepository;
+
 	private final UploadFileRepository fileRepository;
+
 	private final MultipartObjectStorage objectStorage;
+
 	private final TransactionTemplate transactionTemplate;
 
-	UploadMultipartService(
-			UploadBatchRepository batchRepository,
-			UploadFileRepository fileRepository,
-			MultipartObjectStorage objectStorage,
-			TransactionTemplate transactionTemplate) {
+	UploadMultipartService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
+			MultipartObjectStorage objectStorage, TransactionTemplate transactionTemplate) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.objectStorage = objectStorage;
@@ -32,9 +32,9 @@ class UploadMultipartService {
 		try {
 			var file = this.transactionTemplate.execute(status -> {
 				var batch = this.batchRepository.findForFileRegistration(batchId, projectId)
-						.orElseThrow(UploadBatchNotFoundException::new);
+					.orElseThrow(UploadBatchNotFoundException::new);
 				var uploadFile = this.fileRepository.findForUploadCommand(batchId, clientFileId)
-						.orElseThrow(UploadFileNotFoundException::new);
+					.orElseThrow(UploadFileNotFoundException::new);
 				var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 				requireActiveBatch(batch, now);
 				requireCompleteManifest(batch);
@@ -43,10 +43,7 @@ class UploadMultipartService {
 					return uploadFile;
 				}
 
-				var objectKey = "projects/%s/uploads/%s/%s".formatted(
-						projectId,
-						batchId,
-						uploadFile.getUploadFileId());
+				var objectKey = "projects/%s/uploads/%s/%s".formatted(projectId, batchId, uploadFile.getUploadFileId());
 				var created = this.objectStorage.create(objectKey, uploadFile.getContentType());
 				createdUpload.set(created);
 				uploadFile.attachMultipartSession(created, now);
@@ -70,8 +67,7 @@ class UploadMultipartService {
 		var fileCount = this.fileRepository.countByBatchId(batch.getBatchId());
 		var totalSize = this.fileRepository.sumSizeBytesByBatchId(batch.getBatchId());
 		if (fileCount != batch.getFileCount() || totalSize != batch.getTotalSizeBytes()) {
-			throw new UploadMultipartException(
-					"UPLOAD_BATCH_MANIFEST_INCOMPLETE",
+			throw new UploadMultipartException("UPLOAD_BATCH_MANIFEST_INCOMPLETE",
 					"Every declared file must be registered before multipart upload starts.");
 		}
 	}
@@ -80,16 +76,13 @@ class UploadMultipartService {
 		if (!batch.getExpiresAt().isAfter(now)) {
 			throw new UploadMultipartException("UPLOAD_BATCH_EXPIRED", "The upload batch has expired.");
 		}
-		if (batch.getStatus() != UploadBatchStatus.INITIATED
-				&& batch.getStatus() != UploadBatchStatus.UPLOADING) {
-			throw new UploadMultipartException(
-					"UPLOAD_BATCH_NOT_UPLOADABLE",
+		if (batch.getStatus() != UploadBatchStatus.INITIATED && batch.getStatus() != UploadBatchStatus.UPLOADING) {
+			throw new UploadMultipartException("UPLOAD_BATCH_NOT_UPLOADABLE",
 					"The upload batch does not accept multipart operations.");
 		}
 	}
 
-	private void abortAfterFailedPersistence(
-			MultipartObjectStorage.CreatedUpload createdUpload,
+	private void abortAfterFailedPersistence(MultipartObjectStorage.CreatedUpload createdUpload,
 			RuntimeException originalFailure) {
 		if (createdUpload == null || originalFailure instanceof MultipartObjectStorageException) {
 			return;
@@ -101,4 +94,5 @@ class UploadMultipartService {
 			originalFailure.addSuppressed(abortFailure);
 		}
 	}
+
 }

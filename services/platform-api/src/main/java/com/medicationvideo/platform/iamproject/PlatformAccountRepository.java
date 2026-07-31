@@ -11,4 +11,5 @@ interface PlatformAccountRepository extends JpaRepository<PlatformAccount, UUID>
 	Optional<PlatformAccount> findByUsername(String username);
 
 	List<PlatformAccount> findAllByOrderByUsernameAsc();
+
 }

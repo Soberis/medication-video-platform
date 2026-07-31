@@ -9,19 +9,16 @@ class DatasetExportProfileTests {
 
 	@Test
 	void acceptsOnlyApprovedProfilePairs() {
-		assertTrue(DatasetExportProfile.isApproved(
-				DatasetExportProfile.CURRENT_KEY,
-				DatasetExportProfile.CURRENT_DIGEST));
-		assertTrue(DatasetExportProfile.isApproved(
-				DatasetExportProfile.LEGACY_V1_KEY,
+		assertTrue(
+				DatasetExportProfile.isApproved(DatasetExportProfile.CURRENT_KEY, DatasetExportProfile.CURRENT_DIGEST));
+		assertTrue(DatasetExportProfile.isApproved(DatasetExportProfile.LEGACY_V1_KEY,
 				DatasetExportProfile.LEGACY_V1_DIGEST));
 
-		assertFalse(DatasetExportProfile.isApproved(
-				DatasetExportProfile.CURRENT_KEY,
+		assertFalse(DatasetExportProfile.isApproved(DatasetExportProfile.CURRENT_KEY,
 				DatasetExportProfile.LEGACY_V1_DIGEST));
-		assertFalse(DatasetExportProfile.isApproved(
-				DatasetExportProfile.LEGACY_V1_KEY,
+		assertFalse(DatasetExportProfile.isApproved(DatasetExportProfile.LEGACY_V1_KEY,
 				DatasetExportProfile.CURRENT_DIGEST));
 		assertFalse(DatasetExportProfile.isApproved("p0-dataset-export-v3", "0".repeat(64)));
 	}
+
 }

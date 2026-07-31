@@ -19,32 +19,31 @@ class S3ObjectStorageConfiguration {
 	@Bean
 	S3Client s3Client(S3ObjectStorageProperties properties) {
 		return S3Client.builder()
-				.endpointOverride(properties.endpoint())
-				.region(Region.of(properties.region()))
-				.credentialsProvider(credentials(properties))
-				.serviceConfiguration(serviceConfiguration(properties))
-				.httpClientBuilder(UrlConnectionHttpClient.builder())
-				.build();
+			.endpointOverride(properties.endpoint())
+			.region(Region.of(properties.region()))
+			.credentialsProvider(credentials(properties))
+			.serviceConfiguration(serviceConfiguration(properties))
+			.httpClientBuilder(UrlConnectionHttpClient.builder())
+			.build();
 	}
 
 	@Bean
 	S3Presigner s3Presigner(S3ObjectStorageProperties properties) {
 		return S3Presigner.builder()
-				.endpointOverride(properties.endpoint())
-				.region(Region.of(properties.region()))
-				.credentialsProvider(credentials(properties))
-				.serviceConfiguration(serviceConfiguration(properties))
-				.build();
+			.endpointOverride(properties.endpoint())
+			.region(Region.of(properties.region()))
+			.credentialsProvider(credentials(properties))
+			.serviceConfiguration(serviceConfiguration(properties))
+			.build();
 	}
 
 	private static StaticCredentialsProvider credentials(S3ObjectStorageProperties properties) {
-		return StaticCredentialsProvider.create(
-				AwsBasicCredentials.create(properties.accessKey(), properties.secretKey()));
+		return StaticCredentialsProvider
+			.create(AwsBasicCredentials.create(properties.accessKey(), properties.secretKey()));
 	}
 
 	private static S3Configuration serviceConfiguration(S3ObjectStorageProperties properties) {
-		return S3Configuration.builder()
-				.pathStyleAccessEnabled(properties.pathStyleAccess())
-				.build();
+		return S3Configuration.builder().pathStyleAccessEnabled(properties.pathStyleAccess()).build();
 	}
+
 }

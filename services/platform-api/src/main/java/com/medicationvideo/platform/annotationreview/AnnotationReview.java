@@ -43,14 +43,8 @@ class AnnotationReview {
 	protected AnnotationReview() {
 	}
 
-	private AnnotationReview(
-			UUID projectId,
-			UUID annotationRevisionId,
-			AnnotationReviewDecision decision,
-			String reviewNote,
-			String reviewedBy,
-			String idempotencyKey,
-			Instant reviewedAt) {
+	private AnnotationReview(UUID projectId, UUID annotationRevisionId, AnnotationReviewDecision decision,
+			String reviewNote, String reviewedBy, String idempotencyKey, Instant reviewedAt) {
 		this.annotationReviewId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.annotationRevisionId = annotationRevisionId;
@@ -61,21 +55,10 @@ class AnnotationReview {
 		this.reviewedAt = reviewedAt;
 	}
 
-	static AnnotationReview record(
-			AnnotationRevision revision,
-			AnnotationReviewDecision decision,
-			String reviewNote,
-			String reviewedBy,
-			String idempotencyKey,
-			Instant reviewedAt) {
-		return new AnnotationReview(
-				revision.getProjectId(),
-				revision.getAnnotationRevisionId(),
-				decision,
-				reviewNote,
-				reviewedBy,
-				idempotencyKey,
-				reviewedAt);
+	static AnnotationReview record(AnnotationRevision revision, AnnotationReviewDecision decision, String reviewNote,
+			String reviewedBy, String idempotencyKey, Instant reviewedAt) {
+		return new AnnotationReview(revision.getProjectId(), revision.getAnnotationRevisionId(), decision, reviewNote,
+				reviewedBy, idempotencyKey, reviewedAt);
 	}
 
 	UUID getAnnotationReviewId() {
@@ -110,9 +93,11 @@ class AnnotationReview {
 		var normalizedNote = reviewNote == null || reviewNote.isBlank() ? null : reviewNote.trim();
 		return this.decision == decision && java.util.Objects.equals(this.reviewNote, normalizedNote);
 	}
+
 }
 
 enum AnnotationReviewDecision {
-	APPROVED,
-	REJECTED
+
+	APPROVED, REJECTED
+
 }

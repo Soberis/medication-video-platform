@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=local-common.sh
 source "$SCRIPT_DIR/local-common.sh"
 
-skip_worker=false
+start_worker=false
 infrastructure_only=false
 api_startup_timeout_seconds=180
 
@@ -15,7 +15,7 @@ usage() {
 Usage: ./scripts/start-local.sh [options]
 
 Options:
-  --skip-worker          Start only Core API and Web after infrastructure.
+  --worker               Start Media Worker and Export Worker after Core API.
   --infrastructure-only Start only PostgreSQL, RabbitMQ, and S3.
   --api-timeout SECONDS Core API health timeout, from 30 to 600 (default: 180).
   -h, --help             Show this help.
@@ -24,8 +24,8 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --skip-worker)
-            skip_worker=true
+        --worker)
+            start_worker=true
             shift
             ;;
         --infrastructure-only)
@@ -78,7 +78,6 @@ fi
 
 mkdir -p "$LOG_DIRECTORY"
 api_port="${PLATFORM_API_PORT:-8080}"
-web_port="${WEB_PORT:-5173}"
 api_health_uri="http://127.0.0.1:$api_port/actuator/health"
 api_log_path="$LOG_DIRECTORY/api.log"
 
@@ -87,8 +86,6 @@ if $infrastructure_only; then
     exit 0
 fi
 
-require_command node "Core API/Web startup requires Node.js 22." || exit 1
-require_command pnpm "Web startup requires pnpm 11." || exit 1
 require_command java "Core API startup requires Java 21." || exit 1
 
 wait_for_core_api() {
@@ -128,10 +125,10 @@ else
     wait_for_core_api
 fi
 
-if ! $skip_worker; then
+if $start_worker; then
     for command_name in uv ffmpeg ffprobe; do
         require_command "$command_name" \
-            "Full local startup requires $command_name for media processing. Install it or use --skip-worker." || exit 1
+            "Worker startup requires $command_name for media processing." || exit 1
     done
 
     if managed_process_running worker; then
@@ -141,19 +138,22 @@ if ! $skip_worker; then
             worker "Media Worker" "$LOG_DIRECTORY/worker.log" \
             uv run --directory "$PROJECT_ROOT/workers/media-worker" media-worker
     fi
-fi
 
-if tcp_port_in_use "$web_port"; then
-    echo "Web app already listens on $web_port."
-else
-    start_managed_process \
-        web "Web app" "$LOG_DIRECTORY/web.log" \
-        pnpm run web:dev
+    if managed_process_running export-worker; then
+        echo "Export Worker is already managed by this script (PID $(managed_process_pid export-worker))."
+    else
+        start_managed_process \
+            export-worker "Export Worker" "$LOG_DIRECTORY/export-worker.log" \
+            uv run --directory "$PROJECT_ROOT/workers/export-worker" export-worker
+    fi
 fi
 
 echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
-echo "Web app: http://localhost:$web_port"
+echo "Start Web separately: pnpm run web:dev"
+if ! $start_worker; then
+    echo "Start Workers when needed: ./scripts/start-local.sh --worker"
+fi
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

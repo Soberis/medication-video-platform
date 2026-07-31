@@ -31,21 +31,23 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 class S3MultipartCompatibilityTests {
 
-	private static final DockerImageName SEAWEEDFS_IMAGE = DockerImageName.parse(
-			"chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5");
+	private static final DockerImageName SEAWEEDFS_IMAGE = DockerImageName
+		.parse("chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5");
+
 	private static final String ACCESS_KEY = "synthetic-compatibility-access";
+
 	private static final String SECRET_KEY = "synthetic-compatibility-secret";
+
 	private static final String BUCKET = "multipart-compatibility";
 
 	@Test
 	void supportsPresignedUploadCompletionInspectionAndFullSha256() throws Exception {
-		try (var seaweed = new GenericContainer<>(SEAWEEDFS_IMAGE)
-				.withExposedPorts(8333)
-				.withEnv("AWS_ACCESS_KEY_ID", ACCESS_KEY)
-				.withEnv("AWS_SECRET_ACCESS_KEY", SECRET_KEY)
-				.withEnv("S3_BUCKET", BUCKET)
-				.withCommand("mini", "-dir=/data")
-				.waitingFor(Wait.forHttp("/").forPort(8333).forStatusCode(403))) {
+		try (var seaweed = new GenericContainer<>(SEAWEEDFS_IMAGE).withExposedPorts(8333)
+			.withEnv("AWS_ACCESS_KEY_ID", ACCESS_KEY)
+			.withEnv("AWS_SECRET_ACCESS_KEY", SECRET_KEY)
+			.withEnv("S3_BUCKET", BUCKET)
+			.withCommand("mini", "-dir=/data")
+			.waitingFor(Wait.forHttp("/").forPort(8333).forStatusCode(403))) {
 			seaweed.start();
 
 			var endpoint = URI.create("http://" + seaweed.getHost() + ":" + seaweed.getMappedPort(8333));
@@ -53,26 +55,21 @@ class S3MultipartCompatibilityTests {
 			var s3Configuration = S3Configuration.builder().pathStyleAccessEnabled(true).build();
 
 			try (var s3 = S3Client.builder()
-					.endpointOverride(endpoint)
-					.region(Region.US_EAST_1)
-					.credentialsProvider(credentials)
-					.serviceConfiguration(s3Configuration)
-					.httpClient(UrlConnectionHttpClient.create())
-					.build();
-				var presigner = S3Presigner.builder()
+				.endpointOverride(endpoint)
+				.region(Region.US_EAST_1)
+				.credentialsProvider(credentials)
+				.serviceConfiguration(s3Configuration)
+				.httpClient(UrlConnectionHttpClient.create())
+				.build();
+					var presigner = S3Presigner.builder()
 						.endpointOverride(endpoint)
 						.region(Region.US_EAST_1)
 						.credentialsProvider(credentials)
 						.serviceConfiguration(s3Configuration)
 						.build()) {
 				var key = "synthetic/compatibility.bin";
-				var properties = new S3ObjectStorageProperties(
-						endpoint,
-						Region.US_EAST_1.id(),
-						BUCKET,
-						ACCESS_KEY,
-						SECRET_KEY,
-						true);
+				var properties = new S3ObjectStorageProperties(endpoint, Region.US_EAST_1.id(), BUCKET, ACCESS_KEY,
+						SECRET_KEY, true);
 				var storage = new S3MultipartObjectStorage(s3, presigner, properties);
 				var created = storage.create(key, "application/octet-stream");
 				assertFalse(created.uploadId().isBlank());
@@ -80,19 +77,15 @@ class S3MultipartCompatibilityTests {
 				var completed = false;
 
 				try {
-					var syntheticParts = List.of(
-							filledPart(1),
-							filledPart(2),
-							filledPart(3));
+					var syntheticParts = List.of(filledPart(1), filledPart(2), filledPart(3));
 					for (var index = 0; index < syntheticParts.size(); index++) {
 						var partNumber = index + 1;
 						var syntheticPart = syntheticParts.get(index);
-						var request = HttpRequest.newBuilder(storage.authorizePart(
-								created, partNumber, Duration.ofMinutes(5)))
-								.PUT(HttpRequest.BodyPublishers.ofByteArray(syntheticPart))
-								.build();
-						var response = HttpClient.newHttpClient()
-								.send(request, HttpResponse.BodyHandlers.discarding());
+						var request = HttpRequest
+							.newBuilder(storage.authorizePart(created, partNumber, Duration.ofMinutes(5)))
+							.PUT(HttpRequest.BodyPublishers.ofByteArray(syntheticPart))
+							.build();
+						var response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.discarding());
 						assertEquals(200, response.statusCode());
 
 						var part = storage.findPart(created, partNumber).orElseThrow();
@@ -107,28 +100,23 @@ class S3MultipartCompatibilityTests {
 					completed = true;
 					assertEquals(syntheticObject.length, completedObject.sizeBytes());
 					assertEquals(completedObject, storage.findCompletedObject(created).orElseThrow());
-					assertEquals(
-							HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(syntheticObject)),
+					assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(syntheticObject)),
 							storage.calculateSha256(created));
-					assertArrayEquals(
-							syntheticObject,
-							storage.readCompletedObject(
-									new ObjectReference(BUCKET, key),
-									syntheticObject.length));
-					var readRequest = HttpRequest.newBuilder(storage.authorizeRead(
-							new ObjectReference(BUCKET, key), Duration.ofMinutes(5)))
-							.GET()
-							.build();
+					assertArrayEquals(syntheticObject,
+							storage.readCompletedObject(new ObjectReference(BUCKET, key), syntheticObject.length));
+					var readRequest = HttpRequest
+						.newBuilder(storage.authorizeRead(new ObjectReference(BUCKET, key), Duration.ofMinutes(5)))
+						.GET()
+						.build();
 					var readResponse = HttpClient.newHttpClient()
-							.send(readRequest, HttpResponse.BodyHandlers.ofByteArray());
+						.send(readRequest, HttpResponse.BodyHandlers.ofByteArray());
 					assertEquals(200, readResponse.statusCode());
 					assertArrayEquals(syntheticObject, readResponse.body());
 
 					storage.delete(new ObjectReference(BUCKET, key));
 					assertFalse(storage.findCompletedObject(created).isPresent());
 
-					var abandoned = storage.create(
-							"synthetic/abandoned-compatibility.bin", "application/octet-stream");
+					var abandoned = storage.create("synthetic/abandoned-compatibility.bin", "application/octet-stream");
 					storage.abort(abandoned);
 					storage.abort(abandoned);
 				}
@@ -157,4 +145,5 @@ class S3MultipartCompatibilityTests {
 		}
 		return result;
 	}
+
 }

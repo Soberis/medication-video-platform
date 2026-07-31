@@ -23,20 +23,18 @@ class MediaReportController {
 	}
 
 	@GetMapping("/{mediaJobId}/report")
-	ResponseEntity<MediaReportResponse> getReport(
-			@PathVariable UUID mediaJobId,
-			Authentication authentication) {
+	ResponseEntity<MediaReportResponse> getReport(@PathVariable UUID mediaJobId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(MediaReportResponse.from(this.service.getReport(actor.projectId(), mediaJobId)));
+			.cacheControl(CacheControl.noStore())
+			.body(MediaReportResponse.from(this.service.getReport(actor.projectId(), mediaJobId)));
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof PlatformActor actor)) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;
 	}
+
 }

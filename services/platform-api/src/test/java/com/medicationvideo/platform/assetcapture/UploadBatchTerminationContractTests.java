@@ -47,10 +47,13 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 class UploadBatchTerminationContractTests {
 
 	private static final String USER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
-	private static final UUID PROJECT_ID =
-			UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
 	private static final long PART_SIZE = 8L * 1024 * 1024;
+
 	private static final String SHA256 = "a".repeat(64);
 
 	@Autowired
@@ -107,34 +110,33 @@ class UploadBatchTerminationContractTests {
 		registerFile(batchId, clientFileId);
 		startMultipart(batchId, clientFileId);
 
-		var first = abort(batchId, USER_TOKEN, "abort-request-0001")
-				.andExpect(status().isOk())
-				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.status").value("ABORTED"))
-				.andExpect(jsonPath("$.termination_reason_code").value("USER_REQUESTED"))
-				.andExpect(jsonPath("$.cleanup_status").value("PENDING"))
-				.andExpect(jsonPath("$.cleanup_task_count").value(1))
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
+		var first = abort(batchId, USER_TOKEN, "abort-request-0001").andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.status").value("ABORTED"))
+			.andExpect(jsonPath("$.termination_reason_code").value("USER_REQUESTED"))
+			.andExpect(jsonPath("$.cleanup_status").value("PENDING"))
+			.andExpect(jsonPath("$.cleanup_task_count").value(1))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
 
-		var replay = abort(batchId, USER_TOKEN, "abort-request-0002")
-				.andExpect(status().isOk())
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
+		var replay = abort(batchId, USER_TOKEN, "abort-request-0002").andExpect(status().isOk())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
 		assertEquals(first, replay);
 		assertEquals(1, auditCount(batchId, "UPLOAD_BATCH_ABORT"));
 		assertEquals("ABORTED", fileStatus(batchId));
 
 		this.cleanupProcessor.processAvailable();
-		this.mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-					.get("/api/v1/upload/{batchId}", batchId)
-					.header("Authorization", "Bearer " + USER_TOKEN))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.cleanup_status").value("SUCCEEDED"))
-				.andExpect(jsonPath("$.completed_cleanup_task_count").value(1))
-				.andExpect(jsonPath("$.failed_cleanup_task_count").value(0));
+		this.mockMvc
+			.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+				.get("/api/v1/upload/{batchId}", batchId)
+				.header("Authorization", "Bearer " + USER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cleanup_status").value("SUCCEEDED"))
+			.andExpect(jsonPath("$.completed_cleanup_task_count").value(1))
+			.andExpect(jsonPath("$.failed_cleanup_task_count").value(0));
 		assertEquals(1, this.objectStorage.abortCalls);
 		assertEquals(0, this.objectStorage.deleteCalls);
 	}
@@ -143,26 +145,19 @@ class UploadBatchTerminationContractTests {
 	void onlyInitiatorOrAdministratorCanAbort() throws Exception {
 		var batch = directBatch("different-initiator", Instant.now().plusSeconds(3600));
 
-		abort(batch.getBatchId(), USER_TOKEN, "abort-request-unauthorized")
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		abort(batch.getBatchId(), USER_TOKEN, "abort-request-unauthorized").andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 
-		this.jdbcTemplate.update(
-				"UPDATE membership SET role = 'MEMBER' WHERE project_id = ? AND actor_id = ?",
-				PROJECT_ID,
-				ProjectMembershipTestData.ADMIN_ACTOR);
-		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-global-admin-denied")
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
-		this.jdbcTemplate.update(
-				"UPDATE membership SET role = 'ADMIN' WHERE project_id = ? AND actor_id = ?",
-				PROJECT_ID,
-				ProjectMembershipTestData.ADMIN_ACTOR);
+		this.jdbcTemplate.update("UPDATE membership SET role = 'MEMBER' WHERE project_id = ? AND actor_id = ?",
+				PROJECT_ID, ProjectMembershipTestData.ADMIN_ACTOR);
+		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-global-admin-denied").andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		this.jdbcTemplate.update("UPDATE membership SET role = 'ADMIN' WHERE project_id = ? AND actor_id = ?",
+				PROJECT_ID, ProjectMembershipTestData.ADMIN_ACTOR);
 
-		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-admin")
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("ABORTED"))
-				.andExpect(jsonPath("$.cleanup_status").value("NOT_REQUIRED"));
+		abort(batch.getBatchId(), ADMIN_TOKEN, "abort-request-admin").andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("ABORTED"))
+			.andExpect(jsonPath("$.cleanup_status").value("NOT_REQUIRED"));
 		assertEquals(1, auditCount(batch.getBatchId(), "UPLOAD_BATCH_ABORT"));
 	}
 
@@ -177,10 +172,9 @@ class UploadBatchTerminationContractTests {
 		file.startCompletion(UUID.randomUUID(), now.plusSeconds(60), now);
 		this.fileRepository.saveAndFlush(file);
 
-		abort(batch.getBatchId(), USER_TOKEN, "abort-request-completing")
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_COMPLETION_IN_PROGRESS"))
-				.andExpect(jsonPath("$.retryable").value(true));
+		abort(batch.getBatchId(), USER_TOKEN, "abort-request-completing").andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_COMPLETION_IN_PROGRESS"))
+			.andExpect(jsonPath("$.retryable").value(true));
 		assertEquals("UPLOADING", batchStatus(batch.getBatchId()));
 		assertEquals(0, cleanupTaskCount(batch.getBatchId()));
 	}
@@ -208,19 +202,16 @@ class UploadBatchTerminationContractTests {
 	void abortAfterTtlRecordsPolicyExpiryInsteadOfUserAbort() throws Exception {
 		var batch = directBatch("local-synthetic-uploader", Instant.now().minusSeconds(60));
 
-		abort(batch.getBatchId(), USER_TOKEN, "abort-request-after-ttl")
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("EXPIRED"))
-				.andExpect(jsonPath("$.termination_reason_code").value("UPLOAD_BATCH_TTL_EXPIRED"));
+		abort(batch.getBatchId(), USER_TOKEN, "abort-request-after-ttl").andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("EXPIRED"))
+			.andExpect(jsonPath("$.termination_reason_code").value("UPLOAD_BATCH_TTL_EXPIRED"));
 
 		assertEquals(0, auditCount(batch.getBatchId(), "UPLOAD_BATCH_ABORT"));
 		assertEquals(1, auditCount(batch.getBatchId(), "UPLOAD_BATCH_EXPIRE"));
-		assertEquals(
-				"SYSTEM",
+		assertEquals("SYSTEM",
 				this.jdbcTemplate.queryForObject(
 						"SELECT actor_type FROM audit_event WHERE object_id = ? AND action = 'UPLOAD_BATCH_EXPIRE'",
-						String.class,
-						batch.getBatchId().toString()));
+						String.class, batch.getBatchId().toString()));
 	}
 
 	@Test
@@ -231,22 +222,14 @@ class UploadBatchTerminationContractTests {
 		assertTrue(this.terminationService.expireNextDue());
 
 		this.objectStorage.failCleanup = true;
-		var oneAttemptProcessor = new UploadCleanupProcessor(
-				this.cleanupStore,
-				this.objectStorage,
-				1,
-				1,
-				Duration.ofMinutes(1),
-				Duration.ofSeconds(1));
+		var oneAttemptProcessor = new UploadCleanupProcessor(this.cleanupStore, this.objectStorage, 1, 1,
+				Duration.ofMinutes(1), Duration.ofSeconds(1));
 		oneAttemptProcessor.processAvailable();
 
 		assertEquals("FAILED", cleanupTaskStatus(batch.getBatchId()));
-		assertEquals(
-				"OBJECT_STORAGE_CLEANUP_FAILED",
-				this.jdbcTemplate.queryForObject(
-						"SELECT last_error_code FROM upload_cleanup_task WHERE batch_id = ?",
-						String.class,
-						batch.getBatchId()));
+		assertEquals("OBJECT_STORAGE_CLEANUP_FAILED",
+				this.jdbcTemplate.queryForObject("SELECT last_error_code FROM upload_cleanup_task WHERE batch_id = ?",
+						String.class, batch.getBatchId()));
 		assertEquals(1, cleanupAttemptCount(batch.getBatchId()));
 		assertEquals(UploadCleanupStatus.FAILED, this.cleanupStore.summarize(batch.getBatchId()).status());
 	}
@@ -257,16 +240,12 @@ class UploadBatchTerminationContractTests {
 		var batch = directBatch("local-synthetic-uploader", now.minusSeconds(60));
 		var file = directFile(batch, now.minusSeconds(120));
 		assertTrue(this.terminationService.expireNextDue());
-		this.jdbcTemplate.update(
-				"UPDATE upload_cleanup_task SET created_at = ? WHERE batch_id = ?",
-				java.sql.Timestamp.from(now.minus(Duration.ofMinutes(10))),
-				batch.getBatchId());
+		this.jdbcTemplate.update("UPDATE upload_cleanup_task SET created_at = ? WHERE batch_id = ?",
+				java.sql.Timestamp.from(now.minus(Duration.ofMinutes(10))), batch.getBatchId());
 
 		{
 			var registry = new SimpleMeterRegistry();
-			var monitor = new UploadCleanupBacklogMonitor(
-					new UploadCleanupBacklogStore(this.jdbcTemplate),
-					registry,
+			var monitor = new UploadCleanupBacklogMonitor(new UploadCleanupBacklogStore(this.jdbcTemplate), registry,
 					Duration.ofMinutes(5));
 
 			assertEquals(UploadCleanupAlertSeverity.WARNING, monitor.evaluate(now));
@@ -274,21 +253,15 @@ class UploadBatchTerminationContractTests {
 			assertEquals(0.0, taskGauge(registry, "failed"));
 			assertTrue(registry.get("platform.upload.cleanup.oldest.actionable.age").gauge().value() >= 600);
 			assertEquals(UploadCleanupAlertSeverity.WARNING, monitor.evaluate(now.plusMillis(500)));
-			assertEquals(
-					1.0,
+			assertEquals(1.0,
 					registry.get("platform.upload.cleanup.alert.transitions")
-							.tag("severity", "warning")
-							.counter()
-							.count());
+						.tag("severity", "warning")
+						.counter()
+						.count());
 
 			this.objectStorage.failCleanup = true;
-			var oneAttemptProcessor = new UploadCleanupProcessor(
-					this.cleanupStore,
-					this.objectStorage,
-					1,
-					1,
-					Duration.ofMinutes(1),
-					Duration.ofSeconds(1));
+			var oneAttemptProcessor = new UploadCleanupProcessor(this.cleanupStore, this.objectStorage, 1, 1,
+					Duration.ofMinutes(1), Duration.ofSeconds(1));
 			oneAttemptProcessor.processAvailable();
 			assertEquals(UploadCleanupAlertSeverity.CRITICAL, monitor.evaluate(now.plusSeconds(1)));
 			assertEquals(0.0, taskGauge(registry, "pending"));
@@ -301,150 +274,117 @@ class UploadBatchTerminationContractTests {
 			assertEquals(0.0, taskGauge(registry, "pending"));
 			assertEquals(0.0, taskGauge(registry, "running"));
 			assertEquals(0.0, taskGauge(registry, "failed"));
-			assertEquals(
-					1.0,
+			assertEquals(1.0,
 					registry.get("platform.upload.cleanup.alert.transitions")
-							.tag("severity", "warning")
-							.counter()
-							.count());
-			assertEquals(
-					1.0,
+						.tag("severity", "warning")
+						.counter()
+						.count());
+			assertEquals(1.0,
 					registry.get("platform.upload.cleanup.alert.transitions")
-							.tag("severity", "critical")
-							.counter()
-							.count());
-			assertEquals(
-					1.0,
+						.tag("severity", "critical")
+						.counter()
+						.count());
+			assertEquals(1.0,
 					registry.get("platform.upload.cleanup.alert.transitions")
-							.tag("severity", "none")
-							.counter()
-							.count());
+						.tag("severity", "none")
+						.counter()
+						.count());
 		}
 	}
 
 	private UUID initializeBatch() throws Exception {
-		var response = this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + USER_TOKEN)
-					.header("Idempotency-Key", "termination-batch-" + UUID.randomUUID())
-					.contentType(MediaType.APPLICATION_JSON)
-					.content("""
-							{
-							  "project_id": "%s",
-							  "device_id": "synthetic-edge-termination",
-							  "file_count": 1,
-							  "total_size_bytes": %d,
-							  "manifest_sha256": "%s"
-							}
-							""".formatted(PROJECT_ID, PART_SIZE, SHA256)))
-				.andExpect(status().isCreated())
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
+		var response = this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + USER_TOKEN)
+				.header("Idempotency-Key", "termination-batch-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "project_id": "%s",
+						  "device_id": "synthetic-edge-termination",
+						  "file_count": 1,
+						  "total_size_bytes": %d,
+						  "manifest_sha256": "%s"
+						}
+						""".formatted(PROJECT_ID, PART_SIZE, SHA256)))
+			.andExpect(status().isCreated())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
 		var batchId = UUID.fromString(JsonPath.read(response, "$.batch_id"));
 		this.createdBatchIds.add(batchId);
 		return batchId;
 	}
 
 	private void registerFile(UUID batchId, UUID clientFileId) throws Exception {
-		this.mockMvc.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}", batchId, clientFileId)
-					.header("Authorization", "Bearer " + USER_TOKEN)
-					.header("Idempotency-Key", "termination-file-" + UUID.randomUUID())
-					.contentType(MediaType.APPLICATION_JSON)
-					.content("""
-							{
-							  "file_kind": "VIDEO",
-							  "content_type": "video/mp4",
-							  "size_bytes": %d,
-							  "sha256": "%s",
-							  "part_size_bytes": %d
-							}
-							""".formatted(PART_SIZE, SHA256, PART_SIZE)))
-				.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}", batchId, clientFileId)
+				.header("Authorization", "Bearer " + USER_TOKEN)
+				.header("Idempotency-Key", "termination-file-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{
+						  "file_kind": "VIDEO",
+						  "content_type": "video/mp4",
+						  "size_bytes": %d,
+						  "sha256": "%s",
+						  "part_size_bytes": %d
+						}
+						""".formatted(PART_SIZE, SHA256, PART_SIZE)))
+			.andExpect(status().isCreated());
 	}
 
 	private void startMultipart(UUID batchId, UUID clientFileId) throws Exception {
-		this.mockMvc.perform(put(
-					"/api/v1/upload/{batchId}/files/{clientFileId}/multipart",
-					batchId,
-					clientFileId)
-					.header("Authorization", "Bearer " + USER_TOKEN))
-				.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}/multipart", batchId, clientFileId)
+				.header("Authorization", "Bearer " + USER_TOKEN))
+			.andExpect(status().isCreated());
 	}
 
-	private org.springframework.test.web.servlet.ResultActions abort(
-			UUID batchId, String token, String requestId) throws Exception {
-		return this.mockMvc.perform(put("/api/v1/upload/{batchId}/abort", batchId)
-				.header("Authorization", "Bearer " + token)
+	private org.springframework.test.web.servlet.ResultActions abort(UUID batchId, String token, String requestId)
+			throws Exception {
+		return this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/abort", batchId).header("Authorization", "Bearer " + token)
 				.header("X-Request-Id", requestId));
 	}
 
 	private UploadBatch directBatch(String actorId, Instant expiresAt) {
 		var createdAt = expiresAt.minusSeconds(3600);
-		var batch = UploadBatch.initiate(
-				PROJECT_ID,
-				"termination-direct-" + UUID.randomUUID(),
-				SHA256,
-				"synthetic-edge-termination",
-				UploadSourceType.HOSPITAL_REMOTE,
-				null,
-				actorId,
-				1,
-				PART_SIZE,
-				SHA256,
-				expiresAt,
-				createdAt);
+		var batch = UploadBatch.initiate(PROJECT_ID, "termination-direct-" + UUID.randomUUID(), SHA256,
+				"synthetic-edge-termination", UploadSourceType.HOSPITAL_REMOTE, null, actorId, 1, PART_SIZE, SHA256,
+				expiresAt, createdAt);
 		this.batchRepository.saveAndFlush(batch);
 		this.createdBatchIds.add(batch.getBatchId());
 		return batch;
 	}
 
 	private UploadFile directFile(UploadBatch batch, Instant now) {
-		var request = new UploadFileRegistrationRequest(
-				UploadFileKind.VIDEO, "video/mp4", PART_SIZE, SHA256, PART_SIZE);
-		var file = UploadFile.register(
-				batch.getBatchId(),
-				UUID.randomUUID(),
-				"termination-direct-file-" + UUID.randomUUID(),
-				SHA256,
-				request,
-				1,
-				now);
-		file.attachMultipartSession(
-				new MultipartObjectStorage.CreatedUpload(
-						"synthetic-bucket",
-						"termination/" + file.getUploadFileId(),
-						"upload-" + file.getUploadFileId()),
-				now);
+		var request = new UploadFileRegistrationRequest(UploadFileKind.VIDEO, "video/mp4", PART_SIZE, SHA256,
+				PART_SIZE);
+		var file = UploadFile.register(batch.getBatchId(), UUID.randomUUID(),
+				"termination-direct-file-" + UUID.randomUUID(), SHA256, request, 1, now);
+		file.attachMultipartSession(new MultipartObjectStorage.CreatedUpload("synthetic-bucket",
+				"termination/" + file.getUploadFileId(), "upload-" + file.getUploadFileId()), now);
 		return this.fileRepository.saveAndFlush(file);
 	}
 
 	private int auditCount(UUID batchId, String action) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM audit_event WHERE object_id = ? AND action = ?",
-				Integer.class,
-				batchId.toString(),
-				action);
+		return this.jdbcTemplate.queryForObject("SELECT count(*) FROM audit_event WHERE object_id = ? AND action = ?",
+				Integer.class, batchId.toString(), action);
 	}
 
 	private int cleanupTaskCount(UUID batchId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM upload_cleanup_task WHERE batch_id = ?",
-				Integer.class,
-				batchId);
+		return this.jdbcTemplate.queryForObject("SELECT count(*) FROM upload_cleanup_task WHERE batch_id = ?",
+				Integer.class, batchId);
 	}
 
 	private String cleanupTaskStatus(UUID batchId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT status FROM upload_cleanup_task WHERE batch_id = ?",
-				String.class,
-				batchId);
+		return this.jdbcTemplate.queryForObject("SELECT status FROM upload_cleanup_task WHERE batch_id = ?",
+				String.class, batchId);
 	}
 
 	private int cleanupAttemptCount(UUID batchId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT attempt_count FROM upload_cleanup_task WHERE batch_id = ?",
-				Integer.class,
-				batchId);
+		return this.jdbcTemplate.queryForObject("SELECT attempt_count FROM upload_cleanup_task WHERE batch_id = ?",
+				Integer.class, batchId);
 	}
 
 	private static double taskGauge(SimpleMeterRegistry registry, String status) {
@@ -452,13 +392,13 @@ class UploadBatchTerminationContractTests {
 	}
 
 	private String batchStatus(UUID batchId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT status FROM upload_batch WHERE batch_id = ?", String.class, batchId);
+		return this.jdbcTemplate.queryForObject("SELECT status FROM upload_batch WHERE batch_id = ?", String.class,
+				batchId);
 	}
 
 	private String fileStatus(UUID batchId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT status FROM upload_file WHERE batch_id = ?", String.class, batchId);
+		return this.jdbcTemplate.queryForObject("SELECT status FROM upload_file WHERE batch_id = ?", String.class,
+				batchId);
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)
@@ -469,13 +409,17 @@ class UploadBatchTerminationContractTests {
 		FakeCleanupObjectStorage fakeCleanupObjectStorage() {
 			return new FakeCleanupObjectStorage();
 		}
+
 	}
 
 	static class FakeCleanupObjectStorage implements MultipartObjectStorage {
 
 		private final Set<String> completedObjects = new HashSet<>();
+
 		private int abortCalls;
+
 		private int deleteCalls;
+
 		private boolean failCleanup;
 
 		@Override
@@ -514,8 +458,7 @@ class UploadBatchTerminationContractTests {
 				throw new MultipartObjectStorageException("Synthetic cleanup failure.", null);
 			}
 			return this.completedObjects.contains(upload.objectKey())
-					? Optional.of(new CompletedObject(PART_SIZE, "synthetic-etag"))
-					: Optional.empty();
+					? Optional.of(new CompletedObject(PART_SIZE, "synthetic-etag")) : Optional.empty();
 		}
 
 		@Override
@@ -545,5 +488,7 @@ class UploadBatchTerminationContractTests {
 			this.deleteCalls = 0;
 			this.failCleanup = false;
 		}
+
 	}
+
 }

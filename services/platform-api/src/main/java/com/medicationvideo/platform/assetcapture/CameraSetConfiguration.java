@@ -37,13 +37,8 @@ class CameraSetConfiguration {
 	protected CameraSetConfiguration() {
 	}
 
-	private CameraSetConfiguration(
-			UUID projectId,
-			String cameraSetKey,
-			int configurationVersion,
-			String layoutVersion,
-			String requestFingerprint,
-			Instant createdAt) {
+	private CameraSetConfiguration(UUID projectId, String cameraSetKey, int configurationVersion, String layoutVersion,
+			String requestFingerprint, Instant createdAt) {
 		this.cameraSetId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.cameraSetKey = cameraSetKey;
@@ -53,20 +48,10 @@ class CameraSetConfiguration {
 		this.createdAt = createdAt;
 	}
 
-	static CameraSetConfiguration create(
-			UUID projectId,
-			String cameraSetKey,
-			int configurationVersion,
-			String layoutVersion,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new CameraSetConfiguration(
-				projectId,
-				cameraSetKey,
-				configurationVersion,
-				layoutVersion,
-				requestFingerprint,
-				createdAt);
+	static CameraSetConfiguration create(UUID projectId, String cameraSetKey, int configurationVersion,
+			String layoutVersion, String requestFingerprint, Instant createdAt) {
+		return new CameraSetConfiguration(projectId, cameraSetKey, configurationVersion, layoutVersion,
+				requestFingerprint, createdAt);
 	}
 
 	UUID getCameraSetId() {
@@ -96,4 +81,5 @@ class CameraSetConfiguration {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }

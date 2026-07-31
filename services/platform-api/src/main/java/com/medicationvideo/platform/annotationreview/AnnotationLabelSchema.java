@@ -60,9 +60,11 @@ class AnnotationLabelSchema {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }
 
 enum AnnotationLabelSchemaStatus {
-	ACTIVE,
-	RETIRED
+
+	ACTIVE, RETIRED
+
 }

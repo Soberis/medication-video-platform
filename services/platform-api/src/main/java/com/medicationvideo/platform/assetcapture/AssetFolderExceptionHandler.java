@@ -21,92 +21,58 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = {
-		AssetFolderController.class,
-		ClipAssetDeletionController.class,
-		ClipAssetPlaybackController.class
-})
+@RestControllerAdvice(assignableTypes = { AssetFolderController.class, ClipAssetDeletionController.class,
+		ClipAssetPlaybackController.class })
 class AssetFolderExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(AssetFolderExceptionHandler.class);
+
 	private static final String REQUEST_ID_ATTRIBUTE = "medication.requestId";
 
-	@ExceptionHandler({
-		MethodArgumentNotValidException.class,
-		HandlerMethodValidationException.class,
-		MissingRequestHeaderException.class,
-		HttpMessageNotReadableException.class,
-		MethodArgumentTypeMismatchException.class,
-		IllegalArgumentException.class
-	})
+	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
+			MissingRequestHeaderException.class, HttpMessageNotReadableException.class,
+			MethodArgumentTypeMismatchException.class, IllegalArgumentException.class })
 	ResponseEntity<ApiErrorResponse> invalidRequest(Exception exception) {
-		return error(
-				HttpStatus.BAD_REQUEST,
-				"INVALID_REQUEST",
-				"The asset folder request is invalid.",
-				false);
+		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The asset folder request is invalid.", false);
 	}
 
 	@ExceptionHandler(ProjectAccessException.class)
 	ResponseEntity<ApiErrorResponse> projectAccess(ProjectAccessException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				false);
 	}
 
 	@ExceptionHandler(AssetFolderException.class)
 	ResponseEntity<ApiErrorResponse> assetFolder(AssetFolderException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				false);
 	}
 
 	@ExceptionHandler(ClipAssetDeletionException.class)
 	ResponseEntity<ApiErrorResponse> clipAssetDeletion(ClipAssetDeletionException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				false);
 	}
 
 	@ExceptionHandler(ClipAssetPlaybackException.class)
 	ResponseEntity<ApiErrorResponse> clipAssetPlayback(ClipAssetPlaybackException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				exception.isRetryable());
 	}
 
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ApiErrorResponse> unexpected(Exception exception) {
 		log.error("Unexpected asset capture command error", exception);
-		return error(
-				HttpStatus.INTERNAL_SERVER_ERROR,
-				"INTERNAL_ERROR",
-				"The asset capture command encountered an unexpected error.",
-				true);
+		return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+				"The asset capture command encountered an unexpected error.", true);
 	}
 
-	private static ResponseEntity<ApiErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
-			String errorMessage,
+	private static ResponseEntity<ApiErrorResponse> error(HttpStatus status, String errorCode, String errorMessage,
 			boolean retryable) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-				.cacheControl(CacheControl.noStore())
-				.body(new ApiErrorResponse(
-						errorCode,
-						errorMessage,
-						retryable,
-						resolveRequestId(),
-						MDC.get("traceId")));
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new ApiErrorResponse(errorCode, errorMessage, retryable, resolveRequestId(), MDC.get("traceId")));
 	}
 
 	private static String resolveRequestId() {
@@ -126,4 +92,5 @@ class AssetFolderExceptionHandler {
 		}
 		return UUID.randomUUID().toString();
 	}
+
 }

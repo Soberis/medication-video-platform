@@ -5,9 +5,9 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-interface AssetClassificationCommandRepository
-		extends JpaRepository<AssetClassificationCommand, UUID> {
+interface AssetClassificationCommandRepository extends JpaRepository<AssetClassificationCommand, UUID> {
 
-	Optional<AssetClassificationCommand> findByProjectIdAndPerformedByAndIdempotencyKey(
-			UUID projectId, String performedBy, String idempotencyKey);
+	Optional<AssetClassificationCommand> findByProjectIdAndPerformedByAndIdempotencyKey(UUID projectId,
+			String performedBy, String idempotencyKey);
+
 }

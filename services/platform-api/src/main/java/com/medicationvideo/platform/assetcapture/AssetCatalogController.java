@@ -28,12 +28,12 @@ import jakarta.validation.constraints.Size;
 class AssetCatalogController {
 
 	private final AssetCatalogQueryService service;
+
 	private final ClipAssetActivityQueryService activityQueryService;
+
 	private final AssetCaptureProjectAuthorizer authorizer;
 
-	AssetCatalogController(
-			AssetCatalogQueryService service,
-			ClipAssetActivityQueryService activityQueryService,
+	AssetCatalogController(AssetCatalogQueryService service, ClipAssetActivityQueryService activityQueryService,
 			AssetCaptureProjectAuthorizer authorizer) {
 		this.service = service;
 		this.activityQueryService = activityQueryService;
@@ -41,40 +41,27 @@ class AssetCatalogController {
 	}
 
 	@GetMapping("/capture-sessions")
-	ResponseEntity<CaptureSessionListResponse> listCaptureSessions(
-			@PathVariable UUID projectId,
-			@RequestParam(name = "device_id", required = false)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "assembly_status", required = false)
-			CaptureSessionAssemblyStatus assemblyStatus,
-			@RequestParam(name = "quality_status", required = false)
-			CaptureQualityStatus qualityStatus,
-			@RequestParam(name = "recorded_from", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
-			@RequestParam(name = "recorded_before", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
+	ResponseEntity<CaptureSessionListResponse> listCaptureSessions(@PathVariable UUID projectId,
+			@RequestParam(name = "device_id",
+					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
+			@RequestParam(name = "assembly_status", required = false) CaptureSessionAssemblyStatus assemblyStatus,
+			@RequestParam(name = "quality_status", required = false) CaptureQualityStatus qualityStatus,
+			@RequestParam(name = "recorded_from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
+			@RequestParam(name = "recorded_before",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
 			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
-			Authentication authentication) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listCaptureSessions(
-				projectId,
-				deviceId,
-				assemblyStatus,
-				qualityStatus,
-				recordedFrom,
-				recordedBefore,
-				cursor,
-				limit);
+		var response = this.service.listCaptureSessions(projectId, deviceId, assemblyStatus, qualityStatus,
+				recordedFrom, recordedBefore, cursor, limit);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/capture-sessions/{captureSessionId}")
-	ResponseEntity<CaptureSessionResponse> getCaptureSession(
-			@PathVariable UUID projectId,
-			@PathVariable UUID captureSessionId,
-			Authentication authentication) {
+	ResponseEntity<CaptureSessionResponse> getCaptureSession(@PathVariable UUID projectId,
+			@PathVariable UUID captureSessionId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.getCaptureSession(projectId, captureSessionId);
@@ -82,46 +69,31 @@ class AssetCatalogController {
 	}
 
 	@GetMapping("/clip-assets")
-	ResponseEntity<ClipAssetListResponse> listClipAssets(
-			@PathVariable UUID projectId,
+	ResponseEntity<ClipAssetListResponse> listClipAssets(@PathVariable UUID projectId,
 			@RequestParam(name = "capture_session_id", required = false) UUID captureSessionId,
 			@RequestParam(name = "batch_id", required = false) UUID batchId,
-			@RequestParam(name = "device_id", required = false)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "camera_role", required = false)
-			@Pattern(regexp = "^[A-Z][A-Z0-9_]{0,63}$") String cameraRole,
+			@RequestParam(name = "device_id",
+					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
+			@RequestParam(name = "camera_role",
+					required = false) @Pattern(regexp = "^[A-Z][A-Z0-9_]{0,63}$") String cameraRole,
 			@RequestParam(required = false) ClipAssetStatus status,
 			@RequestParam(name = "folder_id", required = false) UUID folderId,
 			@RequestParam(defaultValue = "false") boolean unclassified,
-			@RequestParam(name = "recorded_from", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
-			@RequestParam(name = "recorded_before", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
+			@RequestParam(name = "recorded_from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
+			@RequestParam(name = "recorded_before",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
 			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
-			Authentication authentication) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listClipAssets(
-				projectId,
-				captureSessionId,
-				batchId,
-				deviceId,
-				cameraRole,
-				status,
-				folderId,
-				unclassified,
-				recordedFrom,
-				recordedBefore,
-				cursor,
-				limit);
+		var response = this.service.listClipAssets(projectId, captureSessionId, batchId, deviceId, cameraRole, status,
+				folderId, unclassified, recordedFrom, recordedBefore, cursor, limit);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/clip-assets/{clipAssetId}")
-	ResponseEntity<ClipAssetReadResponse> getClipAsset(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
+	ResponseEntity<ClipAssetReadResponse> getClipAsset(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
@@ -130,12 +102,9 @@ class AssetCatalogController {
 	}
 
 	@GetMapping("/clip-assets/{clipAssetId}/activity")
-	ResponseEntity<ClipAssetActivityResponse> getClipAssetActivity(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
-			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
-			Authentication authentication) {
+	ResponseEntity<ClipAssetActivityResponse> getClipAssetActivity(@PathVariable UUID projectId,
+			@PathVariable UUID clipAssetId, @RequestParam(required = false) @Size(max = 512) String cursor,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.activityQueryService.get(projectId, clipAssetId, cursor, limit);
@@ -143,52 +112,38 @@ class AssetCatalogController {
 	}
 
 	@GetMapping("/capture-event-logs")
-	ResponseEntity<CaptureEventLogListResponse> listCaptureEventLogs(
-			@PathVariable UUID projectId,
+	ResponseEntity<CaptureEventLogListResponse> listCaptureEventLogs(@PathVariable UUID projectId,
 			@RequestParam(name = "batch_id", required = false) UUID batchId,
-			@RequestParam(name = "device_id", required = false)
-			@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "indexed_from", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedFrom,
-			@RequestParam(name = "indexed_before", required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedBefore,
+			@RequestParam(name = "device_id",
+					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
+			@RequestParam(name = "indexed_from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedFrom,
+			@RequestParam(name = "indexed_before",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedBefore,
 			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
-			Authentication authentication) {
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listCaptureEventLogs(
-				projectId,
-				batchId,
-				deviceId,
-				indexedFrom,
-				indexedBefore,
-				cursor,
-				limit);
+		var response = this.service.listCaptureEventLogs(projectId, batchId, deviceId, indexedFrom, indexedBefore,
+				cursor, limit);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	@GetMapping("/capture-event-logs/{captureEventLogId}")
-	ResponseEntity<CaptureEventLogReadResponse> getCaptureEventLog(
-			@PathVariable UUID projectId,
-			@PathVariable UUID captureEventLogId,
-			Authentication authentication) {
+	ResponseEntity<CaptureEventLogReadResponse> getCaptureEventLog(@PathVariable UUID projectId,
+			@PathVariable UUID captureEventLogId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.getCaptureEventLog(
-				projectId,
-				captureEventLogId);
+		var response = this.service.getCaptureEventLog(projectId, captureEventLogId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	private static ProjectActor requireActor(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof ProjectActor actor)) {
-			throw new ProjectAccessException(
-					"PROJECT_ACCESS_DENIED",
-					"An authenticated project actor is required.",
+		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "An authenticated project actor is required.",
 					403);
 		}
 		return actor;
 	}
+
 }

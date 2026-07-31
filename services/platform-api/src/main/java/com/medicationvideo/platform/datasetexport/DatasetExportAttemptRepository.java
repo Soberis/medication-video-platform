@@ -23,9 +23,7 @@ interface DatasetExportAttemptRepository extends JpaRepository<DatasetExportAtte
 			ORDER BY dataset_export_id
 			LIMIT :batchSize
 			""", nativeQuery = true)
-	List<UUID> findRecoverableExportIds(
-			@Param("cutoff") Instant cutoff,
-			@Param("batchSize") int batchSize);
+	List<UUID> findRecoverableExportIds(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
@@ -35,15 +33,14 @@ interface DatasetExportAttemptRepository extends JpaRepository<DatasetExportAtte
 			      select max(current.attempt) from DatasetExportAttempt current
 			      where current.datasetExportId = :datasetExportId)
 			""")
-	Optional<DatasetExportAttempt> findCurrentForUpdate(
-			@Param("datasetExportId") UUID datasetExportId);
+	Optional<DatasetExportAttempt> findCurrentForUpdate(@Param("datasetExportId") UUID datasetExportId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select attempt from DatasetExportAttempt attempt
 			where attempt.datasetExportId = :datasetExportId and attempt.attempt = :attempt
 			""")
-	Optional<DatasetExportAttempt> findForUpdate(
-			@Param("datasetExportId") UUID datasetExportId,
+	Optional<DatasetExportAttempt> findForUpdate(@Param("datasetExportId") UUID datasetExportId,
 			@Param("attempt") int attempt);
+
 }

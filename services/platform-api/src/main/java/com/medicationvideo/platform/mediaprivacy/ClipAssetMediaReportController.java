@@ -14,18 +14,20 @@ import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 import com.medicationvideo.platform.iamproject.PlatformActor;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
-/** Project-scoped read boundary for the media facts visible from a ClipAsset detail page. */
+/**
+ * Project-scoped read boundary for the media facts visible from a ClipAsset detail page.
+ */
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-report")
 class ClipAssetMediaReportController {
 
 	private final MediaJobExecutionService service;
+
 	private final ProjectAccessService projectAccessService;
+
 	private final AssetCatalogQueryService assetCatalogQueryService;
 
-	ClipAssetMediaReportController(
-			MediaJobExecutionService service,
-			ProjectAccessService projectAccessService,
+	ClipAssetMediaReportController(MediaJobExecutionService service, ProjectAccessService projectAccessService,
 			AssetCatalogQueryService assetCatalogQueryService) {
 		this.service = service;
 		this.projectAccessService = projectAccessService;
@@ -33,23 +35,21 @@ class ClipAssetMediaReportController {
 	}
 
 	@GetMapping
-	ResponseEntity<MediaReportResponse> getReport(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
+	ResponseEntity<MediaReportResponse> getReport(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.projectAccessService.requireMember(projectId, actor.actorId());
 		this.assetCatalogQueryService.getClipAssetInputSummary(projectId, clipAssetId);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(MediaReportResponse.from(this.service.getReportForClipAsset(projectId, clipAssetId)));
+			.cacheControl(CacheControl.noStore())
+			.body(MediaReportResponse.from(this.service.getReportForClipAsset(projectId, clipAssetId)));
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof PlatformActor actor)) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;
 	}
+
 }

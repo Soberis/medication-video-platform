@@ -42,11 +42,7 @@ class AssetFolder {
 	protected AssetFolder() {
 	}
 
-	private AssetFolder(
-			UUID projectId,
-			String displayName,
-			String actorId,
-			Instant occurredAt) {
+	private AssetFolder(UUID projectId, String displayName, String actorId, Instant occurredAt) {
 		this.folderId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.displayName = displayName;
@@ -56,11 +52,7 @@ class AssetFolder {
 		this.updatedAt = occurredAt;
 	}
 
-	static AssetFolder create(
-			UUID projectId,
-			String displayName,
-			String actorId,
-			Instant occurredAt) {
+	static AssetFolder create(UUID projectId, String displayName, String actorId, Instant occurredAt) {
 		return new AssetFolder(projectId, displayName, actorId, occurredAt);
 	}
 
@@ -93,4 +85,5 @@ class AssetFolder {
 	long getRowVersion() {
 		return this.rowVersion;
 	}
+
 }

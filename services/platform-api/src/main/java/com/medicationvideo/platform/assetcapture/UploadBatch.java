@@ -82,20 +82,9 @@ class UploadBatch {
 	protected UploadBatch() {
 	}
 
-	private UploadBatch(
-			UUID batchId,
-			UUID projectId,
-			String idempotencyKey,
-			String requestFingerprint,
-			String deviceId,
-			UploadSourceType uploadSourceType,
-			UUID assetFolderId,
-			String initiatedByActorId,
-			int fileCount,
-			long totalSizeBytes,
-			String manifestSha256,
-			Instant expiresAt,
-			Instant createdAt) {
+	private UploadBatch(UUID batchId, UUID projectId, String idempotencyKey, String requestFingerprint, String deviceId,
+			UploadSourceType uploadSourceType, UUID assetFolderId, String initiatedByActorId, int fileCount,
+			long totalSizeBytes, String manifestSha256, Instant expiresAt, Instant createdAt) {
 		this.batchId = batchId;
 		this.projectId = projectId;
 		this.idempotencyKey = idempotencyKey;
@@ -113,33 +102,12 @@ class UploadBatch {
 		this.updatedAt = createdAt;
 	}
 
-	static UploadBatch initiate(
-			UUID projectId,
-			String idempotencyKey,
-			String requestFingerprint,
-			String deviceId,
-			UploadSourceType uploadSourceType,
-			UUID assetFolderId,
-			String initiatedByActorId,
-			int fileCount,
-			long totalSizeBytes,
-			String manifestSha256,
-			Instant expiresAt,
-			Instant createdAt) {
-		return new UploadBatch(
-				UUID.randomUUID(),
-				projectId,
-				idempotencyKey,
-				requestFingerprint,
-				deviceId,
-				uploadSourceType,
-				assetFolderId,
-				initiatedByActorId,
-				fileCount,
-				totalSizeBytes,
-				manifestSha256,
-				expiresAt,
-				createdAt);
+	static UploadBatch initiate(UUID projectId, String idempotencyKey, String requestFingerprint, String deviceId,
+			UploadSourceType uploadSourceType, UUID assetFolderId, String initiatedByActorId, int fileCount,
+			long totalSizeBytes, String manifestSha256, Instant expiresAt, Instant createdAt) {
+		return new UploadBatch(UUID.randomUUID(), projectId, idempotencyKey, requestFingerprint, deviceId,
+				uploadSourceType, assetFolderId, initiatedByActorId, fileCount, totalSizeBytes, manifestSha256,
+				expiresAt, createdAt);
 	}
 
 	UUID getBatchId() {
@@ -235,15 +203,13 @@ class UploadBatch {
 	}
 
 	void terminate(UploadBatchStatus terminalStatus, String reasonCode, Instant changedAt) {
-		if (terminalStatus != UploadBatchStatus.ABORTED
-				&& terminalStatus != UploadBatchStatus.EXPIRED) {
+		if (terminalStatus != UploadBatchStatus.ABORTED && terminalStatus != UploadBatchStatus.EXPIRED) {
 			throw new IllegalArgumentException("Upload batch termination status is invalid.");
 		}
 		if (this.status == terminalStatus) {
 			return;
 		}
-		if (this.status != UploadBatchStatus.INITIATED
-				&& this.status != UploadBatchStatus.UPLOADING) {
+		if (this.status != UploadBatchStatus.INITIATED && this.status != UploadBatchStatus.UPLOADING) {
 			throw new IllegalStateException("Upload batch cannot terminate from its current state.");
 		}
 		this.status = terminalStatus;
@@ -251,4 +217,5 @@ class UploadBatch {
 		this.terminationReasonCode = reasonCode;
 		this.updatedAt = changedAt;
 	}
+
 }

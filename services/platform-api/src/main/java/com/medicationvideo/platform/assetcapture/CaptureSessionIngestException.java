@@ -12,4 +12,5 @@ final class CaptureSessionIngestException extends RuntimeException {
 	String getErrorCode() {
 		return this.errorCode;
 	}
+
 }

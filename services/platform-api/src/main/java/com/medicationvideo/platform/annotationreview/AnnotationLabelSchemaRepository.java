@@ -9,9 +9,8 @@ interface AnnotationLabelSchemaRepository extends JpaRepository<AnnotationLabelS
 
 	Optional<AnnotationLabelSchema> findByStatus(AnnotationLabelSchemaStatus status);
 
-	Optional<AnnotationLabelSchema> findByLabelSchemaIdAndSchemaDigest(
-			UUID labelSchemaId,
-			String schemaDigest);
+	Optional<AnnotationLabelSchema> findByLabelSchemaIdAndSchemaDigest(UUID labelSchemaId, String schemaDigest);
 
 	Optional<AnnotationLabelSchema> findBySchemaDigest(String schemaDigest);
+
 }

@@ -54,4 +54,5 @@ class CameraChannel {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }

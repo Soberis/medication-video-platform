@@ -26,6 +26,6 @@ interface UploadPartRepository extends JpaRepository<UploadPart, UUID> {
 			where part.uploadFileId in :uploadFileIds
 			group by part.uploadFileId
 			""")
-	List<UploadPartProgressSummary> summarizeByUploadFileIds(
-			@Param("uploadFileIds") Collection<UUID> uploadFileIds);
+	List<UploadPartProgressSummary> summarizeByUploadFileIds(@Param("uploadFileIds") Collection<UUID> uploadFileIds);
+
 }

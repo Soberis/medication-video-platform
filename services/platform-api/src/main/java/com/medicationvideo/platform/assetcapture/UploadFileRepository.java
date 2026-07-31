@@ -30,11 +30,10 @@ interface UploadFileRepository extends JpaRepository<UploadFile, UUID> {
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select file from UploadFile file where file.batchId = :batchId and file.clientFileId = :clientFileId")
-	Optional<UploadFile> findForUploadCommand(
-			@Param("batchId") UUID batchId,
-			@Param("clientFileId") UUID clientFileId);
+	Optional<UploadFile> findForUploadCommand(@Param("batchId") UUID batchId, @Param("clientFileId") UUID clientFileId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select file from UploadFile file where file.uploadFileId = :uploadFileId")
 	Optional<UploadFile> findForCompletion(@Param("uploadFileId") UUID uploadFileId);
+
 }

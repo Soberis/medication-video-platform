@@ -65,8 +65,11 @@ class ApprovalDecision {
 	Instant getDecidedAt() {
 		return this.decidedAt;
 	}
+
 }
 
 enum ApprovalDecisionValue {
+
 	APPROVED
+
 }

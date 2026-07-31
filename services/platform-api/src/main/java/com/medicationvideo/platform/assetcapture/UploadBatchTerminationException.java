@@ -3,6 +3,7 @@ package com.medicationvideo.platform.assetcapture;
 final class UploadBatchTerminationException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final boolean retryable;
 
 	UploadBatchTerminationException(String errorCode, String message) {
@@ -22,4 +23,5 @@ final class UploadBatchTerminationException extends RuntimeException {
 	boolean isRetryable() {
 		return this.retryable;
 	}
+
 }

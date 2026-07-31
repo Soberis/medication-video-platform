@@ -9,6 +9,7 @@ interface DatasetSplitPlanRepository extends JpaRepository<DatasetSplitPlan, UUI
 
 	Optional<DatasetSplitPlan> findByDatasetVersionId(UUID datasetVersionId);
 
-	Optional<DatasetSplitPlan> findByProjectIdAndCreatedByAndIdempotencyKey(
-			UUID projectId, String createdBy, String idempotencyKey);
+	Optional<DatasetSplitPlan> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
+			String idempotencyKey);
+
 }

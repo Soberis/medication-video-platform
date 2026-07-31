@@ -145,13 +145,15 @@ Flyway V46 和 OpenAPI 0.52 将新建构建配置切换为 `p0-dataset-export-v2
 配对保留 v1 历史兼容，并同步 React 类型。v2 只承诺主 Step、CaptureSession split 和
 `RAW_CLIP_ASSET_V1`；不伪装 Object、COCO、帧或派生清洗视频已经存在。
 
-OpenAPI 0.50 首次增加导出审批准备检查；当前 OpenAPI 0.53 继续该语义。ACTIVE 项目成员显式请求后，服务端以 `REPEATABLE_READ` 只读事务
+OpenAPI 0.50 首次增加导出审批准备检查；当前 OpenAPI 0.54 继续该语义。ACTIVE 项目成员显式请求后，服务端以 `REPEATABLE_READ` 只读事务
 核对当前角色、申请人与审批人分离、用途有效期、`FROZEN` 状态、导出/审批绑定以及 V43 全部当前证据。
 后端单元/合同测试和 React 交互测试覆盖申请人、普通成员、另一位管理员、过期授权和证据漂移；检查不写
 审批决定、审计、Outbox 或业务状态，也不能替代批准命令的事务内复核。
 
 Flyway V47、OpenAPI 0.53 和 `workers/export-worker` 增加 v2 执行闭环：批准命令在一个事务内重验准备度并写
-审批决定、首次 attempt、Outbox 和审计；消息只携带业务标识、摘要和租约能力。Worker 使用独立 Bearer 身份，
+审批决定、首次 attempt、Outbox 和审计；消息只携带业务标识、摘要和租约能力。Worker 使用独立机器身份；
+OpenAPI 0.54 明确该机器身份契约：`local`/`test` 之外由 Core API 校验签名、HTTPS issuer/JWK、有效期、`sub` 以及 Media/Export 各自唯一 audience，
+Worker 每次请求从受管文件重新读取短期 JWT，静态 bearer 仅允许 `DATA_PROFILE=synthetic` 的本地联调。
 通过 Core API 换取 attempt-scoped 的短期输入、分片输出能力，以固定 ZIP 元数据生成 README、LabelSchema、
 含 streams 的 manifest、action segments、pilot/holdout、`videos/raw/` 和 SHA256SUMS。结果接受事务校验租约、
 固定输入/配置、批准软件摘要、对象元数据、包摘要及准确文件集合后，才把临时对象登记为 `ExportArtifact`。

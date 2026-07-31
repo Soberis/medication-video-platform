@@ -62,8 +62,11 @@ class AnnotationLabelDefinition {
 	int getSortOrder() {
 		return this.sortOrder;
 	}
+
 }
 
 enum AnnotationLabelType {
+
 	PRIMARY_STEP
+
 }

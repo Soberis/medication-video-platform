@@ -25,6 +25,7 @@ import jakarta.validation.constraints.Size;
 class UploadFileController {
 
 	private final UploadFileService service;
+
 	private final AssetCaptureProjectAuthorizer authorizer;
 
 	UploadFileController(UploadFileService service, AssetCaptureProjectAuthorizer authorizer) {
@@ -33,14 +34,10 @@ class UploadFileController {
 	}
 
 	@PutMapping("/{clientFileId}")
-	ResponseEntity<UploadFileResponse> register(
-			@PathVariable UUID batchId,
-			@PathVariable UUID clientFileId,
-			@RequestHeader("Idempotency-Key")
-			@Size(min = 16, max = 128)
-			@Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
-			@Valid @RequestBody UploadFileRegistrationRequest request,
-			Authentication authentication) {
+	ResponseEntity<UploadFileResponse> register(@PathVariable UUID batchId, @PathVariable UUID clientFileId,
+			@RequestHeader("Idempotency-Key") @Size(min = 16,
+					max = 128) @Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
+			@Valid @RequestBody UploadFileRegistrationRequest request, Authentication authentication) {
 		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
@@ -48,4 +45,5 @@ class UploadFileController {
 		var file = this.service.register(access.projectId(), batchId, clientFileId, idempotencyKey, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadFileResponse.from(file));
 	}
+
 }

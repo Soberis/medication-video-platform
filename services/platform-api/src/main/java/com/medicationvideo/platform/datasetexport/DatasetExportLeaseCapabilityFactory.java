@@ -23,8 +23,8 @@ final class DatasetExportLeaseCapabilityFactory {
 
 	static String hash(String token) {
 		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(token.getBytes(StandardCharsets.US_ASCII)));
+			return HexFormat.of()
+				.formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII)));
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 must be available.", exception);
@@ -33,4 +33,5 @@ final class DatasetExportLeaseCapabilityFactory {
 
 	record Capability(String token, String hash) {
 	}
+
 }

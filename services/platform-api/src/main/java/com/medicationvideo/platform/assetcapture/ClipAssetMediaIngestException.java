@@ -3,6 +3,7 @@ package com.medicationvideo.platform.assetcapture;
 public final class ClipAssetMediaIngestException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final boolean retryable;
 
 	public ClipAssetMediaIngestException(String errorCode, String message, boolean retryable) {
@@ -11,8 +12,7 @@ public final class ClipAssetMediaIngestException extends RuntimeException {
 		this.retryable = retryable;
 	}
 
-	public ClipAssetMediaIngestException(
-			String errorCode, String message, boolean retryable, Throwable cause) {
+	public ClipAssetMediaIngestException(String errorCode, String message, boolean retryable, Throwable cause) {
 		super(message, cause);
 		this.errorCode = errorCode;
 		this.retryable = retryable;
@@ -25,4 +25,5 @@ public final class ClipAssetMediaIngestException extends RuntimeException {
 	public boolean isRetryable() {
 		return this.retryable;
 	}
+
 }

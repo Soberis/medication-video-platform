@@ -36,16 +36,14 @@ class RabbitMediaTopologyConfiguration {
 
 	@Bean
 	Binding mediaProbeBinding(Queue mediaProbeQueue, DirectExchange mediaExchange) {
-		return BindingBuilder.bind(mediaProbeQueue)
-				.to(mediaExchange)
-				.with(MediaMessagingTopology.PROBE_ROUTING_KEY);
+		return BindingBuilder.bind(mediaProbeQueue).to(mediaExchange).with(MediaMessagingTopology.PROBE_ROUTING_KEY);
 	}
 
 	@Bean
 	Binding mediaDeadLetterBinding(Queue mediaDeadLetterQueue, DirectExchange mediaDeadLetterExchange) {
 		return BindingBuilder.bind(mediaDeadLetterQueue)
-				.to(mediaDeadLetterExchange)
-				.with(MediaMessagingTopology.DEAD_LETTER_ROUTING_KEY);
+			.to(mediaDeadLetterExchange)
+			.with(MediaMessagingTopology.DEAD_LETTER_ROUTING_KEY);
 	}
 
 }

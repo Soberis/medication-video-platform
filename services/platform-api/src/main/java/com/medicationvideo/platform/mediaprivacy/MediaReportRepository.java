@@ -9,7 +9,7 @@ interface MediaReportRepository extends JpaRepository<MediaReport, UUID> {
 
 	Optional<MediaReport> findByMediaJobId(UUID mediaJobId);
 
-	Optional<MediaReport> findTopByProjectIdAndClipAssetIdOrderByCreatedAtDescMediaReportIdDesc(
-			UUID projectId,
+	Optional<MediaReport> findTopByProjectIdAndClipAssetIdOrderByCreatedAtDescMediaReportIdDesc(UUID projectId,
 			UUID clipAssetId);
+
 }

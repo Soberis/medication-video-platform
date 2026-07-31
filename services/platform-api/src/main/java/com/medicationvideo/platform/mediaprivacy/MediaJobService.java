@@ -21,15 +21,15 @@ import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
 class MediaJobService {
 
 	private final MediaJobRepository repository;
+
 	private final MediaJobAttemptRepository attemptRepository;
+
 	private final AssetCatalogQueryService assetCatalog;
+
 	private final MediaJobAttemptQueueService attemptQueue;
 
-	MediaJobService(
-			MediaJobRepository repository,
-			MediaJobAttemptRepository attemptRepository,
-			AssetCatalogQueryService assetCatalog,
-			MediaJobAttemptQueueService attemptQueue) {
+	MediaJobService(MediaJobRepository repository, MediaJobAttemptRepository attemptRepository,
+			AssetCatalogQueryService assetCatalog, MediaJobAttemptQueueService attemptQueue) {
 		this.repository = repository;
 		this.attemptRepository = attemptRepository;
 		this.assetCatalog = assetCatalog;
@@ -50,29 +50,16 @@ class MediaJobService {
 		var summary = this.assetCatalog.getClipAssetInputSummary(projectId, request.clipAssetId());
 		ensureProbeable(summary);
 
-		var natural = this.repository.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
-				projectId,
-				request.jobType(),
-				summary.clipAssetId(),
-				summary.inputDigest(),
-				MediaProbeProfile.RECIPE_DIGEST);
+		var natural = this.repository.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(projectId,
+				request.jobType(), summary.clipAssetId(), summary.inputDigest(), MediaProbeProfile.RECIPE_DIGEST);
 		if (natural.isPresent()) {
 			return requireSameRequest(natural.get(), fingerprint);
 		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var job = MediaJob.request(
-				projectId,
-				summary.clipAssetId(),
-				request.jobType(),
-				summary.inputDigest(),
-				summary.inputSizeBytes(),
-				summary.contentType(),
-				MediaProbeProfile.PROFILE_KEY,
-				MediaProbeProfile.RECIPE_DIGEST,
-				idempotencyKey,
-				fingerprint,
-				now);
+		var job = MediaJob.request(projectId, summary.clipAssetId(), request.jobType(), summary.inputDigest(),
+				summary.inputSizeBytes(), summary.contentType(), MediaProbeProfile.PROFILE_KEY,
+				MediaProbeProfile.RECIPE_DIGEST, idempotencyKey, fingerprint, now);
 
 		try {
 			job = this.repository.saveAndFlush(job);
@@ -81,18 +68,13 @@ class MediaJobService {
 			return job;
 		}
 		catch (DataIntegrityViolationException exception) {
-			var concurrentByIdem = this.repository
-					.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
+			var concurrentByIdem = this.repository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
 			if (concurrentByIdem.isPresent()) {
 				return requireSameRequest(concurrentByIdem.get(), fingerprint);
 			}
 			var concurrentByNatural = this.repository
-					.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
-							projectId,
-							request.jobType(),
-							summary.clipAssetId(),
-							summary.inputDigest(),
-							MediaProbeProfile.RECIPE_DIGEST);
+				.findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(projectId, request.jobType(),
+						summary.clipAssetId(), summary.inputDigest(), MediaProbeProfile.RECIPE_DIGEST);
 			if (concurrentByNatural.isPresent()) {
 				return requireSameRequest(concurrentByNatural.get(), fingerprint);
 			}
@@ -103,8 +85,7 @@ class MediaJobService {
 	@Transactional(readOnly = true)
 	MediaJob get(UUID projectId, UUID mediaJobId) {
 		var job = this.repository.findById(mediaJobId)
-				.orElseThrow(() -> new MediaJobNotFoundException(
-						"The media job was not found."));
+			.orElseThrow(() -> new MediaJobNotFoundException("The media job was not found."));
 		if (!job.getProjectId().equals(projectId)) {
 			throw new MediaJobNotFoundException("The media job was not found.");
 		}
@@ -114,14 +95,12 @@ class MediaJobService {
 	@Transactional(readOnly = true)
 	MediaJobAttempt currentAttempt(MediaJob job) {
 		return this.attemptRepository.findTopByMediaJobIdOrderByAttemptDesc(job.getMediaJobId())
-				.orElseThrow(() -> new IllegalStateException(
-						"The media job has no current attempt."));
+			.orElseThrow(() -> new IllegalStateException("The media job has no current attempt."));
 	}
 
 	private static void ensureProbeable(ClipAssetInputSummary summary) {
 		if (!summary.contentType().toLowerCase(Locale.ROOT).startsWith("video/")) {
-			throw new ClipAssetNotProbeableException(
-					"The clip asset content type is not a probeable video.");
+			throw new ClipAssetNotProbeableException("The clip asset content type is not a probeable video.");
 		}
 		if (summary.status() != ClipAssetStatus.UPLOADED) {
 			throw new ClipAssetNotProbeableException(
@@ -130,8 +109,7 @@ class MediaJobService {
 	}
 
 	private static MediaJob requireSameRequest(MediaJob job, String fingerprint) {
-		if (!MessageDigest.isEqual(
-				job.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
+		if (!MessageDigest.isEqual(job.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
 				fingerprint.getBytes(StandardCharsets.US_ASCII))) {
 			throw new MediaJobIdempotencyConflictException();
 		}
@@ -139,13 +117,8 @@ class MediaJobService {
 	}
 
 	private static String fingerprint(UUID projectId, MediaJobRequest request) {
-		var canonical = String.join(
-				"\n",
-				projectId.toString(),
-				request.jobType().name(),
-				request.clipAssetId().toString(),
-				MediaProbeProfile.PROFILE_KEY,
-				MediaProbeProfile.RECIPE_DIGEST);
+		var canonical = String.join("\n", projectId.toString(), request.jobType().name(),
+				request.clipAssetId().toString(), MediaProbeProfile.PROFILE_KEY, MediaProbeProfile.RECIPE_DIGEST);
 		try {
 			var digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
 			return HexFormat.of().formatHex(digest);
@@ -154,4 +127,5 @@ class MediaJobService {
 			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
 		}
 	}
+
 }

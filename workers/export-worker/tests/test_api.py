@@ -42,13 +42,12 @@ def client_for(status: int, error_code: str, retryable: bool) -> CoreApiClient:
             json={"error_code": error_code, "retryable": retryable},
         )
 
-    client = CoreApiClient("http://core-api.invalid", "x" * 32, "export-worker-test")
-    client._client.close()
-    client._client = httpx.Client(
-        base_url="http://core-api.invalid",
+    return CoreApiClient(
+        "http://core-api.invalid",
+        "x" * 32,
+        "export-worker-test",
         transport=httpx.MockTransport(respond),
     )
-    return client
 
 
 def test_retryable_conflict_is_requeued_instead_of_misclassified_as_stale() -> None:
@@ -76,3 +75,26 @@ def test_non_retryable_contract_rejection_is_dead_lettered() -> None:
             client.submit_result(job(), {})
     finally:
         client.close()
+
+
+def test_core_requests_read_a_rotated_bearer_token() -> None:
+    tokens = iter(("a" * 32, "b" * 32))
+    observed: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        observed.append(request.headers["Authorization"])
+        return httpx.Response(204, request=request)
+
+    client = CoreApiClient(
+        "http://core-api.invalid",
+        lambda: next(tokens),
+        "export-worker-test",
+        transport=httpx.MockTransport(respond),
+    )
+    try:
+        client.submit_result(job(), {})
+        client.submit_result(job(), {})
+    finally:
+        client.close()
+
+    assert observed == [f"Bearer {'a' * 32}", f"Bearer {'b' * 32}"]

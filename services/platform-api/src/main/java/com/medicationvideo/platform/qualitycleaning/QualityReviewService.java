@@ -19,15 +19,15 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 class QualityReviewService {
 
 	private final ProjectAccessService projectAccessService;
+
 	private final ClipAssetReviewQueryService assetQueryService;
+
 	private final QualityReviewRepository repository;
+
 	private final AuditEventRecorder auditRecorder;
 
-	QualityReviewService(
-			ProjectAccessService projectAccessService,
-			ClipAssetReviewQueryService assetQueryService,
-			QualityReviewRepository repository,
-			AuditEventRecorder auditRecorder) {
+	QualityReviewService(ProjectAccessService projectAccessService, ClipAssetReviewQueryService assetQueryService,
+			QualityReviewRepository repository, AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.assetQueryService = assetQueryService;
 		this.repository = repository;
@@ -39,25 +39,18 @@ class QualityReviewService {
 		this.projectAccessService.requireMember(projectId, actorId);
 		this.assetQueryService.getReviewFacts(projectId, clipAssetId);
 		return this.repository.findByProjectIdAndClipAssetId(projectId, clipAssetId)
-				.map(QualityReviewResult::from)
-				.orElseGet(() -> QualityReviewResult.unreviewed(projectId, clipAssetId));
+			.map(QualityReviewResult::from)
+			.orElseGet(() -> QualityReviewResult.unreviewed(projectId, clipAssetId));
 	}
 
 	@Transactional
-	QualityReviewResult record(
-			UUID projectId,
-			UUID clipAssetId,
-			String actorId,
-			QualityReviewCommand command,
-			String requestId,
-			String traceId) {
+	QualityReviewResult record(UUID projectId, UUID clipAssetId, String actorId, QualityReviewCommand command,
+			String requestId, String traceId) {
 		var projectRole = this.projectAccessService.requireMember(projectId, actorId);
 		var assetFacts = this.assetQueryService.getReviewFacts(projectId, clipAssetId);
 		if (!assetFacts.reviewable()) {
-			throw new QualityReviewException(
-					"QUALITY_REVIEW_NOT_READY",
-					"The clip asset must complete media ingest before quality review.",
-					409);
+			throw new QualityReviewException("QUALITY_REVIEW_NOT_READY",
+					"The clip asset must complete media ingest before quality review.", 409);
 		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -67,12 +60,7 @@ class QualityReviewService {
 			if (command.expectedVersion() != 0) {
 				throw versionConflict();
 			}
-			review = QualityReview.create(
-					projectId,
-					clipAssetId,
-					command.decision(),
-					command.reasonCode(),
-					actorId,
+			review = QualityReview.create(projectId, clipAssetId, command.decision(), command.reasonCode(), actorId,
 					now);
 		}
 		else {
@@ -87,65 +75,35 @@ class QualityReviewService {
 		}
 
 		var saved = this.repository.saveAndFlush(review);
-		this.auditRecorder.record(new AuditEventCommand(
-				now,
-				AuditActorType.USER,
-				actorId,
-				projectId,
-				"CLIP_ASSET_QUALITY_REVIEWED",
-				"QualityReview",
-				saved.getQualityReviewId().toString(),
-				Long.toString(saved.getVersion()),
-				AuditOutcome.SUCCEEDED,
-				saved.getReasonCode().name(),
-				requestId,
-				traceId,
-				"PROJECT_MEMBERSHIP_" + projectRole.name(),
-				Map.of(
-						"clip_asset_id", clipAssetId.toString(),
-						"decision", saved.getDecision().name(),
-						"reason_code", saved.getReasonCode().name())));
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"CLIP_ASSET_QUALITY_REVIEWED", "QualityReview", saved.getQualityReviewId().toString(),
+				Long.toString(saved.getVersion()), AuditOutcome.SUCCEEDED, saved.getReasonCode().name(), requestId,
+				traceId, "PROJECT_MEMBERSHIP_" + projectRole.name(), Map.of("clip_asset_id", clipAssetId.toString(),
+						"decision", saved.getDecision().name(), "reason_code", saved.getReasonCode().name())));
 		return QualityReviewResult.from(saved);
 	}
 
 	private static QualityReviewException versionConflict() {
-		return new QualityReviewException(
-				"QUALITY_REVIEW_CONFLICT",
-				"The quality review changed; reload it before trying again.",
-				409);
+		return new QualityReviewException("QUALITY_REVIEW_CONFLICT",
+				"The quality review changed; reload it before trying again.", 409);
 	}
 
-	record QualityReviewCommand(
-			QualityReviewDecision decision,
-			QualityReviewReasonCode reasonCode,
+	record QualityReviewCommand(QualityReviewDecision decision, QualityReviewReasonCode reasonCode,
 			long expectedVersion) {
 	}
 
-	record QualityReviewResult(
-			UUID qualityReviewId,
-			UUID projectId,
-			UUID clipAssetId,
-			String decision,
-			QualityReviewReasonCode reasonCode,
-			String reviewedBy,
-			Instant reviewedAt,
-			long version) {
+	record QualityReviewResult(UUID qualityReviewId, UUID projectId, UUID clipAssetId, String decision,
+			QualityReviewReasonCode reasonCode, String reviewedBy, Instant reviewedAt, long version) {
 
 		static QualityReviewResult unreviewed(UUID projectId, UUID clipAssetId) {
-			return new QualityReviewResult(
-					null, projectId, clipAssetId, "UNREVIEWED", null, null, null, 0);
+			return new QualityReviewResult(null, projectId, clipAssetId, "UNREVIEWED", null, null, null, 0);
 		}
 
 		static QualityReviewResult from(QualityReview review) {
-			return new QualityReviewResult(
-					review.getQualityReviewId(),
-					review.getProjectId(),
-					review.getClipAssetId(),
-					review.getDecision().name(),
-					review.getReasonCode(),
-					review.getReviewedBy(),
-					review.getReviewedAt(),
+			return new QualityReviewResult(review.getQualityReviewId(), review.getProjectId(), review.getClipAssetId(),
+					review.getDecision().name(), review.getReasonCode(), review.getReviewedBy(), review.getReviewedAt(),
 					review.getVersion());
 		}
 	}
+
 }

@@ -10,4 +10,5 @@ public interface ProjectActor {
 	UUID projectId();
 
 	String actorId();
+
 }

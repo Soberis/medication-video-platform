@@ -11,4 +11,5 @@ interface UploadPartProgressSummary {
 	long getUploadedParts();
 
 	long getUploadedSizeBytes();
+
 }

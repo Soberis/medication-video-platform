@@ -10,12 +10,12 @@ interface ProjectMembershipRepository extends JpaRepository<ProjectMembership, U
 
 	Optional<ProjectMembership> findByProjectIdAndActorId(UUID projectId, String actorId);
 
-	List<ProjectMembership> findAllByActorIdAndStatusOrderByCreatedAtAscMembershipIdAsc(
-			String actorId, MembershipStatus status);
+	List<ProjectMembership> findAllByActorIdAndStatusOrderByCreatedAtAscMembershipIdAsc(String actorId,
+			MembershipStatus status);
 
-	List<ProjectMembership> findAllByProjectIdAndStatusOrderByCreatedAtAscMembershipIdAsc(
-			UUID projectId, MembershipStatus status);
+	List<ProjectMembership> findAllByProjectIdAndStatusOrderByCreatedAtAscMembershipIdAsc(UUID projectId,
+			MembershipStatus status);
 
-	long countByProjectIdAndStatusAndRole(
-			UUID projectId, MembershipStatus status, ProjectRole role);
+	long countByProjectIdAndStatusAndRole(UUID projectId, MembershipStatus status, ProjectRole role);
+
 }

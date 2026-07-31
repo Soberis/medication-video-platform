@@ -29,25 +29,20 @@ import jakarta.validation.Valid;
 class PlatformAuthenticationController {
 
 	private final PlatformAccountAuthenticationService authenticationService;
+
 	private final SecurityContextRepository securityContextRepository;
 
-	PlatformAuthenticationController(
-			PlatformAccountAuthenticationService authenticationService,
+	PlatformAuthenticationController(PlatformAccountAuthenticationService authenticationService,
 			SecurityContextRepository securityContextRepository) {
 		this.authenticationService = authenticationService;
 		this.securityContextRepository = securityContextRepository;
 	}
 
 	@PostMapping("/login")
-	ResponseEntity<PlatformSessionResponse> login(
-			@Valid @RequestBody PlatformLoginRequest request,
-			@RequestHeader(name = "X-Request-Id", required = false) String requestId,
-			HttpServletRequest servletRequest,
-			HttpServletResponse servletResponse,
-			CsrfToken csrfToken) {
-		var authentication = this.authenticationService.authenticate(
-				request,
-				resolveRequestId(requestId),
+	ResponseEntity<PlatformSessionResponse> login(@Valid @RequestBody PlatformLoginRequest request,
+			@RequestHeader(name = "X-Request-Id", required = false) String requestId, HttpServletRequest servletRequest,
+			HttpServletResponse servletResponse, CsrfToken csrfToken) {
+		var authentication = this.authenticationService.authenticate(request, resolveRequestId(requestId),
 				MDC.get("traceId"));
 		var context = SecurityContextHolder.createEmptyContext();
 		context.setAuthentication(authentication);
@@ -55,8 +50,8 @@ class PlatformAuthenticationController {
 		this.securityContextRepository.saveContext(context, servletRequest, servletResponse);
 		csrfToken.getToken();
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.authenticationService.session(authentication));
+			.cacheControl(CacheControl.noStore())
+			.body(this.authenticationService.session(authentication));
 	}
 
 	@GetMapping("/session")
@@ -64,8 +59,8 @@ class PlatformAuthenticationController {
 		var platformAuthentication = requirePlatformAuthentication(authentication);
 		csrfToken.getToken();
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.authenticationService.session(platformAuthentication));
+			.cacheControl(CacheControl.noStore())
+			.body(this.authenticationService.session(platformAuthentication));
 	}
 
 	@PostMapping("/logout")
@@ -78,8 +73,7 @@ class PlatformAuthenticationController {
 		return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
 	}
 
-	private static UsernamePasswordAuthenticationToken requirePlatformAuthentication(
-			Authentication authentication) {
+	private static UsernamePasswordAuthenticationToken requirePlatformAuthentication(Authentication authentication) {
 		if (authentication instanceof UsernamePasswordAuthenticationToken platformAuthentication
 				&& platformAuthentication.getPrincipal() instanceof PlatformActor) {
 			return platformAuthentication;
@@ -90,4 +84,5 @@ class PlatformAuthenticationController {
 	private static String resolveRequestId(String requestId) {
 		return requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
 	}
+
 }

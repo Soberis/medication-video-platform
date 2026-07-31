@@ -16,13 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 class UploadFileCompletionStateService {
 
 	private final UploadBatchRepository batchRepository;
+
 	private final UploadFileRepository fileRepository;
+
 	private final UploadPartRepository partRepository;
+
 	private final Duration completionLease;
 
-	UploadFileCompletionStateService(
-			UploadBatchRepository batchRepository,
-			UploadFileRepository fileRepository,
+	UploadFileCompletionStateService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
 			UploadPartRepository partRepository,
 			@Value("${platform.upload.file-completion-lease}") Duration completionLease) {
 		this.batchRepository = batchRepository;
@@ -30,8 +31,7 @@ class UploadFileCompletionStateService {
 		this.partRepository = partRepository;
 		if (completionLease.compareTo(Duration.ofSeconds(10)) < 0
 				|| completionLease.compareTo(Duration.ofHours(1)) > 0) {
-			throw new IllegalArgumentException(
-					"File completion lease must be between ten seconds and one hour.");
+			throw new IllegalArgumentException("File completion lease must be between ten seconds and one hour.");
 		}
 		this.completionLease = completionLease;
 	}
@@ -39,9 +39,9 @@ class UploadFileCompletionStateService {
 	@Transactional
 	CompletionAttempt begin(UUID projectId, UUID batchId, UUID clientFileId) {
 		var batch = this.batchRepository.findForFileRegistration(batchId, projectId)
-				.orElseThrow(UploadBatchNotFoundException::new);
+			.orElseThrow(UploadBatchNotFoundException::new);
 		var file = this.fileRepository.findForUploadCommand(batchId, clientFileId)
-				.orElseThrow(UploadFileNotFoundException::new);
+			.orElseThrow(UploadFileNotFoundException::new);
 		if (file.getStatus() == UploadFileStatus.UPLOADED) {
 			return CompletionAttempt.completed(UploadFileCompletionResponse.from(file));
 		}
@@ -54,44 +54,33 @@ class UploadFileCompletionStateService {
 			throw new UploadMultipartException("UPLOAD_BATCH_EXPIRED", "The upload batch has expired.");
 		}
 		if (batch.getStatus() != UploadBatchStatus.UPLOADING) {
-			throw new UploadMultipartException(
-					"UPLOAD_BATCH_NOT_UPLOADING",
+			throw new UploadMultipartException("UPLOAD_BATCH_NOT_UPLOADING",
 					"The upload batch has not started uploading.");
 		}
 		if (file.getStatus() == UploadFileStatus.COMPLETING && file.hasActiveCompletionLease(now)) {
 			throw new UploadFileCompletionInProgressException();
 		}
-		if (file.getStatus() != UploadFileStatus.UPLOADING
-				&& file.getStatus() != UploadFileStatus.COMPLETING) {
-			throw new UploadMultipartException(
-					"UPLOAD_FILE_NOT_UPLOADING",
+		if (file.getStatus() != UploadFileStatus.UPLOADING && file.getStatus() != UploadFileStatus.COMPLETING) {
+			throw new UploadMultipartException("UPLOAD_FILE_NOT_UPLOADING",
 					"The upload file has not started uploading.");
 		}
 
 		var attemptId = UUID.randomUUID();
 		file.startCompletion(attemptId, now.plus(this.completionLease), now);
 		this.fileRepository.saveAndFlush(file);
-		return CompletionAttempt.active(
-				attemptId,
-				file.getUploadFileId(),
-				file.getMultipartUpload(),
-				file.getTotalParts(),
-				file.getSizeBytes(),
-				file.getSha256());
+		return CompletionAttempt.active(attemptId, file.getUploadFileId(), file.getMultipartUpload(),
+				file.getTotalParts(), file.getSizeBytes(), file.getSha256());
 	}
 
 	@Transactional
-	List<MultipartObjectStorage.StoredPart> verifyAndConfirmParts(
-			UUID uploadFileId,
-			UUID attemptId,
+	List<MultipartObjectStorage.StoredPart> verifyAndConfirmParts(UUID uploadFileId, UUID attemptId,
 			List<MultipartObjectStorage.StoredPart> storedParts) {
 		var file = requireAttempt(uploadFileId, attemptId);
 		var sortedParts = storedParts.stream()
-				.sorted(Comparator.comparingInt(MultipartObjectStorage.StoredPart::partNumber))
-				.toList();
+			.sorted(Comparator.comparingInt(MultipartObjectStorage.StoredPart::partNumber))
+			.toList();
 		if (sortedParts.size() < file.getTotalParts()) {
-			throw new UploadMultipartException(
-					"UPLOAD_FILE_PARTS_INCOMPLETE",
+			throw new UploadMultipartException("UPLOAD_FILE_PARTS_INCOMPLETE",
 					"Object storage does not contain every declared upload part.");
 		}
 		if (sortedParts.size() > file.getTotalParts()) {
@@ -100,8 +89,7 @@ class UploadFileCompletionStateService {
 
 		var trackedParts = this.partRepository.findAllByUploadFileIdOrderByPartNumber(uploadFileId);
 		if (trackedParts.size() != file.getTotalParts()) {
-			throw new UploadMultipartException(
-					"UPLOAD_FILE_PARTS_INCOMPLETE",
+			throw new UploadMultipartException("UPLOAD_FILE_PARTS_INCOMPLETE",
 					"Every declared upload part must be authorized before file completion.");
 		}
 		var trackedByNumber = new HashMap<Integer, UploadPart>();
@@ -112,8 +100,7 @@ class UploadFileCompletionStateService {
 			var expectedPartNumber = index + 1;
 			var storedPart = sortedParts.get(index);
 			if (storedPart.partNumber() != expectedPartNumber) {
-				throw new UploadMultipartException(
-						"UPLOAD_FILE_PARTS_INCOMPLETE",
+				throw new UploadMultipartException("UPLOAD_FILE_PARTS_INCOMPLETE",
 						"Upload part numbers must be continuous from one through the declared total.");
 			}
 			var trackedPart = trackedByNumber.get(expectedPartNumber);
@@ -124,8 +111,7 @@ class UploadFileCompletionStateService {
 			totalSize = Math.addExact(totalSize, storedPart.sizeBytes());
 		}
 		if (totalSize != file.getSizeBytes()) {
-			throw new UploadMultipartException(
-					"UPLOAD_FILE_PARTS_SIZE_MISMATCH",
+			throw new UploadMultipartException("UPLOAD_FILE_PARTS_SIZE_MISMATCH",
 					"The total stored part size does not match the immutable file manifest.");
 		}
 		this.partRepository.saveAllAndFlush(trackedParts);
@@ -149,10 +135,7 @@ class UploadFileCompletionStateService {
 	}
 
 	@Transactional
-	FinishResult finish(
-			UUID uploadFileId,
-			UUID attemptId,
-			MultipartObjectStorage.CompletedObject completedObject,
+	FinishResult finish(UUID uploadFileId, UUID attemptId, MultipartObjectStorage.CompletedObject completedObject,
 			String observedSha256) {
 		var file = requireAttempt(uploadFileId, attemptId);
 		var now = now();
@@ -160,16 +143,14 @@ class UploadFileCompletionStateService {
 			var errorCode = "UPLOAD_FILE_SIZE_MISMATCH";
 			file.markCompletionFailed(attemptId, completedObject, null, errorCode, now);
 			this.fileRepository.saveAndFlush(file);
-			return FinishResult.failed(
-					errorCode,
+			return FinishResult.failed(errorCode,
 					"The completed object size does not match the immutable file manifest.");
 		}
 		if (!file.getSha256().equals(observedSha256)) {
 			var errorCode = "UPLOAD_FILE_CHECKSUM_MISMATCH";
 			file.markCompletionFailed(attemptId, completedObject, observedSha256, errorCode, now);
 			this.fileRepository.saveAndFlush(file);
-			return FinishResult.failed(
-					errorCode,
+			return FinishResult.failed(errorCode,
 					"The completed object SHA-256 does not match the immutable file manifest.");
 		}
 
@@ -179,14 +160,12 @@ class UploadFileCompletionStateService {
 	}
 
 	private UploadFile requireAttempt(UUID uploadFileId, UUID attemptId) {
-		var file = this.fileRepository.findForCompletion(uploadFileId)
-				.orElseThrow(UploadFileNotFoundException::new);
+		var file = this.fileRepository.findForCompletion(uploadFileId).orElseThrow(UploadFileNotFoundException::new);
 		try {
 			file.requireCompletionAttempt(attemptId);
 		}
 		catch (IllegalStateException exception) {
-			if (file.getStatus() == UploadFileStatus.ABORTED
-					|| file.getStatus() == UploadFileStatus.EXPIRED) {
+			if (file.getStatus() == UploadFileStatus.ABORTED || file.getStatus() == UploadFileStatus.EXPIRED) {
 				throw new UploadFileCompletionSupersededException();
 			}
 			throw exception;
@@ -195,14 +174,12 @@ class UploadFileCompletionStateService {
 	}
 
 	private static UploadMultipartException previousCompletionFailure(UploadFile file) {
-		return new UploadMultipartException(
-				file.getCompletionErrorCode(),
+		return new UploadMultipartException(file.getCompletionErrorCode(),
 				"The upload file previously failed final integrity verification.");
 	}
 
 	private static UploadMultipartException storageDiverged() {
-		return new UploadMultipartException(
-				"UPLOAD_PART_STORAGE_DIVERGED",
+		return new UploadMultipartException("UPLOAD_PART_STORAGE_DIVERGED",
 				"Object storage parts do not match the platform upload state.");
 	}
 
@@ -210,29 +187,13 @@ class UploadFileCompletionStateService {
 		return Instant.now().truncatedTo(ChronoUnit.MICROS);
 	}
 
-	record CompletionAttempt(
-			UUID attemptId,
-			UUID uploadFileId,
-			MultipartObjectStorage.CreatedUpload upload,
-			int totalParts,
-			long expectedSizeBytes,
-			String expectedSha256,
+	record CompletionAttempt(UUID attemptId, UUID uploadFileId, MultipartObjectStorage.CreatedUpload upload,
+			int totalParts, long expectedSizeBytes, String expectedSha256,
 			UploadFileCompletionResponse completedResponse) {
 
-		static CompletionAttempt active(
-				UUID attemptId,
-				UUID uploadFileId,
-				MultipartObjectStorage.CreatedUpload upload,
-				int totalParts,
-				long expectedSizeBytes,
-				String expectedSha256) {
-			return new CompletionAttempt(
-					attemptId,
-					uploadFileId,
-					upload,
-					totalParts,
-					expectedSizeBytes,
-					expectedSha256,
+		static CompletionAttempt active(UUID attemptId, UUID uploadFileId, MultipartObjectStorage.CreatedUpload upload,
+				int totalParts, long expectedSizeBytes, String expectedSha256) {
+			return new CompletionAttempt(attemptId, uploadFileId, upload, totalParts, expectedSizeBytes, expectedSha256,
 					null);
 		}
 
@@ -245,10 +206,7 @@ class UploadFileCompletionStateService {
 		}
 	}
 
-	record FinishResult(
-			UploadFileCompletionResponse response,
-			String errorCode,
-			String errorMessage) {
+	record FinishResult(UploadFileCompletionResponse response, String errorCode, String errorMessage) {
 
 		static FinishResult completed(UploadFileCompletionResponse response) {
 			return new FinishResult(response, null, null);
@@ -262,4 +220,5 @@ class UploadFileCompletionStateService {
 			return this.errorCode != null;
 		}
 	}
+
 }

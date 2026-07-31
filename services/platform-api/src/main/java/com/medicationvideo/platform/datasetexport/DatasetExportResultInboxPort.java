@@ -8,11 +8,7 @@ public interface DatasetExportResultInboxPort {
 
 	Optional<DatasetExportInboxReceipt> find(UUID messageId);
 
-	DatasetExportInboxReceipt record(
-			UUID messageId,
-			UUID exportId,
-			int attempt,
-			String resultFingerprint,
-			String resultStatus,
-			Instant processedAt);
+	DatasetExportInboxReceipt record(UUID messageId, UUID exportId, int attempt, String resultFingerprint,
+			String resultStatus, Instant processedAt);
+
 }

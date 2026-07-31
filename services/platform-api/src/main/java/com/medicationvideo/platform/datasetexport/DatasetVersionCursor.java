@@ -9,19 +9,13 @@ import java.util.UUID;
 record DatasetVersionCursor(Instant createdAt, UUID datasetVersionId) {
 
 	private static final String VERSION = "v1";
+
 	private static final String KIND = "dataset-version";
 
 	static String encode(Instant createdAt, UUID datasetVersionId) {
-		var value = String.join(
-				"|",
-				VERSION,
-				KIND,
-				Long.toString(createdAt.getEpochSecond()),
-				Integer.toString(createdAt.getNano()),
-				datasetVersionId.toString());
-		return Base64.getUrlEncoder()
-				.withoutPadding()
-				.encodeToString(value.getBytes(StandardCharsets.UTF_8));
+		var value = String.join("|", VERSION, KIND, Long.toString(createdAt.getEpochSecond()),
+				Integer.toString(createdAt.getNano()), datasetVersionId.toString());
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
 	}
 
 	static DatasetVersionCursor decode(String cursor) {
@@ -41,9 +35,7 @@ record DatasetVersionCursor(Instant createdAt, UUID datasetVersionId) {
 	}
 
 	private static DatasetVersionException invalid() {
-		return new DatasetVersionException(
-				"INVALID_CURSOR",
-				"The dataset-version pagination cursor is invalid or belongs to another resource.",
-				400);
+		return new DatasetVersionException("INVALID_CURSOR",
+				"The dataset-version pagination cursor is invalid or belongs to another resource.", 400);
 	}
 }

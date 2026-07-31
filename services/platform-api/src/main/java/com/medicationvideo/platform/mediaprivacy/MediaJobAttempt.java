@@ -81,12 +81,7 @@ class MediaJobAttempt {
 	protected MediaJobAttempt() {
 	}
 
-	private MediaJobAttempt(
-			UUID mediaJobId,
-			int attempt,
-			UUID messageId,
-			String leaseTokenHash,
-			Instant createdAt) {
+	private MediaJobAttempt(UUID mediaJobId, int attempt, UUID messageId, String leaseTokenHash, Instant createdAt) {
 		this.mediaJobAttemptId = UUID.randomUUID();
 		this.mediaJobId = mediaJobId;
 		this.attempt = attempt;
@@ -97,11 +92,7 @@ class MediaJobAttempt {
 		this.updatedAt = createdAt;
 	}
 
-	static MediaJobAttempt queue(
-			UUID mediaJobId,
-			int attempt,
-			UUID messageId,
-			String leaseTokenHash,
+	static MediaJobAttempt queue(UUID mediaJobId, int attempt, UUID messageId, String leaseTokenHash,
 			Instant createdAt) {
 		if (attempt < 1) {
 			throw new IllegalArgumentException("Media job attempt must be positive.");
@@ -111,18 +102,14 @@ class MediaJobAttempt {
 
 	void acquire(String requestedWorkerId, Instant now, Duration leaseDuration) {
 		if (this.status == MediaJobAttemptStatus.RUNNING) {
-			if (!requestedWorkerId.equals(this.workerId) || this.leaseUntil == null
-					|| !now.isBefore(this.leaseUntil)) {
-				throw new MediaJobExecutionException(
-						"MEDIA_JOB_LEASE_CONFLICT",
-						"The media job attempt already has an active or expired lease.",
-						false);
+			if (!requestedWorkerId.equals(this.workerId) || this.leaseUntil == null || !now.isBefore(this.leaseUntil)) {
+				throw new MediaJobExecutionException("MEDIA_JOB_LEASE_CONFLICT",
+						"The media job attempt already has an active or expired lease.", false);
 			}
 			return;
 		}
 		if (this.status != MediaJobAttemptStatus.QUEUED) {
-			throw new MediaJobExecutionException(
-					"STALE_ATTEMPT", "The media job attempt is no longer queued.", false);
+			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job attempt is no longer queued.", false);
 		}
 		this.status = MediaJobAttemptStatus.RUNNING;
 		this.workerId = requestedWorkerId;
@@ -136,10 +123,8 @@ class MediaJobAttempt {
 	void heartbeat(String requestedWorkerId, Instant now, Duration leaseDuration) {
 		requireActiveLease(now);
 		if (!requestedWorkerId.equals(this.workerId)) {
-			throw new MediaJobExecutionException(
-					"MEDIA_JOB_LEASE_CONFLICT",
-					"The media job lease belongs to a different Worker.",
-					false);
+			throw new MediaJobExecutionException("MEDIA_JOB_LEASE_CONFLICT",
+					"The media job lease belongs to a different Worker.", false);
 		}
 		this.leaseUntil = now.plus(leaseDuration);
 		this.lastHeartbeatAt = now;
@@ -166,8 +151,7 @@ class MediaJobAttempt {
 
 	void lose(Instant now) {
 		if (this.status != MediaJobAttemptStatus.RUNNING) {
-			throw new MediaJobExecutionException(
-					"STALE_ATTEMPT", "The media job attempt is no longer running.", false);
+			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job attempt is no longer running.", false);
 		}
 		this.status = MediaJobAttemptStatus.LOST;
 		this.errorClass = "RETRYABLE_RESOURCE";
@@ -179,10 +163,8 @@ class MediaJobAttempt {
 	}
 
 	void deadLetter(MediaDeadLetterReason reason, Instant now) {
-		if (this.status != MediaJobAttemptStatus.QUEUED
-				&& this.status != MediaJobAttemptStatus.RUNNING) {
-			throw new MediaJobReplayException(
-					"MEDIA_JOB_REPLAY_STALE",
+		if (this.status != MediaJobAttemptStatus.QUEUED && this.status != MediaJobAttemptStatus.RUNNING) {
+			throw new MediaJobReplayException("MEDIA_JOB_REPLAY_STALE",
 					"The dead-lettered media job attempt is no longer current.");
 		}
 		this.status = MediaJobAttemptStatus.FAILED;
@@ -195,22 +177,19 @@ class MediaJobAttempt {
 	}
 
 	boolean isRecoverableAt(Instant cutoff) {
-		return this.status == MediaJobAttemptStatus.RUNNING
-				&& this.leaseUntil != null
+		return this.status == MediaJobAttemptStatus.RUNNING && this.leaseUntil != null
 				&& !this.leaseUntil.isAfter(cutoff);
 	}
 
 	void requireActiveLease(Instant now) {
-		if (this.status != MediaJobAttemptStatus.RUNNING || this.leaseUntil == null
-				|| !now.isBefore(this.leaseUntil)) {
-			throw new MediaJobExecutionException(
-					"MEDIA_JOB_LEASE_EXPIRED", "The media job lease is not active.", false);
+		if (this.status != MediaJobAttemptStatus.RUNNING || this.leaseUntil == null || !now.isBefore(this.leaseUntil)) {
+			throw new MediaJobExecutionException("MEDIA_JOB_LEASE_EXPIRED", "The media job lease is not active.",
+					false);
 		}
 	}
 
 	boolean matchesLeaseHash(String candidateHash) {
-		return MessageDigest.isEqual(
-				this.leaseTokenHash.getBytes(StandardCharsets.US_ASCII),
+		return MessageDigest.isEqual(this.leaseTokenHash.getBytes(StandardCharsets.US_ASCII),
 				candidateHash.getBytes(StandardCharsets.US_ASCII));
 	}
 
@@ -261,4 +240,5 @@ class MediaJobAttempt {
 	Boolean getErrorRetryable() {
 		return this.errorRetryable;
 	}
+
 }

@@ -8,4 +8,5 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ConditionalOnProperty(name = "platform.upload.cleanup-enabled", havingValue = "true")
 class UploadMaintenanceSchedulingConfiguration {
+
 }

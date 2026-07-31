@@ -3,6 +3,7 @@ package com.medicationvideo.platform.datasetexport;
 final class DatasetExportExecutionException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final boolean retryable;
 
 	DatasetExportExecutionException(String errorCode, String message, boolean retryable) {
@@ -18,4 +19,5 @@ final class DatasetExportExecutionException extends RuntimeException {
 	boolean isRetryable() {
 		return this.retryable;
 	}
+
 }

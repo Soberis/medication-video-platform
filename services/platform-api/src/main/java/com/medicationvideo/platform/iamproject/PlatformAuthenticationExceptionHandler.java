@@ -23,13 +23,12 @@ class PlatformAuthenticationExceptionHandler {
 		return error(HttpStatus.BAD_REQUEST, "INVALID_LOGIN_REQUEST", "请输入有效的账号和密码。");
 	}
 
-	private static ResponseEntity<ProjectApiErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
+	private static ResponseEntity<ProjectApiErrorResponse> error(HttpStatus status, String errorCode,
 			String errorMessage) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-				.cacheControl(CacheControl.noStore())
-				.body(new ProjectApiErrorResponse(errorCode, errorMessage, false, UUID.randomUUID().toString(), null));
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new ProjectApiErrorResponse(errorCode, errorMessage, false, UUID.randomUUID().toString(), null));
 	}
+
 }

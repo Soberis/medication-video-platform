@@ -51,77 +51,47 @@ class QualityReviewController {
 	}
 
 	@GetMapping
-	ResponseEntity<QualityReviewResponse> get(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
+	ResponseEntity<QualityReviewResponse> get(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
 			Authentication authentication) {
 		var result = this.service.get(projectId, clipAssetId, requireActor(authentication).actorId());
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(QualityReviewResponse.from(result));
 	}
 
 	@PutMapping
-	ResponseEntity<QualityReviewResponse> record(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody QualityReviewRequest request,
-			Authentication authentication) {
-		var result = this.service.record(
-				projectId,
-				clipAssetId,
-				requireActor(authentication).actorId(),
+	ResponseEntity<QualityReviewResponse> record(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody QualityReviewRequest request, Authentication authentication) {
+		var result = this.service.record(projectId, clipAssetId, requireActor(authentication).actorId(),
 				new QualityReviewCommand(request.decision(), request.reasonCode(), request.expectedVersion()),
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"));
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(QualityReviewResponse.from(result));
 	}
 
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
-			throw new QualityReviewException(
-					"QUALITY_REVIEW_ACCESS_DENIED",
-					"An authenticated platform account is required for quality review.",
-					403);
+			throw new QualityReviewException("QUALITY_REVIEW_ACCESS_DENIED",
+					"An authenticated platform account is required for quality review.", 403);
 		}
 		return actor;
 	}
+
 }
 
-record QualityReviewRequest(
-		@NotNull QualityReviewDecision decision,
-		@NotNull QualityReviewReasonCode reasonCode,
+record QualityReviewRequest(@NotNull QualityReviewDecision decision, @NotNull QualityReviewReasonCode reasonCode,
 		@NotNull @PositiveOrZero Long expectedVersion) {
 }
 
-record QualityReviewResponse(
-		UUID qualityReviewId,
-		UUID projectId,
-		UUID clipAssetId,
-		String decision,
-		QualityReviewReasonCode reasonCode,
-		String reviewedBy,
-		Instant reviewedAt,
-		long version) {
+record QualityReviewResponse(UUID qualityReviewId, UUID projectId, UUID clipAssetId, String decision,
+		QualityReviewReasonCode reasonCode, String reviewedBy, Instant reviewedAt, long version) {
 
 	static QualityReviewResponse from(QualityReviewResult result) {
-		return new QualityReviewResponse(
-				result.qualityReviewId(),
-				result.projectId(),
-				result.clipAssetId(),
-				result.decision(),
-				result.reasonCode(),
-				result.reviewedBy(),
-				result.reviewedAt(),
-				result.version());
+		return new QualityReviewResponse(result.qualityReviewId(), result.projectId(), result.clipAssetId(),
+				result.decision(), result.reasonCode(), result.reviewedBy(), result.reviewedAt(), result.version());
 	}
 }
 
-record QualityReviewErrorResponse(
-		String errorCode,
-		String errorMessage,
-		boolean retryable,
-		String requestId) {
+record QualityReviewErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
 @RestControllerAdvice(assignableTypes = QualityReviewController.class)
@@ -142,30 +112,24 @@ class QualityReviewExceptionHandler {
 		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
 	}
 
-	@ExceptionHandler({
-		MethodArgumentNotValidException.class,
-		HandlerMethodValidationException.class,
-		HttpMessageNotReadableException.class
-	})
+	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
+			HttpMessageNotReadableException.class })
 	ResponseEntity<QualityReviewErrorResponse> invalidRequest(Exception exception) {
 		return error(HttpStatus.BAD_REQUEST, "INVALID_QUALITY_REVIEW", "The quality review request is invalid.");
 	}
 
-	@ExceptionHandler({
-		ObjectOptimisticLockingFailureException.class,
-		DataIntegrityViolationException.class
-	})
+	@ExceptionHandler({ ObjectOptimisticLockingFailureException.class, DataIntegrityViolationException.class })
 	ResponseEntity<QualityReviewErrorResponse> conflict(Exception exception) {
-		return error(HttpStatus.CONFLICT, "QUALITY_REVIEW_CONFLICT", "The quality review changed; reload it before trying again.");
+		return error(HttpStatus.CONFLICT, "QUALITY_REVIEW_CONFLICT",
+				"The quality review changed; reload it before trying again.");
 	}
 
-	private static ResponseEntity<QualityReviewErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
+	private static ResponseEntity<QualityReviewErrorResponse> error(HttpStatus status, String errorCode,
 			String message) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-				.cacheControl(CacheControl.noStore())
-				.body(new QualityReviewErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new QualityReviewErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
 	}
+
 }

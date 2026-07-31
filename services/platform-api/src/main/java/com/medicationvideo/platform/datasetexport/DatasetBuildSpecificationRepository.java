@@ -9,6 +9,7 @@ interface DatasetBuildSpecificationRepository extends JpaRepository<DatasetBuild
 
 	Optional<DatasetBuildSpecification> findByDatasetVersionId(UUID datasetVersionId);
 
-	Optional<DatasetBuildSpecification> findByProjectIdAndCreatedByAndIdempotencyKey(
-			UUID projectId, String createdBy, String idempotencyKey);
+	Optional<DatasetBuildSpecification> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
+			String idempotencyKey);
+
 }

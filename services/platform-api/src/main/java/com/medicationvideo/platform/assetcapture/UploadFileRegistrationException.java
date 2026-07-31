@@ -12,4 +12,5 @@ final class UploadFileRegistrationException extends RuntimeException {
 	String getErrorCode() {
 		return this.errorCode;
 	}
+
 }

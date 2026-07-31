@@ -14,40 +14,37 @@ import org.springframework.transaction.annotation.Transactional;
 class UploadPartAuthorizationService {
 
 	private final UploadBatchRepository batchRepository;
+
 	private final UploadFileRepository fileRepository;
+
 	private final UploadPartRepository partRepository;
+
 	private final MultipartObjectStorage objectStorage;
+
 	private final Duration authorizationTtl;
 
-	UploadPartAuthorizationService(
-			UploadBatchRepository batchRepository,
-			UploadFileRepository fileRepository,
-			UploadPartRepository partRepository,
-			MultipartObjectStorage objectStorage,
+	UploadPartAuthorizationService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
+			UploadPartRepository partRepository, MultipartObjectStorage objectStorage,
 			@Value("${platform.upload.part-authorization-ttl}") Duration authorizationTtl) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.partRepository = partRepository;
 		this.objectStorage = objectStorage;
-		if (authorizationTtl.isZero()
-				|| authorizationTtl.isNegative()
+		if (authorizationTtl.isZero() || authorizationTtl.isNegative()
 				|| authorizationTtl.compareTo(Duration.ofDays(7)) > 0) {
-			throw new IllegalArgumentException("Part authorization TTL must be positive and no longer than seven days.");
+			throw new IllegalArgumentException(
+					"Part authorization TTL must be positive and no longer than seven days.");
 		}
 		this.authorizationTtl = authorizationTtl;
 	}
 
 	@Transactional
-	AuthorizedPart authorize(
-			UUID projectId,
-			UUID batchId,
-			UUID clientFileId,
-			int partNumber,
+	AuthorizedPart authorize(UUID projectId, UUID batchId, UUID clientFileId, int partNumber,
 			UploadPartAuthorizationRequest request) {
 		var batch = this.batchRepository.findForFileRegistration(batchId, projectId)
-				.orElseThrow(UploadBatchNotFoundException::new);
+			.orElseThrow(UploadBatchNotFoundException::new);
 		var file = this.fileRepository.findForUploadCommand(batchId, clientFileId)
-				.orElseThrow(UploadFileNotFoundException::new);
+			.orElseThrow(UploadFileNotFoundException::new);
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		requireAuthorizedState(batch, file, partNumber, now);
 
@@ -58,18 +55,12 @@ class UploadPartAuthorizationService {
 		}
 
 		var existingPart = this.partRepository.findByUploadFileIdAndPartNumber(file.getUploadFileId(), partNumber);
-		var part = existingPart.orElseGet(() -> UploadPart.authorize(
-				file.getUploadFileId(),
-				partNumber,
-				expectedSize,
-				request.sha256(),
-				expiresAt,
-				now));
+		var part = existingPart.orElseGet(() -> UploadPart.authorize(file.getUploadFileId(), partNumber, expectedSize,
+				request.sha256(), expiresAt, now));
 		if (existingPart.isPresent()) {
 			requireSamePart(part, expectedSize, request.sha256());
 			if (part.getStatus() == UploadPartStatus.UPLOADED) {
-				throw new UploadMultipartException(
-						"UPLOAD_PART_ALREADY_CONFIRMED",
+				throw new UploadMultipartException("UPLOAD_PART_ALREADY_CONFIRMED",
 						"A confirmed upload part cannot be authorized again.");
 			}
 			part.reauthorize(expiresAt, now);
@@ -77,9 +68,7 @@ class UploadPartAuthorizationService {
 
 		URI uploadUrl;
 		try {
-			uploadUrl = this.objectStorage.authorizePart(
-					file.getMultipartUpload(),
-					partNumber,
+			uploadUrl = this.objectStorage.authorizePart(file.getMultipartUpload(), partNumber,
 					Duration.between(now, expiresAt));
 		}
 		catch (MultipartObjectStorageException exception) {
@@ -92,34 +81,24 @@ class UploadPartAuthorizationService {
 		return new AuthorizedPart(file, part, uploadUrl);
 	}
 
-	private static void requireAuthorizedState(
-			UploadBatch batch,
-			UploadFile file,
-			int partNumber,
-			Instant now) {
+	private static void requireAuthorizedState(UploadBatch batch, UploadFile file, int partNumber, Instant now) {
 		if (!batch.getExpiresAt().isAfter(now)) {
 			throw new UploadMultipartException("UPLOAD_BATCH_EXPIRED", "The upload batch has expired.");
 		}
-		if (batch.getStatus() != UploadBatchStatus.INITIATED
-				&& batch.getStatus() != UploadBatchStatus.UPLOADING) {
-			throw new UploadMultipartException(
-					"UPLOAD_BATCH_NOT_UPLOADABLE",
+		if (batch.getStatus() != UploadBatchStatus.INITIATED && batch.getStatus() != UploadBatchStatus.UPLOADING) {
+			throw new UploadMultipartException("UPLOAD_BATCH_NOT_UPLOADABLE",
 					"The upload batch does not accept multipart operations.");
 		}
 		if (!file.hasMultipartSession()) {
-			throw new UploadMultipartException(
-					"UPLOAD_MULTIPART_SESSION_REQUIRED",
+			throw new UploadMultipartException("UPLOAD_MULTIPART_SESSION_REQUIRED",
 					"Create the multipart session before authorizing a part.");
 		}
-		if (file.getStatus() != UploadFileStatus.SESSION_CREATED
-				&& file.getStatus() != UploadFileStatus.UPLOADING) {
-			throw new UploadMultipartException(
-					"UPLOAD_FILE_NOT_UPLOADABLE",
+		if (file.getStatus() != UploadFileStatus.SESSION_CREATED && file.getStatus() != UploadFileStatus.UPLOADING) {
+			throw new UploadMultipartException("UPLOAD_FILE_NOT_UPLOADABLE",
 					"The upload file does not accept new part authorizations.");
 		}
 		if (partNumber > file.getTotalParts()) {
-			throw new UploadMultipartException(
-					"UPLOAD_PART_OUT_OF_RANGE",
+			throw new UploadMultipartException("UPLOAD_PART_OUT_OF_RANGE",
 					"The part number exceeds the file manifest.");
 		}
 	}
@@ -133,8 +112,7 @@ class UploadPartAuthorizationService {
 
 	private static void requireSamePart(UploadPart part, long expectedSize, String sha256) {
 		if (part.getExpectedSizeBytes() != expectedSize || !part.getSha256().equals(sha256)) {
-			throw new UploadMultipartException(
-					"UPLOAD_PART_HASH_CONFLICT",
+			throw new UploadMultipartException("UPLOAD_PART_HASH_CONFLICT",
 					"The upload part was already registered with different immutable metadata.");
 		}
 	}
@@ -145,4 +123,5 @@ class UploadPartAuthorizationService {
 
 	record AuthorizedPart(UploadFile file, UploadPart part, URI uploadUrl) {
 	}
+
 }

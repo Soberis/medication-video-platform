@@ -12,4 +12,5 @@ interface AnnotationReviewRepository extends JpaRepository<AnnotationReview, UUI
 	Optional<AnnotationReview> findByAnnotationRevisionId(UUID annotationRevisionId);
 
 	List<AnnotationReview> findAllByAnnotationRevisionIdIn(Collection<UUID> annotationRevisionIds);
+
 }

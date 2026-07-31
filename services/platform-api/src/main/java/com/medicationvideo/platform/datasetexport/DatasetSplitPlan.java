@@ -49,14 +49,8 @@ class DatasetSplitPlan {
 	protected DatasetSplitPlan() {
 	}
 
-	private DatasetSplitPlan(
-			DatasetVersion version,
-			int splitSeed,
-			int holdoutCount,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
+	private DatasetSplitPlan(DatasetVersion version, int splitSeed, int holdoutCount, String createdBy,
+			String idempotencyKey, String requestFingerprint, Instant createdAt) {
 		this.datasetSplitPlanId = UUID.randomUUID();
 		this.datasetVersionId = version.getDatasetVersionId();
 		this.projectId = version.getProjectId();
@@ -69,16 +63,10 @@ class DatasetSplitPlan {
 		this.createdAt = createdAt;
 	}
 
-	static DatasetSplitPlan create(
-			DatasetVersion version,
-			int splitSeed,
-			int holdoutCount,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new DatasetSplitPlan(
-				version, splitSeed, holdoutCount, createdBy, idempotencyKey, requestFingerprint, createdAt);
+	static DatasetSplitPlan create(DatasetVersion version, int splitSeed, int holdoutCount, String createdBy,
+			String idempotencyKey, String requestFingerprint, Instant createdAt) {
+		return new DatasetSplitPlan(version, splitSeed, holdoutCount, createdBy, idempotencyKey, requestFingerprint,
+				createdAt);
 	}
 
 	boolean matchesCreateRequest(String fingerprint) {
@@ -116,8 +104,11 @@ class DatasetSplitPlan {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }
 
 enum DatasetSplitPolicy {
+
 	CAPTURE_SESSION_HASH_RANK_V1
+
 }

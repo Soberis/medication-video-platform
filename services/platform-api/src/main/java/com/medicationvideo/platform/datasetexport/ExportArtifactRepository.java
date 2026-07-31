@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface ExportArtifactRepository extends JpaRepository<ExportArtifact, UUID> {
 
 	Optional<ExportArtifact> findByDatasetExportId(UUID datasetExportId);
+
 }

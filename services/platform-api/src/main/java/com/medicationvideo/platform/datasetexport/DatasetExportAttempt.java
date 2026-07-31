@@ -89,11 +89,7 @@ class DatasetExportAttempt {
 	protected DatasetExportAttempt() {
 	}
 
-	private DatasetExportAttempt(
-			DatasetExport export,
-			int attempt,
-			UUID messageId,
-			String leaseTokenHash,
+	private DatasetExportAttempt(DatasetExport export, int attempt, UUID messageId, String leaseTokenHash,
 			Instant createdAt) {
 		this.datasetExportAttemptId = UUID.randomUUID();
 		this.datasetExportId = export.getDatasetExportId();
@@ -105,11 +101,7 @@ class DatasetExportAttempt {
 		this.updatedAt = createdAt;
 	}
 
-	static DatasetExportAttempt queue(
-			DatasetExport export,
-			int attempt,
-			UUID messageId,
-			String leaseTokenHash,
+	static DatasetExportAttempt queue(DatasetExport export, int attempt, UUID messageId, String leaseTokenHash,
 			Instant createdAt) {
 		return new DatasetExportAttempt(export, attempt, messageId, leaseTokenHash, createdAt);
 	}
@@ -117,17 +109,15 @@ class DatasetExportAttempt {
 	void acquire(String workerId, Instant now, Duration leaseDuration) {
 		if (this.status == DatasetExportAttemptStatus.RUNNING) {
 			if (!Objects.equals(this.workerId, workerId)) {
-				throw new DatasetExportExecutionException(
-						"EXPORT_ATTEMPT_ALREADY_LEASED",
-						"The dataset export attempt is leased by another Worker.",
-						false);
+				throw new DatasetExportExecutionException("EXPORT_ATTEMPT_ALREADY_LEASED",
+						"The dataset export attempt is leased by another Worker.", false);
 			}
 			heartbeat(workerId, now, leaseDuration);
 			return;
 		}
 		if (this.status != DatasetExportAttemptStatus.QUEUED) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export attempt is no longer queued.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT",
+					"The dataset export attempt is no longer queued.", false);
 		}
 		this.status = DatasetExportAttemptStatus.RUNNING;
 		this.workerId = workerId;
@@ -141,10 +131,8 @@ class DatasetExportAttempt {
 	void heartbeat(String workerId, Instant now, Duration leaseDuration) {
 		requireActiveLease(now);
 		if (!Objects.equals(this.workerId, workerId)) {
-			throw new DatasetExportExecutionException(
-					"EXPORT_WORKER_IDENTITY_MISMATCH",
-					"The dataset export attempt belongs to another Worker.",
-					false);
+			throw new DatasetExportExecutionException("EXPORT_WORKER_IDENTITY_MISMATCH",
+					"The dataset export attempt belongs to another Worker.", false);
 		}
 		this.lastHeartbeatAt = now;
 		this.leaseUntil = now.plus(leaseDuration);
@@ -153,8 +141,7 @@ class DatasetExportAttempt {
 
 	void attachUpload(DatasetExportStoragePort.CreatedUpload upload, Instant now) {
 		if (this.outputUploadId != null) {
-			if (!this.outputBucket.equals(upload.bucket())
-					|| !this.outputObjectKey.equals(upload.objectKey())
+			if (!this.outputBucket.equals(upload.bucket()) || !this.outputObjectKey.equals(upload.objectKey())
 					|| !this.outputUploadId.equals(upload.uploadId())) {
 				throw new IllegalStateException("The dataset export attempt already has another upload.");
 			}
@@ -168,8 +155,8 @@ class DatasetExportAttempt {
 
 	void succeed(Instant now) {
 		if (this.status != DatasetExportAttemptStatus.RUNNING) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export attempt is no longer running.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT",
+					"The dataset export attempt is no longer running.", false);
 		}
 		this.status = DatasetExportAttemptStatus.SUCCEEDED;
 		this.completedAt = now;
@@ -178,8 +165,8 @@ class DatasetExportAttempt {
 
 	void fail(DatasetExportErrorPayload error, Instant now) {
 		if (this.status != DatasetExportAttemptStatus.RUNNING) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export attempt is no longer running.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT",
+					"The dataset export attempt is no longer running.", false);
 		}
 		this.status = DatasetExportAttemptStatus.FAILED;
 		this.errorClass = error.errorClass().name();
@@ -192,8 +179,8 @@ class DatasetExportAttempt {
 
 	void lose(Instant now) {
 		if (this.status != DatasetExportAttemptStatus.RUNNING) {
-			throw new DatasetExportExecutionException(
-					"STALE_ATTEMPT", "The dataset export attempt is no longer running.", false);
+			throw new DatasetExportExecutionException("STALE_ATTEMPT",
+					"The dataset export attempt is no longer running.", false);
 		}
 		this.status = DatasetExportAttemptStatus.LOST;
 		this.errorClass = "RETRYABLE_RESOURCE";
@@ -205,17 +192,15 @@ class DatasetExportAttempt {
 	}
 
 	boolean isRecoverableAt(Instant cutoff) {
-		return this.status == DatasetExportAttemptStatus.RUNNING
-				&& this.leaseUntil != null
+		return this.status == DatasetExportAttemptStatus.RUNNING && this.leaseUntil != null
 				&& !this.leaseUntil.isAfter(cutoff);
 	}
 
 	void requireActiveLease(Instant now) {
-		if (this.status != DatasetExportAttemptStatus.RUNNING
-				|| this.leaseUntil == null
+		if (this.status != DatasetExportAttemptStatus.RUNNING || this.leaseUntil == null
 				|| !this.leaseUntil.isAfter(now)) {
-			throw new DatasetExportExecutionException(
-					"EXPORT_LEASE_EXPIRED", "The dataset export lease is no longer active.", false);
+			throw new DatasetExportExecutionException("EXPORT_LEASE_EXPIRED",
+					"The dataset export lease is no longer active.", false);
 		}
 	}
 
@@ -227,8 +212,7 @@ class DatasetExportAttempt {
 		if (this.outputBucket == null || this.outputObjectKey == null || this.outputUploadId == null) {
 			return null;
 		}
-		return new DatasetExportStoragePort.CreatedUpload(
-				this.outputBucket, this.outputObjectKey, this.outputUploadId);
+		return new DatasetExportStoragePort.CreatedUpload(this.outputBucket, this.outputObjectKey, this.outputUploadId);
 	}
 
 	UUID getDatasetExportAttemptId() {
@@ -266,12 +250,11 @@ class DatasetExportAttempt {
 	Instant getCompletedAt() {
 		return this.completedAt;
 	}
+
 }
 
 enum DatasetExportAttemptStatus {
-	QUEUED,
-	RUNNING,
-	SUCCEEDED,
-	FAILED,
-	LOST
+
+	QUEUED, RUNNING, SUCCEEDED, FAILED, LOST
+
 }

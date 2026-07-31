@@ -4,7 +4,7 @@ import hashlib
 import os
 import socket
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -14,7 +14,8 @@ SOFTWARE_DIGEST_FILES = ("pyproject.toml", "uv.lock")
 @dataclass(frozen=True, slots=True)
 class Settings:
     platform_api_base_url: str
-    worker_bearer_token: str
+    worker_bearer_token: str | None = field(repr=False)
+    worker_bearer_token_file: Path | None
     rabbitmq_url: str
     worker_id: str
     queue_name: str
@@ -26,13 +27,17 @@ class Settings:
     temp_dir: Path | None
     software_digest: str
 
+    def read_worker_bearer_token(self) -> str:
+        return _read_worker_bearer_token(
+            self.worker_bearer_token,
+            self.worker_bearer_token_file,
+        )
+
     @classmethod
     def from_environment(cls, environ: Mapping[str, str] | None = None) -> Settings:
         values = os.environ if environ is None else environ
         root = Path(__file__).resolve().parents[2]
-        token = values.get("MEDIA_WORKER_BEARER_TOKEN", "")
-        if len(token) < 32:
-            raise ValueError("MEDIA_WORKER_BEARER_TOKEN must contain at least 32 characters")
+        token, token_file = _worker_identity(values)
 
         base_url = values.get("PLATFORM_API_BASE_URL", "http://localhost:8080").rstrip("/")
         parsed_base_url = urlparse(base_url)
@@ -67,6 +72,7 @@ class Settings:
         return cls(
             platform_api_base_url=base_url,
             worker_bearer_token=token,
+            worker_bearer_token_file=token_file,
             rabbitmq_url=rabbitmq_url,
             worker_id=worker_id,
             queue_name="platform.media.probe.v1",
@@ -78,6 +84,38 @@ class Settings:
             temp_dir=temp_dir,
             software_digest=software_digest,
         )
+
+
+def _worker_identity(values: Mapping[str, str]) -> tuple[str | None, Path | None]:
+    token = values.get("MEDIA_WORKER_BEARER_TOKEN") or None
+    token_file_value = values.get("MEDIA_WORKER_BEARER_TOKEN_FILE") or None
+    if (token is None) == (token_file_value is None):
+        raise ValueError(
+            "Configure exactly one of MEDIA_WORKER_BEARER_TOKEN or MEDIA_WORKER_BEARER_TOKEN_FILE"
+        )
+    if token is not None and values.get("DATA_PROFILE") != "synthetic":
+        raise ValueError(
+            "MEDIA_WORKER_BEARER_TOKEN is synthetic-only; use "
+            "MEDIA_WORKER_BEARER_TOKEN_FILE outside synthetic data profiles"
+        )
+    token_file = Path(token_file_value) if token_file_value is not None else None
+    if token_file is not None and not token_file.is_absolute():
+        raise ValueError("MEDIA_WORKER_BEARER_TOKEN_FILE must be an absolute path")
+    _read_worker_bearer_token(token, token_file)
+    return token, token_file
+
+
+def _read_worker_bearer_token(token: str | None, token_file: Path | None) -> str:
+    if token_file is not None:
+        try:
+            candidate = token_file.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError("MEDIA_WORKER_BEARER_TOKEN_FILE cannot be read") from exc
+    else:
+        candidate = token or ""
+    if len(candidate) < 32 or any(character.isspace() for character in candidate):
+        raise ValueError("Media Worker bearer token must contain at least 32 non-space characters")
+    return candidate
 
 
 def calculate_software_digest(project_root: Path) -> str:

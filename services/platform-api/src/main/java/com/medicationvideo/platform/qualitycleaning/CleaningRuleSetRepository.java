@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface CleaningRuleSetRepository extends JpaRepository<CleaningRuleSet, UUID> {
 
-	Optional<CleaningRuleSet> findByRuleSetKeyAndStatus(
-			String ruleSetKey,
-			CleaningRuleSetStatus status);
+	Optional<CleaningRuleSet> findByRuleSetKeyAndStatus(String ruleSetKey, CleaningRuleSetStatus status);
+
 }

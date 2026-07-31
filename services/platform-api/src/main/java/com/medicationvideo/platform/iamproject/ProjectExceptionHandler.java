@@ -18,63 +18,40 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
-@RestControllerAdvice(assignableTypes = {
-		ProjectController.class,
-		PlatformAccountManagementController.class
-})
+@RestControllerAdvice(assignableTypes = { ProjectController.class, PlatformAccountManagementController.class })
 class ProjectExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(ProjectExceptionHandler.class);
+
 	private static final String REQUEST_ID_ATTRIBUTE = "medication.requestId";
 
-	@ExceptionHandler({
-		MethodArgumentNotValidException.class,
-		HandlerMethodValidationException.class,
-		MissingRequestHeaderException.class,
-		HttpMessageNotReadableException.class,
-		IllegalArgumentException.class
-	})
+	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
+			MissingRequestHeaderException.class, HttpMessageNotReadableException.class,
+			IllegalArgumentException.class })
 	ResponseEntity<ProjectApiErrorResponse> invalidRequest(Exception exception) {
-		return error(
-				HttpStatus.BAD_REQUEST,
-				"INVALID_REQUEST",
-				"The project request is invalid.",
-				false);
+		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The project request is invalid.", false);
 	}
 
 	@ExceptionHandler(ProjectApiException.class)
 	ResponseEntity<ProjectApiErrorResponse> projectError(ProjectApiException exception) {
-		return error(
-				HttpStatus.valueOf(exception.getStatusCode()),
-				exception.getErrorCode(),
-				exception.getMessage(),
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				false);
 	}
 
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<ProjectApiErrorResponse> unexpected(Exception exception) {
 		log.error("Unexpected project service error", exception);
-		return error(
-				HttpStatus.INTERNAL_SERVER_ERROR,
-				"INTERNAL_ERROR",
-				"The project service encountered an unexpected error.",
-				true);
+		return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+				"The project service encountered an unexpected error.", true);
 	}
 
-	private static ResponseEntity<ProjectApiErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
-			String errorMessage,
-			boolean retryable) {
+	private static ResponseEntity<ProjectApiErrorResponse> error(HttpStatus status, String errorCode,
+			String errorMessage, boolean retryable) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-				.cacheControl(CacheControl.noStore())
-				.body(new ProjectApiErrorResponse(
-						errorCode,
-						errorMessage,
-						retryable,
-						resolveRequestId(),
-						MDC.get("traceId")));
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new ProjectApiErrorResponse(errorCode, errorMessage, retryable, resolveRequestId(),
+					MDC.get("traceId")));
 	}
 
 	private static String resolveRequestId() {
@@ -94,4 +71,5 @@ class ProjectExceptionHandler {
 		}
 		return UUID.randomUUID().toString();
 	}
+
 }

@@ -40,6 +40,7 @@ import jakarta.validation.constraints.Pattern;
 class AnnotationTaskController {
 
 	private static final String IDEMPOTENCY_KEY_PATTERN = "^[A-Za-z0-9._:-]{16,128}$";
+
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
 
 	private final AnnotationTaskService service;
@@ -49,163 +50,114 @@ class AnnotationTaskController {
 	}
 
 	@GetMapping("/annotation-tasks")
-	ResponseEntity<AnnotationTaskListResponse> list(
-			@PathVariable UUID projectId,
-			Authentication authentication) {
+	ResponseEntity<AnnotationTaskListResponse> list(@PathVariable UUID projectId, Authentication authentication) {
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.service.list(projectId, requireActor(authentication).actorId()));
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.list(projectId, requireActor(authentication).actorId()));
 	}
 
 	@PostMapping("/clip-assets/{clipAssetId}/annotation-tasks")
-	ResponseEntity<AnnotationTaskResponse> create(
-			@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId,
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody AnnotationTaskRequest request,
-			Authentication authentication) {
-		var response = this.service.create(
-				projectId,
-				clipAssetId,
-				requireActor(authentication).actorId(),
-				idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"),
-				new AnnotationTaskCreateRequest(request.assigneeActorId()));
+	ResponseEntity<AnnotationTaskResponse> create(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationTaskRequest request, Authentication authentication) {
+		var response = this.service.create(projectId, clipAssetId, requireActor(authentication).actorId(),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"), new AnnotationTaskCreateRequest(request.assigneeActorId()));
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.location(URI.create("/api/v1/projects/" + projectId
-						+ "/annotation-tasks/" + response.annotationTaskId()))
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + response.annotationTaskId()))
+			.cacheControl(CacheControl.noStore())
+			.body(response);
 	}
 
 	@PostMapping("/annotation-tasks/{annotationTaskId}/revisions")
-	ResponseEntity<AnnotationRevisionResponse> submitRevision(
-			@PathVariable UUID projectId,
+	ResponseEntity<AnnotationRevisionResponse> submitRevision(@PathVariable UUID projectId,
 			@PathVariable UUID annotationTaskId,
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody AnnotationRevisionRequest request,
-			Authentication authentication) {
-		var response = this.service.submitRevision(
-				projectId,
-				annotationTaskId,
-				requireActor(authentication).actorId(),
-				idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationRevisionRequest request, Authentication authentication) {
+		var response = this.service.submitRevision(projectId, annotationTaskId, requireActor(authentication).actorId(),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
 				MDC.get("traceId"),
-				new AnnotationRevisionSubmitCommand(
-						request.segments().stream()
-								.map(segment -> new AnnotationSegmentCommand(
-										segment.startMs(), segment.endMs(), segment.label()))
-								.toList(),
-						request.note()));
+				new AnnotationRevisionSubmitCommand(request.segments()
+					.stream()
+					.map(segment -> new AnnotationSegmentCommand(segment.startMs(), segment.endMs(), segment.label()))
+					.toList(), request.note()));
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.location(URI.create("/api/v1/projects/" + projectId
-						+ "/annotation-tasks/" + annotationTaskId + "/revisions/"
-						+ response.annotationRevisionId()))
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + annotationTaskId
+					+ "/revisions/" + response.annotationRevisionId()))
+			.cacheControl(CacheControl.noStore())
+			.body(response);
 	}
 
 	@PostMapping("/annotation-revisions/{annotationRevisionId}/review")
-	ResponseEntity<AnnotationReviewResponse> reviewRevision(
-			@PathVariable UUID projectId,
+	ResponseEntity<AnnotationReviewResponse> reviewRevision(@PathVariable UUID projectId,
 			@PathVariable UUID annotationRevisionId,
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody AnnotationReviewRequest request,
-			Authentication authentication) {
-		var response = this.service.reviewRevision(
-				projectId,
-				annotationRevisionId,
-				requireActor(authentication).actorId(),
-				idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"),
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationReviewRequest request, Authentication authentication) {
+		var response = this.service.reviewRevision(projectId, annotationRevisionId,
+				requireActor(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				new AnnotationReviewCommand(request.decision(), request.reviewNote()));
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.location(URI.create("/api/v1/projects/" + projectId
-						+ "/annotation-revisions/" + annotationRevisionId + "/review"))
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+			.location(URI
+				.create("/api/v1/projects/" + projectId + "/annotation-revisions/" + annotationRevisionId + "/review"))
+			.cacheControl(CacheControl.noStore())
+			.body(response);
 	}
 
 	@PostMapping("/annotation-revisions/{annotationRevisionId}/post-cleaning-rechecks")
-	ResponseEntity<PostCleaningResultResponse> recheckPostCleaning(
-			@PathVariable UUID projectId,
+	ResponseEntity<PostCleaningResultResponse> recheckPostCleaning(@PathVariable UUID projectId,
 			@PathVariable UUID annotationRevisionId,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
-		var response = this.service.recheckPostCleaning(
-				projectId,
-				annotationRevisionId,
+		var response = this.service.recheckPostCleaning(projectId, annotationRevisionId,
 				requireActor(authentication).actorId(),
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"));
-		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
-			throw new AnnotationTaskException(
-					"ANNOTATION_TASK_ACCESS_DENIED",
-					"An authenticated platform account is required for annotation tasks.",
-					403);
+			throw new AnnotationTaskException("ANNOTATION_TASK_ACCESS_DENIED",
+					"An authenticated platform account is required for annotation tasks.", 403);
 		}
 		return actor;
 	}
+
 }
 
 record AnnotationTaskRequest(
-		@NotNull
-		@NotBlank
-		@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
+		@NotNull @NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
 }
 
 record AnnotationRevisionRequest(
-		@NotNull
-		@jakarta.validation.constraints.Size(min = 1, max = 200)
-		java.util.List<@Valid AnnotationSegmentRequest> segments,
-		@jakarta.validation.constraints.Size(max = 1000)
-		@Pattern(regexp = "^[^\\p{Cc}]*$") String note) {
+		@NotNull @jakarta.validation.constraints.Size(min = 1,
+				max = 200) java.util.List<@Valid AnnotationSegmentRequest> segments,
+		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String note) {
 }
 
-record AnnotationSegmentRequest(
-		@jakarta.validation.constraints.Min(0) long startMs,
+record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long startMs,
 		@jakarta.validation.constraints.Min(1) long endMs,
-		@NotBlank
-		@jakarta.validation.constraints.Size(max = 64)
-		@Pattern(regexp = "^[^\\p{Cc}]+$") String label) {
+		@NotBlank @jakarta.validation.constraints.Size(max = 64) @Pattern(regexp = "^[^\\p{Cc}]+$") String label) {
 }
 
-record AnnotationReviewRequest(
-		@NotNull AnnotationReviewDecision decision,
-		@jakarta.validation.constraints.Size(max = 1000)
-		@Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
+record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
+		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
 }
 
-record AnnotationTaskErrorResponse(
-		String errorCode,
-		String errorMessage,
-		boolean retryable,
-		String requestId) {
+record AnnotationTaskErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = {
-	AnnotationTaskController.class,
-	AnnotationLabelSchemaController.class
-})
+@RestControllerAdvice(assignableTypes = { AnnotationTaskController.class, AnnotationLabelSchemaController.class })
 class AnnotationTaskExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)
@@ -223,11 +175,8 @@ class AnnotationTaskExceptionHandler {
 		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage());
 	}
 
-	@ExceptionHandler({
-			MethodArgumentNotValidException.class,
-			HandlerMethodValidationException.class,
-			HttpMessageNotReadableException.class
-	})
+	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
+			HttpMessageNotReadableException.class })
 	ResponseEntity<AnnotationTaskErrorResponse> invalidRequest(Exception exception) {
 		return error(HttpStatus.BAD_REQUEST, "INVALID_ANNOTATION_TASK", "The annotation task request is invalid.");
 	}
@@ -238,13 +187,12 @@ class AnnotationTaskExceptionHandler {
 				"The clip asset already has an annotation task in this project.");
 	}
 
-	private static ResponseEntity<AnnotationTaskErrorResponse> error(
-			HttpStatus status,
-			String errorCode,
+	private static ResponseEntity<AnnotationTaskErrorResponse> error(HttpStatus status, String errorCode,
 			String message) {
 		return ResponseEntity.status(status)
-				.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-				.cacheControl(CacheControl.noStore())
-				.body(new AnnotationTaskErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new AnnotationTaskErrorResponse(errorCode, message, false, UUID.randomUUID().toString()));
 	}
+
 }

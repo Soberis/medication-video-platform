@@ -36,31 +36,37 @@ class DatasetVersionValidationService {
 	private static final String COMMAND_VERSION = "DATASET_VERSION_VALIDATION_CREATE_V1";
 
 	private final ProjectAccessService projectAccessService;
+
 	private final DatasetVersionRepository versionRepository;
+
 	private final DatasetMemberSessionRepository memberRepository;
+
 	private final DatasetMemberStreamRepository streamRepository;
+
 	private final DatasetSplitPlanRepository splitPlanRepository;
+
 	private final DatasetSplitAssignmentRepository assignmentRepository;
+
 	private final DatasetBuildSpecificationRepository specificationRepository;
+
 	private final DatasetBuildSnapshotRepository snapshotRepository;
+
 	private final DatasetVersionValidationRepository validationRepository;
+
 	private final DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService;
+
 	private final DatasetFreezeApprovalService approvalService;
+
 	private final AuditEventRecorder auditRecorder;
 
-	DatasetVersionValidationService(
-			ProjectAccessService projectAccessService,
-			DatasetVersionRepository versionRepository,
-			DatasetMemberSessionRepository memberRepository,
-			DatasetMemberStreamRepository streamRepository,
-			DatasetSplitPlanRepository splitPlanRepository,
+	DatasetVersionValidationService(ProjectAccessService projectAccessService,
+			DatasetVersionRepository versionRepository, DatasetMemberSessionRepository memberRepository,
+			DatasetMemberStreamRepository streamRepository, DatasetSplitPlanRepository splitPlanRepository,
 			DatasetSplitAssignmentRepository assignmentRepository,
 			DatasetBuildSpecificationRepository specificationRepository,
-			DatasetBuildSnapshotRepository snapshotRepository,
-			DatasetVersionValidationRepository validationRepository,
+			DatasetBuildSnapshotRepository snapshotRepository, DatasetVersionValidationRepository validationRepository,
 			DatasetVersionCurrentAdmissionQueryService currentAdmissionQueryService,
-			DatasetFreezeApprovalService approvalService,
-			AuditEventRecorder auditRecorder) {
+			DatasetFreezeApprovalService approvalService, AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.versionRepository = versionRepository;
 		this.memberRepository = memberRepository;
@@ -76,40 +82,29 @@ class DatasetVersionValidationService {
 	}
 
 	@Transactional(isolation = Isolation.REPEATABLE_READ)
-	DatasetVersionValidationResponse validate(
-			UUID projectId,
-			UUID datasetVersionId,
-			String actorId,
-			String idempotencyKey,
-			String requestId,
-			String traceId) {
+	DatasetVersionValidationResponse validate(UUID projectId, UUID datasetVersionId, String actorId,
+			String idempotencyKey, String requestId, String traceId) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = requestFingerprint(datasetVersionId);
-		var replay = this.validationRepository.findByProjectIdAndValidatedByAndIdempotencyKey(
-				projectId, actorId, idempotencyKey);
+		var replay = this.validationRepository.findByProjectIdAndValidatedByAndIdempotencyKey(projectId, actorId,
+				idempotencyKey);
 		if (replay.isPresent()) {
 			if (!replay.get().matchesRequest(fingerprint)) {
-				throw new DatasetVersionException(
-						"DATASET_VERSION_VALIDATION_IDEMPOTENCY_KEY_REUSED",
-						"The idempotency key was already used for another dataset validation.",
-						409);
+				throw new DatasetVersionException("DATASET_VERSION_VALIDATION_IDEMPOTENCY_KEY_REUSED",
+						"The idempotency key was already used for another dataset validation.", 409);
 			}
 			return DatasetVersionValidationResponse.from(replay.get());
 		}
 
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
-				.orElseThrow(DatasetVersionValidationService::notFound);
+			.orElseThrow(DatasetVersionValidationService::notFound);
 		if (version.getStatus() != DatasetVersionStatus.VALIDATING) {
-			throw new DatasetVersionException(
-					"DATASET_VERSION_VALIDATION_STATUS_INVALID",
-					"Freeze validation can only run while the dataset version is validating.",
-					409);
+			throw new DatasetVersionException("DATASET_VERSION_VALIDATION_STATUS_INVALID",
+					"Freeze validation can only run while the dataset version is validating.", 409);
 		}
 		if (this.validationRepository.findByDatasetVersionId(datasetVersionId).isPresent()) {
-			throw new DatasetVersionException(
-					"DATASET_VERSION_VALIDATION_ALREADY_EXISTS",
-					"The dataset version already has an immutable validation result.",
-					409);
+			throw new DatasetVersionException("DATASET_VERSION_VALIDATION_ALREADY_EXISTS",
+					"The dataset version already has an immutable validation result.", 409);
 		}
 
 		var evaluation = evaluateCurrent(projectId, version, actorId);
@@ -117,84 +112,46 @@ class DatasetVersionValidationService {
 		var reasons = evaluation.reasons();
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var validation = this.validationRepository.saveAndFlush(DatasetVersionValidation.record(
-				version,
-				snapshot,
-				reasons,
-				snapshot.getSnapshotDigest(),
-				actorId,
-				idempotencyKey,
-				fingerprint,
-				now));
-		var approval = validation.getOutcome() == DatasetVersionValidationOutcome.PASS
-				? this.approvalService.request(
-						projectId,
-						datasetVersionId,
-						validation.getDatasetVersionValidationId(),
-						actorId,
-						now)
-				: null;
-		this.auditRecorder.record(new AuditEventCommand(
-				now,
-				AuditActorType.USER,
-				actorId,
-				projectId,
-				"DATASET_VERSION_VALIDATION_COMPLETED",
-				"DatasetVersionValidation",
-				validation.getDatasetVersionValidationId().toString(),
-				DatasetVersionValidation.PROFILE_VERSION,
-				AuditOutcome.SUCCEEDED,
-				"DATASET_VALIDATION_" + validation.getOutcome().name(),
-				requestId,
-				traceId,
+		var validation = this.validationRepository.saveAndFlush(DatasetVersionValidation.record(version, snapshot,
+				reasons, snapshot.getSnapshotDigest(), actorId, idempotencyKey, fingerprint, now));
+		var approval = validation.getOutcome() == DatasetVersionValidationOutcome.PASS ? this.approvalService
+			.request(projectId, datasetVersionId, validation.getDatasetVersionValidationId(), actorId, now) : null;
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"DATASET_VERSION_VALIDATION_COMPLETED", "DatasetVersionValidation",
+				validation.getDatasetVersionValidationId().toString(), DatasetVersionValidation.PROFILE_VERSION,
+				AuditOutcome.SUCCEEDED, "DATASET_VALIDATION_" + validation.getOutcome().name(), requestId, traceId,
 				"PROJECT_MEMBERSHIP_ADMIN",
-				Map.of(
-						"dataset_version_id", datasetVersionId.toString(),
-						"dataset_build_snapshot_id", snapshot.getDatasetBuildSnapshotId().toString(),
-						"snapshot_digest", snapshot.getSnapshotDigest(),
-						"outcome", validation.getOutcome().name(),
-						"reason_codes", String.join(",", validation.getReasonCodes()),
-						"approval_request_id",
-						approval == null ? "" : approval.approvalRequestId().toString(),
-						"request_fingerprint", fingerprint)));
+				Map.of("dataset_version_id", datasetVersionId.toString(), "dataset_build_snapshot_id",
+						snapshot.getDatasetBuildSnapshotId().toString(), "snapshot_digest",
+						snapshot.getSnapshotDigest(), "outcome", validation.getOutcome().name(), "reason_codes",
+						String.join(",", validation.getReasonCodes()), "approval_request_id",
+						approval == null ? "" : approval.approvalRequestId().toString(), "request_fingerprint",
+						fingerprint)));
 		return DatasetVersionValidationResponse.from(validation);
 	}
 
-	DatasetVersionValidationEvaluation evaluateCurrent(
-			UUID projectId, DatasetVersion version, String actorId) {
+	DatasetVersionValidationEvaluation evaluateCurrent(UUID projectId, DatasetVersion version, String actorId) {
 		var datasetVersionId = version.getDatasetVersionId();
 		var snapshot = this.snapshotRepository.findByDatasetVersionId(datasetVersionId)
-				.orElseThrow(() -> incomplete("BUILD_SNAPSHOT_MISSING"));
+			.orElseThrow(() -> incomplete("BUILD_SNAPSHOT_MISSING"));
 		var specification = this.specificationRepository.findByDatasetVersionId(datasetVersionId)
-				.orElseThrow(() -> incomplete("BUILD_SPECIFICATION_MISSING"));
+			.orElseThrow(() -> incomplete("BUILD_SPECIFICATION_MISSING"));
 		var splitPlan = this.splitPlanRepository.findByDatasetVersionId(datasetVersionId)
-				.orElseThrow(() -> incomplete("SPLIT_PLAN_MISSING"));
+			.orElseThrow(() -> incomplete("SPLIT_PLAN_MISSING"));
 		var members = this.memberRepository.findByDatasetVersionIdOrderByCandidateIndexAsc(datasetVersionId);
 		var streams = this.streamRepository
-				.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
+			.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(datasetVersionId);
 		var assignments = this.assignmentRepository
-				.findByDatasetSplitPlanIdOrderByCandidateIndexAsc(splitPlan.getDatasetSplitPlanId());
+			.findByDatasetSplitPlanIdOrderByCandidateIndexAsc(splitPlan.getDatasetSplitPlanId());
 		var currentAdmission = this.currentAdmissionQueryService.get(projectId, datasetVersionId, actorId);
-		var reasons = evaluate(
-				version,
-				snapshot,
-				specification,
-				splitPlan,
-				members,
-				streams,
-				assignments,
+		var reasons = evaluate(version, snapshot, specification, splitPlan, members, streams, assignments,
 				currentAdmission);
 		return new DatasetVersionValidationEvaluation(snapshot, reasons);
 	}
 
-	static List<String> evaluate(
-			DatasetVersion version,
-			DatasetBuildSnapshot snapshot,
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			List<DatasetMemberSession> members,
-			List<DatasetMemberStream> streams,
-			List<DatasetSplitAssignment> assignments,
+	static List<String> evaluate(DatasetVersion version, DatasetBuildSnapshot snapshot,
+			DatasetBuildSpecification specification, DatasetSplitPlan splitPlan, List<DatasetMemberSession> members,
+			List<DatasetMemberStream> streams, List<DatasetSplitAssignment> assignments,
 			DatasetVersionCurrentAdmissionResponse currentAdmission) {
 		var reasons = new LinkedHashSet<String>();
 		if (!currentAdmission.allMembersCurrentlyAdmissionEligible()) {
@@ -207,18 +164,18 @@ class DatasetVersionValidationService {
 			reasons.add(SNAPSHOT_REFERENCE_MISMATCH);
 		}
 
-		var structuralIssues = DatasetRelationalSnapshotChecks.structuralIssues(
-				specification, splitPlan, members, streams, assignments);
+		var structuralIssues = DatasetRelationalSnapshotChecks.structuralIssues(specification, splitPlan, members,
+				streams, assignments);
 		if (structuralIssues.contains(DatasetRelationalSnapshotChecks.SPLIT_LEAKAGE_DETECTED)) {
 			reasons.add(SPLIT_LEAKAGE_DETECTED);
 		}
 		if (structuralIssues.stream()
-				.anyMatch(issue -> !DatasetRelationalSnapshotChecks.SPLIT_LEAKAGE_DETECTED.equals(issue))) {
+			.anyMatch(issue -> !DatasetRelationalSnapshotChecks.SPLIT_LEAKAGE_DETECTED.equals(issue))) {
 			reasons.add(SNAPSHOT_STRUCTURE_INVALID);
 		}
 		if (structuralIssues.isEmpty()) {
-			var recomputedDigest = DatasetBuildSnapshotDigest.compute(
-					version, specification, splitPlan, members, streams, assignments);
+			var recomputedDigest = DatasetBuildSnapshotDigest.compute(version, specification, splitPlan, members,
+					streams, assignments);
 			if (!snapshot.getSnapshotDigest().equals(recomputedDigest)) {
 				reasons.add(SNAPSHOT_DIGEST_MISMATCH);
 			}
@@ -229,12 +186,8 @@ class DatasetVersionValidationService {
 		return List.copyOf(reasons);
 	}
 
-	private static boolean referencesMatch(
-			DatasetVersion version,
-			DatasetBuildSnapshot snapshot,
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			List<DatasetMemberSession> members,
+	private static boolean referencesMatch(DatasetVersion version, DatasetBuildSnapshot snapshot,
+			DatasetBuildSpecification specification, DatasetSplitPlan splitPlan, List<DatasetMemberSession> members,
 			List<DatasetMemberStream> streams) {
 		return snapshot.getDatasetBuildSnapshotId().equals(version.getBuildSnapshotId())
 				&& snapshot.getDatasetVersionId().equals(version.getDatasetVersionId())
@@ -243,59 +196,46 @@ class DatasetVersionValidationService {
 				&& specification.getProjectId().equals(version.getProjectId())
 				&& splitPlan.getDatasetVersionId().equals(version.getDatasetVersionId())
 				&& splitPlan.getProjectId().equals(version.getProjectId())
-				&& snapshot.getDatasetBuildSpecificationId()
-						.equals(specification.getDatasetBuildSpecificationId())
+				&& snapshot.getDatasetBuildSpecificationId().equals(specification.getDatasetBuildSpecificationId())
 				&& snapshot.getDatasetSplitPlanId().equals(splitPlan.getDatasetSplitPlanId())
-				&& snapshot.getMemberCount() == members.size()
-				&& snapshot.getStreamCount() == streams.size();
+				&& snapshot.getMemberCount() == members.size() && snapshot.getStreamCount() == streams.size();
 	}
 
-	private static boolean buildContractMatches(
-			DatasetBuildSnapshot snapshot,
-			DatasetBuildSpecification specification,
+	private static boolean buildContractMatches(DatasetBuildSnapshot snapshot, DatasetBuildSpecification specification,
 			DatasetSplitPlan splitPlan) {
 		return DatasetBuildSnapshot.SNAPSHOT_SCHEMA_VERSION.equals(snapshot.getSnapshotSchemaVersion())
 				&& DatasetBuildSnapshot.INPUT_VARIANT_POLICY.equals(snapshot.getInputVariantPolicy())
-				&& specification.getSelectionRuleVersion()
-						== DatasetSelectionRuleVersion.EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1
-				&& DatasetExportProfile.isApproved(
-						specification.getExportProfileKey(),
+				&& specification
+					.getSelectionRuleVersion() == DatasetSelectionRuleVersion.EXPLICIT_CAPTURE_SESSION_SNAPSHOT_V1
+				&& DatasetExportProfile.isApproved(specification.getExportProfileKey(),
 						specification.getExportProfileDigest())
 				&& splitPlan.getPolicyVersion() == DatasetSplitPolicy.CAPTURE_SESSION_HASH_RANK_V1;
 	}
 
 	private static DatasetVersionException incomplete(String reason) {
-		return new DatasetVersionException(
-				"DATASET_VERSION_VALIDATION_INCOMPLETE",
-				"The fixed dataset snapshot is incomplete and cannot be validated.",
-				409,
-				Map.of("reason", reason));
+		return new DatasetVersionException("DATASET_VERSION_VALIDATION_INCOMPLETE",
+				"The fixed dataset snapshot is incomplete and cannot be validated.", 409, Map.of("reason", reason));
 	}
 
 	private static DatasetVersionException notFound() {
-		return new DatasetVersionException(
-				"DATASET_VERSION_NOT_FOUND",
-				"The dataset version was not found for the current project.",
-				404);
+		return new DatasetVersionException("DATASET_VERSION_NOT_FOUND",
+				"The dataset version was not found for the current project.", 404);
 	}
 
 	static String requestFingerprint(UUID datasetVersionId) {
-		var canonical = COMMAND_VERSION
-				+ "\n" + datasetVersionId
-				+ "\n" + DatasetVersionValidation.PROFILE_VERSION;
+		var canonical = COMMAND_VERSION + "\n" + datasetVersionId + "\n" + DatasetVersionValidation.PROFILE_VERSION;
 		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(canonical.getBytes(StandardCharsets.UTF_8)));
+			return HexFormat.of()
+				.formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 must be available.", exception);
 		}
 	}
+
 }
 
-record DatasetVersionValidationEvaluation(
-		DatasetBuildSnapshot snapshot,
-		List<String> reasons) {
+record DatasetVersionValidationEvaluation(DatasetBuildSnapshot snapshot, List<String> reasons) {
 
 	DatasetVersionValidationEvaluation {
 		reasons = List.copyOf(reasons);

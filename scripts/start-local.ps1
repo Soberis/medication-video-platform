@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
     [switch]$Worker,
-    [switch]$SkipWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
     [switch]$RestartExportWorker,
@@ -204,21 +203,17 @@ if (Test-Path -LiteralPath $runtimeFile) {
 }
 
 $apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
-$webPort = [int]($env:WEB_PORT ?? '5173')
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
 
-if ($Worker -and $SkipWorker) {
-    throw 'Use either -Worker or -SkipWorker, not both.'
-}
-if ($RestartExportWorker -and $SkipWorker) {
+if ($RestartExportWorker -and -not $Worker) {
     throw 'Restarting the Export Worker requires workers to be enabled.'
 }
-if ($ExportWorkerSyntheticFailFirstAttempt -and $SkipWorker) {
+if ($ExportWorkerSyntheticFailFirstAttempt -and -not $Worker) {
     throw 'Synthetic Export Worker failure injection requires workers to be enabled.'
 }
-if ($InfrastructureOnly -and ($RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt)) {
-    throw 'Infrastructure-only startup cannot restart or configure the Export Worker.'
+if ($InfrastructureOnly -and ($Worker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt)) {
+    throw 'Infrastructure-only startup cannot start or restart applications.'
 }
 if ($ExportWorkerSyntheticFailFirstAttempt -and -not $RestartExportWorker) {
     throw 'Synthetic Export Worker failure injection requires -RestartExportWorker.'
@@ -263,10 +258,10 @@ else {
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 
-if (-not $SkipWorker) {
+if ($Worker) {
     foreach ($requiredCommand in @('uv', 'ffmpeg', 'ffprobe')) {
         if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
-            throw "Full local startup requires $requiredCommand for media processing. Install it or use -SkipWorker for API/Web-only work."
+            throw "Worker startup requires $requiredCommand for media processing."
         }
     }
     if (Test-ManagedProcessRunning 'worker') {
@@ -283,15 +278,11 @@ if (-not $SkipWorker) {
     }
 }
 
-if (Test-TcpPortInUse $webPort) {
-    Write-Host "Web app already listens on $webPort." -ForegroundColor Yellow
-}
-else {
-    Start-LocalProcess 'web' 'Web app' 'cmd.exe' "/c pnpm run web:dev" (Join-Path $logDirectory 'web.log')
-}
-
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
-Write-Host "Web app: http://localhost:$webPort" -ForegroundColor Cyan
+Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
+if (-not $Worker) {
+    Write-Host 'Start Workers when needed: .\scripts\start-local.ps1 -Worker' -ForegroundColor Cyan
+}
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

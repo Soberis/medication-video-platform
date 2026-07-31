@@ -22,12 +22,15 @@
 cd C:\Dev\Projects\medication-video-platform\workers\media-worker
 uv sync --frozen
 $env:MEDIA_WORKER_BEARER_TOKEN='local-media-worker-bearer-token-do-not-reuse'
+$env:DATA_PROFILE='synthetic'
 uv run media-worker
 ```
 
 所需环境变量：
 
-- `MEDIA_WORKER_BEARER_TOKEN`：必填，独立 Worker 服务凭据；
+- `MEDIA_WORKER_BEARER_TOKEN`：仅允许 `DATA_PROFILE=synthetic` 的本地静态凭据；
+- `MEDIA_WORKER_BEARER_TOKEN_FILE`：非合成环境必填的绝对路径；身份代理写入短期 JWT，
+  Worker 每次 Core API 请求前重新读取，因此可无重启轮换。两种 token 来源必须且只能配置一种；
 - `PLATFORM_API_BASE_URL`：默认 `http://localhost:8080`；
 - `RABBITMQ_URL`：默认本地 `medication` vhost；
 - `MEDIA_WORKER_ID`：默认由主机名和进程 ID 组成，不得包含人员或患者信息；
@@ -46,3 +49,7 @@ Worker 提交的 retryable 失败由 Core API 使用 Outbox 延迟创建新 atte
 安全摘要、原 body 摘要/大小和安全 job 标识；若该诊断未获 broker 确认，原消息重新入队且
 Worker 失败退出，交由监督器退避重启。Core API 已提供管理员受控重放：只读取脱敏诊断身份，
 校验当前 job/attempt 后创建新 capability 和消息并写追加式审计；仍禁止直接重投 DLQ body。
+
+非 `local` / `test` 的 Core API 必须配置 `WORKER_JWT_ISSUER_URI`、`WORKER_JWT_JWK_SET_URI`、
+`MEDIA_WORKER_JWT_AUDIENCE` 和 `EXPORT_WORKER_JWT_AUDIENCE`；两个 audience 必须不同。可用
+`WORKER_JWT_CLOCK_SKEW` 配置 0～5 分钟偏差（默认 `PT1M`）。缺项或非 HTTPS 配置会阻止服务启动。

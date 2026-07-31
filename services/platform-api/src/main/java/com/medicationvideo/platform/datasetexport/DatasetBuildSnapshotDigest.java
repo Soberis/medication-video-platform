@@ -16,27 +16,20 @@ final class DatasetBuildSnapshotDigest {
 	private DatasetBuildSnapshotDigest() {
 	}
 
-	static String compute(
-			DatasetVersion version,
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			List<DatasetMemberSession> members,
-			List<DatasetMemberStream> streams,
+	static String compute(DatasetVersion version, DatasetBuildSpecification specification, DatasetSplitPlan splitPlan,
+			List<DatasetMemberSession> members, List<DatasetMemberStream> streams,
 			List<DatasetSplitAssignment> assignments) {
 		var orderedMembers = members.stream()
-				.sorted(Comparator.comparingInt(DatasetMemberSession::getCandidateIndex))
-				.toList();
+			.sorted(Comparator.comparingInt(DatasetMemberSession::getCandidateIndex))
+			.toList();
 		var streamsByMember = streams.stream()
-				.sorted(Comparator.comparing(DatasetMemberStream::getDatasetMemberSessionId)
-						.thenComparingInt(DatasetMemberStream::getCameraIndex)
-						.thenComparing(DatasetMemberStream::getCameraStreamId))
-				.collect(Collectors.groupingBy(
-						DatasetMemberStream::getDatasetMemberSessionId,
-						Collectors.toList()));
+			.sorted(Comparator.comparing(DatasetMemberStream::getDatasetMemberSessionId)
+				.thenComparingInt(DatasetMemberStream::getCameraIndex)
+				.thenComparing(DatasetMemberStream::getCameraStreamId))
+			.collect(Collectors.groupingBy(DatasetMemberStream::getDatasetMemberSessionId, Collectors.toList()));
 		Map<UUID, DatasetSplitAssignment> assignmentsByMember = assignments.stream()
-				.collect(Collectors.toUnmodifiableMap(
-						DatasetSplitAssignment::getDatasetMemberSessionId,
-						Function.identity()));
+			.collect(Collectors.toUnmodifiableMap(DatasetSplitAssignment::getDatasetMemberSessionId,
+					Function.identity()));
 
 		var canonical = new StringBuilder();
 		append(canonical, "snapshot_schema_version", DatasetBuildSnapshot.SNAPSHOT_SCHEMA_VERSION);
@@ -92,8 +85,8 @@ final class DatasetBuildSnapshotDigest {
 		return sha256(canonical.toString());
 	}
 
-	private static DatasetSplitAssignment requireAssignment(
-			Map<UUID, DatasetSplitAssignment> assignmentsByMember, UUID memberId) {
+	private static DatasetSplitAssignment requireAssignment(Map<UUID, DatasetSplitAssignment> assignmentsByMember,
+			UUID memberId) {
 		var assignment = assignmentsByMember.get(memberId);
 		if (assignment == null) {
 			throw new IllegalArgumentException("Every dataset member must have one split assignment.");
@@ -104,22 +97,23 @@ final class DatasetBuildSnapshotDigest {
 	private static void append(StringBuilder canonical, String name, Object value) {
 		var text = String.valueOf(value);
 		canonical.append(name.length())
-				.append(':')
-				.append(name)
-				.append('=')
-				.append(text.length())
-				.append(':')
-				.append(text)
-				.append('\n');
+			.append(':')
+			.append(name)
+			.append('=')
+			.append(text.length())
+			.append(':')
+			.append(text)
+			.append('\n');
 	}
 
 	private static String sha256(String value) {
 		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(value.getBytes(StandardCharsets.UTF_8)));
+			return HexFormat.of()
+				.formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 must be available.", exception);
 		}
 	}
+
 }

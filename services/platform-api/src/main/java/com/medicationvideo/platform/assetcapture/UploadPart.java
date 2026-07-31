@@ -60,13 +60,8 @@ class UploadPart {
 	protected UploadPart() {
 	}
 
-	private UploadPart(
-			UUID uploadFileId,
-			int partNumber,
-			long expectedSizeBytes,
-			String sha256,
-			Instant authorizationExpiresAt,
-			Instant createdAt) {
+	private UploadPart(UUID uploadFileId, int partNumber, long expectedSizeBytes, String sha256,
+			Instant authorizationExpiresAt, Instant createdAt) {
 		this.uploadPartId = UUID.randomUUID();
 		this.uploadFileId = uploadFileId;
 		this.partNumber = partNumber;
@@ -78,20 +73,9 @@ class UploadPart {
 		this.updatedAt = createdAt;
 	}
 
-	static UploadPart authorize(
-			UUID uploadFileId,
-			int partNumber,
-			long expectedSizeBytes,
-			String sha256,
-			Instant authorizationExpiresAt,
-			Instant createdAt) {
-		return new UploadPart(
-				uploadFileId,
-				partNumber,
-				expectedSizeBytes,
-				sha256,
-				authorizationExpiresAt,
-				createdAt);
+	static UploadPart authorize(UUID uploadFileId, int partNumber, long expectedSizeBytes, String sha256,
+			Instant authorizationExpiresAt, Instant createdAt) {
+		return new UploadPart(uploadFileId, partNumber, expectedSizeBytes, sha256, authorizationExpiresAt, createdAt);
 	}
 
 	void reauthorize(Instant authorizationExpiresAt, Instant changedAt) {
@@ -107,15 +91,12 @@ class UploadPart {
 			throw new IllegalArgumentException("Stored part number does not match the upload part.");
 		}
 		if (storedPart.sizeBytes() != this.expectedSizeBytes) {
-			throw new UploadMultipartException(
-					"UPLOAD_PART_SIZE_MISMATCH",
+			throw new UploadMultipartException("UPLOAD_PART_SIZE_MISMATCH",
 					"The stored upload part size does not match the immutable file manifest.");
 		}
 		if (this.status == UploadPartStatus.UPLOADED) {
-			if (!this.storageEtag.equals(storedPart.eTag())
-					|| !this.uploadedSizeBytes.equals(storedPart.sizeBytes())) {
-				throw new UploadMultipartException(
-						"UPLOAD_PART_STORAGE_CONFLICT",
+			if (!this.storageEtag.equals(storedPart.eTag()) || !this.uploadedSizeBytes.equals(storedPart.sizeBytes())) {
+				throw new UploadMultipartException("UPLOAD_PART_STORAGE_CONFLICT",
 						"The stored upload part changed after it was confirmed.");
 			}
 			return;
@@ -165,4 +146,5 @@ class UploadPart {
 	Instant getConfirmedAt() {
 		return this.confirmedAt;
 	}
+
 }

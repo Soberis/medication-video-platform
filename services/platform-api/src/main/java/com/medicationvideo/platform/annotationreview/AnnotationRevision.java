@@ -60,18 +60,9 @@ class AnnotationRevision {
 	protected AnnotationRevision() {
 	}
 
-	private AnnotationRevision(
-			UUID projectId,
-			UUID annotationTaskId,
-			UUID clipAssetId,
-			int revisionNumber,
-			UUID labelSchemaId,
-			String labelSchemaDigest,
-			Map<String, Object> annotationDocument,
-			String documentSha256,
-			String submittedBy,
-			String idempotencyKey,
-			Instant submittedAt) {
+	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, int revisionNumber,
+			UUID labelSchemaId, String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
+			String submittedBy, String idempotencyKey, Instant submittedAt) {
 		this.annotationRevisionId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.annotationTaskId = annotationTaskId;
@@ -87,26 +78,11 @@ class AnnotationRevision {
 		this.submittedAt = submittedAt;
 	}
 
-	static AnnotationRevision submit(
-			AnnotationTask task,
-			int revisionNumber,
-			Map<String, Object> annotationDocument,
-			String documentSha256,
-			String submittedBy,
-			String idempotencyKey,
-			Instant submittedAt) {
-		return new AnnotationRevision(
-				task.getProjectId(),
-				task.getAnnotationTaskId(),
-				task.getClipAssetId(),
-				revisionNumber,
-				task.getLabelSchemaId(),
-				task.getLabelSchemaDigest(),
-				annotationDocument,
-				documentSha256,
-				submittedBy,
-				idempotencyKey,
-				submittedAt);
+	static AnnotationRevision submit(AnnotationTask task, int revisionNumber, Map<String, Object> annotationDocument,
+			String documentSha256, String submittedBy, String idempotencyKey, Instant submittedAt) {
+		return new AnnotationRevision(task.getProjectId(), task.getAnnotationTaskId(), task.getClipAssetId(),
+				revisionNumber, task.getLabelSchemaId(), task.getLabelSchemaDigest(), annotationDocument,
+				documentSha256, submittedBy, idempotencyKey, submittedAt);
 	}
 
 	UUID getAnnotationRevisionId() {
@@ -160,4 +136,5 @@ class AnnotationRevision {
 	boolean matchesSubmission(String documentSha256) {
 		return this.documentSha256.equals(documentSha256);
 	}
+
 }

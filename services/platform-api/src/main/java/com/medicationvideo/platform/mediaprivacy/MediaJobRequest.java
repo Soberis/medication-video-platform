@@ -4,7 +4,5 @@ import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
 
-record MediaJobRequest(
-		@NotNull UUID clipAssetId,
-		@NotNull MediaJobType jobType) {
+record MediaJobRequest(@NotNull UUID clipAssetId, @NotNull MediaJobType jobType) {
 }

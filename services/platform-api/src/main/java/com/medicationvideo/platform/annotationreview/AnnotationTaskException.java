@@ -3,6 +3,7 @@ package com.medicationvideo.platform.annotationreview;
 class AnnotationTaskException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final int statusCode;
 
 	AnnotationTaskException(String errorCode, String message, int statusCode) {
@@ -18,4 +19,5 @@ class AnnotationTaskException extends RuntimeException {
 	int getStatusCode() {
 		return this.statusCode;
 	}
+
 }

@@ -58,11 +58,7 @@ class ProjectMembership {
 	protected ProjectMembership() {
 	}
 
-	private ProjectMembership(
-			UUID projectId,
-			String actorId,
-			ProjectRole role,
-			String performedBy,
+	private ProjectMembership(UUID projectId, String actorId, ProjectRole role, String performedBy,
 			Instant occurredAt) {
 		this.membershipId = UUID.randomUUID();
 		this.projectId = projectId;
@@ -75,11 +71,7 @@ class ProjectMembership {
 		this.updatedAt = occurredAt;
 	}
 
-	static ProjectMembership grant(
-			UUID projectId,
-			String actorId,
-			ProjectRole role,
-			String performedBy,
+	static ProjectMembership grant(UUID projectId, String actorId, ProjectRole role, String performedBy,
 			Instant occurredAt) {
 		return new ProjectMembership(projectId, actorId, role, performedBy, occurredAt);
 	}
@@ -136,4 +128,5 @@ class ProjectMembership {
 	long getRowVersion() {
 		return this.rowVersion;
 	}
+
 }

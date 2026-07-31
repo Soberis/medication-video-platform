@@ -41,11 +41,8 @@ class OutboxEventStoreContractTests {
 				VALUES (?, 'MediaJob', ?, 'MediaProbeJobRequestedV1', 'media-probe-job.v1',
 				        'platform.media.v1', 'media.probe.requested.v1',
 				        CAST(? AS JSONB), ?, ?)
-				""",
-				outboxId,
-				UUID.randomUUID(),
-				"{\"schema_version\":\"media-probe-job.v1\",\"lease_token\":\"secret\"}",
-				Timestamp.from(now),
+				""", outboxId, UUID.randomUUID(),
+				"{\"schema_version\":\"media-probe-job.v1\",\"lease_token\":\"secret\"}", Timestamp.from(now),
 				Timestamp.from(now));
 
 		var claimed = this.store.claim(1, now.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
@@ -77,14 +74,12 @@ class OutboxEventStoreContractTests {
 				VALUES (?, 'MediaJob', ?, 'MediaProbeJobRequestedV1', 'media-probe-job.v1',
 				        'platform.media.v1', 'media.probe.requested.v1',
 				        CAST(? AS JSONB), ?, ?)
-				""",
-				UUID.randomUUID(),
-				UUID.randomUUID(),
-				"{\"schema_version\":\"media-probe-job.v1\",\"lease_token\":\"secret\"}",
-				Timestamp.from(now),
+				""", UUID.randomUUID(), UUID.randomUUID(),
+				"{\"schema_version\":\"media-probe-job.v1\",\"lease_token\":\"secret\"}", Timestamp.from(now),
 				Timestamp.from(availableAt));
 
 		assertTrue(this.store.claim(1, availableAt.minusMillis(1), Duration.ofSeconds(30)).isEmpty());
 		assertEquals(1, this.store.claim(1, availableAt, Duration.ofSeconds(30)).size());
 	}
+
 }

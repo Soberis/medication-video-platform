@@ -24,7 +24,6 @@ interface ClipAssetRepository extends JpaRepository<ClipAsset, UUID> {
 			SELECT asset FROM ClipAsset asset
 			WHERE asset.clipAssetId = :clipAssetId AND asset.projectId = :projectId
 			""")
-	Optional<ClipAsset> findForUpdate(
-			@Param("clipAssetId") UUID clipAssetId,
-			@Param("projectId") UUID projectId);
+	Optional<ClipAsset> findForUpdate(@Param("clipAssetId") UUID clipAssetId, @Param("projectId") UUID projectId);
+
 }

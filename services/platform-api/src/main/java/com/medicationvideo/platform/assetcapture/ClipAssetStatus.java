@@ -1,8 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 public enum ClipAssetStatus {
-	UPLOADED,
-	INGESTING,
-	INGESTED,
-	INGEST_FAILED
+
+	UPLOADED, INGESTING, INGESTED, INGEST_FAILED
+
 }

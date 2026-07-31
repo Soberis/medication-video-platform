@@ -7,15 +7,8 @@ final class DatasetExportPackagePaths {
 	private DatasetExportPackagePaths() {
 	}
 
-	static String videoPath(
-			UUID captureSessionId,
-			int cameraIndex,
-			UUID clipAssetId,
-			String contentType) {
-		return "videos/raw/" + captureSessionId
-				+ "/camera-" + cameraIndex
-				+ "-" + clipAssetId
-				+ extension(contentType);
+	static String videoPath(UUID captureSessionId, int cameraIndex, UUID clipAssetId, String contentType) {
+		return "videos/raw/" + captureSessionId + "/camera-" + cameraIndex + "-" + clipAssetId + extension(contentType);
 	}
 
 	private static String extension(String contentType) {
@@ -26,4 +19,5 @@ final class DatasetExportPackagePaths {
 			default -> ".bin";
 		};
 	}
+
 }

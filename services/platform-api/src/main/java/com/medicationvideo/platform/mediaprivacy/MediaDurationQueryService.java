@@ -21,34 +21,24 @@ public class MediaDurationQueryService {
 	@Transactional(readOnly = true)
 	public OptionalLong findVerifiedDurationMicroseconds(UUID projectId, UUID clipAssetId) {
 		return findLatestVerifiedDurationFact(projectId, clipAssetId)
-				.map(fact -> OptionalLong.of(fact.durationMicroseconds()))
-				.orElseGet(OptionalLong::empty);
+			.map(fact -> OptionalLong.of(fact.durationMicroseconds()))
+			.orElseGet(OptionalLong::empty);
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<VerifiedDurationFact> findLatestVerifiedDurationFact(
-			UUID projectId,
-			UUID clipAssetId) {
+	public Optional<VerifiedDurationFact> findLatestVerifiedDurationFact(UUID projectId, UUID clipAssetId) {
 		return this.reportRepository
-				.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDescMediaReportIdDesc(
-						projectId, clipAssetId)
-				.map(VerifiedDurationFact::from);
+			.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDescMediaReportIdDesc(projectId, clipAssetId)
+			.map(VerifiedDurationFact::from);
 	}
 
-	public record VerifiedDurationFact(
-			UUID mediaReportId,
-			String inputDigest,
-			String recipeDigest,
-			long durationMicroseconds,
-			Instant createdAt) {
+	public record VerifiedDurationFact(UUID mediaReportId, String inputDigest, String recipeDigest,
+			long durationMicroseconds, Instant createdAt) {
 
 		private static VerifiedDurationFact from(MediaReport report) {
-			return new VerifiedDurationFact(
-					report.getMediaReportId(),
-					report.getInputDigest(),
-					report.getRecipeDigest(),
-					report.getDurationMicroseconds(),
-					report.getCreatedAt());
+			return new VerifiedDurationFact(report.getMediaReportId(), report.getInputDigest(),
+					report.getRecipeDigest(), report.getDurationMicroseconds(), report.getCreatedAt());
 		}
 	}
+
 }

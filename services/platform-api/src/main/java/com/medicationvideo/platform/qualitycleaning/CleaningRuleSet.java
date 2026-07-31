@@ -56,13 +56,17 @@ class CleaningRuleSet {
 	String getRuleSetDigest() {
 		return this.ruleSetDigest;
 	}
+
 }
 
 enum CleaningStage {
+
 	POST_ANNOTATION
+
 }
 
 enum CleaningRuleSetStatus {
-	ACTIVE,
-	RETIRED
+
+	ACTIVE, RETIRED
+
 }

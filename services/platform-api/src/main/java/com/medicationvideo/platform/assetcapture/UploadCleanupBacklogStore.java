@@ -24,17 +24,13 @@ class UploadCleanupBacklogStore {
 				       min(created_at) FILTER (WHERE status IN ('PENDING', 'RUNNING'))
 				           AS oldest_actionable_created_at
 				FROM upload_cleanup_task
-				""",
-				(resultSet, rowNumber) -> {
-					var oldest = resultSet.getObject("oldest_actionable_created_at", OffsetDateTime.class);
-					var ageSeconds = oldest == null
-							? 0
-							: Math.max(0, Duration.between(oldest.toInstant(), observedAt).toSeconds());
-					return new UploadCleanupBacklogSnapshot(
-							resultSet.getLong("pending_tasks"),
-							resultSet.getLong("running_tasks"),
-							resultSet.getLong("failed_tasks"),
-							ageSeconds);
-				});
+				""", (resultSet, rowNumber) -> {
+			var oldest = resultSet.getObject("oldest_actionable_created_at", OffsetDateTime.class);
+			var ageSeconds = oldest == null ? 0
+					: Math.max(0, Duration.between(oldest.toInstant(), observedAt).toSeconds());
+			return new UploadCleanupBacklogSnapshot(resultSet.getLong("pending_tasks"),
+					resultSet.getLong("running_tasks"), resultSet.getLong("failed_tasks"), ageSeconds);
+		});
 	}
+
 }

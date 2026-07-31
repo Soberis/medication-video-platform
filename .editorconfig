@@ -9,7 +9,8 @@ indent_style = space
 indent_size = 2
 
 [*.java]
-indent_size = 4
+indent_style = tab
+tab_width = 4
 
 [*.{xml,sql}]
 indent_size = 2

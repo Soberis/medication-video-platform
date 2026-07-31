@@ -40,10 +40,7 @@ class CameraSetSnapshotMember {
 	protected CameraSetSnapshotMember() {
 	}
 
-	private CameraSetSnapshotMember(
-			UUID cameraSetSnapshotId,
-			CameraSetMember source,
-			Instant createdAt) {
+	private CameraSetSnapshotMember(UUID cameraSetSnapshotId, CameraSetMember source, Instant createdAt) {
 		this.cameraSetSnapshotMemberId = UUID.randomUUID();
 		this.cameraSetSnapshotId = cameraSetSnapshotId;
 		this.cameraChannelId = source.getCameraChannelId();
@@ -54,10 +51,7 @@ class CameraSetSnapshotMember {
 		this.createdAt = createdAt;
 	}
 
-	static CameraSetSnapshotMember freeze(
-			UUID cameraSetSnapshotId,
-			CameraSetMember source,
-			Instant createdAt) {
+	static CameraSetSnapshotMember freeze(UUID cameraSetSnapshotId, CameraSetMember source, Instant createdAt) {
 		return new CameraSetSnapshotMember(cameraSetSnapshotId, source, createdAt);
 	}
 
@@ -84,4 +78,5 @@ class CameraSetSnapshotMember {
 	boolean isEnabled() {
 		return this.enabled;
 	}
+
 }

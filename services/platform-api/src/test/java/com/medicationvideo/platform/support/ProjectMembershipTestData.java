@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public final class ProjectMembershipTestData {
 
 	public static final String ADMIN_ACTOR = "local-synthetic-admin";
+
 	public static final String MEMBER_ACTOR = "local-synthetic-uploader";
 
 	private ProjectMembershipTestData() {
@@ -22,22 +23,13 @@ public final class ProjectMembershipTestData {
 				    request_fingerprint, created_at, row_version)
 				VALUES (?, ?, 'ACTIVE', ?, ?, ?, ?, 0)
 				ON CONFLICT (project_id) DO UPDATE SET status = 'ACTIVE'
-				""",
-				projectId,
-				"Synthetic contract project " + projectId,
-				ADMIN_ACTOR,
-				"test-project-" + projectId,
-				"0".repeat(64),
-				now);
+				""", projectId, "Synthetic contract project " + projectId, ADMIN_ACTOR, "test-project-" + projectId,
+				"0".repeat(64), now);
 		ensureMembership(jdbcTemplate, projectId, ADMIN_ACTOR, "ADMIN", now);
 		ensureMembership(jdbcTemplate, projectId, MEMBER_ACTOR, "MEMBER", now);
 	}
 
-	private static void ensureMembership(
-			JdbcTemplate jdbcTemplate,
-			UUID projectId,
-			String actorId,
-			String role,
+	private static void ensureMembership(JdbcTemplate jdbcTemplate, UUID projectId, String actorId, String role,
 			Timestamp now) {
 		jdbcTemplate.update("""
 				INSERT INTO membership (
@@ -51,14 +43,7 @@ public final class ProjectMembershipTestData {
 				    updated_at = EXCLUDED.updated_at,
 				    removed_by = NULL,
 				    removed_at = NULL
-				""",
-				UUID.randomUUID(),
-				projectId,
-				actorId,
-				role,
-				ADMIN_ACTOR,
-				now,
-				ADMIN_ACTOR,
-				now);
+				""", UUID.randomUUID(), projectId, actorId, role, ADMIN_ACTOR, now, ADMIN_ACTOR, now);
 	}
+
 }

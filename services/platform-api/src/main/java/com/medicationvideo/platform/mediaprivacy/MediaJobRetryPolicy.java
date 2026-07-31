@@ -11,22 +11,21 @@ import org.springframework.stereotype.Component;
 class MediaJobRetryPolicy {
 
 	private final int maxAttempts;
+
 	private final Duration baseDelay;
+
 	private final Duration maxDelay;
 
-	MediaJobRetryPolicy(
-			@Value("${platform.media-probe.max-attempts:3}") int maxAttempts,
+	MediaJobRetryPolicy(@Value("${platform.media-probe.max-attempts:3}") int maxAttempts,
 			@Value("${platform.media-probe.retry-base-delay:PT5S}") Duration baseDelay,
 			@Value("${platform.media-probe.retry-max-delay:PT5M}") Duration maxDelay) {
 		if (maxAttempts < 1 || maxAttempts > 20) {
-			throw new IllegalArgumentException(
-					"Media probe max attempts must be between 1 and 20.");
+			throw new IllegalArgumentException("Media probe max attempts must be between 1 and 20.");
 		}
 		this.baseDelay = requireAtLeastOneSecond(baseDelay, "Media probe retry base delay");
 		this.maxDelay = requireAtLeastOneSecond(maxDelay, "Media probe retry max delay");
 		if (this.maxDelay.compareTo(this.baseDelay) < 0) {
-			throw new IllegalArgumentException(
-					"Media probe retry max delay must not be shorter than the base delay.");
+			throw new IllegalArgumentException("Media probe retry max delay must not be shorter than the base delay.");
 		}
 		this.maxAttempts = maxAttempts;
 	}
@@ -46,13 +45,10 @@ class MediaJobRetryPolicy {
 		var baseMillis = this.baseDelay.toMillis();
 		var maxMillis = this.maxDelay.toMillis();
 		var shift = Math.min(nextAttempt - 2, 62);
-		var exponentialMillis = baseMillis > (maxMillis >> shift)
-				? maxMillis
+		var exponentialMillis = baseMillis > (maxMillis >> shift) ? maxMillis
 				: Math.min(maxMillis, baseMillis << shift);
 		var jitterWindow = Math.max(1L, exponentialMillis / 4L);
-		var seed = mediaJobId.getMostSignificantBits()
-				^ mediaJobId.getLeastSignificantBits()
-				^ nextAttempt;
+		var seed = mediaJobId.getMostSignificantBits() ^ mediaJobId.getLeastSignificantBits() ^ nextAttempt;
 		var jitterMillis = Math.floorMod(seed, jitterWindow + 1L);
 		return now.plusMillis(Math.min(maxMillis, exponentialMillis + jitterMillis));
 	}
@@ -63,4 +59,5 @@ class MediaJobRetryPolicy {
 		}
 		return value;
 	}
+
 }

@@ -5,9 +5,9 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-interface ProjectMembershipCommandRepository
-		extends JpaRepository<ProjectMembershipCommand, UUID> {
+interface ProjectMembershipCommandRepository extends JpaRepository<ProjectMembershipCommand, UUID> {
 
-	Optional<ProjectMembershipCommand> findByProjectIdAndPerformedByAndIdempotencyKey(
-			UUID projectId, String performedBy, String idempotencyKey);
+	Optional<ProjectMembershipCommand> findByProjectIdAndPerformedByAndIdempotencyKey(UUID projectId,
+			String performedBy, String idempotencyKey);
+
 }

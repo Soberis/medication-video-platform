@@ -30,6 +30,7 @@
 		<java.version>21</java.version>
 		<aws.sdk.version>2.47.2</aws.sdk.version>
 		<spring-modulith.version>2.1.0</spring-modulith.version>
+		<spring-javaformat.version>0.0.47</spring-javaformat.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -51,6 +52,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -153,6 +158,20 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>io.spring.javaformat</groupId>
+				<artifactId>spring-javaformat-maven-plugin</artifactId>
+				<version>${spring-javaformat.version}</version>
+				<executions>
+					<execution>
+						<id>validate-java-format</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>validate</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

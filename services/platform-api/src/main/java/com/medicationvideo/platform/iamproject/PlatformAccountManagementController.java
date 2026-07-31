@@ -29,6 +29,7 @@ import jakarta.validation.constraints.Size;
 class PlatformAccountManagementController {
 
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
+
 	private static final String USERNAME_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$";
 
 	private final PlatformAccountManagementService service;
@@ -44,43 +45,40 @@ class PlatformAccountManagementController {
 	}
 
 	@PostMapping
-	ResponseEntity<PlatformAccountResponse> create(
-			@Valid @RequestBody PlatformAccountCreateRequest request,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+	ResponseEntity<PlatformAccountResponse> create(@Valid @RequestBody PlatformAccountCreateRequest request,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var administrator = requireAdministrator(authentication);
-		var response = this.service.create(
-				administrator.actorId(), resolveRequestId(requestId), MDC.get("traceId"), request);
+		var response = this.service.create(administrator.actorId(), resolveRequestId(requestId), MDC.get("traceId"),
+				request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-				.location(URI.create("/api/v1/admin/accounts/" + response.username()))
-				.cacheControl(CacheControl.noStore())
-				.body(response);
+			.location(URI.create("/api/v1/admin/accounts/" + response.username()))
+			.cacheControl(CacheControl.noStore())
+			.body(response);
 	}
 
 	@PatchMapping("/{username}/enabled")
 	ResponseEntity<PlatformAccountResponse> changeEnabled(
 			@PathVariable @Size(min = 3, max = 128) @Pattern(regexp = USERNAME_PATTERN) String username,
 			@Valid @RequestBody PlatformAccountEnabledRequest request,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var administrator = requireAdministrator(authentication);
 		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.body(this.service.changeEnabled(
-						administrator.actorId(), username, resolveRequestId(requestId), MDC.get("traceId"), request));
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.changeEnabled(administrator.actorId(), username, resolveRequestId(requestId),
+					MDC.get("traceId"), request));
 	}
 
 	private static PlatformActor requireAdministrator(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof PlatformActor actor)
-				|| authentication.getAuthorities().stream()
-						.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
-			throw new ProjectApiException(
-					"PLATFORM_ACCOUNT_ACCESS_DENIED",
-					"Platform administrator authority is required.",
-					403);
+		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)
+				|| authentication.getAuthorities()
+					.stream()
+					.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+			throw new ProjectApiException("PLATFORM_ACCOUNT_ACCESS_DENIED",
+					"Platform administrator authority is required.", 403);
 		}
 		return actor;
 	}
@@ -88,4 +86,5 @@ class PlatformAccountManagementController {
 	private static String resolveRequestId(String requestId) {
 		return Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString());
 	}
+
 }

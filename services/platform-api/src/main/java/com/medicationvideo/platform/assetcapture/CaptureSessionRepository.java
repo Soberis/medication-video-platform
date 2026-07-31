@@ -23,7 +23,7 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 			WHERE session.captureSessionId = :captureSessionId
 			  AND session.projectId = :projectId
 			""")
-	Optional<CaptureSession> findForMediaProjection(
-			@Param("captureSessionId") UUID captureSessionId,
+	Optional<CaptureSession> findForMediaProjection(@Param("captureSessionId") UUID captureSessionId,
 			@Param("projectId") UUID projectId);
+
 }

@@ -19,26 +19,26 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 
 @Component
-@ConditionalOnProperty(
-		name = "platform.upload.cleanup-alert.enabled",
-		havingValue = "true",
-		matchIfMissing = true)
+@ConditionalOnProperty(name = "platform.upload.cleanup-alert.enabled", havingValue = "true", matchIfMissing = true)
 class UploadCleanupBacklogMonitor {
 
 	private static final Logger log = LoggerFactory.getLogger(UploadCleanupBacklogMonitor.class);
+
 	private static final String RUNBOOK = "docs/runbooks/upload-abort-and-expiry-cleanup.md";
 
 	private final UploadCleanupBacklogStore store;
+
 	private final Duration pendingAgeThreshold;
-	private final AtomicReference<UploadCleanupBacklogSnapshot> current =
-			new AtomicReference<>(UploadCleanupBacklogSnapshot.empty());
-	private final AtomicReference<UploadCleanupAlertSeverity> lastSeverity =
-			new AtomicReference<>(UploadCleanupAlertSeverity.NONE);
+
+	private final AtomicReference<UploadCleanupBacklogSnapshot> current = new AtomicReference<>(
+			UploadCleanupBacklogSnapshot.empty());
+
+	private final AtomicReference<UploadCleanupAlertSeverity> lastSeverity = new AtomicReference<>(
+			UploadCleanupAlertSeverity.NONE);
+
 	private final Map<UploadCleanupAlertSeverity, Counter> transitionCounters;
 
-	UploadCleanupBacklogMonitor(
-			UploadCleanupBacklogStore store,
-			MeterRegistry registry,
+	UploadCleanupBacklogMonitor(UploadCleanupBacklogStore store, MeterRegistry registry,
 			@Value("${platform.upload.cleanup-alert.pending-age:PT5M}") Duration pendingAgeThreshold) {
 		if (pendingAgeThreshold.isZero() || pendingAgeThreshold.isNegative()) {
 			throw new IllegalArgumentException("Upload cleanup pending-age alert threshold must be positive.");
@@ -48,15 +48,13 @@ class UploadCleanupBacklogMonitor {
 		registerTaskGauge(registry, "pending", UploadCleanupBacklogSnapshot::pendingTasks);
 		registerTaskGauge(registry, "running", UploadCleanupBacklogSnapshot::runningTasks);
 		registerTaskGauge(registry, "failed", UploadCleanupBacklogSnapshot::failedTasks);
-		Gauge.builder(
-				"platform.upload.cleanup.oldest.actionable.age",
-				this.current,
-				reference -> reference.get().oldestActionableAgeSeconds())
-				.description("Age of the oldest PENDING or RUNNING upload cleanup task")
-				.baseUnit("seconds")
-				.register(registry);
-		this.transitionCounters = Map.of(
-				UploadCleanupAlertSeverity.NONE, transitionCounter(registry, "none"),
+		Gauge
+			.builder("platform.upload.cleanup.oldest.actionable.age", this.current,
+					reference -> reference.get().oldestActionableAgeSeconds())
+			.description("Age of the oldest PENDING or RUNNING upload cleanup task")
+			.baseUnit("seconds")
+			.register(registry);
+		this.transitionCounters = Map.of(UploadCleanupAlertSeverity.NONE, transitionCounter(registry, "none"),
 				UploadCleanupAlertSeverity.WARNING, transitionCounter(registry, "warning"),
 				UploadCleanupAlertSeverity.CRITICAL, transitionCounter(registry, "critical"));
 	}
@@ -94,55 +92,41 @@ class UploadCleanupBacklogMonitor {
 		return UploadCleanupAlertSeverity.NONE;
 	}
 
-	private void logTransition(
-			UploadCleanupAlertSeverity previous,
-			UploadCleanupAlertSeverity severity,
+	private void logTransition(UploadCleanupAlertSeverity previous, UploadCleanupAlertSeverity severity,
 			UploadCleanupBacklogSnapshot snapshot) {
 		if (severity == UploadCleanupAlertSeverity.CRITICAL) {
 			log.error(
 					"Upload cleanup alert CRITICAL: failed_tasks={}, actionable_tasks={}, "
 							+ "oldest_actionable_age_seconds={}, owner=platform-operations, runbook={}.",
-					snapshot.failedTasks(),
-					snapshot.actionableTasks(),
-					snapshot.oldestActionableAgeSeconds(),
-					RUNBOOK);
+					snapshot.failedTasks(), snapshot.actionableTasks(), snapshot.oldestActionableAgeSeconds(), RUNBOOK);
 		}
 		else if (severity == UploadCleanupAlertSeverity.WARNING) {
 			log.warn(
 					"Upload cleanup alert WARNING: actionable_tasks={}, oldest_actionable_age_seconds={}, "
 							+ "owner=platform-operations, runbook={}.",
-					snapshot.actionableTasks(),
-					snapshot.oldestActionableAgeSeconds(),
-					RUNBOOK);
+					snapshot.actionableTasks(), snapshot.oldestActionableAgeSeconds(), RUNBOOK);
 		}
 		else {
 			log.info(
 					"Upload cleanup alert recovered from {}: actionable_tasks={}, failed_tasks={}, "
 							+ "owner=platform-operations, runbook={}.",
-					previous,
-					snapshot.actionableTasks(),
-					snapshot.failedTasks(),
-					RUNBOOK);
+					previous, snapshot.actionableTasks(), snapshot.failedTasks(), RUNBOOK);
 		}
 	}
 
-	private void registerTaskGauge(
-			MeterRegistry registry,
-			String status,
+	private void registerTaskGauge(MeterRegistry registry, String status,
 			java.util.function.ToDoubleFunction<UploadCleanupBacklogSnapshot> value) {
-		Gauge.builder(
-				"platform.upload.cleanup.tasks",
-				this.current,
-				reference -> value.applyAsDouble(reference.get()))
-				.description("Durable upload cleanup tasks by low-cardinality status")
-				.tag("status", status)
-				.register(registry);
+		Gauge.builder("platform.upload.cleanup.tasks", this.current, reference -> value.applyAsDouble(reference.get()))
+			.description("Durable upload cleanup tasks by low-cardinality status")
+			.tag("status", status)
+			.register(registry);
 	}
 
 	private static Counter transitionCounter(MeterRegistry registry, String severity) {
 		return Counter.builder("platform.upload.cleanup.alert.transitions")
-				.description("Upload cleanup alert state transitions")
-				.tag("severity", severity)
-				.register(registry);
+			.description("Upload cleanup alert state transitions")
+			.tag("severity", severity)
+			.register(registry);
 	}
+
 }

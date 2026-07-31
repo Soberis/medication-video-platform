@@ -45,11 +45,7 @@ class PlatformAccount {
 	protected PlatformAccount() {
 	}
 
-	private PlatformAccount(
-			UUID accountId,
-			String username,
-			String passwordHash,
-			PlatformAccountRole role,
+	private PlatformAccount(UUID accountId, String username, String passwordHash, PlatformAccountRole role,
 			Instant now) {
 		this.accountId = accountId;
 		this.username = username;
@@ -60,11 +56,7 @@ class PlatformAccount {
 		this.updatedAt = now;
 	}
 
-	static PlatformAccount create(
-			String username,
-			String passwordHash,
-			PlatformAccountRole role,
-			Instant now) {
+	static PlatformAccount create(String username, String passwordHash, PlatformAccountRole role, Instant now) {
 		return new PlatformAccount(UUID.randomUUID(), username, passwordHash, role, now);
 	}
 
@@ -107,4 +99,5 @@ class PlatformAccount {
 	long getRowVersion() {
 		return this.rowVersion;
 	}
+
 }

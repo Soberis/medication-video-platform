@@ -25,44 +25,31 @@ public class AuditEventQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	public ClipAssetActivityPage findClipAssetActivity(
-			UUID projectId, UUID clipAssetId, String cursor, int limit) {
+	public ClipAssetActivityPage findClipAssetActivity(UUID projectId, UUID clipAssetId, String cursor, int limit) {
 		var decodedCursor = cursor == null ? null : decodeCursor(clipAssetId, cursor);
 		var pageable = PageRequest.of(0, limit + 1);
 		var rows = decodedCursor == null
 				? this.repository.findClipAssetActivity(projectId, clipAssetId.toString(), pageable)
-				: this.repository.findClipAssetActivityBefore(
-						projectId,
-						clipAssetId.toString(),
-						decodedCursor.occurredAtUtc(),
-						decodedCursor.eventId(),
-						pageable);
+				: this.repository.findClipAssetActivityBefore(projectId, clipAssetId.toString(),
+						decodedCursor.occurredAtUtc(), decodedCursor.eventId(), pageable);
 		var page = rows.stream().limit(limit).map(AuditEventSummary::from).toList();
 		var nextCursor = rows.size() > limit
-				? encodeCursor(clipAssetId, page.getLast().occurredAtUtc(), page.getLast().eventId())
-				: null;
+				? encodeCursor(clipAssetId, page.getLast().occurredAtUtc(), page.getLast().eventId()) : null;
 		return new ClipAssetActivityPage(page, nextCursor);
 	}
 
 	private static String encodeCursor(UUID clipAssetId, Instant occurredAtUtc, UUID eventId) {
-		var value = String.join(
-				":",
-				CLIP_ASSET_ACTIVITY_CURSOR_KIND,
-				clipAssetId.toString(),
-				Long.toString(occurredAtUtc.getEpochSecond()),
-				Integer.toString(occurredAtUtc.getNano()),
+		var value = String.join(":", CLIP_ASSET_ACTIVITY_CURSOR_KIND, clipAssetId.toString(),
+				Long.toString(occurredAtUtc.getEpochSecond()), Integer.toString(occurredAtUtc.getNano()),
 				eventId.toString());
-		return Base64.getUrlEncoder().withoutPadding()
-				.encodeToString(value.getBytes(StandardCharsets.UTF_8));
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
 	}
 
 	private static ActivityCursor decodeCursor(UUID clipAssetId, String cursor) {
 		try {
 			var decoded = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
 			var parts = decoded.split(":", 6);
-			if (parts.length != 6
-					|| !parts[0].equals("clip-asset-activity")
-					|| !parts[1].equals("v1")
+			if (parts.length != 6 || !parts[0].equals("clip-asset-activity") || !parts[1].equals("v1")
 					|| !UUID.fromString(parts[2]).equals(clipAssetId)) {
 				throw new IllegalArgumentException("Unexpected cursor kind.");
 			}
@@ -76,8 +63,7 @@ public class AuditEventQueryService {
 		}
 		catch (RuntimeException exception) {
 			throw new IllegalArgumentException(
-					"The activity pagination cursor is invalid or belongs to another resource.",
-					exception);
+					"The activity pagination cursor is invalid or belongs to another resource.", exception);
 		}
 	}
 
@@ -91,32 +77,15 @@ public class AuditEventQueryService {
 		}
 	}
 
-	public record AuditEventSummary(
-			UUID eventId,
-			Instant occurredAtUtc,
-			String actorType,
-			String actorId,
-			String action,
-			String objectType,
-			String objectId,
-			String objectVersion,
-			String outcome,
-			String reasonCode,
+	public record AuditEventSummary(UUID eventId, Instant occurredAtUtc, String actorType, String actorId,
+			String action, String objectType, String objectId, String objectVersion, String outcome, String reasonCode,
 			String requestId) {
 
 		private static AuditEventSummary from(AuditEvent event) {
-			return new AuditEventSummary(
-					event.getEventId(),
-					event.getOccurredAtUtc(),
-					event.getActorType().name(),
-					event.getActorId(),
-					event.getAction(),
-					event.getObjectType(),
-					event.getObjectId(),
-					event.getObjectVersion(),
-					event.getOutcome().name(),
-					event.getReasonCode(),
-					event.getRequestId());
+			return new AuditEventSummary(event.getEventId(), event.getOccurredAtUtc(), event.getActorType().name(),
+					event.getActorId(), event.getAction(), event.getObjectType(), event.getObjectId(),
+					event.getObjectVersion(), event.getOutcome().name(), event.getReasonCode(), event.getRequestId());
 		}
 	}
+
 }

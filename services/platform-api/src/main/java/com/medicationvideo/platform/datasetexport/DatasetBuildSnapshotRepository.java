@@ -9,6 +9,7 @@ interface DatasetBuildSnapshotRepository extends JpaRepository<DatasetBuildSnaps
 
 	Optional<DatasetBuildSnapshot> findByDatasetVersionId(UUID datasetVersionId);
 
-	Optional<DatasetBuildSnapshot> findByProjectIdAndCreatedByAndIdempotencyKey(
-			UUID projectId, String createdBy, String idempotencyKey);
+	Optional<DatasetBuildSnapshot> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
+			String idempotencyKey);
+
 }

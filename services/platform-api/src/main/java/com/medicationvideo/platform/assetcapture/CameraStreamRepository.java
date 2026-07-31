@@ -11,4 +11,5 @@ interface CameraStreamRepository extends JpaRepository<CameraStream, UUID> {
 	List<CameraStream> findAllByCaptureSessionIdOrderByCameraIndexAsc(UUID captureSessionId);
 
 	Optional<CameraStream> findByClipAssetId(UUID clipAssetId);
+
 }

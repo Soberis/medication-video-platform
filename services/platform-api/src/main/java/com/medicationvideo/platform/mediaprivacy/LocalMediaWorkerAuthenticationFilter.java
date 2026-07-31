@@ -27,25 +27,18 @@ final class LocalMediaWorkerAuthenticationFilter extends OncePerRequestFilter {
 	}
 
 	@Override
-	protected void doFilterInternal(
-			HttpServletRequest request,
-			HttpServletResponse response,
-			FilterChain filterChain) throws ServletException, IOException {
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
 		var authorization = request.getHeader("Authorization");
-		if (authorization == null
-				|| !authorization.startsWith(BEARER_PREFIX)
-				|| this.expectedToken.length < 32
+		if (authorization == null || !authorization.startsWith(BEARER_PREFIX) || this.expectedToken.length < 32
 				|| !MessageDigest.isEqual(
-						authorization.substring(BEARER_PREFIX.length())
-								.getBytes(StandardCharsets.UTF_8),
+						authorization.substring(BEARER_PREFIX.length()).getBytes(StandardCharsets.UTF_8),
 						this.expectedToken)) {
 			unauthorized(response);
 			return;
 		}
 
-		var authentication = new UsernamePasswordAuthenticationToken(
-				new MediaWorkerActor("local-media-worker"),
-				null,
+		var authentication = new UsernamePasswordAuthenticationToken(new MediaWorkerActor("local-media-worker"), null,
 				List.of(new SimpleGrantedAuthority("ROLE_MEDIA_WORKER")));
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		filterChain.doFilter(request, response);
@@ -56,9 +49,10 @@ final class LocalMediaWorkerAuthenticationFilter extends OncePerRequestFilter {
 		response.setHeader("WWW-Authenticate", "Bearer");
 		response.setHeader("Cache-Control", "no-store");
 		response.setContentType("application/problem+json");
-		response.getWriter().write("{\"error_code\":\"UNAUTHORIZED\","
-				+ "\"error_message\":\"A valid Worker bearer token is required.\","
-				+ "\"retryable\":false,"
-				+ "\"request_id\":\"" + UUID.randomUUID() + "\"}");
+		response.getWriter()
+			.write("{\"error_code\":\"UNAUTHORIZED\","
+					+ "\"error_message\":\"A valid Worker bearer token is required.\"," + "\"retryable\":false,"
+					+ "\"request_id\":\"" + UUID.randomUUID() + "\"}");
 	}
+
 }

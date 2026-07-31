@@ -30,8 +30,11 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 class CameraConfigurationContractTests {
 
 	private static final String TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
+
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
 	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
 	@Autowired
@@ -68,19 +71,16 @@ class CameraConfigurationContractTests {
 
 	@Test
 	void provisionsAStableLogicalChannelIdempotently() throws Exception {
-		var first = provisionChannel(PROJECT_ID, "cabinet.overview-01")
-				.andExpect(status().isCreated())
-				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-				.andExpect(jsonPath("$.camera_channel_id").isNotEmpty())
-				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
-				.andExpect(jsonPath("$.provisioning_key").value("cabinet.overview-01"))
-				.andExpect(jsonPath("$.created_at").isNotEmpty())
-				.andReturn();
+		var first = provisionChannel(PROJECT_ID, "cabinet.overview-01").andExpect(status().isCreated())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.camera_channel_id").isNotEmpty())
+			.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
+			.andExpect(jsonPath("$.provisioning_key").value("cabinet.overview-01"))
+			.andExpect(jsonPath("$.created_at").isNotEmpty())
+			.andReturn();
 
-		var replay = provisionChannel(PROJECT_ID, "cabinet.overview-01")
-				.andExpect(status().isCreated())
-				.andReturn();
+		var replay = provisionChannel(PROJECT_ID, "cabinet.overview-01").andExpect(status().isCreated()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.channelRepository.count());
@@ -92,26 +92,23 @@ class CameraConfigurationContractTests {
 		var handsId = provisionedChannelId("cabinet.hands-01");
 		var request = cameraSetRequest(overviewId, handsId, "layout-2026-01");
 
-		var first = configureCameraSet("cabinet-a", 1, request)
-				.andExpect(status().isCreated())
-				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.camera_set_id").isNotEmpty())
-				.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
-				.andExpect(jsonPath("$.camera_set_key").value("cabinet-a"))
-				.andExpect(jsonPath("$.configuration_version").value(1))
-				.andExpect(jsonPath("$.layout_version").value("layout-2026-01"))
-				.andExpect(jsonPath("$.enabled_camera_count").value(2))
-				.andExpect(jsonPath("$.members.length()").value(2))
-				.andExpect(jsonPath("$.members[0].camera_index").value(0))
-				.andExpect(jsonPath("$.members[0].camera_role").value("OVERVIEW"))
-				.andExpect(jsonPath("$.members[1].camera_index").value(1))
-				.andExpect(jsonPath("$.members[1].camera_role").value("HANDS"))
-				.andReturn();
+		var first = configureCameraSet("cabinet-a", 1, request).andExpect(status().isCreated())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.camera_set_id").isNotEmpty())
+			.andExpect(jsonPath("$.project_id").value(PROJECT_ID.toString()))
+			.andExpect(jsonPath("$.camera_set_key").value("cabinet-a"))
+			.andExpect(jsonPath("$.configuration_version").value(1))
+			.andExpect(jsonPath("$.layout_version").value("layout-2026-01"))
+			.andExpect(jsonPath("$.enabled_camera_count").value(2))
+			.andExpect(jsonPath("$.members.length()").value(2))
+			.andExpect(jsonPath("$.members[0].camera_index").value(0))
+			.andExpect(jsonPath("$.members[0].camera_role").value("OVERVIEW"))
+			.andExpect(jsonPath("$.members[1].camera_index").value(1))
+			.andExpect(jsonPath("$.members[1].camera_role").value("HANDS"))
+			.andReturn();
 
 		var reordered = reorderedCameraSetRequest(overviewId, handsId, "layout-2026-01");
-		var replay = configureCameraSet("cabinet-a", 1, reordered)
-				.andExpect(status().isCreated())
-				.andReturn();
+		var replay = configureCameraSet("cabinet-a", 1, reordered).andExpect(status().isCreated()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.configurationRepository.count());
@@ -122,12 +119,12 @@ class CameraConfigurationContractTests {
 	void rejectsChangedContentForAnExistingVersion() throws Exception {
 		var channelId = provisionedChannelId("cabinet.overview-03");
 		configureCameraSet("cabinet-b", 1, singleMemberRequest(channelId, "layout-1", true))
-				.andExpect(status().isCreated());
+			.andExpect(status().isCreated());
 
 		configureCameraSet("cabinet-b", 1, singleMemberRequest(channelId, "layout-2", true))
-				.andExpect(status().isConflict())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-				.andExpect(jsonPath("$.error_code").value("CAMERA_SET_VERSION_CONFLICT"));
+			.andExpect(status().isConflict())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.error_code").value("CAMERA_SET_VERSION_CONFLICT"));
 	}
 
 	@Test
@@ -135,60 +132,50 @@ class CameraConfigurationContractTests {
 		var firstId = provisionedChannelId("cabinet.overview-04");
 		var secondId = provisionedChannelId("cabinet.hands-02");
 
-		configureCameraSet("cabinet-c", 1, duplicateIndexRequest(firstId, secondId))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("CAMERA_SET_DUPLICATE_INDEX"));
+		configureCameraSet("cabinet-c", 1, duplicateIndexRequest(firstId, secondId)).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAMERA_SET_DUPLICATE_INDEX"));
 
-		configureCameraSet("cabinet-c", 2, duplicateChannelRequest(firstId))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("CAMERA_SET_DUPLICATE_CHANNEL"));
+		configureCameraSet("cabinet-c", 2, duplicateChannelRequest(firstId)).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAMERA_SET_DUPLICATE_CHANNEL"));
 
 		configureCameraSet("cabinet-c", 3, singleMemberRequest(firstId, "layout-disabled", false))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("CAMERA_SET_NO_ENABLED_CHANNEL"));
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAMERA_SET_NO_ENABLED_CHANNEL"));
 	}
 
 	@Test
 	void enforcesProjectScopeForConfigurationAndMembers() throws Exception {
-		provisionChannel(OTHER_PROJECT_ID, "other-project-channel")
-				.andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+		provisionChannel(OTHER_PROJECT_ID, "other-project-channel").andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
-		provisionChannel(OTHER_PROJECT_ID, "other-authorized-channel")
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.project_id").value(OTHER_PROJECT_ID.toString()));
+		provisionChannel(OTHER_PROJECT_ID, "other-authorized-channel").andExpect(status().isCreated())
+			.andExpect(jsonPath("$.project_id").value(OTHER_PROJECT_ID.toString()));
 
-		this.mockMvc.perform(put(
-				"/api/v1/projects/{projectId}/camera-channels/{provisioningKey}",
-				PROJECT_ID,
-				"member-denied-channel")
+		this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/camera-channels/{provisioningKey}", PROJECT_ID,
+					"member-denied-channel")
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var otherChannel = this.channelRepository.saveAndFlush(
-				CameraChannel.provision(OTHER_PROJECT_ID, "other-project-channel", now));
-		configureCameraSet(
-				"cabinet-d",
-				1,
+		var otherChannel = this.channelRepository
+			.saveAndFlush(CameraChannel.provision(OTHER_PROJECT_ID, "other-project-channel", now));
+		configureCameraSet("cabinet-d", 1,
 				singleMemberRequest(otherChannel.getCameraChannelId(), "layout-foreign", true))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("CAMERA_SET_CHANNEL_NOT_FOUND"));
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAMERA_SET_CHANNEL_NOT_FOUND"));
 	}
 
 	@Test
 	void appliesCameraConfigurationMigrationAndUniquenessConstraints() {
 		var migrationCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success = true",
-				Integer.class);
-		var constraintCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM information_schema.table_constraints "
-						+ "WHERE constraint_name IN "
-						+ "('uk_camera_channel_project_key', 'uk_camera_set_project_key_version', "
-						+ "'uk_camera_set_member_channel', 'uk_camera_set_member_index')",
-				Integer.class);
+				"SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success = true", Integer.class);
+		var constraintCount = this.jdbcTemplate
+			.queryForObject("SELECT count(*) FROM information_schema.table_constraints " + "WHERE constraint_name IN "
+					+ "('uk_camera_channel_project_key', 'uk_camera_set_project_key_version', "
+					+ "'uk_camera_set_member_channel', 'uk_camera_set_member_index')", Integer.class);
 
 		assertEquals(1, migrationCount);
 		assertEquals(4, constraintCount);
@@ -197,29 +184,22 @@ class CameraConfigurationContractTests {
 	private UUID provisionedChannelId(String provisioningKey) throws Exception {
 		provisionChannel(PROJECT_ID, provisioningKey).andExpect(status().isCreated());
 		return this.channelRepository.findByProjectIdAndProvisioningKey(PROJECT_ID, provisioningKey)
-				.orElseThrow()
-				.getCameraChannelId();
+			.orElseThrow()
+			.getCameraChannelId();
 	}
 
-	private org.springframework.test.web.servlet.ResultActions provisionChannel(
-			UUID projectId,
-			String provisioningKey) throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/projects/{projectId}/camera-channels/{provisioningKey}",
-				projectId,
-				provisioningKey)
+	private org.springframework.test.web.servlet.ResultActions provisionChannel(UUID projectId, String provisioningKey)
+			throws Exception {
+		return this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/camera-channels/{provisioningKey}", projectId, provisioningKey)
 				.header("Authorization", "Bearer " + TOKEN));
 	}
 
-	private org.springframework.test.web.servlet.ResultActions configureCameraSet(
-			String cameraSetKey,
-			int configurationVersion,
-			String request) throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/projects/{projectId}/camera-sets/{cameraSetKey}/versions/{configurationVersion}",
-				PROJECT_ID,
-				cameraSetKey,
-				configurationVersion)
+	private org.springframework.test.web.servlet.ResultActions configureCameraSet(String cameraSetKey,
+			int configurationVersion, String request) throws Exception {
+		return this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/camera-sets/{cameraSetKey}/versions/{configurationVersion}",
+					PROJECT_ID, cameraSetKey, configurationVersion)
 				.header("Authorization", "Bearer " + TOKEN)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(request));
@@ -337,4 +317,5 @@ class CameraConfigurationContractTests {
 				}
 				""".formatted(channelId, channelId);
 	}
+
 }

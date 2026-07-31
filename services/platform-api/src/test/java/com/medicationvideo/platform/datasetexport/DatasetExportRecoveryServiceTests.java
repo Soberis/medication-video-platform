@@ -23,8 +23,9 @@ import com.medicationvideo.platform.governance.AuditEventRecorder;
 class DatasetExportRecoveryServiceTests {
 
 	private static final Duration LEASE_GRACE = Duration.ofMinutes(5);
-	private static final Instant RECOVERED_AT =
-			DatasetExportRecoveryTestFixtures.STARTED_AT.plus(Duration.ofMinutes(7));
+
+	private static final Instant RECOVERED_AT = DatasetExportRecoveryTestFixtures.STARTED_AT
+		.plus(Duration.ofMinutes(7));
 
 	@Test
 	void marksTheLostAttemptAndQueuesOneFreshCapability() {
@@ -35,12 +36,10 @@ class DatasetExportRecoveryServiceTests {
 		assertEquals(DatasetExportAttemptStatus.LOST, fixture.attempt().getStatus());
 		assertEquals(DatasetExportStatus.RETRY_WAIT, fixture.export().getStatus());
 		verify(fixture.outputCleanup()).discard(fixture.attempt());
-		verify(fixture.attemptQueue()).enqueue(
-				fixture.export(), 2, RECOVERED_AT, RECOVERED_AT);
-		verify(fixture.auditRecorder()).record(
-				org.mockito.ArgumentMatchers.argThat(command ->
-						"DATASET_EXPORT_RETRY_SCHEDULED".equals(command.action())
-								&& "WORKER_LEASE_LOST".equals(command.reasonCode())));
+		verify(fixture.attemptQueue()).enqueue(fixture.export(), 2, RECOVERED_AT, RECOVERED_AT);
+		verify(fixture.auditRecorder()).record(org.mockito.ArgumentMatchers
+			.argThat(command -> "DATASET_EXPORT_RETRY_SCHEDULED".equals(command.action())
+					&& "WORKER_LEASE_LOST".equals(command.reasonCode())));
 	}
 
 	@Test
@@ -53,12 +52,10 @@ class DatasetExportRecoveryServiceTests {
 		assertEquals(DatasetExportStatus.FAILED, fixture.export().getStatus());
 		assertEquals(RECOVERED_AT, fixture.export().getCompletedAt());
 		verify(fixture.outputCleanup()).discard(fixture.attempt());
-		verify(fixture.attemptQueue(), never()).enqueue(
-				any(), anyInt(), any(), any());
-		verify(fixture.auditRecorder()).record(
-				org.mockito.ArgumentMatchers.argThat(command ->
-						"DATASET_EXPORT_FAILED".equals(command.action())
-								&& "WORKER_LEASE_LOST".equals(command.reasonCode())));
+		verify(fixture.attemptQueue(), never()).enqueue(any(), anyInt(), any(), any());
+		verify(fixture.auditRecorder())
+			.record(org.mockito.ArgumentMatchers.argThat(command -> "DATASET_EXPORT_FAILED".equals(command.action())
+					&& "WORKER_LEASE_LOST".equals(command.reasonCode())));
 	}
 
 	@Test
@@ -71,8 +68,7 @@ class DatasetExportRecoveryServiceTests {
 		assertEquals(DatasetExportAttemptStatus.RUNNING, fixture.attempt().getStatus());
 		assertEquals(DatasetExportStatus.RUNNING, fixture.export().getStatus());
 		verify(fixture.outputCleanup(), never()).discard(fixture.attempt());
-		verify(fixture.attemptQueue(), never()).enqueue(
-				any(), anyInt(), any(), any());
+		verify(fixture.attemptQueue(), never()).enqueue(any(), anyInt(), any(), any());
 	}
 
 	private static Fixture fixture(int attemptNumber) {
@@ -85,35 +81,20 @@ class DatasetExportRecoveryServiceTests {
 		var auditRecorder = mock(AuditEventRecorder.class);
 		var transactionManager = mock(PlatformTransactionManager.class);
 		var transactionStatus = mock(TransactionStatus.class);
-		when(transactionManager.getTransaction(any(TransactionDefinition.class)))
-				.thenReturn(transactionStatus);
+		when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
 		when(attemptRepository.findRecoverableExportIds(any(), anyInt()))
-				.thenReturn(List.of(export.getDatasetExportId()));
-		when(exportRepository.findForUpdate(export.getDatasetExportId()))
-				.thenReturn(Optional.of(export));
-		when(attemptRepository.findCurrentForUpdate(export.getDatasetExportId()))
-				.thenReturn(Optional.of(attempt));
-		var service = new DatasetExportRecoveryService(
-				exportRepository,
-				attemptRepository,
-				attemptQueue,
-				new DatasetExportRetryPolicy(
-						3, Duration.ofSeconds(5), Duration.ofMinutes(5)),
-				outputCleanup,
-				auditRecorder,
-				transactionManager,
-				LEASE_GRACE,
-				20);
-		return new Fixture(
-				service, export, attempt, attemptQueue, outputCleanup, auditRecorder);
+			.thenReturn(List.of(export.getDatasetExportId()));
+		when(exportRepository.findForUpdate(export.getDatasetExportId())).thenReturn(Optional.of(export));
+		when(attemptRepository.findCurrentForUpdate(export.getDatasetExportId())).thenReturn(Optional.of(attempt));
+		var service = new DatasetExportRecoveryService(exportRepository, attemptRepository, attemptQueue,
+				new DatasetExportRetryPolicy(3, Duration.ofSeconds(5), Duration.ofMinutes(5)), outputCleanup,
+				auditRecorder, transactionManager, LEASE_GRACE, 20);
+		return new Fixture(service, export, attempt, attemptQueue, outputCleanup, auditRecorder);
 	}
 
-	private record Fixture(
-			DatasetExportRecoveryService service,
-			DatasetExport export,
-			DatasetExportAttempt attempt,
-			DatasetExportAttemptQueueService attemptQueue,
-			DatasetExportOutputCleanup outputCleanup,
+	private record Fixture(DatasetExportRecoveryService service, DatasetExport export, DatasetExportAttempt attempt,
+			DatasetExportAttemptQueueService attemptQueue, DatasetExportOutputCleanup outputCleanup,
 			AuditEventRecorder auditRecorder) {
 	}
+
 }

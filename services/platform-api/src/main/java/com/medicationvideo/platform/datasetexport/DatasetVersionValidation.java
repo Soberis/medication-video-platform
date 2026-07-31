@@ -19,12 +19,8 @@ import jakarta.persistence.Table;
 class DatasetVersionValidation {
 
 	static final String PROFILE_VERSION = "DATASET_FREEZE_VALIDATION_V1";
-	static final List<String> EXECUTED_CHECKS = List.of(
-			"CURRENT_ADMISSION",
-			"REFERENCE_INTEGRITY",
-			"SNAPSHOT_DIGEST",
-			"SPLIT_ISOLATION",
-			"BUILD_CONTRACT");
+	static final List<String> EXECUTED_CHECKS = List.of("CURRENT_ADMISSION", "REFERENCE_INTEGRITY", "SNAPSHOT_DIGEST",
+			"SPLIT_ISOLATION", "BUILD_CONTRACT");
 
 	@Id
 	@Column(name = "dataset_version_validation_id", nullable = false, updatable = false)
@@ -72,22 +68,15 @@ class DatasetVersionValidation {
 	protected DatasetVersionValidation() {
 	}
 
-	private DatasetVersionValidation(
-			DatasetVersion version,
-			DatasetBuildSnapshot snapshot,
-			List<String> reasonCodes,
-			String validatedSnapshotDigest,
-			String validatedBy,
-			String idempotencyKey,
-			String requestFingerprint,
+	private DatasetVersionValidation(DatasetVersion version, DatasetBuildSnapshot snapshot, List<String> reasonCodes,
+			String validatedSnapshotDigest, String validatedBy, String idempotencyKey, String requestFingerprint,
 			Instant validatedAt) {
 		this.datasetVersionValidationId = UUID.randomUUID();
 		this.datasetVersionId = version.getDatasetVersionId();
 		this.projectId = version.getProjectId();
 		this.datasetBuildSnapshotId = snapshot.getDatasetBuildSnapshotId();
 		this.validationProfileVersion = PROFILE_VERSION;
-		this.outcome = reasonCodes.isEmpty()
-				? DatasetVersionValidationOutcome.PASS
+		this.outcome = reasonCodes.isEmpty() ? DatasetVersionValidationOutcome.PASS
 				: DatasetVersionValidationOutcome.FAIL;
 		this.reasonCodes = List.copyOf(reasonCodes);
 		this.executedChecks = EXECUTED_CHECKS;
@@ -98,24 +87,11 @@ class DatasetVersionValidation {
 		this.validatedAt = validatedAt;
 	}
 
-	static DatasetVersionValidation record(
-			DatasetVersion version,
-			DatasetBuildSnapshot snapshot,
-			List<String> reasonCodes,
-			String validatedSnapshotDigest,
-			String validatedBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant validatedAt) {
-		return new DatasetVersionValidation(
-				version,
-				snapshot,
-				reasonCodes,
-				validatedSnapshotDigest,
-				validatedBy,
-				idempotencyKey,
-				requestFingerprint,
-				validatedAt);
+	static DatasetVersionValidation record(DatasetVersion version, DatasetBuildSnapshot snapshot,
+			List<String> reasonCodes, String validatedSnapshotDigest, String validatedBy, String idempotencyKey,
+			String requestFingerprint, Instant validatedAt) {
+		return new DatasetVersionValidation(version, snapshot, reasonCodes, validatedSnapshotDigest, validatedBy,
+				idempotencyKey, requestFingerprint, validatedAt);
 	}
 
 	boolean matchesRequest(String fingerprint) {
@@ -166,9 +142,11 @@ class DatasetVersionValidation {
 	Instant getValidatedAt() {
 		return this.validatedAt;
 	}
+
 }
 
 enum DatasetVersionValidationOutcome {
-	PASS,
-	FAIL
+
+	PASS, FAIL
+
 }

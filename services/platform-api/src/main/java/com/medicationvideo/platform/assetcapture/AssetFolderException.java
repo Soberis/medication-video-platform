@@ -3,6 +3,7 @@ package com.medicationvideo.platform.assetcapture;
 final class AssetFolderException extends RuntimeException {
 
 	private final String errorCode;
+
 	private final int statusCode;
 
 	AssetFolderException(String errorCode, String message, int statusCode) {
@@ -18,4 +19,5 @@ final class AssetFolderException extends RuntimeException {
 	int getStatusCode() {
 		return this.statusCode;
 	}
+
 }

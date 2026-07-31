@@ -415,7 +415,7 @@ else {
 $webPackage = Join-Path $root 'apps/web/package.json'
 if (Test-Path -LiteralPath $webPackage) {
     $webManifest = Get-Content -LiteralPath $webPackage -Raw | ConvertFrom-Json
-    foreach ($script in @('lint', 'type-check', 'test', 'build')) {
+    foreach ($script in @('format:check', 'lint', 'type-check', 'test', 'build')) {
         if ($webManifest.scripts.PSObject.Properties.Name -contains $script) {
             & pnpm --dir (Join-Path $root 'apps/web') run $script
             if ($LASTEXITCODE -eq 0) {
@@ -478,6 +478,11 @@ else {
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "uv lock check failed: $projectDir"
+            }
+            & uv run ruff format --check .
+            if ($LASTEXITCODE -ne 0) {
+                $projectFailed = $true
+                Add-Failure "Ruff format check failed: $projectDir"
             }
             & uv run ruff check .
             if ($LASTEXITCODE -ne 0) {

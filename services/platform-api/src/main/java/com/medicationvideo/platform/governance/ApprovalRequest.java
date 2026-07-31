@@ -49,13 +49,8 @@ class ApprovalRequest {
 	protected ApprovalRequest() {
 	}
 
-	private ApprovalRequest(
-			ApprovalRequestType requestType,
-			UUID projectId,
-			UUID datasetVersionId,
-			UUID validationId,
-			String requestedBy,
-			Instant requestedAt) {
+	private ApprovalRequest(ApprovalRequestType requestType, UUID projectId, UUID datasetVersionId, UUID validationId,
+			String requestedBy, Instant requestedAt) {
 		this.approvalRequestId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.requestType = requestType;
@@ -67,68 +62,34 @@ class ApprovalRequest {
 		this.status = ApprovalRequestStatus.PENDING;
 	}
 
-	static ApprovalRequest requestDatasetFreeze(
-			UUID projectId,
-			UUID datasetVersionId,
-			UUID validationId,
-			String requestedBy,
-			Instant requestedAt) {
-		return new ApprovalRequest(
-				ApprovalRequestType.DATASET_VERSION_FREEZE,
-				projectId,
-				datasetVersionId,
-				validationId,
-				requestedBy,
-				requestedAt);
+	static ApprovalRequest requestDatasetFreeze(UUID projectId, UUID datasetVersionId, UUID validationId,
+			String requestedBy, Instant requestedAt) {
+		return new ApprovalRequest(ApprovalRequestType.DATASET_VERSION_FREEZE, projectId, datasetVersionId,
+				validationId, requestedBy, requestedAt);
 	}
 
-	static ApprovalRequest requestDatasetExport(
-			UUID projectId,
-			UUID datasetVersionId,
-			UUID validationId,
-			String requestedBy,
-			Instant requestedAt) {
-		return new ApprovalRequest(
-				ApprovalRequestType.DATASET_EXPORT,
-				projectId,
-				datasetVersionId,
-				validationId,
-				requestedBy,
-				requestedAt);
+	static ApprovalRequest requestDatasetExport(UUID projectId, UUID datasetVersionId, UUID validationId,
+			String requestedBy, Instant requestedAt) {
+		return new ApprovalRequest(ApprovalRequestType.DATASET_EXPORT, projectId, datasetVersionId, validationId,
+				requestedBy, requestedAt);
 	}
 
-	boolean matchesDatasetFreeze(
-			UUID projectId,
-			UUID datasetVersionId,
-			UUID validationId,
-			String requestedBy) {
-		return this.projectId.equals(projectId)
-				&& this.requestType == ApprovalRequestType.DATASET_VERSION_FREEZE
-				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType)
-				&& this.objectId.equals(datasetVersionId)
-				&& this.objectVersion.equals(validationId)
-				&& this.requestedBy.equals(requestedBy);
+	boolean matchesDatasetFreeze(UUID projectId, UUID datasetVersionId, UUID validationId, String requestedBy) {
+		return this.projectId.equals(projectId) && this.requestType == ApprovalRequestType.DATASET_VERSION_FREEZE
+				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType) && this.objectId.equals(datasetVersionId)
+				&& this.objectVersion.equals(validationId) && this.requestedBy.equals(requestedBy);
 	}
 
 	boolean matchesDatasetFreeze(UUID projectId, UUID datasetVersionId, UUID validationId) {
-		return this.projectId.equals(projectId)
-				&& this.requestType == ApprovalRequestType.DATASET_VERSION_FREEZE
-				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType)
-				&& this.objectId.equals(datasetVersionId)
+		return this.projectId.equals(projectId) && this.requestType == ApprovalRequestType.DATASET_VERSION_FREEZE
+				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType) && this.objectId.equals(datasetVersionId)
 				&& this.objectVersion.equals(validationId);
 	}
 
-	boolean matchesDatasetExport(
-			UUID projectId,
-			UUID datasetVersionId,
-			UUID validationId,
-			String requestedBy) {
-		return this.projectId.equals(projectId)
-				&& this.requestType == ApprovalRequestType.DATASET_EXPORT
-				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType)
-				&& this.objectId.equals(datasetVersionId)
-				&& this.objectVersion.equals(validationId)
-				&& this.requestedBy.equals(requestedBy);
+	boolean matchesDatasetExport(UUID projectId, UUID datasetVersionId, UUID validationId, String requestedBy) {
+		return this.projectId.equals(projectId) && this.requestType == ApprovalRequestType.DATASET_EXPORT
+				&& DATASET_VERSION_OBJECT_TYPE.equals(this.objectType) && this.objectId.equals(datasetVersionId)
+				&& this.objectVersion.equals(validationId) && this.requestedBy.equals(requestedBy);
 	}
 
 	void approve() {
@@ -165,14 +126,17 @@ class ApprovalRequest {
 	ApprovalRequestStatus getStatus() {
 		return this.status;
 	}
+
 }
 
 enum ApprovalRequestType {
-	DATASET_VERSION_FREEZE,
-	DATASET_EXPORT
+
+	DATASET_VERSION_FREEZE, DATASET_EXPORT
+
 }
 
 enum ApprovalRequestStatus {
-	PENDING,
-	APPROVED
+
+	PENDING, APPROVED
+
 }

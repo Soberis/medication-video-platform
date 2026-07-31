@@ -6,9 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
-@ConditionalOnProperty(
-		name = "platform.upload.cleanup-alert.enabled",
-		havingValue = "true",
-		matchIfMissing = true)
+@ConditionalOnProperty(name = "platform.upload.cleanup-alert.enabled", havingValue = "true", matchIfMissing = true)
 class UploadCleanupAlertSchedulingConfiguration {
+
 }

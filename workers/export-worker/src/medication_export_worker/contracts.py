@@ -8,13 +8,9 @@ from typing import Final
 from uuid import UUID
 
 CURRENT_PROFILE_KEY: Final = "p0-dataset-export-v2"
-CURRENT_PROFILE_DIGEST: Final = (
-    "5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96"
-)
+CURRENT_PROFILE_DIGEST: Final = "5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96"
 LEGACY_PROFILE_KEY: Final = "p0-dataset-export-v1"
-LEGACY_PROFILE_DIGEST: Final = (
-    "3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888"
-)
+LEGACY_PROFILE_DIGEST: Final = "3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888"
 JOB_FIELDS: Final = frozenset(
     {
         "schema_version",

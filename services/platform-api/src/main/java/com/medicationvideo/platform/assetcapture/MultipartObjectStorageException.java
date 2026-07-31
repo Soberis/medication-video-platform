@@ -5,4 +5,5 @@ public final class MultipartObjectStorageException extends RuntimeException {
 	public MultipartObjectStorageException(String message, Throwable cause) {
 		super(message, cause);
 	}
+
 }

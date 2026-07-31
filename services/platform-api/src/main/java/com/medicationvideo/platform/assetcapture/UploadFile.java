@@ -100,19 +100,9 @@ class UploadFile {
 	protected UploadFile() {
 	}
 
-	private UploadFile(
-			UUID uploadFileId,
-			UUID batchId,
-			UUID clientFileId,
-			String idempotencyKey,
-			String requestFingerprint,
-			UploadFileKind fileKind,
-			String contentType,
-			long sizeBytes,
-			String sha256,
-			long partSizeBytes,
-			int totalParts,
-			Instant createdAt) {
+	private UploadFile(UUID uploadFileId, UUID batchId, UUID clientFileId, String idempotencyKey,
+			String requestFingerprint, UploadFileKind fileKind, String contentType, long sizeBytes, String sha256,
+			long partSizeBytes, int totalParts, Instant createdAt) {
 		this.uploadFileId = uploadFileId;
 		this.batchId = batchId;
 		this.clientFileId = clientFileId;
@@ -129,27 +119,11 @@ class UploadFile {
 		this.updatedAt = createdAt;
 	}
 
-	static UploadFile register(
-			UUID batchId,
-			UUID clientFileId,
-			String idempotencyKey,
-			String requestFingerprint,
-			UploadFileRegistrationRequest request,
-			int totalParts,
-			Instant createdAt) {
-		return new UploadFile(
-				UUID.randomUUID(),
-				batchId,
-				clientFileId,
-				idempotencyKey,
-				requestFingerprint,
-				request.fileKind(),
-				request.contentType(),
-				request.sizeBytes(),
-				request.sha256(),
-				request.partSizeBytes(),
-				totalParts,
-				createdAt);
+	static UploadFile register(UUID batchId, UUID clientFileId, String idempotencyKey, String requestFingerprint,
+			UploadFileRegistrationRequest request, int totalParts, Instant createdAt) {
+		return new UploadFile(UUID.randomUUID(), batchId, clientFileId, idempotencyKey, requestFingerprint,
+				request.fileKind(), request.contentType(), request.sizeBytes(), request.sha256(),
+				request.partSizeBytes(), totalParts, createdAt);
 	}
 
 	UUID getUploadFileId() {
@@ -208,10 +182,7 @@ class UploadFile {
 		if (!hasMultipartSession()) {
 			throw new IllegalStateException("Upload file has no multipart session.");
 		}
-		return new MultipartObjectStorage.CreatedUpload(
-				this.storageBucket,
-				this.objectKey,
-				this.storageUploadId);
+		return new MultipartObjectStorage.CreatedUpload(this.storageBucket, this.objectKey, this.storageUploadId);
 	}
 
 	Instant getMultipartCreatedAt() {
@@ -262,8 +233,7 @@ class UploadFile {
 	}
 
 	boolean hasActiveCompletionLease(Instant now) {
-		return this.status == UploadFileStatus.COMPLETING
-				&& this.completionLeaseExpiresAt != null
+		return this.status == UploadFileStatus.COMPLETING && this.completionLeaseExpiresAt != null
 				&& this.completionLeaseExpiresAt.isAfter(now);
 	}
 
@@ -286,10 +256,7 @@ class UploadFile {
 		this.updatedAt = changedAt;
 	}
 
-	void markUploaded(
-			UUID attemptId,
-			MultipartObjectStorage.CompletedObject completedObject,
-			String observedSha256,
+	void markUploaded(UUID attemptId, MultipartObjectStorage.CompletedObject completedObject, String observedSha256,
 			Instant changedAt) {
 		requireCompletionAttempt(attemptId);
 		this.status = UploadFileStatus.UPLOADED;
@@ -302,12 +269,8 @@ class UploadFile {
 		this.updatedAt = changedAt;
 	}
 
-	void markCompletionFailed(
-			UUID attemptId,
-			MultipartObjectStorage.CompletedObject completedObject,
-			String observedSha256,
-			String errorCode,
-			Instant changedAt) {
+	void markCompletionFailed(UUID attemptId, MultipartObjectStorage.CompletedObject completedObject,
+			String observedSha256, String errorCode, Instant changedAt) {
 		requireCompletionAttempt(attemptId);
 		this.status = UploadFileStatus.FAILED;
 		this.completionAttemptId = null;
@@ -359,8 +322,7 @@ class UploadFile {
 	}
 
 	void terminate(UploadFileStatus terminalStatus, Instant changedAt) {
-		if (terminalStatus != UploadFileStatus.ABORTED
-				&& terminalStatus != UploadFileStatus.EXPIRED) {
+		if (terminalStatus != UploadFileStatus.ABORTED && terminalStatus != UploadFileStatus.EXPIRED) {
 			throw new IllegalArgumentException("Upload file termination status is invalid.");
 		}
 		if (this.status == terminalStatus) {
@@ -382,4 +344,5 @@ class UploadFile {
 			throw new IllegalStateException("Upload file completion attempt is no longer active.");
 		}
 	}
+
 }

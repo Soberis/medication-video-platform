@@ -16,21 +16,24 @@ import com.medicationvideo.platform.assetcapture.ClipAssetMediaIngestService;
 class MediaJobRecoveryService {
 
 	private final MediaJobRepository jobRepository;
+
 	private final MediaJobAttemptRepository attemptRepository;
+
 	private final MediaJobAttemptQueueService attemptQueue;
+
 	private final MediaJobRetryPolicy retryPolicy;
+
 	private final ClipAssetMediaIngestService assetIngest;
+
 	private final TransactionTemplate transactionTemplate;
+
 	private final Duration leaseGrace;
+
 	private final int batchSize;
 
-	MediaJobRecoveryService(
-			MediaJobRepository jobRepository,
-			MediaJobAttemptRepository attemptRepository,
-			MediaJobAttemptQueueService attemptQueue,
-			MediaJobRetryPolicy retryPolicy,
-			ClipAssetMediaIngestService assetIngest,
-			PlatformTransactionManager transactionManager,
+	MediaJobRecoveryService(MediaJobRepository jobRepository, MediaJobAttemptRepository attemptRepository,
+			MediaJobAttemptQueueService attemptQueue, MediaJobRetryPolicy retryPolicy,
+			ClipAssetMediaIngestService assetIngest, PlatformTransactionManager transactionManager,
 			@Value("${platform.media-probe.lease-grace:PT5M}") Duration leaseGrace,
 			@Value("${platform.media-probe.recovery-batch-size:20}") int batchSize) {
 		this.jobRepository = jobRepository;
@@ -41,8 +44,7 @@ class MediaJobRecoveryService {
 		this.transactionTemplate = new TransactionTemplate(transactionManager);
 		this.leaseGrace = requirePositive(leaseGrace, "Media probe lease grace");
 		if (batchSize < 1 || batchSize > 1000) {
-			throw new IllegalArgumentException(
-					"Media probe recovery batch size must be between 1 and 1000.");
+			throw new IllegalArgumentException("Media probe recovery batch size must be between 1 and 1000.");
 		}
 		this.batchSize = batchSize;
 	}
@@ -55,8 +57,7 @@ class MediaJobRecoveryService {
 		var cutoff = now.minus(this.leaseGrace);
 		var recovered = 0;
 		for (var mediaJobId : this.attemptRepository.findRecoverableJobIds(cutoff, this.batchSize)) {
-			var changed = this.transactionTemplate.execute(
-					status -> recoverOne(mediaJobId, cutoff, now));
+			var changed = this.transactionTemplate.execute(status -> recoverOne(mediaJobId, cutoff, now));
 			if (Boolean.TRUE.equals(changed)) {
 				recovered++;
 			}
@@ -93,4 +94,5 @@ class MediaJobRecoveryService {
 		}
 		return value;
 	}
+
 }

@@ -40,10 +40,7 @@ class CameraSetSnapshot {
 	protected CameraSetSnapshot() {
 	}
 
-	private CameraSetSnapshot(
-			UUID captureSessionId,
-			CameraSetConfiguration source,
-			int expectedCameraCount,
+	private CameraSetSnapshot(UUID captureSessionId, CameraSetConfiguration source, int expectedCameraCount,
 			Instant createdAt) {
 		this.cameraSetSnapshotId = UUID.randomUUID();
 		this.captureSessionId = captureSessionId;
@@ -55,10 +52,7 @@ class CameraSetSnapshot {
 		this.createdAt = createdAt;
 	}
 
-	static CameraSetSnapshot freeze(
-			UUID captureSessionId,
-			CameraSetConfiguration source,
-			int expectedCameraCount,
+	static CameraSetSnapshot freeze(UUID captureSessionId, CameraSetConfiguration source, int expectedCameraCount,
 			Instant createdAt) {
 		return new CameraSetSnapshot(captureSessionId, source, expectedCameraCount, createdAt);
 	}
@@ -86,4 +80,5 @@ class CameraSetSnapshot {
 	int getExpectedCameraCount() {
 		return this.expectedCameraCount;
 	}
+
 }

@@ -61,17 +61,9 @@ class DatasetBuildSnapshot {
 	protected DatasetBuildSnapshot() {
 	}
 
-	private DatasetBuildSnapshot(
-			DatasetVersion version,
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			int memberCount,
-			int streamCount,
-			String snapshotDigest,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
+	private DatasetBuildSnapshot(DatasetVersion version, DatasetBuildSpecification specification,
+			DatasetSplitPlan splitPlan, int memberCount, int streamCount, String snapshotDigest, String createdBy,
+			String idempotencyKey, String requestFingerprint, Instant createdAt) {
 		this.datasetBuildSnapshotId = UUID.randomUUID();
 		this.datasetVersionId = version.getDatasetVersionId();
 		this.projectId = version.getProjectId();
@@ -88,28 +80,11 @@ class DatasetBuildSnapshot {
 		this.createdAt = createdAt;
 	}
 
-	static DatasetBuildSnapshot create(
-			DatasetVersion version,
-			DatasetBuildSpecification specification,
-			DatasetSplitPlan splitPlan,
-			int memberCount,
-			int streamCount,
-			String snapshotDigest,
-			String createdBy,
-			String idempotencyKey,
-			String requestFingerprint,
-			Instant createdAt) {
-		return new DatasetBuildSnapshot(
-				version,
-				specification,
-				splitPlan,
-				memberCount,
-				streamCount,
-				snapshotDigest,
-				createdBy,
-				idempotencyKey,
-				requestFingerprint,
-				createdAt);
+	static DatasetBuildSnapshot create(DatasetVersion version, DatasetBuildSpecification specification,
+			DatasetSplitPlan splitPlan, int memberCount, int streamCount, String snapshotDigest, String createdBy,
+			String idempotencyKey, String requestFingerprint, Instant createdAt) {
+		return new DatasetBuildSnapshot(version, specification, splitPlan, memberCount, streamCount, snapshotDigest,
+				createdBy, idempotencyKey, requestFingerprint, createdAt);
 	}
 
 	boolean matchesCreateRequest(String fingerprint) {
@@ -163,4 +138,5 @@ class DatasetBuildSnapshot {
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
+
 }

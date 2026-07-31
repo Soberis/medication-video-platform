@@ -42,10 +42,15 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 class UploadMultipartContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
 	private static final long PART_SIZE = 8_388_608L;
+
 	private static final String SHA256_A = "a".repeat(64);
+
 	private static final String SHA256_B = "b".repeat(64);
+
 	private static final String SHA256_C = "c".repeat(64);
 
 	@Autowired
@@ -88,32 +93,25 @@ class UploadMultipartContractTests {
 		var clientFileId = UUID.fromString("20000000-0000-0000-0000-000000000001");
 		registerFile(batchId, clientFileId, PART_SIZE * 2, "multipart-file-key-0001");
 
-		var first = startMultipart(batchId, clientFileId)
-				.andExpect(status().isCreated())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-				.andExpect(jsonPath("$.upload_file_id").isNotEmpty())
-				.andExpect(jsonPath("$.batch_id").value(batchId.toString()))
-				.andExpect(jsonPath("$.client_file_id").value(clientFileId.toString()))
-				.andExpect(jsonPath("$.total_parts").value(2))
-				.andExpect(jsonPath("$.status").value("SESSION_CREATED"))
-				.andExpect(jsonPath("$.multipart_created_at").isNotEmpty())
-				.andExpect(jsonPath("$.storage_upload_id").doesNotExist())
-				.andExpect(jsonPath("$.object_key").doesNotExist())
-				.andReturn();
+		var first = startMultipart(batchId, clientFileId).andExpect(status().isCreated())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.upload_file_id").isNotEmpty())
+			.andExpect(jsonPath("$.batch_id").value(batchId.toString()))
+			.andExpect(jsonPath("$.client_file_id").value(clientFileId.toString()))
+			.andExpect(jsonPath("$.total_parts").value(2))
+			.andExpect(jsonPath("$.status").value("SESSION_CREATED"))
+			.andExpect(jsonPath("$.multipart_created_at").isNotEmpty())
+			.andExpect(jsonPath("$.storage_upload_id").doesNotExist())
+			.andExpect(jsonPath("$.object_key").doesNotExist())
+			.andReturn();
 
-		var replay = startMultipart(batchId, clientFileId)
-				.andExpect(status().isCreated())
-				.andReturn();
+		var replay = startMultipart(batchId, clientFileId).andExpect(status().isCreated()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.objectStorage.createCalls);
 		assertEquals(UploadBatchStatus.INITIATED, this.batchRepository.findById(batchId).orElseThrow().getStatus());
-		assertEquals(
-				"synthetic-upload-1",
-				this.jdbcTemplate.queryForObject(
-						"SELECT storage_upload_id FROM upload_file WHERE batch_id = ?",
-						String.class,
-						batchId));
+		assertEquals("synthetic-upload-1", this.jdbcTemplate
+			.queryForObject("SELECT storage_upload_id FROM upload_file WHERE batch_id = ?", String.class, batchId));
 	}
 
 	@Test
@@ -123,27 +121,23 @@ class UploadMultipartContractTests {
 		registerFile(batchId, clientFileId, PART_SIZE + 1, "multipart-file-key-0002");
 		startMultipart(batchId, clientFileId).andExpect(status().isCreated());
 
-		authorizePart(batchId, clientFileId, 1, SHA256_B)
-				.andExpect(status().isOk())
-				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.part_number").value(1))
-				.andExpect(jsonPath("$.expected_size_bytes").value(PART_SIZE))
-				.andExpect(jsonPath("$.sha256").value(SHA256_B))
-				.andExpect(jsonPath("$.status").value("AUTHORIZED"))
-				.andExpect(jsonPath("$.upload_url").value(org.hamcrest.Matchers.startsWith("https://storage.invalid/")))
-				.andExpect(jsonPath("$.expires_at").isNotEmpty());
+		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.part_number").value(1))
+			.andExpect(jsonPath("$.expected_size_bytes").value(PART_SIZE))
+			.andExpect(jsonPath("$.sha256").value(SHA256_B))
+			.andExpect(jsonPath("$.status").value("AUTHORIZED"))
+			.andExpect(jsonPath("$.upload_url").value(org.hamcrest.Matchers.startsWith("https://storage.invalid/")))
+			.andExpect(jsonPath("$.expires_at").isNotEmpty());
 
-		authorizePart(batchId, clientFileId, 1, SHA256_B)
-				.andExpect(status().isOk());
+		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk());
 
 		assertEquals(2, this.objectStorage.authorizeCalls);
 		assertEquals(1, this.partRepository.count());
 		assertEquals(UploadBatchStatus.UPLOADING, this.batchRepository.findById(batchId).orElseThrow().getStatus());
-		assertEquals(
-				UploadFileStatus.UPLOADING,
+		assertEquals(UploadFileStatus.UPLOADING,
 				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getStatus());
-		assertEquals(
-				0,
+		assertEquals(0,
 				this.jdbcTemplate.queryForObject(
 						"SELECT count(*) FROM information_schema.columns "
 								+ "WHERE table_name IN ('upload_file', 'upload_part') AND column_name = 'upload_url'",
@@ -156,14 +150,13 @@ class UploadMultipartContractTests {
 		var clientFileId = UUID.fromString("20000000-0000-0000-0000-000000000003");
 		registerFile(batchId, clientFileId, PART_SIZE, "multipart-file-key-0003");
 
-		startMultipart(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_BATCH_MANIFEST_INCOMPLETE"));
+		startMultipart(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_BATCH_MANIFEST_INCOMPLETE"));
 
 		assertEquals(0, this.objectStorage.createCalls);
 		assertFalse(this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId)
-				.orElseThrow()
-				.hasMultipartSession());
+			.orElseThrow()
+			.hasMultipartSession());
 	}
 
 	@Test
@@ -172,21 +165,17 @@ class UploadMultipartContractTests {
 		var clientFileId = UUID.fromString("20000000-0000-0000-0000-000000000004");
 		registerFile(batchId, clientFileId, PART_SIZE + 1, "multipart-file-key-0004");
 
-		authorizePart(batchId, clientFileId, 1, SHA256_B)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_MULTIPART_SESSION_REQUIRED"));
+		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_MULTIPART_SESSION_REQUIRED"));
 
 		startMultipart(batchId, clientFileId).andExpect(status().isCreated());
-		authorizePart(batchId, clientFileId, 3, SHA256_B)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_OUT_OF_RANGE"));
+		authorizePart(batchId, clientFileId, 3, SHA256_B).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_OUT_OF_RANGE"));
 
-		authorizePart(batchId, clientFileId, 2, SHA256_B)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.expected_size_bytes").value(1));
-		authorizePart(batchId, clientFileId, 2, SHA256_C)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_HASH_CONFLICT"));
+		authorizePart(batchId, clientFileId, 2, SHA256_B).andExpect(status().isOk())
+			.andExpect(jsonPath("$.expected_size_bytes").value(1));
+		authorizePart(batchId, clientFileId, 2, SHA256_C).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_HASH_CONFLICT"));
 
 		assertEquals(1, this.partRepository.count());
 	}
@@ -199,39 +188,30 @@ class UploadMultipartContractTests {
 		startMultipart(batchId, clientFileId).andExpect(status().isCreated());
 		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk());
 
-		confirmPart(batchId, clientFileId, 1)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_NOT_FOUND_IN_STORAGE"));
+		confirmPart(batchId, clientFileId, 1).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_NOT_FOUND_IN_STORAGE"));
 
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
-		var first = confirmPart(batchId, clientFileId, 1)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.part_number").value(1))
-				.andExpect(jsonPath("$.expected_size_bytes").value(PART_SIZE))
-				.andExpect(jsonPath("$.uploaded_size_bytes").value(PART_SIZE))
-				.andExpect(jsonPath("$.sha256").value(SHA256_B))
-				.andExpect(jsonPath("$.status").value("UPLOADED"))
-				.andExpect(jsonPath("$.storage_etag").value("synthetic-etag-1"))
-				.andExpect(jsonPath("$.confirmed_at").isNotEmpty())
-				.andReturn();
+		var first = confirmPart(batchId, clientFileId, 1).andExpect(status().isOk())
+			.andExpect(jsonPath("$.part_number").value(1))
+			.andExpect(jsonPath("$.expected_size_bytes").value(PART_SIZE))
+			.andExpect(jsonPath("$.uploaded_size_bytes").value(PART_SIZE))
+			.andExpect(jsonPath("$.sha256").value(SHA256_B))
+			.andExpect(jsonPath("$.status").value("UPLOADED"))
+			.andExpect(jsonPath("$.storage_etag").value("synthetic-etag-1"))
+			.andExpect(jsonPath("$.confirmed_at").isNotEmpty())
+			.andReturn();
 
-		var replay = confirmPart(batchId, clientFileId, 1)
-				.andExpect(status().isOk())
-				.andReturn();
+		var replay = confirmPart(batchId, clientFileId, 1).andExpect(status().isOk()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
-		authorizePart(batchId, clientFileId, 1, SHA256_B)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_ALREADY_CONFIRMED"));
-		assertEquals(
-				UploadPartStatus.UPLOADED,
-				this.partRepository.findByUploadFileIdAndPartNumber(
-						this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId)
-								.orElseThrow()
-								.getUploadFileId(),
-						1)
-						.orElseThrow()
-						.getStatus());
+		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_ALREADY_CONFIRMED"));
+		assertEquals(UploadPartStatus.UPLOADED, this.partRepository.findByUploadFileIdAndPartNumber(
+				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getUploadFileId(),
+				1)
+			.orElseThrow()
+			.getStatus());
 	}
 
 	@Test
@@ -244,24 +224,21 @@ class UploadMultipartContractTests {
 		authorizePart(batchId, clientFileId, 2, SHA256_C).andExpect(status().isOk());
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
 
-		reconcileParts(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.total_parts").value(2))
-				.andExpect(jsonPath("$.tracked_parts").value(2))
-				.andExpect(jsonPath("$.uploaded_parts").value(1))
-				.andExpect(jsonPath("$.parts[0].part_number").value(1))
-				.andExpect(jsonPath("$.parts[0].status").value("UPLOADED"))
-				.andExpect(jsonPath("$.parts[1].part_number").value(2))
-				.andExpect(jsonPath("$.parts[1].status").value("AUTHORIZED"));
-		getPartProgress(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andExpect(header().string("Cache-Control", "no-store"))
-				.andExpect(jsonPath("$.uploaded_parts").value(1));
+		reconcileParts(batchId, clientFileId).andExpect(status().isOk())
+			.andExpect(jsonPath("$.total_parts").value(2))
+			.andExpect(jsonPath("$.tracked_parts").value(2))
+			.andExpect(jsonPath("$.uploaded_parts").value(1))
+			.andExpect(jsonPath("$.parts[0].part_number").value(1))
+			.andExpect(jsonPath("$.parts[0].status").value("UPLOADED"))
+			.andExpect(jsonPath("$.parts[1].part_number").value(2))
+			.andExpect(jsonPath("$.parts[1].status").value("AUTHORIZED"));
+		getPartProgress(batchId, clientFileId).andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.uploaded_parts").value(1));
 
 		this.objectStorage.storePart(2, PART_SIZE, "synthetic-etag-2");
-		reconcileParts(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.uploaded_parts").value(2));
+		reconcileParts(batchId, clientFileId).andExpect(status().isOk())
+			.andExpect(jsonPath("$.uploaded_parts").value(2));
 	}
 
 	@Test
@@ -273,15 +250,13 @@ class UploadMultipartContractTests {
 		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk());
 		this.objectStorage.storePart(1, PART_SIZE - 1, "synthetic-etag-wrong-size");
 
-		confirmPart(batchId, clientFileId, 1)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_SIZE_MISMATCH"));
+		confirmPart(batchId, clientFileId, 1).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_SIZE_MISMATCH"));
 
 		this.objectStorage.removePart(1);
 		this.objectStorage.storePart(2, PART_SIZE, "synthetic-etag-untracked");
-		reconcileParts(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_STORAGE_DIVERGED"));
+		reconcileParts(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_PART_STORAGE_DIVERGED"));
 	}
 
 	@Test
@@ -291,36 +266,31 @@ class UploadMultipartContractTests {
 		registerFile(batchId, clientFileId, PART_SIZE, "multipart-file-key-0005");
 
 		this.objectStorage.failCreate = true;
-		startMultipart(batchId, clientFileId)
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.error_code").value("OBJECT_STORAGE_UNAVAILABLE"))
-				.andExpect(jsonPath("$.retryable").value(true));
+		startMultipart(batchId, clientFileId).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.error_code").value("OBJECT_STORAGE_UNAVAILABLE"))
+			.andExpect(jsonPath("$.retryable").value(true));
 		assertFalse(this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId)
-				.orElseThrow()
-				.hasMultipartSession());
+			.orElseThrow()
+			.hasMultipartSession());
 
 		this.objectStorage.failCreate = false;
 		startMultipart(batchId, clientFileId).andExpect(status().isCreated());
 		this.objectStorage.failAuthorize = true;
-		authorizePart(batchId, clientFileId, 1, SHA256_A)
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.retryable").value(true));
+		authorizePart(batchId, clientFileId, 1, SHA256_A).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.retryable").value(true));
 
 		assertEquals(0, this.partRepository.count());
 		assertEquals(UploadBatchStatus.INITIATED, this.batchRepository.findById(batchId).orElseThrow().getStatus());
-		assertEquals(
-				UploadFileStatus.SESSION_CREATED,
+		assertEquals(UploadFileStatus.SESSION_CREATED,
 				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getStatus());
 
 		this.objectStorage.failAuthorize = false;
 		authorizePart(batchId, clientFileId, 1, SHA256_A).andExpect(status().isOk());
 		this.objectStorage.failInspect = true;
-		confirmPart(batchId, clientFileId, 1)
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.retryable").value(true));
-		reconcileParts(batchId, clientFileId)
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.retryable").value(true));
+		confirmPart(batchId, clientFileId, 1).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.retryable").value(true));
+		reconcileParts(batchId, clientFileId).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.retryable").value(true));
 	}
 
 	@Test
@@ -334,38 +304,30 @@ class UploadMultipartContractTests {
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
 		this.objectStorage.storePart(2, PART_SIZE, "synthetic-etag-2");
 
-		var first = completeFile(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.batch_id").value(batchId.toString()))
-				.andExpect(jsonPath("$.client_file_id").value(clientFileId.toString()))
-				.andExpect(jsonPath("$.size_bytes").value(PART_SIZE * 2))
-				.andExpect(jsonPath("$.declared_sha256").value(SHA256_A))
-				.andExpect(jsonPath("$.verified_sha256").value(SHA256_A))
-				.andExpect(jsonPath("$.status").value("UPLOADED"))
-				.andExpect(jsonPath("$.storage_etag").value("synthetic-completed-etag"))
-				.andExpect(jsonPath("$.completion_started_at").isNotEmpty())
-				.andExpect(jsonPath("$.completed_at").isNotEmpty())
-				.andReturn();
+		var first = completeFile(batchId, clientFileId).andExpect(status().isOk())
+			.andExpect(jsonPath("$.batch_id").value(batchId.toString()))
+			.andExpect(jsonPath("$.client_file_id").value(clientFileId.toString()))
+			.andExpect(jsonPath("$.size_bytes").value(PART_SIZE * 2))
+			.andExpect(jsonPath("$.declared_sha256").value(SHA256_A))
+			.andExpect(jsonPath("$.verified_sha256").value(SHA256_A))
+			.andExpect(jsonPath("$.status").value("UPLOADED"))
+			.andExpect(jsonPath("$.storage_etag").value("synthetic-completed-etag"))
+			.andExpect(jsonPath("$.completion_started_at").isNotEmpty())
+			.andExpect(jsonPath("$.completed_at").isNotEmpty())
+			.andReturn();
 
-		var replay = completeFile(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andReturn();
+		var replay = completeFile(batchId, clientFileId).andExpect(status().isOk()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.objectStorage.completeCalls);
 		assertEquals(1, this.objectStorage.hashCalls);
-		assertEquals(
-				UploadFileStatus.UPLOADED,
+		assertEquals(UploadFileStatus.UPLOADED,
 				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getStatus());
-		assertEquals(
-				2,
-				this.partRepository.findAllByUploadFileIdOrderByPartNumber(
-						this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId)
-								.orElseThrow()
-								.getUploadFileId())
-						.stream()
-						.filter(part -> part.getStatus() == UploadPartStatus.UPLOADED)
-						.count());
+		assertEquals(2, this.partRepository.findAllByUploadFileIdOrderByPartNumber(
+				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getUploadFileId())
+			.stream()
+			.filter(part -> part.getStatus() == UploadPartStatus.UPLOADED)
+			.count());
 	}
 
 	@Test
@@ -378,13 +340,11 @@ class UploadMultipartContractTests {
 		authorizePart(batchId, clientFileId, 2, SHA256_C).andExpect(status().isOk());
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
 
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_PARTS_INCOMPLETE"));
+		completeFile(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_PARTS_INCOMPLETE"));
 
 		assertEquals(0, this.objectStorage.completeCalls);
-		assertEquals(
-				UploadFileStatus.UPLOADING,
+		assertEquals(UploadFileStatus.UPLOADING,
 				this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow().getStatus());
 	}
 
@@ -398,12 +358,10 @@ class UploadMultipartContractTests {
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
 		this.objectStorage.completedSha256 = SHA256_B;
 
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_CHECKSUM_MISMATCH"));
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_CHECKSUM_MISMATCH"));
+		completeFile(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_CHECKSUM_MISMATCH"));
+		completeFile(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_CHECKSUM_MISMATCH"));
 
 		var file = this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow();
 		assertEquals(UploadFileStatus.FAILED, file.getStatus());
@@ -420,13 +378,11 @@ class UploadMultipartContractTests {
 		registerFile(batchId, clientFileId, PART_SIZE, "multipart-file-key-0014");
 		startMultipart(batchId, clientFileId).andExpect(status().isCreated());
 		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk());
-		this.objectStorage.completedObject = new MultipartObjectStorage.CompletedObject(
-				PART_SIZE - 1,
+		this.objectStorage.completedObject = new MultipartObjectStorage.CompletedObject(PART_SIZE - 1,
 				"synthetic-wrong-size-etag");
 
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_SIZE_MISMATCH"));
+		completeFile(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_SIZE_MISMATCH"));
 
 		var file = this.fileRepository.findByBatchIdAndClientFileId(batchId, clientFileId).orElseThrow();
 		assertEquals(UploadFileStatus.FAILED, file.getStatus());
@@ -445,14 +401,12 @@ class UploadMultipartContractTests {
 		this.objectStorage.storePart(1, PART_SIZE, "synthetic-etag-1");
 		this.objectStorage.failAfterComplete = true;
 
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.retryable").value(true));
+		completeFile(batchId, clientFileId).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.retryable").value(true));
 
 		this.objectStorage.failAfterComplete = false;
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("UPLOADED"));
+		completeFile(batchId, clientFileId).andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("UPLOADED"));
 
 		assertEquals(1, this.objectStorage.completeCalls);
 		assertEquals(1, this.objectStorage.hashCalls);
@@ -467,13 +421,11 @@ class UploadMultipartContractTests {
 		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isOk());
 		this.completionStateService.begin(PROJECT_ID, batchId, clientFileId);
 
-		authorizePart(batchId, clientFileId, 1, SHA256_B)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_NOT_UPLOADABLE"));
-		completeFile(batchId, clientFileId)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_COMPLETION_IN_PROGRESS"))
-				.andExpect(jsonPath("$.retryable").value(true));
+		authorizePart(batchId, clientFileId, 1, SHA256_B).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_NOT_UPLOADABLE"));
+		completeFile(batchId, clientFileId).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("UPLOAD_FILE_COMPLETION_IN_PROGRESS"))
+			.andExpect(jsonPath("$.retryable").value(true));
 	}
 
 	@Test
@@ -482,14 +434,12 @@ class UploadMultipartContractTests {
 				"SELECT count(*) FROM flyway_schema_history WHERE version IN ('3', '4', '5') AND success = true",
 				Integer.class);
 		var constraintCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM information_schema.table_constraints "
-						+ "WHERE table_name = 'upload_part' "
+				"SELECT count(*) FROM information_schema.table_constraints " + "WHERE table_name = 'upload_part' "
 						+ "AND constraint_name IN ("
 						+ "'uk_upload_part_file_number', 'ck_upload_part_sha256', 'ck_upload_part_confirmation')",
 				Integer.class);
 		var fileConstraintCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM information_schema.table_constraints "
-						+ "WHERE table_name = 'upload_file' "
+				"SELECT count(*) FROM information_schema.table_constraints " + "WHERE table_name = 'upload_file' "
 						+ "AND constraint_name = 'ck_upload_file_completion_fields'",
 				Integer.class);
 
@@ -508,19 +458,18 @@ class UploadMultipartContractTests {
 				  "manifest_sha256": "%s"
 				}
 				""".formatted(PROJECT_ID, fileCount, totalSizeBytes, SHA256_A);
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", idempotencyKey)
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated());
 		return this.batchRepository.findByProjectIdAndIdempotencyKey(PROJECT_ID, idempotencyKey)
-				.orElseThrow()
-				.getBatchId();
+			.orElseThrow()
+			.getBatchId();
 	}
 
-	private void registerFile(UUID batchId, UUID clientFileId, long sizeBytes, String idempotencyKey)
-			throws Exception {
+	private void registerFile(UUID batchId, UUID clientFileId, long sizeBytes, String idempotencyKey) throws Exception {
 		var request = """
 				{
 				  "file_kind": "VIDEO",
@@ -530,74 +479,56 @@ class UploadMultipartContractTests {
 				  "part_size_bytes": %d
 				}
 				""".formatted(sizeBytes, SHA256_A, PART_SIZE);
-		this.mockMvc.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}", batchId, clientFileId)
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", idempotencyKey)
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}", batchId, clientFileId)
+				.header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated());
 	}
 
 	private org.springframework.test.web.servlet.ResultActions startMultipart(UUID batchId, UUID clientFileId)
 			throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/multipart",
-				batchId,
-				clientFileId)
+		return this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}/multipart", batchId, clientFileId)
 				.header("Authorization", "Bearer " + TOKEN));
 	}
 
-	private org.springframework.test.web.servlet.ResultActions authorizePart(
-			UUID batchId,
-			UUID clientFileId,
-			int partNumber,
-			String sha256) throws Exception {
-		return this.mockMvc.perform(post(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/parts/{partNumber}/authorization",
-				batchId,
-				clientFileId,
-				partNumber)
+	private org.springframework.test.web.servlet.ResultActions authorizePart(UUID batchId, UUID clientFileId,
+			int partNumber, String sha256) throws Exception {
+		return this.mockMvc
+			.perform(post("/api/v1/upload/{batchId}/files/{clientFileId}/parts/{partNumber}/authorization", batchId,
+					clientFileId, partNumber)
 				.header("Authorization", "Bearer " + TOKEN)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"sha256\":\"%s\"}".formatted(sha256)));
 	}
 
-	private org.springframework.test.web.servlet.ResultActions confirmPart(
-			UUID batchId,
-			UUID clientFileId,
+	private org.springframework.test.web.servlet.ResultActions confirmPart(UUID batchId, UUID clientFileId,
 			int partNumber) throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/parts/{partNumber}/confirmation",
-				batchId,
-				clientFileId,
-				partNumber)
-				.header("Authorization", "Bearer " + TOKEN));
+		return this.mockMvc.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}/parts/{partNumber}/confirmation",
+				batchId, clientFileId, partNumber)
+			.header("Authorization", "Bearer " + TOKEN));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions getPartProgress(UUID batchId, UUID clientFileId)
 			throws Exception {
-		return this.mockMvc.perform(get(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/parts",
-				batchId,
-				clientFileId)
-				.header("Authorization", "Bearer " + TOKEN));
+		return this.mockMvc.perform(get("/api/v1/upload/{batchId}/files/{clientFileId}/parts", batchId, clientFileId)
+			.header("Authorization", "Bearer " + TOKEN));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions reconcileParts(UUID batchId, UUID clientFileId)
 			throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/parts/reconciliation",
-				batchId,
-				clientFileId)
+		return this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}/parts/reconciliation", batchId, clientFileId)
 				.header("Authorization", "Bearer " + TOKEN));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions completeFile(UUID batchId, UUID clientFileId)
 			throws Exception {
-		return this.mockMvc.perform(put(
-				"/api/v1/upload/{batchId}/files/{clientFileId}/completion",
-				batchId,
-				clientFileId)
+		return this.mockMvc
+			.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}/completion", batchId, clientFileId)
 				.header("Authorization", "Bearer " + TOKEN));
 	}
 
@@ -609,20 +540,31 @@ class UploadMultipartContractTests {
 		FakeMultipartObjectStorage fakeMultipartObjectStorage() {
 			return new FakeMultipartObjectStorage();
 		}
+
 	}
 
 	static class FakeMultipartObjectStorage implements MultipartObjectStorage {
 
 		private int createCalls;
+
 		private int authorizeCalls;
+
 		private int completeCalls;
+
 		private int hashCalls;
+
 		private final Map<Integer, StoredPart> storedParts = new HashMap<>();
+
 		private CompletedObject completedObject;
+
 		private String completedSha256 = SHA256_A;
+
 		private boolean failCreate;
+
 		private boolean failAuthorize;
+
 		private boolean failInspect;
+
 		private boolean failAfterComplete;
 
 		@Override
@@ -661,9 +603,7 @@ class UploadMultipartContractTests {
 			if (this.failInspect) {
 				throw new MultipartObjectStorageException("Synthetic list failure.", null);
 			}
-			return this.storedParts.values().stream()
-					.sorted(Comparator.comparingInt(StoredPart::partNumber))
-					.toList();
+			return this.storedParts.values().stream().sorted(Comparator.comparingInt(StoredPart::partNumber)).toList();
 		}
 
 		@Override
@@ -727,5 +667,7 @@ class UploadMultipartContractTests {
 			this.failInspect = false;
 			this.failAfterComplete = false;
 		}
+
 	}
+
 }

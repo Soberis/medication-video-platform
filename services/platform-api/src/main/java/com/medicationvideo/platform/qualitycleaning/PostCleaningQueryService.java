@@ -25,12 +25,10 @@ public class PostCleaningQueryService {
 			return Map.of();
 		}
 		return this.repository.findAllByAnnotationRevisionIdIn(annotationRevisionIds)
-				.stream()
-				.collect(Collectors.toMap(
-						CleaningResult::getAnnotationRevisionId,
-						PostCleaningResultSummary::from,
-						BinaryOperator.maxBy(java.util.Comparator
-								.comparing(PostCleaningResultSummary::evaluatedAt)
-								.thenComparing(PostCleaningResultSummary::cleaningResultId))));
+			.stream()
+			.collect(Collectors.toMap(CleaningResult::getAnnotationRevisionId, PostCleaningResultSummary::from,
+					BinaryOperator.maxBy(java.util.Comparator.comparing(PostCleaningResultSummary::evaluatedAt)
+						.thenComparing(PostCleaningResultSummary::cleaningResultId))));
 	}
+
 }

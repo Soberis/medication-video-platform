@@ -32,9 +32,7 @@ class OutboxEventStore {
 				ORDER BY occurred_at, outbox_event_id
 				LIMIT ?
 				FOR UPDATE SKIP LOCKED
-				""",
-				this::map,
-				Timestamp.from(now), Timestamp.from(now), batchSize);
+				""", this::map, Timestamp.from(now), Timestamp.from(now), batchSize);
 		if (rows.isEmpty()) {
 			return List.of();
 		}
@@ -45,10 +43,7 @@ class OutboxEventStore {
 					UPDATE outbox_event
 					SET claim_token = ?, claimed_until = ?, publish_attempts = publish_attempts + 1
 					WHERE outbox_event_id = ? AND published_at IS NULL
-					""",
-					claimToken,
-					Timestamp.from(now.plus(claimDuration)),
-					row.outboxEventId());
+					""", claimToken, Timestamp.from(now.plus(claimDuration)), row.outboxEventId());
 			if (updated != 1) {
 				throw new IllegalStateException("The claimed Outbox row changed unexpectedly.");
 			}
@@ -74,11 +69,7 @@ class OutboxEventStore {
 				    claimed_until = NULL,
 				    last_error_code = NULL
 				WHERE outbox_event_id = ? AND claim_token = ? AND published_at IS NULL
-				""",
-				Timestamp.from(publishedAt),
-				Timestamp.from(publishedAt),
-				outboxEventId,
-				claimToken);
+				""", Timestamp.from(publishedAt), Timestamp.from(publishedAt), outboxEventId, claimToken);
 		if (updated != 1) {
 			throw new IllegalStateException("The Outbox publish claim is no longer current.");
 		}
@@ -90,29 +81,22 @@ class OutboxEventStore {
 				UPDATE outbox_event
 				SET available_at = ?, claim_token = NULL, claimed_until = NULL, last_error_code = ?
 				WHERE outbox_event_id = ? AND claim_token = ? AND published_at IS NULL
-				""",
-				Timestamp.from(availableAt), errorCode, outboxEventId, claimToken);
+				""", Timestamp.from(availableAt), errorCode, outboxEventId, claimToken);
 	}
 
 	private ClaimedOutboxEvent map(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ClaimedOutboxEvent(
-				resultSet.getObject("outbox_event_id", UUID.class),
-				null,
-				resultSet.getString("exchange_name"),
-				resultSet.getString("routing_key"),
+		return new ClaimedOutboxEvent(resultSet.getObject("outbox_event_id", UUID.class), null,
+				resultSet.getString("exchange_name"), resultSet.getString("routing_key"),
 				resultSet.getString("payload_json"));
 	}
 
-	record ClaimedOutboxEvent(
-			UUID outboxEventId,
-			UUID claimToken,
-			String exchangeName,
-			String routingKey,
+	record ClaimedOutboxEvent(UUID outboxEventId, UUID claimToken, String exchangeName, String routingKey,
 			String payloadJson) {
 
 		ClaimedOutboxEvent withClaimToken(UUID token) {
-			return new ClaimedOutboxEvent(
-					this.outboxEventId, token, this.exchangeName, this.routingKey, this.payloadJson);
+			return new ClaimedOutboxEvent(this.outboxEventId, token, this.exchangeName, this.routingKey,
+					this.payloadJson);
 		}
 	}
+
 }

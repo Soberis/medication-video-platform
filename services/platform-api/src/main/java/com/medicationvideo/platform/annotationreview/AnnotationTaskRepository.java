@@ -13,9 +13,7 @@ import jakarta.persistence.LockModeType;
 
 interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 
-	Optional<AnnotationTask> findByProjectIdAndCreatedByAndIdempotencyKey(
-			UUID projectId,
-			String createdBy,
+	Optional<AnnotationTask> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
 			String idempotencyKey);
 
 	boolean existsByProjectIdAndClipAssetId(UUID projectId, UUID clipAssetId);
@@ -27,13 +25,12 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 			select task from AnnotationTask task
 			where task.projectId = :projectId and task.annotationTaskId = :annotationTaskId
 			""")
-	Optional<AnnotationTask> findForUpdate(
-			@Param("projectId") UUID projectId,
+	Optional<AnnotationTask> findForUpdate(@Param("projectId") UUID projectId,
 			@Param("annotationTaskId") UUID annotationTaskId);
 
 	List<AnnotationTask> findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId);
 
-	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(
-			UUID projectId,
+	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId,
 			String assigneeActorId);
+
 }

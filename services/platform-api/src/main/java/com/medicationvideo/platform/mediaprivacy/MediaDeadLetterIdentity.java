@@ -8,8 +8,7 @@ import java.util.UUID;
 
 final class MediaDeadLetterIdentity {
 
-	private static final UUID URL_NAMESPACE =
-			UUID.fromString("6ba7b811-9dad-11d1-80b4-00c04fd430c8");
+	private static final UUID URL_NAMESPACE = UUID.fromString("6ba7b811-9dad-11d1-80b4-00c04fd430c8");
 
 	private MediaDeadLetterIdentity() {
 	}
@@ -32,8 +31,9 @@ final class MediaDeadLetterIdentity {
 
 	private static byte[] uuidBytes(UUID value) {
 		return ByteBuffer.allocate(16)
-				.putLong(value.getMostSignificantBits())
-				.putLong(value.getLeastSignificantBits())
-				.array();
+			.putLong(value.getMostSignificantBits())
+			.putLong(value.getLeastSignificantBits())
+			.array();
 	}
+
 }

@@ -28,8 +28,11 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 class UploadBatchContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+
 	private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000001";
+
 	private static final String OTHER_PROJECT_ID = "00000000-0000-0000-0000-000000000002";
+
 	private static final String MANIFEST_SHA256 = "a".repeat(64);
 
 	@Autowired
@@ -73,39 +76,39 @@ class UploadBatchContractTests {
 		var request = this.jsonMapper.readValue(validRequest(PROJECT_ID, 1L), UploadBatchInitRequest.class);
 		assertEquals("synthetic-device-01", request.deviceId());
 
-		var errorJson = this.jsonMapper.writeValueAsString(
-				new ApiErrorResponse("INVALID_REQUEST", "invalid", false, "request-1", null));
+		var errorJson = this.jsonMapper
+			.writeValueAsString(new ApiErrorResponse("INVALID_REQUEST", "invalid", false, "request-1", null));
 		assertTrue(errorJson.contains("\"error_code\""));
 	}
 
 	@Test
 	void initializesAndIdempotentlyReplaysTheSameBatch() throws Exception {
 		var request = validRequest(PROJECT_ID, 5_368_709_120L);
-		var first = this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "batch-init-key-0001")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isCreated())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-				.andExpect(jsonPath("$.batch_id").isNotEmpty())
-				.andExpect(jsonPath("$.project_id").value(PROJECT_ID))
-				.andExpect(jsonPath("$.device_id").value("synthetic-device-01"))
-				.andExpect(jsonPath("$.file_count").value(2))
-				.andExpect(jsonPath("$.total_size_bytes").value(5_368_709_120L))
-				.andExpect(jsonPath("$.manifest_sha256").value(MANIFEST_SHA256))
-				.andExpect(jsonPath("$.status").value("INITIATED"))
-				.andExpect(jsonPath("$.expires_at").isNotEmpty())
-				.andExpect(jsonPath("$.created_at").isNotEmpty())
-				.andReturn();
+		var first = this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "batch-init-key-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.batch_id").isNotEmpty())
+			.andExpect(jsonPath("$.project_id").value(PROJECT_ID))
+			.andExpect(jsonPath("$.device_id").value("synthetic-device-01"))
+			.andExpect(jsonPath("$.file_count").value(2))
+			.andExpect(jsonPath("$.total_size_bytes").value(5_368_709_120L))
+			.andExpect(jsonPath("$.manifest_sha256").value(MANIFEST_SHA256))
+			.andExpect(jsonPath("$.status").value("INITIATED"))
+			.andExpect(jsonPath("$.expires_at").isNotEmpty())
+			.andExpect(jsonPath("$.created_at").isNotEmpty())
+			.andReturn();
 
-		var replay = this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "batch-init-key-0001")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isCreated())
-				.andReturn();
+		var replay = this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "batch-init-key-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated())
+			.andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.repository.count());
@@ -124,15 +127,15 @@ class UploadBatchContractTests {
 				}
 				""".formatted(PROJECT_ID, MANIFEST_SHA256);
 
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "platform-local-init-0001")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.device_id").value("PLATFORM_LOCAL"))
-				.andExpect(jsonPath("$.upload_source_type").value("PLATFORM_LOCAL"))
-				.andExpect(jsonPath("$.file_count").value(1));
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "platform-local-init-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.device_id").value("PLATFORM_LOCAL"))
+			.andExpect(jsonPath("$.upload_source_type").value("PLATFORM_LOCAL"))
+			.andExpect(jsonPath("$.file_count").value(1));
 	}
 
 	@Test
@@ -148,71 +151,70 @@ class UploadBatchContractTests {
 				}
 				""".formatted(PROJECT_ID, MANIFEST_SHA256);
 
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "platform-local-init-0002")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error_code").value("PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED"));
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "platform-local-init-0002")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error_code").value("PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED"));
 	}
 
 	@Test
 	void rejectsReusingAnIdempotencyKeyForDifferentContent() throws Exception {
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "batch-init-key-0002")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(validRequest(PROJECT_ID, 5_368_709_120L)))
-				.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "batch-init-key-0002")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validRequest(PROJECT_ID, 5_368_709_120L)))
+			.andExpect(status().isCreated());
 
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "batch-init-key-0002")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(validRequest(PROJECT_ID, 5_368_709_121L)))
-				.andExpect(status().isConflict())
-				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-				.andExpect(jsonPath("$.error_code").value("IDEMPOTENCY_KEY_REUSED"))
-				.andExpect(jsonPath("$.retryable").value(false))
-				.andExpect(jsonPath("$.request_id").isNotEmpty());
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "batch-init-key-0002")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validRequest(PROJECT_ID, 5_368_709_121L)))
+			.andExpect(status().isConflict())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.error_code").value("IDEMPOTENCY_KEY_REUSED"))
+			.andExpect(jsonPath("$.retryable").value(false))
+			.andExpect(jsonPath("$.request_id").isNotEmpty());
 
 		assertEquals(1, this.repository.count());
 	}
 
 	@Test
 	void requiresAuthenticationAndProjectScope() throws Exception {
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Idempotency-Key", "batch-init-key-0003")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(validRequest(PROJECT_ID, 1L)))
-				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.error_code").value("UNAUTHENTICATED"));
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Idempotency-Key", "batch-init-key-0003")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validRequest(PROJECT_ID, 1L)))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.error_code").value("UNAUTHENTICATED"));
 
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "batch-init-key-0004")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(validRequest(OTHER_PROJECT_ID, 1L)))
-				.andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "batch-init-key-0004")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validRequest(OTHER_PROJECT_ID, 1L)))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 
 		assertEquals(0, this.repository.count());
 	}
 
 	@Test
 	void acceptsAnExplicitProjectMembershipInsteadOfTheTokenDefaultProject() throws Exception {
-		var authorizedProjectId = java.util.UUID.fromString(
-				"00000000-0000-0000-0000-000000000003");
+		var authorizedProjectId = java.util.UUID.fromString("00000000-0000-0000-0000-000000000003");
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, authorizedProjectId);
 		try {
-			this.mockMvc.perform(post("/api/v1/upload/init")
-						.header("Authorization", "Bearer " + TOKEN)
-						.header("Idempotency-Key", "batch-other-project-0001")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(validRequest(authorizedProjectId.toString(), 1L)))
-					.andExpect(status().isCreated())
-					.andExpect(jsonPath("$.project_id").value(authorizedProjectId.toString()));
+			this.mockMvc
+				.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+					.header("Idempotency-Key", "batch-other-project-0001")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(validRequest(authorizedProjectId.toString(), 1L)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.project_id").value(authorizedProjectId.toString()));
 		}
 		finally {
 			this.repository.deleteAll();
@@ -233,13 +235,13 @@ class UploadBatchContractTests {
 				}
 				""".formatted(PROJECT_ID);
 
-		this.mockMvc.perform(post("/api/v1/upload/init")
-					.header("Authorization", "Bearer " + TOKEN)
-					.header("Idempotency-Key", "short")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(request))
-				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error_code").value("INVALID_REQUEST"));
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "short")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error_code").value("INVALID_REQUEST"));
 
 		assertEquals(0, this.repository.count());
 	}
@@ -247,11 +249,9 @@ class UploadBatchContractTests {
 	@Test
 	void appliesTheFlywayMigrationWithTheIdempotencyConstraint() {
 		var migrationCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success = true",
-				Integer.class);
+				"SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success = true", Integer.class);
 		var constraintCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM information_schema.table_constraints "
-						+ "WHERE table_name = 'upload_batch' "
+				"SELECT count(*) FROM information_schema.table_constraints " + "WHERE table_name = 'upload_batch' "
 						+ "AND constraint_name = 'uk_upload_batch_project_idempotency'",
 				Integer.class);
 
@@ -270,4 +270,5 @@ class UploadBatchContractTests {
 				}
 				""".formatted(projectId, totalSizeBytes, MANIFEST_SHA256);
 	}
+
 }

@@ -27,16 +27,20 @@ class RabbitOutboxRelay {
 	private static final Logger log = LoggerFactory.getLogger(RabbitOutboxRelay.class);
 
 	private final OutboxEventStore store;
+
 	private final RabbitTemplate rabbitTemplate;
+
 	private final int batchSize;
+
 	private final Duration claimDuration;
+
 	private final Duration retryDelay;
+
 	private final Duration confirmTimeout;
+
 	private final ConcurrentMap<String, CorrelationData> pendingReturns = new ConcurrentHashMap<>();
 
-	RabbitOutboxRelay(
-			OutboxEventStore store,
-			RabbitTemplate rabbitTemplate,
+	RabbitOutboxRelay(OutboxEventStore store, RabbitTemplate rabbitTemplate,
 			@Value("${platform.messaging.outbox.batch-size:20}") int batchSize,
 			@Value("${platform.messaging.outbox.claim-duration:PT30S}") Duration claimDuration,
 			@Value("${platform.messaging.outbox.retry-delay:PT5S}") Duration retryDelay,
@@ -60,10 +64,7 @@ class RabbitOutboxRelay {
 				this.store.markPublished(event.outboxEventId(), event.claimToken(), Instant.now());
 			}
 			catch (Exception exception) {
-				this.store.release(
-						event.outboxEventId(),
-						event.claimToken(),
-						Instant.now().plus(this.retryDelay),
+				this.store.release(event.outboxEventId(), event.claimToken(), Instant.now().plus(this.retryDelay),
 						"BROKER_PUBLISH_FAILED");
 				log.warn("Outbox event {} was not confirmed and will be retried.", event.outboxEventId());
 			}
@@ -72,13 +73,12 @@ class RabbitOutboxRelay {
 
 	private void publish(OutboxEventStore.ClaimedOutboxEvent event) throws Exception {
 		var correlation = new CorrelationData(event.outboxEventId().toString());
-		var message = MessageBuilder
-				.withBody(event.payloadJson().getBytes(StandardCharsets.UTF_8))
-				.setContentType(MessageProperties.CONTENT_TYPE_JSON)
-				.setContentEncoding(StandardCharsets.UTF_8.name())
-				.setDeliveryMode(MessageDeliveryMode.PERSISTENT)
-				.setMessageId(event.outboxEventId().toString())
-				.build();
+		var message = MessageBuilder.withBody(event.payloadJson().getBytes(StandardCharsets.UTF_8))
+			.setContentType(MessageProperties.CONTENT_TYPE_JSON)
+			.setContentEncoding(StandardCharsets.UTF_8.name())
+			.setDeliveryMode(MessageDeliveryMode.PERSISTENT)
+			.setMessageId(event.outboxEventId().toString())
+			.build();
 		this.pendingReturns.put(correlation.getId(), correlation);
 		try {
 			this.rabbitTemplate.send(event.exchangeName(), event.routingKey(), message, correlation);
@@ -93,8 +93,9 @@ class RabbitOutboxRelay {
 	}
 
 	private void recordReturnedMessage(ReturnedMessage returned) {
-		var correlationId = returned.getMessage().getMessageProperties()
-				.getHeader("spring_returned_message_correlation");
+		var correlationId = returned.getMessage()
+			.getMessageProperties()
+			.getHeader("spring_returned_message_correlation");
 		if (correlationId == null) {
 			log.warn("RabbitMQ returned an Outbox message without a correlation identifier.");
 			return;
@@ -106,4 +107,5 @@ class RabbitOutboxRelay {
 		}
 		correlation.setReturned(returned);
 	}
+
 }

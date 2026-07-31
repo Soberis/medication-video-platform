@@ -12,4 +12,5 @@ class UploadMultipartException extends RuntimeException {
 	String getErrorCode() {
 		return this.errorCode;
 	}
+
 }

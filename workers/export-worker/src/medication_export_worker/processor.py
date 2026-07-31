@@ -323,9 +323,7 @@ class JobProcessor:
             },
         }
 
-    def _base_result(
-        self, job: DatasetExportJob, started_at: datetime
-    ) -> dict[str, object]:
+    def _base_result(self, job: DatasetExportJob, started_at: datetime) -> dict[str, object]:
         return {
             "schema_version": "dataset-export-result.v1",
             "message_id": str(job.message_id),

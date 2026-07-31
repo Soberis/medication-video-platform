@@ -5,4 +5,5 @@ final class ClipAssetNotProbeableException extends RuntimeException {
 	ClipAssetNotProbeableException(String message) {
 		super(message);
 	}
+
 }

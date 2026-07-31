@@ -35,22 +35,16 @@ class RabbitOutboxRelayTests {
 			assertEquals("application/json", message.getMessageProperties().getContentType());
 			assertEquals("PERSISTENT", message.getMessageProperties().getDeliveryMode().name());
 			invocation.getArgument(3, CorrelationData.class)
-					.getFuture()
-					.complete(new CorrelationData.Confirm(true, null));
+				.getFuture()
+				.complete(new CorrelationData.Confirm(true, null));
 			return null;
-		}).when(rabbitTemplate).send(
-				eq(MediaMessagingTopology.EXCHANGE),
-				eq(MediaMessagingTopology.PROBE_ROUTING_KEY),
-				any(Message.class),
-				any(CorrelationData.class));
+		}).when(rabbitTemplate)
+			.send(eq(MediaMessagingTopology.EXCHANGE), eq(MediaMessagingTopology.PROBE_ROUTING_KEY), any(Message.class),
+					any(CorrelationData.class));
 
-		new RabbitOutboxRelay(
-				store,
-				rabbitTemplate,
-				20,
-				Duration.ofSeconds(30),
-				Duration.ofSeconds(5),
-				Duration.ofSeconds(5)).relay();
+		new RabbitOutboxRelay(store, rabbitTemplate, 20, Duration.ofSeconds(30), Duration.ofSeconds(5),
+				Duration.ofSeconds(5))
+			.relay();
 
 		verify(store).markPublished(eq(event.outboxEventId()), eq(event.claimToken()), any());
 		verify(store, never()).release(any(), any(), any(), any());
@@ -64,25 +58,17 @@ class RabbitOutboxRelayTests {
 		when(store.claim(eq(20), any(), eq(Duration.ofSeconds(30)))).thenReturn(List.of(event));
 		doAnswer(invocation -> {
 			invocation.getArgument(3, CorrelationData.class)
-					.getFuture()
-					.complete(new CorrelationData.Confirm(false, "synthetic nack"));
+				.getFuture()
+				.complete(new CorrelationData.Confirm(false, "synthetic nack"));
 			return null;
 		}).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
 
-		new RabbitOutboxRelay(
-				store,
-				rabbitTemplate,
-				20,
-				Duration.ofSeconds(30),
-				Duration.ofSeconds(5),
-				Duration.ofSeconds(5)).relay();
+		new RabbitOutboxRelay(store, rabbitTemplate, 20, Duration.ofSeconds(30), Duration.ofSeconds(5),
+				Duration.ofSeconds(5))
+			.relay();
 
 		verify(store, never()).markPublished(any(), any(), any());
-		verify(store).release(
-				eq(event.outboxEventId()),
-				eq(event.claimToken()),
-				any(),
-				eq("BROKER_PUBLISH_FAILED"));
+		verify(store).release(eq(event.outboxEventId()), eq(event.claimToken()), any(), eq("BROKER_PUBLISH_FAILED"));
 	}
 
 	@Test
@@ -100,26 +86,19 @@ class RabbitOutboxRelayTests {
 			var correlation = invocation.getArgument(3, CorrelationData.class);
 			var properties = new MessageProperties();
 			properties.setHeader("spring_returned_message_correlation", correlation.getId());
-			returnsCallback.get().returnedMessage(new ReturnedMessage(
-					new Message(new byte[0], properties), 312, "NO_ROUTE", "missing.exchange", "missing.route"));
+			returnsCallback.get()
+				.returnedMessage(new ReturnedMessage(new Message(new byte[0], properties), 312, "NO_ROUTE",
+						"missing.exchange", "missing.route"));
 			correlation.getFuture().complete(new CorrelationData.Confirm(true, null));
 			return null;
 		}).when(rabbitTemplate).send(any(), any(), any(Message.class), any(CorrelationData.class));
 
-		new RabbitOutboxRelay(
-				store,
-				rabbitTemplate,
-				20,
-				Duration.ofSeconds(30),
-				Duration.ofSeconds(5),
-				Duration.ofSeconds(5)).relay();
+		new RabbitOutboxRelay(store, rabbitTemplate, 20, Duration.ofSeconds(30), Duration.ofSeconds(5),
+				Duration.ofSeconds(5))
+			.relay();
 
 		verify(store, never()).markPublished(any(), any(), any());
-		verify(store).release(
-				eq(event.outboxEventId()),
-				eq(event.claimToken()),
-				any(),
-				eq("BROKER_PUBLISH_FAILED"));
+		verify(store).release(eq(event.outboxEventId()), eq(event.claimToken()), any(), eq("BROKER_PUBLISH_FAILED"));
 	}
 
 	@Test
@@ -134,11 +113,9 @@ class RabbitOutboxRelayTests {
 	}
 
 	private static OutboxEventStore.ClaimedOutboxEvent event() {
-		return new OutboxEventStore.ClaimedOutboxEvent(
-				UUID.randomUUID(),
-				UUID.randomUUID(),
-				MediaMessagingTopology.EXCHANGE,
-				MediaMessagingTopology.PROBE_ROUTING_KEY,
+		return new OutboxEventStore.ClaimedOutboxEvent(UUID.randomUUID(), UUID.randomUUID(),
+				MediaMessagingTopology.EXCHANGE, MediaMessagingTopology.PROBE_ROUTING_KEY,
 				"{\"schema_version\":\"media-probe-job.v1\"}");
 	}
+
 }

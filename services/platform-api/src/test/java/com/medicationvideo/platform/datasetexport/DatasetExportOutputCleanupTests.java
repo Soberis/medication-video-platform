@@ -20,10 +20,9 @@ class DatasetExportOutputCleanupTests {
 		var cleanup = new DatasetExportOutputCleanup(storage);
 		var attempt = DatasetExportRecoveryTestFixtures.runningAttempt(1);
 		var upload = DatasetExportRecoveryTestFixtures.attachUpload(attempt);
-		var object = new DatasetExportStoragePort.ObjectReference(
-				upload.bucket(), upload.objectKey());
+		var object = new DatasetExportStoragePort.ObjectReference(upload.bucket(), upload.objectKey());
 		when(storage.findCompletedObject(upload))
-				.thenReturn(Optional.of(new DatasetExportStoragePort.CompletedObject(42, "etag")));
+			.thenReturn(Optional.of(new DatasetExportStoragePort.CompletedObject(42, "etag")));
 
 		cleanup.discard(attempt);
 
@@ -37,12 +36,9 @@ class DatasetExportOutputCleanupTests {
 		var cleanup = new DatasetExportOutputCleanup(storage);
 		var attempt = DatasetExportRecoveryTestFixtures.runningAttempt(1);
 		var upload = DatasetExportRecoveryTestFixtures.attachUpload(attempt);
-		var object = new DatasetExportStoragePort.ObjectReference(
-				upload.bucket(), upload.objectKey());
-		when(storage.findCompletedObject(upload))
-				.thenReturn(Optional.empty())
-				.thenReturn(Optional.of(
-						new DatasetExportStoragePort.CompletedObject(42, "etag")));
+		var object = new DatasetExportStoragePort.ObjectReference(upload.bucket(), upload.objectKey());
+		when(storage.findCompletedObject(upload)).thenReturn(Optional.empty())
+			.thenReturn(Optional.of(new DatasetExportStoragePort.CompletedObject(42, "etag")));
 
 		cleanup.discard(attempt);
 
@@ -62,4 +58,5 @@ class DatasetExportOutputCleanupTests {
 
 		verifyNoInteractions(storage);
 	}
+
 }

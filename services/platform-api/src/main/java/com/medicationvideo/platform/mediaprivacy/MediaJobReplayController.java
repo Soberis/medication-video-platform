@@ -36,35 +36,29 @@ class MediaJobReplayController {
 	}
 
 	@PostMapping("/{mediaJobId}/replays")
-	ResponseEntity<MediaJobReplayResponse> replay(
-			@PathVariable UUID mediaJobId,
-			@RequestHeader(name = "Idempotency-Key")
-			@NotBlank @Pattern(regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false)
-			@Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@RequestBody @Valid MediaJobReplayRequest request,
-			Authentication authentication) {
+	ResponseEntity<MediaJobReplayResponse> replay(@PathVariable UUID mediaJobId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@RequestBody @Valid MediaJobReplayRequest request, Authentication authentication) {
 		var actor = requireAdministrator(authentication);
-		var replay = this.service.replay(
-				actor.projectId(),
-				actor.actorId(),
-				mediaJobId,
-				idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"),
+		var replay = this.service.replay(actor.projectId(), actor.actorId(), mediaJobId, idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				request);
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
-				.cacheControl(CacheControl.noStore())
-				.body(MediaJobReplayResponse.from(replay));
+			.cacheControl(CacheControl.noStore())
+			.body(MediaJobReplayResponse.from(replay));
 	}
 
 	private static PlatformActor requireAdministrator(Authentication authentication) {
-		if (authentication == null
-				|| !(authentication.getPrincipal() instanceof PlatformActor actor)
-				|| authentication.getAuthorities().stream()
-						.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)
+				|| authentication.getAuthorities()
+					.stream()
+					.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
 			throw new MediaJobAuthorizationException();
 		}
 		return actor;
 	}
+
 }

@@ -1,10 +1,10 @@
 package com.medicationvideo.platform.mediaprivacy;
 
 /**
- * The only approved media-probe recipe in the current P0 slice. The digest is the SHA-256 of
- * {@code contracts/profiles/media-probe-baseline-v1.json} after removing its final newline.
- * Changing the profile content requires a new profile key and a new digest; existing jobs remain
- * bound to the recipe they were created with.
+ * The only approved media-probe recipe in the current P0 slice. The digest is the SHA-256
+ * of {@code contracts/profiles/media-probe-baseline-v1.json} after removing its final
+ * newline. Changing the profile content requires a new profile key and a new digest;
+ * existing jobs remain bound to the recipe they were created with.
  */
 final class MediaProbeProfile {
 
@@ -13,4 +13,5 @@ final class MediaProbeProfile {
 
 	private MediaProbeProfile() {
 	}
+
 }

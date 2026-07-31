@@ -14,8 +14,7 @@ import jakarta.persistence.LockModeType;
 
 interface DataProjectRepository extends JpaRepository<DataProject, UUID> {
 
-	Optional<DataProject> findByCreatedByAndIdempotencyKey(
-			String createdBy, String idempotencyKey);
+	Optional<DataProject> findByCreatedByAndIdempotencyKey(String createdBy, String idempotencyKey);
 
 	Optional<DataProject> findByProjectIdAndStatus(UUID projectId, ProjectStatus status);
 
@@ -28,7 +27,7 @@ interface DataProjectRepository extends JpaRepository<DataProject, UUID> {
 			where project.projectId in :projectIds and project.status = :status
 			order by project.createdAt, project.projectId
 			""")
-	List<DataProject> findVisibleProjects(
-			@Param("projectIds") Collection<UUID> projectIds,
+	List<DataProject> findVisibleProjects(@Param("projectIds") Collection<UUID> projectIds,
 			@Param("status") ProjectStatus status);
+
 }

@@ -21,8 +21,7 @@ interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
 			WHERE job.projectId = :projectId
 			  AND job.idempotencyKey = :idempotencyKey
 			""")
-	Optional<MediaJob> findByProjectIdAndIdempotencyKey(
-			@Param("projectId") UUID projectId,
+	Optional<MediaJob> findByProjectIdAndIdempotencyKey(@Param("projectId") UUID projectId,
 			@Param("idempotencyKey") String idempotencyKey);
 
 	@Query("""
@@ -34,9 +33,8 @@ interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
 			  AND job.recipeDigest = :recipeDigest
 			""")
 	Optional<MediaJob> findByProjectIdAndJobTypeAndClipAssetIdAndInputDigestAndRecipeDigest(
-			@Param("projectId") UUID projectId,
-			@Param("jobType") MediaJobType jobType,
-			@Param("clipAssetId") UUID clipAssetId,
-			@Param("inputDigest") String inputDigest,
+			@Param("projectId") UUID projectId, @Param("jobType") MediaJobType jobType,
+			@Param("clipAssetId") UUID clipAssetId, @Param("inputDigest") String inputDigest,
 			@Param("recipeDigest") String recipeDigest);
+
 }

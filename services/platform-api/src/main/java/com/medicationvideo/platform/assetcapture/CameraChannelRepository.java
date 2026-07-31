@@ -11,7 +11,6 @@ interface CameraChannelRepository extends JpaRepository<CameraChannel, UUID> {
 
 	Optional<CameraChannel> findByProjectIdAndProvisioningKey(UUID projectId, String provisioningKey);
 
-	List<CameraChannel> findAllByProjectIdAndCameraChannelIdIn(
-			UUID projectId,
-			Collection<UUID> cameraChannelIds);
+	List<CameraChannel> findAllByProjectIdAndCameraChannelIdIn(UUID projectId, Collection<UUID> cameraChannelIds);
+
 }

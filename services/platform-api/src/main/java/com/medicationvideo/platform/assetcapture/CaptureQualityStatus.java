@@ -1,8 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 enum CaptureQualityStatus {
-	PENDING,
-	PASS,
-	WARNING,
-	REJECT
+
+	PENDING, PASS, WARNING, REJECT
+
 }

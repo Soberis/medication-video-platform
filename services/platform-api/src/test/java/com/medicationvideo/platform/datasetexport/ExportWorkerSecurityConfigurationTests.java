@@ -18,8 +18,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 class ExportWorkerSecurityConfigurationTests {
 
-	private static final String EXPORT_WORKER_TOKEN =
-			"synthetic-export-worker-bearer-token-do-not-reuse";
+	private static final String EXPORT_WORKER_TOKEN = "synthetic-export-worker-bearer-token-do-not-reuse";
+
 	private static final String WEB_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
 	@AfterEach
@@ -51,9 +51,7 @@ class ExportWorkerSecurityConfigurationTests {
 		var authentication = observedAuthentication.get();
 		assertInstanceOf(ExportWorkerActor.class, authentication.getPrincipal());
 		assertEquals("local-export-worker", ((ExportWorkerActor) authentication.getPrincipal()).serviceId());
-		assertEquals(
-				"ROLE_EXPORT_WORKER",
-				authentication.getAuthorities().iterator().next().getAuthority());
+		assertEquals("ROLE_EXPORT_WORKER", authentication.getAuthorities().iterator().next().getAuthority());
 	}
 
 	private static void assertRejected(String authorization) throws Exception {
@@ -77,12 +75,12 @@ class ExportWorkerSecurityConfigurationTests {
 	}
 
 	private static MockHttpServletRequest request(String authorization) {
-		var request = new MockHttpServletRequest(
-				"POST",
+		var request = new MockHttpServletRequest("POST",
 				"/api/v1/internal/dataset-exports/99999999-9999-9999-9999-999999999999/attempts/1/lease");
 		if (authorization != null) {
 			request.addHeader("Authorization", authorization);
 		}
 		return request;
 	}
+
 }

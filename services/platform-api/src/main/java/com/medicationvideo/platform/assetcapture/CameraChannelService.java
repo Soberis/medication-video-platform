@@ -21,17 +21,15 @@ class CameraChannelService {
 		if (existing.isPresent()) {
 			return CameraChannelResponse.from(existing.get());
 		}
-		var channel = CameraChannel.provision(
-				projectId,
-				provisioningKey,
-				Instant.now().truncatedTo(ChronoUnit.MICROS));
+		var channel = CameraChannel.provision(projectId, provisioningKey, Instant.now().truncatedTo(ChronoUnit.MICROS));
 		try {
 			return CameraChannelResponse.from(this.repository.saveAndFlush(channel));
 		}
 		catch (DataIntegrityViolationException exception) {
 			return this.repository.findByProjectIdAndProvisioningKey(projectId, provisioningKey)
-					.map(CameraChannelResponse::from)
-					.orElseThrow(() -> exception);
+				.map(CameraChannelResponse::from)
+				.orElseThrow(() -> exception);
 		}
 	}
+
 }

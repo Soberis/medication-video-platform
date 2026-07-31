@@ -18,24 +18,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class AssetCatalogQueryService {
 
 	private static final String SESSION_CURSOR_KIND = "capture-session";
+
 	private static final String ASSET_CURSOR_KIND = "clip-asset";
+
 	private static final String EVENT_LOG_CURSOR_KIND = "capture-event-log";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
+
 	private final CaptureSessionRepository sessionRepository;
+
 	private final CameraSetSnapshotRepository snapshotRepository;
+
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
+
 	private final CameraStreamRepository streamRepository;
+
 	private final ClipAssetRepository clipAssetRepository;
+
 	private final CaptureEventLogRepository captureEventLogRepository;
 
-	public AssetCatalogQueryService(
-			NamedParameterJdbcTemplate jdbcTemplate,
-			CaptureSessionRepository sessionRepository,
-			CameraSetSnapshotRepository snapshotRepository,
-			CameraSetSnapshotMemberRepository snapshotMemberRepository,
-			CameraStreamRepository streamRepository,
-			ClipAssetRepository clipAssetRepository,
+	public AssetCatalogQueryService(NamedParameterJdbcTemplate jdbcTemplate, CaptureSessionRepository sessionRepository,
+			CameraSetSnapshotRepository snapshotRepository, CameraSetSnapshotMemberRepository snapshotMemberRepository,
+			CameraStreamRepository streamRepository, ClipAssetRepository clipAssetRepository,
 			CaptureEventLogRepository captureEventLogRepository) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.sessionRepository = sessionRepository;
@@ -47,15 +51,9 @@ public class AssetCatalogQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	CaptureSessionListResponse listCaptureSessions(
-			UUID projectId,
-			String deviceId,
-			CaptureSessionAssemblyStatus assemblyStatus,
-			CaptureQualityStatus qualityStatus,
-			Instant recordedFrom,
-			Instant recordedBefore,
-			String cursor,
-			int limit) {
+	CaptureSessionListResponse listCaptureSessions(UUID projectId, String deviceId,
+			CaptureSessionAssemblyStatus assemblyStatus, CaptureQualityStatus qualityStatus, Instant recordedFrom,
+			Instant recordedBefore, String cursor, int limit) {
 		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
 		var decodedCursor = decodeCursor(SESSION_CURSOR_KIND, cursor);
 		var sql = new StringBuilder("""
@@ -114,17 +112,14 @@ public class AssetCatalogQueryService {
 			parameters.addValue("cursorRecordedAt", Timestamp.from(decodedCursor.recordedAt()));
 			parameters.addValue("cursorId", decodedCursor.id());
 		}
-		sql.append(" ORDER BY COALESCE(session.device_time_utc, session.server_receive_time) DESC, session.capture_session_id DESC LIMIT :fetchLimit");
+		sql.append(
+				" ORDER BY COALESCE(session.device_time_utc, session.server_receive_time) DESC, session.capture_session_id DESC LIMIT :fetchLimit");
 		parameters.addValue("fetchLimit", limit + 1);
 
 		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapCaptureSession);
 		var page = boundedPage(rows, limit);
-		var nextCursor = rows.size() > limit
-				? AssetCatalogCursor.encode(
-						SESSION_CURSOR_KIND,
-						catalogSortTime(page.getLast()),
-						page.getLast().captureSessionId())
-				: null;
+		var nextCursor = rows.size() > limit ? AssetCatalogCursor.encode(SESSION_CURSOR_KIND,
+				catalogSortTime(page.getLast()), page.getLast().captureSessionId()) : null;
 		return new CaptureSessionListResponse(page, nextCursor);
 	}
 
@@ -134,37 +129,24 @@ public class AssetCatalogQueryService {
 
 	@Transactional(readOnly = true)
 	CaptureSessionResponse getCaptureSession(UUID projectId, UUID captureSessionId) {
-		var session = this.sessionRepository
-				.findByCaptureSessionIdAndProjectId(captureSessionId, projectId)
-				.orElseThrow(() -> new AssetCatalogQueryException(
-						"CAPTURE_SESSION_NOT_FOUND",
-						"The capture session was not found in the current project."));
+		var session = this.sessionRepository.findByCaptureSessionIdAndProjectId(captureSessionId, projectId)
+			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_SESSION_NOT_FOUND",
+					"The capture session was not found in the current project."));
 		var snapshot = this.snapshotRepository.findByCaptureSessionId(captureSessionId)
-				.orElseThrow(() -> new IllegalStateException("A capture session has no camera set snapshot."));
+			.orElseThrow(() -> new IllegalStateException("A capture session has no camera set snapshot."));
 		var members = this.snapshotMemberRepository
-				.findAllByCameraSetSnapshotIdOrderByCameraIndexAsc(snapshot.getCameraSetSnapshotId());
+			.findAllByCameraSetSnapshotIdOrderByCameraIndexAsc(snapshot.getCameraSetSnapshotId());
 		var streams = this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId);
 		return CaptureSessionResponse.from(session, snapshot, members, streams);
 	}
 
 	@Transactional(readOnly = true)
-	ClipAssetListResponse listClipAssets(
-			UUID projectId,
-			UUID captureSessionId,
-			UUID batchId,
-			String deviceId,
-			String cameraRole,
-			ClipAssetStatus status,
-			UUID folderId,
-			boolean unclassified,
-			Instant recordedFrom,
-			Instant recordedBefore,
-			String cursor,
-			int limit) {
+	ClipAssetListResponse listClipAssets(UUID projectId, UUID captureSessionId, UUID batchId, String deviceId,
+			String cameraRole, ClipAssetStatus status, UUID folderId, boolean unclassified, Instant recordedFrom,
+			Instant recordedBefore, String cursor, int limit) {
 		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
 		if (folderId != null && unclassified) {
-			throw new AssetCatalogQueryException(
-					"INVALID_FOLDER_FILTER",
+			throw new AssetCatalogQueryException("INVALID_FOLDER_FILTER",
 					"folder_id and unclassified=true cannot be combined.");
 		}
 		var decodedCursor = decodeCursor(ASSET_CURSOR_KIND, cursor);
@@ -238,68 +220,46 @@ public class AssetCatalogQueryService {
 			parameters.addValue("recordedBefore", Timestamp.from(recordedBefore));
 		}
 		if (decodedCursor != null) {
-			sql.append(" AND (").append(recordedAtExpression).append(" < :cursorRecordedAt OR (")
-					.append(recordedAtExpression)
-					.append(" = :cursorRecordedAt AND asset.clip_asset_id < :cursorId))\n");
+			sql.append(" AND (")
+				.append(recordedAtExpression)
+				.append(" < :cursorRecordedAt OR (")
+				.append(recordedAtExpression)
+				.append(" = :cursorRecordedAt AND asset.clip_asset_id < :cursorId))\n");
 			parameters.addValue("cursorRecordedAt", Timestamp.from(decodedCursor.recordedAt()));
 			parameters.addValue("cursorId", decodedCursor.id());
 		}
-		sql.append(" ORDER BY ").append(recordedAtExpression)
-				.append(" DESC, asset.clip_asset_id DESC LIMIT :fetchLimit");
+		sql.append(" ORDER BY ")
+			.append(recordedAtExpression)
+			.append(" DESC, asset.clip_asset_id DESC LIMIT :fetchLimit");
 		parameters.addValue("fetchLimit", limit + 1);
 
 		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapClipAsset);
 		var page = boundedPage(rows, limit);
 		var items = page.stream().map(ClipAssetRow::response).toList();
-		var nextCursor = rows.size() > limit
-				? AssetCatalogCursor.encode(
-						ASSET_CURSOR_KIND,
-						page.getLast().recordedAt(),
-						page.getLast().response().clipAssetId())
-				: null;
+		var nextCursor = rows.size() > limit ? AssetCatalogCursor.encode(ASSET_CURSOR_KIND, page.getLast().recordedAt(),
+				page.getLast().response().clipAssetId()) : null;
 		return new ClipAssetListResponse(items, nextCursor);
 	}
 
 	@Transactional(readOnly = true)
 	ClipAssetReadResponse getClipAsset(UUID projectId, UUID clipAssetId) {
 		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
-				.filter(existing -> !existing.isDeleted())
-				.orElseThrow(() -> new AssetCatalogQueryException(
-						"CLIP_ASSET_NOT_FOUND",
-						"The clip asset was not found in the current project."));
-		var binding = this.streamRepository.findByClipAssetId(clipAssetId)
-				.map(stream -> {
-					var member = this.snapshotMemberRepository
-							.findById(stream.getCameraSetSnapshotMemberId())
-							.orElseThrow(() -> new IllegalStateException(
-									"A camera stream has no matching snapshot member."));
-					return binding(stream, member);
-				})
-				.orElse(null);
-		return new ClipAssetReadResponse(
-				asset.getClipAssetId(),
-				asset.getBatchId(),
-				asset.getSourceUploadFileId(),
-				asset.getClientFileId(),
-				asset.getContentType(),
-				asset.getSizeBytes(),
-				asset.getSha256(),
-				asset.getStatus(),
-				asset.getFolderId(),
-				binding,
-				asset.getCreatedAt(),
-				asset.getUpdatedAt());
+			.filter(existing -> !existing.isDeleted())
+			.orElseThrow(() -> new AssetCatalogQueryException("CLIP_ASSET_NOT_FOUND",
+					"The clip asset was not found in the current project."));
+		var binding = this.streamRepository.findByClipAssetId(clipAssetId).map(stream -> {
+			var member = this.snapshotMemberRepository.findById(stream.getCameraSetSnapshotMemberId())
+				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching snapshot member."));
+			return binding(stream, member);
+		}).orElse(null);
+		return new ClipAssetReadResponse(asset.getClipAssetId(), asset.getBatchId(), asset.getSourceUploadFileId(),
+				asset.getClientFileId(), asset.getContentType(), asset.getSizeBytes(), asset.getSha256(),
+				asset.getStatus(), asset.getFolderId(), binding, asset.getCreatedAt(), asset.getUpdatedAt());
 	}
 
 	@Transactional(readOnly = true)
-	CaptureEventLogListResponse listCaptureEventLogs(
-			UUID projectId,
-			UUID batchId,
-			String deviceId,
-			Instant indexedFrom,
-			Instant indexedBefore,
-			String cursor,
-			int limit) {
+	CaptureEventLogListResponse listCaptureEventLogs(UUID projectId, UUID batchId, String deviceId, Instant indexedFrom,
+			Instant indexedBefore, String cursor, int limit) {
 		validateTimeRange(indexedFrom, indexedBefore, "indexed_from", "indexed_before");
 		var decodedCursor = decodeCursor(EVENT_LOG_CURSOR_KIND, cursor);
 		var sql = new StringBuilder("""
@@ -346,132 +306,83 @@ public class AssetCatalogQueryService {
 
 		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapCaptureEventLog);
 		var page = boundedPage(rows, limit);
-		var nextCursor = rows.size() > limit
-				? AssetCatalogCursor.encode(
-						EVENT_LOG_CURSOR_KIND,
-						page.getLast().indexedAt(),
-						page.getLast().captureEventLogId())
-				: null;
+		var nextCursor = rows.size() > limit ? AssetCatalogCursor.encode(EVENT_LOG_CURSOR_KIND,
+				page.getLast().indexedAt(), page.getLast().captureEventLogId()) : null;
 		return new CaptureEventLogListResponse(page, nextCursor);
 	}
 
 	@Transactional(readOnly = true)
 	CaptureEventLogReadResponse getCaptureEventLog(UUID projectId, UUID captureEventLogId) {
-		return this.captureEventLogRepository
-				.findByCaptureEventLogIdAndProjectId(captureEventLogId, projectId)
-				.map(CaptureEventLogReadResponse::from)
-				.orElseThrow(() -> new AssetCatalogQueryException(
-						"CAPTURE_EVENT_LOG_NOT_FOUND",
-						"The capture event log was not found in the current project."));
+		return this.captureEventLogRepository.findByCaptureEventLogIdAndProjectId(captureEventLogId, projectId)
+			.map(CaptureEventLogReadResponse::from)
+			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_EVENT_LOG_NOT_FOUND",
+					"The capture event log was not found in the current project."));
 	}
 
 	/**
-	 * Cross-module read-only entry point. Returns a frozen snapshot of the fields a downstream
-	 * module (e.g. mediaprivacy) needs to schedule work against a clip asset. Does not leak
-	 * storage locations, ETag or batch identifiers.
+	 * Cross-module read-only entry point. Returns a frozen snapshot of the fields a
+	 * downstream module (e.g. mediaprivacy) needs to schedule work against a clip asset.
+	 * Does not leak storage locations, ETag or batch identifiers.
 	 */
 	@Transactional(readOnly = true)
 	public ClipAssetInputSummary getClipAssetInputSummary(UUID projectId, UUID clipAssetId) {
 		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
-				.filter(existing -> !existing.isDeleted())
-				.orElseThrow(() -> new AssetCatalogQueryException(
-						"CLIP_ASSET_NOT_FOUND",
-						"The clip asset was not found in the current project."));
-		return new ClipAssetInputSummary(
-				asset.getClipAssetId(),
-				asset.getProjectId(),
-				asset.getContentType(),
-				asset.getSizeBytes(),
-				asset.getSha256(),
-				asset.getStatus(),
-				asset.getCreatedAt(),
-				asset.getUpdatedAt());
+			.filter(existing -> !existing.isDeleted())
+			.orElseThrow(() -> new AssetCatalogQueryException("CLIP_ASSET_NOT_FOUND",
+					"The clip asset was not found in the current project."));
+		return new ClipAssetInputSummary(asset.getClipAssetId(), asset.getProjectId(), asset.getContentType(),
+				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), asset.getCreatedAt(), asset.getUpdatedAt());
 	}
 
-	private CaptureSessionListItemResponse mapCaptureSession(ResultSet resultSet, int rowNumber)
-			throws SQLException {
-		return new CaptureSessionListItemResponse(
-				resultSet.getObject("capture_session_id", UUID.class),
-				resultSet.getObject("batch_id", UUID.class),
-				resultSet.getString("device_id"),
-				resultSet.getObject("camera_set_id", UUID.class),
-				resultSet.getString("camera_set_key"),
-				resultSet.getInt("configuration_version"),
-				resultSet.getString("layout_version"),
-				resultSet.getInt("expected_camera_count"),
-				resultSet.getInt("bound_stream_count"),
-				resultSet.getInt("received_camera_count"),
-				resultSet.getInt("ingest_failed_stream_count"),
-				resultSet.getString("sync_group_id"),
-				instant(resultSet, "device_time_utc"),
+	private CaptureSessionListItemResponse mapCaptureSession(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new CaptureSessionListItemResponse(resultSet.getObject("capture_session_id", UUID.class),
+				resultSet.getObject("batch_id", UUID.class), resultSet.getString("device_id"),
+				resultSet.getObject("camera_set_id", UUID.class), resultSet.getString("camera_set_key"),
+				resultSet.getInt("configuration_version"), resultSet.getString("layout_version"),
+				resultSet.getInt("expected_camera_count"), resultSet.getInt("bound_stream_count"),
+				resultSet.getInt("received_camera_count"), resultSet.getInt("ingest_failed_stream_count"),
+				resultSet.getString("sync_group_id"), instant(resultSet, "device_time_utc"),
 				instant(resultSet, "server_receive_time"),
 				CaptureSessionAssemblyStatus.valueOf(resultSet.getString("assembly_status")),
-				CaptureQualityStatus.valueOf(resultSet.getString("quality_status")),
-				instant(resultSet, "created_at"));
+				CaptureQualityStatus.valueOf(resultSet.getString("quality_status")), instant(resultSet, "created_at"));
 	}
 
 	private ClipAssetRow mapClipAsset(ResultSet resultSet, int rowNumber) throws SQLException {
 		ClipAssetSessionBindingResponse binding = null;
 		var cameraStreamId = resultSet.getObject("camera_stream_id", UUID.class);
 		if (cameraStreamId != null) {
-			binding = new ClipAssetSessionBindingResponse(
-					resultSet.getObject("capture_session_id", UUID.class),
-					cameraStreamId,
-					resultSet.getObject("camera_channel_id", UUID.class),
-					resultSet.getInt("camera_index"),
-					resultSet.getString("camera_role"),
-					resultSet.getString("mount_position"),
-					instant(resultSet, "record_start_utc"),
+			binding = new ClipAssetSessionBindingResponse(resultSet.getObject("capture_session_id", UUID.class),
+					cameraStreamId, resultSet.getObject("camera_channel_id", UUID.class),
+					resultSet.getInt("camera_index"), resultSet.getString("camera_role"),
+					resultSet.getString("mount_position"), instant(resultSet, "record_start_utc"),
 					resultSet.getLong("time_offset_ms"),
 					DeclaredSyncStatus.valueOf(resultSet.getString("declared_sync_status")),
 					CameraStreamStatus.valueOf(resultSet.getString("stream_status")),
 					CaptureQualityStatus.valueOf(resultSet.getString("stream_quality_status")));
 		}
-		var response = new ClipAssetReadResponse(
-				resultSet.getObject("clip_asset_id", UUID.class),
-				resultSet.getObject("batch_id", UUID.class),
-				resultSet.getObject("source_upload_file_id", UUID.class),
-				resultSet.getObject("client_file_id", UUID.class),
-				resultSet.getString("content_type"),
-				resultSet.getLong("size_bytes"),
-				resultSet.getString("sha256"),
+		var response = new ClipAssetReadResponse(resultSet.getObject("clip_asset_id", UUID.class),
+				resultSet.getObject("batch_id", UUID.class), resultSet.getObject("source_upload_file_id", UUID.class),
+				resultSet.getObject("client_file_id", UUID.class), resultSet.getString("content_type"),
+				resultSet.getLong("size_bytes"), resultSet.getString("sha256"),
 				ClipAssetStatus.valueOf(resultSet.getString("asset_status")),
-				resultSet.getObject("folder_id", UUID.class),
-				binding,
-				instant(resultSet, "created_at"),
+				resultSet.getObject("folder_id", UUID.class), binding, instant(resultSet, "created_at"),
 				instant(resultSet, "updated_at"));
 		return new ClipAssetRow(response, instant(resultSet, "recorded_at"));
 	}
 
-	private CaptureEventLogReadResponse mapCaptureEventLog(ResultSet resultSet, int rowNumber)
-			throws SQLException {
-		return new CaptureEventLogReadResponse(
-				resultSet.getObject("capture_event_log_id", UUID.class),
-				resultSet.getObject("batch_id", UUID.class),
-				resultSet.getObject("source_upload_file_id", UUID.class),
-				resultSet.getObject("client_file_id", UUID.class),
-				resultSet.getString("device_id"),
-				resultSet.getString("content_type"),
-				resultSet.getLong("size_bytes"),
-				resultSet.getString("sha256"),
+	private CaptureEventLogReadResponse mapCaptureEventLog(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new CaptureEventLogReadResponse(resultSet.getObject("capture_event_log_id", UUID.class),
+				resultSet.getObject("batch_id", UUID.class), resultSet.getObject("source_upload_file_id", UUID.class),
+				resultSet.getObject("client_file_id", UUID.class), resultSet.getString("device_id"),
+				resultSet.getString("content_type"), resultSet.getLong("size_bytes"), resultSet.getString("sha256"),
 				instant(resultSet, "indexed_at"));
 	}
 
-	private static ClipAssetSessionBindingResponse binding(
-			CameraStream stream,
-			CameraSetSnapshotMember member) {
-		return new ClipAssetSessionBindingResponse(
-				stream.getCaptureSessionId(),
-				stream.getCameraStreamId(),
-				stream.getCameraChannelId(),
-				stream.getCameraIndex(),
-				member.getCameraRole(),
-				member.getMountPosition(),
-				stream.getRecordStartUtc(),
-				stream.getTimeOffsetMs(),
-				stream.getDeclaredSyncStatus(),
-				stream.getStreamStatus(),
-				stream.getQualityStatus());
+	private static ClipAssetSessionBindingResponse binding(CameraStream stream, CameraSetSnapshotMember member) {
+		return new ClipAssetSessionBindingResponse(stream.getCaptureSessionId(), stream.getCameraStreamId(),
+				stream.getCameraChannelId(), stream.getCameraIndex(), member.getCameraRole(), member.getMountPosition(),
+				stream.getRecordStartUtc(), stream.getTimeOffsetMs(), stream.getDeclaredSyncStatus(),
+				stream.getStreamStatus(), stream.getQualityStatus());
 	}
 
 	private static Instant instant(ResultSet resultSet, String column) throws SQLException {
@@ -483,14 +394,9 @@ public class AssetCatalogQueryService {
 		return cursor == null ? null : AssetCatalogCursor.decode(kind, cursor);
 	}
 
-	private static void validateTimeRange(
-			Instant from,
-			Instant before,
-			String fromParameter,
-			String beforeParameter) {
+	private static void validateTimeRange(Instant from, Instant before, String fromParameter, String beforeParameter) {
 		if (from != null && before != null && !from.isBefore(before)) {
-			throw new AssetCatalogQueryException(
-					"INVALID_TIME_RANGE",
+			throw new AssetCatalogQueryException("INVALID_TIME_RANGE",
 					fromParameter + " must be earlier than " + beforeParameter + ".");
 		}
 	}
@@ -504,4 +410,5 @@ public class AssetCatalogQueryService {
 
 	private record ClipAssetRow(ClipAssetReadResponse response, Instant recordedAt) {
 	}
+
 }

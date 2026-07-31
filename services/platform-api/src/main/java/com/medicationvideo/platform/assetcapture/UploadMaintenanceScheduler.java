@@ -10,11 +10,12 @@ import org.springframework.stereotype.Component;
 class UploadMaintenanceScheduler {
 
 	private final UploadBatchTerminationService terminationService;
+
 	private final UploadCleanupProcessor cleanupProcessor;
+
 	private final int expiryBatchSize;
 
-	UploadMaintenanceScheduler(
-			UploadBatchTerminationService terminationService,
+	UploadMaintenanceScheduler(UploadBatchTerminationService terminationService,
 			UploadCleanupProcessor cleanupProcessor,
 			@Value("${platform.upload.expiry-batch-size:20}") int expiryBatchSize) {
 		if (expiryBatchSize < 1 || expiryBatchSize > 100) {
@@ -34,4 +35,5 @@ class UploadMaintenanceScheduler {
 		}
 		this.cleanupProcessor.processAvailable();
 	}
+
 }
