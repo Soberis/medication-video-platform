@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import path from 'node:path'
 
 import {
   assertAcceptanceEnvironment,
   requireAvailableArtifact,
+  selectEnvironmentFile,
   sha256Hex,
 } from './index.mjs'
 
@@ -73,5 +75,17 @@ test('artifact digest uses the registered SHA-256 representation', () => {
   assert.equal(
     sha256Hex(Buffer.from('synthetic dataset export artifact', 'utf8')),
     'fcb7f05c524cd49fc7a3bd8562e162c5ff8576b206864b9dfef37290cbcce541',
+  )
+})
+
+test('local environment file takes precedence over the example configuration', () => {
+  const repositoryRoot = 'synthetic-repository'
+  assert.equal(
+    selectEnvironmentFile(repositoryRoot, (candidate) => candidate.endsWith('.env')),
+    path.join(repositoryRoot, '.env'),
+  )
+  assert.equal(
+    selectEnvironmentFile(repositoryRoot, () => false),
+    path.join(repositoryRoot, '.env.example'),
   )
 })

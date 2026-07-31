@@ -441,14 +441,17 @@ async function readJson(response, operation) {
 
 function loadLocalEnvironment() {
   const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-  for (const environmentFile of [
-    path.join(repositoryRoot, '.env'),
-    path.join(repositoryRoot, '.env.example'),
-  ]) {
-    if (existsSync(environmentFile)) {
-      loadEnvFile(environmentFile)
-    }
+  const environmentFile = selectEnvironmentFile(repositoryRoot)
+  if (existsSync(environmentFile)) {
+    loadEnvFile(environmentFile)
   }
+}
+
+export function selectEnvironmentFile(repositoryRoot, fileExists = existsSync) {
+  const localEnvironmentFile = path.join(repositoryRoot, '.env')
+  return fileExists(localEnvironmentFile)
+    ? localEnvironmentFile
+    : path.join(repositoryRoot, '.env.example')
 }
 
 function key(prefix) {
