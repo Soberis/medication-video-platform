@@ -69,6 +69,12 @@ $requiredFiles = @(
     'tools/synthetic-upload-client/README.md',
     'tools/dataset-export-acceptance/index.mjs',
     'tools/dataset-export-acceptance/index.test.mjs',
+    'scripts/check-environment.sh',
+    'scripts/local-common.sh',
+    'scripts/start-local.sh',
+    'scripts/start-local.test.mjs',
+    'scripts/status-local.sh',
+    'scripts/stop-local.sh',
     'workers/media-worker/pyproject.toml',
     'workers/media-worker/uv.lock',
     'workers/media-worker/README.md',
@@ -460,6 +466,22 @@ if (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
 }
 else {
     Add-Skip 'Dataset export acceptance tool has not been generated yet'
+}
+
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    Add-Pass 'macOS/Linux local script tests are not applicable on Windows'
+}
+elseif ($null -eq (Get-Command bash -ErrorAction SilentlyContinue)) {
+    Add-Failure 'Bash is required to validate the macOS/Linux local scripts'
+}
+else {
+    & pnpm --dir $root run local-scripts:test
+    if ($LASTEXITCODE -eq 0) {
+        Add-Pass 'macOS/Linux local script tests'
+    }
+    else {
+        Add-Failure "macOS/Linux local script tests exited with code $LASTEXITCODE"
+    }
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |

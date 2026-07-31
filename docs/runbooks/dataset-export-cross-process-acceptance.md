@@ -24,6 +24,12 @@
 .\scripts\start-local.ps1 -Worker
 ```
 
+macOS / Linux 使用等价命令：
+
+```bash
+./scripts/start-local.sh --worker
+```
+
 ## 3. 执行
 
 在环境负责人确认后，显式打开一次性开关：
@@ -31,6 +37,12 @@
 ```powershell
 $env:RUN_DATASET_EXPORT_ACCEPTANCE='true'
 pnpm run dataset-export:acceptance
+```
+
+macOS / Linux 可在单条命令中设置同一个一次性开关：
+
+```bash
+RUN_DATASET_EXPORT_ACCEPTANCE=true pnpm run dataset-export:acceptance
 ```
 
 工具自行从未提交的仓库根 `.env` 或 `.env.example` 读取本地合成令牌；进程环境变量优先。它拒绝非 loopback 地址、非 `synthetic` 数据配置、缺少两个本地身份或未设置显式开关的执行。
@@ -50,7 +62,7 @@ pnpm run dataset-export:acceptance
 
 ## 5. 可重试失败恢复演练
 
-以下演练只用于已经批准的本地合成环境。它会停止并重启**受本地脚本管理的 Export Worker**，并创建新的合成项目、Session、DatasetVersion 和导出审计事实；环境中不得同时有其他导出任务。它不会修改 Core API、数据库或对象存储配置，也不会访问真实视频。
+以下演练只用于已经批准的本地合成环境。它会停止并重启**受本地脚本管理且仍在运行的 Export Worker**，并创建新的合成项目、Session、DatasetVersion 和导出审计事实；开始前必须人工确认没有 `QUEUED`、`RUNNING` 或 `RETRY_WAIT` 导出，RabbitMQ 中没有遗留导出消息，也没有手工启动或由其他终端管理的 Export Worker。故障注入会作用于新 Worker 收到的第一个首轮任务，不满足这些隔离条件可能影响其他本地导出。它不会修改 Core API、数据库或对象存储配置，也不会访问真实视频。
 
 先确认未提交的本地 `.env` 若覆盖了 Export Worker 两个摘要，已与当前 `.env.example` 一致。环境负责人再手动执行：
 
@@ -61,9 +73,22 @@ pnpm run dataset-export:recovery-acceptance
 .\scripts\start-local.ps1 -Worker -RestartExportWorker
 ```
 
+macOS / Linux 使用等价的受控重启和故障注入入口：
+
+```bash
+./scripts/start-local.sh --worker --restart-export-worker --export-worker-synthetic-fail-first-attempt
+cleanup_export_worker() {
+  ./scripts/start-local.sh --worker --restart-export-worker
+}
+trap cleanup_export_worker EXIT
+RUN_DATASET_EXPORT_ACCEPTANCE=true pnpm run dataset-export:recovery-acceptance
+cleanup_export_worker
+trap - EXIT
+```
+
 第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic`、两项显式验收授权以及 loopback Core API/RabbitMQ，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。
 
-本机合成恢复结果见第 8 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
+本机合成恢复结果见第 8、9 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
 
 ## 6. 尚未覆盖
 
@@ -128,3 +153,34 @@ pnpm run dataset-export:recovery-acceptance
 ```
 
 数据库复核显示首轮 attempt 为 `FAILED/PACKAGE_BUILD_FAILED`，第 2 轮为 `SUCCEEDED`，导出终态为 `AVAILABLE`。这证明可重试构建失败能够经 Core API 的有上限策略生成新 attempt，并由真实 Worker 完成恢复；它不证明失联租约、DLQ、并发、生产网络或正式 UAT 已通过。
+
+## 9. 2026-07-31 macOS 本地合成恢复结果
+
+本次以 `16df94d` 为代码基线，并叠加本轮尚未提交的 POSIX 启动脚本改动，在 Apple Silicon macOS 本机 loopback 环境执行。运行时为 Java 21.0.12、Node.js 22.23.1、pnpm 11.11.0、uv 管理的 Python 3.12.13，以及 Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2。执行前数据库中没有 `QUEUED`、`RUNNING` 或 `RETRY_WAIT` 导出，导出队列没有 ready/unacknowledged 消息且只有一个受脚本管理的 Export Worker；输入仍为工具即时生成的两段合成 MP4。
+
+最终运行结果：
+
+```json
+{
+  "schema_version": "dataset-export-cross-process-acceptance-v1",
+  "project_id": "eb60c16d-b132-4e6d-bc4b-b0b1b49c706e",
+  "dataset_version_id": "1a89a379-a6d4-4543-b977-c01f016d690d",
+  "dataset_export_id": "b973bd97-2d06-414d-8ac7-85734152ade8",
+  "capture_session_count": 2,
+  "independent_approvals": true,
+  "recovery_mode": true,
+  "observed_export_statuses": [
+    "QUEUED",
+    "RETRY_WAIT",
+    "AVAILABLE"
+  ],
+  "worker_attempt": 2,
+  "export_status": "AVAILABLE",
+  "artifact_size_bytes": 380894,
+  "artifact_sha256": "a4ac92220229678f0940577f63de8a5aafed3237ba44fa79a9f25dc6b707bb3e",
+  "downloaded_sha256": "a4ac92220229678f0940577f63de8a5aafed3237ba44fa79a9f25dc6b707bb3e",
+  "duration_ms": 11958
+}
+```
+
+数据库复核显示 attempt 1 为 `FAILED/PACKAGE_BUILD_FAILED`，attempt 2 为 `SUCCEEDED`，导出终态为 `AVAILABLE`。结束后已受控重启正常 Export Worker，并直接确认 `EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=false`、`RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=false`；导出和媒体队列均为 0 条 ready/unacknowledged 消息且各有一个消费者。该结果补齐 macOS 的可重试构建失败恢复证据，但仍不替代失联租约、DLQ、并发或正式 UAT。

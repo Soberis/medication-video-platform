@@ -97,6 +97,9 @@ macOS / Linux 常用命令：
 ./scripts/stop-local.sh
 ./scripts/stop-local.sh --keep-infrastructure
 ./scripts/start-local.sh --worker
+./scripts/start-local.sh --restart-api
+./scripts/start-local.sh --worker --restart-export-worker
+pnpm run local-scripts:test
 ```
 
 Windows PowerShell 常用命令：

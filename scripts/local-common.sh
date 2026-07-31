@@ -71,6 +71,57 @@ managed_process_running() {
     [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
 }
 
+remove_managed_process_record() {
+    local key="$1"
+    local temporary_file
+
+    [[ -f "$RUNTIME_FILE" ]] || return 0
+    temporary_file="$(mktemp "$LOG_DIRECTORY/managed-processes.XXXXXX")"
+    awk -F $'\t' -v expected="$key" '$1 != expected' "$RUNTIME_FILE" > "$temporary_file"
+    if [[ -s "$temporary_file" ]]; then
+        mv "$temporary_file" "$RUNTIME_FILE"
+    else
+        rm -f "$temporary_file" "$RUNTIME_FILE"
+    fi
+}
+
+stop_process_tree() {
+    local pid="$1"
+    local description="$2"
+    local child
+
+    if ! [[ "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
+        echo "$description is not running (PID $pid)."
+        return 0
+    fi
+
+    if command -v pgrep >/dev/null 2>&1; then
+        for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+            stop_process_tree "$child" "$description child process"
+        done
+    fi
+
+    kill -TERM "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.5
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+    echo "Stopped $description (PID $pid)."
+}
+
+stop_managed_process() {
+    local key="$1"
+    local description="$2"
+    local pid
+
+    pid="$(managed_process_pid "$key")" || return 1
+    stop_process_tree "$pid" "$description"
+    remove_managed_process_record "$key"
+}
+
 record_managed_process() {
     local key="$1"
     local pid="$2"

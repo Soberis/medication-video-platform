@@ -18,6 +18,7 @@
     "dataset-export:acceptance": "node tools/dataset-export-acceptance/index.mjs",
     "dataset-export:recovery-acceptance": "node tools/dataset-export-acceptance/index.mjs --recovery",
     "dataset-export:acceptance:test": "node --test tools/dataset-export-acceptance/*.test.mjs",
+    "local-scripts:test": "node --test scripts/*.test.mjs",
     "contract:lint": "redocly lint contracts/openapi/openapi.yaml",
     "api:test": "node scripts/run-bruno.mjs"
   },

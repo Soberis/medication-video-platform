@@ -8,6 +8,9 @@ source "$SCRIPT_DIR/local-common.sh"
 
 start_worker=false
 infrastructure_only=false
+restart_api=false
+restart_export_worker=false
+export_worker_synthetic_fail_first_attempt=false
 api_startup_timeout_seconds=180
 
 usage() {
@@ -15,10 +18,13 @@ usage() {
 Usage: ./scripts/start-local.sh [options]
 
 Options:
-  --worker               Start Media Worker and Export Worker after Core API.
-  --infrastructure-only Start only PostgreSQL, RabbitMQ, and S3.
-  --api-timeout SECONDS Core API health timeout, from 30 to 600 (default: 180).
-  -h, --help             Show this help.
+  --worker                                      Start Media Worker and Export Worker after Core API.
+  --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
+  --restart-api                                 Restart the Core API managed by this script.
+  --restart-export-worker                       Restart the Export Worker managed by this script.
+  --export-worker-synthetic-fail-first-attempt  Inject one retryable first-attempt export failure.
+  --api-timeout SECONDS                         Core API health timeout, from 30 to 600 (default: 180).
+  -h, --help                                    Show this help.
 EOF
 }
 
@@ -30,6 +36,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --infrastructure-only)
             infrastructure_only=true
+            shift
+            ;;
+        --restart-api)
+            restart_api=true
+            shift
+            ;;
+        --restart-export-worker)
+            restart_export_worker=true
+            shift
+            ;;
+        --export-worker-synthetic-fail-first-attempt)
+            export_worker_synthetic_fail_first_attempt=true
             shift
             ;;
         --api-timeout)
@@ -49,6 +67,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if $restart_export_worker && ! $start_worker; then
+    echo "Restarting the Export Worker requires --worker." >&2
+    exit 2
+fi
+if $export_worker_synthetic_fail_first_attempt && ! $start_worker; then
+    echo "Synthetic Export Worker failure injection requires --worker." >&2
+    exit 2
+fi
+if $infrastructure_only && { $start_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt; }; then
+    echo "Infrastructure-only startup cannot start or restart applications." >&2
+    exit 2
+fi
+if $export_worker_synthetic_fail_first_attempt && ! $restart_export_worker; then
+    echo "Synthetic Export Worker failure injection requires --restart-export-worker." >&2
+    exit 2
+fi
+
 if [[ ! "$api_startup_timeout_seconds" =~ ^[0-9]+$ ]] ||
    ((api_startup_timeout_seconds < 30 || api_startup_timeout_seconds > 600)); then
     echo "--api-timeout must be an integer from 30 to 600." >&2
@@ -62,6 +97,20 @@ done
 load_local_environment
 build_compose_environment_arguments
 cd "$PROJECT_ROOT"
+
+if $export_worker_synthetic_fail_first_attempt && [[ "${DATA_PROFILE:-}" != "synthetic" ]]; then
+    echo "Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic." >&2
+    exit 2
+fi
+
+export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=false
+export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=false
+if $export_worker_synthetic_fail_first_attempt; then
+    export RUN_DATASET_EXPORT_ACCEPTANCE=true
+    export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=true
+    export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=true
+    echo "Export Worker will inject one synthetic first-attempt failure for recovery acceptance."
+fi
 
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
     echo "Docker Desktop is not running or unreachable. Start Docker Desktop, then run this script again." >&2
@@ -80,6 +129,39 @@ mkdir -p "$LOG_DIRECTORY"
 api_port="${PLATFORM_API_PORT:-8080}"
 api_health_uri="http://127.0.0.1:$api_port/actuator/health"
 api_log_path="$LOG_DIRECTORY/api.log"
+
+restart_managed_api() {
+    if ! managed_process_pid api >/dev/null 2>&1; then
+        if tcp_port_in_use "$api_port"; then
+            echo "Core API port $api_port is occupied by an unmanaged process. Use status-local.sh to inspect it; this script will not terminate it." >&2
+            return 1
+        fi
+        return 0
+    fi
+    stop_managed_process api "managed Core API"
+}
+
+restart_managed_export_worker_process() {
+    if ! managed_process_pid export-worker >/dev/null 2>&1; then
+        if $export_worker_synthetic_fail_first_attempt; then
+            echo "Synthetic failure injection requires a running Export Worker managed by this script." >&2
+            return 1
+        fi
+        return 0
+    fi
+    if $export_worker_synthetic_fail_first_attempt && ! managed_process_running export-worker; then
+        echo "Synthetic failure injection refuses a stale Export Worker process record." >&2
+        return 1
+    fi
+    stop_managed_process export-worker "managed Export Worker"
+}
+
+if $restart_api; then
+    restart_managed_api
+fi
+if $restart_export_worker; then
+    restart_managed_export_worker_process
+fi
 
 if $infrastructure_only; then
     echo "Infrastructure is ready. Run ./scripts/status-local.sh to inspect it."
@@ -137,6 +219,11 @@ if $start_worker; then
         start_managed_process \
             worker "Media Worker" "$LOG_DIRECTORY/worker.log" \
             uv run --directory "$PROJECT_ROOT/workers/media-worker" media-worker
+        sleep 1
+        if ! managed_process_running worker; then
+            echo "Media Worker exited during startup. Inspect: $LOG_DIRECTORY/worker.log and $LOG_DIRECTORY/worker.log.error.log" >&2
+            exit 1
+        fi
     fi
 
     if managed_process_running export-worker; then
@@ -145,6 +232,11 @@ if $start_worker; then
         start_managed_process \
             export-worker "Export Worker" "$LOG_DIRECTORY/export-worker.log" \
             uv run --directory "$PROJECT_ROOT/workers/export-worker" export-worker
+        sleep 1
+        if ! managed_process_running export-worker; then
+            echo "Export Worker exited during startup. Inspect: $LOG_DIRECTORY/export-worker.log and $LOG_DIRECTORY/export-worker.log.error.log" >&2
+            exit 1
+        fi
     fi
 fi
 

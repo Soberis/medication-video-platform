@@ -42,33 +42,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-stop_process_tree() {
-    local pid="$1"
-    local description="$2"
-    local child
-
-    if ! [[ "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
-        echo "$description is not running (PID $pid)."
-        return
-    fi
-
-    if command -v pgrep >/dev/null 2>&1; then
-        for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-            stop_process_tree "$child" "$description child process"
-        done
-    fi
-
-    kill -TERM "$pid" 2>/dev/null || true
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        kill -0 "$pid" 2>/dev/null || break
-        sleep 0.5
-    done
-    if kill -0 "$pid" 2>/dev/null; then
-        kill -KILL "$pid" 2>/dev/null || true
-    fi
-    echo "Stopped $description (PID $pid)."
-}
-
 if [[ -f "$RUNTIME_FILE" ]]; then
     while IFS=$'\t' read -r key pid name log_path; do
         [[ -n "$key" ]] || continue
