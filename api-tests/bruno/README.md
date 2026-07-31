@@ -51,6 +51,7 @@ pnpm run api:test
 10. 拒绝缺少存储 Part 的文件完成请求；
 11. 读取数据库事实生成的批次上传进度；
 12. 读取文件进度、确认字节和稳定完成错误码。
-13. 验证 MediaJob 缺少幂等键、未知 ClipAsset 和未知 Job 的稳定错误响应。
+13. 验证 MediaJob 缺少幂等键、未知 ClipAsset 和未知 Job 的稳定错误响应；
+14. 验证内部数据集导出端点拒绝缺失身份和普通 Web 身份，并返回 `no-store` 的稳定失败响应。
 
 Bruno 不提交大体积二进制测试文件，因此成功直传、确认、恢复、Multipart Complete 和完整文件 SHA-256 的数据面证据由 Java 合同测试及 SeaweedFS 兼容性测试提供；Collection 负责验证真实运行 API 的控制面和失败守卫。所有请求只使用合成项目、设备和摘要。新接口只有在 OpenAPI、实现和对应测试同时就绪后才加入 Collection。
