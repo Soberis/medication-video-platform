@@ -13,13 +13,24 @@ const collectionDirectory = path.join(
   "medication-platform",
 );
 const dotenvFile = path.join(collectionDirectory, ".env");
-if (!process.env.DEV_BEARER_TOKEN && existsSync(dotenvFile)) {
-  loadEnvFile(dotenvFile);
+const localEnvironmentFiles = [
+  path.join(repositoryRoot, ".env"),
+  dotenvFile,
+  path.join(repositoryRoot, ".env.example"),
+];
+for (const environmentFile of localEnvironmentFiles) {
+  if (!existsSync(environmentFile)) {
+    continue;
+  }
+  loadEnvFile(environmentFile);
 }
 
 const bearerToken = process.env.DEV_BEARER_TOKEN;
-if (!bearerToken) {
-  console.error("DEV_BEARER_TOKEN is required in the process environment or Bruno collection .env file.");
+const adminBearerToken = process.env.DEV_ADMIN_BEARER_TOKEN;
+if (!bearerToken || !adminBearerToken) {
+  console.error(
+    "DEV_BEARER_TOKEN and DEV_ADMIN_BEARER_TOKEN are required in the process environment, repository .env, Bruno collection .env, or .env.example.",
+  );
   process.exit(2);
 }
 
@@ -27,7 +38,16 @@ const require = createRequire(import.meta.url);
 const brunoCli = require.resolve("@usebruno/cli/bin/bru.js");
 const result = spawnSync(
   process.execPath,
-  [brunoCli, "run", "--env", "local", "--env-var", `devBearerToken=${bearerToken}`],
+  [
+    brunoCli,
+    "run",
+    "--env",
+    "local",
+    "--env-var",
+    `devBearerToken=${bearerToken}`,
+    "--env-var",
+    `devAdminBearerToken=${adminBearerToken}`,
+  ],
   {
     cwd: collectionDirectory,
     env: process.env,

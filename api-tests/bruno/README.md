@@ -22,7 +22,8 @@ docker compose --env-file .env.example -f infra/docker-compose/compose.yaml up -
 
 cd services/platform-api
 $env:SPRING_PROFILES_ACTIVE = 'local'
-$env:DEV_BEARER_TOKEN = 'local-dev-token'
+$env:DEV_BEARER_TOKEN = 'synthetic-local-bearer-token-do-not-reuse'
+$env:DEV_ADMIN_BEARER_TOKEN = 'synthetic-local-admin-bearer-token-do-not-reuse'
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -36,6 +37,10 @@ Bruno CLI 3.5.2 已锁定在根 `pnpm-lock.yaml`。后端运行后，在另一�
 cd C:\Dev\Projects\medication-video-platform
 pnpm run api:test
 ```
+
+启动器按 `process.env`、仓库根 `.env`、Collection `.env`、`.env.example` 的顺序读取
+`DEV_BEARER_TOKEN` 和 `DEV_ADMIN_BEARER_TOKEN`；默认本地配置无需再手动设置它们。覆盖时只在
+未提交的仓库根 `.env` 中设置合成令牌，避免测试令牌与实际本地 API 配置不一致。
 
 当前自动化场景覆盖：
 

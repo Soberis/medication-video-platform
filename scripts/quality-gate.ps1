@@ -318,7 +318,9 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',
         'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru',
         'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
+        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru',
+        'api-tests/bruno/medication-platform/Dataset Exports/01 Reject Missing Export Worker Identity.bru',
+        'api-tests/bruno/medication-platform/Dataset Exports/02 Reject Web Identity As Export Worker.bru'
     )
     foreach ($relativePath in $requiredBrunoRequests) {
         if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {
