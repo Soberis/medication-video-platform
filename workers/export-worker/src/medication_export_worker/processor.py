@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -10,12 +11,10 @@ from typing import Protocol
 from uuid import UUID
 
 from medication_export_worker.api import (
-    CoreApiClient,
     ExportStream,
     InputDigestMismatchError,
     InputDownloadError,
     LeaseGrant,
-    LeaseMonitor,
     OutputUploadError,
     PermanentDeliveryError,
     RetryableDeliveryError,
@@ -27,7 +26,6 @@ from medication_export_worker.contracts import (
     DatasetExportJob,
 )
 from medication_export_worker.package_builder import (
-    DatasetPackageBuilder,
     PackageBuildError,
     PackageInputError,
     PackageResult,
@@ -77,7 +75,11 @@ class ProcessingOutcome:
 class ExportClient(Protocol):
     def acquire(self, job: DatasetExportJob) -> LeaseGrant: ...
 
-    def maintain_lease(self, job: DatasetExportJob, grant: LeaseGrant) -> LeaseMonitor: ...
+    def maintain_lease(
+        self,
+        job: DatasetExportJob,
+        grant: LeaseGrant,
+    ) -> AbstractContextManager[object]: ...
 
     def download_input(self, stream: ExportStream, target: Path) -> None: ...
 
@@ -107,8 +109,8 @@ class ExportFailure:
 class JobProcessor:
     def __init__(
         self,
-        client: CoreApiClient,
-        builder: DatasetPackageBuilder,
+        client: ExportClient,
+        builder: PackageBuilder,
         software_digest: str,
         temp_dir: Path | None,
     ) -> None:

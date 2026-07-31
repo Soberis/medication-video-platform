@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 from uuid import NAMESPACE_URL, uuid5
 
 import pika
@@ -12,7 +12,6 @@ import pika
 from medication_export_worker.processor import (
     DeadLetterReason,
     DeliveryDisposition,
-    JobProcessor,
     ProcessingOutcome,
 )
 
@@ -31,6 +30,10 @@ class DeadLetterPublishError(RuntimeError):
     """Sanitized diagnostic was not confirmed; supervisor restart is required."""
 
 
+class MessageProcessor(Protocol):
+    def process(self, body: bytes) -> ProcessingOutcome: ...
+
+
 class DatasetExportConsumer:
     def __init__(
         self,
@@ -38,13 +41,13 @@ class DatasetExportConsumer:
         queue_name: str,
         dead_letter_exchange: str,
         dead_letter_routing_key: str,
-        processor: JobProcessor,
+        processor: MessageProcessor,
     ) -> None:
         self._rabbitmq_url = rabbitmq_url
         self._queue_name = queue_name
         self._dead_letter_exchange = dead_letter_exchange
         self._dead_letter_routing_key = dead_letter_routing_key
-        self._processor = processor
+        self._processor: MessageProcessor = processor
 
     def run(self) -> None:
         parameters = pika.URLParameters(self._rabbitmq_url)
