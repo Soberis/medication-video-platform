@@ -5,5 +5,6 @@
 - [媒体死信与受控重放](./media-dead-letter-replay.md)：当前仅覆盖本地合成环境中已经验证的队列重建、脱敏诊断检查和管理员重放边界。
 - [上传终止与过期清理](./upload-abort-and-expiry-cleanup.md)：说明破坏性调度开关、可观察状态、启用前检查和失败升级边界。
 - [数据集导出跨进程验收](./dataset-export-cross-process-acceptance.md)：以显式授权的本地合成数据验证 Core API、Outbox、RabbitMQ、Export Worker 和短期下载授权的最小闭环。
+- [P0 Web 与数据闭环 UAT](./p0-uat-acceptance.md)：固定真实角色、目标桌面浏览器、主 Step 闭环、证据和失败退出口径；不把本机演示当作 UAT。
 
 后续仍需覆盖：环境启动与停止、数据库备份恢复、对象存储恢复、队列积压处理、密钥轮换和隐私事件响应。未验证的生产命令不得从本地步骤直接推导。
