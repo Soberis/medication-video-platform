@@ -12,22 +12,20 @@ describe('App', () => {
   it('uses the authorized project list as the explicit business entry', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse({
-            items: [
-              {
-                project_id: '30000000-0000-4000-8000-000000000001',
-                display_name: '合成测试项目',
-                status: 'ACTIVE',
-                current_role: 'ADMIN',
-                created_at: '2026-07-20T00:00:00Z',
-              },
-            ],
-            can_create_projects: false,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              project_id: '30000000-0000-4000-8000-000000000001',
+              display_name: '合成测试项目',
+              status: 'ACTIVE',
+              current_role: 'ADMIN',
+              created_at: '2026-07-20T00:00:00Z',
+            },
+          ],
+          can_create_projects: false,
+        }),
+      ),
     )
     const { router } = renderRouter(
       [
@@ -89,10 +87,7 @@ describe('App', () => {
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
     const eventLogLink = within(navigation).getByRole('link', { name: '采集事件日志' })
-    expect(eventLogLink).toHaveAttribute(
-      'href',
-      `/projects/${projectId}/event-logs`,
-    )
+    expect(eventLogLink).toHaveAttribute('href', `/projects/${projectId}/event-logs`)
     expect(eventLogLink).toHaveAttribute('aria-current', 'page')
     expect(within(navigation).getByText('管理').closest('details')).toHaveClass('nav-more-active')
     expect(within(navigation).getByRole('link', { name: '项目' })).not.toHaveAttribute(

@@ -63,7 +63,7 @@ pnpm run dataset-export:recovery-acceptance
 
 第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic`、两项显式验收授权以及 loopback Core API/RabbitMQ，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。
 
-这项演练尚未执行前不能把它写为已通过；失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
+本机合成恢复结果见第 8 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
 
 ## 6. 尚未覆盖
 
@@ -72,7 +72,7 @@ pnpm run dataset-export:recovery-acceptance
 - 大数据集吞吐、并发导出、限带宽或断网；
 - 正式 UAT、性能 SLO 与生产发布审批。
 
-## 6. 2026-07-31 本地合成基线结果
+## 7. 2026-07-31 本地合成基线结果
 
 本次在 Windows 本机 loopback、Core API `local` profile、Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2，以及 Node.js 22.22.2、Media Worker、Export Worker 全部运行时执行。输入为工具即时生成的两段合成 MP4；未使用真实视频、生产凭证或外部对象存储。
 
@@ -96,3 +96,35 @@ pnpm run dataset-export:recovery-acceptance
 ```
 
 这证明了 Core API、Outbox、RabbitMQ、两个 Worker、独立审批和短期下载校验的本地合成实现闭环；它不替代正式 UAT、生产对象存储演练或性能验证。
+
+## 8. 2026-07-31 本地合成恢复结果
+
+本次基于提交 `58aa365`，在第 7 节相同的本机合成环境中执行第 5 节命令。执行前确认进行中的导出数为 0；结束后已将 Export Worker 重启为无故障注入的正常模式。
+
+最终运行结果：
+
+```json
+{
+  "schema_version": "dataset-export-cross-process-acceptance-v1",
+  "project_id": "16de8ed2-7c3f-4b4b-8e99-1e8e467f9d50",
+  "dataset_version_id": "e3e881c7-c02c-4092-a5d5-57904b24e1f7",
+  "dataset_export_id": "6dcf9812-6ea5-4855-92eb-4bf833ccb2a9",
+  "capture_session_count": 2,
+  "independent_approvals": true,
+  "recovery_mode": true,
+  "observed_export_statuses": [
+    "QUEUED",
+    "RUNNING",
+    "RETRY_WAIT",
+    "AVAILABLE"
+  ],
+  "worker_attempt": 2,
+  "export_status": "AVAILABLE",
+  "artifact_size_bytes": 381064,
+  "artifact_sha256": "5955f1ee816bba299d3098ff9c718915db858dc381c64cc2c1ddce7c01924388",
+  "downloaded_sha256": "5955f1ee816bba299d3098ff9c718915db858dc381c64cc2c1ddce7c01924388",
+  "duration_ms": 176329
+}
+```
+
+数据库复核显示首轮 attempt 为 `FAILED/PACKAGE_BUILD_FAILED`，第 2 轮为 `SUCCEEDED`，导出终态为 `AVAILABLE`。这证明可重试构建失败能够经 Core API 的有上限策略生成新 attempt，并由真实 Worker 完成恢复；它不证明失联租约、DLQ、并发、生产网络或正式 UAT 已通过。

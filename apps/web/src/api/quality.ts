@@ -63,7 +63,11 @@ export class QualityReviewApiError extends Error {
   }
 }
 
-export async function getQualityReview(projectId: string, clipAssetId: string, signal?: AbortSignal) {
+export async function getQualityReview(
+  projectId: string,
+  clipAssetId: string,
+  signal?: AbortSignal,
+) {
   const response = await fetch(path(projectId, clipAssetId), {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -109,7 +113,10 @@ async function readResponse(response: Response): Promise<QualityReview> {
     INVALID_QUALITY_REVIEW: '质量判断内容不完整，请重新选择。',
     QUALITY_REVIEW_CONFLICT: '质量结论已被其他用户更新，请刷新后重试。',
   }
-  throw new QualityReviewApiError(messages[errorCode] ?? '质量结论暂未保存，请稍后重试。', errorCode)
+  throw new QualityReviewApiError(
+    messages[errorCode] ?? '质量结论暂未保存，请稍后重试。',
+    errorCode,
+  )
 }
 
 function path(projectId: string, clipAssetId: string) {

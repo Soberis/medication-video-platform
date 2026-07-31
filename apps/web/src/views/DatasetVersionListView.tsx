@@ -126,7 +126,15 @@ function DatasetVersionListContent() {
                 title: '状态',
                 width: 120,
                 render: (_, row) => (
-                  <Tag color={row.status === 'FROZEN' ? 'success' : row.status === 'DRAFT' ? 'blue' : 'processing'}>
+                  <Tag
+                    color={
+                      row.status === 'FROZEN'
+                        ? 'success'
+                        : row.status === 'DRAFT'
+                          ? 'blue'
+                          : 'processing'
+                    }
+                  >
                     {datasetVersionStatusLabels[row.status]}
                   </Tag>
                 ),

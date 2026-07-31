@@ -8,7 +8,10 @@ describe('platform account API', () => {
   it('uses the protected account endpoint and csrf header without persisting the password', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(accountResponse()))
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await createPlatformAccount('reviewer-01', 'member-password-123')
 
@@ -23,7 +26,9 @@ describe('platform account API', () => {
   })
 
   it('changes account state through the narrow enabled endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ...accountResponse(), enabled: false }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ...accountResponse(), enabled: false }))
     vi.stubGlobal('fetch', fetchMock)
 
     await changePlatformAccountEnabled('reviewer-01', false)

@@ -119,12 +119,15 @@ export async function listAnnotationTasks(
   projectId: string,
   signal?: AbortSignal,
 ): Promise<AnnotationTaskList> {
-  const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-    signal,
-  })
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal,
+    },
+  )
   if (response.ok) return (await response.json()) as AnnotationTaskList
   throw await annotationTaskApiError(response)
 }
@@ -133,12 +136,15 @@ export async function getAnnotationLabelSchema(
   projectId: string,
   signal?: AbortSignal,
 ): Promise<AnnotationLabelSchema> {
-  const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-    signal,
-  })
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal,
+    },
+  )
   if (response.ok) return (await response.json()) as AnnotationLabelSchema
   throw await annotationTaskApiError(response)
 }
@@ -255,5 +261,8 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_POST_CLEANING_RECHECK_NOT_READY: '当前标注、任务或视频状态不允许重新核对清洗。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
-  return new AnnotationTaskApiError(messages[errorCode] ?? '标注任务暂未创建，请稍后重试。', errorCode)
+  return new AnnotationTaskApiError(
+    messages[errorCode] ?? '标注任务暂未创建，请稍后重试。',
+    errorCode,
+  )
 }

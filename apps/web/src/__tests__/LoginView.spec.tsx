@@ -46,24 +46,21 @@ describe('LoginView', () => {
     '/login?redirect=//external.invalid/path',
     '/login?redirect=/%5Cexternal.invalid/path',
     '/login?redirect=/login',
-  ])(
-    'rejects an external-looking post-login redirect: %s',
-    async (entry) => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue(jsonResponse({ username: 'platform-admin', role: 'ADMIN' })),
-      )
-      const user = userEvent.setup()
-      const { router } = renderLogin(entry)
+  ])('rejects an external-looking post-login redirect: %s', async (entry) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ username: 'platform-admin', role: 'ADMIN' })),
+    )
+    const user = userEvent.setup()
+    const { router } = renderLogin(entry)
 
-      await user.type(screen.getByLabelText('账号'), 'platform-admin')
-      await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
-      await user.click(screen.getByRole('button', { name: /登\s*录/ }))
+    await user.type(screen.getByLabelText('账号'), 'platform-admin')
+    await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
+    await user.click(screen.getByRole('button', { name: /登\s*录/ }))
 
-      await waitFor(() => expect(router.state.location.pathname).toBe('/projects'))
-      expect(await screen.findByText('Projects')).toBeInTheDocument()
-    },
-  )
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects'))
+    expect(await screen.findByText('Projects')).toBeInTheDocument()
+  })
 
   it('returns to the requested internal route after login state changes', async () => {
     vi.stubGlobal(

@@ -98,7 +98,7 @@ V1.10 明确 P0 标注只包含主 Step 时间段。Object 框及其 COCO 导出
 | FR-027 创建数据集版本 | P0 | `datasetexport` | create/read DatasetVersion；read current admission/build readiness；create/read split plan、build specification、build snapshot 和 freeze-preflight validation；start build | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 管理员仅可为 1–100 个明确选择且全部当前 eligible 的 CaptureSession 创建 `DRAFT` 候选快照；成员可读取固定证据并比较当前事实。至少两个成员时可固定一次可复现 pilot/holdout 划分；随后可把显式候选规则、统一 label/clean 摘要、split 和 P0 export profile 固定为一次不可变构建配置。管理员显式开始构建时，服务端重新校验全部当前准入和证据差异，零阻断才迁移到 `BUILDING`；随后验证 session/stream、原始输入、revision、清洗和 leakage/split 关系完整性，以版本化确定性摘要封印快照并进入 `VALIDATING`。管理员可在该状态记录一次当前准入、引用、摘要、防泄漏和构建契约技术校验；创建、配置、启动、封印、校验、幂等和审计事实均保存 | PI |
 | FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview；draft creation；draft current-admission/build-readiness read；freeze-preflight validation | dataset_member_session、dataset_member_stream、dataset_version_validation | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；管理员创建草稿时服务端重新校验所有当前事实，并保存证据快照。草稿准备检查逐成员返回当前预览和相对快照的稳定证据变化，同时汇总当前准入/证据漂移阻断，且不修改草稿或写入审计。进入 `VALIDATING` 后，一次性技术校验及冻结批准命令都会重新核对当前准入和证据变化。未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可进入草稿；WARNING 批准例外仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | create/read immutable split plan | dataset_split_plan、dataset_split_assignment | 已实现 `CAPTURE_SESSION_HASH_RANK_V1`：CaptureSession 同时作为最小成员和泄漏组，服务端保存正整数 seed、稳定哈希排名及 pilot/holdout 实际结果；同一草稿只允许一个计划，冲突失败且不会自动降级。操作者/设备/批次等更强分组和正式比例仍待样本设计批准 | PI |
-| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/approval/worker/download | dataset_build_specification、dataset_export、dataset_export_attempt、export_artifact、outbox_event、inbox_message | v2 已实现独立审批、首次任务原子入队、Worker 租约与心跳、短期输入/输出能力、确定性 ZIP、服务端文件集合和摘要校验、批准软件摘要、有限重试、结果去重、过期租约自动恢复、临时输出清理、短期下载与审计；契约、Worker 单元测试和固定合成输入的 Golden 内容测试覆盖主要模型。2026-07-31 已在本机合成环境真实验证两个 Session、独立冻结/导出审批、首次 Worker attempt、产物登记和短期下载摘要一致；历史 v1 仍因缺少真实 Object/COCO 与 clean video 生产者而被明确阻断，正式 UAT 仍待完成 | PI |
+| FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/approval/worker/download | dataset_build_specification、dataset_export、dataset_export_attempt、export_artifact、outbox_event、inbox_message | v2 已实现独立审批、首次任务原子入队、Worker 租约与心跳、短期输入/输出能力、确定性 ZIP、服务端文件集合和摘要校验、批准软件摘要、有限重试、结果去重、过期租约自动恢复、临时输出清理、短期下载与审计；契约、Worker 单元测试和固定合成输入的 Golden 内容测试覆盖主要模型。2026-07-31 已在本机合成环境真实验证两个 Session、独立冻结/导出审批、正常导出，以及首轮 `PACKAGE_BUILD_FAILED` 后经 `RETRY_WAIT` 由第 2 次 attempt 完成恢复；产物登记和短期下载摘要一致。失联租约、DLQ、并发和正式 UAT 仍待完成；历史 v1 仍因缺少真实 Object/COCO 与 clean video 生产者而被明确阻断 | PI |
 | FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze-preflight validation；freeze command/approval | dataset_version_validation、dataset_version、approval_request、approval_decision | `PASS` 自动创建绑定该 validation 的待审批请求；申请人不能自批，另一位当前项目管理员批准时重新执行全部技术检查，并原子记录唯一决定、审计和 `FROZEN` 状态。证据变化不产生部分审批，冻结后成员、revision、split 和规则不可修改，只能新建版本；冻结不授权导出 | I |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
 
@@ -157,7 +157,7 @@ Flyway V47、OpenAPI 0.53 和 `workers/export-worker` 增加 v2 执行闭环：�
 固定输入/配置、批准软件摘要、对象元数据、包摘要及准确文件集合后，才把临时对象登记为 `ExportArtifact`。
 可重试失败创建新 attempt；下载必须由管理员显式申请 5 分钟授权且 URL 不落库。Flyway V48 增加失联
 attempt 的 grace 后恢复：锁定当前导出和最新 attempt 后标记 `LOST`，清理 multipart/已完成临时对象，
-未达上限时原子创建新 capability、attempt 与 Outbox，达到上限时终止导出。2026-07-31 已取得本机合成真实服务执行证据，详见数据集导出跨进程验收运行手册；正式 UAT 仍待完成；
+未达上限时原子创建新 capability、attempt 与 Outbox，达到上限时终止导出。2026-07-31 已取得正常导出和一次可重试构建失败恢复的本机合成真实服务证据，详见数据集导出跨进程验收运行手册；失联租约、DLQ 和正式 UAT 仍待完成；
 v1 因无真实 Object/COCO 与 clean video 生产者而返回稳定 Profile 阻断，不能声称 V1.10 历史执行兼容已完成。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。
@@ -188,7 +188,7 @@ FR-034 当前 `PI` 证据和边界：
 | NFR-PERF-002 | 常用列表第一页 3 秒内返回 | 查询投影、PostgreSQL | 冻结数据规模、过滤组合和并发后统计服务端 P95；浏览器时间单列 | PENDING |
 | NFR-PERF-003 | 脱敏视频和缩略图可预览（旧基线） | `mediaprivacy`、Web | V1.5 已后置脱敏/Preview Variant；P0 原始 MP4 审核播放按 FR-039 验证 | DEFERRED |
 | NFR-PERF-004 | 外部标注工具完成后五分钟内同步 | `integration`、`annotationreview` | V1.5 已把 CVAT 移出 P0；未来批准外部工具后重新冻结同步 SLO 和故障测试 | DEFERRED |
-| NFR-OPS-001 | 清洗、导出等异步执行并可查进度 | 各作业所属模块 | 单 revision post-clean 继续使用同步事务；数据集导出已覆盖持久状态、租约心跳、失败、有限重试、失联恢复和结果查询，真实跨进程故障演练及未来批量清洗仍待验收 | PI |
+| NFR-OPS-001 | 清洗、导出等异步执行并可查进度 | 各作业所属模块 | 单 revision post-clean 继续使用同步事务；数据集导出已覆盖持久状态、租约心跳、失败、有限重试、失联恢复和结果查询，并已完成一次可重试构建失败的真实跨进程恢复演练；失联租约、DLQ 和未来批量清洗仍待验收 | PI |
 | NFR-OPS-002 | 所有后台任务可重跑、可取消 | 作业协议 | 请求取消、运行中协作取消、完成后取消和重复取消 | D1 |
 | NFR-SEC-001 | 原始视频仅限授权项目内部使用 | `iamproject`、`assetcapture` | Membership 正反向权限矩阵、短期 URL 和跨项目越权测试 | PI |
 | NFR-SEC-002 | 传输和存储加密 | 部署与对象存储 | TLS 配置、密钥引用、静态加密和轮换演练 | PENDING |

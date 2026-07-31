@@ -52,7 +52,10 @@ async function authFetch(input: RequestInfo | URL, init: RequestInit): Promise<R
   try {
     return await fetch(input, init)
   } catch {
-    throw new AuthApiError('认证服务暂不可用，请确认 Core API 已启动后重试。', 'AUTH_SERVICE_UNAVAILABLE')
+    throw new AuthApiError(
+      '认证服务暂不可用，请确认 Core API 已启动后重试。',
+      'AUTH_SERVICE_UNAVAILABLE',
+    )
   }
 }
 

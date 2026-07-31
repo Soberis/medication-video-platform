@@ -1,11 +1,7 @@
 import { Button, Card, Empty, Table, Tag } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 
-import {
-  CatalogApiError,
-  listClipAssetActivity,
-  type ClipAssetActivityItem,
-} from '@/api/catalog'
+import { CatalogApiError, listClipAssetActivity, type ClipAssetActivityItem } from '@/api/catalog'
 import { formatDateTime, shortId } from '@/catalog-presentation'
 
 const actionLabels: Record<string, string> = {
@@ -31,13 +27,7 @@ const reasonLabels: Record<string, string> = {
   POST_CLEANING_REJECT: '后置清洗不通过',
 }
 
-export function AssetActivityCard({
-  projectId,
-  assetId,
-}: {
-  projectId: string
-  assetId: string
-}) {
+export function AssetActivityCard({ projectId, assetId }: { projectId: string; assetId: string }) {
   const [items, setItems] = useState<ClipAssetActivityItem[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -124,14 +114,20 @@ export function AssetActivityCard({
                 title: '操作',
                 dataIndex: 'action',
                 width: 220,
-                render: (value: string) => <span title={value}>{actionLabels[value] ?? value}</span>,
+                render: (value: string) => (
+                  <span title={value}>{actionLabels[value] ?? value}</span>
+                ),
               },
               {
                 title: '操作者',
                 width: 180,
                 render: (_, item) => (
                   <span>
-                    {item.actor_type === 'USER' ? '用户' : item.actor_type === 'SERVICE' ? '服务' : '系统'}
+                    {item.actor_type === 'USER'
+                      ? '用户'
+                      : item.actor_type === 'SERVICE'
+                        ? '服务'
+                        : '系统'}
                     {' · '}
                     {item.actor_id}
                   </span>
@@ -142,7 +138,11 @@ export function AssetActivityCard({
                 dataIndex: 'outcome',
                 width: 100,
                 render: (value: ClipAssetActivityItem['outcome']) => (
-                  <Tag color={value === 'SUCCEEDED' ? 'success' : value === 'DENIED' ? 'warning' : 'error'}>
+                  <Tag
+                    color={
+                      value === 'SUCCEEDED' ? 'success' : value === 'DENIED' ? 'warning' : 'error'
+                    }
+                  >
                     {value === 'SUCCEEDED' ? '成功' : value === 'DENIED' ? '已拒绝' : '失败'}
                   </Tag>
                 ),

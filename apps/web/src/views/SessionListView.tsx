@@ -1,4 +1,16 @@
-import { Button, Card, DatePicker, Empty, Form, Input, message, Modal, Select, Table, Tag } from 'antd'
+import {
+  Button,
+  Card,
+  DatePicker,
+  Empty,
+  Form,
+  Input,
+  message,
+  Modal,
+  Select,
+  Table,
+  Tag,
+} from 'antd'
 import type { Dayjs } from 'dayjs'
 import { type Key, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -125,7 +137,9 @@ function SessionListContent() {
       if (request.signal.aborted || roleRequest.current !== request) return
       setProjectRole(null)
       setRoleLoadState('error')
-      setRoleErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED')
+      setRoleErrorCode(
+        error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED',
+      )
       setSelectedSessionIds([])
     } finally {
       if (roleRequest.current === request) roleRequest.current = null
@@ -345,7 +359,11 @@ function SessionListContent() {
                     清除选择
                   </Button>
                 ) : null}
-                <Button type="primary" disabled={!selectedSessionIds.length} onClick={openDraftModal}>
+                <Button
+                  type="primary"
+                  disabled={!selectedSessionIds.length}
+                  onClick={openDraftModal}
+                >
                   创建数据集草稿
                 </Button>
               </div>
@@ -465,7 +483,8 @@ function SessionListContent() {
         onOk={() => void createDraft()}
       >
         <p className="form-hint">
-          将为已选的 {selectedSessionIds.length} 条配药操作保存候选证据快照。服务端会重新核对准入条件；任一记录不符合时，不会创建草稿。草稿不会拆分、冻结或导出。
+          将为已选的 {selectedSessionIds.length}{' '}
+          条配药操作保存候选证据快照。服务端会重新核对准入条件；任一记录不符合时，不会创建草稿。草稿不会拆分、冻结或导出。
         </p>
         <Form layout="vertical">
           <Form.Item label="草稿名称" htmlFor="dataset-draft-display-name">

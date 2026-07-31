@@ -34,7 +34,10 @@ export async function listPlatformAccounts(signal?: AbortSignal): Promise<Platfo
   return ((await response.json()) as { items: PlatformAccount[] }).items
 }
 
-export async function createPlatformAccount(username: string, password: string): Promise<PlatformAccount> {
+export async function createPlatformAccount(
+  username: string,
+  password: string,
+): Promise<PlatformAccount> {
   return writeAccount('/api/v1/admin/accounts', 'POST', { username, password })
 }
 
@@ -42,10 +45,16 @@ export async function changePlatformAccountEnabled(
   username: string,
   enabled: boolean,
 ): Promise<PlatformAccount> {
-  return writeAccount(`/api/v1/admin/accounts/${encodeURIComponent(username)}/enabled`, 'PATCH', { enabled })
+  return writeAccount(`/api/v1/admin/accounts/${encodeURIComponent(username)}/enabled`, 'PATCH', {
+    enabled,
+  })
 }
 
-async function writeAccount(path: string, method: 'POST' | 'PATCH', body: object): Promise<PlatformAccount> {
+async function writeAccount(
+  path: string,
+  method: 'POST' | 'PATCH',
+  body: object,
+): Promise<PlatformAccount> {
   const response = await fetch(path, {
     method,
     headers: {
@@ -77,5 +86,9 @@ async function toAdminApiError(response: Response): Promise<AdminApiError> {
         : errorCode === 'PLATFORM_ACCOUNT_ROLE_IMMUTABLE'
           ? '初始管理员不能在此页面停用。'
           : '账号操作未完成，请稍后重试。'
-  return new AdminApiError(message, errorCode, typeof body.request_id === 'string' ? body.request_id : null)
+  return new AdminApiError(
+    message,
+    errorCode,
+    typeof body.request_id === 'string' ? body.request_id : null,
+  )
 }

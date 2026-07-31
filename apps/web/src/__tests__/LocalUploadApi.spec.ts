@@ -54,11 +54,17 @@ describe('platform-local upload API', () => {
       .mockResolvedValueOnce(jsonResponse({ batch_id: batchId }))
       .mockResolvedValueOnce(jsonResponse({}))
       .mockResolvedValueOnce(jsonResponse({ total_parts: 1 }))
-      .mockResolvedValueOnce(jsonResponse({ upload_url: 'http://127.0.0.1:9000/signed-upload-url' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ upload_url: 'http://127.0.0.1:9000/signed-upload-url' }),
+      )
       .mockResolvedValueOnce(jsonResponse({}))
       .mockResolvedValueOnce(jsonResponse({}))
-      .mockResolvedValueOnce(jsonResponse({ clip_assets: [{ clip_asset_id: '80000000-0000-4000-8000-000000000001' }] }))
-      .mockResolvedValueOnce(jsonResponse({ capture_session_id: '90000000-0000-4000-8000-000000000001' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ clip_assets: [{ clip_asset_id: '80000000-0000-4000-8000-000000000001' }] }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ capture_session_id: '90000000-0000-4000-8000-000000000001' }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('XMLHttpRequest', FakeXmlHttpRequest)
     const identifiers = [
@@ -67,7 +73,9 @@ describe('platform-local upload API', () => {
       '70000000-0000-4000-8000-000000000001',
     ]
     vi.stubGlobal('crypto', {
-      randomUUID: vi.fn().mockImplementation(() => identifiers.shift() ?? 'a0000000-0000-4000-8000-000000000001'),
+      randomUUID: vi
+        .fn()
+        .mockImplementation(() => identifiers.shift() ?? 'a0000000-0000-4000-8000-000000000001'),
     })
     vi.mocked(hashFileInWorker).mockImplementation(async (_file, _partSize, onProgress) => {
       onProgress(12, 12)
@@ -76,7 +84,10 @@ describe('platform-local upload API', () => {
     const progress = vi.fn()
     const file = new File(['synthetic-v'], 'synthetic.mp4', { type: 'video/mp4' })
 
-    const result = await uploadPlatformLocalVideo({ projectId, assetFolderId: null, file }, progress)
+    const result = await uploadPlatformLocalVideo(
+      { projectId, assetFolderId: null, file },
+      progress,
+    )
 
     expect(result).toEqual({
       batchId,
@@ -84,7 +95,11 @@ describe('platform-local upload API', () => {
       clipAssetId: '80000000-0000-4000-8000-000000000001',
     })
     expect(fetchMock).toHaveBeenCalledTimes(8)
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/upload/init', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/upload/init',
+      expect.objectContaining({ method: 'POST' }),
+    )
     expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string)).toMatchObject({
       project_id: projectId,
       device_id: 'PLATFORM_LOCAL',
@@ -101,8 +116,13 @@ describe('platform-local upload API', () => {
       expect.objectContaining({ method: 'PUT' }),
     )
     expect(FakeXmlHttpRequest.instances).toHaveLength(1)
-    expect(FakeXmlHttpRequest.instances[0]).toMatchObject({ method: 'PUT', url: 'http://127.0.0.1:9000/signed-upload-url' })
-    expect(progress).toHaveBeenLastCalledWith(expect.objectContaining({ phase: 'COMPLETED', batchId }))
+    expect(FakeXmlHttpRequest.instances[0]).toMatchObject({
+      method: 'PUT',
+      url: 'http://127.0.0.1:9000/signed-upload-url',
+    })
+    expect(progress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'COMPLETED', batchId }),
+    )
   })
 
   it('uses the documented one-file manifest canonical form', () => {

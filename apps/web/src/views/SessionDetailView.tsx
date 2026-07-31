@@ -176,7 +176,9 @@ function SessionDetailContent() {
       if (request.signal.aborted || roleRequest.current !== request) return
       setProjectRole(null)
       setRoleLoadState('error')
-      setRoleErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED')
+      setRoleErrorCode(
+        error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED',
+      )
     } finally {
       if (roleRequest.current === request) roleRequest.current = null
     }
@@ -359,7 +361,11 @@ function SessionDetailContent() {
                         </span>
                       </div>
                       {projectRole === 'ADMIN' ? (
-                        <Button type="primary" loading={creatingDatasetDraft} onClick={confirmCreateDraft}>
+                        <Button
+                          type="primary"
+                          loading={creatingDatasetDraft}
+                          onClick={confirmCreateDraft}
+                        >
                           创建数据集草稿
                         </Button>
                       ) : null}

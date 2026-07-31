@@ -120,7 +120,11 @@ function CaptureEventLogListContent() {
         </Button>
       </section>
       <Card className="filter-card" variant="outlined">
-        <Form className="catalog-filters event-log-filters" layout="vertical" onFinish={applyFilters}>
+        <Form
+          className="catalog-filters event-log-filters"
+          layout="vertical"
+          onFinish={applyFilters}
+        >
           <Form.Item label="批次 ID" htmlFor="capture-event-log-batch-id">
             <Input
               id="capture-event-log-batch-id"
@@ -140,7 +144,10 @@ function CaptureEventLogListContent() {
           </Form.Item>
           <Form.Item label="平台索引时间" htmlFor="capture-event-log-indexed-from">
             <DatePicker.RangePicker
-              id={{ start: 'capture-event-log-indexed-from', end: 'capture-event-log-indexed-before' }}
+              id={{
+                start: 'capture-event-log-indexed-from',
+                end: 'capture-event-log-indexed-before',
+              }}
               showTime
               value={indexedRange}
               onChange={(value) => setIndexedRange(value as [Dayjs, Dayjs] | null)}
@@ -219,7 +226,11 @@ function CaptureEventLogListContent() {
                   </span>
                 ),
               },
-              { title: '平台索引时间', width: 190, render: (_, row) => formatDateTime(row.indexed_at) },
+              {
+                title: '平台索引时间',
+                width: 190,
+                render: (_, row) => formatDateTime(row.indexed_at),
+              },
             ]}
           />
           <div className="table-footer">

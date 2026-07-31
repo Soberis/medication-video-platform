@@ -3,10 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DatasetExport, DatasetVersionDetail } from '@/api/catalog'
-import {
-  clearDatasetDraftIntent,
-  getDatasetDraftIntent,
-} from '@/app/dataset-draft-intent'
+import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
 import AssetListView from '@/views/AssetListView'
@@ -66,7 +63,8 @@ describe('catalog views', () => {
     let createBody: unknown
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
-      if (url === `/api/v1/projects/${projectId}`) return Promise.resolve(jsonResponse(project('ADMIN')))
+      if (url === `/api/v1/projects/${projectId}`)
+        return Promise.resolve(jsonResponse(project('ADMIN')))
       if (url === `/api/v1/projects/${projectId}/dataset-versions` && init?.method === 'POST') {
         createBody = JSON.parse(String(init.body))
         return Promise.resolve(
@@ -250,55 +248,46 @@ describe('catalog views', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(`/projects/${otherProjectId}/sessions`),
     )
-    const pendingIntent = getDatasetDraftIntent(
-      projectId,
-      '配药操作训练候选',
-      [sessionId],
-    )
+    const pendingIntent = getDatasetDraftIntent(projectId, '配药操作训练候选', [sessionId])
     expect(pendingIntent.idempotencyKey).toBe(draftIdempotencyKey)
     clearDatasetDraftIntent(pendingIntent)
   })
 
   it('shows a concise, evidence-based dataset readiness preview on the session detail page', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockImplementation((input: RequestInfo | URL) =>
-        Promise.resolve(
-          String(input).endsWith('/dataset-admission-preview')
-            ? jsonResponse({
-                capture_session_id: sessionId,
-                eligible: false,
-                assembly_status: 'COMPLETE',
-                quality_status: 'PENDING',
-                expected_camera_count: 1,
-                received_camera_count: 1,
-                blocking_reasons: ['SESSION_QUALITY_NOT_PASS'],
-                streams: [
-                  {
-                    camera_stream_id: '41000000-0000-4000-8000-000000000001',
-                    clip_asset_id: assetId,
-                    camera_index: 0,
-                    eligible: false,
-                    stream_status: 'INGESTED',
-                    stream_quality_status: 'PENDING',
-                    asset_status: 'INGESTED',
-                    asset_deleted: false,
-                    quality_review_decision: 'UNREVIEWED',
-                    annotation_revision_id: null,
-                    annotation_review_decision: 'UNREVIEWED',
-                    post_cleaning_decision: 'MISSING',
-                    annotation_document_sha256: null,
-                    label_schema_digest: null,
-                    blocking_reasons: [
-                      'QUALITY_REVIEW_NOT_QUALIFIED',
-                      'ANNOTATION_REVISION_MISSING',
-                    ],
-                  },
-                ],
-              })
-            : jsonResponse(captureSessionDetail()),
-        ),
-      )
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(
+        String(input).endsWith('/dataset-admission-preview')
+          ? jsonResponse({
+              capture_session_id: sessionId,
+              eligible: false,
+              assembly_status: 'COMPLETE',
+              quality_status: 'PENDING',
+              expected_camera_count: 1,
+              received_camera_count: 1,
+              blocking_reasons: ['SESSION_QUALITY_NOT_PASS'],
+              streams: [
+                {
+                  camera_stream_id: '41000000-0000-4000-8000-000000000001',
+                  clip_asset_id: assetId,
+                  camera_index: 0,
+                  eligible: false,
+                  stream_status: 'INGESTED',
+                  stream_quality_status: 'PENDING',
+                  asset_status: 'INGESTED',
+                  asset_deleted: false,
+                  quality_review_decision: 'UNREVIEWED',
+                  annotation_revision_id: null,
+                  annotation_review_decision: 'UNREVIEWED',
+                  post_cleaning_decision: 'MISSING',
+                  annotation_document_sha256: null,
+                  label_schema_digest: null,
+                  blocking_reasons: ['QUALITY_REVIEW_NOT_QUALIFIED', 'ANNOTATION_REVISION_MISSING'],
+                },
+              ],
+            })
+          : jsonResponse(captureSessionDetail()),
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
     renderSessionDetail()
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作详情')
@@ -324,7 +313,8 @@ describe('catalog views', () => {
       'fetch',
       vi.fn().mockImplementation((input: RequestInfo | URL) => {
         const url = String(input)
-        if (url === `/api/v1/projects/${projectId}`) return Promise.resolve(jsonResponse(project('MEMBER')))
+        if (url === `/api/v1/projects/${projectId}`)
+          return Promise.resolve(jsonResponse(project('MEMBER')))
         if (url.endsWith('/dataset-admission-preview')) {
           return Promise.resolve(
             jsonResponse({
@@ -573,7 +563,9 @@ describe('catalog views', () => {
     const confirmDialog = await screen.findByRole('dialog')
     await user.click(within(confirmDialog).getByRole('button', { name: '固定划分' }))
 
-    expect(await screen.findByText('DATASET_SPLIT_PLAN_TEMPORARILY_UNAVAILABLE')).toBeInTheDocument()
+    expect(
+      await screen.findByText('DATASET_SPLIT_PLAN_TEMPORARILY_UNAVAILABLE'),
+    ).toBeInTheDocument()
     expect(screen.getByText('请求标识：request-dataset-split-0001')).toBeInTheDocument()
 
     fireEvent.click(within(confirmDialog).getByRole('button', { name: /固定划分/ }))
@@ -671,7 +663,9 @@ describe('catalog views', () => {
           }),
         )
       }
-      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+      return Promise.resolve(
+        jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')),
+      )
     })
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
@@ -734,7 +728,9 @@ describe('catalog views', () => {
               }),
         )
       }
-      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+      return Promise.resolve(
+        jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')),
+      )
     })
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
@@ -744,7 +740,9 @@ describe('catalog views', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作训练候选')
     await user.click(screen.getByRole('button', { name: '检查构建准备' }))
 
-    expect(await screen.findByText('DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE')).toBeInTheDocument()
+    expect(
+      await screen.findByText('DATASET_VERSION_CURRENT_ADMISSION_UNAVAILABLE'),
+    ).toBeInTheDocument()
     expect(screen.getByText('请求标识：request-current-admission-0001')).toBeInTheDocument()
     expect(screen.getByText('候选配药操作')).toBeInTheDocument()
 
@@ -968,8 +966,8 @@ describe('catalog views', () => {
     )
 
     await user.click(screen.getByRole('button', { name: '生成构建快照' }))
-    const snapshotDialog = (await screen.findAllByRole('dialog')).find((dialog) =>
-      within(dialog).queryAllByText('生成当前构建快照？').length > 0,
+    const snapshotDialog = (await screen.findAllByRole('dialog')).find(
+      (dialog) => within(dialog).queryAllByText('生成当前构建快照？').length > 0,
     )
     expect(snapshotDialog).toBeDefined()
     if (!snapshotDialog) throw new Error('Snapshot confirmation dialog was not rendered.')
@@ -991,8 +989,8 @@ describe('catalog views', () => {
     )
 
     await user.click(screen.getByRole('button', { name: '执行冻结前校验' }))
-    const validationDialog = (await screen.findAllByRole('dialog')).find((dialog) =>
-      within(dialog).queryAllByText('执行冻结前校验？').length > 0,
+    const validationDialog = (await screen.findAllByRole('dialog')).find(
+      (dialog) => within(dialog).queryAllByText('执行冻结前校验？').length > 0,
     )
     expect(validationDialog).toBeDefined()
     if (!validationDialog) throw new Error('Validation confirmation dialog was not rendered.')
@@ -1282,7 +1280,9 @@ describe('catalog views', () => {
       return Promise.resolve(jsonResponse(detail))
     })
     vi.stubGlobal('fetch', fetchMock)
-    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
     const user = userEvent.setup()
 
     renderDatasetDetail(datasetVersionId)
@@ -1376,7 +1376,8 @@ describe('catalog views', () => {
       }),
     )
     const exportCall = fetchMock.mock.calls.find(
-      ([input, init]) => String(input) === exportPath && (init as RequestInit | undefined)?.method === 'POST',
+      ([input, init]) =>
+        String(input) === exportPath && (init as RequestInit | undefined)?.method === 'POST',
     )
     expect(JSON.parse(String((exportCall?.[1] as RequestInit | undefined)?.body))).toMatchObject({
       purpose: 'MODEL_TRAINING',
@@ -1397,7 +1398,9 @@ describe('catalog views', () => {
       const datasetVersionId = String(input).endsWith(`/${secondDatasetVersionId}`)
         ? secondDatasetVersionId
         : firstDatasetVersionId
-      return Promise.resolve(jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')))
+      return Promise.resolve(
+        jsonResponse(datasetVersionDetail(datasetVersionId, '配药操作训练候选')),
+      )
     })
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
@@ -1450,7 +1453,9 @@ describe('catalog views', () => {
     let resolveSecondRequest: ((response: Response) => void) | undefined
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       if (String(input).endsWith(`/dataset-versions/${firstDatasetVersionId}`)) {
-        return Promise.resolve(jsonResponse(datasetVersionDetail(firstDatasetVersionId, '项目 A 草稿')))
+        return Promise.resolve(
+          jsonResponse(datasetVersionDetail(firstDatasetVersionId, '项目 A 草稿')),
+        )
       }
       return new Promise<Response>((resolve) => {
         resolveSecondRequest = resolve
@@ -1471,29 +1476,29 @@ describe('catalog views', () => {
     expect(screen.queryByRole('heading', { name: '项目 A 草稿' })).not.toBeInTheDocument()
     expect(screen.getByText('正在读取不可变候选快照…')).toBeInTheDocument()
 
-    resolveSecondRequest?.(jsonResponse(datasetVersionDetail(secondDatasetVersionId, '项目 B 草稿')))
+    resolveSecondRequest?.(
+      jsonResponse(datasetVersionDetail(secondDatasetVersionId, '项目 B 草稿')),
+    )
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('项目 B 草稿')
   })
 
   it('keeps the session facts available when the readiness preview temporarily fails', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockImplementation((input: RequestInfo | URL) =>
-          Promise.resolve(
-            String(input).endsWith('/dataset-admission-preview')
-              ? jsonResponse(
-                  {
-                    error_code: 'DATASET_ADMISSION_PREVIEW_UNAVAILABLE',
-                    error_message: 'Synthetic failure.',
-                    retryable: true,
-                  },
-                  503,
-                )
-              : jsonResponse(captureSessionDetail()),
-          ),
+      vi.fn().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).endsWith('/dataset-admission-preview')
+            ? jsonResponse(
+                {
+                  error_code: 'DATASET_ADMISSION_PREVIEW_UNAVAILABLE',
+                  error_message: 'Synthetic failure.',
+                  retryable: true,
+                },
+                503,
+              )
+            : jsonResponse(captureSessionDetail()),
         ),
+      ),
     )
     renderSessionDetail()
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('配药操作详情')
@@ -1604,7 +1609,9 @@ describe('catalog views', () => {
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
     const button = await screen.findByRole('button', { name: '查看记录' })
     expect(
-      fetchMock.mock.calls.some(([input]) => String(input).includes(`/clip-assets/${assetId}/activity`)),
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes(`/clip-assets/${assetId}/activity`),
+      ),
     ).toBe(false)
 
     await user.click(button)
@@ -1684,29 +1691,27 @@ describe('catalog views', () => {
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
     const folderId = 'a0000000-0000-4000-8000-000000000001'
-    const fetchMock = vi
-      .fn()
-      .mockImplementation((input: RequestInfo | URL) =>
-        Promise.resolve(
-          String(input).includes('/asset-folders')
-            ? jsonResponse({
-                items: [
-                  {
-                    folder_id: folderId,
-                    project_id: projectId,
-                    display_name: '待标注',
-                    version: 0,
-                    created_at: '2026-07-15T01:03:03Z',
-                    updated_at: '2026-07-15T01:03:03Z',
-                  },
-                ],
-              })
-            : jsonResponse({
-                items: [{ ...assetDetail('UPLOADED'), folder_id: folderId }],
-                next_cursor: null,
-              }),
-        ),
-      )
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(
+        String(input).includes('/asset-folders')
+          ? jsonResponse({
+              items: [
+                {
+                  folder_id: folderId,
+                  project_id: projectId,
+                  display_name: '待标注',
+                  version: 0,
+                  created_at: '2026-07-15T01:03:03Z',
+                  updated_at: '2026-07-15T01:03:03Z',
+                },
+              ],
+            })
+          : jsonResponse({
+              items: [{ ...assetDetail('UPLOADED'), folder_id: folderId }],
+              next_cursor: null,
+            }),
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
     renderAssetList()
     expect(await screen.findByText('待标注')).toBeInTheDocument()

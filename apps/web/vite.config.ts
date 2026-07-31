@@ -15,7 +15,11 @@ export default defineConfig(({ mode }) => {
     process.env[name]?.trim() || localEnvironment[name]?.trim() || exampleEnvironment[name]?.trim()
 
   const configuredWebPort = Number(environmentValue('WEB_PORT') || '5173')
-  if (!Number.isInteger(configuredWebPort) || configuredWebPort < 1024 || configuredWebPort > 65535) {
+  if (
+    !Number.isInteger(configuredWebPort) ||
+    configuredWebPort < 1024 ||
+    configuredWebPort > 65535
+  ) {
     throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
   }
 

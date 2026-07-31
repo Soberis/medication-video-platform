@@ -74,7 +74,12 @@ export class UploadApiError extends Error {
   readonly retryable: boolean
   readonly requestId: string | null
 
-  constructor(message: string, errorCode = 'UPLOAD_PROGRESS_REQUEST_FAILED', retryable = false, requestId: string | null = null) {
+  constructor(
+    message: string,
+    errorCode = 'UPLOAD_PROGRESS_REQUEST_FAILED',
+    retryable = false,
+    requestId: string | null = null,
+  ) {
     super(message)
     this.name = 'UploadApiError'
     this.errorCode = errorCode

@@ -65,14 +65,18 @@ describe('annotation task API', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ items: [], progress: emptyProgress }))
-      .mockResolvedValueOnce(jsonResponse({ error_code: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED' }, { status: 409 }))
+      .mockResolvedValueOnce(
+        jsonResponse({ error_code: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED' }, { status: 409 }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(listAnnotationTasks(projectId)).resolves.toEqual({
       items: [],
       progress: emptyProgress,
     })
-    await expect(createAnnotationTask(projectId, assetId, 'local-synthetic-uploader')).rejects.toMatchObject({
+    await expect(
+      createAnnotationTask(projectId, assetId, 'local-synthetic-uploader'),
+    ).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
       message: '只有已判定合格的视频才能创建标注任务。',
     })
@@ -205,7 +209,9 @@ describe('annotation task API', () => {
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('annotation-revision-idempotency-0001') })
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('annotation-revision-idempotency-0001'),
+    })
 
     await expect(
       submitAnnotationRevision(
@@ -224,7 +230,9 @@ describe('annotation task API', () => {
           segments: [{ start_ms: 100, end_ms: 900, label: 'retrieve_medicine' }],
           note: '合成验证',
         }),
-        headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-revision-idempotency-0001' }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'annotation-revision-idempotency-0001',
+        }),
       }),
     )
   })
@@ -243,9 +251,13 @@ describe('annotation task API', () => {
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('annotation-review-idempotency-0001') })
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('annotation-review-idempotency-0001'),
+    })
 
-    await expect(reviewAnnotationRevision(projectId, revisionId, 'APPROVED')).resolves.toMatchObject({
+    await expect(
+      reviewAnnotationRevision(projectId, revisionId, 'APPROVED'),
+    ).resolves.toMatchObject({
       annotation_revision_id: revisionId,
       decision: 'APPROVED',
     })
@@ -255,7 +267,9 @@ describe('annotation task API', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ decision: 'APPROVED' }),
-        headers: expect.objectContaining({ 'Idempotency-Key': 'annotation-review-idempotency-0001' }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'annotation-review-idempotency-0001',
+        }),
       }),
     )
   })
@@ -277,7 +291,9 @@ describe('annotation task API', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(recheckAnnotationPostCleaning(projectId, revisionId)).resolves.toMatchObject({ outcome: 'PASS' })
+    await expect(recheckAnnotationPostCleaning(projectId, revisionId)).resolves.toMatchObject({
+      outcome: 'PASS',
+    })
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/post-cleaning-rechecks`,
       expect.objectContaining({ method: 'POST', cache: 'no-store' }),

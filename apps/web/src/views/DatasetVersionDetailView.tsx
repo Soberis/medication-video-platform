@@ -1,4 +1,14 @@
-import { App as AntdApp, Button, Card, DatePicker, Descriptions, Empty, InputNumber, Table, Tag } from 'antd'
+import {
+  App as AntdApp,
+  Button,
+  Card,
+  DatePicker,
+  Descriptions,
+  Empty,
+  InputNumber,
+  Table,
+  Tag,
+} from 'antd'
 import type { Dayjs } from 'dayjs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -146,10 +156,12 @@ function DatasetVersionDetailContent() {
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [requestId, setRequestId] = useState<string | null>(null)
-  const [currentAdmission, setCurrentAdmission] = useState<DatasetVersionCurrentAdmission | null>(null)
-  const [currentAdmissionState, setCurrentAdmissionState] = useState<'idle' | 'loading' | 'success' | 'error'>(
-    'idle',
+  const [currentAdmission, setCurrentAdmission] = useState<DatasetVersionCurrentAdmission | null>(
+    null,
   )
+  const [currentAdmissionState, setCurrentAdmissionState] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle')
   const [currentAdmissionErrorCode, setCurrentAdmissionErrorCode] = useState('')
   const [currentAdmissionErrorMessage, setCurrentAdmissionErrorMessage] = useState('')
   const [currentAdmissionRequestId, setCurrentAdmissionRequestId] = useState<string | null>(null)
@@ -158,15 +170,21 @@ function DatasetVersionDetailContent() {
   const [splitPlanErrorCode, setSplitPlanErrorCode] = useState('')
   const [splitPlanErrorMessage, setSplitPlanErrorMessage] = useState('')
   const [splitPlanRequestId, setSplitPlanRequestId] = useState<string | null>(null)
-  const [buildSpecificationState, setBuildSpecificationState] = useState<'idle' | 'creating' | 'error'>('idle')
+  const [buildSpecificationState, setBuildSpecificationState] = useState<
+    'idle' | 'creating' | 'error'
+  >('idle')
   const [buildSpecificationErrorCode, setBuildSpecificationErrorCode] = useState('')
   const [buildSpecificationErrorMessage, setBuildSpecificationErrorMessage] = useState('')
-  const [buildSpecificationRequestId, setBuildSpecificationRequestId] = useState<string | null>(null)
+  const [buildSpecificationRequestId, setBuildSpecificationRequestId] = useState<string | null>(
+    null,
+  )
   const [buildStartState, setBuildStartState] = useState<'idle' | 'starting' | 'error'>('idle')
   const [buildStartErrorCode, setBuildStartErrorCode] = useState('')
   const [buildStartErrorMessage, setBuildStartErrorMessage] = useState('')
   const [buildStartRequestId, setBuildStartRequestId] = useState<string | null>(null)
-  const [buildSnapshotState, setBuildSnapshotState] = useState<'idle' | 'creating' | 'error'>('idle')
+  const [buildSnapshotState, setBuildSnapshotState] = useState<'idle' | 'creating' | 'error'>(
+    'idle',
+  )
   const [buildSnapshotErrorCode, setBuildSnapshotErrorCode] = useState('')
   const [buildSnapshotErrorMessage, setBuildSnapshotErrorMessage] = useState('')
   const [buildSnapshotRequestId, setBuildSnapshotRequestId] = useState<string | null>(null)
@@ -179,7 +197,9 @@ function DatasetVersionDetailContent() {
   const [freezeErrorMessage, setFreezeErrorMessage] = useState('')
   const [freezeRequestId, setFreezeRequestId] = useState<string | null>(null)
   const [exportExpiresAt, setExportExpiresAt] = useState<Dayjs | null>(null)
-  const [exportRequestState, setExportRequestState] = useState<'idle' | 'requesting' | 'error'>('idle')
+  const [exportRequestState, setExportRequestState] = useState<'idle' | 'requesting' | 'error'>(
+    'idle',
+  )
   const [exportErrorCode, setExportErrorCode] = useState('')
   const [exportErrorMessage, setExportErrorMessage] = useState('')
   const [exportRequestId, setExportRequestId] = useState<string | null>(null)
@@ -242,7 +262,11 @@ function DatasetVersionDetailContent() {
     setBuildStartErrorMessage('')
     setBuildStartRequestId(null)
     try {
-      const response = await getDatasetVersionCurrentAdmission(projectId, datasetVersionId, request.signal)
+      const response = await getDatasetVersionCurrentAdmission(
+        projectId,
+        datasetVersionId,
+        request.signal,
+      )
       if (currentAdmissionRequest.current !== request) return
       setCurrentAdmission(response)
       setCurrentAdmissionState('success')
@@ -352,7 +376,8 @@ function DatasetVersionDetailContent() {
   const confirmBuildSpecification = useCallback(() => {
     modal.confirm({
       title: '固定当前构建配置？',
-      content: '将当前候选快照、统一标签规范、清洗规则、数据划分和 P0 必需导出绑定到该草稿。固定后如需调整，应新建草稿。',
+      content:
+        '将当前候选快照、统一标签规范、清洗规则、数据划分和 P0 必需导出绑定到该草稿。固定后如需调整，应新建草稿。',
       okText: '固定构建配置',
       cancelText: '取消',
       onOk: fixBuildSpecification,
@@ -390,7 +415,8 @@ function DatasetVersionDetailContent() {
   const confirmBuildStart = useCallback(() => {
     modal.confirm({
       title: '开始构建当前数据集？',
-      content: '系统会再次核对当前准入和固定证据。通过后版本进入构建阶段，既有划分和配置不能修改；此操作不会冻结或导出数据。',
+      content:
+        '系统会再次核对当前准入和固定证据。通过后版本进入构建阶段，既有划分和配置不能修改；此操作不会冻结或导出数据。',
       okText: '开始构建',
       cancelText: '取消',
       onOk: startBuild,
@@ -428,7 +454,8 @@ function DatasetVersionDetailContent() {
   const confirmBuildSnapshot = useCallback(() => {
     modal.confirm({
       title: '生成当前构建快照？',
-      content: '系统会封存已固定的配药操作、视频、标注、清洗和划分摘要。完成后版本进入校验阶段；此操作不会冻结或导出数据。',
+      content:
+        '系统会封存已固定的配药操作、视频、标注、清洗和划分摘要。完成后版本进入校验阶段；此操作不会冻结或导出数据。',
       okText: '生成构建快照',
       cancelText: '取消',
       onOk: sealBuildSnapshot,
@@ -635,7 +662,15 @@ function DatasetVersionDetailContent() {
               </p>
             </div>
             <div className="heading-tags">
-              <Tag color={detail.status === 'FROZEN' ? 'success' : detail.status === 'DRAFT' ? 'blue' : 'processing'}>
+              <Tag
+                color={
+                  detail.status === 'FROZEN'
+                    ? 'success'
+                    : detail.status === 'DRAFT'
+                      ? 'blue'
+                      : 'processing'
+                }
+              >
                 {datasetVersionStatusLabels[detail.status]}
               </Tag>
             </div>
@@ -716,10 +751,10 @@ function DatasetVersionDetailContent() {
               detail.status === 'FROZEN' ? null : (
                 <Button
                   disabled={
-                    buildStartState === 'starting'
-                    || buildSnapshotState === 'creating'
-                    || validationState === 'validating'
-                    || freezeState === 'freezing'
+                    buildStartState === 'starting' ||
+                    buildSnapshotState === 'creating' ||
+                    validationState === 'validating' ||
+                    freezeState === 'freezing'
                   }
                   loading={currentAdmissionState === 'loading'}
                   onClick={() => void checkCurrentAdmission()}
@@ -812,7 +847,9 @@ function DatasetVersionDetailContent() {
               <div className="catalog-error" role="alert">
                 <strong>{buildSpecificationErrorCode}</strong>
                 <span>{buildSpecificationErrorMessage}</span>
-                {buildSpecificationRequestId ? <small>请求标识：{buildSpecificationRequestId}</small> : null}
+                {buildSpecificationRequestId ? (
+                  <small>请求标识：{buildSpecificationRequestId}</small>
+                ) : null}
               </div>
             ) : null}
             {buildSnapshotState === 'error' ? (
@@ -848,11 +885,15 @@ function DatasetVersionDetailContent() {
               <div className="catalog-error" role="alert">
                 <strong>{currentAdmissionErrorCode}</strong>
                 <span>{currentAdmissionErrorMessage}</span>
-                {currentAdmissionRequestId ? <small>请求标识：{currentAdmissionRequestId}</small> : null}
+                {currentAdmissionRequestId ? (
+                  <small>请求标识：{currentAdmissionRequestId}</small>
+                ) : null}
                 <Button onClick={() => void checkCurrentAdmission()}>重试</Button>
               </div>
             ) : null}
-            {detail.status !== 'FROZEN' && currentAdmissionState === 'success' && currentAdmission ? (
+            {detail.status !== 'FROZEN' &&
+            currentAdmissionState === 'success' &&
+            currentAdmission ? (
               <CurrentAdmissionEvidence
                 projectId={projectId}
                 admission={currentAdmission}
@@ -878,7 +919,9 @@ function DatasetVersionDetailContent() {
                 <ExportRequestEvidence
                   exportRequest={detail.export_request}
                   onChange={(exportRequest) =>
-                    setDetail((current) => (current ? { ...current, export_request: exportRequest } : current))
+                    setDetail((current) =>
+                      current ? { ...current, export_request: exportRequest } : current,
+                    )
                   }
                   onRefresh={loadDetail}
                 />
@@ -939,7 +982,9 @@ function DatasetVersionDetailContent() {
               scroll={{ x: 940 }}
               expandable={{
                 rowExpandable: (member) => member.streams.length > 0,
-                expandedRowRender: (member) => <StreamEvidence projectId={projectId} streams={member.streams} />,
+                expandedRowRender: (member) => (
+                  <StreamEvidence projectId={projectId} streams={member.streams} />
+                ),
               }}
               columns={[
                 {
@@ -951,7 +996,10 @@ function DatasetVersionDetailContent() {
                   title: '配药操作',
                   width: 220,
                   render: (_, row) => (
-                    <Link className="text-link table-action-link" to={paths.session(projectId, row.capture_session_id)}>
+                    <Link
+                      className="text-link table-action-link"
+                      to={paths.session(projectId, row.capture_session_id)}
+                    >
                       {shortId(row.capture_session_id)}
                     </Link>
                   ),
@@ -959,7 +1007,8 @@ function DatasetVersionDetailContent() {
                 {
                   title: '视频完整性',
                   width: 150,
-                  render: (_, row) => `${row.received_camera_count} / ${row.expected_camera_count} 路`,
+                  render: (_, row) =>
+                    `${row.received_camera_count} / ${row.expected_camera_count} 路`,
                 },
                 {
                   title: '组装状态',
@@ -1003,7 +1052,9 @@ function ExportRequestEvidence({
   onRefresh: () => Promise<void>
 }) {
   const { message, modal } = AntdApp.useApp()
-  const [readinessState, setReadinessState] = useState<ExportApprovalReadinessState>({ status: 'idle' })
+  const [readinessState, setReadinessState] = useState<ExportApprovalReadinessState>({
+    status: 'idle',
+  })
   const [operationState, setOperationState] = useState<
     'idle' | 'approving' | 'refreshing' | 'downloading' | 'error'
   >('idle')
@@ -1151,7 +1202,9 @@ function ExportRequestEvidence({
 
   return (
     <>
-      <div className={`readiness-result${exportRequest.status === 'AVAILABLE' ? ' readiness-result-ready' : ''}`}>
+      <div
+        className={`readiness-result${exportRequest.status === 'AVAILABLE' ? ' readiness-result-ready' : ''}`}
+      >
         <div>
           <strong>{status.title}</strong>
           <span>{status.description}</span>
@@ -1169,7 +1222,11 @@ function ExportRequestEvidence({
             </Button>
           ) : null}
           {exportRequest.status === 'AVAILABLE' ? (
-            <Button type="primary" loading={operationState === 'downloading'} onClick={confirmDownload}>
+            <Button
+              type="primary"
+              loading={operationState === 'downloading'}
+              onClick={confirmDownload}
+            >
               下载训练包
             </Button>
           ) : null}
@@ -1203,7 +1260,10 @@ function ExportRequestEvidence({
             <strong>独立审批</strong>
             <span>先核对职责分离、授权有效期和冻结证据；批准时会在同一事务内再次检查。</span>
           </div>
-          <Button loading={readinessState.status === 'loading'} onClick={() => void checkReadiness()}>
+          <Button
+            loading={readinessState.status === 'loading'}
+            onClick={() => void checkReadiness()}
+          >
             检查审批准备
           </Button>
         </div>
@@ -1213,7 +1273,11 @@ function ExportRequestEvidence({
           className={`readiness-result${readinessState.value.ready_for_approval ? ' readiness-result-ready' : ''}`}
         >
           <div>
-            <strong>{readinessState.value.ready_for_approval ? '审批证据当前满足条件' : '审批准备仍有阻断项'}</strong>
+            <strong>
+              {readinessState.value.ready_for_approval
+                ? '审批证据当前满足条件'
+                : '审批准备仍有阻断项'}
+            </strong>
             <span>
               {readinessState.value.ready_for_approval
                 ? '批准时会再次核对这些事实，并原子记录审批、首次任务和后台消息。'
@@ -1232,7 +1296,11 @@ function ExportRequestEvidence({
               {readinessState.value.ready_for_approval ? '可以审批' : '暂不可审批'}
             </Tag>
             {readinessState.value.ready_for_approval ? (
-              <Button type="primary" loading={operationState === 'approving'} onClick={confirmApproval}>
+              <Button
+                type="primary"
+                loading={operationState === 'approving'}
+                onClick={confirmApproval}
+              >
                 批准并开始导出
               </Button>
             ) : null}
@@ -1670,7 +1738,10 @@ function SplitPlanEvidence({
           {
             title: '配药操作',
             render: (_, row) => (
-              <Link className="text-link table-action-link" to={paths.session(projectId, row.capture_session_id)}>
+              <Link
+                className="text-link table-action-link"
+                to={paths.session(projectId, row.capture_session_id)}
+              >
                 {shortId(row.capture_session_id)}
               </Link>
             ),
@@ -1771,7 +1842,10 @@ function CurrentAdmissionEvidence({
             title: '配药操作',
             width: 190,
             render: (_, row) => (
-              <Link className="text-link table-action-link" to={paths.session(projectId, row.capture_session_id)}>
+              <Link
+                className="text-link table-action-link"
+                to={paths.session(projectId, row.capture_session_id)}
+              >
                 {shortId(row.capture_session_id)}
               </Link>
             ),
@@ -1818,7 +1892,11 @@ function AdmissionBlockingReasons({ admission }: { admission: DatasetAdmissionPr
   )
 }
 
-function AdmissionEvidenceChanges({ changes }: { changes: DatasetVersionCurrentAdmissionEvidenceChange[] }) {
+function AdmissionEvidenceChanges({
+  changes,
+}: {
+  changes: DatasetVersionCurrentAdmissionEvidenceChange[]
+}) {
   const changeItems = changes.flatMap((change) =>
     change.change_codes.map((code) => ({
       code,
@@ -1837,7 +1915,10 @@ function AdmissionEvidenceChanges({ changes }: { changes: DatasetVersionCurrentA
               ? `视频流 ${shortId(change.cameraStreamId)}`
               : '视频流'
         return (
-          <Tag key={`${change.scope}:${change.cameraStreamId ?? 'none'}:${change.code}:${index}`} title={change.code}>
+          <Tag
+            key={`${change.scope}:${change.cameraStreamId ?? 'none'}:${change.code}:${index}`}
+            title={change.code}
+          >
             {source} · {evidenceChangeLabels[change.code] ?? change.code}
           </Tag>
         )
@@ -1846,8 +1927,15 @@ function AdmissionEvidenceChanges({ changes }: { changes: DatasetVersionCurrentA
   )
 }
 
-function StreamEvidence({ projectId, streams }: { projectId: string; streams: DatasetVersionMemberStream[] }) {
-  if (streams.length === 0) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该候选操作没有固定视频流。" />
+function StreamEvidence({
+  projectId,
+  streams,
+}: {
+  projectId: string
+  streams: DatasetVersionMemberStream[]
+}) {
+  if (streams.length === 0)
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该候选操作没有固定视频流。" />
   return (
     <div className="dataset-stream-evidence">
       <Table<DatasetVersionMemberStream>
@@ -1862,7 +1950,10 @@ function StreamEvidence({ projectId, streams }: { projectId: string; streams: Da
             title: '视频资产',
             width: 180,
             render: (_, row) => (
-              <Link className="text-link table-action-link" to={paths.asset(projectId, row.clip_asset_id)}>
+              <Link
+                className="text-link table-action-link"
+                to={paths.asset(projectId, row.clip_asset_id)}
+              >
                 {shortId(row.clip_asset_id)}
               </Link>
             ),

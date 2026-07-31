@@ -87,21 +87,19 @@ describe('UploadProgressView', () => {
   it('shows a stable backend error without leaking internal details', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockImplementation(() =>
-          Promise.resolve(
-            jsonResponse(
-              {
-                error_code: 'UPLOAD_BATCH_NOT_FOUND',
-                error_message: 'The upload batch was not found.',
-                retryable: false,
-                request_id: 'synthetic-request-id',
-              },
-              404,
-            ),
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse(
+            {
+              error_code: 'UPLOAD_BATCH_NOT_FOUND',
+              error_message: 'The upload batch was not found.',
+              retryable: false,
+              request_id: 'synthetic-request-id',
+            },
+            404,
           ),
         ),
+      ),
     )
     const user = userEvent.setup()
     render(<UploadProgressView />)

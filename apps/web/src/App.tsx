@@ -1,13 +1,5 @@
 import { App as AntdApp, Button, Tag } from 'antd'
-import {
-  Link,
-  matchPath,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-  useParams,
-} from 'react-router'
+import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'

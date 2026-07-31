@@ -86,11 +86,7 @@ export interface CaptureSessionDetail {
   created_at: string
 }
 
-export type DatasetQualityReviewDecision =
-  | 'UNREVIEWED'
-  | 'QUALIFIED'
-  | 'REJECTED'
-  | 'NEEDS_REVIEW'
+export type DatasetQualityReviewDecision = 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
 export type DatasetAnnotationReviewDecision = 'UNREVIEWED' | 'APPROVED' | 'REJECTED'
 export type DatasetPostCleaningDecision = 'MISSING' | 'PASS' | 'WARNING' | 'REJECT'
 export type DatasetAssetStatus = ClipAssetStatus | 'MISSING'
@@ -582,7 +578,8 @@ const errorMessages: Record<string, string> = {
   DATASET_SPLIT_PLAN_ALREADY_EXISTS: '该草稿已经固定数据划分，请刷新页面查看。',
   DATASET_SPLIT_PLAN_IDEMPOTENCY_KEY_REUSED: '本次划分请求与已提交请求冲突，请刷新后重试。',
   DATASET_BUILD_SPECIFICATION_ALREADY_EXISTS: '该草稿已经固定构建配置，请刷新页面查看。',
-  DATASET_BUILD_SPECIFICATION_IDEMPOTENCY_KEY_REUSED: '本次构建配置请求与已提交请求冲突，请刷新后重试。',
+  DATASET_BUILD_SPECIFICATION_IDEMPOTENCY_KEY_REUSED:
+    '本次构建配置请求与已提交请求冲突，请刷新后重试。',
   DATASET_BUILD_SPLIT_PLAN_REQUIRED: '请先固定试用组和留出组划分。',
   DATASET_BUILD_EVIDENCE_MISSING: '草稿缺少可固定的视频证据，请新建数据集草稿。',
   DATASET_BUILD_LABEL_SCHEMA_NOT_UNIFORM: '候选视频的标签规范不一致，请重新选择候选数据。',
@@ -604,7 +601,8 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_FREEZE_VALIDATION_FAILED: '冻结前技术校验未通过，当前版本不能冻结。',
   DATASET_VERSION_FREEZE_APPROVAL_MISSING: '冻结审批请求缺失，请刷新页面后重试。',
   DATASET_VERSION_FREEZE_APPROVAL_INVALID: '冻结审批请求已失效，请刷新页面查看。',
-  DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN: '申请人与审批人必须不同，请由另一位项目管理员处理。',
+  DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN:
+    '申请人与审批人必须不同，请由另一位项目管理员处理。',
   DATASET_VERSION_FREEZE_EVIDENCE_CHANGED: '校验后数据证据发生变化，请修正后新建数据集版本。',
   DATASET_VERSION_ALREADY_FROZEN: '该数据集版本已经冻结。',
   DATASET_VERSION_FREEZE_IDEMPOTENCY_KEY_REUSED: '本次冻结请求与已提交请求冲突，请刷新后重试。',
@@ -682,23 +680,30 @@ export async function createDatasetVersionDraft(
   idempotencyKey: string,
   signal?: AbortSignal,
 ): Promise<DatasetVersionDraft> {
-  const response = await fetch(`/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'Idempotency-Key': idempotencyKey,
-      ...csrfHeaders(),
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ display_name: displayName, capture_session_ids: captureSessionIds }),
+      cache: 'no-store',
+      signal,
     },
-    body: JSON.stringify({ display_name: displayName, capture_session_ids: captureSessionIds }),
-    cache: 'no-store',
-    signal,
-  })
+  )
   if (response.ok) return (await response.json()) as DatasetVersionDraft
   throw await toCatalogError(response)
 }
 
-export function listDatasetVersions(projectId: string, cursor: string | null, signal?: AbortSignal) {
+export function listDatasetVersions(
+  projectId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+) {
   const query = new URLSearchParams({ limit: '20' })
   add(query, 'cursor', cursor ?? undefined)
   return readJson<CatalogPage<DatasetVersionSummary>>(
@@ -993,10 +998,10 @@ export function listCaptureEventLogs(
 }
 
 export function getClipAsset(projectId: string, clipAssetId: string, signal?: AbortSignal) {
-	return readJson<ClipAssetRead>(
+  return readJson<ClipAssetRead>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
     signal,
-	)
+  )
 }
 
 export function listClipAssetActivity(
@@ -1013,7 +1018,11 @@ export function listClipAssetActivity(
   )
 }
 
-export function getClipAssetMediaReport(projectId: string, clipAssetId: string, signal?: AbortSignal) {
+export function getClipAssetMediaReport(
+  projectId: string,
+  clipAssetId: string,
+  signal?: AbortSignal,
+) {
   return readJson<MediaReport>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-report`,
     signal,

@@ -20,7 +20,13 @@ describe('CaptureEventLogListView', () => {
           url.includes('cursor=opaque-next-cursor')
             ? { items: [secondLog], next_cursor: null }
             : {
-                items: [{ ...firstLog, payload: 'must-not-be-rendered', storage_key: 'must-not-be-rendered' }],
+                items: [
+                  {
+                    ...firstLog,
+                    payload: 'must-not-be-rendered',
+                    storage_key: 'must-not-be-rendered',
+                  },
+                ],
                 next_cursor: 'opaque-next-cursor',
               },
         ),
@@ -50,9 +56,9 @@ describe('CaptureEventLogListView', () => {
 
   it('applies server-supported filters and clears them explicitly', async () => {
     const batchId = '60000000-0000-4000-8000-000000000001'
-    const fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(jsonResponse({ items: [], next_cursor: null })),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(jsonResponse({ items: [], next_cursor: null })))
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
 
@@ -90,7 +96,10 @@ describe('CaptureEventLogListView', () => {
                 },
                 404,
               )
-            : jsonResponse({ items: [captureEventLog('71000000-0000-4000-8000-000000000001')], next_cursor: null }),
+            : jsonResponse({
+                items: [captureEventLog('71000000-0000-4000-8000-000000000001')],
+                next_cursor: null,
+              }),
         ),
       ),
     )
@@ -150,7 +159,9 @@ describe('CaptureEventLogListView', () => {
       }),
     )
 
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/projects/${otherProjectId}/event-logs`))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/projects/${otherProjectId}/event-logs`),
+    )
     expect(screen.queryByText('synthetic-edge-01')).not.toBeInTheDocument()
   })
 })

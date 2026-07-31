@@ -30,14 +30,19 @@ describe('authentication API', () => {
       .mockResolvedValueOnce(sessionResponse())
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await getSession()
     await logout()
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       '/api/v1/auth/logout',
-      expect.objectContaining({ headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'csrf-test-token' }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'csrf-test-token' }),
+      }),
     )
   })
 
@@ -52,8 +57,7 @@ describe('authentication API', () => {
 })
 
 function sessionResponse() {
-  return new Response(
-    JSON.stringify({ username: 'platform-admin', role: 'ADMIN' }),
-    { headers: { 'Content-Type': 'application/json' } },
-  )
+  return new Response(JSON.stringify({ username: 'platform-admin', role: 'ADMIN' }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 }

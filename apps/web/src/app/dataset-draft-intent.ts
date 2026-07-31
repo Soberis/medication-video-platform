@@ -38,7 +38,11 @@ export function clearDatasetDraftIntent(intent: DatasetDraftIntent) {
   }
 }
 
-function intentStorageKey(projectId: string, displayName: string, captureSessionIds: readonly string[]) {
+function intentStorageKey(
+  projectId: string,
+  displayName: string,
+  captureSessionIds: readonly string[],
+) {
   return `${storagePrefix}${stableFingerprint(
     JSON.stringify([projectId, displayName, captureSessionIds]),
   )}`

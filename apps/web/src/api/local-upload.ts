@@ -96,14 +96,18 @@ export async function uploadPlatformLocalVideo(
   const contentType = requireVideoContentType(request.file)
   const totalParts = Math.ceil(request.file.size / LOCAL_UPLOAD_PART_SIZE_BYTES)
   if (totalParts > 10_000) {
-    throw new LocalUploadApiError('文件超过当前分片上传的单文件上限。', 'LOCAL_UPLOAD_TOO_MANY_PARTS')
+    throw new LocalUploadApiError(
+      '文件超过当前分片上传的单文件上限。',
+      'LOCAL_UPLOAD_TOO_MANY_PARTS',
+    )
   }
 
   onProgress(progress('HASHING', request.file.size, 0, 0, totalParts, 0))
   const hashes = await hashFileInWorker(
     request.file,
     LOCAL_UPLOAD_PART_SIZE_BYTES,
-    (processedBytes, totalBytes) => onProgress(progress('HASHING', totalBytes, processedBytes, 0, totalParts, 0)),
+    (processedBytes, totalBytes) =>
+      onProgress(progress('HASHING', totalBytes, processedBytes, 0, totalParts, 0)),
     signal,
   )
   const clientFileId = crypto.randomUUID()
@@ -132,7 +136,9 @@ export async function uploadPlatformLocalVideo(
     signal,
   )
 
-  onProgress(progress('REGISTERING', request.file.size, request.file.size, 0, totalParts, 0, batch.batch_id))
+  onProgress(
+    progress('REGISTERING', request.file.size, request.file.size, 0, totalParts, 0, batch.batch_id),
+  )
   await requestJson(
     `/api/v1/upload/${encodeURIComponent(batch.batch_id)}/files/${encodeURIComponent(clientFileId)}`,
     'PUT',
@@ -155,7 +161,10 @@ export async function uploadPlatformLocalVideo(
     signal,
   )
   if (multipart.total_parts !== totalParts || hashes.partSha256.length !== totalParts) {
-    throw new LocalUploadApiError('本地上传清单与服务器分片计划不一致。', 'LOCAL_UPLOAD_PLAN_MISMATCH')
+    throw new LocalUploadApiError(
+      '本地上传清单与服务器分片计划不一致。',
+      'LOCAL_UPLOAD_PLAN_MISMATCH',
+    )
   }
 
   let uploadedBytes = 0
@@ -175,10 +184,35 @@ export async function uploadPlatformLocalVideo(
       undefined,
       signal,
     )
-    onProgress(progress('UPLOADING', request.file.size, request.file.size, uploadedBytes, totalParts, index, batch.batch_id))
-    await uploadPart(authorization.upload_url, part, (partBytes) => {
-      onProgress(progress('UPLOADING', request.file.size, request.file.size, uploadedBytes + partBytes, totalParts, index, batch.batch_id))
-    }, signal)
+    onProgress(
+      progress(
+        'UPLOADING',
+        request.file.size,
+        request.file.size,
+        uploadedBytes,
+        totalParts,
+        index,
+        batch.batch_id,
+      ),
+    )
+    await uploadPart(
+      authorization.upload_url,
+      part,
+      (partBytes) => {
+        onProgress(
+          progress(
+            'UPLOADING',
+            request.file.size,
+            request.file.size,
+            uploadedBytes + partBytes,
+            totalParts,
+            index,
+            batch.batch_id,
+          ),
+        )
+      },
+      signal,
+    )
     await requestJson(
       `/api/v1/upload/${encodeURIComponent(batch.batch_id)}/files/${encodeURIComponent(clientFileId)}/parts/${partNumber}/confirmation`,
       'PUT',
@@ -187,10 +221,30 @@ export async function uploadPlatformLocalVideo(
       signal,
     )
     uploadedBytes += part.size
-    onProgress(progress('UPLOADING', request.file.size, request.file.size, uploadedBytes, totalParts, partNumber, batch.batch_id))
+    onProgress(
+      progress(
+        'UPLOADING',
+        request.file.size,
+        request.file.size,
+        uploadedBytes,
+        totalParts,
+        partNumber,
+        batch.batch_id,
+      ),
+    )
   }
 
-  onProgress(progress('VERIFYING', request.file.size, request.file.size, uploadedBytes, totalParts, totalParts, batch.batch_id))
+  onProgress(
+    progress(
+      'VERIFYING',
+      request.file.size,
+      request.file.size,
+      uploadedBytes,
+      totalParts,
+      totalParts,
+      batch.batch_id,
+    ),
+  )
   await requestJson(
     `/api/v1/upload/${encodeURIComponent(batch.batch_id)}/files/${encodeURIComponent(clientFileId)}/completion`,
     'PUT',
@@ -205,7 +259,17 @@ export async function uploadPlatformLocalVideo(
     undefined,
     signal,
   )
-  onProgress(progress('ASSEMBLING', request.file.size, request.file.size, uploadedBytes, totalParts, totalParts, batch.batch_id))
+  onProgress(
+    progress(
+      'ASSEMBLING',
+      request.file.size,
+      request.file.size,
+      uploadedBytes,
+      totalParts,
+      totalParts,
+      batch.batch_id,
+    ),
+  )
   const session = await requestJson<CaptureSessionResponse>(
     `/api/v1/upload/${encodeURIComponent(batch.batch_id)}/capture-session`,
     'PUT',
@@ -213,7 +277,17 @@ export async function uploadPlatformLocalVideo(
     undefined,
     signal,
   )
-  onProgress(progress('COMPLETED', request.file.size, request.file.size, uploadedBytes, totalParts, totalParts, batch.batch_id))
+  onProgress(
+    progress(
+      'COMPLETED',
+      request.file.size,
+      request.file.size,
+      uploadedBytes,
+      totalParts,
+      totalParts,
+      batch.batch_id,
+    ),
+  )
 
   return {
     batchId: batch.batch_id,
@@ -296,7 +370,8 @@ async function requestJson<T>(
   } catch {
     // The fallback below does not expose proxy, object-storage, or server implementation details.
   }
-  const errorCode = typeof errorBody.error_code === 'string' ? errorBody.error_code : 'LOCAL_UPLOAD_REQUEST_FAILED'
+  const errorCode =
+    typeof errorBody.error_code === 'string' ? errorBody.error_code : 'LOCAL_UPLOAD_REQUEST_FAILED'
   throw new LocalUploadApiError(
     errorMessages[errorCode] ?? '本地上传请求未完成，请稍后重试。',
     errorCode,
@@ -331,11 +406,29 @@ function uploadPart(
       if (request.status >= 200 && request.status < 300) {
         finish(resolve)
       } else {
-        finish(() => reject(new LocalUploadApiError('视频分片未能上传，请稍后重试。', 'LOCAL_UPLOAD_PART_TRANSFER_FAILED', true)))
+        finish(() =>
+          reject(
+            new LocalUploadApiError(
+              '视频分片未能上传，请稍后重试。',
+              'LOCAL_UPLOAD_PART_TRANSFER_FAILED',
+              true,
+            ),
+          ),
+        )
       }
     }
-    request.onerror = () => finish(() => reject(new LocalUploadApiError('视频分片网络连接失败，请稍后重试。', 'LOCAL_UPLOAD_PART_TRANSFER_FAILED', true)))
-    request.onabort = () => finish(() => reject(new DOMException('The upload was cancelled.', 'AbortError')))
+    request.onerror = () =>
+      finish(() =>
+        reject(
+          new LocalUploadApiError(
+            '视频分片网络连接失败，请稍后重试。',
+            'LOCAL_UPLOAD_PART_TRANSFER_FAILED',
+            true,
+          ),
+        ),
+      )
+    request.onabort = () =>
+      finish(() => reject(new DOMException('The upload was cancelled.', 'AbortError')))
     if (signal?.aborted) {
       abort()
       return

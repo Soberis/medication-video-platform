@@ -35,7 +35,9 @@ describe('quality review API', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('quality-request-0001') })
 
-    await expect(getQualityReview(projectId, clipAssetId)).resolves.toMatchObject({ decision: 'UNREVIEWED' })
+    await expect(getQualityReview(projectId, clipAssetId)).resolves.toMatchObject({
+      decision: 'UNREVIEWED',
+    })
     await expect(
       recordQualityReview(projectId, clipAssetId, {
         decision: 'QUALIFIED',

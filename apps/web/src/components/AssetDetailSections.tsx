@@ -614,8 +614,7 @@ export function DangerZoneCard({
       variant="outlined"
     >
       <p className="form-hint">
-        从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session
-        的其他视频。
+        从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session 的其他视频。
       </p>
     </Card>
   )

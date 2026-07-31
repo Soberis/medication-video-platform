@@ -248,7 +248,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       createDatasetVersionDraft(
@@ -276,7 +279,10 @@ describe('catalog API', () => {
   })
 
   it('keeps an unreadable gateway failure retryable so a draft request can reuse its key', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('upstream unavailable', { status: 503 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('upstream unavailable', { status: 503 })),
+    )
 
     await expect(
       createDatasetVersionDraft(
@@ -302,7 +308,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       startDatasetVersionBuild(projectId, datasetVersionId, 'dataset-build-start-0001'),
@@ -342,7 +351,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       createDatasetBuildSnapshot(projectId, datasetVersionId, 'dataset-build-snapshot-0001'),
@@ -387,7 +399,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       validateDatasetVersion(projectId, datasetVersionId, 'dataset-validation-0001'),
@@ -424,7 +439,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       freezeDatasetVersion(projectId, datasetVersionId, 'dataset-freeze-0001'),
@@ -460,15 +478,13 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
-      requestDatasetExport(
-        projectId,
-        datasetVersionId,
-        expiresAt,
-        'dataset-export-request-0001',
-      ),
+      requestDatasetExport(projectId, datasetVersionId, expiresAt, 'dataset-export-request-0001'),
     ).resolves.toMatchObject({ status: 'REQUESTED', purpose: 'MODEL_TRAINING' })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -532,7 +548,10 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
     await expect(
       approveDatasetExport(projectId, datasetVersionId, 'dataset-export-approval-0001'),
@@ -569,9 +588,14 @@ describe('catalog API', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    Object.defineProperty(document, 'cookie', { configurable: true, value: 'XSRF-TOKEN=csrf-test-token' })
+    Object.defineProperty(document, 'cookie', {
+      configurable: true,
+      value: 'XSRF-TOKEN=csrf-test-token',
+    })
 
-    await expect(authorizeDatasetExportDownload(projectId, datasetVersionId)).resolves.toMatchObject({
+    await expect(
+      authorizeDatasetExportDownload(projectId, datasetVersionId),
+    ).resolves.toMatchObject({
       file_name: 'dataset-export.zip',
       size_bytes: 1024,
     })
@@ -711,7 +735,9 @@ describe('catalog API', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createDatasetSplitPlan(projectId, datasetVersionId, 1, idempotencyKey)).resolves.toMatchObject({
+    await expect(
+      createDatasetSplitPlan(projectId, datasetVersionId, 1, idempotencyKey),
+    ).resolves.toMatchObject({
       policy_version: 'CAPTURE_SESSION_HASH_RANK_V1',
       holdout_count: 1,
     })

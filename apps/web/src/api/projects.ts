@@ -107,7 +107,10 @@ export function upsertProjectMembership(
   )
 }
 
-export async function removeProjectMembership(projectId: string, actorId: string): Promise<ProjectMembership> {
+export async function removeProjectMembership(
+  projectId: string,
+  actorId: string,
+): Promise<ProjectMembership> {
   return writeJson<ProjectMembership>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/memberships/${encodeURIComponent(actorId)}`,
     'DELETE',
@@ -127,9 +130,13 @@ export async function listAssetFolders(
 }
 
 export function createAssetFolder(projectId: string, displayName: string): Promise<AssetFolder> {
-  return writeJson<AssetFolder>(`/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders`, 'POST', {
-    display_name: displayName,
-  })
+  return writeJson<AssetFolder>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders`,
+    'POST',
+    {
+      display_name: displayName,
+    },
+  )
 }
 
 export function renameAssetFolder(
@@ -187,7 +194,11 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   throw await projectApiError(response)
 }
 
-async function writeJson<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: object): Promise<T> {
+async function writeJson<T>(
+  path: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: object,
+): Promise<T> {
   const response = await write(path, method, body)
   if (response.ok) return (await response.json()) as T
   throw await projectApiError(response)
