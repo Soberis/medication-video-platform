@@ -28,6 +28,8 @@ def test_uses_the_calculated_source_digest_when_no_assertion_is_configured(
     settings = Settings.from_environment(environment())
 
     assert settings.software_digest == CALCULATED_DIGEST
+    assert settings.synthetic_fail_first_attempt is False
+    assert settings.synthetic_lease_loss_first_attempt is False
 
 
 def test_accepts_a_matching_configured_source_digest(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -154,5 +156,76 @@ def test_rejects_synthetic_failure_injection_for_non_loopback_dependencies(
                 RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE="true",
                 EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT="true",
                 **endpoint_override,
+            ),
+        )
+
+
+def test_enables_synthetic_lease_loss_only_with_an_independent_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    settings = Settings.from_environment(
+        environment(
+            RUN_DATASET_EXPORT_ACCEPTANCE="true",
+            RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE="true",
+            EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT="true",
+        ),
+    )
+
+    assert settings.synthetic_lease_loss_first_attempt is True
+
+
+def test_rejects_synthetic_lease_loss_without_its_independent_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    with pytest.raises(ValueError, match="lease-loss acceptance authorization"):
+        Settings.from_environment(
+            environment(
+                RUN_DATASET_EXPORT_ACCEPTANCE="true",
+                EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT="true",
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "endpoint_override",
+    [
+        {"PLATFORM_API_BASE_URL": "https://api.example.test"},
+        {"RABBITMQ_URL": "amqps://user:password@rabbitmq.example.test/medication"},
+    ],
+)
+def test_rejects_synthetic_lease_loss_for_non_loopback_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint_override: dict[str, str],
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    with pytest.raises(ValueError, match="requires loopback Core API and RabbitMQ"):
+        Settings.from_environment(
+            environment(
+                RUN_DATASET_EXPORT_ACCEPTANCE="true",
+                RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE="true",
+                EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT="true",
+                **endpoint_override,
+            ),
+        )
+
+
+def test_rejects_mutually_exclusive_synthetic_injection_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config, "calculate_software_digest", lambda _: CALCULATED_DIGEST)
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        Settings.from_environment(
+            environment(
+                RUN_DATASET_EXPORT_ACCEPTANCE="true",
+                RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE="true",
+                RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE="true",
+                EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT="true",
+                EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT="true",
             ),
         )

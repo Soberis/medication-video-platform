@@ -88,16 +88,64 @@ trap - EXIT
 
 第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic`、两项显式验收授权以及 loopback Core API/RabbitMQ，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。
 
-本机合成恢复结果见第 8、9 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
+本机合成恢复结果见第 9、10 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
 
-## 6. 尚未覆盖
+## 6. Worker 租约失联恢复演练
+
+以下演练只用于已经批准的本地合成环境。它会重启受本地脚本管理的 Core API 和
+Export Worker，并临时使用 10 秒租约、2 秒心跳、2 秒 grace period 和 1 秒恢复轮询；
+脚本进程结束后这些短时参数不会写回仓库或生产环境。开始前必须确认没有其他本地导出、
+没有手工启动的 Worker，也没有真实视频、医院凭证或非 loopback 依赖。
+
+故障模式默认关闭，并且同时要求 `DATA_PROFILE=synthetic`、loopback Core API/RabbitMQ、
+`RUN_DATASET_EXPORT_ACCEPTANCE=true` 和独立的
+`RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=true`。它只让真实 Export Worker 在首个
+attempt 已 acquire、完成临时 ZIP 上传后停止续租并跳过结果提交；不写数据库状态、不输出
+lease token、预签名 URL、对象 key 或账号密码。恢复由 Core API 的现有租约回收逻辑完成。
+
+PowerShell：
+
+```powershell
+.\scripts\start-local.ps1 -Worker -RestartApi -RestartExportWorker -ExportWorkerSyntheticLeaseLossFirstAttempt
+$env:RUN_DATASET_EXPORT_ACCEPTANCE='true'
+$env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE='true'
+pnpm run dataset-export:lease-loss-acceptance
+.\scripts\start-local.ps1 -Worker -RestartApi -RestartExportWorker
+```
+
+macOS / Linux：
+
+```bash
+./scripts/start-local.sh --worker --restart-api --restart-export-worker --export-worker-synthetic-lease-loss-first-attempt
+cleanup_export_worker() {
+  ./scripts/start-local.sh --worker --restart-api --restart-export-worker
+}
+trap cleanup_export_worker EXIT
+RUN_DATASET_EXPORT_ACCEPTANCE=true RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=true \
+  pnpm run dataset-export:lease-loss-acceptance
+cleanup_export_worker
+trap - EXIT
+```
+
+通过条件：最终由第 2 个 attempt 变为 `AVAILABLE`，并且只有一个已登记产物，下载后的
+SHA-256 与登记值一致。`RETRY_WAIT` 可能短于验收工具的轮询间隔，因此若输出中观察到该
+状态只作为辅助信息，不作为通过前提。现有
+`DatasetExportRecoveryServiceTests` 继续断言首个 attempt 为 `LOST`、错误/审计 reason 为
+`WORKER_LEASE_LOST` 并调用旧输出清理；本公共数据集版本查询只返回
+当前 attempt，因此验收工具不会伪造或猜测历史 attempt 字段。若需要留存完整证据，应同时
+保存该测试结果和本次脱敏命令输出。
+
+失败时不要手工修改数据库、重用授权 URL 或再次使用故障 Worker；先执行最后的正常重启，
+再保留脱敏日志和合成项目 ID 定位问题。未经明确批准不要运行这组会改变本地服务状态的命令。
+
+## 7. 尚未覆盖
 
 - 生产身份、生产 S3、医院网络和真实视频；
-- 不可重试失败后的人工恢复、长租约丢失和 DLQ 演练；
+- 不可重试失败后的人工恢复和 DLQ 演练；
 - 大数据集吞吐、并发导出、限带宽或断网；
 - 正式 UAT、性能 SLO 与生产发布审批。
 
-## 7. 2026-07-31 本地合成基线结果
+## 8. 2026-07-31 本地合成基线结果
 
 本次在 Windows 本机 loopback、Core API `local` profile、Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2，以及 Node.js 22.22.2、Media Worker、Export Worker 全部运行时执行。输入为工具即时生成的两段合成 MP4；未使用真实视频、生产凭证或外部对象存储。
 
@@ -122,9 +170,9 @@ trap - EXIT
 
 这证明了 Core API、Outbox、RabbitMQ、两个 Worker、独立审批和短期下载校验的本地合成实现闭环；它不替代正式 UAT、生产对象存储演练或性能验证。
 
-## 8. 2026-07-31 本地合成恢复结果
+## 9. 2026-07-31 本地合成恢复结果
 
-本次基于提交 `58aa365`，在第 7 节相同的本机合成环境中执行第 5 节命令。执行前确认进行中的导出数为 0；结束后已将 Export Worker 重启为无故障注入的正常模式。
+本次基于提交 `58aa365`，在第 8 节相同的本机合成环境中执行第 5 节命令。执行前确认进行中的导出数为 0；结束后已将 Export Worker 重启为无故障注入的正常模式。
 
 最终运行结果：
 
@@ -154,7 +202,7 @@ trap - EXIT
 
 数据库复核显示首轮 attempt 为 `FAILED/PACKAGE_BUILD_FAILED`，第 2 轮为 `SUCCEEDED`，导出终态为 `AVAILABLE`。这证明可重试构建失败能够经 Core API 的有上限策略生成新 attempt，并由真实 Worker 完成恢复；它不证明失联租约、DLQ、并发、生产网络或正式 UAT 已通过。
 
-## 9. 2026-07-31 macOS 本地合成恢复结果
+## 10. 2026-07-31 macOS 本地合成恢复结果
 
 本次以 `16df94d` 为代码基线，并叠加本轮尚未提交的 POSIX 启动脚本改动，在 Apple Silicon macOS 本机 loopback 环境执行。运行时为 Java 21.0.12、Node.js 22.23.1、pnpm 11.11.0、uv 管理的 Python 3.12.13，以及 Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2。执行前数据库中没有 `QUEUED`、`RUNNING` 或 `RETRY_WAIT` 导出，导出队列没有 ready/unacknowledged 消息且只有一个受脚本管理的 Export Worker；输入仍为工具即时生成的两段合成 MP4。
 

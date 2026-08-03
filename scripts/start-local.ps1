@@ -5,6 +5,7 @@ param(
     [switch]$RestartApi,
     [switch]$RestartExportWorker,
     [switch]$ExportWorkerSyntheticFailFirstAttempt,
+    [switch]$ExportWorkerSyntheticLeaseLossFirstAttempt,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
@@ -212,23 +213,50 @@ if ($RestartExportWorker -and -not $Worker) {
 if ($ExportWorkerSyntheticFailFirstAttempt -and -not $Worker) {
     throw 'Synthetic Export Worker failure injection requires workers to be enabled.'
 }
-if ($InfrastructureOnly -and ($Worker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt)) {
+if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $Worker) {
+    throw 'Synthetic Export Worker lease-loss injection requires workers to be enabled.'
+}
+if ($InfrastructureOnly -and ($Worker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt -or $ExportWorkerSyntheticLeaseLossFirstAttempt)) {
     throw 'Infrastructure-only startup cannot start or restart applications.'
 }
 if ($ExportWorkerSyntheticFailFirstAttempt -and -not $RestartExportWorker) {
     throw 'Synthetic Export Worker failure injection requires -RestartExportWorker.'
 }
+if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $RestartExportWorker) {
+    throw 'Synthetic Export Worker lease-loss injection requires -RestartExportWorker.'
+}
+if ($ExportWorkerSyntheticFailFirstAttempt -and $ExportWorkerSyntheticLeaseLossFirstAttempt) {
+    throw 'Synthetic Export Worker failure and lease-loss injections are mutually exclusive.'
+}
 if ($ExportWorkerSyntheticFailFirstAttempt -and $env:DATA_PROFILE -ne 'synthetic') {
     throw 'Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic.'
+}
+if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and $env:DATA_PROFILE -ne 'synthetic') {
+    throw 'Synthetic Export Worker lease-loss injection requires DATA_PROFILE=synthetic.'
+}
+if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $RestartApi) {
+    throw 'Synthetic Export Worker lease-loss injection requires -RestartApi so local lease timings can be shortened.'
 }
 
 $env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'false'
 $env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'false'
+$env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE = 'false'
+$env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT = 'false'
 if ($ExportWorkerSyntheticFailFirstAttempt) {
     $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
     $env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'true'
     $env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'true'
     Write-Host 'Export Worker will inject one synthetic first-attempt failure for recovery acceptance.' -ForegroundColor Yellow
+}
+if ($ExportWorkerSyntheticLeaseLossFirstAttempt) {
+    $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
+    $env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE = 'true'
+    $env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT = 'true'
+    $env:DATASET_EXPORT_LEASE_DURATION = 'PT10S'
+    $env:DATASET_EXPORT_HEARTBEAT_INTERVAL = 'PT2S'
+    $env:DATASET_EXPORT_LEASE_GRACE = 'PT2S'
+    $env:DATASET_EXPORT_RECOVERY_POLL_DELAY = 'PT1S'
+    Write-Host 'Export Worker will inject one synthetic lease loss with short local recovery timings.' -ForegroundColor Yellow
 }
 
 if ($RestartApi) {

@@ -133,11 +133,14 @@ class JobProcessor:
         builder: PackageBuilder,
         software_digest: str,
         temp_dir: Path | None,
+        synthetic_lease_loss_first_attempt: bool = False,
     ) -> None:
         self._client: ExportClient = client
         self._builder: PackageBuilder = builder
         self._software_digest = software_digest
         self._temp_dir = temp_dir
+        self._synthetic_lease_loss_first_attempt = synthetic_lease_loss_first_attempt
+        self._synthetic_lease_loss_injected = False
 
     def process(self, body: bytes) -> ProcessingOutcome:
         try:
@@ -186,6 +189,21 @@ class JobProcessor:
                 job,
                 DeadLetterReason.LEASE_REJECTED,
             )
+
+        if (
+            self._synthetic_lease_loss_first_attempt
+            and job.attempt == 1
+            and not self._synthetic_lease_loss_injected
+            and result.get("status") == "SUCCEEDED"
+        ):
+            self._synthetic_lease_loss_injected = True
+            LOGGER.warning(
+                "Synthetic lease-loss acceptance: stopped renewing after upload and skipped "
+                "result submission export_id=%s attempt=%s",
+                job.export_id,
+                job.attempt,
+            )
+            return ProcessingOutcome.for_job(DeliveryDisposition.ACK, job)
 
         try:
             self._client.submit_result(job, result)

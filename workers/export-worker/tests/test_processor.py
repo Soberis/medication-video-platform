@@ -266,6 +266,34 @@ def test_synthetic_first_attempt_failure_builder_allows_the_second_attempt_to_su
     assert client.results[1]["status"] == "SUCCEEDED"
 
 
+def test_synthetic_lease_loss_skips_first_result_after_upload_and_allows_second_attempt(
+    tmp_path: Path,
+) -> None:
+    client = RecordingClient(b"synthetic-video-bytes")
+    processor = JobProcessor(
+        client,
+        DatasetPackageBuilder(),
+        SOFTWARE_DIGEST,
+        tmp_path,
+        synthetic_lease_loss_first_attempt=True,
+    )
+
+    first = processor.process(job_body(attempt=1))
+    assert first.disposition is DeliveryDisposition.ACK
+    assert client.acquired[0].attempt == 1
+    assert len(client.uploaded_packages) == 1
+    assert client.results == []
+
+    second = processor.process(job_body(attempt=2))
+
+    assert len(client.uploaded_packages) == 2
+    assert second.disposition is DeliveryDisposition.ACK
+    assert len(client.results) == 1
+    assert client.results[0]["attempt"] == 2
+    assert client.results[0]["status"] == "SUCCEEDED"
+    assert list(tmp_path.glob("dataset-export-*")) == []
+
+
 def test_requeues_when_result_submission_is_temporarily_unavailable(tmp_path: Path) -> None:
     client = RecordingClient(
         b"synthetic-video-bytes",

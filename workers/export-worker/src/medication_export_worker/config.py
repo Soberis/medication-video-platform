@@ -24,6 +24,7 @@ class Settings:
     dead_letter_routing_key: str
     temp_dir: Path | None
     synthetic_fail_first_attempt: bool
+    synthetic_lease_loss_first_attempt: bool
     software_digest: str
 
     def read_worker_bearer_token(self) -> str:
@@ -66,6 +67,15 @@ class Settings:
             base_url,
             rabbitmq_url,
         )
+        synthetic_lease_loss_first_attempt = _synthetic_lease_loss_first_attempt(
+            values,
+            base_url,
+            rabbitmq_url,
+        )
+        if synthetic_fail_first_attempt and synthetic_lease_loss_first_attempt:
+            raise ValueError(
+                "Synthetic export failure and lease-loss injections are mutually exclusive"
+            )
 
         return cls(
             platform_api_base_url=base_url,
@@ -78,6 +88,7 @@ class Settings:
             dead_letter_routing_key="dataset-export.dead-letter.v1",
             temp_dir=temp_dir,
             synthetic_fail_first_attempt=synthetic_fail_first_attempt,
+            synthetic_lease_loss_first_attempt=synthetic_lease_loss_first_attempt,
             software_digest=calculated_digest,
         )
 
@@ -177,6 +188,34 @@ def _synthetic_fail_first_attempt(
     if not _is_loopback_url(platform_api_base_url) or not _is_loopback_url(rabbitmq_url):
         raise ValueError(
             "Synthetic export failure injection requires loopback Core API and RabbitMQ"
+        )
+    return True
+
+
+def _synthetic_lease_loss_first_attempt(
+    values: Mapping[str, str],
+    platform_api_base_url: str,
+    rabbitmq_url: str,
+) -> bool:
+    enabled = values.get("EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT", "false")
+    if enabled not in {"false", "true"}:
+        raise ValueError("EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT must be true or false")
+    if enabled == "false":
+        return False
+    if values.get("DATA_PROFILE") != "synthetic":
+        raise ValueError("Synthetic export lease-loss injection requires DATA_PROFILE=synthetic")
+    if values.get("RUN_DATASET_EXPORT_ACCEPTANCE") != "true":
+        raise ValueError(
+            "Synthetic export lease-loss injection requires explicit acceptance authorization"
+        )
+    if values.get("RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE") != "true":
+        raise ValueError(
+            "Synthetic export lease-loss injection requires explicit "
+            "lease-loss acceptance authorization"
+        )
+    if not _is_loopback_url(platform_api_base_url) or not _is_loopback_url(rabbitmq_url):
+        raise ValueError(
+            "Synthetic export lease-loss injection requires loopback Core API and RabbitMQ"
         )
     return True
 

@@ -16,20 +16,30 @@ const EXPORT_TIMEOUT_MS = 180_000
 const POLL_INTERVAL_MS = 1_000
 
 export function parseAcceptanceMode(argv) {
-  if (argv.length === 0) return { recovery: false }
-  if (argv.length === 1 && argv[0] === '--recovery') return { recovery: true }
-  throw new Error('Usage: dataset-export-acceptance [--recovery]')
+  if (argv.length === 0) return { recovery: false, leaseLoss: false }
+  if (argv.length === 1 && argv[0] === '--recovery') {
+    return { recovery: true, leaseLoss: false }
+  }
+  if (argv.length === 1 && argv[0] === '--lease-loss-recovery') {
+    return { recovery: true, leaseLoss: true }
+  }
+  throw new Error('Usage: dataset-export-acceptance [--recovery|--lease-loss-recovery]')
 }
 
 export function assertAcceptanceEnvironment({
   enabled,
   dataProfile,
   baseUrl,
+  rabbitmqUrl = 'amqp://localhost:5672/medication',
   adminBearerToken,
   uploaderBearerToken,
+  leaseLoss = false,
+  leaseLossAuthorized,
 }) {
   if (enabled !== 'true') {
-    throw new Error('Set RUN_DATASET_EXPORT_ACCEPTANCE=true to authorize this synthetic export acceptance')
+    throw new Error(
+      'Set RUN_DATASET_EXPORT_ACCEPTANCE=true to authorize this synthetic export acceptance',
+    )
   }
   if (dataProfile !== 'synthetic') {
     throw new Error('Dataset export acceptance requires DATA_PROFILE=synthetic')
@@ -44,8 +54,30 @@ export function assertAcceptanceEnvironment({
   } catch {
     throw new Error('PLATFORM_BASE_URL must be a valid HTTP URL')
   }
-  if (!['http:', 'https:'].includes(parsedBaseUrl.protocol) || !isLoopbackHost(parsedBaseUrl.hostname)) {
+  if (
+    !['http:', 'https:'].includes(parsedBaseUrl.protocol) ||
+    !isLoopbackHost(parsedBaseUrl.hostname)
+  ) {
     throw new Error('Dataset export acceptance only permits a localhost Core API')
+  }
+
+  let parsedRabbitmqUrl
+  try {
+    parsedRabbitmqUrl = new URL(rabbitmqUrl)
+  } catch {
+    throw new Error('RABBITMQ_URL must be a valid AMQP URL')
+  }
+  if (
+    !['amqp:', 'amqps:'].includes(parsedRabbitmqUrl.protocol) ||
+    !isLoopbackHost(parsedRabbitmqUrl.hostname)
+  ) {
+    throw new Error('Dataset export acceptance only permits a localhost RabbitMQ')
+  }
+  if (leaseLoss && leaseLossAuthorized !== 'true') {
+    throw new Error('Lease-loss acceptance requires RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=true')
+  }
+  if (!leaseLoss && leaseLossAuthorized === 'true') {
+    throw new Error('Lease-loss authorization requires --lease-loss-recovery')
   }
 
   return {
@@ -91,6 +123,16 @@ export function matchesExpectedExportCompletion(exportRequest, recovery, observe
   }
   if (exportRequest.attempt?.attempt !== 2) {
     throw new Error('Recovery acceptance did not complete on the second Worker attempt')
+  }
+  return true
+}
+
+export function requireLeaseLossRecovery(exportRequest) {
+  if (exportRequest?.status !== 'AVAILABLE') {
+    throw new Error('Lease-loss recovery did not reach AVAILABLE')
+  }
+  if (exportRequest.attempt?.attempt !== 2) {
+    throw new Error('Lease-loss recovery did not complete on the second Worker attempt')
   }
   return true
 }
@@ -148,8 +190,11 @@ async function main() {
     enabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
     dataProfile: process.env.DATA_PROFILE,
     baseUrl: process.env.PLATFORM_BASE_URL || 'http://localhost:8080',
+    rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
     adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
     uploaderBearerToken: process.env.DEV_BEARER_TOKEN,
+    leaseLoss: mode.leaseLoss,
+    leaseLossAuthorized: process.env.RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE,
   })
   await assertHealthy(environment.baseUrl)
 
@@ -304,16 +349,25 @@ async function main() {
     const observedExportStatuses = [approvedExport.status]
     const detail = await waitFor(
       'dataset export Worker completion',
-      async () => administrator.request(
-        'read dataset export status',
-        `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
-      ),
+      async () =>
+        administrator.request(
+          'read dataset export status',
+          `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+        ),
       (response) => {
         const status = response.export_request?.status
         if (typeof status === 'string' && !observedExportStatuses.includes(status)) {
           observedExportStatuses.push(status)
         }
-        return matchesExpectedExportCompletion(response.export_request, mode.recovery, observedExportStatuses)
+        const completed = matchesExpectedExportCompletion(
+          response.export_request,
+          mode.recovery && !mode.leaseLoss,
+          observedExportStatuses,
+        )
+        if (completed && mode.leaseLoss) {
+          return requireLeaseLossRecovery(response.export_request)
+        }
+        return completed
       },
       EXPORT_TIMEOUT_MS,
     )
@@ -328,22 +382,25 @@ async function main() {
       throw new Error('Short-lived export download does not match the registered artifact')
     }
 
-    process.stdout.write(`ACCEPTANCE_RESULT ${JSON.stringify({
-      schema_version: 'dataset-export-cross-process-acceptance-v1',
-      project_id: projectId,
-      dataset_version_id: datasetVersionId,
-      dataset_export_id: detail.export_request.dataset_export_id,
-      capture_session_count: uploadedSessions.length,
-      independent_approvals: true,
-      recovery_mode: mode.recovery,
-      observed_export_statuses: observedExportStatuses,
-      worker_attempt: detail.export_request.attempt?.attempt,
-      export_status: detail.export_request.status,
-      artifact_size_bytes: artifact.size_bytes,
-      artifact_sha256: artifact.sha256,
-      downloaded_sha256: downloaded.sha256,
-      duration_ms: Date.now() - startedAt,
-    })}\n`)
+    process.stdout.write(
+      `ACCEPTANCE_RESULT ${JSON.stringify({
+        schema_version: 'dataset-export-cross-process-acceptance-v1',
+        project_id: projectId,
+        dataset_version_id: datasetVersionId,
+        dataset_export_id: detail.export_request.dataset_export_id,
+        capture_session_count: uploadedSessions.length,
+        independent_approvals: true,
+        recovery_mode: mode.recovery,
+        lease_loss_mode: mode.leaseLoss,
+        observed_export_statuses: observedExportStatuses,
+        worker_attempt: detail.export_request.attempt?.attempt,
+        export_status: detail.export_request.status,
+        artifact_size_bytes: artifact.size_bytes,
+        artifact_sha256: artifact.sha256,
+        downloaded_sha256: downloaded.sha256,
+        duration_ms: Date.now() - startedAt,
+      })}\n`,
+    )
   } finally {
     await rm(workDirectory, { recursive: true, force: true })
   }
@@ -363,10 +420,11 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
   requireMediaProbeJob(mediaProbe)
   await waitFor(
     'media ingestion',
-    async () => administrator.request(
-      'read capture-session admission preview',
-      `/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
-    ),
+    async () =>
+      administrator.request(
+        'read capture-session admission preview',
+        `/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
+      ),
     (preview) => {
       const streams = preview.streams ?? []
       if (streams.some((stream) => stream.asset_status === 'INGEST_FAILED')) {
@@ -410,7 +468,10 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
       },
     },
   )
-  const annotationRevisionId = requireUuid(revision.annotation_revision_id, 'Synthetic annotation revision')
+  const annotationRevisionId = requireUuid(
+    revision.annotation_revision_id,
+    'Synthetic annotation revision',
+  )
   await administrator.request(
     'independently review synthetic annotation',
     `/projects/${projectId}/annotation-revisions/${annotationRevisionId}/review`,
@@ -422,10 +483,11 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
   )
   await waitFor(
     'dataset admission eligibility',
-    async () => administrator.request(
-      'read eligible capture-session admission',
-      `/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
-    ),
+    async () =>
+      administrator.request(
+        'read eligible capture-session admission',
+        `/projects/${projectId}/capture-sessions/${captureSessionId}/dataset-admission-preview`,
+      ),
     (preview) => preview.eligible === true,
     MEDIA_INGEST_TIMEOUT_MS,
   )
@@ -461,7 +523,10 @@ async function downloadAndDigest(downloadUrl) {
   } catch {
     throw new Error('Export download authorization contains an invalid URL')
   }
-  if (!['http:', 'https:'].includes(parsedDownloadUrl.protocol) || !isLoopbackHost(parsedDownloadUrl.hostname)) {
+  if (
+    !['http:', 'https:'].includes(parsedDownloadUrl.protocol) ||
+    !isLoopbackHost(parsedDownloadUrl.hostname)
+  ) {
     throw new Error('Synthetic acceptance refuses a non-local export download URL')
   }
   const response = await fetch(downloadUrl)
@@ -498,9 +563,7 @@ function loadLocalEnvironment() {
 }
 
 function readEnvironmentFile(environmentFile) {
-  return existsSync(environmentFile)
-    ? parseEnv(readFileSync(environmentFile, 'utf8'))
-    : {}
+  return existsSync(environmentFile) ? parseEnv(readFileSync(environmentFile, 'utf8')) : {}
 }
 
 export function mergeEnvironment(exampleEnvironment, localEnvironment, explicitEnvironment) {
@@ -516,7 +579,10 @@ function key(prefix) {
 }
 
 function requireUuid(value, label) {
-  if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  ) {
     throw new Error(`${label} is missing a valid UUID`)
   }
   return value
@@ -531,7 +597,8 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+const isEntryPoint =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 if (isEntryPoint) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`)

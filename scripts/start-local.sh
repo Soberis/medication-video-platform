@@ -11,6 +11,7 @@ infrastructure_only=false
 restart_api=false
 restart_export_worker=false
 export_worker_synthetic_fail_first_attempt=false
+export_worker_synthetic_lease_loss_first_attempt=false
 api_startup_timeout_seconds=180
 
 usage() {
@@ -23,6 +24,8 @@ Options:
   --restart-api                                 Restart the Core API managed by this script.
   --restart-export-worker                       Restart the Export Worker managed by this script.
   --export-worker-synthetic-fail-first-attempt  Inject one retryable first-attempt export failure.
+  --export-worker-synthetic-lease-loss-first-attempt
+                                               Stop renewing the first attempt after its package upload.
   --api-timeout SECONDS                         Core API health timeout, from 30 to 600 (default: 180).
   -h, --help                                    Show this help.
 EOF
@@ -50,6 +53,10 @@ while [[ $# -gt 0 ]]; do
             export_worker_synthetic_fail_first_attempt=true
             shift
             ;;
+        --export-worker-synthetic-lease-loss-first-attempt)
+            export_worker_synthetic_lease_loss_first_attempt=true
+            shift
+            ;;
         --api-timeout)
             [[ $# -ge 2 ]] || { echo "--api-timeout requires a value." >&2; exit 2; }
             api_startup_timeout_seconds="$2"
@@ -75,12 +82,28 @@ if $export_worker_synthetic_fail_first_attempt && ! $start_worker; then
     echo "Synthetic Export Worker failure injection requires --worker." >&2
     exit 2
 fi
-if $infrastructure_only && { $start_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt; }; then
+if $export_worker_synthetic_lease_loss_first_attempt && ! $start_worker; then
+    echo "Synthetic Export Worker lease-loss injection requires --worker." >&2
+    exit 2
+fi
+if $infrastructure_only && { $start_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt || $export_worker_synthetic_lease_loss_first_attempt; }; then
     echo "Infrastructure-only startup cannot start or restart applications." >&2
     exit 2
 fi
 if $export_worker_synthetic_fail_first_attempt && ! $restart_export_worker; then
     echo "Synthetic Export Worker failure injection requires --restart-export-worker." >&2
+    exit 2
+fi
+if $export_worker_synthetic_lease_loss_first_attempt && ! $restart_export_worker; then
+    echo "Synthetic Export Worker lease-loss injection requires --restart-export-worker." >&2
+    exit 2
+fi
+if $export_worker_synthetic_fail_first_attempt && $export_worker_synthetic_lease_loss_first_attempt; then
+    echo "Synthetic Export Worker failure and lease-loss injections are mutually exclusive." >&2
+    exit 2
+fi
+if $export_worker_synthetic_lease_loss_first_attempt && ! $restart_api; then
+    echo "Synthetic Export Worker lease-loss injection requires --restart-api so local lease timings can be shortened." >&2
     exit 2
 fi
 
@@ -102,14 +125,30 @@ if $export_worker_synthetic_fail_first_attempt && [[ "${DATA_PROFILE:-}" != "syn
     echo "Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic." >&2
     exit 2
 fi
+if $export_worker_synthetic_lease_loss_first_attempt && [[ "${DATA_PROFILE:-}" != "synthetic" ]]; then
+    echo "Synthetic Export Worker lease-loss injection requires DATA_PROFILE=synthetic." >&2
+    exit 2
+fi
 
 export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=false
 export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=false
+export RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=false
+export EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT=false
 if $export_worker_synthetic_fail_first_attempt; then
     export RUN_DATASET_EXPORT_ACCEPTANCE=true
     export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=true
     export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=true
     echo "Export Worker will inject one synthetic first-attempt failure for recovery acceptance."
+fi
+if $export_worker_synthetic_lease_loss_first_attempt; then
+    export RUN_DATASET_EXPORT_ACCEPTANCE=true
+    export RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=true
+    export EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT=true
+    export DATASET_EXPORT_LEASE_DURATION=PT10S
+    export DATASET_EXPORT_HEARTBEAT_INTERVAL=PT2S
+    export DATASET_EXPORT_LEASE_GRACE=PT2S
+    export DATASET_EXPORT_RECOVERY_POLL_DELAY=PT1S
+    echo "Export Worker will inject one synthetic lease loss with short local recovery timings."
 fi
 
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then

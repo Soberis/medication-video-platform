@@ -32,6 +32,7 @@ def main() -> None:
         builder,
         settings.software_digest,
         settings.temp_dir,
+        settings.synthetic_lease_loss_first_attempt,
     )
     consumer = DatasetExportConsumer(
         settings.rabbitmq_url,
