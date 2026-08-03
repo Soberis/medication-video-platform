@@ -498,6 +498,61 @@ class MediaJobExecutionContractTests {
 				scalar("SELECT asset_status FROM clip_asset WHERE clip_asset_id = ?", created.clipAssetId()));
 	}
 
+	/**
+	 * Synthetic cancelled-state guard only; cancellation protocol/API is not implemented.
+	 * Late Worker deliveries must not mutate a persisted CANCELLED job or its
+	 * projections.
+	 */
+	@Test
+	void syntheticCancelledStateGuardRejectsLateDeliveriesWithoutMutation() throws Exception {
+		var created = createQueuedJob();
+		var projection = CaptureMediaProjectionTestData.bindPending(this.jdbcTemplate, PROJECT_ID,
+				created.clipAssetId(), Instant.now().minusSeconds(30));
+		this.jdbcTemplate.update("UPDATE media_job SET status = 'CANCELLED' WHERE media_job_id = ?", created.jobId());
+		this.jdbcTemplate.update("""
+				UPDATE media_job_attempt SET status = 'CANCELLED'
+				WHERE media_job_id = ? AND attempt = ?
+				""", created.jobId(), created.attempt());
+
+		var jobBefore = this.jdbcTemplate.queryForMap("SELECT * FROM media_job WHERE media_job_id = ?",
+				created.jobId());
+		var attemptBefore = this.jdbcTemplate.queryForMap("""
+				SELECT * FROM media_job_attempt WHERE media_job_id = ? AND attempt = ?
+				""", created.jobId(), created.attempt());
+		assertEquals("CANCELLED", jobBefore.get("status"));
+		assertEquals("CANCELLED", attemptBefore.get("status"));
+		var assetBefore = this.jdbcTemplate.queryForMap("SELECT * FROM clip_asset WHERE clip_asset_id = ?",
+				created.clipAssetId());
+		var streamBefore = this.jdbcTemplate.queryForMap("SELECT * FROM camera_stream WHERE camera_stream_id = ?",
+				projection.cameraStreamId());
+		var sessionBefore = this.jdbcTemplate.queryForMap("SELECT * FROM capture_session WHERE capture_session_id = ?",
+				projection.captureSessionId());
+		var outboxCountBefore = count("SELECT count(*) FROM outbox_event");
+		var auditCountBefore = count("SELECT count(*) FROM audit_event");
+
+		acquire(created).andExpect(status().isConflict()).andExpect(jsonPath("$.error_code").value("STALE_ATTEMPT"));
+		heartbeat(created, "media-worker-test").andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("STALE_ATTEMPT"));
+		submitResult(created, successResult(created, SOFTWARE_DIGEST)).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_LEASE_EXPIRED"));
+
+		assertEquals(jobBefore,
+				this.jdbcTemplate.queryForMap("SELECT * FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals(attemptBefore, this.jdbcTemplate.queryForMap("""
+				SELECT * FROM media_job_attempt WHERE media_job_id = ? AND attempt = ?
+				""", created.jobId(), created.attempt()));
+		assertEquals(assetBefore, this.jdbcTemplate.queryForMap("SELECT * FROM clip_asset WHERE clip_asset_id = ?",
+				created.clipAssetId()));
+		assertEquals(streamBefore, this.jdbcTemplate
+			.queryForMap("SELECT * FROM camera_stream WHERE camera_stream_id = ?", projection.cameraStreamId()));
+		assertEquals(sessionBefore, this.jdbcTemplate
+			.queryForMap("SELECT * FROM capture_session WHERE capture_session_id = ?", projection.captureSessionId()));
+		assertEquals(outboxCountBefore, count("SELECT count(*) FROM outbox_event"));
+		assertEquals(auditCountBefore, count("SELECT count(*) FROM audit_event"));
+		assertEquals(0, count("SELECT count(*) FROM inbox_message"));
+		assertEquals(0, count("SELECT count(*) FROM media_report"));
+	}
+
 	@Test
 	void rejectsResultMessageIdReuseWithDifferentContent() throws Exception {
 		var created = createQueuedJob();
