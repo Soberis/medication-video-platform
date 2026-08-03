@@ -88,7 +88,7 @@ trap - EXIT
 
 第一个命令只让新启动的 Export Worker 对一个首轮 attempt 人为返回一次已有的、可重试的 `PACKAGE_BUILD_FAILED` 结果；开关要求 `DATA_PROFILE=synthetic`、两项显式验收授权以及 loopback Core API/RabbitMQ，普通启动会强制关闭。恢复命令必须在输出中记录 `RETRY_WAIT`，并以第 2 次 attempt 的 `AVAILABLE`、产物登记和下载 SHA-256 一致结束。最后一个命令重启为无注入的正常 Worker。
 
-本机合成恢复结果见第 9、10 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
+本机合成恢复结果见第 9～11 节；每次复验仍须保留命令输出和对应提交。失败时保留脱敏错误码和合成项目 ID，不要手改数据库、重复使用授权 URL 或在非合成环境尝试。
 
 ## 6. Worker 租约失联恢复演练
 
@@ -232,3 +232,33 @@ SHA-256 与登记值一致。`RETRY_WAIT` 可能短于验收工具的轮询间�
 ```
 
 数据库复核显示 attempt 1 为 `FAILED/PACKAGE_BUILD_FAILED`，attempt 2 为 `SUCCEEDED`，导出终态为 `AVAILABLE`。结束后已受控重启正常 Export Worker，并直接确认 `EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=false`、`RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=false`；导出和媒体队列均为 0 条 ready/unacknowledged 消息且各有一个消费者。该结果补齐 macOS 的可重试构建失败恢复证据，但仍不替代失联租约、DLQ、并发或正式 UAT。
+
+## 11. 2026-08-03 Windows 本地合成租约失联恢复结果
+
+本次在 Windows 本机 loopback 合成环境执行一次租约失联验收，基线为 `main/1761744d21824a3a05c26a59d9af25ea97d55717`。执行前确认工作区干净、没有 `QUEUED`、`RUNNING` 或 `RETRY_WAIT` 导出，导出队列没有 ready/unacknowledged 消息；运行时只使用本地 PostgreSQL、SeaweedFS、RabbitMQ、Core API、Media Worker 和 Export Worker，未使用真实视频、生产凭证或外部服务。
+
+本次合成证据：
+
+```text
+project_id: 3d70fe12-6a2d-449a-8e2d-ed9fe0a04bbf
+dataset_version_id: bf1d9779-adbb-43e7-80fe-2705f5244f7f
+dataset_export_id: a79e29dc-fd71-4620-b987-4f980421cd03
+export_status: AVAILABLE
+active_export_count: 0
+attempt_1: LOST / WORKER_LEASE_LOST
+attempt_2: SUCCEEDED
+artifact_count: 1
+artifact_size_bytes: > 0
+artifact_sha256: ea9087841b80eb52a3ffce76ea44155500883f9c2a3a8fa89e0fe5d7ae6b7706
+acceptance_exit_code: 0
+acceptance_command_reruns: 0
+```
+
+审计依次记录 `DATASET_EXPORT_RETRY_SCHEDULED/WORKER_LEASE_LOST` 和
+`DATASET_EXPORT_AVAILABLE/EXPORT_PACKAGE_VERIFIED`。恢复后的 API 为 UP，Export queue
+为 ready `0`、unacknowledged `0`、consumer `1`；正常租约参数恢复为
+`lease_duration=PT2H`、`heartbeat_interval=PT5M`、`grace=PT5M`、`recovery_poll_delay=PT30S`，故障注入关闭。数据库、审计和 Artifact 登记由独立只读查询复核；
+验收工具 stdout 未被当前工具层保留，因此本节不声称直接复核下载响应中的 SHA 字段。
+
+该结果补齐本地合成环境的 Worker 失联租约恢复证据；DLQ、并发、大数据集、生产网络和正式 UAT
+仍按第 7 节保持未覆盖。
