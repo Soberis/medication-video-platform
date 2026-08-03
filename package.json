@@ -19,6 +19,8 @@
     "dataset-export:recovery-acceptance": "node tools/dataset-export-acceptance/index.mjs --recovery",
     "dataset-export:acceptance:test": "node --test tools/dataset-export-acceptance/*.test.mjs",
     "dataset-export:lease-loss-acceptance": "node tools/dataset-export-acceptance/index.mjs --lease-loss-recovery",
+    "dataset-export:dlq-prepare": "node tools/dataset-export-acceptance/index.mjs --dlq-prepare",
+    "dataset-export:dlq-replay": "node tools/dataset-export-acceptance/index.mjs --dlq-replay",
     "local-scripts:test": "node --test scripts/*.test.mjs",
     "contract:lint": "redocly lint contracts/openapi/openapi.yaml",
     "api:test": "node scripts/run-bruno.mjs"

@@ -262,3 +262,221 @@ acceptance_command_reruns: 0
 
 该结果补齐本地合成环境的 Worker 失联租约恢复证据；DLQ、并发、大数据集、生产网络和正式 UAT
 仍按第 7 节保持未覆盖。
+
+## 12. Export DLQ 管理员受控重放（工具与手册，尚未执行）
+
+本节只提供下一项本地合成演练的可审计入口，不代表真实 RabbitMQ DLQ 已经通过验收。
+它使用 `pnpm run dataset-export:dlq-prepare` 与 `pnpm run dataset-export:dlq-replay` 两个独立模式，要求同时设置普通验收授权和独立的
+`RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true`。工具只允许 loopback Core API、RabbitMQ
+AMQP 和 Management API，且强制 `DATA_PROFILE=synthetic`；不读取数据库，不接受原始任务 body，
+也不会把 lease token、签名 URL、对象位置或其他敏感字段提交给重放 API。
+
+### 12.1 前置隔离与故障注入
+
+开始前由环境负责人确认：本机没有其他 `QUEUED`、`RUNNING` 或 `RETRY_WAIT` 导出；导出业务队列和
+死信队列没有遗留演练消息；没有第二个手工 Export Worker；所有输入均为工具生成的合成视频。
+不要运行 `rabbitmqctl purge_queue`，也不要删除队列、交换机、vhost 或 Volume。
+
+为让真实 Export Worker 产生带有可信 `message_id`、`export_id` 和 `attempt` 的
+`DATASET_EXPORT_JOB_ACQUIRE_REJECTED` 诊断，使用一个仅存在于本地临时文件中的无效合成身份。
+`EXPORT_WORKER_BEARER_TOKEN_FILE` 必须是绝对路径；Worker 每次调用 Core API 前重新读取该文件。
+不要把 token 内容写入命令输出、日志或验收证据。
+
+PowerShell 示例（在独立终端中运行，并由本地进程主管理 Export Worker 的 worker-only 停止/启动；
+不要用会同时停止 Core API 的整机 stop 命令）：
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$tokenFile = Join-Path $env:TEMP "dataset-export-dlq-token-$([guid]::NewGuid()).txt"
+$validToken = $env:EXPORT_WORKER_BEARER_TOKEN
+if ([string]::IsNullOrWhiteSpace($validToken) -or $validToken.Length -lt 32) {
+    throw 'Load the approved synthetic export-worker token into the process without printing it.'
+}
+[IO.File]::WriteAllText($tokenFile, ('x' * 64), [Text.UTF8Encoding]::new($false))
+$env:DATA_PROFILE = 'synthetic'
+$env:PLATFORM_API_BASE_URL = 'http://localhost:8080'
+$env:RABBITMQ_URL = 'amqp://medication_local:change-me-local-only@127.0.0.1:5672/medication'
+$env:EXPORT_WORKER_BEARER_TOKEN_FILE = $tokenFile
+Remove-Item Env:EXPORT_WORKER_BEARER_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE -ErrorAction SilentlyContinue
+Remove-Item Env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT -ErrorAction SilentlyContinue
+Remove-Item Env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE -ErrorAction SilentlyContinue
+Remove-Item Env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT -ErrorAction SilentlyContinue
+uv run --directory workers/export-worker export-worker
+```
+
+在另一个已配置管理员/上传者本地令牌的终端运行 DLQ 准备模式：
+
+```powershell
+$env:DATA_PROFILE = 'synthetic'
+$env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
+$env:RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE = 'true'
+pnpm run dataset-export:dlq-prepare
+```
+
+工具在首次导出进入 `QUEUED` 后会输出一行 `ACCEPTANCE_SETUP`，其中只有
+`project_id`、`dataset_version_id`、`dataset_export_id` 和 `first_attempt`，然后以退出码 0 正常结束；
+它不会启动等待循环，也不需要 Ctrl+C。无效身份造成的
+`dataset-export-dead-letter.v1` 诊断应随后进入
+`platform.dataset-export.dead-letter.v1`；不要等待普通模式超时，也不要重用其他项目的 ID。
+保留该行和脱敏错误码作为证据。
+
+停止无效 Worker，仍保留 Core API、RabbitMQ 和对象存储运行。把临时文件原子替换为有效的本地
+Export Worker token（不打印文件内容），然后以同一 `EXPORT_WORKER_BEARER_TOKEN_FILE` 启动一个
+正常 Worker。下面的 PowerShell 片段把原子替换、工具执行和恢复放在同一控制窗口；
+`Start-Process` 只启动临时 Worker，工具本身不管理进程，worker-only 停止/启动仍由环境负责人确认：
+
+```powershell
+$replacement = "$tokenFile.next"
+$workerProcess = $null
+try {
+    [IO.File]::WriteAllText($replacement, $validToken, [Text.UTF8Encoding]::new($false))
+    [IO.File]::Replace($replacement, $tokenFile, $null) # NTFS 同卷原子替换，不输出内容
+    $workerProcess = Start-Process -FilePath 'uv' `
+        -ArgumentList @('run', '--directory', 'workers/export-worker', 'export-worker') `
+        -WorkingDirectory (Get-Location) -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput 'logs/local/dlq-replay-export-worker.log' `
+        -RedirectStandardError 'logs/local/dlq-replay-export-worker.error.log'
+
+    $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
+    $env:RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE = 'true'
+    $env:DATASET_EXPORT_DLQ_REPLAY_PROJECT_ID = '<ACCEPTANCE_SETUP.project_id>'
+    $env:DATASET_EXPORT_DLQ_REPLAY_DATASET_VERSION_ID = '<ACCEPTANCE_SETUP.dataset_version_id>'
+    $env:DATASET_EXPORT_DLQ_REPLAY_EXPORT_ID = '<ACCEPTANCE_SETUP.dataset_export_id>'
+    $env:DATASET_EXPORT_DLQ_REPLAY_REASON_CODE = 'AUTHORIZATION_FIXED'
+    $env:DATASET_EXPORT_DLQ_REPLAY_CHANGE_REFERENCE = 'local-dlq-replay-20260803'
+    $env:DATASET_EXPORT_DLQ_REPLAY_IDEMPOTENCY_KEY = 'local-dlq-replay-command-20260803'
+    pnpm run dataset-export:dlq-replay
+}
+finally {
+    if ($null -ne $workerProcess -and -not $workerProcess.HasExited) {
+        taskkill.exe /PID $workerProcess.Id /T /F | Out-Null
+    }
+    Remove-Item -LiteralPath $replacement, $tokenFile -Force -ErrorAction SilentlyContinue
+    Remove-Item Env:EXPORT_WORKER_BEARER_TOKEN_FILE -ErrorAction SilentlyContinue
+    Remove-Item Env:EXPORT_WORKER_BEARER_TOKEN -ErrorAction SilentlyContinue
+    Remove-Item Env:RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE -ErrorAction SilentlyContinue
+    Remove-Item Env:RUN_DATASET_EXPORT_ACCEPTANCE -ErrorAction SilentlyContinue
+    Remove-Item Env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE -ErrorAction SilentlyContinue
+    Remove-Item Env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT -ErrorAction SilentlyContinue
+    Remove-Item Env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE -ErrorAction SilentlyContinue
+    Remove-Item Env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT -ErrorAction SilentlyContinue
+    .\scripts\start-local.ps1 -Worker -RestartExportWorker
+}
+```
+
+`finally` 必须执行，即使 `pnpm run dataset-export:dlq-replay` 失败；它不删除 RabbitMQ
+队列或数据库事实，只关闭临时 Worker、删除临时 token 文件并恢复受脚本管理的正常 Worker。
+
+### 12.2 读取诊断并调用管理员重放
+
+从 `ACCEPTANCE_SETUP` 设置项目和 DatasetVersion ID，并显式提供管理员原因与变更引用。以下值
+只作为示例，不能复制到生产：
+
+```powershell
+$env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
+$env:RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE = 'true'
+$env:DATASET_EXPORT_DLQ_REPLAY_PROJECT_ID = '<ACCEPTANCE_SETUP.project_id>'
+$env:DATASET_EXPORT_DLQ_REPLAY_DATASET_VERSION_ID = '<ACCEPTANCE_SETUP.dataset_version_id>'
+$env:DATASET_EXPORT_DLQ_REPLAY_EXPORT_ID = '<ACCEPTANCE_SETUP.dataset_export_id>'
+$env:DATASET_EXPORT_DLQ_REPLAY_REASON_CODE = 'AUTHORIZATION_FIXED'
+$env:DATASET_EXPORT_DLQ_REPLAY_CHANGE_REFERENCE = 'local-dlq-replay-20260803'
+$env:DATASET_EXPORT_DLQ_REPLAY_IDEMPOTENCY_KEY = 'local-dlq-replay-command-20260803'
+pnpm run dataset-export:dlq-replay
+```
+
+工具通过 RabbitMQ Management API 使用 `ack_requeue_true` 读取**且保留**一条诊断；它拒绝多条
+消息、非预期 exchange/routing-key、非 `application/json`、未知字段、`CONTRACT_INVALID`、
+缺少 `message_id/export_id/attempt`、错误 body SHA-256 或不匹配 Worker UUIDv5 的
+`dead_letter_id`。提交 Core API 的 JSON 仅包含 `dead_letter_id`、`source_message_id`、
+`source_attempt`、稳定 `dead_letter_reason`、诊断 `body_sha256`、管理员原因和变更引用。
+本次故障注入和重放固定使用 `DATASET_EXPORT_JOB_ACQUIRE_REJECTED`；工具在发起 POST 前会拒绝
+其他 DLQ reason。`AUTHORIZATION_FIXED` 只是管理员对修复原因的分类，不是 DLQ reason。
+
+重放前工具会先只读查询指定 DatasetVersion，确认其 export ID 与 `DATASET_EXPORT_DLQ_REPLAY_EXPORT_ID`
+和诊断一致、状态仍为 `QUEUED/RUNNING`、current attempt 为 1 且没有 artifact，随后才允许 POST。
+重放后工具只验证 replay response 的 `new_attempt=2`，以及当前 attempt=`2/SUCCEEDED`、导出最终为
+`AVAILABLE`、只登记一个非空且格式正确的 artifact。公共查询不暴露历史 attempt，因此
+`DLQ_REPLAY_RESULT`/`DLQ_REPLAY_EVIDENCE` 将旧 attempt 标为
+`NOT_OBSERVED_BY_PUBLIC_API`；旧 attempt=`FAILED`、新 message/capability、Outbox 和审计记录必须
+在验收后用独立只读 SQL/队列证据确认，未确认时不得声称通过。输出仍不包含原始 RabbitMQ payload、
+lease token、签名 URL、凭据或对象 key，只保留 artifact 大小和 SHA-256 作为非敏感完整性证据。
+
+### 12.3 验收后只读 SQL/队列证据
+
+工具不会执行 SQL，也不会把 lease token 写入输出。`DLQ_REPLAY_RESULT` 通过后，仍需由独立的
+数据库只读账号使用同一个 `<dataset_export_id>` 复核以下事实；任一查询未执行或断言不成立，
+都不得把本节标为通过：
+
+```sql
+-- 1) 两个 attempt：首轮必须是人工停发后的 FAILED/acquire-rejected，重放轮必须成功。
+SELECT attempt, status, error_code, message_id, lease_token_hash
+FROM dataset_export_attempt
+WHERE dataset_export_id = '<dataset_export_id>'
+ORDER BY attempt;
+
+-- 2) 手工重放只允许一条，且绑定固定 DLQ reason 和 attempt 1 -> 2。
+SELECT dead_letter_id, source_message_id, source_attempt, new_attempt,
+       dead_letter_reason, operator_reason_code, change_reference
+FROM dataset_export_manual_replay
+WHERE dataset_export_id = '<dataset_export_id>';
+
+-- 3) Artifact 只有一个；不要选择 storage_bucket/object_key 等对象位置。
+SELECT count(*) AS artifact_count,
+       count(*) FILTER (WHERE size_bytes > 0 AND sha256 ~ '^[a-f0-9]{64}$') AS valid_artifact_count
+FROM export_artifact
+WHERE dataset_export_id = '<dataset_export_id>'
+  AND artifact_role = 'DATASET_PACKAGE';
+
+-- 4) 两个不同 message_id 的导出作业事件已进入 Outbox；只统计是否仍有未脱敏 lease token，
+--    不读取或打印 token 内容。
+SELECT count(*) AS job_event_count,
+       count(DISTINCT payload_json ->> 'message_id') AS distinct_message_ids,
+       count(*) FILTER (WHERE jsonb_exists(payload_json, 'lease_token'))
+         AS unredacted_lease_token_events
+FROM outbox_event
+WHERE aggregate_id = '<dataset_export_id>'
+  AND schema_version = 'dataset-export-job.v1';
+
+-- 5) 一条成功的手工重放审计，reason 和 details 均与请求一致。
+SELECT count(*) AS replay_audit_count,
+       max(outcome) AS outcome,
+       max(reason_code) AS operator_reason_code,
+       max(details_json ->> 'dead_letter_reason') AS dead_letter_reason,
+       max(details_json ->> 'source_attempt') AS source_attempt,
+       max(details_json ->> 'new_attempt') AS new_attempt
+FROM audit_event
+WHERE action = 'DATASET_EXPORT_MANUAL_REPLAY'
+  AND object_type = 'DatasetExport'
+  AND object_id = '<dataset_export_id>';
+```
+
+断言为：attempt 查询恰好返回 attempt 1/2，状态分别为 `FAILED/SUCCEEDED`，attempt 1 的
+`error_code=DATASET_EXPORT_JOB_ACQUIRE_REJECTED`，两个 `message_id` 和两个
+`lease_token_hash` 均不同；重放查询恰好一行且 `source_attempt=1/new_attempt=2`、
+`dead_letter_reason=DATASET_EXPORT_JOB_ACQUIRE_REJECTED`；Artifact 查询为
+`artifact_count=valid_artifact_count=1`；Outbox 至少两条、至少两个不同 message ID、
+`unredacted_lease_token_events=0`；审计恰好一条且 `outcome=SUCCEEDED`，其 reason、source/new
+attempt 与重放一致。`lease_token_hash` 是不可逆摘要，严禁把 Worker token 作为 SQL 结果或日志
+证据。
+
+最后执行 RabbitMQ 只读状态检查（不 purge、不 ack、不 republish）：
+
+```powershell
+rabbitmqctl list_queues -p medication name messages_ready messages_unacknowledged consumers
+```
+
+确认导出业务队列和 DLQ 没有额外 ready/unacknowledged 演练消息，且 DLQ 原诊断仍被保留；该命令
+只读队列元数据，不替代上面的数据库事实。
+
+### 12.4 通过条件与恢复
+
+- RabbitMQ 诊断只以 requeue 模式读取且仍保留在 DLQ；没有 purge/delete/republish 原始 body；
+- 管理员重放响应的 `source_attempt` 与诊断一致，`new_attempt=2`，且 replay API 请求没有敏感字段；
+- 工具观测到 replay response `new_attempt=2`，当前 attempt=`SUCCEEDED`，导出=`AVAILABLE`，artifact
+  数量恰好为 1；
+- 验收后独立只读 SQL/队列证据确认旧 attempt=`FAILED`、新 message ID/capability、Outbox 和审计；
+- 成功或失败后，Export Worker 均恢复有效 token、正常配置和受本地脚本管理的进程；临时 token
+  文件被删除，验收开关恢复为 `false`；
+- 证据至少包括脱敏 `DLQ_REPLAY_RESULT`/`DLQ_REPLAY_EVIDENCE`、提交 SHA、命令退出码和恢复后
+  `status-local`/RabbitMQ 只读状态。不要声称本节已执行，除非真实命令、日志和数据库只读复核均已保留。

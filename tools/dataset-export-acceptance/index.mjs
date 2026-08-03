@@ -14,6 +14,44 @@ const UPLOADER_ACTOR_ID = 'local-synthetic-uploader'
 const MEDIA_INGEST_TIMEOUT_MS = 120_000
 const EXPORT_TIMEOUT_MS = 180_000
 const POLL_INTERVAL_MS = 1_000
+const DATASET_EXPORT_DEAD_LETTER_SCHEMA = 'dataset-export-dead-letter.v1'
+const DATASET_EXPORT_DEAD_LETTER_EXCHANGE = 'platform.dead-letter.v1'
+const DATASET_EXPORT_DEAD_LETTER_ROUTING_KEY = 'dataset-export.dead-letter.v1'
+const DATASET_EXPORT_DEAD_LETTER_QUEUE = 'platform.dataset-export.dead-letter.v1'
+const DLQ_REPLAYABLE_REASONS = new Set([
+  'DATASET_EXPORT_JOB_PROFILE_UNSUPPORTED',
+  'DATASET_EXPORT_JOB_ACQUIRE_REJECTED',
+  'DATASET_EXPORT_JOB_LEASE_REJECTED',
+  'DATASET_EXPORT_JOB_RESULT_REJECTED',
+])
+const DLQ_SAFE_SUMMARIES = {
+  DATASET_EXPORT_JOB_PROFILE_UNSUPPORTED: 'Message requested an export profile without a producer',
+  DATASET_EXPORT_JOB_ACQUIRE_REJECTED: 'Worker authorization or export lease was rejected',
+  DATASET_EXPORT_JOB_LEASE_REJECTED: 'Current dataset export lease was rejected',
+  DATASET_EXPORT_JOB_RESULT_REJECTED: 'Dataset export result submission was rejected',
+}
+const DLQ_DIAGNOSTIC_FIELDS = new Set([
+  'schema_version',
+  'dead_letter_id',
+  'observed_at',
+  'reason_code',
+  'safe_summary',
+  'body_sha256',
+  'body_size_bytes',
+  'message_id',
+  'export_id',
+  'attempt',
+])
+const DLQ_OPERATOR_REASONS = new Set([
+  'CONFIGURATION_FIXED',
+  'WORKER_DEPLOYMENT_FIXED',
+  'AUTHORIZATION_FIXED',
+  'OTHER_APPROVED',
+])
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const SHA256_PATTERN = /^[a-f0-9]{64}$/
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/
+const NAMESPACE_URL_UUID = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
 
 export function parseAcceptanceMode(argv) {
   if (argv.length === 0) return { recovery: false, leaseLoss: false }
@@ -23,7 +61,127 @@ export function parseAcceptanceMode(argv) {
   if (argv.length === 1 && argv[0] === '--lease-loss-recovery') {
     return { recovery: true, leaseLoss: true }
   }
-  throw new Error('Usage: dataset-export-acceptance [--recovery|--lease-loss-recovery]')
+  if (argv.length === 1 && argv[0] === '--dlq-replay') {
+    return { recovery: false, leaseLoss: false, dlqReplay: true }
+  }
+  if (argv.length === 1 && argv[0] === '--dlq-prepare') {
+    return { recovery: false, leaseLoss: false, dlqPrepare: true }
+  }
+  throw new Error(
+    'Usage: dataset-export-acceptance [--recovery|--lease-loss-recovery|--dlq-prepare|--dlq-replay]',
+  )
+}
+
+export function assertDlqPrepareEnvironment({
+  enabled,
+  normalAcceptanceEnabled,
+  dataProfile,
+  baseUrl,
+  rabbitmqUrl = 'amqp://localhost:5672/medication',
+  adminBearerToken,
+  uploaderBearerToken,
+}) {
+  if (enabled !== 'true') {
+    throw new Error(
+      'Set RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true to authorize this synthetic DLQ preparation',
+    )
+  }
+  if (normalAcceptanceEnabled !== 'true') {
+    throw new Error(
+      'Set RUN_DATASET_EXPORT_ACCEPTANCE=true before preparing the synthetic DLQ replay fixture',
+    )
+  }
+  return assertAcceptanceEnvironment({
+    enabled: 'true',
+    dataProfile,
+    baseUrl,
+    rabbitmqUrl,
+    adminBearerToken,
+    uploaderBearerToken,
+  })
+}
+
+export function assertDlqReplayEnvironment({
+  enabled,
+  normalAcceptanceEnabled,
+  dataProfile,
+  baseUrl,
+  rabbitmqUrl = 'amqp://localhost:5672/medication',
+  rabbitmqManagementUrl = 'http://localhost:15672',
+  rabbitmqManagementUsername,
+  rabbitmqManagementPassword,
+  adminBearerToken,
+  exportId,
+  projectId,
+  datasetVersionId,
+  operatorReasonCode,
+  changeReference,
+  idempotencyKey,
+  deadLetterQueue = DATASET_EXPORT_DEAD_LETTER_QUEUE,
+}) {
+  if (enabled !== 'true') {
+    throw new Error(
+      'Set RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true to authorize this synthetic DLQ replay acceptance',
+    )
+  }
+  if (normalAcceptanceEnabled !== 'true') {
+    throw new Error(
+      'Set RUN_DATASET_EXPORT_ACCEPTANCE=true before running the synthetic DLQ replay acceptance',
+    )
+  }
+  if (dataProfile !== 'synthetic') {
+    throw new Error('Dataset export DLQ replay acceptance requires DATA_PROFILE=synthetic')
+  }
+  if (!adminBearerToken) {
+    throw new Error('DEV_ADMIN_BEARER_TOKEN is required')
+  }
+  const parsedBaseUrl = parseLoopbackUrl(baseUrl, ['http:', 'https:'], 'PLATFORM_BASE_URL')
+  const parsedRabbitmqUrl = parseLoopbackUrl(rabbitmqUrl, ['amqp:', 'amqps:'], 'RABBITMQ_URL')
+  const parsedManagementUrl = parseLoopbackUrl(
+    rabbitmqManagementUrl,
+    ['http:', 'https:'],
+    'RABBITMQ_MANAGEMENT_URL',
+  )
+  if (!rabbitmqManagementUsername || !rabbitmqManagementPassword) {
+    throw new Error('RABBITMQ_USER and RABBITMQ_PASSWORD are required for the local management API')
+  }
+  requireUuid(projectId, 'DLQ replay project')
+  requireUuid(datasetVersionId, 'DLQ replay dataset version')
+  requireUuid(exportId, 'DLQ replay export')
+  if (!DLQ_OPERATOR_REASONS.has(operatorReasonCode)) {
+    throw new Error(
+      'DATASET_EXPORT_DLQ_REPLAY_REASON_CODE must be CONFIGURATION_FIXED, WORKER_DEPLOYMENT_FIXED, AUTHORIZATION_FIXED, or OTHER_APPROVED',
+    )
+  }
+  if (
+    typeof changeReference !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,127}$/.test(changeReference)
+  ) {
+    throw new Error(
+      'DATASET_EXPORT_DLQ_REPLAY_CHANGE_REFERENCE must be 3 to 128 safe non-sensitive characters',
+    )
+  }
+  if (typeof idempotencyKey !== 'string' || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    throw new Error(
+      'DATASET_EXPORT_DLQ_REPLAY_IDEMPOTENCY_KEY must match ^[A-Za-z0-9._:-]{16,128}$',
+    )
+  }
+  requireQueueName(deadLetterQueue, 'DATASET_EXPORT_DLQ_QUEUE')
+  return {
+    baseUrl: parsedBaseUrl.toString().replace(/\/$/, ''),
+    rabbitmqUrl: parsedRabbitmqUrl.toString(),
+    rabbitmqManagementUrl: parsedManagementUrl.toString().replace(/\/$/, ''),
+    rabbitmqManagementUsername,
+    rabbitmqManagementPassword,
+    adminBearerToken,
+    exportId,
+    projectId,
+    datasetVersionId,
+    operatorReasonCode,
+    changeReference,
+    idempotencyKey,
+    deadLetterQueue,
+  }
 }
 
 export function assertAcceptanceEnvironment({
@@ -141,6 +299,225 @@ export function sha256Hex(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+export function uuidV5(namespace, name) {
+  const namespaceBytes = Buffer.from(namespace.replaceAll('-', ''), 'hex')
+  if (namespaceBytes.length !== 16 || typeof name !== 'string') {
+    throw new Error('UUIDv5 requires a UUID namespace and string name')
+  }
+  const digest = createHash('sha1').update(namespaceBytes).update(name, 'utf8').digest()
+  digest[6] = (digest[6] & 0x0f) | 0x50
+  digest[8] = (digest[8] & 0x3f) | 0x80
+  return formatUuid(digest.subarray(0, 16))
+}
+
+export function requireDatasetExportDeadLetterDiagnostic(message) {
+  if (!message || typeof message !== 'object') {
+    throw new Error('RabbitMQ DLQ response did not contain a diagnostic message')
+  }
+  if (message.exchange !== DATASET_EXPORT_DEAD_LETTER_EXCHANGE) {
+    throw new Error('RabbitMQ message came from an unexpected dataset export DLQ exchange')
+  }
+  if (message.routing_key !== DATASET_EXPORT_DEAD_LETTER_ROUTING_KEY) {
+    throw new Error('RabbitMQ message used an unexpected dataset export DLQ routing key')
+  }
+  if (message.properties?.type !== DATASET_EXPORT_DEAD_LETTER_SCHEMA) {
+    throw new Error('RabbitMQ message type is not dataset-export-dead-letter.v1')
+  }
+  if (message.properties?.content_type !== 'application/json') {
+    throw new Error('RabbitMQ DLQ diagnostic must use application/json')
+  }
+  if (typeof message.payload !== 'string') {
+    throw new Error('RabbitMQ DLQ diagnostic payload is not text JSON')
+  }
+  let diagnostic
+  try {
+    diagnostic = JSON.parse(message.payload)
+  } catch {
+    throw new Error('RabbitMQ DLQ diagnostic is not valid JSON')
+  }
+  if (!diagnostic || typeof diagnostic !== 'object' || Array.isArray(diagnostic)) {
+    throw new Error('RabbitMQ DLQ diagnostic must be a JSON object')
+  }
+  const fields = Object.keys(diagnostic)
+  if (fields.some((field) => !DLQ_DIAGNOSTIC_FIELDS.has(field))) {
+    throw new Error('RabbitMQ DLQ diagnostic contains a forbidden or unknown field')
+  }
+  const requiredFields = [
+    'schema_version',
+    'dead_letter_id',
+    'observed_at',
+    'reason_code',
+    'safe_summary',
+    'body_sha256',
+    'body_size_bytes',
+    'message_id',
+    'export_id',
+    'attempt',
+  ]
+  if (requiredFields.some((field) => !Object.hasOwn(diagnostic, field))) {
+    throw new Error('RabbitMQ DLQ diagnostic is missing a required safe field')
+  }
+  if (diagnostic.schema_version !== DATASET_EXPORT_DEAD_LETTER_SCHEMA) {
+    throw new Error('RabbitMQ DLQ diagnostic schema is not dataset-export-dead-letter.v1')
+  }
+  if (!DLQ_REPLAYABLE_REASONS.has(diagnostic.reason_code)) {
+    throw new Error('RabbitMQ DLQ diagnostic reason is not replayable')
+  }
+  requireUuid(diagnostic.dead_letter_id, 'DLQ dead_letter_id')
+  requireUuid(diagnostic.message_id, 'DLQ message_id')
+  requireUuid(diagnostic.export_id, 'DLQ export_id')
+  if (typeof diagnostic.safe_summary !== 'string' || diagnostic.safe_summary.length === 0) {
+    throw new Error('RabbitMQ DLQ diagnostic safe_summary is invalid')
+  }
+  if (diagnostic.safe_summary !== DLQ_SAFE_SUMMARIES[diagnostic.reason_code]) {
+    throw new Error('RabbitMQ DLQ diagnostic safe_summary does not match its stable reason')
+  }
+  if (!SHA256_PATTERN.test(diagnostic.body_sha256)) {
+    throw new Error('RabbitMQ DLQ diagnostic body_sha256 is invalid')
+  }
+  if (!Number.isSafeInteger(diagnostic.body_size_bytes) || diagnostic.body_size_bytes <= 0) {
+    throw new Error('RabbitMQ DLQ diagnostic body_size_bytes is invalid')
+  }
+  if (!Number.isSafeInteger(diagnostic.attempt) || diagnostic.attempt < 1) {
+    throw new Error('RabbitMQ DLQ diagnostic attempt is invalid')
+  }
+  if (typeof diagnostic.observed_at !== 'string' || !isRfc3339(diagnostic.observed_at)) {
+    throw new Error('RabbitMQ DLQ diagnostic observed_at is invalid')
+  }
+  const expectedDeadLetterId = uuidV5(
+    NAMESPACE_URL_UUID,
+    `${DATASET_EXPORT_DEAD_LETTER_SCHEMA}:${diagnostic.reason_code}:${diagnostic.body_sha256}`,
+  )
+  if (diagnostic.dead_letter_id.toLowerCase() !== expectedDeadLetterId.toLowerCase()) {
+    throw new Error('RabbitMQ DLQ diagnostic dead_letter_id does not match UUIDv5 identity')
+  }
+  if (
+    typeof message.properties?.message_id !== 'string' ||
+    message.properties.message_id.toLowerCase() !== diagnostic.dead_letter_id.toLowerCase()
+  ) {
+    throw new Error('RabbitMQ DLQ message properties do not match dead_letter_id')
+  }
+  return {
+    deadLetterId: diagnostic.dead_letter_id,
+    reasonCode: diagnostic.reason_code,
+    bodySha256: diagnostic.body_sha256,
+    sourceMessageId: diagnostic.message_id,
+    exportId: diagnostic.export_id,
+    sourceAttempt: diagnostic.attempt,
+  }
+}
+
+export function buildDatasetExportReplayRequest(diagnostic, operatorReasonCode, changeReference) {
+  const safeDiagnostic = requireSafeReplayDiagnostic(diagnostic)
+  if (!DLQ_OPERATOR_REASONS.has(operatorReasonCode)) {
+    throw new Error('DLQ replay operator reason code is invalid')
+  }
+  if (
+    typeof changeReference !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,127}$/.test(changeReference)
+  ) {
+    throw new Error('DLQ replay change reference is invalid')
+  }
+  return {
+    dead_letter_id: safeDiagnostic.deadLetterId,
+    source_message_id: safeDiagnostic.sourceMessageId,
+    source_attempt: safeDiagnostic.sourceAttempt,
+    dead_letter_reason: safeDiagnostic.reasonCode,
+    body_sha256: safeDiagnostic.bodySha256,
+    operator_reason_code: operatorReasonCode,
+    change_reference: changeReference,
+  }
+}
+
+export function requireDatasetExportReplayResponse(response, diagnostic) {
+  const safeDiagnostic = requireSafeReplayDiagnostic(diagnostic)
+  if (!response || typeof response !== 'object') {
+    throw new Error('Core API replay response is invalid')
+  }
+  requireUuid(response.replay_id, 'Dataset export replay')
+  requireUuid(response.dataset_export_id, 'Dataset export replay export')
+  if (response.dataset_export_id.toLowerCase() !== safeDiagnostic.exportId.toLowerCase()) {
+    throw new Error('Core API replay response export does not match the DLQ diagnostic')
+  }
+  if (response.dead_letter_id.toLowerCase() !== safeDiagnostic.deadLetterId.toLowerCase()) {
+    throw new Error('Core API replay response dead_letter_id does not match the DLQ diagnostic')
+  }
+  if (response.source_attempt !== safeDiagnostic.sourceAttempt) {
+    throw new Error('Core API replay response source attempt does not match the DLQ diagnostic')
+  }
+  if (response.new_attempt !== safeDiagnostic.sourceAttempt + 1) {
+    throw new Error('Core API replay did not queue exactly the next attempt')
+  }
+  if (response.resulting_export_status !== 'QUEUED') {
+    throw new Error('Core API replay did not leave the export QUEUED')
+  }
+  return response
+}
+
+export function requireDatasetExportReplayPreflight(
+  response,
+  expectedExportId,
+  expectedAttempt = 1,
+) {
+  requireUuid(expectedExportId, 'Dataset export preflight expected export')
+  const exportRequest = response?.export_request
+  if (!exportRequest || typeof exportRequest !== 'object') {
+    throw new Error('Dataset export preflight response is missing export_request')
+  }
+  requireUuid(exportRequest.dataset_export_id, 'Dataset export preflight export')
+  if (exportRequest.dataset_export_id.toLowerCase() !== expectedExportId.toLowerCase()) {
+    throw new Error('Dataset export preflight export does not match the requested replay export')
+  }
+  if (!['QUEUED', 'RUNNING'].includes(exportRequest.status)) {
+    throw new Error('Dataset export preflight requires a queued or running export')
+  }
+  if (exportRequest.attempt?.attempt !== expectedAttempt) {
+    throw new Error('Dataset export preflight requires the first Worker attempt')
+  }
+  if (!['QUEUED', 'RUNNING'].includes(exportRequest.attempt?.status)) {
+    throw new Error('Dataset export preflight requires a queued or running first attempt')
+  }
+  if (exportRequest.artifact != null) {
+    throw new Error('Dataset export preflight refuses an export that already has an artifact')
+  }
+  return exportRequest
+}
+
+export function requireDatasetExportReplayCompletion(response, expectedExportId, expectedAttempt) {
+  requireUuid(expectedExportId, 'Dataset export completion expected export')
+  const exportRequest = response?.export_request
+  if (!exportRequest || typeof exportRequest !== 'object') {
+    throw new Error('Dataset export status response is missing export_request')
+  }
+  if (
+    typeof exportRequest.dataset_export_id !== 'string' ||
+    exportRequest.dataset_export_id.toLowerCase() !== expectedExportId.toLowerCase()
+  ) {
+    throw new Error('Dataset export status response does not match the replayed export')
+  }
+  if (exportRequest.status === 'FAILED') {
+    throw new Error('Dataset export replay Worker reported FAILED')
+  }
+  if (exportRequest.status !== 'AVAILABLE') return false
+  if (exportRequest.attempt?.attempt !== expectedAttempt) {
+    throw new Error('Dataset export replay did not complete on the next Worker attempt')
+  }
+  if (exportRequest.attempt?.status !== 'SUCCEEDED') {
+    throw new Error('Dataset export replay current attempt is not SUCCEEDED')
+  }
+  const artifact = requireAvailableArtifact(exportRequest)
+  return { exportRequest, artifact }
+}
+
+export function requireDatasetExportDlqReplayReason(reasonCode) {
+  if (reasonCode !== 'DATASET_EXPORT_JOB_ACQUIRE_REJECTED') {
+    throw new Error(
+      'Dataset export DLQ replay acceptance requires DATASET_EXPORT_JOB_ACQUIRE_REJECTED',
+    )
+  }
+  return reasonCode
+}
+
 class CoreApiError extends Error {
   constructor(operation, status, payload) {
     const errorCode = typeof payload?.error_code === 'string' ? payload.error_code : 'HTTP_ERROR'
@@ -183,19 +560,233 @@ class CoreApiClient {
   }
 }
 
+class RabbitManagementClient {
+  constructor({ baseUrl, username, password, vhost, deadLetterQueue }) {
+    this.baseUrl = baseUrl
+    this.username = username
+    this.password = password
+    this.vhost = vhost
+    this.deadLetterQueue = deadLetterQueue
+  }
+
+  async getRetainedDeadLetter() {
+    const messages = await this.getQueueMessages(this.deadLetterQueue)
+    if (messages.length !== 1 || messages[0].message_count !== 0) {
+      throw new Error(
+        'Dataset export DLQ must contain exactly one retained diagnostic and no additional messages',
+      )
+    }
+    return requireDatasetExportDeadLetterDiagnostic(messages[0])
+  }
+
+  async getQueueMessages(queue) {
+    const encodedVhost = encodeURIComponent(this.vhost)
+    const encodedQueue = encodeURIComponent(queue)
+    const response = await fetch(`${this.baseUrl}/api/queues/${encodedVhost}/${encodedQueue}/get`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${Buffer.from(`${this.username}:${this.password}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ count: 1, ackmode: 'ack_requeue_true', encoding: 'auto' }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    const payload = await readJson(response, 'RabbitMQ management queue read')
+    if (!response.ok) {
+      throw new Error(`RabbitMQ management queue read failed with HTTP ${response.status}`)
+    }
+    if (!Array.isArray(payload)) {
+      throw new Error('RabbitMQ management queue read returned an invalid payload')
+    }
+    return payload
+  }
+}
+
+async function runDlqReplayAcceptance(environment) {
+  const startedAt = Date.now()
+  const evidence = {
+    schema_version: 'dataset-export-dlq-replay-acceptance-v1',
+    project_id: environment.projectId,
+    dataset_version_id: environment.datasetVersionId,
+    source_attempt: null,
+    new_attempt: null,
+    dead_letter_id: null,
+    dataset_export_id: null,
+    old_attempt_status: 'NOT_OBSERVED_BY_PUBLIC_API',
+    export_status: null,
+    artifact_count: null,
+    artifact_size_bytes: null,
+    artifact_sha256: null,
+    outcome: 'FAILED',
+  }
+  const administrator = new CoreApiClient({
+    baseUrl: environment.baseUrl,
+    bearerToken: environment.adminBearerToken,
+  })
+  const management = new RabbitManagementClient({
+    baseUrl: environment.rabbitmqManagementUrl,
+    username: environment.rabbitmqManagementUsername,
+    password: environment.rabbitmqManagementPassword,
+    vhost: decodeURIComponent(new URL(environment.rabbitmqUrl).pathname.replace(/^\//, '')) || '/',
+    deadLetterQueue: environment.deadLetterQueue,
+  })
+  try {
+    const diagnostic = await management.getRetainedDeadLetter()
+    evidence.dead_letter_id = diagnostic.deadLetterId
+    evidence.dataset_export_id = diagnostic.exportId
+    evidence.source_attempt = diagnostic.sourceAttempt
+    if (diagnostic.exportId.toLowerCase() !== environment.exportId.toLowerCase()) {
+      throw new Error(
+        'Retained dataset export DLQ diagnostic does not match DATASET_EXPORT_DLQ_REPLAY_EXPORT_ID',
+      )
+    }
+    if (diagnostic.sourceAttempt !== 1) {
+      throw new Error('Dataset export DLQ replay acceptance only supports source attempt 1')
+    }
+    requireDatasetExportDlqReplayReason(diagnostic.reasonCode)
+
+    const preflight = await administrator.request(
+      'preflight retained dataset export dead letter',
+      `/projects/${environment.projectId}/dataset-versions/${environment.datasetVersionId}`,
+    )
+    requireDatasetExportReplayPreflight(preflight, environment.exportId, diagnostic.sourceAttempt)
+
+    const replayRequest = buildDatasetExportReplayRequest(
+      diagnostic,
+      environment.operatorReasonCode,
+      environment.changeReference,
+    )
+    const replayResponse = await administrator.request(
+      'replay retained dataset export dead letter',
+      `/dataset-exports/${diagnostic.exportId}/replays`,
+      {
+        method: 'POST',
+        idempotencyKey: environment.idempotencyKey,
+        body: replayRequest,
+      },
+    )
+    requireDatasetExportReplayResponse(replayResponse, diagnostic)
+    evidence.new_attempt = replayResponse.new_attempt
+
+    const completed = await waitFor(
+      'dataset export DLQ replay completion',
+      async () =>
+        administrator.request(
+          'read replayed dataset export status',
+          `/projects/${environment.projectId}/dataset-versions/${environment.datasetVersionId}`,
+        ),
+      (response) => {
+        const result = requireDatasetExportReplayCompletion(
+          response,
+          diagnostic.exportId,
+          diagnostic.sourceAttempt + 1,
+        )
+        if (result === false) return false
+        evidence.export_status = result.exportRequest.status
+        evidence.artifact_count = result.exportRequest.artifact ? 1 : 0
+        evidence.artifact_size_bytes = result.artifact.size_bytes
+        evidence.artifact_sha256 = result.artifact.sha256
+        return result
+      },
+      EXPORT_TIMEOUT_MS,
+    )
+    if (completed.artifact.size_bytes <= 0 || !SHA256_PATTERN.test(completed.artifact.sha256)) {
+      throw new Error('Dataset export DLQ replay artifact is invalid')
+    }
+    if (evidence.artifact_count !== 1) {
+      throw new Error('Dataset export DLQ replay did not leave exactly one artifact')
+    }
+    evidence.outcome = 'PASSED'
+    evidence.duration_ms = Date.now() - startedAt
+    process.stdout.write(`DLQ_REPLAY_RESULT ${JSON.stringify(evidence)}\n`)
+  } finally {
+    if (evidence.outcome !== 'PASSED') {
+      evidence.duration_ms = Date.now() - startedAt
+      process.stdout.write(`DLQ_REPLAY_EVIDENCE ${JSON.stringify(evidence)}\n`)
+    }
+  }
+}
+
+function requireSafeReplayDiagnostic(diagnostic) {
+  if (
+    !diagnostic ||
+    typeof diagnostic !== 'object' ||
+    typeof diagnostic.deadLetterId !== 'string' ||
+    typeof diagnostic.reasonCode !== 'string' ||
+    typeof diagnostic.bodySha256 !== 'string' ||
+    typeof diagnostic.sourceMessageId !== 'string' ||
+    typeof diagnostic.exportId !== 'string' ||
+    !Number.isSafeInteger(diagnostic.sourceAttempt)
+  ) {
+    throw new Error('DLQ replay diagnostic is incomplete')
+  }
+  if (!DLQ_REPLAYABLE_REASONS.has(diagnostic.reasonCode)) {
+    throw new Error('DLQ replay diagnostic reason is not replayable')
+  }
+  if (
+    !UUID_PATTERN.test(diagnostic.deadLetterId) ||
+    !UUID_PATTERN.test(diagnostic.sourceMessageId)
+  ) {
+    throw new Error('DLQ replay diagnostic UUID is invalid')
+  }
+  if (!UUID_PATTERN.test(diagnostic.exportId) || diagnostic.sourceAttempt < 1) {
+    throw new Error('DLQ replay diagnostic export identity is invalid')
+  }
+  if (!SHA256_PATTERN.test(diagnostic.bodySha256)) {
+    throw new Error('DLQ replay diagnostic body_sha256 is invalid')
+  }
+  return diagnostic
+}
+
 async function main() {
   loadLocalEnvironment()
   const mode = parseAcceptanceMode(process.argv.slice(2))
-  const environment = assertAcceptanceEnvironment({
-    enabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
-    dataProfile: process.env.DATA_PROFILE,
-    baseUrl: process.env.PLATFORM_BASE_URL || 'http://localhost:8080',
-    rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
-    adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
-    uploaderBearerToken: process.env.DEV_BEARER_TOKEN,
-    leaseLoss: mode.leaseLoss,
-    leaseLossAuthorized: process.env.RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE,
-  })
+  if (mode.dlqReplay) {
+    const environment = assertDlqReplayEnvironment({
+      enabled: process.env.RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE,
+      normalAcceptanceEnabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
+      dataProfile: process.env.DATA_PROFILE,
+      baseUrl: process.env.PLATFORM_BASE_URL || 'http://localhost:8080',
+      rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
+      rabbitmqManagementUrl:
+        process.env.RABBITMQ_MANAGEMENT_URL ||
+        `http://localhost:${process.env.RABBITMQ_MANAGEMENT_PORT || '15672'}`,
+      rabbitmqManagementUsername: process.env.RABBITMQ_USER,
+      rabbitmqManagementPassword: process.env.RABBITMQ_PASSWORD,
+      adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
+      projectId: process.env.DATASET_EXPORT_DLQ_REPLAY_PROJECT_ID,
+      datasetVersionId: process.env.DATASET_EXPORT_DLQ_REPLAY_DATASET_VERSION_ID,
+      exportId: process.env.DATASET_EXPORT_DLQ_REPLAY_EXPORT_ID,
+      operatorReasonCode: process.env.DATASET_EXPORT_DLQ_REPLAY_REASON_CODE,
+      changeReference: process.env.DATASET_EXPORT_DLQ_REPLAY_CHANGE_REFERENCE,
+      idempotencyKey: process.env.DATASET_EXPORT_DLQ_REPLAY_IDEMPOTENCY_KEY,
+      deadLetterQueue: process.env.DATASET_EXPORT_DLQ_QUEUE || DATASET_EXPORT_DEAD_LETTER_QUEUE,
+    })
+    await assertHealthy(environment.baseUrl)
+    await runDlqReplayAcceptance(environment)
+    return
+  }
+  const environment = mode.dlqPrepare
+    ? assertDlqPrepareEnvironment({
+        enabled: process.env.RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE,
+        normalAcceptanceEnabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
+        dataProfile: process.env.DATA_PROFILE,
+        baseUrl: process.env.PLATFORM_BASE_URL || 'http://localhost:8080',
+        rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
+        adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
+        uploaderBearerToken: process.env.DEV_BEARER_TOKEN,
+      })
+    : assertAcceptanceEnvironment({
+        enabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
+        dataProfile: process.env.DATA_PROFILE,
+        baseUrl: process.env.PLATFORM_BASE_URL || 'http://localhost:8080',
+        rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
+        adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
+        uploaderBearerToken: process.env.DEV_BEARER_TOKEN,
+        leaseLoss: mode.leaseLoss,
+        leaseLossAuthorized: process.env.RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE,
+      })
   await assertHealthy(environment.baseUrl)
 
   const startedAt = Date.now()
@@ -344,6 +935,22 @@ async function main() {
     )
     if (approvedExport.status !== 'QUEUED' || approvedExport.attempt?.attempt !== 1) {
       throw new Error('Dataset export approval did not queue its first Worker attempt')
+    }
+
+    if (mode.dlqPrepare) {
+      process.stdout.write(
+        `ACCEPTANCE_SETUP ${JSON.stringify({
+          schema_version: 'dataset-export-cross-process-acceptance-setup-v1',
+          project_id: projectId,
+          dataset_version_id: datasetVersionId,
+          dataset_export_id: requireUuid(
+            approvedExport.dataset_export_id,
+            'Synthetic dataset export',
+          ),
+          first_attempt: approvedExport.attempt.attempt,
+        })}\n`,
+      )
+      return
     }
 
     const observedExportStatuses = [approvedExport.status]
@@ -579,13 +1186,51 @@ function key(prefix) {
 }
 
 function requireUuid(value, label) {
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-  ) {
+  if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
     throw new Error(`${label} is missing a valid UUID`)
   }
   return value
+}
+
+function parseLoopbackUrl(value, schemes, label) {
+  let parsed
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`${label} must be a valid URL`)
+  }
+  if (!schemes.includes(parsed.protocol) || !isLoopbackHost(parsed.hostname)) {
+    throw new Error(`${label} must use a localhost/loopback address`)
+  }
+  return parsed
+}
+
+function requireQueueName(value, label) {
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
+    value.length > 255 ||
+    !/^[A-Za-z0-9._:-]+$/.test(value)
+  ) {
+    throw new Error(`${label} must be a simple local RabbitMQ queue name`)
+  }
+}
+
+function isRfc3339(value) {
+  if (typeof value !== 'string') return false
+  const parsed = new Date(value)
+  return Number.isFinite(parsed.getTime()) && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+}
+
+function formatUuid(bytes) {
+  const hex = Buffer.from(bytes).toString('hex')
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-')
 }
 
 function isLoopbackHost(hostname) {
