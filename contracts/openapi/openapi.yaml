@@ -916,6 +916,74 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/DatasetVersionError"
+  /dataset-exports/{dataset_export_id}/replays:
+    post:
+      operationId: replayDeadLetteredDatasetExport
+      tags:
+        - Dataset Admission
+      summary: Create an audited new attempt from a retained dataset export dead-letter diagnostic
+      description: >-
+        Administrator-only recovery command. The caller copies only safe identity fields from the
+        retained dataset-export-dead-letter.v1 diagnostic. The server verifies the deterministic
+        UUIDv5 dead_letter_id, current project/export/message/attempt identity, replayable reason,
+        output cleanup, replay limit and idempotency key; it then marks the old attempt failed and
+        atomically creates a new attempt, lease capability, message ID, Outbox event, immutable replay
+        record and append-only audit event. The DLQ body is never accepted or republished. A
+        DATASET_EXPORT_JOB_CONTRACT_INVALID diagnostic is not replayable because it has no trusted
+        export identity.
+      parameters:
+        - $ref: "#/components/parameters/DatasetExportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatasetExportManualReplayRequest"
+      responses:
+        "202":
+          description: New attempt queued, or the exact command replayed idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetExportManualReplayResponse"
+        "400":
+          description: The diagnostic fields, change reference or idempotency key are invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "403":
+          description: The caller is not an administrator for the current project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "404":
+          description: The dataset export is not found in the authenticated project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
+        "409":
+          description: >-
+            The diagnostic is not replayable or does not match the current attempt, cleanup failed,
+            the replay limit or export state was reached, or the idempotency key/dead-letter identity
+            conflicts with another command.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DatasetVersionError"
   /auth/login:
     post:
       operationId: loginPlatformAccount
@@ -6754,6 +6822,88 @@ components:
         sha256:
           type: string
           pattern: ^[a-f0-9]{64}$
+        created_at:
+          type: string
+          format: date-time
+    DatasetExportManualReplayRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - dead_letter_id
+        - source_message_id
+        - source_attempt
+        - dead_letter_reason
+        - body_sha256
+        - operator_reason_code
+        - change_reference
+      properties:
+        dead_letter_id:
+          type: string
+          format: uuid
+          description: Deterministic UUIDv5 from the dataset export diagnostic reason and body digest.
+        source_message_id:
+          type: string
+          format: uuid
+        source_attempt:
+          type: integer
+          minimum: 1
+        dead_letter_reason:
+          type: string
+          enum:
+            - DATASET_EXPORT_JOB_CONTRACT_INVALID
+            - DATASET_EXPORT_JOB_PROFILE_UNSUPPORTED
+            - DATASET_EXPORT_JOB_ACQUIRE_REJECTED
+            - DATASET_EXPORT_JOB_LEASE_REJECTED
+            - DATASET_EXPORT_JOB_RESULT_REJECTED
+          description: Stable reason from dataset-export-dead-letter.v1; contract-invalid is rejected as unreplayable.
+        body_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+          description: SHA-256 from the sanitized diagnostic, never the original message body.
+        operator_reason_code:
+          type: string
+          enum:
+            - CONFIGURATION_FIXED
+            - WORKER_DEPLOYMENT_FIXED
+            - AUTHORIZATION_FIXED
+            - OTHER_APPROVED
+        change_reference:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,127}$
+          description: Non-sensitive ticket, deployment or commit reference supporting the replay.
+    DatasetExportManualReplayResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - replay_id
+        - dataset_export_id
+        - dead_letter_id
+        - source_attempt
+        - new_attempt
+        - resulting_export_status
+        - created_at
+      properties:
+        replay_id:
+          type: string
+          format: uuid
+        dataset_export_id:
+          type: string
+          format: uuid
+        dead_letter_id:
+          type: string
+          format: uuid
+        source_attempt:
+          type: integer
+          minimum: 1
+        new_attempt:
+          type: integer
+          minimum: 2
+        resulting_export_status:
+          type: string
+          const: QUEUED
+          description: State committed by the replay command, not a live worker-status read.
         created_at:
           type: string
           format: date-time

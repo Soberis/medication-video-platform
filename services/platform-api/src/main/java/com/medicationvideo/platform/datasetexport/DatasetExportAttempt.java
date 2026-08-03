@@ -191,6 +191,20 @@ class DatasetExportAttempt {
 		this.updatedAt = now;
 	}
 
+	void failAfterManualDeadLetter(DatasetExportDeadLetterReason reason, Instant now) {
+		if (this.status != DatasetExportAttemptStatus.QUEUED && this.status != DatasetExportAttemptStatus.RUNNING) {
+			throw new DatasetExportExecutionException("DATASET_EXPORT_REPLAY_STATE_INVALID",
+					"Only a queued or running dataset export attempt can be manually replayed.", false);
+		}
+		this.status = DatasetExportAttemptStatus.FAILED;
+		this.errorClass = "NON_RETRYABLE_POLICY";
+		this.errorCode = reason.name();
+		this.safeErrorMessage = "The dataset export attempt was manually stopped after a retained dead-letter diagnostic.";
+		this.errorRetryable = false;
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
 	boolean isRecoverableAt(Instant cutoff) {
 		return this.status == DatasetExportAttemptStatus.RUNNING && this.leaseUntil != null
 				&& !this.leaseUntil.isAfter(cutoff);
@@ -241,6 +255,18 @@ class DatasetExportAttempt {
 
 	String getWorkerId() {
 		return this.workerId;
+	}
+
+	String getErrorClass() {
+		return this.errorClass;
+	}
+
+	String getErrorCode() {
+		return this.errorCode;
+	}
+
+	String getSafeErrorMessage() {
+		return this.safeErrorMessage;
 	}
 
 	Instant getStartedAt() {

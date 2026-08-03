@@ -162,7 +162,7 @@ Worker 每次请求从受管文件重新读取短期 JWT，静态 bearer 仅允�
 可重试失败创建新 attempt；下载必须由管理员显式申请 5 分钟授权且 URL 不落库。Flyway V48 增加失联
 attempt 的 grace 后恢复：锁定当前导出和最新 attempt 后标记 `LOST`，清理 multipart/已完成临时对象，
 未达上限时原子创建新 capability、attempt 与 Outbox，达到上限时终止导出。2026-07-31 已在 Windows 与 macOS
-取得正常导出和一次可重试构建失败恢复的本机合成真实服务证据，2026-08-03 又在 Windows 本地合成环境完成真实跨进程失联租约恢复，详见数据集导出跨进程验收运行手册；DLQ 和正式 UAT 仍待完成；
+取得正常导出和一次可重试构建失败恢复的本机合成真实服务证据，2026-08-03 又在 Windows 本地合成环境完成真实跨进程失联租约恢复，详见数据集导出跨进程验收运行手册；V49 已完成 Export DLQ 管理员受控重放的 Core API 代码与合同测试，真实 broker DLQ 演练、并发和正式 UAT 仍待完成；
 v1 因无真实 Object/COCO 与 clean video 生产者而返回稳定 Profile 阻断，不能声称 V1.10 历史执行兼容已完成。
 
 FR-022 当前 `PI` 的边界是单个已批准主 Step revision 的轻量同步后置清洗，不是按批次/筛选条件创建的通用异步清洗任务。复核通过时创建首个 run/result；管理员可对仍完成、已通过、未删除且已入库的视频 revision 发起受控重核，服务端以当前质量版本、媒体和标注文档构建输入指纹，未变化时返回既有结果、变化时创建新不可变结果。该切片复用 Core API 和 PostgreSQL 事务，不增加 Worker、RabbitMQ 路由或 `/cleaning` 页面；后续出现真实批量或耗时规则时，再按冻结输入和可重跑语义扩展 CleaningRun。

@@ -178,6 +178,14 @@ class DatasetExport {
 		this.status = DatasetExportStatus.RETRY_WAIT;
 	}
 
+	void requeueAfterManualReplay() {
+		if (this.status != DatasetExportStatus.QUEUED && this.status != DatasetExportStatus.RUNNING) {
+			throw new DatasetExportExecutionException("DATASET_EXPORT_REPLAY_STATE_INVALID",
+					"Only a queued or running dataset export can be manually replayed.", false);
+		}
+		this.status = DatasetExportStatus.QUEUED;
+	}
+
 	void makeAvailable(Instant completedAt) {
 		complete(DatasetExportStatus.AVAILABLE, completedAt);
 	}

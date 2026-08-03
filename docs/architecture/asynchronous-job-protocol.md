@@ -351,6 +351,17 @@ UUIDv5 校验能够发现抄录错误并绑定稳定诊断身份，但不是签�
 管理员从受控 RabbitMQ 管理面读取保留诊断并接受审计；若未来需要无人值守重放，必须先增加
 签名诊断或受信 DLQ Inbox，不能把本接口改为自动消费后直接重试。
 
+数据集导出沿用同一人工边界，当前接口为 `POST /api/v1/dataset-exports/{dataset_export_id}/replays`。
+V49 只持久化人工复制的安全字段和不可变 replay 记录，不新增 DLQ inbox、不自动消费 RabbitMQ，
+也不接受原始 body、lease token、签名 URL 或对象存储字段。可重放原因是
+`DATASET_EXPORT_JOB_PROFILE_UNSUPPORTED`、`DATASET_EXPORT_JOB_ACQUIRE_REJECTED`、
+`DATASET_EXPORT_JOB_LEASE_REJECTED` 和 `DATASET_EXPORT_JOB_RESULT_REJECTED`；
+`DATASET_EXPORT_JOB_CONTRACT_INVALID` 或缺少可信 message/export/attempt 身份的诊断必须拒绝。
+服务端会锁定当前项目和导出，清理已有临时输出，终止旧 attempt，复用既有 AttemptQueueService
+创建新 attempt/capability/message/Outbox，并记录 `DATASET_EXPORT_MANUAL_REPLAY` 审计；清理失败时
+事务不创建新 replay 或 Outbox。默认每个 export 最多 2 次人工重放，配置边界仍为 1..10。
+本切片的代码和合同测试完成不等于真实 broker DLQ 运维演练完成。
+
 ## 12. 对象输出与原子发布
 
 对象存储通常没有目录级原子 rename。发布采用两阶段：
@@ -412,7 +423,7 @@ temporary/{job_id}/{attempt}/...
 - [x] lease 过期后旧 attempt 迟到结果被拒绝。
 - [ ] 运行中取消能停止并清理临时输出。
 - [x] non-retryable 输入不会进入重试风暴。
-- [x] 受控 DLQ 重放创建新 attempt、新 capability/message ID 并保留追加式审计；真实 broker
-  运维演练仍待完成。
+- [x] 受控 Media/Export DLQ 重放创建新 attempt、新 capability/message ID 并保留追加式审计；真实
+  broker DLQ 运维演练仍待完成。
 - [ ] 对象摘要、输入摘要或参数摘要变化会阻断提交。
 - [ ] Worker 无数据库写权限、无默认公网出站权限。
