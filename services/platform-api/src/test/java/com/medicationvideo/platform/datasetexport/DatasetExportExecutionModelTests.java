@@ -5,14 +5,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import com.medicationvideo.platform.governance.AuditEventCommand;
 
 class DatasetExportExecutionModelTests {
 
@@ -56,6 +66,111 @@ class DatasetExportExecutionModelTests {
 		assertEquals(APPROVAL_DECISION_ID, export.getApprovalDecisionId());
 		assertEquals("independent.approver", export.getApprovedBy());
 		assertEquals(approvedAt.plusSeconds(4), export.getCompletedAt());
+	}
+
+	@Test
+	void redeliveredSuccessfulResultUsesPersistedReceiptWithoutRepeatingSideEffects() {
+		var export = requestedExport();
+		var startedAt = Instant.now().minusSeconds(10);
+		export.queue(APPROVAL_DECISION_ID, "independent.approver", "dataset-export-approve-0001", digest('e'),
+				startedAt);
+		var capability = DatasetExportLeaseCapabilityFactory.create();
+		var messageId = new UUID(0, 7);
+		var attempt = DatasetExportAttempt.queue(export, 1, messageId, capability.hash(), startedAt);
+		attempt.acquire("export-worker-1", startedAt, Duration.ofHours(2));
+		export.start(startedAt);
+		var upload = new DatasetExportStoragePort.CreatedUpload("synthetic", "export.zip", "upload-1");
+		attempt.attachUpload(upload, startedAt);
+
+		var softwareDigest = "sha256:" + digest('a');
+		var packageSha256 = digest('b');
+		var files = List.of(new DatasetExportFileResult("README.md", digest('f'), 1),
+				new DatasetExportFileResult("label_schema.json", digest('f'), 1),
+				new DatasetExportFileResult("manifest.jsonl", digest('f'), 1),
+				new DatasetExportFileResult("action_segments.jsonl", digest('f'), 1),
+				new DatasetExportFileResult("splits/pilot.txt", digest('f'), 1),
+				new DatasetExportFileResult("splits/holdout.txt", digest('f'), 1),
+				new DatasetExportFileResult("SHA256SUMS", digest('f'), 1));
+		var request = new DatasetExportResultRequest(DatasetExportResultRequest.SCHEMA_VERSION, messageId,
+				export.getDatasetExportId(), 1, capability.token(), DatasetExportResultStatus.SUCCEEDED,
+				export.getSnapshotDigest(), export.getExportProfileDigest(), packageSha256, 1L, files, softwareDigest,
+				startedAt, startedAt.plusSeconds(1), null);
+		var receipt = new DatasetExportInboxReceipt(messageId, export.getDatasetExportId(), 1, request.fingerprint(),
+				DatasetExportResultStatus.SUCCEEDED.name(), Instant.parse("2026-08-03T00:00:00Z"));
+		var part = new DatasetExportStoragePort.StoredPart(1, 1, "etag-1");
+		var completed = new DatasetExportStoragePort.CompletedObject(1, "etag-1");
+
+		var exportRepository = mock(DatasetExportRepository.class);
+		var attemptRepository = mock(DatasetExportAttemptRepository.class);
+		var artifactRepository = mock(ExportArtifactRepository.class);
+		var specificationRepository = mock(DatasetBuildSpecificationRepository.class);
+		var memberRepository = mock(DatasetMemberSessionRepository.class);
+		var streamRepository = mock(DatasetMemberStreamRepository.class);
+		var assignmentRepository = mock(DatasetSplitAssignmentRepository.class);
+		var assetReadService = mock(com.medicationvideo.platform.assetcapture.ClipAssetExportReadService.class);
+		var annotationQueryService = mock(
+				com.medicationvideo.platform.annotationreview.AnnotationExportQueryService.class);
+		var storage = mock(DatasetExportStoragePort.class);
+		var outputCleanup = mock(DatasetExportOutputCleanup.class);
+		var inbox = mock(DatasetExportResultInboxPort.class);
+		var attemptQueue = mock(DatasetExportAttemptQueueService.class);
+		var retryPolicy = mock(DatasetExportRetryPolicy.class);
+		var auditRecorder = mock(com.medicationvideo.platform.governance.AuditEventRecorder.class);
+
+		when(exportRepository.findForUpdate(export.getDatasetExportId())).thenReturn(Optional.of(export));
+		when(attemptRepository.findForUpdate(export.getDatasetExportId(), 1)).thenReturn(Optional.of(attempt));
+		when(streamRepository
+			.findByDatasetVersionIdOrderByDatasetMemberSessionIdAscCameraIndexAsc(export.getDatasetVersionId()))
+			.thenReturn(List.of());
+		when(memberRepository.findByDatasetVersionIdOrderByCandidateIndexAsc(export.getDatasetVersionId()))
+			.thenReturn(List.of());
+		when(assetReadService.describe(export.getProjectId(), List.of())).thenReturn(List.of());
+		when(storage.findCompletedObject(upload)).thenReturn(Optional.empty());
+		when(storage.listParts(upload)).thenReturn(List.of(part));
+		when(storage.complete(upload, List.of(part))).thenReturn(completed);
+		when(storage.calculateSha256(upload)).thenReturn(packageSha256);
+		when(artifactRepository.saveAndFlush(any(ExportArtifact.class)))
+			.thenAnswer(invocation -> invocation.getArgument(0));
+		when(inbox.find(messageId)).thenReturn(Optional.empty(), Optional.of(receipt));
+		when(inbox.record(eq(messageId), eq(export.getDatasetExportId()), eq(1), eq(request.fingerprint()),
+				eq(DatasetExportResultStatus.SUCCEEDED.name()), any(Instant.class)))
+			.thenReturn(receipt);
+
+		var service = new DatasetExportExecutionService(exportRepository, attemptRepository, artifactRepository,
+				specificationRepository, memberRepository, streamRepository, assignmentRepository, assetReadService,
+				annotationQueryService, storage, outputCleanup, inbox, attemptQueue, retryPolicy, auditRecorder,
+				Duration.ofHours(2), Duration.ofMinutes(5), Duration.ofHours(2), Duration.ofMinutes(15),
+				Duration.ofMinutes(5), softwareDigest);
+
+		var first = service.acceptResult(export.getDatasetExportId(), 1, capability.token(), request);
+		var second = service.acceptResult(export.getDatasetExportId(), 1, capability.token(), request);
+
+		assertEquals(first, second);
+		assertEquals(receipt.messageId(), first.messageId());
+		assertEquals(receipt.exportId(), first.exportId());
+		assertEquals(receipt.attempt(), first.attempt());
+		assertEquals(DatasetExportResultStatus.SUCCEEDED, first.status());
+		assertEquals(DatasetExportStatus.AVAILABLE, first.exportStatus());
+		assertEquals(receipt.processedAt(), first.processedAt());
+		assertEquals(DatasetExportStatus.AVAILABLE, export.getStatus());
+		assertEquals(DatasetExportAttemptStatus.SUCCEEDED, attempt.getStatus());
+
+		var artifact = ArgumentCaptor.forClass(ExportArtifact.class);
+		verify(artifactRepository, times(1)).saveAndFlush(artifact.capture());
+		assertEquals(export.getDatasetExportId(), artifact.getValue().getDatasetExportId());
+		assertEquals(1, artifact.getValue().getSizeBytes());
+		assertEquals(packageSha256, artifact.getValue().getSha256());
+		verify(inbox, times(2)).find(messageId);
+		verify(inbox, times(1)).record(eq(messageId), eq(export.getDatasetExportId()), eq(1), eq(request.fingerprint()),
+				eq(DatasetExportResultStatus.SUCCEEDED.name()), any(Instant.class));
+		var audit = ArgumentCaptor.forClass(AuditEventCommand.class);
+		verify(auditRecorder, times(1)).record(audit.capture());
+		assertEquals("DATASET_EXPORT_AVAILABLE", audit.getValue().action());
+		verify(storage, times(1)).findCompletedObject(upload);
+		verify(storage, times(1)).listParts(upload);
+		verify(storage, times(1)).complete(upload, List.of(part));
+		verify(storage, times(1)).calculateSha256(upload);
+		verifyNoInteractions(outputCleanup, attemptQueue, retryPolicy);
 	}
 
 	@Test
