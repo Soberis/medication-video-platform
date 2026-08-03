@@ -17,6 +17,7 @@ from medication_export_worker.api import (
     OutputUploadError,
     PermanentDeliveryError,
     RetryableDeliveryError,
+    StaleDeliveryError,
 )
 from medication_export_worker.contracts import (
     CURRENT_PROFILE_DIGEST,
@@ -305,6 +306,29 @@ def test_requeues_when_result_submission_is_temporarily_unavailable(tmp_path: Pa
     assert outcome.disposition is DeliveryDisposition.REQUEUE
     assert outcome.dead_letter_reason is None
     assert len(client.results) == 1
+
+
+def test_acknowledges_stale_acquire_without_side_effects(tmp_path: Path) -> None:
+    client = RecordingClient(
+        b"synthetic-video-bytes",
+        acquire_error=StaleDeliveryError(),
+    )
+
+    outcome = processor(client, tmp_path).process(job_body())
+
+    assert outcome.disposition is DeliveryDisposition.ACK
+    assert outcome.dead_letter_reason is None
+    assert outcome.message_id == MESSAGE_ID
+    assert outcome.export_id == EXPORT_ID
+    assert outcome.attempt == 1
+    assert len(client.acquired) == 1
+    assert client.acquired[0].message_id == MESSAGE_ID
+    assert client.acquired[0].export_id == EXPORT_ID
+    assert client.acquired[0].attempt == 1
+    assert client.downloaded == []
+    assert client.uploaded_packages == []
+    assert client.results == []
+    assert list(tmp_path.glob("dataset-export-*")) == []
 
 
 def test_rejects_legacy_profile_without_contacting_core_api(tmp_path: Path) -> None:
