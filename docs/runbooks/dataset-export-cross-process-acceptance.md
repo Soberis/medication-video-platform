@@ -270,6 +270,8 @@ acceptance_command_reruns: 0
 `RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true`。工具只允许 loopback Core API、RabbitMQ
 AMQP 和 Management API，且强制 `DATA_PROFILE=synthetic`；不读取数据库，不接受原始任务 body，
 也不会把 lease token、签名 URL、对象位置或其他敏感字段提交给重放 API。
+准备模式复用 `DEV_PROJECT_ID` 指向的本地合成引导项目，而不是新建项目：受控重放接口按当前本地
+Bearer 的项目上下文授权。它仍会在该项目下新建合成会话、DatasetVersion 和导出。
 
 ### 12.1 前置隔离与故障注入
 
@@ -311,6 +313,8 @@ uv run --directory workers/export-worker export-worker
 $env:DATA_PROFILE = 'synthetic'
 $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
 $env:RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE = 'true'
+# 必须与本地 Bearer 的当前项目相同；.env 的默认值是合成引导项目。
+$env:DEV_PROJECT_ID = '00000000-0000-0000-0000-000000000001'
 pnpm run dataset-export:dlq-prepare
 ```
 

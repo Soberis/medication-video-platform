@@ -80,6 +80,7 @@ export function assertDlqPrepareEnvironment({
   rabbitmqUrl = 'amqp://localhost:5672/medication',
   adminBearerToken,
   uploaderBearerToken,
+  projectId,
 }) {
   if (enabled !== 'true') {
     throw new Error(
@@ -91,7 +92,7 @@ export function assertDlqPrepareEnvironment({
       'Set RUN_DATASET_EXPORT_ACCEPTANCE=true before preparing the synthetic DLQ replay fixture',
     )
   }
-  return assertAcceptanceEnvironment({
+  const environment = assertAcceptanceEnvironment({
     enabled: 'true',
     dataProfile,
     baseUrl,
@@ -99,6 +100,10 @@ export function assertDlqPrepareEnvironment({
     adminBearerToken,
     uploaderBearerToken,
   })
+  return {
+    ...environment,
+    projectId: requireUuid(projectId, 'DEV_PROJECT_ID'),
+  }
 }
 
 export function assertDlqReplayEnvironment({
@@ -776,6 +781,7 @@ async function main() {
         rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672/medication',
         adminBearerToken: process.env.DEV_ADMIN_BEARER_TOKEN,
         uploaderBearerToken: process.env.DEV_BEARER_TOKEN,
+        projectId: process.env.DEV_PROJECT_ID,
       })
     : assertAcceptanceEnvironment({
         enabled: process.env.RUN_DATASET_EXPORT_ACCEPTANCE,
@@ -798,12 +804,18 @@ async function main() {
     baseUrl: environment.baseUrl,
     bearerToken: environment.uploaderBearerToken,
   })
-  const project = await administrator.request('create synthetic acceptance project', '/projects', {
-    method: 'POST',
-    idempotencyKey: key('dataset-export-acceptance-project'),
-    body: { display_name: `Synthetic dataset export acceptance ${randomUUID()}` },
-  })
-  const projectId = requireUuid(project.project_id, 'Synthetic acceptance project')
+  const projectId = mode.dlqPrepare
+    ? environment.projectId
+    : requireUuid(
+        (
+          await administrator.request('create synthetic acceptance project', '/projects', {
+            method: 'POST',
+            idempotencyKey: key('dataset-export-acceptance-project'),
+            body: { display_name: `Synthetic dataset export acceptance ${randomUUID()}` },
+          })
+        ).project_id,
+        'Synthetic acceptance project',
+      )
   await administrator.request(
     'grant synthetic uploader membership',
     `/projects/${projectId}/memberships/${UPLOADER_ACTOR_ID}`,

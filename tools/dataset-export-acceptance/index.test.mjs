@@ -42,7 +42,7 @@ test('acceptance mode keeps the normal path explicit and rejects unknown options
   assert.throws(() => parseAcceptanceMode(['--recovery', '--lease-loss-recovery']), /Usage/)
 })
 
-test('DLQ preparation requires both acceptance authorizations and synthetic loopback credentials', () => {
+test('DLQ preparation requires both acceptance authorizations, loopback credentials, and bootstrap project context', () => {
   const common = {
     enabled: 'true',
     normalAcceptanceEnabled: 'true',
@@ -51,9 +51,11 @@ test('DLQ preparation requires both acceptance authorizations and synthetic loop
     rabbitmqUrl: 'amqp://localhost:5672/medication',
     adminBearerToken: 'synthetic-admin',
     uploaderBearerToken: 'synthetic-uploader',
+    projectId: '00000000-0000-4000-8000-000000000001',
   }
 
   assert.equal(assertDlqPrepareEnvironment(common).baseUrl, 'http://localhost:8080')
+  assert.equal(assertDlqPrepareEnvironment(common).projectId, common.projectId)
   assert.throws(
     () => assertDlqPrepareEnvironment({ ...common, enabled: 'false' }),
     /RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true/,
@@ -70,6 +72,8 @@ test('DLQ preparation requires both acceptance authorizations and synthetic loop
     () => assertDlqPrepareEnvironment({ ...common, baseUrl: 'http://platform:8080' }),
     /localhost Core API/,
   )
+  assert.throws(() => assertDlqPrepareEnvironment({ ...common, projectId: undefined }), /DEV_PROJECT_ID/)
+  assert.throws(() => assertDlqPrepareEnvironment({ ...common, projectId: 'not-a-uuid' }), /DEV_PROJECT_ID/)
 })
 
 test('DLQ replay authorization is independent, synthetic, and loopback-only', () => {
