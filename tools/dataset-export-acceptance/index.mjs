@@ -49,6 +49,7 @@ const DLQ_OPERATOR_REASONS = new Set([
   'OTHER_APPROVED',
 ])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const CANONICAL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/
 const NAMESPACE_URL_UUID = '6ba7b811-9dad-11d1-80b4-00c04fd430c8'
@@ -102,7 +103,7 @@ export function assertDlqPrepareEnvironment({
   })
   return {
     ...environment,
-    projectId: requireUuid(projectId, 'DEV_PROJECT_ID'),
+    projectId: requireCanonicalUuid(projectId, 'DEV_PROJECT_ID'),
   }
 }
 
@@ -150,7 +151,7 @@ export function assertDlqReplayEnvironment({
   if (!rabbitmqManagementUsername || !rabbitmqManagementPassword) {
     throw new Error('RABBITMQ_USER and RABBITMQ_PASSWORD are required for the local management API')
   }
-  requireUuid(projectId, 'DLQ replay project')
+  requireCanonicalUuid(projectId, 'DLQ replay project')
   requireUuid(datasetVersionId, 'DLQ replay dataset version')
   requireUuid(exportId, 'DLQ replay export')
   if (!DLQ_OPERATOR_REASONS.has(operatorReasonCode)) {
@@ -655,7 +656,14 @@ async function runDlqReplayAcceptance(environment) {
       'preflight retained dataset export dead letter',
       `/projects/${environment.projectId}/dataset-versions/${environment.datasetVersionId}`,
     )
-    requireDatasetExportReplayPreflight(preflight, environment.exportId, diagnostic.sourceAttempt)
+    const alreadyCompleted = requireDatasetExportReplayCompletion(
+      preflight,
+      diagnostic.exportId,
+      diagnostic.sourceAttempt + 1,
+    )
+    if (alreadyCompleted === false) {
+      requireDatasetExportReplayPreflight(preflight, environment.exportId, diagnostic.sourceAttempt)
+    }
 
     const replayRequest = buildDatasetExportReplayRequest(
       diagnostic,
@@ -674,28 +682,29 @@ async function runDlqReplayAcceptance(environment) {
     requireDatasetExportReplayResponse(replayResponse, diagnostic)
     evidence.new_attempt = replayResponse.new_attempt
 
-    const completed = await waitFor(
-      'dataset export DLQ replay completion',
-      async () =>
-        administrator.request(
-          'read replayed dataset export status',
-          `/projects/${environment.projectId}/dataset-versions/${environment.datasetVersionId}`,
-        ),
-      (response) => {
-        const result = requireDatasetExportReplayCompletion(
-          response,
-          diagnostic.exportId,
-          diagnostic.sourceAttempt + 1,
-        )
-        if (result === false) return false
-        evidence.export_status = result.exportRequest.status
-        evidence.artifact_count = result.exportRequest.artifact ? 1 : 0
-        evidence.artifact_size_bytes = result.artifact.size_bytes
-        evidence.artifact_sha256 = result.artifact.sha256
-        return result
-      },
-      EXPORT_TIMEOUT_MS,
+    const completed = alreadyCompleted || requireDatasetExportReplayCompletion(
+      await waitFor(
+        'dataset export DLQ replay completion',
+        async () =>
+          administrator.request(
+            'read replayed dataset export status',
+            `/projects/${environment.projectId}/dataset-versions/${environment.datasetVersionId}`,
+          ),
+        (response) =>
+          requireDatasetExportReplayCompletion(
+            response,
+            diagnostic.exportId,
+            diagnostic.sourceAttempt + 1,
+          ),
+        EXPORT_TIMEOUT_MS,
+      ),
+      diagnostic.exportId,
+      diagnostic.sourceAttempt + 1,
     )
+    evidence.export_status = completed.exportRequest.status
+    evidence.artifact_count = completed.exportRequest.artifact ? 1 : 0
+    evidence.artifact_size_bytes = completed.artifact.size_bytes
+    evidence.artifact_sha256 = completed.artifact.sha256
     if (completed.artifact.size_bytes <= 0 || !SHA256_PATTERN.test(completed.artifact.sha256)) {
       throw new Error('Dataset export DLQ replay artifact is invalid')
     }
@@ -1199,6 +1208,13 @@ function key(prefix) {
 
 function requireUuid(value, label) {
   if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
+    throw new Error(`${label} is missing a valid UUID`)
+  }
+  return value
+}
+
+function requireCanonicalUuid(value, label) {
+  if (typeof value !== 'string' || !CANONICAL_UUID_PATTERN.test(value)) {
     throw new Error(`${label} is missing a valid UUID`)
   }
   return value

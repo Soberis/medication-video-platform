@@ -141,7 +141,6 @@ SHA-256 与登记值一致。`RETRY_WAIT` 可能短于验收工具的轮询间�
 ## 7. 尚未覆盖
 
 - 生产身份、生产 S3、医院网络和真实视频；
-- 不可重试失败后的人工恢复和 DLQ 演练；
 - 大数据集吞吐、并发导出、限带宽或断网；
 - 正式 UAT、性能 SLO 与生产发布审批。
 
@@ -263,9 +262,9 @@ acceptance_command_reruns: 0
 该结果补齐本地合成环境的 Worker 失联租约恢复证据；DLQ、并发、大数据集、生产网络和正式 UAT
 仍按第 7 节保持未覆盖。
 
-## 12. Export DLQ 管理员受控重放（工具与手册，尚未执行）
+## 12. Export DLQ 管理员受控重放（2026-08-04 隔离本机合成验收通过）
 
-本节只提供下一项本地合成演练的可审计入口，不代表真实 RabbitMQ DLQ 已经通过验收。
+本节提供本地合成演练的可审计入口；2026-08-04 已在隔离 Windows loopback 环境完成一次真实 RabbitMQ DLQ 重放，结果见第 12.5 节。
 它使用 `pnpm run dataset-export:dlq-prepare` 与 `pnpm run dataset-export:dlq-replay` 两个独立模式，要求同时设置普通验收授权和独立的
 `RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true`。工具只允许 loopback Core API、RabbitMQ
 AMQP 和 Management API，且强制 `DATA_PROFILE=synthetic`；不读取数据库，不接受原始任务 body，
@@ -484,3 +483,19 @@ rabbitmqctl list_queues -p medication name messages_ready messages_unacknowledge
   文件被删除，验收开关恢复为 `false`；
 - 证据至少包括脱敏 `DLQ_REPLAY_RESULT`/`DLQ_REPLAY_EVIDENCE`、提交 SHA、命令退出码和恢复后
   `status-local`/RabbitMQ 只读状态。不要声称本节已执行，除非真实命令、日志和数据库只读复核均已保留。
+
+### 12.5 2026-08-04 Windows 隔离本机合成结果
+
+隔离 Docker Compose 环境使用 loopback PostgreSQL、SeaweedFS 和 RabbitMQ；Core API、Media Worker 与 Export Worker
+均只处理合成输入。准备模式输出 `dataset_export_id=62b6db6c-9680-41cf-8e60-c1f5b0739707`，首轮 attempt=1。
+无效 Worker 身份产生并保留一条 `DATASET_EXPORT_JOB_ACQUIRE_REJECTED` 诊断；管理员以
+`AUTHORIZATION_FIXED` 和 `local-dlq-replay-20260804` 执行受控重放。工具最终输出 `DLQ_REPLAY_RESULT`：
+`source_attempt=1`、`new_attempt=2`、导出=`AVAILABLE`、Artifact 数量=1、大小=381064、SHA-256=
+`15e2941802ab7577f0057a7d88dc5c6f17d228ae61e53ee286f3dd8b2b0bc784`、退出码=0。
+
+独立只读 SQL 复核 attempt 1=`FAILED/DATASET_EXPORT_JOB_ACQUIRE_REJECTED`、attempt 2=`SUCCEEDED`；两个
+message ID 与 lease capability 摘要均不同。`dataset_export_manual_replay` 恰一行，绑定 attempt 1→2、同一
+dead-letter reason、操作者原因和变更引用；Artifact 恰一条且有效；Outbox 有两条不同 message ID 的 job 事件且
+没有明文 lease token；`DATASET_EXPORT_MANUAL_REPLAY` 审计恰一条并为 `SUCCEEDED`。RabbitMQ 只读检查显示
+导出业务队列为 0，原 DLQ 诊断仍为 1。另有一条未消费的 `platform.media.probe.v1` 消息，不属于本次 export/DLQ
+重放，故本节仅声明 Export DLQ 闭环通过，不声明隔离环境全部队列已清空。

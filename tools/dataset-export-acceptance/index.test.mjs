@@ -56,6 +56,10 @@ test('DLQ preparation requires both acceptance authorizations, loopback credenti
 
   assert.equal(assertDlqPrepareEnvironment(common).baseUrl, 'http://localhost:8080')
   assert.equal(assertDlqPrepareEnvironment(common).projectId, common.projectId)
+  assert.equal(
+    assertDlqPrepareEnvironment({ ...common, projectId: '00000000-0000-0000-0000-000000000001' }).projectId,
+    '00000000-0000-0000-0000-000000000001',
+  )
   assert.throws(
     () => assertDlqPrepareEnvironment({ ...common, enabled: 'false' }),
     /RUN_DATASET_EXPORT_DLQ_REPLAY_ACCEPTANCE=true/,
@@ -98,6 +102,12 @@ test('DLQ replay authorization is independent, synthetic, and loopback-only', ()
   assert.equal(
     assertDlqReplayEnvironment(common).deadLetterQueue,
     'platform.dataset-export.dead-letter.v1',
+  )
+  assert.doesNotThrow(() =>
+    assertDlqReplayEnvironment({
+      ...common,
+      projectId: '00000000-0000-0000-0000-000000000001',
+    }),
   )
   assert.throws(
     () => assertDlqReplayEnvironment({ ...common, enabled: 'false' }),
