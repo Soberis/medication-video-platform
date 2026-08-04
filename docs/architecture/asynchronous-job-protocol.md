@@ -351,6 +351,14 @@ UUIDv5 校验能够发现抄录错误并绑定稳定诊断身份，但不是签�
 管理员从受控 RabbitMQ 管理面读取保留诊断并接受审计；若未来需要无人值守重放，必须先增加
 签名诊断或受信 DLQ Inbox，不能把本接口改为自动消费后直接重试。
 
+若 RabbitMQ 在 publisher confirm 之后发生灾难性丢失，数据库中的当前 `QUEUED` attempt 不会被
+自动重新投递：Core API 无法仅凭队列瞬时为空判断消息丢失，自动重投会造成重复执行和伪造 DLQ。
+管理员在确认 source message 已丢失后，才可调用
+`POST /api/v1/media-jobs/{media_job_id}/delivery-recoveries`。该命令仅接受 source message/attempt、
+固定原因 `BROKER_MESSAGE_LOST` 与非敏感变更引用；锁定项目和当前 `QUEUED` attempt，标记旧 attempt
+为失败并原子创建新的 attempt、capability、message ID、Outbox、恢复记录和审计。它不扫描队列、
+不重发旧 capability、不能用于 RUNNING/终态 attempt，并受既有最大 attempt 上限约束。
+
 数据集导出沿用同一人工边界，当前接口为 `POST /api/v1/dataset-exports/{dataset_export_id}/replays`。
 V49 只持久化人工复制的安全字段和不可变 replay 记录，不新增 DLQ inbox、不自动消费 RabbitMQ，
 也不接受原始 body、lease token、签名 URL 或对象存储字段。可重放原因是

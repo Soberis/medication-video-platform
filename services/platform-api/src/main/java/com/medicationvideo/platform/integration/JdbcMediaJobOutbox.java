@@ -46,4 +46,17 @@ class JdbcMediaJobOutbox implements MediaJobDispatchPort {
 		}
 	}
 
+	@Override
+	public boolean hasConfirmedPublication(UUID mediaJobId, UUID messageId) {
+		return Boolean.TRUE.equals(this.jdbcTemplate.queryForObject("""
+				SELECT EXISTS (
+				    SELECT 1 FROM outbox_event
+				    WHERE aggregate_type = 'MediaJob'
+				      AND aggregate_id = ?
+				      AND event_type = 'MediaProbeJobRequestedV1'
+				      AND payload_json ->> 'message_id' = ?
+				      AND published_at IS NOT NULL)
+				""", Boolean.class, mediaJobId, messageId.toString()));
+	}
+
 }

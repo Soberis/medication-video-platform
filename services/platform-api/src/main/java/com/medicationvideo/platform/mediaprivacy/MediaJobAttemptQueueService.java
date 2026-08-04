@@ -35,4 +35,8 @@ class MediaJobAttemptQueueService {
 				job.getRecipeDigest(), requestedAt), availableAt);
 	}
 
+	boolean hasConfirmedPublication(UUID mediaJobId, UUID messageId) {
+		return this.dispatchPort.hasConfirmedPublication(mediaJobId, messageId);
+	}
+
 }

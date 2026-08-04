@@ -61,6 +61,7 @@ class MediaJobExecutionContractTests {
 	@BeforeEach
 	void clearMediaState() {
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
+		this.jdbcTemplate.update("DELETE FROM media_job_delivery_recovery");
 		this.jdbcTemplate.update("DELETE FROM media_job_manual_replay");
 		this.jdbcTemplate.update("DELETE FROM inbox_message");
 		this.jdbcTemplate.update("DELETE FROM outbox_event");
@@ -71,6 +72,7 @@ class MediaJobExecutionContractTests {
 
 	@AfterEach
 	void clearReplayState() {
+		this.jdbcTemplate.update("DELETE FROM media_job_delivery_recovery");
 		this.jdbcTemplate.update("DELETE FROM media_job_manual_replay");
 	}
 
@@ -597,6 +599,116 @@ class MediaJobExecutionContractTests {
 		assertEquals("RUNNING", scalar("SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
 	}
 
+	@Test
+	void administratorRecoversAConfirmedMissingQueuedDeliveryWithNewAttemptOutboxAndAudit() throws Exception {
+		var created = createQueuedJob();
+		markOutboxPublished(created);
+		var idempotencyKey = "media-delivery-recovery-" + UUID.randomUUID();
+		var request = deliveryRecoveryRequest(created);
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + USER_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		var response = this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", "broker-recovery-contract-1")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isAccepted())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.media_job_id").value(created.jobId().toString()))
+			.andExpect(jsonPath("$.source_message_id").value(created.messageId().toString()))
+			.andExpect(jsonPath("$.source_attempt").value(1))
+			.andExpect(jsonPath("$.new_attempt").value(2))
+			.andExpect(jsonPath("$.resulting_job_status").value("QUEUED"))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		var recoveryId = JsonPath.<String>read(response, "$.recovery_id");
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.recovery_id").value(recoveryId));
+
+		assertEquals("FAILED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals("BROKER_MESSAGE_LOST", scalar(
+				"SELECT error_code FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals("QUEUED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 2", created.jobId()));
+		assertEquals("QUEUED", scalar("SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals(1,
+				count("SELECT count(*) FROM media_job_delivery_recovery WHERE media_job_id = ?", created.jobId()));
+		assertEquals(2, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+		var recovered = loadAttempt(created, 2);
+		assertNotEquals(created.messageId(), recovered.messageId());
+		assertEquals(1, count(
+				"SELECT count(*) FROM audit_event WHERE action = 'MEDIA_JOB_DELIVERY_RECOVERED'" + " AND object_id = ?",
+				created.jobId().toString()));
+	}
+
+	@Test
+	void rejectsStaleOrReusedDeliveryRecoveryWithoutQueuingAnotherAttempt() throws Exception {
+		var created = createQueuedJob();
+		markOutboxPublished(created);
+		var request = deliveryRecoveryRequest(created);
+		var firstKey = "media-delivery-recovery-" + UUID.randomUUID();
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", firstKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isAccepted());
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delivery-recovery-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_DELIVERY_RECOVERY_SOURCE_REUSED"));
+
+		assertEquals(2, count("SELECT count(*) FROM media_job_attempt WHERE media_job_id = ?", created.jobId()));
+		assertEquals(2, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+	}
+
+	@Test
+	void rejectsRecoveryAfterTheCurrentAttemptStartedWithoutChangingIt() throws Exception {
+		var created = createQueuedJob();
+		markOutboxPublished(created);
+		acquire(created).andExpect(status().isOk());
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delivery-recovery-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(deliveryRecoveryRequest(created)))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_DELIVERY_RECOVERY_STATE_CONFLICT"));
+
+		assertEquals("RUNNING", scalar("SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals("RUNNING",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals(1, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+	}
+
 	private org.springframework.test.web.servlet.ResultActions acquire(CreatedJob created) throws Exception {
 		return this.mockMvc.perform(
 				post("/api/v1/internal/media-jobs/{jobId}/attempts/{attempt}/lease", created.jobId(), created.attempt())
@@ -654,6 +766,45 @@ class MediaJobExecutionContractTests {
 				WHERE media_job_id = ? AND attempt = 1
 				""", UUID.class, jobId);
 		return new CreatedJob(jobId, clipAssetId, messageId, leaseToken, 1);
+	}
+
+	private static String deliveryRecoveryRequest(CreatedJob job) {
+		return """
+				{
+				  "source_message_id": "%s",
+				  "source_attempt": %d,
+				  "recovery_reason": "BROKER_MESSAGE_LOST",
+				  "change_reference": "local-broker-recovery-0001"
+				}
+				""".formatted(job.messageId(), job.attempt());
+	}
+
+	@Test
+	void rejectsRecoveryBeforeTheSourceOutboxMessageWasPublisherConfirmed() throws Exception {
+		var created = createQueuedJob();
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/delivery-recoveries", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delivery-recovery-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(deliveryRecoveryRequest(created)))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED"));
+
+		assertEquals("QUEUED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals(1, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+	}
+
+	private void markOutboxPublished(CreatedJob job) {
+		this.jdbcTemplate.update("""
+				UPDATE outbox_event
+				SET published_at = CURRENT_TIMESTAMP,
+				    payload_json = payload_json - 'lease_token',
+				    payload_redacted_at = CURRENT_TIMESTAMP
+				WHERE aggregate_id = ?
+				""", job.jobId());
 	}
 
 	private CreatedJob loadAttempt(CreatedJob job, int attemptNumber) {

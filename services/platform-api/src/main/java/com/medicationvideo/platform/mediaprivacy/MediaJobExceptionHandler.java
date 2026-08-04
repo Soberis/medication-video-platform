@@ -22,7 +22,8 @@ import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
 @RestControllerAdvice(assignableTypes = { MediaJobController.class, MediaJobReplayController.class,
-		MediaWorkerController.class, MediaReportController.class, ClipAssetMediaReportController.class })
+		MediaJobDeliveryRecoveryController.class, MediaWorkerController.class, MediaReportController.class,
+		ClipAssetMediaReportController.class })
 class MediaJobExceptionHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(MediaJobExceptionHandler.class);
@@ -56,6 +57,11 @@ class MediaJobExceptionHandler {
 
 	@ExceptionHandler(MediaJobReplayException.class)
 	ResponseEntity<ApiErrorResponse> replayConflict(MediaJobReplayException exception) {
+		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage(), false);
+	}
+
+	@ExceptionHandler(MediaJobDeliveryRecoveryException.class)
+	ResponseEntity<ApiErrorResponse> deliveryRecoveryConflict(MediaJobDeliveryRecoveryException exception) {
 		return error(HttpStatus.CONFLICT, exception.getErrorCode(), exception.getMessage(), false);
 	}
 
