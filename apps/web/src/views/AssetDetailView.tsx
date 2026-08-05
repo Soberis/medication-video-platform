@@ -9,6 +9,7 @@ import {
   deleteClipAsset,
   getClipAsset,
   getClipAssetMediaReport,
+  recoverCurrentClipAssetMediaProbeDelivery,
   requestClipAssetMediaProbe,
   type ClipAssetPlaybackGrant,
   type ClipAssetRead,
@@ -68,6 +69,7 @@ export default function AssetDetailView() {
   const [playbackMessage, setPlaybackMessage] = useState('')
   const [isRequestingPlayback, setIsRequestingPlayback] = useState(false)
   const [isRequestingMediaProbe, setIsRequestingMediaProbe] = useState(false)
+  const [isRecoveringMediaProbe, setIsRecoveringMediaProbe] = useState(false)
   const [mediaProbeMessage, setMediaProbeMessage] = useState('')
   const [mediaProbeSubmitted, setMediaProbeSubmitted] = useState(false)
   const [mediaReport, setMediaReport] = useState<MediaReport | null>(null)
@@ -96,11 +98,16 @@ export default function AssetDetailView() {
   const qualityRequest = useRef<AbortController | null>(null)
   const mediaReportRequest = useRef<AbortController | null>(null)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mediaProbeRecoveryIntent = useRef<{
+    changeReference: string
+    idempotencyKey: string
+  } | null>(null)
 
   const canDelete = projectRole === 'ADMIN'
   const canPlay = projectRole !== null && detail?.content_type === 'video/mp4'
   const canRequestMediaProbe =
     projectRole !== null && detail?.status === 'UPLOADED' && !mediaProbeSubmitted
+  const canRecoverMissingMediaProbe = projectRole === 'ADMIN' && detail?.status === 'UPLOADED'
   const canReviewQuality = projectRole !== null && detail?.status === 'INGESTED'
   const canCreateAnnotationTask =
     projectRole === 'ADMIN' &&
@@ -433,6 +440,53 @@ export default function AssetDetailView() {
       setIsRequestingMediaProbe(false)
     }
   }
+  async function recoverMissingMediaProbe() {
+    if (!canRecoverMissingMediaProbe || isRecoveringMediaProbe) return
+    const changeReference = await prompt({
+      title: '恢复已丢失的检测任务',
+      description:
+        '仅在 RabbitMQ 已确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的受审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
+      confirmText: '确认恢复',
+      placeholder: '例如：INC-20260805-001',
+      validate: (value) =>
+        /^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,127}$/.test(value.trim())
+          ? null
+          : '请输入 3–128 个允许字符组成的事件或变更编号。',
+    })
+    if (changeReference === null) return
+    const normalizedReference = changeReference.trim()
+    const intent =
+      mediaProbeRecoveryIntent.current?.changeReference === normalizedReference
+        ? mediaProbeRecoveryIntent.current
+        : { changeReference: normalizedReference, idempotencyKey: crypto.randomUUID() }
+    mediaProbeRecoveryIntent.current = intent
+    setIsRecoveringMediaProbe(true)
+    setActionErrorCode('')
+    setActionErrorMessage('')
+    try {
+      const recovery = await recoverCurrentClipAssetMediaProbeDelivery(
+        projectId,
+        assetId,
+        normalizedReference,
+        intent.idempotencyKey,
+      )
+      mediaProbeRecoveryIntent.current = null
+      setMediaProbeSubmitted(true)
+      setMediaProbeMessage(`媒体检测已恢复为第 ${recovery.new_attempt} 次尝试。请稍后刷新状态。`)
+      void message.success('媒体检测恢复命令已记录并排队。')
+    } catch (error) {
+      setActionErrorCode(
+        error instanceof CatalogApiError ? error.errorCode : 'MEDIA_PROBE_DELIVERY_RECOVERY_FAILED',
+      )
+      setActionErrorMessage(
+        error instanceof CatalogApiError
+          ? error.message
+          : '媒体检测恢复未完成，请确认任务状态后重试。',
+      )
+    } finally {
+      setIsRecoveringMediaProbe(false)
+    }
+  }
   async function saveQualityReview() {
     if (!qualityReview || !canReviewQuality || isSavingQuality) return
     setIsSavingQuality(true)
@@ -552,8 +606,10 @@ export default function AssetDetailView() {
           <PlaybackCard
             availability={playbackAvailability}
             canPlay={canPlay}
+            canRecoverMissingMediaProbe={canRecoverMissingMediaProbe}
             canRequestMediaProbe={canRequestMediaProbe}
             grant={playbackGrant}
+            isRecoveringMediaProbe={isRecoveringMediaProbe}
             isRequestingMediaProbe={isRequestingMediaProbe}
             isRequestingPlayback={isRequestingPlayback}
             mediaProbeMessage={mediaProbeMessage}
@@ -565,6 +621,7 @@ export default function AssetDetailView() {
               setPlaybackMessage('')
             }}
             onPlaybackError={handlePlaybackError}
+            onRecoverMissingMediaProbe={() => void recoverMissingMediaProbe()}
             onRequestMediaProbe={() => void requestMediaProbe()}
             onStartPlayback={() => void startPlayback()}
           />

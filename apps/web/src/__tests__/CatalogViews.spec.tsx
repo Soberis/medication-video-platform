@@ -1646,6 +1646,29 @@ describe('catalog views', () => {
     expect(screen.getByLabelText('视频预览')).toBeInTheDocument()
   })
 
+  it('lets an administrator recover a confirmed missing media probe delivery from the asset detail', async () => {
+    const fetchMock = stubAsset({ role: 'ADMIN', status: 'UPLOADED', deliveryRecovery: true })
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('media-recovery-ui-0001') })
+    const user = userEvent.setup()
+    renderAssetDetail({ username: 'admin', role: 'ADMIN' })
+
+    await user.click(await screen.findByRole('button', { name: '恢复已丢失的检测任务' }))
+    await user.type(screen.getByPlaceholderText('例如：INC-20260805-001'), 'INC-20260805-001')
+    await user.click(screen.getByRole('button', { name: '确认恢复' }))
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/clip-assets/${assetId}/media-probe-delivery-recoveries`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ change_reference: 'INC-20260805-001' }),
+          headers: expect.objectContaining({ 'Idempotency-Key': 'media-recovery-ui-0001' }),
+        }),
+      ),
+    )
+    expect(await screen.findByText(/媒体检测已恢复为第 2 次尝试/)).toBeInTheDocument()
+  })
+
   it('lets an administrator create one task only after the video is human-qualified', async () => {
     const membership = {
       membership_id: 'd0000000-0000-4000-8000-000000000001',
@@ -1772,6 +1795,7 @@ function stubAsset(options: {
   quality?: object
   playback?: boolean
   mediaProbe?: boolean
+  deliveryRecovery?: boolean
   annotationTask?: boolean
   activity?: boolean
 }) {
@@ -1833,6 +1857,21 @@ function stubAsset(options: {
             clip_asset_id: assetId,
             job_type: 'MEDIA_PROBE',
             status: 'QUEUED',
+          },
+          202,
+        ),
+      )
+    if (url.endsWith('/media-probe-delivery-recoveries') && options.deliveryRecovery)
+      return Promise.resolve(
+        jsonResponse(
+          {
+            recovery_id: 'c0000000-0000-4000-8000-000000000001',
+            media_job_id: 'b0000000-0000-4000-8000-000000000001',
+            source_message_id: 'd0000000-0000-4000-8000-000000000001',
+            source_attempt: 1,
+            new_attempt: 2,
+            resulting_job_status: 'QUEUED',
+            created_at: '2026-08-05T01:02:03Z',
           },
           202,
         ),

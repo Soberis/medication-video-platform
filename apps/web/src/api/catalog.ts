@@ -489,6 +489,16 @@ export interface MediaProbeJob {
   status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED'
 }
 
+export interface MediaJobDeliveryRecovery {
+  recovery_id: string
+  media_job_id: string
+  source_message_id: string
+  source_attempt: number
+  new_attempt: number
+  resulting_job_status: 'QUEUED'
+  created_at: string
+}
+
 export interface MediaReport {
   media_report_id: string
   media_job_id: string
@@ -563,6 +573,13 @@ const errorMessages: Record<string, string> = {
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
   CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
+  MEDIA_JOB_NOT_FOUND: '当前视频没有可恢复的媒体检测任务，请先发起检测或刷新状态。',
+  MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED:
+    '原检测任务尚未确认发布，不能执行恢复。请刷新状态后重试。',
+  MEDIA_JOB_DELIVERY_RECOVERY_STATE_CONFLICT:
+    '当前检测任务已不再处于可恢复的排队状态，请刷新后确认。',
+  MEDIA_JOB_DELIVERY_RECOVERY_SOURCE_REUSED: '当前检测任务已经恢复过，不能再次使用原消息。',
+  MEDIA_JOB_DELIVERY_RECOVERY_LIMIT_REACHED: '媒体检测已达到最大尝试次数，不能继续恢复。',
   PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   MEDIA_REPORT_NOT_FOUND: '媒体检测报告尚未就绪，请在检测完成后刷新状态。',
@@ -1075,6 +1092,30 @@ export async function requestClipAssetMediaProbe(projectId: string, clipAssetId:
     },
   )
   if (response.ok) return (await response.json()) as MediaProbeJob
+  throw await toCatalogError(response)
+}
+
+export async function recoverCurrentClipAssetMediaProbeDelivery(
+  projectId: string,
+  clipAssetId: string,
+  changeReference: string,
+  idempotencyKey: string,
+) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-probe-delivery-recoveries`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ change_reference: changeReference }),
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as MediaJobDeliveryRecovery
   throw await toCatalogError(response)
 }
 

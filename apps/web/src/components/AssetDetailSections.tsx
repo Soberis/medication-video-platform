@@ -31,8 +31,10 @@ export interface PlaybackAvailability {
 interface PlaybackCardProps {
   availability: PlaybackAvailability | null
   canPlay: boolean
+  canRecoverMissingMediaProbe: boolean
   canRequestMediaProbe: boolean
   grant: ClipAssetPlaybackGrant | null
+  isRecoveringMediaProbe: boolean
   isRequestingMediaProbe: boolean
   isRequestingPlayback: boolean
   mediaProbeMessage: string
@@ -41,6 +43,7 @@ interface PlaybackCardProps {
   onClose: () => void
   onLoadedMetadata: () => void
   onPlaybackError: () => void
+  onRecoverMissingMediaProbe: () => void
   onRequestMediaProbe: () => void
   onStartPlayback: () => void
 }
@@ -48,8 +51,10 @@ interface PlaybackCardProps {
 export function PlaybackCard({
   availability,
   canPlay,
+  canRecoverMissingMediaProbe,
   canRequestMediaProbe,
   grant,
+  isRecoveringMediaProbe,
   isRequestingMediaProbe,
   isRequestingPlayback,
   mediaProbeMessage,
@@ -58,6 +63,7 @@ export function PlaybackCard({
   onClose,
   onLoadedMetadata,
   onPlaybackError,
+  onRecoverMissingMediaProbe,
   onRequestMediaProbe,
   onStartPlayback,
 }: PlaybackCardProps) {
@@ -137,6 +143,16 @@ export function PlaybackCard({
       ) : null}
       {mediaProbeMessage ? (
         <p className="form-hint media-probe-message">{mediaProbeMessage}</p>
+      ) : null}
+      {canRecoverMissingMediaProbe ? (
+        <div className="playback-toolbar media-probe-toolbar">
+          <Button loading={isRecoveringMediaProbe} onClick={onRecoverMissingMediaProbe}>
+            恢复已丢失的检测任务
+          </Button>
+          <p className="form-hint">
+            仅在 RabbitMQ 已确认原任务消息不存在时使用；会创建新的受审计尝试。
+          </p>
+        </div>
       ) : null}
     </Card>
   )

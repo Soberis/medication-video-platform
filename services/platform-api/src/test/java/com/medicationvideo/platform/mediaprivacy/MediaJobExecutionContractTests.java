@@ -661,6 +661,54 @@ class MediaJobExecutionContractTests {
 	}
 
 	@Test
+	void administratorRecoversCurrentClipAssetProbeWithoutSubmittingMessageIdentity() throws Exception {
+		var created = createQueuedJob();
+		markOutboxPublished(created);
+		var idempotencyKey = "media-delivery-recovery-ui-" + UUID.randomUUID();
+		var request = "{\"change_reference\":\"INC-20260805-001\"}";
+		var path = "/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-delivery-recoveries";
+
+		this.mockMvc
+			.perform(post(path, PROJECT_ID, created.clipAssetId()).header("Authorization", "Bearer " + USER_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		var response = this.mockMvc
+			.perform(post(path, PROJECT_ID, created.clipAssetId()).header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isAccepted())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.media_job_id").value(created.jobId().toString()))
+			.andExpect(jsonPath("$.source_message_id").value(created.messageId().toString()))
+			.andExpect(jsonPath("$.source_attempt").value(1))
+			.andExpect(jsonPath("$.new_attempt").value(2))
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		var recoveryId = JsonPath.<String>read(response, "$.recovery_id");
+
+		this.mockMvc
+			.perform(post(path, PROJECT_ID, created.clipAssetId()).header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.recovery_id").value(recoveryId));
+
+		assertEquals("FAILED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals("QUEUED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 2", created.jobId()));
+		assertEquals(1,
+				count("SELECT count(*) FROM media_job_delivery_recovery WHERE media_job_id = ?", created.jobId()));
+	}
+
+	@Test
 	void rejectsStaleOrReusedDeliveryRecoveryWithoutQueuingAnotherAttempt() throws Exception {
 		var created = createQueuedJob();
 		markOutboxPublished(created);

@@ -16,6 +16,7 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 /**
  * Explicit disaster-recovery command for a broker message known to be absent after it was
@@ -36,37 +37,66 @@ class MediaJobDeliveryRecoveryService {
 
 	private final AuditEventRecorder auditRecorder;
 
+	private final ProjectAccessService projectAccessService;
+
 	MediaJobDeliveryRecoveryService(MediaJobRepository jobRepository, MediaJobAttemptRepository attemptRepository,
 			MediaJobDeliveryRecoveryRepository recoveryRepository, MediaJobAttemptQueueService attemptQueue,
-			MediaJobRetryPolicy retryPolicy, AuditEventRecorder auditRecorder) {
+			MediaJobRetryPolicy retryPolicy, AuditEventRecorder auditRecorder,
+			ProjectAccessService projectAccessService) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.recoveryRepository = recoveryRepository;
 		this.attemptQueue = attemptQueue;
 		this.retryPolicy = retryPolicy;
 		this.auditRecorder = auditRecorder;
+		this.projectAccessService = projectAccessService;
 	}
 
 	@Transactional
 	MediaJobDeliveryRecovery recover(UUID projectId, String actorId, UUID mediaJobId, String idempotencyKey,
 			String requestId, String traceId, MediaJobDeliveryRecoveryRequest request) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = fingerprint(projectId, mediaJobId, request);
 		var byIdempotency = this.recoveryRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
 		if (byIdempotency.isPresent()) {
 			return requireSameRequest(byIdempotency.get(), fingerprint);
 		}
 
-		var job = this.jobRepository.findForUpdate(mediaJobId)
-			.filter(candidate -> candidate.getProjectId().equals(projectId))
+		var job = requireProjectJob(projectId, mediaJobId);
+		var attempt = requireCurrentAttempt(mediaJobId);
+		return recoverNew(projectId, actorId, mediaJobId, idempotencyKey, requestId, traceId, request, fingerprint, job,
+				attempt);
+	}
+
+	@Transactional
+	MediaJobDeliveryRecovery recoverCurrentClipAssetMediaProbe(UUID projectId, String actorId, UUID clipAssetId,
+			String idempotencyKey, String requestId, String traceId, MediaJobCurrentDeliveryRecoveryRequest request) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		var fingerprint = currentFingerprint(projectId, clipAssetId, request);
+		var byIdempotency = this.recoveryRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
+		if (byIdempotency.isPresent()) {
+			return requireSameRequest(byIdempotency.get(), fingerprint);
+		}
+
+		var job = this.jobRepository
+			.findTopByProjectIdAndClipAssetIdAndJobTypeOrderByCreatedAtDesc(projectId, clipAssetId,
+					MediaJobType.MEDIA_PROBE)
 			.orElseThrow(() -> new MediaJobNotFoundException("The media job was not found."));
+		var attempt = requireCurrentAttempt(job.getMediaJobId());
+		var derivedRequest = new MediaJobDeliveryRecoveryRequest(attempt.getMessageId(), attempt.getAttempt(),
+				MediaJobDeliveryRecoveryReason.BROKER_MESSAGE_LOST, request.changeReference());
+		return recoverNew(projectId, actorId, job.getMediaJobId(), idempotencyKey, requestId, traceId, derivedRequest,
+				fingerprint, job, attempt);
+	}
+
+	private MediaJobDeliveryRecovery recoverNew(UUID projectId, String actorId, UUID mediaJobId, String idempotencyKey,
+			String requestId, String traceId, MediaJobDeliveryRecoveryRequest request, String fingerprint, MediaJob job,
+			MediaJobAttempt attempt) {
 		var bySource = this.recoveryRepository.findBySourceMessageId(request.sourceMessageId());
 		if (bySource.isPresent()) {
 			throw new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_SOURCE_REUSED",
 					"The source message was already recovered.");
 		}
-		var attempt = this.attemptRepository.findCurrentForUpdate(mediaJobId)
-			.orElseThrow(() -> new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_STALE",
-					"The media job has no current queued attempt."));
 		if (attempt.getAttempt() != request.sourceAttempt()
 				|| !attempt.getMessageId().equals(request.sourceMessageId())) {
 			throw new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_STALE",
@@ -101,6 +131,18 @@ class MediaJobDeliveryRecoveryService {
 		return recovery;
 	}
 
+	private MediaJob requireProjectJob(UUID projectId, UUID mediaJobId) {
+		return this.jobRepository.findForUpdate(mediaJobId)
+			.filter(candidate -> candidate.getProjectId().equals(projectId))
+			.orElseThrow(() -> new MediaJobNotFoundException("The media job was not found."));
+	}
+
+	private MediaJobAttempt requireCurrentAttempt(UUID mediaJobId) {
+		return this.attemptRepository.findCurrentForUpdate(mediaJobId)
+			.orElseThrow(() -> new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_STALE",
+					"The media job has no current queued attempt."));
+	}
+
 	private static MediaJobDeliveryRecovery requireSameRequest(MediaJobDeliveryRecovery recovery, String fingerprint) {
 		if (!MessageDigest.isEqual(recovery.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
 				fingerprint.getBytes(StandardCharsets.US_ASCII))) {
@@ -110,9 +152,18 @@ class MediaJobDeliveryRecoveryService {
 	}
 
 	private static String fingerprint(UUID projectId, UUID mediaJobId, MediaJobDeliveryRecoveryRequest request) {
-		var canonical = String.join("\n", projectId.toString(), mediaJobId.toString(),
+		return sha256(String.join("\n", projectId.toString(), mediaJobId.toString(),
 				request.sourceMessageId().toString(), Integer.toString(request.sourceAttempt()),
-				request.recoveryReason().name(), request.changeReference());
+				request.recoveryReason().name(), request.changeReference()));
+	}
+
+	private static String currentFingerprint(UUID projectId, UUID clipAssetId,
+			MediaJobCurrentDeliveryRecoveryRequest request) {
+		return sha256(String.join("\n", "current-clip-asset-media-probe-delivery-recovery-v1", projectId.toString(),
+				clipAssetId.toString(), request.changeReference()));
+	}
+
+	private static String sha256(String canonical) {
 		try {
 			return HexFormat.of()
 				.formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));

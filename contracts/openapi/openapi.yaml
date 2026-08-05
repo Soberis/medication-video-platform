@@ -3402,6 +3402,83 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-delivery-recoveries:
+    post:
+      operationId: recoverCurrentClipAssetMediaProbeDelivery
+      tags:
+        - Media Jobs
+      summary: Recover one confirmed missing queued media-probe delivery from the asset detail
+      description: >-
+        Requires an ACTIVE ADMIN membership in the explicit project. The administrator must first
+        confirm that RabbitMQ no longer contains the publisher-confirmed source message. The request
+        contains only a non-sensitive change reference; the server locks the asset's current
+        MEDIA_PROBE job and attempt, then derives the source message internally. It never reads a
+        broker queue, reuses a lease capability, or republishes the original message automatically.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9._:-]+$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaJobCurrentDeliveryRecoveryRequest"
+      responses:
+        "202":
+          description: A new attempt was queued, or the same recovery command was returned idempotently.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaJobDeliveryRecoveryResponse"
+        "400":
+          description: The request body or Idempotency-Key is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The caller is not an administrator for the explicit project.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: The project, asset, or its media probe job is not visible to the caller.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The current source is not confirmed, no longer queued, already recovered, or reached its attempt limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/clip-assets/{clip_asset_id}/media-report:
     get:
       operationId: getClipAssetMediaReport
@@ -9265,6 +9342,18 @@ components:
         recovery_reason:
           type: string
           const: BROKER_MESSAGE_LOST
+        change_reference:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:/#-]+$
+          description: Non-sensitive incident, ticket or deployment reference.
+    MediaJobCurrentDeliveryRecoveryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - change_reference
+      properties:
         change_reference:
           type: string
           minLength: 3

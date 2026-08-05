@@ -24,7 +24,7 @@ import jakarta.validation.constraints.Pattern;
 
 @Validated
 @RestController
-@RequestMapping("/api/v1/media-jobs")
+@RequestMapping("/api/v1")
 class MediaJobDeliveryRecoveryController {
 
 	private static final String REQUEST_ID_PATTERN = "^[A-Za-z0-9._:-]{1,128}$";
@@ -35,7 +35,7 @@ class MediaJobDeliveryRecoveryController {
 		this.service = service;
 	}
 
-	@PostMapping("/{mediaJobId}/delivery-recoveries")
+	@PostMapping("/media-jobs/{mediaJobId}/delivery-recoveries")
 	ResponseEntity<MediaJobDeliveryRecoveryResponse> recover(@PathVariable UUID mediaJobId,
 			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
 					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
@@ -46,6 +46,23 @@ class MediaJobDeliveryRecoveryController {
 		var recovery = this.service.recover(actor.projectId(), actor.actorId(), mediaJobId, idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				request);
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
+			.cacheControl(CacheControl.noStore())
+			.body(MediaJobDeliveryRecoveryResponse.from(recovery));
+	}
+
+	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-delivery-recoveries")
+	ResponseEntity<MediaJobDeliveryRecoveryResponse> recoverCurrentClipAssetMediaProbe(@PathVariable UUID projectId,
+			@PathVariable UUID clipAssetId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@RequestBody @Valid MediaJobCurrentDeliveryRecoveryRequest request, Authentication authentication) {
+		var actor = requireAdministrator(authentication);
+		var recovery = this.service.recoverCurrentClipAssetMediaProbe(projectId, actor.actorId(), clipAssetId,
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"), request);
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
 			.cacheControl(CacheControl.noStore())
 			.body(MediaJobDeliveryRecoveryResponse.from(recovery));
