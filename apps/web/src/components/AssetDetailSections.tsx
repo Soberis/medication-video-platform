@@ -436,7 +436,7 @@ export function AnnotationTaskCard({
         <>
           <Alert
             title="标注任务已创建并分配"
-            description={`执行人：${createdTask.assignee_actor_id}。请在标注任务页提交时间段标注；管理员可对提交结果进行独立复核。`}
+            description={`执行人：${createdTask.assignee_actor_id}。请在标注任务页提交时间段标注；当前项目管理员可对提交结果进行复核。`}
             type="success"
             showIcon
           />

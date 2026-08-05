@@ -116,6 +116,28 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
+	void globalMemberCannotCreateAnAdministratorTaskEvenIfItsProjectMembershipWasMisconfigured() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET role = 'ADMIN',
+				    updated_by = ?,
+				    updated_at = ?,
+				    row_version = row_version + 1
+				WHERE project_id = ? AND actor_id = ?
+				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(BASE_TIME.plusSeconds(1)), PROJECT_ID,
+				ProjectMembershipTestData.MEMBER_ACTOR);
+
+		create(MEMBER_TOKEN, clipAssetId, ProjectMembershipTestData.MEMBER_ACTOR,
+				"annotation-task-member-admin-membership-" + UUID.randomUUID())
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+	}
+
+	@Test
 	void projectMemberReadsTheImmutablePrimaryStepLabelSchema() throws Exception {
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/annotation-label-schema", PROJECT_ID).header("Authorization",
@@ -350,7 +372,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void administratorsBuildFreezeApproveAndRecoverDatasetExportExactlyOnce() throws Exception {
+	void administratorBuildsSelfApprovesAndRecoversDatasetExportExactlyOnce() throws Exception {
 		var firstSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(10));
 		var secondSessionId = createEligibleDatasetSession(BASE_TIME.plusSeconds(20));
 		var draftResponse = createDatasetDraft(ADMIN_TOKEN, List.of(firstSessionId, secondSessionId),
@@ -506,7 +528,7 @@ class AnnotationTaskContractTests {
 			.andExpect(jsonPath("$.can_validate").value(false))
 			.andExpect(jsonPath("$.freeze_approval.status").value("PENDING"))
 			.andExpect(jsonPath("$.freeze_approval.requested_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
-			.andExpect(jsonPath("$.can_freeze").value(false));
+			.andExpect(jsonPath("$.can_freeze").value(true));
 		assertEquals(1, count("SELECT count(*) FROM dataset_version_validation WHERE dataset_version_id = ?",
 				datasetVersionId));
 		assertEquals(1, count("SELECT count(*) FROM approval_request WHERE object_id = ?", datasetVersionId));
@@ -517,21 +539,10 @@ class AnnotationTaskContractTests {
 				""", datasetVersionId));
 
 		var freezeIdempotencyKey = "dataset-freeze-" + UUID.randomUUID();
-		freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, freezeIdempotencyKey).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN"));
-		this.jdbcTemplate.update("""
-				UPDATE membership
-				SET role = 'ADMIN',
-				    updated_by = ?,
-				    updated_at = ?,
-				    row_version = row_version + 1
-				WHERE project_id = ? AND actor_id = ?
-				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(BASE_TIME.plusSeconds(30)), PROJECT_ID,
-				ProjectMembershipTestData.MEMBER_ACTOR);
 		var pendingApprovalResponse = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}", PROJECT_ID,
 					datasetVersionId)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("VALIDATING"))
 			.andExpect(jsonPath("$.freeze_approval.status").value("PENDING"))
@@ -542,34 +553,34 @@ class AnnotationTaskContractTests {
 		var approvalRequestId = com.jayway.jsonpath.JsonPath.<String>read(pendingApprovalResponse,
 				"$.freeze_approval.approval_request_id");
 
-		var freezeResponse = freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, freezeIdempotencyKey)
+		var freezeResponse = freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, freezeIdempotencyKey)
 			.andExpect(status().isCreated())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.dataset_version_id").value(datasetVersionId.toString()))
 			.andExpect(jsonPath("$.status").value("FROZEN"))
 			.andExpect(jsonPath("$.validation_id").value(validationId))
 			.andExpect(jsonPath("$.approval_request_id").value(approvalRequestId))
-			.andExpect(jsonPath("$.frozen_by").value(ProjectMembershipTestData.MEMBER_ACTOR))
+			.andExpect(jsonPath("$.frozen_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andReturn()
 			.getResponse()
 			.getContentAsString();
 		var approvalDecisionId = com.jayway.jsonpath.JsonPath.<String>read(freezeResponse, "$.approval_decision_id");
-		freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, freezeIdempotencyKey).andExpect(status().isCreated())
+		freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, freezeIdempotencyKey).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.approval_decision_id").value(approvalDecisionId))
 			.andExpect(jsonPath("$.status").value("FROZEN"));
-		freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, "dataset-freeze-second-" + UUID.randomUUID())
+		freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, "dataset-freeze-second-" + UUID.randomUUID())
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("DATASET_VERSION_ALREADY_FROZEN"));
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}", PROJECT_ID,
 					datasetVersionId)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("FROZEN"))
 			.andExpect(jsonPath("$.freeze_approval.status").value("APPROVED"))
 			.andExpect(jsonPath("$.freeze_approval.approval_decision_id").value(approvalDecisionId))
-			.andExpect(jsonPath("$.freeze_approval.approved_by").value(ProjectMembershipTestData.MEMBER_ACTOR))
+			.andExpect(jsonPath("$.freeze_approval.approved_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.can_freeze").value(false))
 			.andExpect(jsonPath("$.export_request").value(org.hamcrest.Matchers.nullValue()))
 			.andExpect(jsonPath("$.can_request_export").value(true));
@@ -581,15 +592,6 @@ class AnnotationTaskContractTests {
 				WHERE dataset_version_id = ?
 				""", datasetVersionId));
 
-		this.jdbcTemplate.update("""
-				UPDATE membership
-				SET role = 'MEMBER',
-				    updated_by = ?,
-				    updated_at = ?,
-				    row_version = row_version + 1
-				WHERE project_id = ? AND actor_id = ?
-				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(BASE_TIME.plusSeconds(40)), PROJECT_ID,
-				ProjectMembershipTestData.MEMBER_ACTOR);
 		var exportExpiry = Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MICROS).toString();
 		var exportIdempotencyKey = "dataset-export-" + UUID.randomUUID();
 		requestDatasetExport(MEMBER_TOKEN, datasetVersionId, exportIdempotencyKey, exportExpiry)
@@ -625,33 +627,20 @@ class AnnotationTaskContractTests {
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
 			.andExpect(jsonPath("$.approval_request_id").value(exportApprovalRequestId))
-			.andExpect(jsonPath("$.ready_for_approval").value(false))
-			.andExpect(jsonPath("$.blocking_reasons[0]").value("SELF_APPROVAL_FORBIDDEN"));
+			.andExpect(jsonPath("$.ready_for_approval").value(true))
+			.andExpect(jsonPath("$.blocking_reasons").isEmpty());
 		getDatasetExportApprovalReadiness(MEMBER_TOKEN, datasetVersionId).andExpect(status().isOk())
 			.andExpect(jsonPath("$.ready_for_approval").value(false))
 			.andExpect(jsonPath("$.blocking_reasons[0]").value("APPROVER_ADMIN_REQUIRED"));
-		this.jdbcTemplate.update("""
-				UPDATE membership
-				SET role = 'ADMIN',
-				    updated_by = ?,
-				    updated_at = ?,
-				    row_version = row_version + 1
-				WHERE project_id = ? AND actor_id = ?
-				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(BASE_TIME.plusSeconds(41)), PROJECT_ID,
-				ProjectMembershipTestData.MEMBER_ACTOR);
-		getDatasetExportApprovalReadiness(MEMBER_TOKEN, datasetVersionId).andExpect(status().isOk())
-			.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
-			.andExpect(jsonPath("$.ready_for_approval").value(true))
-			.andExpect(jsonPath("$.blocking_reasons").isEmpty());
 		var exportApprovalIdempotencyKey = "dataset-export-approval-" + UUID.randomUUID();
-		var approvedExportResponse = approveDatasetExport(MEMBER_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
+		var approvedExportResponse = approveDatasetExport(ADMIN_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
 			.andExpect(status().isAccepted())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
 			.andExpect(jsonPath("$.status").value("QUEUED"))
 			.andExpect(jsonPath("$.approval.status").value("APPROVED"))
-			.andExpect(jsonPath("$.approval.decided_by").value(ProjectMembershipTestData.MEMBER_ACTOR))
-			.andExpect(jsonPath("$.approved_by").value(ProjectMembershipTestData.MEMBER_ACTOR))
+			.andExpect(jsonPath("$.approval.decided_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
+			.andExpect(jsonPath("$.approved_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.attempt.attempt").value(1))
 			.andExpect(jsonPath("$.attempt.status").value("QUEUED"))
 			.andReturn()
@@ -659,17 +648,17 @@ class AnnotationTaskContractTests {
 			.getContentAsString();
 		var datasetExportAttemptId = com.jayway.jsonpath.JsonPath.<String>read(approvedExportResponse,
 				"$.attempt.dataset_export_attempt_id");
-		approveDatasetExport(MEMBER_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
+		approveDatasetExport(ADMIN_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
 			.andExpect(status().isAccepted())
 			.andExpect(jsonPath("$.attempt.dataset_export_attempt_id").value(datasetExportAttemptId))
 			.andExpect(jsonPath("$.status").value("QUEUED"));
-		authorizeDatasetExportDownload(MEMBER_TOKEN, datasetVersionId).andExpect(status().isConflict())
+		authorizeDatasetExportDownload(ADMIN_TOKEN, datasetVersionId).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("DATASET_EXPORT_NOT_AVAILABLE"));
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/dataset-versions/{datasetVersionId}", PROJECT_ID,
 					datasetVersionId)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.export_request.dataset_export_id").value(datasetExportId))
 			.andExpect(jsonPath("$.export_request.status").value("QUEUED"))
@@ -1467,7 +1456,7 @@ class AnnotationTaskContractTests {
 	}
 
 	@Test
-	void submittingAdministratorCannotReviewTheirOwnRevision() throws Exception {
+	void submittingAdministratorCanReviewTheirOwnRevisionWithAnExplicitAuditMarker() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
 		insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
 		var taskResponse = create(ADMIN_TOKEN, clipAssetId, ProjectMembershipTestData.ADMIN_ACTOR,
@@ -1487,8 +1476,16 @@ class AnnotationTaskContractTests {
 			.fromString(com.jayway.jsonpath.JsonPath.read(revisionResponse, "$.annotation_revision_id"));
 
 		review(ADMIN_TOKEN, revisionId, "annotation-review-self-" + UUID.randomUUID(), "{\"decision\":\"APPROVED\"}")
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN"));
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.reviewed_by").value(ProjectMembershipTestData.ADMIN_ACTOR));
+		assertEquals(1,
+				count("""
+						SELECT count(*) FROM audit_event
+						WHERE action = 'ANNOTATION_REVISION_REVIEWED'
+						  AND object_id IN (SELECT annotation_review_id::text FROM annotation_review WHERE annotation_revision_id = ?)
+						  AND reason_code = 'SELF_ADMIN_APPROVAL'
+						""",
+						revisionId));
 	}
 
 	@Test

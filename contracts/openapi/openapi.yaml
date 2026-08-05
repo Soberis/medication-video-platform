@@ -24,7 +24,7 @@ info:
     conclusion with a stable reason and optimistic version, let project administrators create and
     assign one auditable annotation task for a qualified video, expose the immutable P0 primary-Step
     label schema, let an assignee submit one schema-bound non-overlapping time-range revision, let an
-    independent project administrator record one review decision, return a rejected task for a
+    global ROLE_ADMIN with an ACTIVE project ADMIN membership record one review decision, return a rejected task for a
     later immutable revision, or complete an approved task with a persisted post-cleaning result,
     let project administrators snapshot eligible CaptureSessions into a DRAFT DatasetVersion and
     fix one reproducible CaptureSession-level pilot/holdout split plan and one immutable minimum
@@ -34,9 +34,9 @@ info:
     persisted relational evidence with a deterministic digest before entering VALIDATING, then run
     one immutable freeze-preflight validation over current admission, references, the snapshot digest,
     CaptureSession split isolation and the approved build contract; a PASS creates a pending request
-    that a different ACTIVE project administrator can approve only after atomic revalidation, then
+    that a global ROLE_ADMIN with an ACTIVE project ADMIN membership can approve only after atomic revalidation, then
     freeze the version without creating export artifacts or starting a Worker, then record one
-    purpose-bound export request, re-evaluate independent approval readiness, atomically approve
+    purpose-bound export request, re-evaluate administrator approval readiness, atomically approve
     and queue its first attempt through the Outbox, validate a deterministic Step-only package from
     an independently authenticated Export Worker, and issue an audited short-lived download grant,
     and create and read project-scoped media probe jobs that freeze the input
@@ -95,10 +95,10 @@ tags:
       Current-state previews and administrator-created DatasetVersion candidate snapshots. DRAFT
       versions can fix build prerequisites and explicitly enter BUILDING; a completed relational
       snapshot seal advances to VALIDATING, where one technical freeze-preflight result can be
-      recorded. A PASS creates a pending request; a different ACTIVE project administrator can
+      recorded. A PASS creates a pending request; a global ROLE_ADMIN with an ACTIVE project ADMIN membership can
       revalidate, approve and atomically freeze the version. An administrator can then request the
       fixed P0 export profile for the explicit MODEL_TRAINING purpose and expiry. Members can run a
-      no-store approval-readiness check; an independent administrator may then atomically approve
+      no-store approval-readiness check; that administrator may then atomically approve
       and queue v2. AVAILABLE means the Core API verified the package before an administrator can
       request a short-lived audited download grant.
   - name: Video Playback
@@ -216,7 +216,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/DatasetVersionError"
         "403":
-          description: The actor is not an ACTIVE project administrator.
+          description: The actor is not a global administrator with ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -638,11 +638,12 @@ paths:
       operationId: freezeDatasetVersion
       tags:
         - Dataset Admission
-      summary: Independently approve and freeze a validated dataset version
+      summary: Approve and freeze a validated dataset version
       description: >-
-        Requires ACTIVE ADMIN membership, a VALIDATING DatasetVersion, an immutable PASS result and
-        its pending freeze request. The approver must differ from the requester who ran the
-        freeze-preflight validation. The command locks the project, reruns current admission,
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership, a VALIDATING DatasetVersion,
+        an immutable PASS result and its pending freeze request. The same administrator may approve
+        their own request; that fact is retained as SELF_ADMIN_APPROVAL in the append-only audit.
+        The command locks the project, reruns current admission,
         reference, snapshot-digest, CaptureSession split-isolation and build-contract checks, records
         one APPROVED decision and advances the version to FROZEN in the same transaction. A changed
         fact blocks the command and requires a new DatasetVersion. FROZEN members, revisions, rules
@@ -655,7 +656,7 @@ paths:
         - $ref: "#/components/parameters/OptionalRequestId"
       responses:
         "201":
-          description: The independent approval was recorded and the DatasetVersion is FROZEN.
+          description: The administrator approval was recorded and the DatasetVersion is FROZEN.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -690,7 +691,7 @@ paths:
         "409":
           description: >-
             The version is not VALIDATING, validation did not pass, approval is missing or invalid,
-            requester and approver are the same, evidence changed, the version is already frozen,
+            evidence changed, the version is already frozen,
             or the idempotency key was used for another dataset version.
           content:
             application/problem+json:
@@ -703,9 +704,9 @@ paths:
         - Dataset Admission
       summary: Request the approved P0 export profile for a frozen dataset version
       description: >-
-        Requires ACTIVE ADMIN membership and a FROZEN DatasetVersion. Creates exactly one REQUESTED
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership and a FROZEN DatasetVersion. Creates exactly one REQUESTED
         DatasetExport bound to the immutable build specification, relational snapshot, PASS
-        validation and its approved v1 or v2 export profile, together with a pending independent
+        validation and its approved v1 or v2 export profile, together with a pending administrator
         approval request and audit event. P0 accepts only MODEL_TRAINING and an explicit future
         expiry. This command does not approve, queue, generate, publish or authorize download of
         any file. Replaying the same idempotency key and request returns the original record.
@@ -767,10 +768,10 @@ paths:
       operationId: getDatasetExportApprovalReadiness
       tags:
         - Dataset Admission
-      summary: Check whether a frozen export request is ready for independent approval
+      summary: Check whether a frozen export request is ready for administrator approval
       description: >-
-        Requires ACTIVE project membership. Re-evaluates the current actor role, requester/approver
-        separation, purpose expiry, DatasetVersion FROZEN state, immutable export bindings and all
+        Requires ACTIVE project membership. Re-evaluates whether the current actor is global ROLE_ADMIN
+        with ACTIVE project ADMIN membership, purpose expiry, DatasetVersion FROZEN state, immutable export bindings and all
         current freeze-evidence checks. The response is a read-only point-in-time preflight: it does
         not approve the request, create an approval decision, queue a job, start a Worker or create
         export files. A future approval command must repeat these checks transactionally.
@@ -810,9 +811,10 @@ paths:
       operationId: approveDatasetExport
       tags:
         - Dataset Admission
-      summary: Independently approve and queue the current v2 dataset export
+      summary: Approve and queue the current v2 dataset export
       description: >-
-        Requires an ACTIVE project administrator other than the requester. Repeats all readiness
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The same administrator may
+        approve their own request and the audit records SELF_ADMIN_APPROVAL. Repeats all readiness
         checks in one transaction, records the immutable approval decision, moves the export to
         QUEUED, creates attempt 1 and writes dataset-export-job.v1 to the Transactional Outbox.
         It does not run packaging synchronously. The same Idempotency-Key and command replay the
@@ -845,7 +847,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/DatasetVersionError"
         "403":
-          description: The actor is not an eligible independent project administrator.
+          description: The actor is not a global administrator with ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -3822,10 +3824,11 @@ paths:
       operationId: reviewAnnotationRevision
       tags:
         - Annotation Tasks
-      summary: Record one independent administrator decision for a submitted annotation revision
+      summary: Record one administrator decision for a submitted annotation revision
       description: >-
-        Requires an ACTIVE ADMIN membership. The reviewer must differ from the revision submitter;
-        the video must remain undeleted, INGESTED and human-qualified. P0 records one immutable
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The same administrator may
+        review their own revision and the audit records SELF_ADMIN_APPROVAL; the video must remain
+        undeleted, INGESTED and human-qualified. P0 records one immutable
         APPROVED or REJECTED decision. A rejection returns the task to its assignee; their next
         immutable revision receives the next revision number. An approval completes the task and
         persists the deterministic post-cleaning result for that exact immutable revision. Older
@@ -3875,7 +3878,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required and the reviewer must be independent.
+          description: A global administrator with ACTIVE project ADMIN membership is required.
           content:
             application/problem+json:
               schema:
@@ -3899,7 +3902,7 @@ paths:
         - Annotation Tasks
       summary: Re-evaluate an approved annotation revision against current training facts
       description: >-
-        Requires an ACTIVE ADMIN membership. The revision must remain independently APPROVED, its
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The revision must remain APPROVED, its
         task COMPLETED and its video undeleted and INGESTED. The service re-evaluates the immutable
         revision using the current human-quality version and current verified media fact. An unchanged
         input fingerprint returns the existing immutable result; a changed input creates a new run and
@@ -8591,7 +8594,7 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Submitted tasks waiting for an independent administrator review.
+          description: Submitted tasks waiting for a project administrator review.
         completed:
           type: integer
           format: int64

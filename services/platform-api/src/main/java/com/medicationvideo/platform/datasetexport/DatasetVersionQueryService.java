@@ -84,7 +84,8 @@ class DatasetVersionQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	DatasetVersionDetailResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
+	DatasetVersionDetailResponse get(UUID projectId, UUID datasetVersionId, String actorId,
+			boolean platformAdministrator) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 			.orElseThrow(DatasetVersionQueryService::notFound);
@@ -119,27 +120,24 @@ class DatasetVersionQueryService {
 		var exportArtifact = exportRequest == null ? null
 				: this.exportArtifactRepository.findByDatasetExportId(exportRequest.getDatasetExportId()).orElse(null);
 		var buildEvidence = DatasetBuildEvidence.from(snapshotStreams);
+		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
 		return DatasetVersionDetailResponse.from(version, members, splitPlan,
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.DRAFT && splitPlan == null
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.DRAFT && splitPlan == null
 						&& members.size() >= 2,
 				specification == null ? null : DatasetBuildSpecificationResponse.from(specification),
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.DRAFT && splitPlan != null
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.DRAFT && splitPlan != null
 						&& specification == null && buildEvidence.isComplete(),
 				buildSnapshot == null ? null : DatasetBuildSnapshotResponse.from(buildSnapshot),
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.BUILDING
-						&& buildSnapshot == null,
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.BUILDING && buildSnapshot == null,
 				validation == null ? null : DatasetVersionValidationResponse.from(validation),
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.VALIDATING
-						&& validation == null,
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.VALIDATING && validation == null,
 				freezeApproval == null ? null : DatasetVersionFreezeApprovalResponse.from(freezeApproval),
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.VALIDATING
-						&& validation != null && validation.getOutcome() == DatasetVersionValidationOutcome.PASS
-						&& freezeApproval != null && freezeApproval.pending()
-						&& !freezeApproval.requestedBy().equals(actorId),
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.VALIDATING && validation != null
+						&& validation.getOutcome() == DatasetVersionValidationOutcome.PASS && freezeApproval != null
+						&& freezeApproval.pending(),
 				exportRequest == null ? null
 						: DatasetExportResponse.from(exportRequest, exportApproval, exportAttempt, exportArtifact),
-				role == ProjectRole.ADMIN && version.getStatus() == DatasetVersionStatus.FROZEN
-						&& exportRequest == null);
+				projectAdministrator && version.getStatus() == DatasetVersionStatus.FROZEN && exportRequest == null);
 	}
 
 	private static DatasetVersionException notFound() {

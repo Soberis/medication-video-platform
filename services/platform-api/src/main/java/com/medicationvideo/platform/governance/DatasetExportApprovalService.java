@@ -43,13 +43,13 @@ public class DatasetExportApprovalService {
 
 	@Transactional
 	public DatasetExportApprovalSnapshot approve(UUID projectId, UUID datasetVersionId, UUID validationId,
-			String approvedBy, Instant approvedAt) {
+			String approvedBy, Instant approvedAt, boolean selfAdminApprovalAllowed) {
 		var request = findRequest(projectId, datasetVersionId)
 			.orElseThrow(() -> new IllegalStateException("The dataset export approval request is missing."));
 		if (!request.matchesDatasetExport(projectId, datasetVersionId, validationId, request.getRequestedBy())) {
 			throw new IllegalStateException("The dataset export approval request does not match its frozen version.");
 		}
-		if (request.getRequestedBy().equals(approvedBy)) {
+		if (request.getRequestedBy().equals(approvedBy) && !selfAdminApprovalAllowed) {
 			throw new IllegalArgumentException("The dataset export requester cannot approve the same request.");
 		}
 		if (request.getStatus() != ApprovalRequestStatus.PENDING) {

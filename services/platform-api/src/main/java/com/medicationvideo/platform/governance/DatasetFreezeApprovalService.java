@@ -42,13 +42,13 @@ public class DatasetFreezeApprovalService {
 
 	@Transactional
 	public DatasetFreezeApprovalSnapshot approve(UUID projectId, UUID datasetVersionId, UUID validationId,
-			String approvedBy, Instant approvedAt) {
+			String approvedBy, Instant approvedAt, boolean selfAdminApprovalAllowed) {
 		var request = findRequest(projectId, datasetVersionId)
 			.orElseThrow(() -> new IllegalStateException("The dataset freeze approval request is missing."));
 		if (!request.matchesDatasetFreeze(projectId, datasetVersionId, validationId)) {
 			throw new IllegalStateException("The dataset freeze approval request does not match its validation.");
 		}
-		if (request.getRequestedBy().equals(approvedBy)) {
+		if (request.getRequestedBy().equals(approvedBy) && !selfAdminApprovalAllowed) {
 			throw new IllegalArgumentException("The dataset freeze requester cannot approve the same request.");
 		}
 		if (request.getStatus() != ApprovalRequestStatus.PENDING) {

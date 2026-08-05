@@ -51,8 +51,8 @@ class DatasetVersionFreezeService {
 	}
 
 	@Transactional(isolation = Isolation.REPEATABLE_READ)
-	DatasetVersionFreezeResponse freeze(UUID projectId, UUID datasetVersionId, String actorId, String idempotencyKey,
-			String requestId, String traceId) {
+	DatasetVersionFreezeResponse freeze(UUID projectId, UUID datasetVersionId, String actorId,
+			boolean selfAdminApprovalAllowed, String idempotencyKey, String requestId, String traceId) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = requestFingerprint(datasetVersionId);
 		var replay = this.versionRepository.findByProjectIdAndFrozenByAndFreezeIdempotencyKey(projectId, actorId,
@@ -90,7 +90,8 @@ class DatasetVersionFreezeService {
 			throw new DatasetVersionException("DATASET_VERSION_FREEZE_APPROVAL_INVALID",
 					"The dataset freeze approval request is not pending for the current validation.", 409);
 		}
-		if (approval.requestedBy().equals(actorId)) {
+		var selfAdminApproval = approval.requestedBy().equals(actorId);
+		if (selfAdminApproval && !selfAdminApprovalAllowed) {
 			throw new DatasetVersionException("DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN",
 					"The freeze requester cannot approve the same dataset version.", 409);
 		}
@@ -108,7 +109,7 @@ class DatasetVersionFreezeService {
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var approved = this.approvalService.approve(projectId, datasetVersionId,
-				validation.getDatasetVersionValidationId(), actorId, now);
+				validation.getDatasetVersionValidationId(), actorId, now, selfAdminApprovalAllowed);
 		if (approved.approvalDecisionId() == null) {
 			throw new IllegalStateException("An approved dataset freeze must have one decision.");
 		}
@@ -117,8 +118,9 @@ class DatasetVersionFreezeService {
 		this.versionRepository.saveAndFlush(version);
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"DATASET_VERSION_FROZEN", "DatasetVersion", datasetVersionId.toString(),
-				Long.toString(version.getVersion()), AuditOutcome.SUCCEEDED, "FREEZE_APPROVED_AFTER_REVALIDATION",
-				requestId, traceId, "APPROVAL_DECISION:" + approved.approvalDecisionId(),
+				Long.toString(version.getVersion()), AuditOutcome.SUCCEEDED,
+				selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "FREEZE_APPROVED_AFTER_REVALIDATION", requestId, traceId,
+				"APPROVAL_DECISION:" + approved.approvalDecisionId(),
 				Map.of("dataset_version_validation_id", validation.getDatasetVersionValidationId().toString(),
 						"approval_request_id", approved.approvalRequestId().toString(), "approval_decision_id",
 						approved.approvalDecisionId().toString(), "snapshot_digest",

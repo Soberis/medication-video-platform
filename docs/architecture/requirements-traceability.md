@@ -1,10 +1,10 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md`
-> 继承需求基线：V1.9、V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
+> 当前需求基线：`docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md`
+> 继承需求基线：V1.10、V1.9、V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-08-03
+> 最后更新：2026-08-05
 
 ## 1. 目的
 
@@ -21,7 +21,7 @@
 → UAT 证据
 ```
 
-当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、独立复核、后置清洗及 Sprint 3 的数据集导出执行切片；2026-07-31 已取得本机合成数据的跨进程闭环证据。Sprint 3 现在以真实故障场景和批准环境的 UAT 证据收口，而不是继续增加未经验证的新功能。V1.10 继承 V1.9 的内部训练数据平台、React 和桌面视口边界，并把 P0 收敛为主 Step 训练数据。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为 1–100 个明确选择且均当前 eligible 的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。草稿详情与按需准备检查严格分离：项目成员可只读比较每个草稿成员的当前准入事实和固定证据的稳定差异码，查询不写入草稿、不产生审计。拥有至少两个成员的草稿可由项目管理员固定一次 `pilot/holdout` 划分：当前策略以 CaptureSession 为泄漏组，持久化算法版本、随机种子和实际分配，重试受幂等键保护。已有划分且候选 stream 的标签、清洗摘要各自统一时，管理员还可固定一次不可变构建配置，绑定显式候选快照、统一摘要、split 和当前 `p0-dataset-export-v2`。同一只读查询按 `DRAFT → BUILDING` 守卫列出剩余配置阻断，以及当前准入或固定证据变化；零阻断时，项目管理员可显式开始构建，服务端在同一事务再次校验后记录启动事实与审计并迁移到 `BUILDING`。管理员随后可验证既有关系快照完整性，以版本化规范生成确定性摘要并进入 `VALIDATING`；该步骤复用原始 ClipAsset ID/摘要，不复制成员数据或创建派生 Variant。冻结前 `PASS` 会建立绑定该校验的待审批请求；另一位当前项目管理员批准时重新执行全部技术检查，并原子记录决定、审计和 `FROZEN` 状态。冻结版本的 v2 导出可经独立审批进入 Outbox/RabbitMQ/Export Worker；Worker 生成确定性训练包，Core API 校验后登记产物并按显式操作签发短期下载授权。失联 attempt 已支持 grace 后自动恢复、临时输出清理和有上限重试。当前仍不提供 WARNING override，历史 v1 因缺少真实 Object/COCO 与 clean video 生产者而不能继续执行，这是 V1.10 的已知缺口。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
+当前仓库已完成 Sprint 0、上传/资产主链路和最小人工审核、标注、复核、后置清洗及 Sprint 3 的数据集导出执行切片；2026-07-31 已取得本机合成数据的跨进程闭环证据。Sprint 3 现在以真实故障场景和批准环境的 UAT 证据收口，而不是继续增加未经验证的新功能。V1.11 继承 V1.10 的内部训练数据平台、React 和桌面视口边界，并把 P0 收敛为主 Step 训练数据。它将人工职责分离改为受限的单管理员运营规则：拥有 ACTIVE 项目 ADMIN Membership 的 `ROLE_ADMIN` 可完成自己发起的复核、冻结和导出审批；`ROLE_MEMBER` 仍不能执行任何管理员命令，同人审批必须记录为 `SELF_ADMIN_APPROVAL`，不能伪称独立审批。该规则的代码、OpenAPI、UI 文案和合同/UAT 证据尚待同步，相关条目保持 `PI`。当前切片把媒体探测结果投影为 stream/session 的入库数量、组装状态和技术检测状态，按 CaptureSession 聚合删除、人工质量、最新 review 与 post-clean 事实，并在配药操作详情显示可解释的只读准入预览；同时校验 post-clean 冻结的人工质量版本仍是当前版本。项目管理员可为 1–100 个明确选择且均当前 eligible 的 CaptureSession 创建 `DRAFT` DatasetVersion，并保存 session/stream、媒体摘要、标注 revision/document/schema、人工质量版本和 post-clean 规则证据快照；输入变化产生新不可变 run/result，历史不覆盖。草稿详情与按需准备检查严格分离：项目成员可只读比较每个草稿成员的当前准入事实和固定证据的稳定差异码，查询不写入草稿、不产生审计。拥有至少两个成员的草稿可由项目管理员固定一次 `pilot/holdout` 划分：当前策略以 CaptureSession 为泄漏组，持久化算法版本、随机种子和实际分配，重试受幂等键保护。已有划分且候选 stream 的标签、清洗摘要各自统一时，管理员还可固定一次不可变构建配置，绑定显式候选快照、统一摘要、split 和当前 `p0-dataset-export-v2`。同一只读查询按 `DRAFT → BUILDING` 守卫列出剩余配置阻断，以及当前准入或固定证据变化；零阻断时，项目管理员可显式开始构建，服务端在同一事务再次校验后记录启动事实与审计并迁移到 `BUILDING`。管理员随后可验证既有关系快照完整性，以版本化规范生成确定性摘要并进入 `VALIDATING`；该步骤复用原始 ClipAsset ID/摘要，不复制成员数据或创建派生 Variant。冻结前 `PASS` 会建立绑定该校验的待审批请求；管理员批准时重新执行全部技术检查，并原子记录决定、审计和 `FROZEN` 状态。冻结版本的 v2 导出可经管理员审批进入 Outbox/RabbitMQ/Export Worker；Worker 生成确定性训练包，Core API 校验后登记产物并按显式操作签发短期下载授权。失联 attempt 已支持 grace 后自动恢复、临时输出清理和有上限重试。当前仍不提供 WARNING override，历史 v1 因缺少真实 Object/COCO 与 clean video 生产者而不能继续执行，这是 V1.10 的已知缺口。下表中的契约面同时包含已实现和计划能力，必须结合“当前状态”和可执行证据判断，不能仅凭接口名称推断需求已经完成。
 
 2026-08-03 的 Windows 本地 loopback 合成验收已补齐 Worker 租约失联恢复证据：首个 attempt 为 `LOST/WORKER_LEASE_LOST`，后续 attempt 成功并将导出置为 `AVAILABLE`。2026-08-04 又在隔离 Windows loopback 合成环境完成真实 RabbitMQ DLQ 管理员受控重放；并发和正式 UAT 仍按下表状态保留。
 
@@ -79,7 +79,7 @@
 | FR-013 标注任务状态管理 | P0 | `annotationreview` | task command API | annotation_task、annotation_revision | `ASSIGNED → SUBMITTED` 只允许受理人；`APPROVED` 推进为 `COMPLETED`；重复提交不覆盖既有修订 | PI |
 | FR-014 标注指南绑定 | P0 | `annotationreview` | guideline versions | annotation_guideline_version | 提交 revision 可追溯到实际使用的指南摘要 | D1 |
 | FR-015 标注进度统计 | P0 | `annotationreview`、只读投影 | annotation task list + progress | annotation_task、annotation_revision、annotation_review（只读聚合） | 管理员项目范围与成员个人范围正确；四个互斥状态计数之和等于可见任务总数 | PI |
-| FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision、annotation_task | 独立项目管理员记录一次通过/不通过；标注提交者不能自审；通过只完成当前任务，不等于数据集准入 | PI |
+| FR-016 基础复核 | P0 | `annotationreview` | review command API | annotation_review、annotation_revision、annotation_task | V1.11 要求拥有 ACTIVE 项目 ADMIN Membership 的 `ROLE_ADMIN` 记录一次通过/不通过；同一管理员可自审，审计/UI 显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能复核。控制器、服务、OpenAPI、React 和合同测试已同步；真实 UAT 待完成 | PI |
 | FR-017 退回重标并保留历史 | P0 | `annotationreview` | rework command | annotation_task、annotation_revision、annotation_review | `REJECTED` 退回任务；再次提交创建递增 revision，旧记录不可覆盖 | PI |
 | FR-018 基础一致性检查 | P0 | `annotationreview`、`qualitycleaning` | 提交守卫；post-clean run/result | annotation_revision、cleaning_rule_set、cleaning_run、cleaning_result | 提交时阻断时间和标签错误；复核通过后以冻结输入重验，缺少已验证媒体时长产生 `WARNING`，非法事实产生 `REJECT` | PI |
 | FR-019 抽检比例和全检策略 | P1 | `annotationreview` | sampling policy | review_sampling_policy | 规则版本化并能解释任务为何被抽中 | DEFERRED |
@@ -101,12 +101,14 @@ V1.10 明确 P0 标注只包含主 Step 时间段。Object 框及其 COCO 导出
 | FR-028 数据集准入 | P0 | `datasetexport` | capture-session admission preview；draft creation；draft current-admission/build-readiness read；freeze-preflight validation | dataset_member_session、dataset_member_stream、dataset_version_validation | 已实现按 CaptureSession/stream 汇总当前装配、技术检测、删除、人工质量、最新 review 和 post-clean 的只读阻断原因预览，并在 Session 详情展示准备度；管理员创建草稿时服务端重新校验所有当前事实，并保存证据快照。草稿准备检查逐成员返回当前预览和相对快照的稳定证据变化，同时汇总当前准入/证据漂移阻断，且不修改草稿或写入审计。进入 `VALIDATING` 后，一次性技术校验及冻结批准命令都会重新核对当前准入和证据变化。未复核、post-clean 非 PASS、post-clean 使用过期人工质量版本、资产已删除或质量非 QUALIFIED 均不可进入草稿；WARNING 批准例外仍待实现 | PI |
 | FR-029 split 和防泄漏 | P0 | `datasetexport` | create/read immutable split plan | dataset_split_plan、dataset_split_assignment | 已实现 `CAPTURE_SESSION_HASH_RANK_V1`：CaptureSession 同时作为最小成员和泄漏组，服务端保存正整数 seed、稳定哈希排名及 pilot/holdout 实际结果；同一草稿只允许一个计划，冲突失败且不会自动降级。操作者/设备/批次等更强分组和正式比例仍待样本设计批准 | PI |
 | FR-030 MVP 必需导出 | P0 | `datasetexport` | versioned export profile；export request/approval/worker/download | dataset_build_specification、dataset_export、dataset_export_attempt、export_artifact、outbox_event、inbox_message | v2 已实现独立审批、首次任务原子入队、Worker 租约与心跳、短期输入/输出能力、确定性 ZIP、服务端文件集合和摘要校验、批准软件摘要、有限重试、结果去重、过期租约自动恢复、临时输出清理、短期下载与审计；契约、Worker 单元测试和固定合成输入的 Golden 内容测试覆盖主要模型。2026-07-31 已在本机合成环境真实验证两个 Session、独立冻结/导出审批、正常导出，以及首轮 `PACKAGE_BUILD_FAILED` 后经 `RETRY_WAIT` 由第 2 次 attempt 完成恢复；产物登记和短期下载摘要一致。2026-08-03 在 Windows 本地 loopback 合成环境再验证 Worker 租约失联：attempt 1 为 `LOST/WORKER_LEASE_LOST`，attempt 2 为 `SUCCEEDED`，最终 `AVAILABLE`。2026-08-04 在隔离 Windows loopback 合成环境以无效 Worker 身份产生并保留一条 `DATASET_EXPORT_JOB_ACQUIRE_REJECTED` DLQ 诊断；管理员重放创建 attempt 2 并最终 `AVAILABLE`，独立只读 SQL 复核旧 attempt=`FAILED`、新 attempt=`SUCCEEDED`、不同 message/capability 摘要、单条 replay/审计、单 Artifact，以及两个无明文 lease token 的 Outbox job 事件。并发和正式 UAT 仍待完成；历史 v1 仍因缺少真实 Object/COCO 与 clean video 生产者而被明确阻断 | PI |
-| FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze-preflight validation；freeze command/approval | dataset_version_validation、dataset_version、approval_request、approval_decision | `PASS` 自动创建绑定该 validation 的待审批请求；申请人不能自批，另一位当前项目管理员批准时重新执行全部技术检查，并原子记录唯一决定、审计和 `FROZEN` 状态。证据变化不产生部分审批，冻结后成员、revision、split 和规则不可修改，只能新建版本；冻结不授权导出 | I |
+| FR-031 数据集冻结 | P0 | `datasetexport`、`governance` | freeze-preflight validation；freeze command/approval | dataset_version_validation、dataset_version、approval_request、approval_decision | V1.11 要求 `ROLE_ADMIN` + ACTIVE 项目 ADMIN Membership 可对自己申请的 `PASS` 执行冻结；必须照实记录 `SELF_ADMIN_APPROVAL`，并继续重验全部技术证据、原子记录唯一决定/审计和 `FROZEN`。`ROLE_MEMBER` 不能冻结，冻结后成员、revision、split 和规则不可修改；控制器、服务、OpenAPI、React 和合同测试已同步，真实 UAT 待完成 | PI |
 | FR-032 扩展导出格式 | P1/P2 | `datasetexport` | export profiles | export_profile | YOLO/CVAT/Parquet 等逐格式建立契约和 Golden 文件 | DEFERRED |
+
+V1.11 已用受限单管理员规则替换 FR-016、FR-030 和 FR-031 中的人工职责分离要求：当前代码、OpenAPI、UI 和 Java 合同测试已同步为 `SELF_ADMIN_APPROVAL`；历史本机跨进程证据仍使用旧的双管理员流程，正式 UAT 需按 V1.11 重新执行。Worker 服务身份独立性、项目 Membership、状态/摘要校验、Outbox/Inbox 与审计追加约束不变。
 
 FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移链不可变，运行 API、前端客户端、策略 profile 和状态投影已从 P0 删除。未来若重新启用，必须重新建立需求、威胁模型、用途边界、契约和迁移，不能直接恢复历史代码。
 
-### 3.4 V1.2～V1.10 新增与细化需求
+### 3.4 V1.2～V1.11 新增与细化需求
 
 V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁；V1.10 将 P0 收敛为主 Step 训练包并后置 Object/COCO。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
 

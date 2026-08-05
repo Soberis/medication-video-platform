@@ -42,7 +42,7 @@ class DatasetExportApprovalReadinessServiceTests {
 	void reportsReadyForAnotherCurrentAdministrator() {
 		var fixture = fixture(APPROVER_ID, ProjectRole.ADMIN, Instant.now().plusSeconds(3600), List.of());
 
-		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID);
+		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, true);
 
 		assertTrue(response.readyForApproval());
 		assertTrue(response.blockingReasons().isEmpty());
@@ -54,14 +54,17 @@ class DatasetExportApprovalReadinessServiceTests {
 	void keepsTheRequesterAndOrdinaryMembersOutOfTheApprovalRole() {
 		var requester = fixture(REQUESTER_ID, ProjectRole.ADMIN, Instant.now().plusSeconds(3600), List.of());
 		var requesterResponse = requester.service()
-			.get(PROJECT_ID, requester.version().getDatasetVersionId(), REQUESTER_ID);
+			.get(PROJECT_ID, requester.version().getDatasetVersionId(), REQUESTER_ID, false);
 
 		assertFalse(requesterResponse.readyForApproval());
-		assertEquals(List.of(DatasetExportApprovalReadinessService.SELF_APPROVAL_FORBIDDEN),
+		assertEquals(
+				List.of(DatasetExportApprovalReadinessService.APPROVER_ADMIN_REQUIRED,
+						DatasetExportApprovalReadinessService.SELF_APPROVAL_FORBIDDEN),
 				requesterResponse.blockingReasons());
 
 		var member = fixture("project.member", ProjectRole.MEMBER, Instant.now().plusSeconds(3600), List.of());
-		var memberResponse = member.service().get(PROJECT_ID, member.version().getDatasetVersionId(), "project.member");
+		var memberResponse = member.service()
+			.get(PROJECT_ID, member.version().getDatasetVersionId(), "project.member", false);
 
 		assertFalse(memberResponse.readyForApproval());
 		assertEquals(List.of(DatasetExportApprovalReadinessService.APPROVER_ADMIN_REQUIRED),
@@ -69,10 +72,20 @@ class DatasetExportApprovalReadinessServiceTests {
 	}
 
 	@Test
+	void allowsAPlatformAdministratorToApproveTheirOwnExportRequest() {
+		var fixture = fixture(REQUESTER_ID, ProjectRole.ADMIN, Instant.now().plusSeconds(3600), List.of());
+
+		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), REQUESTER_ID, true);
+
+		assertTrue(response.readyForApproval());
+		assertTrue(response.blockingReasons().isEmpty());
+	}
+
+	@Test
 	void reportsExpiredPurposeAuthorization() {
 		var fixture = fixture(APPROVER_ID, ProjectRole.ADMIN, Instant.now().minusSeconds(1), List.of());
 
-		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID);
+		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, true);
 
 		assertFalse(response.readyForApproval());
 		assertEquals(List.of(DatasetExportApprovalReadinessService.EXPORT_AUTHORIZATION_EXPIRED),
@@ -84,7 +97,7 @@ class DatasetExportApprovalReadinessServiceTests {
 		var fixture = fixture(APPROVER_ID, ProjectRole.ADMIN, Instant.now().plusSeconds(3600),
 				List.of(DatasetVersionValidationService.SNAPSHOT_EVIDENCE_CHANGED));
 
-		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID);
+		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, true);
 
 		assertFalse(response.readyForApproval());
 		assertEquals(List.of(DatasetVersionValidationService.SNAPSHOT_EVIDENCE_CHANGED), response.blockingReasons());
@@ -95,7 +108,7 @@ class DatasetExportApprovalReadinessServiceTests {
 		var fixture = fixture(APPROVER_ID, ProjectRole.ADMIN, Instant.now().plusSeconds(3600), List.of(),
 				DatasetExportProfile.LEGACY_V1_KEY, DatasetExportProfile.LEGACY_V1_DIGEST);
 
-		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID);
+		var response = fixture.service().get(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, true);
 
 		assertFalse(response.readyForApproval());
 		assertEquals(List.of(DatasetExportApprovalReadinessService.EXPORT_PROFILE_NOT_EXECUTABLE),

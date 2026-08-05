@@ -53,7 +53,8 @@ class AnnotationTaskController {
 	ResponseEntity<AnnotationTaskListResponse> list(@PathVariable UUID projectId, Authentication authentication) {
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(this.service.list(projectId, requireActor(authentication).actorId()));
+			.body(this.service.list(projectId, requireActor(authentication).actorId(),
+					isPlatformAdministrator(authentication)));
 	}
 
 	@PostMapping("/clip-assets/{clipAssetId}/annotation-tasks")
@@ -63,9 +64,10 @@ class AnnotationTaskController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationTaskRequest request, Authentication authentication) {
-		var response = this.service.create(projectId, clipAssetId, requireActor(authentication).actorId(),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"), new AnnotationTaskCreateRequest(request.assigneeActorId()));
+		var response = this.service.create(projectId, clipAssetId,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				new AnnotationTaskCreateRequest(request.assigneeActorId()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + response.annotationTaskId()))
 			.cacheControl(CacheControl.noStore())
@@ -103,9 +105,9 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationReviewRequest request, Authentication authentication) {
 		var response = this.service.reviewRevision(projectId, annotationRevisionId,
-				requireActor(authentication).actorId(), idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
-				new AnnotationReviewCommand(request.decision(), request.reviewNote()));
+				requirePlatformAdministrator(authentication).actorId(), isPlatformAdministrator(authentication),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"), new AnnotationReviewCommand(request.decision(), request.reviewNote()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI
 				.create("/api/v1/projects/" + projectId + "/annotation-revisions/" + annotationRevisionId + "/review"))
@@ -120,7 +122,7 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.service.recheckPostCleaning(projectId, annotationRevisionId,
-				requireActor(authentication).actorId(),
+				requirePlatformAdministrator(authentication).actorId(),
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -131,6 +133,21 @@ class AnnotationTaskController {
 					"An authenticated platform account is required for annotation tasks.", 403);
 		}
 		return actor;
+	}
+
+	private static ProjectActor requirePlatformAdministrator(Authentication authentication) {
+		var actor = requireActor(authentication);
+		if (!isPlatformAdministrator(authentication)) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "A platform administrator account is required.",
+					403);
+		}
+		return actor;
+	}
+
+	private static boolean isPlatformAdministrator(Authentication authentication) {
+		return authentication != null && authentication.getAuthorities()
+			.stream()
+			.anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
 	}
 
 }

@@ -72,15 +72,17 @@ class AnnotationTaskService {
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	AnnotationTaskListResponse list(UUID projectId, String actorId) {
+	AnnotationTaskListResponse list(UUID projectId, String actorId, boolean platformAdministrator) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
-		List<AnnotationTask> tasks = role == ProjectRole.ADMIN
+		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
+		List<AnnotationTask> tasks = projectAdministrator
 				? this.repository.findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId)
 				: this.repository
 					.findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId, actorId);
 		if (tasks.isEmpty()) {
 			var items = List.<AnnotationTaskResponse>of();
-			return new AnnotationTaskListResponse(items, AnnotationTaskProgressResponse.from(role, items));
+			return new AnnotationTaskListResponse(items,
+					AnnotationTaskProgressResponse.from(projectAdministrator, items));
 		}
 		var revisionsByTaskId = this.revisionRepository
 			.findAllByAnnotationTaskIdIn(tasks.stream().map(AnnotationTask::getAnnotationTaskId).toList())
@@ -97,11 +99,11 @@ class AnnotationTaskService {
 						revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList());
 		var items = tasks.stream().map(task -> {
 			var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
-			return AnnotationTaskResponse.from(task, actorId, role, revision,
+			return AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision,
 					revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()),
 					revision == null ? null : postCleaningByRevisionId.get(revision.getAnnotationRevisionId()));
 		}).toList();
-		return new AnnotationTaskListResponse(items, AnnotationTaskProgressResponse.from(role, items));
+		return new AnnotationTaskListResponse(items, AnnotationTaskProgressResponse.from(projectAdministrator, items));
 	}
 
 	@Transactional
@@ -114,7 +116,7 @@ class AnnotationTaskService {
 				throw new AnnotationTaskException("ANNOTATION_TASK_IDEMPOTENCY_KEY_REUSED",
 						"The idempotency key was already used for a different annotation task.", 409);
 			}
-			return AnnotationTaskResponse.from(replay.get(), actorId, ProjectRole.ADMIN, null, null, null);
+			return AnnotationTaskResponse.from(replay.get(), actorId, true, null, null, null);
 		}
 
 		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, clipAssetId);
@@ -143,7 +145,7 @@ class AnnotationTaskService {
 					Map.of("clip_asset_id", clipAssetId.toString(), "assignee_actor_id", task.getAssigneeActorId(),
 							"label_schema_id", task.getLabelSchemaId().toString(), "label_schema_digest",
 							task.getLabelSchemaDigest())));
-		return AnnotationTaskResponse.from(task, actorId, ProjectRole.ADMIN, null, null, null);
+		return AnnotationTaskResponse.from(task, actorId, true, null, null, null);
 	}
 
 	@Transactional
@@ -199,11 +201,13 @@ class AnnotationTaskService {
 
 	@Transactional
 	AnnotationReviewResponse reviewRevision(UUID projectId, UUID annotationRevisionId, String actorId,
-			String idempotencyKey, String requestId, String traceId, AnnotationReviewCommand request) {
+			boolean selfAdminApprovalAllowed, String idempotencyKey, String requestId, String traceId,
+			AnnotationReviewCommand request) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
 			.orElseThrow(AnnotationTaskService::revisionNotFound);
-		if (revision.getSubmittedBy().equals(actorId)) {
+		var selfAdminApproval = revision.getSubmittedBy().equals(actorId);
+		if (selfAdminApproval && !selfAdminApprovalAllowed) {
 			throw new AnnotationTaskException("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN",
 					"The submitting member cannot independently review this annotation revision.", 403);
 		}
@@ -238,14 +242,16 @@ class AnnotationTaskService {
 		}
 		else {
 			this.evaluatePostCleaning(projectId, revision, review, task, assetFacts.assetSha256(), qualityDecision,
-					actorId, requestId, traceId, "INDEPENDENT_ANNOTATION_REVIEW");
+					actorId, requestId, traceId,
+					selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "INDEPENDENT_ANNOTATION_REVIEW");
 			task.complete(now);
 			this.repository.saveAndFlush(task);
 		}
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_REVISION_REVIEWED", "AnnotationReview", review.getAnnotationReviewId().toString(),
-				review.getDecision().name(), AuditOutcome.SUCCEEDED, "INDEPENDENT_ANNOTATION_REVIEW", requestId,
-				traceId, "PROJECT_MEMBERSHIP_ADMIN",
+				review.getDecision().name(), AuditOutcome.SUCCEEDED,
+				selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "INDEPENDENT_ANNOTATION_REVIEW", requestId, traceId,
+				"PROJECT_MEMBERSHIP_ADMIN",
 				Map.of("annotation_revision_id", revision.getAnnotationRevisionId().toString(), "annotation_task_id",
 						revision.getAnnotationTaskId().toString(), "decision", review.getDecision().name(),
 						"reopened_for_rework",
@@ -457,15 +463,15 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID clipAs
 		boolean canReview, boolean canRecheckPostCleaning, AnnotationRevisionSummary annotationRevision,
 		Instant createdAt, Instant updatedAt, long version) {
 
-	static AnnotationTaskResponse from(AnnotationTask task, String actorId, ProjectRole role,
+	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, PostCleaningResultSummary postCleaningResult) {
 		return new AnnotationTaskResponse(task.getAnnotationTaskId(), task.getProjectId(), task.getClipAssetId(),
 				task.getLabelSchemaId(), task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(),
 				task.getStatus().name(),
 				task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId),
-				task.getStatus() == AnnotationTaskStatus.SUBMITTED && role == ProjectRole.ADMIN && revision != null
-						&& review == null && !revision.getSubmittedBy().equals(actorId),
-				task.getStatus() == AnnotationTaskStatus.COMPLETED && role == ProjectRole.ADMIN && revision != null
+				task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
+						&& review == null,
+				task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null
 						&& review != null && review.getDecision() == AnnotationReviewDecision.APPROVED,
 				AnnotationRevisionSummary.from(revision, review, postCleaningResult), task.getCreatedAt(),
 				task.getUpdatedAt(), task.getVersion());
@@ -478,7 +484,7 @@ record AnnotationTaskListResponse(List<AnnotationTaskResponse> items, Annotation
 record AnnotationTaskProgressResponse(String scope, long total, long awaitingSubmission, long reworkRequired,
 		long awaitingReview, long completed) {
 
-	static AnnotationTaskProgressResponse from(ProjectRole role, List<AnnotationTaskResponse> items) {
+	static AnnotationTaskProgressResponse from(boolean projectAdministrator, List<AnnotationTaskResponse> items) {
 		long awaitingSubmission = 0;
 		long reworkRequired = 0;
 		long awaitingReview = 0;
@@ -500,7 +506,7 @@ record AnnotationTaskProgressResponse(String scope, long total, long awaitingSub
 				default -> throw new IllegalStateException("Unsupported annotation task status: " + item.status());
 			}
 		}
-		return new AnnotationTaskProgressResponse(role == ProjectRole.ADMIN ? "PROJECT" : "ASSIGNEE", items.size(),
+		return new AnnotationTaskProgressResponse(projectAdministrator ? "PROJECT" : "ASSIGNEE", items.size(),
 				awaitingSubmission, reworkRequired, awaitingReview, completed);
 	}
 }

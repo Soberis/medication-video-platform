@@ -223,7 +223,7 @@ export default function AnnotationTaskListView() {
     setIsSubmitting(true)
     try {
       await submitAnnotationRevision(projectId, task.annotation_task_id, validSegments, note)
-      void message.success('标注已提交，等待后续独立复核。')
+      void message.success('标注已提交，等待管理员复核。')
       setIsSubmissionOpen(false)
       await loadTasks()
     } catch (error) {
@@ -250,7 +250,7 @@ export default function AnnotationTaskListView() {
         setReviewingRevisionId(revision.annotation_revision_id)
         try {
           await reviewAnnotationRevision(projectId, revision.annotation_revision_id, decision)
-          void message.success(approved ? '标注已通过独立复核。' : '已记录标注不通过。')
+          void message.success(approved ? '标注已通过管理员复核。' : '已记录标注不通过。')
           await loadTasks()
         } catch (error) {
           void message.error(
@@ -298,7 +298,7 @@ export default function AnnotationTaskListView() {
         <div>
           <p className="app-eyebrow">人工训练数据标注</p>
           <h1 id="annotation-task-title">标注任务</h1>
-          <p>处理已分配的合格视频标注；提交后由另一位管理员独立复核。</p>
+          <p>处理已分配的合格视频标注；提交后由当前项目管理员复核。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
           刷新
@@ -378,11 +378,18 @@ export default function AnnotationTaskListView() {
                     <>
                       <div>已提交 · {revision.annotation_document.segments.length} 个时间段</div>
                       {revision.review ? (
-                        <Tag color={revision.review.decision === 'APPROVED' ? 'success' : 'error'}>
-                          {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
-                        </Tag>
+                        <>
+                          <Tag
+                            color={revision.review.decision === 'APPROVED' ? 'success' : 'error'}
+                          >
+                            {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
+                          </Tag>
+                          {revision.review.reviewed_by === revision.submitted_by ? (
+                            <Tag color="gold">管理员自审（SELF_ADMIN_APPROVAL）</Tag>
+                          ) : null}
+                        </>
                       ) : (
-                        <span className="muted-text">等待独立复核</span>
+                        <span className="muted-text">等待管理员复核</span>
                       )}
                       {presentation ? (
                         <div>
@@ -473,7 +480,7 @@ export default function AnnotationTaskListView() {
         destroyOnHidden
       >
         <p className="form-hint">
-          按项目标签规范记录一个或多个主流程步骤。提交后内容不可覆盖，后续由独立复核处理。
+          按项目标签规范记录一个或多个主流程步骤。提交后内容不可覆盖，后续由管理员复核处理。
         </p>
         <Form layout="vertical" onFinish={() => void submit()}>
           {segments.map((segment, index) => (

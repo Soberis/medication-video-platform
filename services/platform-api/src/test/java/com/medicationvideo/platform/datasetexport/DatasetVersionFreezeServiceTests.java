@@ -3,6 +3,7 @@ package com.medicationvideo.platform.datasetexport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,14 +43,14 @@ class DatasetVersionFreezeServiceTests {
 
 		var exception = assertThrows(DatasetVersionException.class,
 				() -> fixture.service()
-					.freeze(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, "dataset-freeze-0001",
-							"dataset-freeze-request-0001", "trace-0001"));
+					.freeze(PROJECT_ID, fixture.version().getDatasetVersionId(), APPROVER_ID, false,
+							"dataset-freeze-0001", "dataset-freeze-request-0001", "trace-0001"));
 
 		assertEquals("DATASET_VERSION_FREEZE_EVIDENCE_CHANGED", exception.getErrorCode());
 		assertEquals("SNAPSHOT_EVIDENCE_CHANGED,BUILD_CONTRACT_MISMATCH,SNAPSHOT_VALIDATION_MISMATCH",
 				exception.getDetails().get("blocking_reasons"));
 		assertEquals(DatasetVersionStatus.VALIDATING, fixture.version().getStatus());
-		verify(fixture.approvals(), never()).approve(any(), any(), any(), any(), any());
+		verify(fixture.approvals(), never()).approve(any(), any(), any(), any(), any(), anyBoolean());
 		verify(fixture.versions(), never()).saveAndFlush(any());
 		verifyNoInteractions(fixture.audit());
 	}

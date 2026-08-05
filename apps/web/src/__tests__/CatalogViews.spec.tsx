@@ -999,8 +999,8 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('冻结前校验已通过')).toBeInTheDocument()
     expect(screen.getByText(/仍需单独审批后才能冻结/)).toBeInTheDocument()
-    expect(screen.getByText('等待独立审批')).toBeInTheDocument()
-    expect(screen.getByText(/另一位项目管理员/)).toBeInTheDocument()
+    expect(screen.getByText('等待管理员审批')).toBeInTheDocument()
+    expect(screen.getByText(/当前项目管理员处理/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '批准并冻结' })).not.toBeInTheDocument()
     const validationFacts = screen.getByText('查看校验标识').closest('details')
     expect(validationFacts).not.toBeNull()
@@ -1019,7 +1019,7 @@ describe('catalog views', () => {
     )
   })
 
-  it('lets a different administrator revalidate, approve and freeze one version atomically', async () => {
+  it('lets one administrator revalidate, self-approve and freeze one version atomically', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
     const freezePath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/freezes`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
@@ -1038,14 +1038,14 @@ describe('catalog views', () => {
         'BUILD_CONTRACT',
       ] as const,
       validated_snapshot_digest: 'f'.repeat(64),
-      validated_by: 'other-admin',
+      validated_by: 'local-admin',
       validated_at: '2026-07-30T01:00:00Z',
     }
     const pendingApproval = {
       approval_request_id: '96000000-0000-4000-8000-000000000001',
       validation_id: validation.dataset_version_validation_id,
       status: 'PENDING' as const,
-      requested_by: 'other-admin',
+      requested_by: 'local-admin',
       requested_at: '2026-07-30T01:00:00Z',
       approval_decision_id: null,
       approved_by: null,
@@ -1097,7 +1097,7 @@ describe('catalog views', () => {
 
     renderDatasetDetail(datasetVersionId)
 
-    expect(await screen.findByText('等待独立审批')).toBeInTheDocument()
+    expect(await screen.findByText('等待管理员审批')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '批准并冻结' }))
     const confirmDialog = await screen.findByRole('dialog')
     expect(within(confirmDialog).getByText(/冻结后不可修改，只能新建版本/)).toBeInTheDocument()
@@ -1106,14 +1106,15 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('数据集已冻结')).toBeInTheDocument()
     expect(screen.getByText('已冻结')).toBeInTheDocument()
-    expect(screen.getByText('技术校验通过，独立审批已完成。')).toBeInTheDocument()
+    expect(screen.getByText('管理员自审（SELF_ADMIN_APPROVAL）')).toBeInTheDocument()
+    expect(screen.getByText('技术校验通过，管理员审批已完成。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '批准并冻结' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检查当前证据' })).not.toBeInTheDocument()
     const approvalFacts = screen.getByText('查看冻结审批记录').closest('details')
     expect(approvalFacts).not.toBeNull()
     if (!approvalFacts) throw new Error('Freeze approval facts were not rendered.')
     expect(within(approvalFacts).getByText('审批人')).toBeInTheDocument()
-    expect(within(approvalFacts).getByText('local-admin')).toBeInTheDocument()
+    expect(within(approvalFacts).getAllByText('local-admin')).toHaveLength(2)
     expect(fetchMock).toHaveBeenCalledWith(
       freezePath,
       expect.objectContaining({
@@ -1152,7 +1153,7 @@ describe('catalog views', () => {
 
     renderDatasetDetail(datasetVersionId)
 
-    expect(await screen.findByText('导出申请等待独立审批')).toBeInTheDocument()
+    expect(await screen.findByText('导出申请等待管理员审批')).toBeInTheDocument()
     expect(screen.getByText(/尚未进入后台队列/)).toBeInTheDocument()
     expect(screen.getByText('内部模型训练')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '提交导出申请' })).not.toBeInTheDocument()
@@ -1162,7 +1163,7 @@ describe('catalog views', () => {
     expect(within(exportFacts).getByText('p0-dataset-export-v1')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '检查审批准备' }))
     expect(await screen.findByText('审批准备仍有阻断项')).toBeInTheDocument()
-    expect(screen.getByText('导出申请人不能审批自己的申请')).toBeInTheDocument()
+    expect(screen.getByText('当前账号没有管理员自审权限')).toBeInTheDocument()
     expect(screen.getByText('暂不可审批')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '批准并开始导出' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1366,7 +1367,7 @@ describe('catalog views', () => {
     expect(within(confirmDialog).getByText(/不会立即生成或下载文件/)).toBeInTheDocument()
     await user.click(within(confirmDialog).getByRole('button', { name: '提交申请' }))
 
-    expect(await screen.findByText('导出申请等待独立审批')).toBeInTheDocument()
+    expect(await screen.findByText('导出申请等待管理员审批')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       exportPath,
       expect.objectContaining({

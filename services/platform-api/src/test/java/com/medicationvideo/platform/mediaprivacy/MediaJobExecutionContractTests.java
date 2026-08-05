@@ -699,6 +699,13 @@ class MediaJobExecutionContractTests {
 				.content(request))
 			.andExpect(status().isAccepted())
 			.andExpect(jsonPath("$.recovery_id").value(recoveryId));
+		this.mockMvc
+			.perform(post(path, PROJECT_ID, created.clipAssetId()).header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"change_reference\":\"INC-20260805-002\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("IDEMPOTENCY_KEY_REUSED"));
 
 		assertEquals("FAILED",
 				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
@@ -706,6 +713,63 @@ class MediaJobExecutionContractTests {
 				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 2", created.jobId()));
 		assertEquals(1,
 				count("SELECT count(*) FROM media_job_delivery_recovery WHERE media_job_id = ?", created.jobId()));
+	}
+
+	@Test
+	void rejectsCurrentClipAssetProbeRecoveryBeforeTheSourceOutboxMessageWasPublisherConfirmed() throws Exception {
+		var created = createQueuedJob();
+		var path = "/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-delivery-recoveries";
+
+		this.mockMvc
+			.perform(post(path, PROJECT_ID, created.clipAssetId()).header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delivery-recovery-ui-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"change_reference\":\"INC-20260805-003\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED"));
+
+		assertEquals("QUEUED", scalar("SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals("QUEUED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals(1, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+		assertEquals(0,
+				count("SELECT count(*) FROM media_job_delivery_recovery WHERE media_job_id = ?", created.jobId()));
+		assertEquals(0, count(
+				"SELECT count(*) FROM audit_event WHERE action = 'MEDIA_JOB_DELIVERY_RECOVERED'" + " AND object_id = ?",
+				created.jobId().toString()));
+	}
+
+	@Test
+	void rejectsCurrentClipAssetProbeRecoveryForDeletedAssetWithoutChangingTheJob() throws Exception {
+		var created = createQueuedJob();
+		markOutboxPublished(created);
+		this.mockMvc
+			.perform(delete("/api/v1/projects/{projectId}/clip-assets/{clipAssetId}", PROJECT_ID, created.clipAssetId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delete-recovery-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"reason\":\"Synthetic deleted asset recovery verification\"}"))
+			.andExpect(status().isNoContent());
+
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/media-probe-delivery-recoveries",
+					PROJECT_ID, created.clipAssetId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-delivery-recovery-ui-" + UUID.randomUUID())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"change_reference\":\"INC-20260805-004\"}"))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+
+		assertEquals("QUEUED", scalar("SELECT status FROM media_job WHERE media_job_id = ?", created.jobId()));
+		assertEquals("QUEUED",
+				scalar("SELECT status FROM media_job_attempt WHERE media_job_id = ? AND attempt = 1", created.jobId()));
+		assertEquals(1, count("SELECT count(*) FROM outbox_event WHERE aggregate_id = ?", created.jobId()));
+		assertEquals(0,
+				count("SELECT count(*) FROM media_job_delivery_recovery WHERE media_job_id = ?", created.jobId()));
+		assertEquals(0, count(
+				"SELECT count(*) FROM audit_event WHERE action = 'MEDIA_JOB_DELIVERY_RECOVERED'" + " AND object_id = ?",
+				created.jobId().toString()));
 	}
 
 	@Test

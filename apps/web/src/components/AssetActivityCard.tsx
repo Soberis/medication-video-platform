@@ -21,6 +21,7 @@ const reasonLabels: Record<string, string> = {
   QUALIFIED_CLIP_ASSET: '视频已通过人工质量判断',
   MANUAL_ANNOTATION_SUBMITTED: '人工标注已提交',
   INDEPENDENT_ANNOTATION_REVIEW: '独立复核',
+  SELF_ADMIN_APPROVAL: '管理员自审（SELF_ADMIN_APPROVAL）',
   MEETS_REQUIREMENTS: '符合质量要求',
   POST_CLEANING_PASS: '后置清洗通过',
   POST_CLEANING_WARNING: '后置清洗需确认',

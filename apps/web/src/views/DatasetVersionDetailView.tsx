@@ -64,7 +64,7 @@ const admissionReasonLabels: Record<string, string> = {
   QUALITY_REVIEW_NOT_QUALIFIED: '有视频尚未通过人工质量判断',
   QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING: '人工质量结论已变更，需要重新完成清洗检查',
   ANNOTATION_REVISION_MISSING: '有视频尚未提交人工标注',
-  ANNOTATION_REVIEW_NOT_APPROVED: '有标注尚未通过独立复核',
+  ANNOTATION_REVIEW_NOT_APPROVED: '有标注尚未通过管理员复核',
   POST_CLEANING_MISSING: '有已复核标注尚未完成清洗检查',
   POST_CLEANING_WARNING: '有标注清洗结果需要人工确认',
   POST_CLEANING_REJECT: '有标注未通过清洗检查',
@@ -120,7 +120,7 @@ const validationReasonLabels: Record<DatasetVersionValidationReason, string> = {
 
 const exportApprovalBlockerLabels: Record<DatasetExportApprovalBlocker, string> = {
   APPROVER_ADMIN_REQUIRED: '只有当前项目管理员可以批准导出',
-  SELF_APPROVAL_FORBIDDEN: '导出申请人不能审批自己的申请',
+  SELF_APPROVAL_FORBIDDEN: '当前账号没有管理员自审权限',
   EXPORT_AUTHORIZATION_EXPIRED: '本次训练用途授权已经到期',
   DATASET_VERSION_NOT_FROZEN: '数据集版本当前不是冻结状态',
   EXPORT_REQUEST_INVALID: '导出申请与当前数据集版本不一致',
@@ -477,7 +477,7 @@ function DatasetVersionDetailContent() {
       setCurrentAdmissionState('idle')
       await loadDetail()
       if (result.outcome === 'PASS') {
-        void message.success('冻结前校验已通过，已提交独立审批。')
+        void message.success('冻结前校验已通过，已提交管理员审批。')
       } else {
         void message.warning('冻结前校验未通过，请根据结果新建数据集版本。')
       }
@@ -498,7 +498,7 @@ function DatasetVersionDetailContent() {
     modal.confirm({
       title: '执行冻结前校验？',
       content:
-        '系统会核对当前准入、固定引用、快照摘要、数据划分和构建契约，并保存一次不可覆盖的结果。未通过时应新建版本；通过也不会自动冻结，只会提交独立审批请求。',
+        '系统会核对当前准入、固定引用、快照摘要、数据划分和构建契约，并保存一次不可覆盖的结果。未通过时应新建版本；通过也不会自动冻结，只会提交管理员审批请求。',
       okText: '执行冻结前校验',
       cancelText: '取消',
       onOk: runValidation,
@@ -519,7 +519,7 @@ function DatasetVersionDetailContent() {
       setCurrentAdmission(null)
       setCurrentAdmissionState('idle')
       await loadDetail()
-      void message.success('独立审批已记录，数据集版本已冻结。')
+      void message.success('管理员审批已记录，数据集版本已冻结。')
     } catch (error) {
       setFreezeState('error')
       if (error instanceof CatalogApiError) {
@@ -537,7 +537,7 @@ function DatasetVersionDetailContent() {
     modal.confirm({
       title: '批准并冻结当前数据集版本？',
       content:
-        '系统会重新核对全部技术证据，由当前管理员记录独立审批并立即冻结。冻结后不可修改，只能新建版本；此操作不会导出数据。',
+        '系统会重新核对全部技术证据，由当前管理员记录审批并立即冻结。冻结后不可修改，只能新建版本；此操作不会导出数据。若申请人与审批人为同一管理员，操作记录会明确标记为“管理员自审”。',
       okText: '批准并冻结',
       cancelText: '取消',
       onOk: runFreeze,
@@ -578,7 +578,7 @@ function DatasetVersionDetailContent() {
       exportIntent.current = null
       setExportExpiresAt(null)
       setExportRequestState('idle')
-      void message.success('导出申请已提交，正在等待独立审批。')
+      void message.success('导出申请已提交，正在等待管理员审批。')
     } catch (error) {
       setExportRequestState('error')
       if (error instanceof CatalogApiError) {
@@ -658,7 +658,7 @@ function DatasetVersionDetailContent() {
                     ? '构建配置已经封存；生成不可变快照后才能进入校验，冻结和导出仍须后续完成。'
                     : detail.status === 'VALIDATING'
                       ? '构建快照已经封存并进入校验阶段；当前状态不代表已经冻结或可以导出。'
-                      : '版本已完成独立审批并冻结；成员、标注、规则和划分不可修改，当前仍未导出。'}
+                      : '版本已完成管理员审批并冻结；成员、标注、规则和划分不可修改，当前仍未导出。'}
               </p>
             </div>
             <div className="heading-tags">
@@ -770,7 +770,7 @@ function DatasetVersionDetailContent() {
               {detail.status === 'DRAFT'
                 ? '只读取当前事实并核对草稿条件，不修改候选快照。通过本检查也不代表已经冻结或可以导出。'
                 : detail.status === 'FROZEN'
-                  ? '以下记录共同证明该版本经过技术校验、独立审批并冻结；冻结不会自动导出数据。'
+                  ? '以下记录共同证明该版本经过技术校验、管理员审批并冻结；冻结不会自动导出数据。'
                   : '固定证据与当前事实分开显示；构建和校验不会自动冻结或导出数据。'}
             </p>
             {detail.build_specification ? (
@@ -913,7 +913,7 @@ function DatasetVersionDetailContent() {
           {detail.status === 'FROZEN' ? (
             <Card className="detail-card" title={<strong>数据集导出</strong>} variant="outlined">
               <p className="form-hint">
-                当前 P0 只允许申请内部模型训练用途。申请、独立审批、后台生成和可下载是不同状态。
+                当前 P0 只允许申请内部模型训练用途。申请、管理员审批、后台生成和可下载是不同状态。
               </p>
               {detail.export_request ? (
                 <ExportRequestEvidence
@@ -1241,7 +1241,16 @@ function ExportRequestEvidence({
           {
             key: 'approver',
             label: '审批人',
-            children: exportRequest.approved_by ?? '等待独立审批',
+            children: exportRequest.approved_by ? (
+              <>
+                {exportRequest.approved_by}
+                {exportRequest.approved_by === exportRequest.requested_by
+                  ? ' · 管理员自审（SELF_ADMIN_APPROVAL）'
+                  : ''}
+              </>
+            ) : (
+              '等待管理员审批'
+            ),
           },
           ...(exportRequest.artifact
             ? [
@@ -1257,8 +1266,8 @@ function ExportRequestEvidence({
       {exportRequest.status === 'REQUESTED' ? (
         <div className="dataset-draft-selection-toolbar">
           <div>
-            <strong>独立审批</strong>
-            <span>先核对职责分离、授权有效期和冻结证据；批准时会在同一事务内再次检查。</span>
+            <strong>管理员审批</strong>
+            <span>先核对授权有效期和冻结证据；批准时会在同一事务内再次检查并保留真实审批人。</span>
           </div>
           <Button
             loading={readinessState.status === 'loading'}
@@ -1394,7 +1403,7 @@ function exportStatusPresentation(status: DatasetExport['status']) {
   switch (status) {
     case 'REQUESTED':
       return {
-        title: '导出申请等待独立审批',
+        title: '导出申请等待管理员审批',
         description: '用途和有效期已经固定，尚未进入后台队列。',
         label: '待审批',
         color: 'processing',
@@ -1570,7 +1579,7 @@ function ValidationEvidence({
           <span>
             {passed
               ? approved
-                ? '技术校验通过，独立审批已完成。'
+                ? '技术校验通过，管理员审批已完成。'
                 : '当前版本已通过技术校验，仍需单独审批后才能冻结。'
               : '当前版本不能进入冻结审批；请根据原因修正数据后新建版本。'}
           </span>
@@ -1637,21 +1646,28 @@ function FreezeApprovalEvidence({
   onFreeze: () => void
 }) {
   const approved = approval.status === 'APPROVED'
+  const selfAdminApproval = approved && approval.requested_by === approval.approved_by
   return (
     <>
       <div className={`readiness-result${approved ? ' readiness-result-ready' : ''}`}>
         <div>
-          <strong>{approved ? '数据集已冻结' : '等待独立审批'}</strong>
+          <strong>{approved ? '数据集已冻结' : '等待管理员审批'}</strong>
           <span>
             {approved
               ? '审批决定已记录，当前版本保持不可变；如需调整，请新建数据集版本。'
               : canFreeze
                 ? '技术校验已经通过。批准时会重新核对全部证据，并在同一事务内冻结版本。'
-                : '需由校验执行人以外的另一位项目管理员处理。'}
+                : '需由当前项目管理员处理。管理员自审会在操作记录中明确标记。'}
           </span>
         </div>
         <div className="dataset-draft-selection-actions">
-          <Tag color={approved ? 'success' : 'processing'}>{approved ? '已批准' : '待审批'}</Tag>
+          <Tag color={approved ? 'success' : 'processing'}>
+            {approved
+              ? selfAdminApproval
+                ? '管理员自审（SELF_ADMIN_APPROVAL）'
+                : '已批准'
+              : '待审批'}
+          </Tag>
           {canFreeze ? (
             <Button type="primary" loading={freezing} onClick={onFreeze}>
               批准并冻结
@@ -1963,7 +1979,7 @@ function StreamEvidence({
             width: 150,
             render: (_, row) => `合格 · v${row.quality_review_version}`,
           },
-          { title: '独立复核', width: 130, render: () => <Tag color="success">已通过</Tag> },
+          { title: '管理员复核', width: 130, render: () => <Tag color="success">已通过</Tag> },
           { title: '后置清洗', width: 130, render: () => <Tag color="success">通过</Tag> },
           {
             title: '证据摘要',

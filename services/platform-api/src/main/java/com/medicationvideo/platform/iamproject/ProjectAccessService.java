@@ -3,6 +3,7 @@ package com.medicationvideo.platform.iamproject;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class ProjectAccessService {
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireAdministrator(UUID projectId, String actorId) {
+		requireEnabledPlatformAdministrator();
 		var project = this.projectRepository.findForUpdate(projectId)
 			.orElseThrow(ProjectAccessService::projectNotFound);
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
@@ -48,6 +50,21 @@ public class ProjectAccessService {
 		return this.membershipRepository.findByProjectIdAndActorId(projectId, actorId)
 			.filter(ProjectMembership::isActive)
 			.orElseThrow(ProjectAccessService::projectNotFound);
+	}
+
+	private void requireEnabledPlatformAdministrator() {
+		var authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null || !authentication.isAuthenticated()
+				|| authentication.getAuthorities()
+					.stream()
+					.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+			throw administratorRequired();
+		}
+	}
+
+	private static ProjectAccessException administratorRequired() {
+		return new ProjectAccessException("PROJECT_ACCESS_DENIED", "A platform administrator account is required.",
+				403);
 	}
 
 	private static ProjectAccessException projectNotFound() {

@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
@@ -39,10 +40,12 @@ class MediaJobDeliveryRecoveryService {
 
 	private final ProjectAccessService projectAccessService;
 
+	private final AssetCatalogQueryService assetCatalog;
+
 	MediaJobDeliveryRecoveryService(MediaJobRepository jobRepository, MediaJobAttemptRepository attemptRepository,
 			MediaJobDeliveryRecoveryRepository recoveryRepository, MediaJobAttemptQueueService attemptQueue,
 			MediaJobRetryPolicy retryPolicy, AuditEventRecorder auditRecorder,
-			ProjectAccessService projectAccessService) {
+			ProjectAccessService projectAccessService, AssetCatalogQueryService assetCatalog) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.recoveryRepository = recoveryRepository;
@@ -50,6 +53,7 @@ class MediaJobDeliveryRecoveryService {
 		this.retryPolicy = retryPolicy;
 		this.auditRecorder = auditRecorder;
 		this.projectAccessService = projectAccessService;
+		this.assetCatalog = assetCatalog;
 	}
 
 	@Transactional
@@ -78,6 +82,7 @@ class MediaJobDeliveryRecoveryService {
 			return requireSameRequest(byIdempotency.get(), fingerprint);
 		}
 
+		this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
 		var job = this.jobRepository
 			.findTopByProjectIdAndClipAssetIdAndJobTypeOrderByCreatedAtDesc(projectId, clipAssetId,
 					MediaJobType.MEDIA_PROBE)

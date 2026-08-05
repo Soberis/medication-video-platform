@@ -57,8 +57,8 @@ class DatasetExportApprovalCommandService {
 	}
 
 	@Transactional(isolation = Isolation.REPEATABLE_READ)
-	DatasetExportResponse approve(UUID projectId, UUID datasetVersionId, String actorId, String idempotencyKey,
-			String requestId, String traceId) {
+	DatasetExportResponse approve(UUID projectId, UUID datasetVersionId, String actorId,
+			boolean selfAdminApprovalAllowed, String idempotencyKey, String requestId, String traceId) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = requestFingerprint(datasetVersionId);
 		var replay = this.exportRepository.findByProjectIdAndApprovedByAndApprovalIdempotencyKey(projectId, actorId,
@@ -78,7 +78,7 @@ class DatasetExportApprovalCommandService {
 			throw new DatasetVersionException("DATASET_EXPORT_APPROVAL_STATE_INVALID",
 					"Only a requested dataset export can be approved and queued.", 409);
 		}
-		var readiness = this.readinessService.get(projectId, datasetVersionId, actorId);
+		var readiness = this.readinessService.get(projectId, datasetVersionId, actorId, selfAdminApprovalAllowed);
 		if (!readiness.readyForApproval()) {
 			throw new DatasetVersionException("DATASET_EXPORT_APPROVAL_BLOCKED",
 					"The dataset export is not ready for approval and execution.", 409,
@@ -87,17 +87,19 @@ class DatasetExportApprovalCommandService {
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var approval = this.approvalService.approve(projectId, datasetVersionId, export.getDatasetVersionValidationId(),
-				actorId, now);
+				actorId, now, selfAdminApprovalAllowed);
 		if (approval.approvalDecisionId() == null) {
 			throw new IllegalStateException("An approved dataset export must have one decision.");
 		}
 		export.queue(approval.approvalDecisionId(), actorId, idempotencyKey, fingerprint, now);
 		this.exportRepository.saveAndFlush(export);
 		var attempt = this.attemptQueue.enqueue(export, 1, now, now);
+		var selfAdminApproval = export.getRequestedBy().equals(actorId);
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"DATASET_EXPORT_APPROVED_AND_QUEUED", "DatasetExport", export.getDatasetExportId().toString(),
-				Long.toString(export.getVersion()), AuditOutcome.SUCCEEDED, "EXPORT_APPROVED_AFTER_REVALIDATION",
-				requestId, traceId, "APPROVAL_DECISION:" + approval.approvalDecisionId(),
+				Long.toString(export.getVersion()), AuditOutcome.SUCCEEDED,
+				selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "EXPORT_APPROVED_AFTER_REVALIDATION", requestId, traceId,
+				"APPROVAL_DECISION:" + approval.approvalDecisionId(),
 				Map.of("dataset_version_id", datasetVersionId.toString(), "approval_request_id",
 						approval.approvalRequestId().toString(), "approval_decision_id",
 						approval.approvalDecisionId().toString(), "dataset_export_attempt_id",

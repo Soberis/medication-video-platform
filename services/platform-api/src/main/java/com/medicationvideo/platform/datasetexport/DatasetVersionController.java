@@ -112,7 +112,8 @@ class DatasetVersionController {
 	@GetMapping("/{datasetVersionId}")
 	ResponseEntity<DatasetVersionDetailResponse> get(@PathVariable UUID projectId, @PathVariable UUID datasetVersionId,
 			Authentication authentication) {
-		var response = this.queryService.get(projectId, datasetVersionId, requireActor(authentication).actorId());
+		var response = this.queryService.get(projectId, datasetVersionId, requireActor(authentication).actorId(),
+				isPlatformAdministrator(authentication));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -131,8 +132,9 @@ class DatasetVersionController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody DatasetVersionCreateRequest request, Authentication authentication) {
-		var response = this.service.createDraft(projectId, requireActor(authentication).actorId(), idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+		var response = this.service.createDraft(projectId, requirePlatformAdministrator(authentication).actorId(),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
 				new DatasetVersionCreateCommand(request.displayName(), request.captureSessionIds()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI.create("/api/v1/projects/" + projectId + "/dataset-versions/" + response.datasetVersionId()))
@@ -148,9 +150,10 @@ class DatasetVersionController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody DatasetSplitPlanCreateRequest request, Authentication authentication) {
-		var response = this.splitPlanService.create(projectId, datasetVersionId, requireActor(authentication).actorId(),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"), request.holdoutCount());
+		var response = this.splitPlanService.create(projectId, datasetVersionId,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				request.holdoutCount());
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -163,7 +166,7 @@ class DatasetVersionController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.buildSpecificationService.create(projectId, datasetVersionId,
-				requireActor(authentication).actorId(), idempotencyKey,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -176,9 +179,9 @@ class DatasetVersionController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
-		var response = this.buildService.start(projectId, datasetVersionId, requireActor(authentication).actorId(),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"));
+		var response = this.buildService.start(projectId, datasetVersionId,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -191,7 +194,7 @@ class DatasetVersionController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.buildSnapshotService.create(projectId, datasetVersionId,
-				requireActor(authentication).actorId(), idempotencyKey,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -205,7 +208,7 @@ class DatasetVersionController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.validationService.validate(projectId, datasetVersionId,
-				requireActor(authentication).actorId(), idempotencyKey,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -218,7 +221,8 @@ class DatasetVersionController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
-		var response = this.freezeService.freeze(projectId, datasetVersionId, requireActor(authentication).actorId(),
+		var response = this.freezeService.freeze(projectId, datasetVersionId,
+				requirePlatformAdministrator(authentication).actorId(), isPlatformAdministrator(authentication),
 				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
 				MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
@@ -232,9 +236,10 @@ class DatasetVersionController {
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody DatasetExportCreateRequest request, Authentication authentication) {
-		var response = this.exportService.request(projectId, datasetVersionId, requireActor(authentication).actorId(),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"), request.purpose(), request.expiresAt());
+		var response = this.exportService.request(projectId, datasetVersionId,
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				request.purpose(), request.expiresAt());
 		return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -242,7 +247,7 @@ class DatasetVersionController {
 	ResponseEntity<DatasetExportApprovalReadinessResponse> getDatasetExportApprovalReadiness(
 			@PathVariable UUID projectId, @PathVariable UUID datasetVersionId, Authentication authentication) {
 		var response = this.exportApprovalReadinessService.get(projectId, datasetVersionId,
-				requireActor(authentication).actorId());
+				requireActor(authentication).actorId(), isPlatformAdministrator(authentication));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -255,8 +260,9 @@ class DatasetVersionController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			Authentication authentication) {
 		var response = this.exportApprovalCommandService.approve(projectId, datasetVersionId,
-				requireActor(authentication).actorId(), idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+				requirePlatformAdministrator(authentication).actorId(), isPlatformAdministrator(authentication),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.ACCEPTED).cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -278,6 +284,21 @@ class DatasetVersionController {
 					"An authenticated platform account is required for dataset versions.", 403);
 		}
 		return actor;
+	}
+
+	private static ProjectActor requirePlatformAdministrator(Authentication authentication) {
+		var actor = requireActor(authentication);
+		if (!isPlatformAdministrator(authentication)) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "A platform administrator account is required.",
+					403);
+		}
+		return actor;
+	}
+
+	private static boolean isPlatformAdministrator(Authentication authentication) {
+		return authentication != null && authentication.getAuthorities()
+			.stream()
+			.anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
 	}
 
 }

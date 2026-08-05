@@ -294,28 +294,30 @@ V42 增加关系快照封印。项目管理员在 `BUILDING` 状态显式执行�
 
 V43 增加一次性冻结前技术校验。项目管理员在 `VALIDATING` 状态显式执行后，Core API 重新检查当前准入、
 固定引用、关系快照摘要、CaptureSession 级 split 隔离和已批准构建契约，并保存不可变 `PASS/FAIL`、
-稳定原因码、检查项、受检摘要、操作者和时间。结果不会改变 DatasetVersion 状态；`PASS` 仍需独立冻结
+稳定原因码、检查项、受检摘要、操作者和时间。结果不会改变 DatasetVersion 状态；`PASS` 仍需管理员冻结
 审批，`FAIL` 不得覆盖或重跑，修正只能创建新 DatasetVersion。该命令不创建文件、Worker、队列或导出。
 
 V44 在 `PASS` 技术校验的同一事务创建一条绑定该 validation 的 `PENDING` 冻结请求，校验执行人即申请人。
-另一位当前项目管理员批准时，Core API 锁定项目并重新执行 V43 的全部检查；只有证据仍一致时，才在同一
-事务写入唯一 `APPROVED` 决定、冻结事实和审计，并迁移到 `FROZEN`。申请人不能自批，失败不产生部分决定；
+拥有 ACTIVE 项目 ADMIN Membership 的 `ROLE_ADMIN` 批准时，Core API 锁定项目并重新执行 V43 的全部检查；只有证据仍一致时，才在同一
+事务写入唯一 `APPROVED` 决定、冻结事实和审计，并迁移到 `FROZEN`。申请人与审批人为同一账号时记录
+`SELF_ADMIN_APPROVAL`；失败不产生部分决定；
 请求没有独立有效期，因为它只绑定一个不可变 validation，且批准与冻结在一个命令内原子完成。冻结不等于
 导出授权，也不创建文件、Worker 或队列。
 
 V45 允许项目管理员为 `FROZEN` 版本提交一次 `MODEL_TRAINING` 导出申请。申请固定
 构建规范中的导出 Profile、关系快照、通过的 validation、用途和未来到期时间，并在同一事务创建
-`REQUESTED` DatasetExport、`PENDING` 独立审批请求和审计。相同幂等请求返回原记录；同一版本和 profile
+`REQUESTED` DatasetExport、`PENDING` 管理员审批请求和审计。相同幂等请求返回原记录；同一版本和 profile
 不建立第二个申请。`REQUESTED` 不进入 `QUEUED`，也不创建文件、Worker 消息、下载授权或导出路径；
 只有后续审批与作业消费者一起落地时才允许推进。
 
 V46 将新建构建配置切换为 v2，并用准确 key/digest 配对兼容 v1 历史记录；状态机没有变化。
 OpenAPI 0.52 提供按需、只读的审批准备检查。它在同一个 `REPEATABLE_READ` 视图中核对当前项目角色、
-申请人与审批人分离、purpose 到期时间、`FROZEN` 状态、导出申请/审批引用和 V43 全部当前证据，返回
+当前账号的 ACTIVE 项目 ADMIN Membership、purpose 到期时间、`FROZEN` 状态、导出申请/审批引用和 V43
+全部当前证据，返回
 稳定阻断码。该查询不写审批决定、审计或业务状态；即使结果为 ready，后续批准命令仍必须在入队事务中
 重新执行全部检查。
 
-V47 与 OpenAPI 0.53 增加 v2 导出执行闭环。另一位当前项目管理员批准时，服务端在同一事务重新执行
+V47 与 OpenAPI 0.53 增加 v2 导出执行闭环。拥有 ACTIVE 项目 ADMIN Membership 的 `ROLE_ADMIN` 批准时，服务端在同一事务重新执行
 全部准备检查，并原子记录唯一审批决定、首次 `QUEUED` attempt、Outbox 和审计。Export Worker 通过
 独立服务身份与 attempt-scoped 租约换取短期输入、输出能力，生成确定性 ZIP；Core API 接受结果时再次
 校验 attempt、租约、固定摘要、批准的软件摘要、输出对象和 Profile 文件集合，全部通过后才登记
@@ -338,7 +340,8 @@ REQUESTED → QUEUED → RUNNING → AVAILABLE
                          └→ FAILED
 ```
 
-- `REQUESTED` 只表示待独立审批；批准与首次 attempt/Outbox 在同一事务提交。
+- `REQUESTED` 只表示待管理员审批；批准与首次 attempt/Outbox 在同一事务提交。同一管理员的申请和审批
+  必须记录为 `SELF_ADMIN_APPROVAL`，不得表述为独立审批。
 - Worker 只写 attempt 临时前缀；`AVAILABLE` 前不可签发下载地址。
 - 当前切片在结果接受事务中校验文件集合、固定输入、对象大小/SHA-256、ZIP 摘要和软件摘要，不增加一个
   仅用于展示的 `VALIDATING` 状态。
@@ -380,14 +383,15 @@ ASSIGNED → SUBMITTED → COMPLETED
 - P0 每轮提交创建一条不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或尚未退回的已提交任务拒绝。
 - P0 文档只包含一个或多个绑定不可变 P0 LabelSchema 的主 Step 时间段和可选说明。主 Step 可在边界相接但不得重叠；存在已验证 MediaReport 时，结束时间不得超过媒体时长。返工已启用，对象框仍在后续真实用例中启用。
 
-### P0 revision 独立复核
+### P0 revision 管理员复核
 
 ```text
 SUBMITTED revision → APPROVED review
                    → REJECTED review → task ASSIGNED → next revision
 ```
 
-- 复核是独立于任务状态的一次不可变事实：只有项目 ADMIN 可以创建，且 `reviewed_by != submitted_by`。
+- 复核是独立于任务状态的一次不可变事实：只有拥有 ACTIVE 项目 ADMIN Membership 的 `ROLE_ADMIN` 可以创建。
+  同一管理员可复核自己的修订，但审计和 UI 必须记录 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能创建复核。
 - 当前只支持每个 revision 一条复核决定。`REJECTED` 会把同一任务退回受分配人；再次提交产生下一个 revision，旧 revision 和 review 永不覆盖。
 - `APPROVED` 会把任务推进到 `COMPLETED`，并在同一事务内为该 revision 生成 post-clean run/result；重复的相同复核请求不得重复创建任务迁移、run、result 或审计。
 

@@ -58,7 +58,8 @@ class DatasetExportApprovalReadinessService {
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	DatasetExportApprovalReadinessResponse get(UUID projectId, UUID datasetVersionId, String actorId) {
+	DatasetExportApprovalReadinessResponse get(UUID projectId, UUID datasetVersionId, String actorId,
+			boolean selfAdminApprovalAllowed) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var version = this.versionRepository.findByProjectIdAndDatasetVersionId(projectId, datasetVersionId)
 			.orElseThrow(DatasetExportApprovalReadinessService::notFound);
@@ -70,10 +71,10 @@ class DatasetExportApprovalReadinessService {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var blockers = new LinkedHashSet<String>();
 
-		if (role != ProjectRole.ADMIN) {
+		if (!selfAdminApprovalAllowed || role != ProjectRole.ADMIN) {
 			blockers.add(APPROVER_ADMIN_REQUIRED);
 		}
-		if (export.getRequestedBy().equals(actorId)) {
+		if (export.getRequestedBy().equals(actorId) && !selfAdminApprovalAllowed) {
 			blockers.add(SELF_APPROVAL_FORBIDDEN);
 		}
 		if (!export.getExpiresAt().isAfter(now)) {
