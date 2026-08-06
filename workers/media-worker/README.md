@@ -19,7 +19,7 @@
 本地运行前需要 Python 3.12、FFmpeg、RabbitMQ 和启用 Worker 内部接口的 Core API：
 
 ```powershell
-cd C:\Dev\Projects\medication-video-platform\workers\media-worker
+Set-Location (Join-Path (git rev-parse --show-toplevel) 'workers/media-worker')
 uv sync --frozen
 $env:MEDIA_WORKER_BEARER_TOKEN='local-media-worker-bearer-token-do-not-reuse'
 $env:DATA_PROFILE='synthetic'

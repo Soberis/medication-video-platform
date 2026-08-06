@@ -83,10 +83,13 @@ cd /path/to/medication-video-platform
 在 Windows PowerShell 上启动本地基础设施和 Core API：
 
 ```powershell
-cd C:\Dev\Projects\medication-video-platform
+$repositoryRoot = git rev-parse --show-toplevel
+Set-Location $repositoryRoot
 .\scripts\check-environment.ps1
 .\scripts\start-local.ps1
 ```
+
+在仓库任意子目录中执行上述命令即可；脚本会基于自身位置定位仓库根目录，因此项目移动到其他磁盘或目录后无需修改脚本。
 
 在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本默认最长等待 180 秒，直到 Core API 健康。前端需由 pnpm 单独启动；需要媒体探测或数据集导出时，再显式启动两个 Worker。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
 

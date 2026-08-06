@@ -37,6 +37,18 @@ function Get-Sha256Hex {
     }
 }
 
+$hardcodedWindowsPaths = @(
+    git -C $root ls-files --cached --others --exclude-standard |
+        Where-Object { [System.IO.Path]::GetExtension($_) -notin @('.lock', '.jar', '.class', '.docx') } |
+        ForEach-Object {
+            Select-String -LiteralPath (Join-Path $root $_) -Pattern '(?i)\b[A-Z]:[\\/]' -ErrorAction SilentlyContinue
+        }
+)
+foreach ($match in $hardcodedWindowsPaths) {
+    $relativePath = $match.Path.Substring($root.Length).TrimStart('\\', '/')
+    Add-Failure "Hard-coded local Windows path: ${relativePath}:$($match.LineNumber)"
+}
+
 $requiredFiles = @(
     'AGENTS.md',
     'README.md',

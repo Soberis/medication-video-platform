@@ -7,7 +7,7 @@
 在 Bruno 3.5.2 中点击 `Open Collection`，选择：
 
 ```text
-C:\Dev\Projects\medication-video-platform\api-tests\bruno\medication-platform
+<仓库根目录>\api-tests\bruno\medication-platform
 ```
 
 选择 `local` 环境后，按顺序运行 `System` 和 `Uploads`，或者直接运行整个 Collection。
@@ -17,10 +17,11 @@ C:\Dev\Projects\medication-video-platform\api-tests\bruno\medication-platform
 先启动 PostgreSQL/S3 和后端：
 
 ```powershell
-cd C:\Dev\Projects\medication-video-platform
+$repositoryRoot = git rev-parse --show-toplevel
+Set-Location $repositoryRoot
 docker compose --env-file .env.example -f infra/docker-compose/compose.yaml up -d --wait
 
-cd services/platform-api
+Set-Location (Join-Path $repositoryRoot 'services/platform-api')
 $env:SPRING_PROFILES_ACTIVE = 'local'
 $env:DEV_BEARER_TOKEN = 'synthetic-local-bearer-token-do-not-reuse'
 $env:DEV_ADMIN_BEARER_TOKEN = 'synthetic-local-admin-bearer-token-do-not-reuse'
@@ -34,7 +35,7 @@ Collection 根目录的 `.env` 被 Git 忽略，并为 Bruno Desktop 提供相�
 Bruno CLI 3.5.2 已锁定在根 `pnpm-lock.yaml`。后端运行后，在另一个终端执行：
 
 ```powershell
-cd C:\Dev\Projects\medication-video-platform
+Set-Location (git rev-parse --show-toplevel)
 pnpm run api:test
 ```
 
