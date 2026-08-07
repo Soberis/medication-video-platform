@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@noble/hashes": "2.2.0",
-    "antd": "6.5.2",
+    "antd": "6.5.3",
     "dayjs": "1.11.21",
     "react": "19.2.8",
     "react-dom": "19.2.8",

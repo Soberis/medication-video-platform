@@ -6,7 +6,7 @@
     "moduleResolution": "Bundler",
     "moduleDetection": "force",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "node"],
+    "types": ["vite/client", "node", "@testing-library/jest-dom"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,

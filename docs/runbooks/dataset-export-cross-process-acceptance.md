@@ -47,7 +47,7 @@ RUN_DATASET_EXPORT_ACCEPTANCE=true pnpm run dataset-export:acceptance
 
 工具自行从未提交的仓库根 `.env` 或 `.env.example` 读取本地合成令牌；进程环境变量优先。它拒绝非 loopback 地址、非 `synthetic` 数据配置、缺少两个本地身份或未设置显式开关的执行。
 
-每个媒体入库最多等待 120 秒，Export Worker 最多等待 180 秒。成功时最后一行以 `ACCEPTANCE_RESULT` 开头，包含合成项目/版本/导出 ID、两个独立审批、Worker attempt、已登记产物的大小与 SHA-256，以及短期下载后复核的 SHA-256；不包含下载 URL。
+每个媒体入库最多等待 120 秒，Export Worker 最多等待 180 秒。成功时最后一行以 `ACCEPTANCE_RESULT` 开头，包含合成项目/版本/导出 ID、审批事实、Worker attempt、已登记产物的大小与 SHA-256，以及短期下载后复核的 SHA-256；不包含下载 URL。历史双管理员证据只证明当时的 V1.10 流程；V1.11 正式 UAT 必须改为验证单个合格管理员的 `SELF_ADMIN_APPROVAL`。
 
 ## 4. 通过条件
 
@@ -167,7 +167,7 @@ SHA-256 与登记值一致。`RETRY_WAIT` 可能短于验收工具的轮询间�
 }
 ```
 
-这证明了 Core API、Outbox、RabbitMQ、两个 Worker、独立审批和短期下载校验的本地合成实现闭环；它不替代正式 UAT、生产对象存储演练或性能验证。
+这证明了 Core API、Outbox、RabbitMQ、两个 Worker、审批和短期下载校验的本地合成实现闭环；历史执行使用 V1.10 双管理员事实，不能替代 V1.11 单管理员正式 UAT、生产对象存储演练或性能验证。
 
 ## 9. 2026-07-31 本地合成恢复结果
 

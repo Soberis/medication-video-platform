@@ -334,9 +334,9 @@ flowchart LR
 - V43 允许项目管理员在 `VALIDATING` 内执行一次 `DATASET_FREEZE_VALIDATION_V1`。校验重算当前准入、
   引用完整性、关系快照摘要、CaptureSession 级 split 隔离和构建契约，保存不可变结果、稳定原因码、
   受检摘要、操作者、幂等指纹和时间。`PASS` 不推进状态或替代审批；`FAIL` 不得改写，修正必须创建新版本。
-- V44 在 `PASS` 校验事务内通过 `governance` 创建一条绑定 validation 的冻结请求。另一位当前项目管理员
-  批准时再次执行全部 V43 检查，并在同一事务写唯一审批决定、DatasetVersion 冻结事实和审计后进入
-  `FROZEN`。申请人不能自批；证据变化时不写决定、不改变状态。该一次性请求只服务当前冻结命令，不是
+- V44 在 `PASS` 校验事务内通过 `governance` 创建一条绑定 validation 的冻结请求。拥有 ACTIVE 项目
+  `ADMIN` Membership 的 `ROLE_ADMIN` 批准时再次执行全部 V43 检查，并在同一事务写唯一审批决定、DatasetVersion
+  冻结事实和审计后进入 `FROZEN`；同人决定必须记录为 `SELF_ADMIN_APPROVAL`。证据变化时不写决定、不改变状态。该一次性请求只服务当前冻结命令，不是
   可复用的通用授权。
 - V45 为 FROZEN 版本创建一次绑定构建配置、关系快照、PASS validation、用途和有效期的导出申请；
   V46 只扩展为准确配对的 v1/v2 Profile，不批准、不入队、不生成文件。

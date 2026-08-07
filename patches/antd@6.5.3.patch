@@ -1,0 +1,16 @@
+diff --git a/es/card/index.d.ts b/es/card/index.d.ts
+index 4b571e24edb18a718e301faade0d5efbb16f4b22..c96843c514772400efe5e675e8272f4d56511963 100644
+--- a/es/card/index.d.ts
++++ b/es/card/index.d.ts
+@@ -5,9 +5,9 @@ export type { CardProps, CardTabListType } from './Card';
+ export type { CardGridProps } from './CardGrid';
+ export type { CardMetaProps } from './CardMeta';
+ type InternalCardType = typeof InternalCard;
+-export interface CardInterface extends InternalCardType {
++export type CardInterface = InternalCardType & {
+     Grid: typeof CardGrid;
+     Meta: typeof CardMeta;
+-}
++};
+ declare const Card: CardInterface;
+ export default Card;

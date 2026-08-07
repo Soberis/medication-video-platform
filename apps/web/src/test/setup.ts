@@ -1,7 +1,8 @@
-import '@testing-library/jest-dom/vitest'
-
 import { cleanup } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import * as matchers from '@testing-library/jest-dom/matchers'
+import { afterEach, expect } from 'vitest'
+
+expect.extend(matchers)
 
 afterEach(cleanup)
 
@@ -26,3 +27,9 @@ class ResizeObserverStub {
 }
 
 globalThis.ResizeObserver = ResizeObserverStub
+
+const nativeGetComputedStyle = window.getComputedStyle.bind(window)
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: (element: Element) => nativeGetComputedStyle(element),
+})

@@ -3,3 +3,6 @@ packages:
 
 allowBuilds:
   protobufjs: true
+
+patchedDependencies:
+  antd@6.5.3: patches/antd@6.5.3.patch

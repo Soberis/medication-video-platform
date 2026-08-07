@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$Strict
 )
@@ -37,15 +37,33 @@ function Get-Sha256Hex {
     }
 }
 
+function Get-GitRepositoryPaths {
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'git'
+    $startInfo.Arguments = "-C `"$root`" -c core.quotepath=false ls-files -z --cached --others --exclude-standard"
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    $output = $process.StandardOutput.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "git ls-files failed with exit code $($process.ExitCode)"
+    }
+
+    $output -split [char]0 | Where-Object { $_ }
+}
+
 $hardcodedWindowsPaths = @(
-    git -C $root ls-files --cached --others --exclude-standard |
+    Get-GitRepositoryPaths |
         Where-Object { [System.IO.Path]::GetExtension($_) -notin @('.lock', '.jar', '.class', '.docx') } |
         ForEach-Object {
             Select-String -LiteralPath (Join-Path $root $_) -Pattern '(?i)\b[A-Z]:[\\/]' -ErrorAction SilentlyContinue
         }
 )
 foreach ($match in $hardcodedWindowsPaths) {
-    $relativePath = $match.Path.Substring($root.Length).TrimStart('\\', '/')
+    $relativePath = $match.Path.Substring($root.Length).TrimStart([char[]]@('\', '/'))
     Add-Failure "Hard-coded local Windows path: ${relativePath}:$($match.LineNumber)"
 }
 
@@ -100,6 +118,7 @@ $requiredFiles = @(
     'workers/export-worker/src/medication_export_worker/processor.py',
     'workers/export-worker/src/medication_export_worker/package_builder.py',
     'docs/requirements/README.md',
+    'docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md',
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md',
     'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md',
     'docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.docx',
