@@ -1172,23 +1172,23 @@ describe('catalog views', () => {
     )
   })
 
-  it('approves a ready dataset export and exposes the queued state without polling', async () => {
+  it('self-approves a ready dataset export and exposes the queued state without polling', async () => {
     const datasetVersionId = '91000000-0000-4000-8000-000000000001'
     const readinessPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`
     const approvalPath = `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approvals`
     const detail = datasetVersionDetail(datasetVersionId, '配药操作训练候选')
     detail.status = 'FROZEN'
-    detail.export_request = datasetExport(datasetVersionId, { requested_by: 'requester-admin' })
+    detail.export_request = datasetExport(datasetVersionId, { requested_by: 'local-admin' })
     const queuedExport = datasetExport(datasetVersionId, {
       status: 'QUEUED',
-      approved_by: 'independent-admin',
+      approved_by: 'local-admin',
       approved_at: '2026-07-30T03:01:00Z',
       approval: {
         ...datasetExport(datasetVersionId).approval,
         status: 'APPROVED',
-        requested_by: 'requester-admin',
+        requested_by: 'local-admin',
         approval_decision_id: '9a000000-0000-4000-8000-000000000001',
-        decided_by: 'independent-admin',
+        decided_by: 'local-admin',
         decided_at: '2026-07-30T03:01:00Z',
       },
       attempt: {
@@ -1233,6 +1233,7 @@ describe('catalog views', () => {
     await user.click(within(confirmDialog).getByRole('button', { name: '批准并开始导出' }))
 
     expect(await screen.findByText('已批准，等待生成训练包')).toBeInTheDocument()
+    expect(screen.getByText('local-admin · 管理员自审（SELF_ADMIN_APPROVAL）')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       approvalPath,
       expect.objectContaining({

@@ -186,6 +186,31 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
   })
 
+  it('marks an administrator review of their own revision as SELF_ADMIN_APPROVAL', async () => {
+    stubTasks(
+      [
+        {
+          ...assignedTask,
+          assignee_actor_id: 'local-synthetic-admin',
+          status: 'COMPLETED',
+          can_submit: false,
+          can_recheck_post_cleaning: true,
+          annotation_revision: {
+            ...completedRevision,
+            submitted_by: 'local-synthetic-admin',
+            review: { ...completedRevision.review, reviewed_by: 'local-synthetic-admin' },
+          },
+        },
+      ],
+      labelSchema,
+    )
+    renderView()
+
+    expect(await screen.findByText('复核通过')).toBeInTheDocument()
+    expect(screen.getByText('管理员自审（SELF_ADMIN_APPROVAL）')).toBeInTheDocument()
+    expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
+  })
+
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
     vi.stubGlobal(
       'fetch',

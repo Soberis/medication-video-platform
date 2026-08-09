@@ -520,5 +520,10 @@ dead-letter reason、操作者原因和变更引用；Artifact 恰一条且有�
 `QUEUED → RUNNING → AVAILABLE`；Artifact 大小为 380894 bytes，登记和下载 SHA-256 均为
 `3b7c2dc3852aee2671e7ef9f41820a073758e66e6f421dac3b487dd375c1d314`。
 
+随后以只读 SQL 仅查询 action、对象标识、actor、outcome 和 reason code：首条标注复核、冻结和导出
+批准均由 `local-synthetic-admin` 成功写入 `SELF_ADMIN_APPROVAL`；第二条成员提交的标注由管理员写入
+`INDEPENDENT_ANNOTATION_REVIEW`。`local-synthetic-uploader` 对上述三类管理员 action 的审计事件计数为
+0。查询未读取请求标识、授权引用、对象位置、下载地址或审计 details。
+
 该结果证明当前本地合成跨进程主链符合 V1.11 单管理员规则，不替代四档视口、页面/审计展示和批准
 样本环境的正式 P0 UAT。

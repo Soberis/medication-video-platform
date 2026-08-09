@@ -39,10 +39,11 @@
 | U4 | A/M | 对检测通过的视频记录人工质量；A 创建并直接分配给自己，提交主 Step 后由 A 复核。响应中的提交者/复核者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 记录复核必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增复核、post-clean 或审计成功事实。A 复核通过后确认 post-clean 为 PASS。 |
 | U5 | A/M | A 使用两次 eligible CaptureSession 创建草稿、固定 pilot/holdout 划分、构建配置和关系快照；执行冻结前校验并由 A 批准自己发起的冻结。响应中的申请者/批准者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 冻结必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增审批或改变版本状态。冻结后不得修改成员或配置。 |
 | U6 | A/M | A 为已冻结版本申请并批准自己的 `MODEL_TRAINING` 导出。响应中的申请者/批准者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 批准必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增审批、attempt、Outbox 或成功审计。确认状态依次反映 REQUESTED/QUEUED/RUNNING/AVAILABLE 或稳定失败码；仅 AVAILABLE 可显式下载，下载文件 SHA-256 与登记摘要一致。 |
-| U7 | A/M | 在四个规定视口抽查登录、项目、Session、资产、标注、上传和数据集页面：无页面级横向滚动、重叠、被遮挡的主操作或不可见焦点；键盘可完成主要操作，状态和错误不只依赖颜色。 |
+| U7 | A/M | 在四个规定视口抽查登录、项目、配药操作、视频资产列表、视频详情、标注任务、本地上传、管理和数据集页面：无页面级横向滚动、重叠、被遮挡的主操作或不可见焦点；键盘可完成主要操作，状态和错误不只依赖颜色。 |
 
 ## 通过、失败与留档
 
+- U4～U6 的页面和审计证据分开留存：页面截图证明同一 actor 与 `SELF_ADMIN_APPROVAL` 标记；审计由环境负责人通过受控只读查询仅核对 action、对象标识、actor、outcome 和 reason code。视频操作记录是 ClipAsset 范围投影，不能替代冻结或导出的通用审计证据。
 - 所有适用项通过，且没有未解释的权限、状态机、数据完整性或安全问题，才可将相应需求条目附上 `UAT` 证据；不是把整张追踪矩阵一次性改为通过。
 - 任何失败均记录最小复现步骤、时间、错误码、request ID（如可安全记录）和关联提交；保留脱敏日志，不保存下载地址、凭据或原始视频。
 - UAT 结束后将结果链接回[需求追踪矩阵](../architecture/requirements-traceability.md)，并明确尚未覆盖的生产容量、恢复、TLS、对象存储和医院网络验证。
