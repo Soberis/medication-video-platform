@@ -2,7 +2,7 @@
 
 ## 1. 目的与边界
 
-本手册验证已实现的 P0 `p0-dataset-export-v2` 最小闭环：Core API 创建项目和合成采集数据，并显式发起每段视频的媒体检测；Media Worker 完成技术检测，两个独立的合成身份完成标注、冻结和导出审批，Outbox 经 RabbitMQ 交给 Export Worker，最后由 Core API 登记 ZIP 并签发一次短期下载授权。
+本手册验证已实现的 P0 `p0-dataset-export-v2` 最小闭环：Core API 创建项目和合成采集数据，并显式发起每段视频的媒体检测；Media Worker 完成技术检测；一个 `ROLE_ADMIN` + ACTIVE 项目 `ADMIN` Membership 的合成管理员完成标注、自审、冻结和导出审批，另一个 `ROLE_MEMBER` 合成身份只用于管理员命令的无副作用反向验证；Outbox 经 RabbitMQ 交给独立身份的 Export Worker，最后由 Core API 登记 ZIP 并签发一次短期下载授权。
 
 它只使用运行时生成的合成 MP4，只允许连接 `localhost`/loopback 且 `DATA_PROFILE=synthetic`。工具不接受视频路径、不读取真实数据、不输出或持久化任何预签名 URL、lease token 或账号密码。
 
@@ -45,15 +45,16 @@ macOS / Linux 可在单条命令中设置同一个一次性开关：
 RUN_DATASET_EXPORT_ACCEPTANCE=true pnpm run dataset-export:acceptance
 ```
 
-工具自行从未提交的仓库根 `.env` 或 `.env.example` 读取本地合成令牌；进程环境变量优先。它拒绝非 loopback 地址、非 `synthetic` 数据配置、缺少两个本地身份或未设置显式开关的执行。
+工具自行从未提交的仓库根 `.env` 或 `.env.example` 读取本地合成令牌；进程环境变量优先。`DEV_ADMIN_BEARER_TOKEN` 必须对应合成管理员，`DEV_BEARER_TOKEN` 必须保持 `ROLE_MEMBER`，不得在验收过程中提权。工具拒绝非 loopback 地址、非 `synthetic` 数据配置、缺少这两个本地身份或未设置显式开关的执行。
 
-每个媒体入库最多等待 120 秒，Export Worker 最多等待 180 秒。成功时最后一行以 `ACCEPTANCE_RESULT` 开头，包含合成项目/版本/导出 ID、审批事实、Worker attempt、已登记产物的大小与 SHA-256，以及短期下载后复核的 SHA-256；不包含下载 URL。历史双管理员证据只证明当时的 V1.10 流程；V1.11 正式 UAT 必须改为验证单个合格管理员的 `SELF_ADMIN_APPROVAL`。
+每个媒体入库最多等待 120 秒，Export Worker 最多等待 180 秒。成功时最后一行以 `ACCEPTANCE_RESULT` 开头，Schema 为 `dataset-export-cross-process-acceptance-v2`；结果包含合成项目/版本/导出 ID、`approval_mode=SELF_ADMIN_APPROVAL`、`self_admin_approval` 中的管理员及三组申请/批准 actor、`member_permission_checks` 中三项无状态变化拒绝、Worker attempt、已登记产物的大小与 SHA-256，以及短期下载后复核的 SHA-256；不包含下载 URL。历史双管理员 v1 证据只证明当时的 V1.10 流程，不能替代本命令或正式 UAT 的 V1.11 单管理员证据。
 
 ## 4. 通过条件
 
-- 两个 CaptureSession 均经媒体检测、人工质量、独立标注复核和 post-clean 后变为 eligible；
+- 两个 CaptureSession 均经媒体检测、人工质量、复核和 post-clean 后变为 eligible；其中一条由同一合格管理员提交并复核，提交者与复核者 actor 相同，另一条保留 `ROLE_MEMBER` 提交、管理员复核路径；
 - DatasetVersion 依次通过 `DRAFT → BUILDING → VALIDATING → FROZEN`；
-- 导出申请人与批准人为不同的 ACTIVE 项目管理员；
+- 冻结请求/决定和导出请求/决定的申请人与批准人均为同一合格管理员，审批模式为 `SELF_ADMIN_APPROVAL`；
+- `ROLE_MEMBER` 对复核、冻结、导出批准的请求均返回 `403 + PROJECT_ACCESS_DENIED`，且脚本读取的聚焦业务状态前后不变；
 - 导出首次 attempt 从 `QUEUED` 进入 `AVAILABLE`，并登记一个非空 ZIP 产物；
 - 仅通过 Core API 取得的短期下载内容大小和 SHA-256 与登记产物一致；
 - 命令退出码为 0，Core API、RabbitMQ、Media Worker 与 Export Worker 日志无未解释错误。
@@ -145,6 +146,10 @@ SHA-256 与登记值一致。`RETRY_WAIT` 可能短于验收工具的轮询间�
 - 正式 UAT、性能 SLO 与生产发布审批。
 
 ## 8. 2026-07-31 本地合成基线结果
+
+第 8～12 节按原样保留既有执行证据，不代表当前 V1.11 规则。其中 JSON 的
+`schema_version=dataset-export-cross-process-acceptance-v1` 和 `independent_approvals=true` 明确属于
+V1.10 双管理员历史输出；不得改写历史事实，也不得将其计作 `SELF_ADMIN_APPROVAL` 验收通过。
 
 本次在 Windows 本机 loopback、Core API `local` profile、Docker Compose 的 PostgreSQL 18.4、SeaweedFS 4.29 和 RabbitMQ 4.3.2，以及 Node.js 22.22.2、Media Worker、Export Worker 全部运行时执行。输入为工具即时生成的两段合成 MP4；未使用真实视频、生产凭证或外部对象存储。
 
@@ -306,7 +311,7 @@ Remove-Item Env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT -ErrorAction Si
 uv run --directory workers/export-worker export-worker
 ```
 
-在另一个已配置管理员/上传者本地令牌的终端运行 DLQ 准备模式：
+在另一个已配置合格管理员本地令牌的终端运行 DLQ 准备模式：
 
 ```powershell
 $env:DATA_PROFILE = 'synthetic'
@@ -499,3 +504,21 @@ dead-letter reason、操作者原因和变更引用；Artifact 恰一条且有�
 没有明文 lease token；`DATASET_EXPORT_MANUAL_REPLAY` 审计恰一条并为 `SUCCEEDED`。RabbitMQ 只读检查显示
 导出业务队列为 0，原 DLQ 诊断仍为 1。另有一条未消费的 `platform.media.probe.v1` 消息，不属于本次 export/DLQ
 重放，故本节仅声明 Export DLQ 闭环通过，不声明隔离环境全部队列已清空。
+
+## 13. 2026-08-09 macOS V1.11 单管理员本地合成结果
+
+在 macOS 本地 loopback 合成环境中，PostgreSQL、SeaweedFS、RabbitMQ、Core API、Web、Media Worker
+和 Export Worker 均健康。正常模式命令退出码为 0，输出
+`schema_version=dataset-export-cross-process-acceptance-v2`：项目
+`7327f006-c12a-4ec3-ae15-60f042f76ca6`、DatasetVersion
+`8a916078-f4aa-4b1a-a166-4c91f6b2d167`、DatasetExport
+`b2c26ce0-b4f5-4ee4-a56b-2fd1c6112213`。
+
+`local-synthetic-admin` 同时是首条 AnnotationRevision 的提交者/复核者、冻结请求者/批准者和导出
+请求者/批准者；`local-synthetic-uploader` 始终保持 ACTIVE `MEMBER`，其复核、冻结和导出批准命令
+均得到 `403 + PROJECT_ACCESS_DENIED`，脚本核对的聚焦状态前后不变。导出首次 attempt 依次观测到
+`QUEUED → RUNNING → AVAILABLE`；Artifact 大小为 380894 bytes，登记和下载 SHA-256 均为
+`3b7c2dc3852aee2671e7ef9f41820a073758e66e6f421dac3b487dd375c1d314`。
+
+该结果证明当前本地合成跨进程主链符合 V1.11 单管理员规则，不替代四档视口、页面/审计展示和批准
+样本环境的正式 P0 UAT。

@@ -4,13 +4,14 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { parseEnv } from 'node:util'
+import { isDeepStrictEqual, parseEnv } from 'node:util'
 import { fileURLToPath } from 'node:url'
 
 import { generateSyntheticVideo } from '../synthetic-upload-client/synthetic-video.mjs'
 import { SyntheticUploadClient } from '../synthetic-upload-client/upload-client.mjs'
 
 const UPLOADER_ACTOR_ID = 'local-synthetic-uploader'
+const ADMINISTRATOR_ACTOR_ID = 'local-synthetic-admin'
 const MEDIA_INGEST_TIMEOUT_MS = 120_000
 const EXPORT_TIMEOUT_MS = 180_000
 const POLL_INTERVAL_MS = 1_000
@@ -274,6 +275,27 @@ export function requireMediaProbeJob(mediaProbe) {
     throw new Error('Synthetic media probe did not enter an executable state')
   }
   return mediaJobId
+}
+
+export function requireActorIdentity(value, expectedActorId, label) {
+  if (value !== expectedActorId) {
+    throw new Error(`${label} does not identify the expected administrator`)
+  }
+  return value
+}
+
+export function requireMemberPermissionDenied(error, label) {
+  if (error?.status !== 403 || error?.errorCode !== 'PROJECT_ACCESS_DENIED') {
+    throw new Error(`${label} did not fail with HTTP 403 (PROJECT_ACCESS_DENIED)`)
+  }
+  return true
+}
+
+export function requireUnchangedState(before, after, label) {
+  if (!isDeepStrictEqual(before, after)) {
+    throw new Error(`${label} changed state after the rejected member command`)
+  }
+  return true
 }
 
 export function matchesExpectedExportCompletion(exportRequest, recovery, observedStatuses) {
@@ -825,7 +847,7 @@ async function main() {
         ).project_id,
         'Synthetic acceptance project',
       )
-  await administrator.request(
+  const uploaderMembership = await administrator.request(
     'grant synthetic uploader membership',
     `/projects/${projectId}/memberships/${UPLOADER_ACTOR_ID}`,
     {
@@ -834,6 +856,13 @@ async function main() {
       body: { role: 'MEMBER' },
     },
   )
+  if (
+    uploaderMembership.actor_id !== UPLOADER_ACTOR_ID ||
+    uploaderMembership.role !== 'MEMBER' ||
+    uploaderMembership.status !== 'ACTIVE'
+  ) {
+    throw new Error('Synthetic uploader must remain an active project member')
+  }
 
   const workDirectory = await mkdtemp(path.join(tmpdir(), 'medication-dataset-export-'))
   try {
@@ -856,8 +885,21 @@ async function main() {
       await uploadClient.uploadSyntheticSession(videoBytes, camera),
     ]
 
-    for (const session of uploadedSessions) {
-      await prepareEligibleSession({ administrator, uploader, projectId, session })
+    const preparedSessions = []
+    for (const [index, session] of uploadedSessions.entries()) {
+      preparedSessions.push(
+        await prepareEligibleSession({
+          administrator,
+          uploader,
+          projectId,
+          session,
+          selfAdminApproval: index === 0,
+        }),
+      )
+    }
+    const selfAdminAnnotation = preparedSessions.find((session) => session.selfAdminApproval)
+    if (!selfAdminAnnotation?.memberReviewPermissionChecked) {
+      throw new Error('Synthetic acceptance did not prove the self-admin annotation path')
     }
 
     const datasetVersion = await administrator.request(
@@ -908,23 +950,80 @@ async function main() {
     if (validation.outcome !== 'PASS') {
       throw new Error('Synthetic dataset version did not pass freeze validation')
     }
-
-    await administrator.request(
-      'promote independent synthetic approver',
-      `/projects/${projectId}/memberships/${UPLOADER_ACTOR_ID}`,
-      {
-        method: 'PUT',
-        idempotencyKey: key('dataset-export-acceptance-approver'),
-        body: { role: 'ADMIN' },
-      },
+    requireActorIdentity(
+      validation.validated_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset freeze validation',
     )
-    const freeze = await uploader.request(
-      'approve dataset freeze',
+
+    const pendingFreezeDetail = await administrator.request(
+      'read pending dataset freeze approval',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+    )
+    if (
+      pendingFreezeDetail.status !== 'VALIDATING' ||
+      pendingFreezeDetail.freeze_approval?.status !== 'PENDING' ||
+      pendingFreezeDetail.freeze_approval?.approval_decision_id != null ||
+      pendingFreezeDetail.freeze_approval?.approved_by != null
+    ) {
+      throw new Error('Dataset freeze request did not remain pending before administrator approval')
+    }
+    const freezeRequestedBy = requireActorIdentity(
+      pendingFreezeDetail.freeze_approval.requested_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset freeze request',
+    )
+    const freezeStateBeforeMemberCommand = datasetFreezeDecisionState(pendingFreezeDetail)
+    await assertMemberCommandDenied('ordinary member dataset freeze', () =>
+      uploader.request(
+        'ordinary member dataset freeze',
+        `/projects/${projectId}/dataset-versions/${datasetVersionId}/freezes`,
+        { method: 'POST', idempotencyKey: key('dataset-export-acceptance-member-freeze') },
+      ),
+    )
+    const freezeDetailAfterMemberCommand = await administrator.request(
+      'read dataset freeze state after rejected member command',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+    )
+    requireUnchangedState(
+      freezeStateBeforeMemberCommand,
+      datasetFreezeDecisionState(freezeDetailAfterMemberCommand),
+      'Dataset freeze',
+    )
+
+    const freeze = await administrator.request(
+      'self-approve dataset freeze',
       `/projects/${projectId}/dataset-versions/${datasetVersionId}/freezes`,
       { method: 'POST', idempotencyKey: key('dataset-export-acceptance-freeze') },
     )
-    if (freeze.status !== 'FROZEN') {
-      throw new Error('Independent approval did not freeze the dataset version')
+    if (freeze.status !== 'FROZEN' || freeze.dataset_version_id !== datasetVersionId) {
+      throw new Error('Administrator self-approval did not freeze the dataset version')
+    }
+    requireActorIdentity(freeze.frozen_by, ADMINISTRATOR_ACTOR_ID, 'Dataset freeze decision')
+    const frozenDetail = await administrator.request(
+      'read approved dataset freeze',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+    )
+    if (
+      frozenDetail.status !== 'FROZEN' ||
+      frozenDetail.freeze_approval?.status !== 'APPROVED' ||
+      frozenDetail.freeze_approval?.approval_request_id !== freeze.approval_request_id ||
+      frozenDetail.freeze_approval?.approval_decision_id !== freeze.approval_decision_id
+    ) {
+      throw new Error('Dataset freeze detail does not expose the approved decision')
+    }
+    requireActorIdentity(
+      frozenDetail.freeze_approval.requested_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Approved dataset freeze request',
+    )
+    const freezeApprovedBy = requireActorIdentity(
+      frozenDetail.freeze_approval.approved_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset freeze approval',
+    )
+    if (freezeRequestedBy !== freezeApprovedBy) {
+      throw new Error('Dataset freeze was not requested and approved by the same administrator')
     }
 
     const exportRequest = await administrator.request(
@@ -942,20 +1041,99 @@ async function main() {
     if (exportRequest.status !== 'REQUESTED') {
       throw new Error('Dataset export request did not enter REQUESTED')
     }
-    const readiness = await uploader.request(
+    const datasetExportId = requireUuid(exportRequest.dataset_export_id, 'Synthetic dataset export')
+    const exportRequestedBy = requireActorIdentity(
+      exportRequest.requested_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset export request',
+    )
+    requireActorIdentity(
+      exportRequest.approval?.requested_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset export approval request',
+    )
+    const exportApprovalRequestId = requireUuid(
+      exportRequest.approval?.approval_request_id,
+      'Dataset export approval request',
+    )
+    if (
+      exportRequest.approval?.status !== 'PENDING' ||
+      exportRequest.approved_by != null ||
+      exportRequest.approval?.decided_by != null
+    ) {
+      throw new Error('Dataset export approval did not remain pending before administrator approval')
+    }
+    const memberReadiness = await uploader.request(
+      'read ordinary member dataset export approval readiness',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`,
+    )
+    if (
+      memberReadiness.ready_for_approval !== false ||
+      !memberReadiness.blocking_reasons?.includes('APPROVER_ADMIN_REQUIRED')
+    ) {
+      throw new Error('Ordinary member export approval readiness did not remain blocked')
+    }
+    const readiness = await administrator.request(
       'read dataset export approval readiness',
       `/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approval-readiness`,
     )
     if (readiness.ready_for_approval !== true || readiness.blocking_reasons?.length !== 0) {
-      throw new Error('Independent synthetic approver is not ready to approve the export')
+      throw new Error('Synthetic administrator is not ready to approve the export')
     }
-    const approvedExport = await uploader.request(
-      'approve dataset export',
+    const exportDetailBeforeMemberCommand = await administrator.request(
+      'read dataset export state before rejected member command',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+    )
+    const exportStateBeforeMemberCommand = datasetExportDecisionState(exportDetailBeforeMemberCommand)
+    await assertMemberCommandDenied('ordinary member dataset export approval', () =>
+      uploader.request(
+        'ordinary member dataset export approval',
+        `/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approvals`,
+        {
+          method: 'POST',
+          idempotencyKey: key('dataset-export-acceptance-member-export-approval'),
+        },
+      ),
+    )
+    const exportDetailAfterMemberCommand = await administrator.request(
+      'read dataset export state after rejected member command',
+      `/projects/${projectId}/dataset-versions/${datasetVersionId}`,
+    )
+    requireUnchangedState(
+      exportStateBeforeMemberCommand,
+      datasetExportDecisionState(exportDetailAfterMemberCommand),
+      'Dataset export approval',
+    )
+
+    const approvedExport = await administrator.request(
+      'self-approve dataset export',
       `/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/approvals`,
       { method: 'POST', idempotencyKey: key('dataset-export-acceptance-export-approval') },
     )
-    if (approvedExport.status !== 'QUEUED' || approvedExport.attempt?.attempt !== 1) {
+    if (
+      approvedExport.status !== 'QUEUED' ||
+      approvedExport.dataset_export_id !== datasetExportId ||
+      approvedExport.approval?.status !== 'APPROVED' ||
+      approvedExport.approval?.approval_request_id !== exportApprovalRequestId ||
+      approvedExport.attempt?.attempt !== 1
+    ) {
       throw new Error('Dataset export approval did not queue its first Worker attempt')
+    }
+    const exportApprovedBy = requireActorIdentity(
+      approvedExport.approved_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset export approval',
+    )
+    requireActorIdentity(
+      approvedExport.approval?.decided_by,
+      ADMINISTRATOR_ACTOR_ID,
+      'Dataset export approval decision',
+    )
+    if (
+      exportRequestedBy !== exportApprovedBy ||
+      exportRequest.approval.requested_by !== approvedExport.approval.decided_by
+    ) {
+      throw new Error('Dataset export was not requested and approved by the same administrator')
     }
 
     if (mode.dlqPrepare) {
@@ -1000,7 +1178,7 @@ async function main() {
       EXPORT_TIMEOUT_MS,
     )
     const artifact = requireAvailableArtifact(detail.export_request)
-    const authorization = await uploader.request(
+    const authorization = await administrator.request(
       'authorize synthetic export download',
       `/projects/${projectId}/dataset-versions/${datasetVersionId}/exports/download-authorizations`,
       { method: 'POST' },
@@ -1012,12 +1190,30 @@ async function main() {
 
     process.stdout.write(
       `ACCEPTANCE_RESULT ${JSON.stringify({
-        schema_version: 'dataset-export-cross-process-acceptance-v1',
+        schema_version: 'dataset-export-cross-process-acceptance-v2',
         project_id: projectId,
         dataset_version_id: datasetVersionId,
         dataset_export_id: detail.export_request.dataset_export_id,
         capture_session_count: uploadedSessions.length,
-        independent_approvals: true,
+        approval_mode: 'SELF_ADMIN_APPROVAL',
+        self_admin_approval: {
+          administrator_actor_id: ADMINISTRATOR_ACTOR_ID,
+          annotation_revision_submitted_by: selfAdminAnnotation.submittedBy,
+          annotation_revision_reviewed_by: selfAdminAnnotation.reviewedBy,
+          dataset_freeze_requested_by: freezeRequestedBy,
+          dataset_freeze_approved_by: freezeApprovedBy,
+          dataset_export_requested_by: exportRequestedBy,
+          dataset_export_approved_by: exportApprovedBy,
+        },
+        member_permission_checks: {
+          actor_id: uploaderMembership.actor_id,
+          role: uploaderMembership.role,
+          status: uploaderMembership.status,
+          annotation_review_forbidden_without_state_change:
+            selfAdminAnnotation.memberReviewPermissionChecked,
+          dataset_freeze_forbidden_without_state_change: true,
+          dataset_export_approval_forbidden_without_state_change: true,
+        },
         recovery_mode: mode.recovery,
         lease_loss_mode: mode.leaseLoss,
         observed_export_statuses: observedExportStatuses,
@@ -1034,7 +1230,13 @@ async function main() {
   }
 }
 
-async function prepareEligibleSession({ administrator, uploader, projectId, session }) {
+async function prepareEligibleSession({
+  administrator,
+  uploader,
+  projectId,
+  session,
+  selfAdminApproval,
+}) {
   const captureSessionId = requireUuid(session.capture_session_id, 'Synthetic capture session')
   const [clipAssetId] = session.clip_asset_ids
   if (typeof clipAssetId !== 'string') {
@@ -1080,11 +1282,15 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
     {
       method: 'POST',
       idempotencyKey: key('dataset-export-acceptance-task'),
-      body: { assignee_actor_id: UPLOADER_ACTOR_ID },
+      body: {
+        assignee_actor_id: selfAdminApproval ? ADMINISTRATOR_ACTOR_ID : UPLOADER_ACTOR_ID,
+      },
     },
   )
   const annotationTaskId = requireUuid(task.annotation_task_id, 'Synthetic annotation task')
-  const revision = await uploader.request(
+  const submitter = selfAdminApproval ? administrator : uploader
+  const submittedBy = selfAdminApproval ? ADMINISTRATOR_ACTOR_ID : UPLOADER_ACTOR_ID
+  const revision = await submitter.request(
     'submit synthetic annotation revision',
     `/projects/${projectId}/annotation-tasks/${annotationTaskId}/revisions`,
     {
@@ -1096,12 +1302,49 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
       },
     },
   )
+  requireActorIdentity(revision.submitted_by, submittedBy, 'Synthetic annotation submission')
   const annotationRevisionId = requireUuid(
     revision.annotation_revision_id,
     'Synthetic annotation revision',
   )
-  await administrator.request(
-    'independently review synthetic annotation',
+  if (revision.annotation_task_id !== annotationTaskId) {
+    throw new Error('Synthetic annotation revision does not match its assigned task')
+  }
+  let memberReviewPermissionChecked = false
+  if (selfAdminApproval) {
+    const taskListBeforeMemberCommand = await administrator.request(
+      'read annotation task before rejected member review',
+      `/projects/${projectId}/annotation-tasks`,
+    )
+    const reviewStateBeforeMemberCommand = annotationTaskDecisionState(
+      taskListBeforeMemberCommand,
+      annotationTaskId,
+    )
+    await assertMemberCommandDenied('ordinary member annotation review', () =>
+      uploader.request(
+        'ordinary member annotation review',
+        `/projects/${projectId}/annotation-revisions/${annotationRevisionId}/review`,
+        {
+          method: 'POST',
+          idempotencyKey: key('dataset-export-acceptance-member-review'),
+          body: { decision: 'APPROVED', review_note: 'Rejected member permission check' },
+        },
+      ),
+    )
+    const taskListAfterMemberCommand = await administrator.request(
+      'read annotation task after rejected member review',
+      `/projects/${projectId}/annotation-tasks`,
+    )
+    requireUnchangedState(
+      reviewStateBeforeMemberCommand,
+      annotationTaskDecisionState(taskListAfterMemberCommand, annotationTaskId),
+      'Annotation review',
+    )
+    memberReviewPermissionChecked = true
+  }
+
+  const review = await administrator.request(
+    selfAdminApproval ? 'self-review synthetic annotation' : 'review synthetic annotation',
     `/projects/${projectId}/annotation-revisions/${annotationRevisionId}/review`,
     {
       method: 'POST',
@@ -1109,6 +1352,17 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
       body: { decision: 'APPROVED', review_note: 'Synthetic acceptance review approved' },
     },
   )
+  const reviewedBy = requireActorIdentity(
+    review.reviewed_by,
+    ADMINISTRATOR_ACTOR_ID,
+    'Synthetic annotation review',
+  )
+  if (review.annotation_revision_id !== annotationRevisionId || review.decision !== 'APPROVED') {
+    throw new Error('Synthetic annotation review does not approve the submitted revision')
+  }
+  if (selfAdminApproval && revision.submitted_by !== review.reviewed_by) {
+    throw new Error('Synthetic annotation was not submitted and reviewed by the same administrator')
+  }
   await waitFor(
     'dataset admission eligibility',
     async () =>
@@ -1119,6 +1373,74 @@ async function prepareEligibleSession({ administrator, uploader, projectId, sess
     (preview) => preview.eligible === true,
     MEDIA_INGEST_TIMEOUT_MS,
   )
+  return { captureSessionId, selfAdminApproval, submittedBy, reviewedBy, memberReviewPermissionChecked }
+}
+
+async function assertMemberCommandDenied(label, command) {
+  try {
+    await command()
+  } catch (error) {
+    requireMemberPermissionDenied(error, label)
+    return
+  }
+  throw new Error(`${label} unexpectedly succeeded`)
+}
+
+function annotationTaskDecisionState(response, annotationTaskId) {
+  const task = response.items?.find((item) => item.annotation_task_id === annotationTaskId)
+  if (!task) {
+    throw new Error('Synthetic annotation task is missing from the administrator queue')
+  }
+  return {
+    annotation_task_id: task.annotation_task_id,
+    status: task.status,
+    version: task.version,
+    annotation_revision: task.annotation_revision
+      ? {
+          annotation_revision_id: task.annotation_revision.annotation_revision_id,
+          submitted_by: task.annotation_revision.submitted_by,
+          review_id: task.annotation_revision.review?.annotation_review_id ?? null,
+          review_decision: task.annotation_revision.review?.decision ?? null,
+          reviewed_by: task.annotation_revision.review?.reviewed_by ?? null,
+          post_cleaning_result_id:
+            task.annotation_revision.post_cleaning_result?.cleaning_result_id ?? null,
+        }
+      : null,
+  }
+}
+
+function datasetFreezeDecisionState(detail) {
+  return {
+    status: detail.status,
+    validation_id: detail.validation?.dataset_version_validation_id ?? null,
+    validation_outcome: detail.validation?.outcome ?? null,
+    approval_request_id: detail.freeze_approval?.approval_request_id ?? null,
+    approval_status: detail.freeze_approval?.status ?? null,
+    approval_decision_id: detail.freeze_approval?.approval_decision_id ?? null,
+    requested_by: detail.freeze_approval?.requested_by ?? null,
+    approved_by: detail.freeze_approval?.approved_by ?? null,
+    can_freeze: detail.can_freeze,
+  }
+}
+
+function datasetExportDecisionState(detail) {
+  const exportRequest = detail.export_request
+  return {
+    status: detail.status,
+    dataset_export_id: exportRequest?.dataset_export_id ?? null,
+    export_status: exportRequest?.status ?? null,
+    export_requested_by: exportRequest?.requested_by ?? null,
+    export_approved_by: exportRequest?.approved_by ?? null,
+    approval_request_id: exportRequest?.approval?.approval_request_id ?? null,
+    approval_status: exportRequest?.approval?.status ?? null,
+    approval_decision_id: exportRequest?.approval?.approval_decision_id ?? null,
+    approval_requested_by: exportRequest?.approval?.requested_by ?? null,
+    approval_decided_by: exportRequest?.approval?.decided_by ?? null,
+    attempt_id: exportRequest?.attempt?.dataset_export_attempt_id ?? null,
+    attempt_number: exportRequest?.attempt?.attempt ?? null,
+    attempt_status: exportRequest?.attempt?.status ?? null,
+    can_request_export: detail.can_request_export,
+  }
 }
 
 async function assertHealthy(baseUrl) {

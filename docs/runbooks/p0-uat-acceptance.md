@@ -2,7 +2,7 @@
 
 ## 目的与边界
 
-本手册把 V1.10 的 P0 主 Step 闭环转化为可记录的 UAT：
+本手册把 V1.11 的 P0 主 Step 闭环转化为可记录的 UAT；未变更能力继承 V1.10：
 
 ```text
 登录与项目隔离
@@ -22,7 +22,7 @@
 | 版本 | Git commit、Core API/Web/Worker 镜像或构建版本、数据库迁移版本 |
 | 环境 | 隔离环境标识、对象存储产品版本、是否只含合成或已批准样本 |
 | 浏览器 | 目标浏览器及准确版本、操作系统、显示缩放比例 |
-| 角色 | 管理员 A（可创建、复核、申请和审批）与成员 M（上传/标注）；可由同一名操作人员切换两个账号执行，但账号必须不同。A 必须是 `ROLE_ADMIN` 且拥有 ACTIVE 项目 `ADMIN` Membership；M 为 `ROLE_MEMBER`。 |
+| 角色 | 管理员 A（`ROLE_ADMIN` + ACTIVE 项目 `ADMIN` Membership，可创建、复核、申请和审批）与成员 M（`ROLE_MEMBER`，用于上传/标注及管理员命令反向验证）。A 对自己的复核、冻结和导出申请执行审批；A/M 必须是不同账号，M 不得临时提权。 |
 | 样本 | 至少两次符合格式的合成或已批准 CaptureSession，及其来源批准记录 |
 
 浏览器验证以 1366×768、1920×1080、2560×1440、3840×2160 为视口基线；记录每个视口的缩放比例。手机和触摸操作不属于本次 UAT。
@@ -36,9 +36,9 @@
 | U1 | 未登录、M | 未登录访问受保护路由回到登录；M 只能看到已加入的项目，不能进入管理或其他项目数据。 |
 | U2 | A/M | 上传一段批准样本；页面显示真实上传终态。已完成完整性校验的 MP4 可显式播放和 seek，播放地址不出现在页面、持久化存储或证据附件中。 |
 | U3 | A/M | 显式发起媒体检测；报告显示时长、编码和完整解码终态。检测失败样本不得进入质量/标注候选。 |
-| U4 | A/M | 对检测通过的视频记录人工质量；A 创建并可直接分配给自己或 M。验证 A 提交的主 Step 可由 A 复核，复核/审计显示 `SELF_ADMIN_APPROVAL`；M 提交时仍不能记录复核。复核通过后确认 post-clean 为 PASS。 |
-| U5 | A/M | A 使用两次 eligible CaptureSession 创建草稿、固定 pilot/holdout 划分、构建配置和关系快照；执行冻结前校验并由 A 批准冻结。冻结响应、页面和审计必须显示 `SELF_ADMIN_APPROVAL`；M 不能冻结，冻结后不得修改成员或配置。 |
-| U6 | A/M | A 为已冻结版本申请并批准 `MODEL_TRAINING` 导出。确认状态依次反映 REQUESTED/QUEUED/RUNNING/AVAILABLE 或稳定失败码；审批记录为 `SELF_ADMIN_APPROVAL`，M 不能批准；仅 AVAILABLE 可显式下载，下载文件 SHA-256 与登记摘要一致。 |
+| U4 | A/M | 对检测通过的视频记录人工质量；A 创建并直接分配给自己，提交主 Step 后由 A 复核。响应中的提交者/复核者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 记录复核必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增复核、post-clean 或审计成功事实。A 复核通过后确认 post-clean 为 PASS。 |
+| U5 | A/M | A 使用两次 eligible CaptureSession 创建草稿、固定 pilot/holdout 划分、构建配置和关系快照；执行冻结前校验并由 A 批准自己发起的冻结。响应中的申请者/批准者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 冻结必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增审批或改变版本状态。冻结后不得修改成员或配置。 |
+| U6 | A/M | A 为已冻结版本申请并批准自己的 `MODEL_TRAINING` 导出。响应中的申请者/批准者为同一 actor，页面和审计显示 `SELF_ADMIN_APPROVAL`；M 批准必须得到 `403 + PROJECT_ACCESS_DENIED`，且不新增审批、attempt、Outbox 或成功审计。确认状态依次反映 REQUESTED/QUEUED/RUNNING/AVAILABLE 或稳定失败码；仅 AVAILABLE 可显式下载，下载文件 SHA-256 与登记摘要一致。 |
 | U7 | A/M | 在四个规定视口抽查登录、项目、Session、资产、标注、上传和数据集页面：无页面级横向滚动、重叠、被遮挡的主操作或不可见焦点；键盘可完成主要操作，状态和错误不只依赖颜色。 |
 
 ## 通过、失败与留档

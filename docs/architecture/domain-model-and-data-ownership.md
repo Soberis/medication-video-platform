@@ -2,13 +2,13 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > Java 根包：`com.medicationvideo.platform`  
-> 最后更新：2026-07-30
+> 最后更新：2026-08-09
 
 ## 1. 目标与边界
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.10；未变更条款按需求基线继承 V1.9 至 V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
+当前业务事实来源是 V1.11；未变更条款按需求基线继承 V1.10 至 V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -252,7 +252,7 @@ flowchart LR
 - Object 同时保存 stream PTS 时间、session 时间和 frame index；不能只用 `frame_index/fps` 推导。
 - 人工不确定性使用明确字段，例如 `annotator_certainty` 或原因标签；不得与算法 score 混用。
 - 复核员需要修正时，必须退回或创建裁决 revision，并保留来源链。
-- 标注提交者不得复核自己的 revision；两级界面角色不会取消该职责分离守卫。
+- V1.11 的受限单管理员规则允许 `ROLE_ADMIN` 在拥有 ACTIVE 项目 `ADMIN` Membership 时复核自己提交的 revision；同人决定必须照实记录 `SELF_ADMIN_APPROVAL`。`ROLE_MEMBER` 不能记录复核，项目、状态、摘要、幂等和追加式审计守卫不变。
 - 当前 revision 获 `APPROVED` 时，AnnotationTask 在同一事务推进为 `COMPLETED`，并调用
   `qualitycleaning` 的公开应用服务写入绑定该 revision 的 post-clean run/result；
   `REJECTED` 只把任务退回 `ASSIGNED`，不产生 post-clean 结果。
@@ -336,10 +336,12 @@ flowchart LR
   受检摘要、操作者、幂等指纹和时间。`PASS` 不推进状态或替代审批；`FAIL` 不得改写，修正必须创建新版本。
 - V44 在 `PASS` 校验事务内通过 `governance` 创建一条绑定 validation 的冻结请求。拥有 ACTIVE 项目
   `ADMIN` Membership 的 `ROLE_ADMIN` 批准时再次执行全部 V43 检查，并在同一事务写唯一审批决定、DatasetVersion
-  冻结事实和审计后进入 `FROZEN`；同人决定必须记录为 `SELF_ADMIN_APPROVAL`。证据变化时不写决定、不改变状态。该一次性请求只服务当前冻结命令，不是
+  冻结事实和审计后进入 `FROZEN`；申请人与批准人可以是同一合格管理员，此时必须记录 `SELF_ADMIN_APPROVAL`。
+  `ROLE_MEMBER` 不能执行冻结命令。证据变化时不写决定、不改变状态。该一次性请求只服务当前冻结命令，不是
   可复用的通用授权。
 - V45 为 FROZEN 版本创建一次绑定构建配置、关系快照、PASS validation、用途和有效期的导出申请；
   V46 只扩展为准确配对的 v1/v2 Profile，不批准、不入队、不生成文件。
+- V47 的导出批准同样只允许拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 执行；同一管理员申请并批准时记录 `SELF_ADMIN_APPROVAL`，`ROLE_MEMBER` 不得申请或批准。首次 attempt、Outbox、审批决定和审计仍在同一事务创建。
 - FROZEN 后不可修改成员、revision、规则和 split；任何变化创建新 DatasetVersion。
 - 导出只读取 FROZEN 快照；导出失败不改变冻结版本。
 
@@ -375,7 +377,9 @@ flowchart LR
 
 ### 11.2 不变量
 
-- 申请人与审批人分离；紧急例外必须事后复核。
+- 默认申请人与审批人分离；V1.11 仅允许合格项目管理员对 P0 标注复核、DatasetVersion 冻结和
+  `MODEL_TRAINING` 导出执行同人审批，并记录 `SELF_ADMIN_APPROVAL`。物理销毁、密钥、权限提升等未被
+  V1.11 放宽的高风险流程仍保持职责分离；紧急例外必须事后复核。
 - 审批决定绑定对象版本，不是通用永久授权。V44 冻结请求绑定唯一 DatasetVersion validation，批准后立即
   原子消费为 `FROZEN`，因此不另设用途、范围或有效期；正式导出等可延迟使用的授权仍必须显式绑定这些事实。
 - `audit_event` 只追加；修正通过补充事件，不原地改历史。

@@ -9,6 +9,7 @@ import {
   matchesExpectedExportCompletion,
   mergeEnvironment,
   parseAcceptanceMode,
+  requireActorIdentity,
   requireDatasetExportDeadLetterDiagnostic,
   requireDatasetExportDlqReplayReason,
   requireDatasetExportReplayPreflight,
@@ -16,7 +17,9 @@ import {
   requireDatasetExportReplayResponse,
   requireAvailableArtifact,
   requireLeaseLossRecovery,
+  requireMemberPermissionDenied,
   requireMediaProbeJob,
+  requireUnchangedState,
   sha256Hex,
   uuidV5,
 } from './index.mjs'
@@ -408,6 +411,59 @@ test('acceptance environment requires explicit synthetic localhost authorization
         uploaderBearerToken: 'synthetic-uploader',
       }),
     /localhost RabbitMQ/,
+  )
+})
+
+test('V1.11 acceptance evidence binds self-admin facts and rejected member commands', () => {
+  const administratorActorId = 'local-synthetic-admin'
+  assert.equal(
+    requireActorIdentity(
+      administratorActorId,
+      administratorActorId,
+      'Synthetic annotation review',
+    ),
+    administratorActorId,
+  )
+  assert.throws(
+    () =>
+      requireActorIdentity(
+        'local-synthetic-uploader',
+        administratorActorId,
+        'Synthetic annotation review',
+      ),
+    /expected administrator/,
+  )
+
+  assert.equal(
+    requireMemberPermissionDenied(
+      { status: 403, errorCode: 'PROJECT_ACCESS_DENIED' },
+      'ordinary member annotation review',
+    ),
+    true,
+  )
+  assert.throws(
+    () =>
+      requireMemberPermissionDenied(
+        { status: 409, errorCode: 'DATASET_VERSION_FREEZE_STATUS_INVALID' },
+        'ordinary member dataset freeze',
+      ),
+    /HTTP 403 \(PROJECT_ACCESS_DENIED\)/,
+  )
+
+  const pending = {
+    status: 'PENDING',
+    requested_by: administratorActorId,
+    approved_by: null,
+  }
+  assert.equal(requireUnchangedState(pending, { ...pending }, 'Dataset freeze'), true)
+  assert.throws(
+    () =>
+      requireUnchangedState(
+        pending,
+        { ...pending, status: 'APPROVED', approved_by: administratorActorId },
+        'Dataset freeze',
+      ),
+    /changed state/,
   )
 })
 

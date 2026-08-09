@@ -553,6 +553,8 @@ class AnnotationTaskContractTests {
 		var approvalRequestId = com.jayway.jsonpath.JsonPath.<String>read(pendingApprovalResponse,
 				"$.freeze_approval.approval_request_id");
 
+		freezeDatasetVersion(MEMBER_TOKEN, datasetVersionId, freezeIdempotencyKey).andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 		var freezeResponse = freezeDatasetVersion(ADMIN_TOKEN, datasetVersionId, freezeIdempotencyKey)
 			.andExpect(status().isCreated())
 			.andExpect(header().string("Cache-Control", "no-store"))
@@ -580,6 +582,7 @@ class AnnotationTaskContractTests {
 			.andExpect(jsonPath("$.status").value("FROZEN"))
 			.andExpect(jsonPath("$.freeze_approval.status").value("APPROVED"))
 			.andExpect(jsonPath("$.freeze_approval.approval_decision_id").value(approvalDecisionId))
+			.andExpect(jsonPath("$.freeze_approval.requested_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.freeze_approval.approved_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.can_freeze").value(false))
 			.andExpect(jsonPath("$.export_request").value(org.hamcrest.Matchers.nullValue()))
@@ -633,12 +636,16 @@ class AnnotationTaskContractTests {
 			.andExpect(jsonPath("$.ready_for_approval").value(false))
 			.andExpect(jsonPath("$.blocking_reasons[0]").value("APPROVER_ADMIN_REQUIRED"));
 		var exportApprovalIdempotencyKey = "dataset-export-approval-" + UUID.randomUUID();
+		approveDatasetExport(MEMBER_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 		var approvedExportResponse = approveDatasetExport(ADMIN_TOKEN, datasetVersionId, exportApprovalIdempotencyKey)
 			.andExpect(status().isAccepted())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.dataset_export_id").value(datasetExportId))
 			.andExpect(jsonPath("$.status").value("QUEUED"))
 			.andExpect(jsonPath("$.approval.status").value("APPROVED"))
+			.andExpect(jsonPath("$.approval.requested_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.approval.decided_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.approved_by").value(ProjectMembershipTestData.ADMIN_ACTOR))
 			.andExpect(jsonPath("$.attempt.attempt").value(1))

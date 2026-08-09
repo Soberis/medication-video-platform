@@ -6373,8 +6373,10 @@ components:
         can_freeze:
           type: boolean
           description: >-
-            True only for an ACTIVE project administrator other than the requester while a PASS-bound
-            freeze request is pending. The command still revalidates every technical guard.
+            True only for a ROLE_ADMIN account with an ACTIVE project ADMIN membership while a
+            PASS-bound freeze request is pending. Under V1.11 the requester may approve the same
+            request; the command still revalidates every technical guard and records
+            SELF_ADMIN_APPROVAL when both actors are the same.
         export_request:
           description: >-
             The immutable P0 export request and its pending approval, or null before an administrator

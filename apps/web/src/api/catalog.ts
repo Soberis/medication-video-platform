@@ -619,7 +619,7 @@ const errorMessages: Record<string, string> = {
   DATASET_VERSION_FREEZE_APPROVAL_MISSING: '冻结审批请求缺失，请刷新页面后重试。',
   DATASET_VERSION_FREEZE_APPROVAL_INVALID: '冻结审批请求已失效，请刷新页面查看。',
   DATASET_VERSION_FREEZE_SELF_APPROVAL_FORBIDDEN:
-    '申请人与审批人必须不同，请由另一位项目管理员处理。',
+    '当前账号不满足受限管理员自审条件，请由合格的平台项目管理员处理。',
   DATASET_VERSION_FREEZE_EVIDENCE_CHANGED: '校验后数据证据发生变化，请修正后新建数据集版本。',
   DATASET_VERSION_ALREADY_FROZEN: '该数据集版本已经冻结。',
   DATASET_VERSION_FREEZE_IDEMPOTENCY_KEY_REUSED: '本次冻结请求与已提交请求冲突，请刷新后重试。',

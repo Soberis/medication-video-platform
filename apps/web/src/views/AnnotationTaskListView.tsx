@@ -33,7 +33,7 @@ interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
 }
 const postCleaningReasonLabels: Readonly<Record<string, string>> = {
-  REVIEW_NOT_APPROVED: '未绑定已通过的独立复核',
+  REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
   QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是合格',
   ASSET_INPUT_DIGEST_INVALID: '视频输入摘要无效',
   ANNOTATION_DOCUMENT_DIGEST_INVALID: '标注文档摘要无效',
