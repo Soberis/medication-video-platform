@@ -99,6 +99,8 @@ $requiredFiles = @(
     'tools/synthetic-upload-client/README.md',
     'tools/dataset-export-acceptance/index.mjs',
     'tools/dataset-export-acceptance/index.test.mjs',
+    'tools/web-preflight/index.mjs',
+    'tools/web-preflight/index.test.mjs',
     'scripts/check-environment.ps1',
     'scripts/check-environment.sh',
     'scripts/quality-gate.ps1',
@@ -503,6 +505,20 @@ if (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
 }
 else {
     Add-Skip 'Dataset export acceptance tool has not been generated yet'
+}
+
+$webPreflight = Join-Path $root 'tools/web-preflight/index.mjs'
+if (Test-Path -LiteralPath $webPreflight -PathType Leaf) {
+    & pnpm --dir $root run p0-web:preflight:test
+    if ($LASTEXITCODE -eq 0) {
+        Add-Pass 'P0 Web preflight guard unit tests'
+    }
+    else {
+        Add-Failure "P0 Web preflight guard unit tests exited with code $LASTEXITCODE"
+    }
+}
+else {
+    Add-Skip 'P0 Web preflight tool has not been generated yet'
 }
 
 if ($IsWindows -or $env:OS -eq 'Windows_NT') {

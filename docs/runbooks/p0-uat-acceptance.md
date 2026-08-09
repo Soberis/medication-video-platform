@@ -27,6 +27,29 @@
 
 浏览器验证以 1366×768、1920×1080、2560×1440、3840×2160 为视口基线；记录每个视口的缩放比例。手机和触摸操作不属于本次 UAT。
 
+## 本地浏览器预检查（开发证据）
+
+`pnpm run p0-web:preflight` 是明确授权的本地开发预检查，不是正式 UAT。它只接受 `DATA_PROFILE=synthetic` 和 `localhost`/loopback Web 地址；使用独立临时 Edge 配置，只点击登录，结束前退出登录。不会上传、播放、下载、创建、冻结、审批或导出。
+
+它在四档视口检查登录页、指定标注任务行和数据集详情；标注必须同时显示复核通过、自审标记和 post-clean PASS，数据集分别检查冻结和导出卡片。截图和 JSON 结果写到已忽略的 `reports/web-preflight/run-*`；不得提交其中的图片、Cookie、URL 或凭据。
+
+运行前准备好当前合成验收的项目、管理员自审的 AnnotationTask 和已冻结/导出的 DatasetVersion。macOS 本地示例：
+
+```bash
+set -a
+source .env.example
+source .env
+RUN_P0_WEB_PREFLIGHT=true \
+WEB_PREFLIGHT_USERNAME="$PLATFORM_BOOTSTRAP_ADMIN_USERNAME" \
+WEB_PREFLIGHT_PASSWORD="$PLATFORM_BOOTSTRAP_ADMIN_PASSWORD" \
+P0_WEB_PREFLIGHT_PROJECT_ID='<project-id>' \
+P0_WEB_PREFLIGHT_ANNOTATION_TASK_ID='<self-review-task-id>' \
+P0_WEB_PREFLIGHT_DATASET_VERSION_ID='<frozen-version-id>' \
+pnpm run p0-web:preflight
+```
+
+成功输出为 `PRECHECK_PASSED`，并记录 Edge 版本、ADMIN 会话、未登录重定向、页面级溢出和截图 SHA-256。它不证明 MEMBER 反向权限、真实上传/播放/seek、下载、审计 SQL 或人工键盘全流程；这些仍按下面的 U1～U7 在批准环境执行。
+
 ## 执行清单
 
 每项同时记录执行人、时间、结果、稳定错误码（如有）和证据位置。失败时停止该路径，不手改数据库或重用短期 URL。

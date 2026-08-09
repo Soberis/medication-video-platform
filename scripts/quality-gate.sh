@@ -166,6 +166,8 @@ required_files=(
     'tools/synthetic-upload-client/README.md'
     'tools/dataset-export-acceptance/index.mjs'
     'tools/dataset-export-acceptance/index.test.mjs'
+    'tools/web-preflight/index.mjs'
+    'tools/web-preflight/index.test.mjs'
     'scripts/check-environment.ps1'
     'scripts/check-environment.sh'
     'scripts/quality-gate.ps1'
@@ -494,6 +496,19 @@ if [[ -f "$dataset_export_acceptance" ]]; then
     fi
 else
     add_skip 'Dataset export acceptance tool has not been generated yet'
+fi
+
+web_preflight="$PROJECT_ROOT/tools/web-preflight/index.mjs"
+if [[ -f "$web_preflight" ]]; then
+    pnpm --dir "$PROJECT_ROOT" run p0-web:preflight:test
+    exit_code=$?
+    if ((exit_code == 0)); then
+        add_pass 'P0 Web preflight guard unit tests'
+    else
+        add_failure "P0 Web preflight guard unit tests exited with code $exit_code"
+    fi
+else
+    add_skip 'P0 Web preflight tool has not been generated yet'
 fi
 
 if ! command -v bash >/dev/null 2>&1; then
