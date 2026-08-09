@@ -77,7 +77,7 @@ export async function runPreflight(environment = process.env, cwd = process.cwd(
     },
     limitations: [
       'This is a local precheck, not formal UAT.',
-      'It only reads login, annotation, and dataset pages.',
+      'It only creates and clears an authentication session while reading login, annotation, and dataset pages.',
       'It does not upload, play, download, create, freeze, approve, or export data.',
     ],
     checks: [],
@@ -132,6 +132,7 @@ export async function runPreflight(environment = process.env, cwd = process.cwd(
       await navigate(cdp, sessionId, `${config.baseUrl}${annotationPath}`)
       const check = await inspectAnnotation(cdp, sessionId, config.annotationTaskId)
       assertPageCheck(check)
+      await revealAnnotationEvidence(cdp, sessionId, config.annotationTaskId)
       check.screenshot = await capture(
         cdp,
         sessionId,
@@ -147,14 +148,14 @@ export async function runPreflight(environment = process.env, cwd = process.cwd(
       await navigate(cdp, sessionId, `${config.baseUrl}${datasetPath}`)
       const check = await inspectDataset(cdp, sessionId)
       assertPageCheck(check)
-      await scrollToText(cdp, sessionId, '构建准备')
+      await revealDatasetEvidence(cdp, sessionId, '构建准备')
       check.freeze_screenshot = await capture(
         cdp,
         sessionId,
         runDirectory,
         `dataset-freeze-${width}x${height}.png`,
       )
-      await scrollToText(cdp, sessionId, '数据集导出')
+      await revealDatasetEvidence(cdp, sessionId, '数据集导出')
       check.export_screenshot = await capture(
         cdp,
         sessionId,
@@ -178,7 +179,15 @@ export async function runPreflight(environment = process.env, cwd = process.cwd(
       evidence.logout = { completed: false }
     }
   }
-  await close(cdp, edge, profileDirectory)
+  try {
+    await close(cdp, edge, profileDirectory)
+  } catch (error) {
+    evidence.cleanup_failure = safeError(error)
+    if (evidence.outcome === 'PRECHECK_PASSED') {
+      evidence.outcome = 'PRECHECK_FAILED'
+      evidence.failure = evidence.cleanup_failure
+    }
+  }
   await writePrivateJson(
     runDirectory,
     evidence.outcome === 'PRECHECK_PASSED' ? 'evidence.json' : 'failure.json',
@@ -358,16 +367,38 @@ async function logout(cdp, sessionId) {
   return result
 }
 
-async function scrollToText(cdp, sessionId, title) {
-  await evaluate(
+async function revealAnnotationEvidence(cdp, sessionId, taskId) {
+  const visible = await evaluate(
+    cdp,
+    sessionId,
+    `(() => {
+    const row = [...document.querySelectorAll('tr[data-row-key]')].find((item) => item.getAttribute('data-row-key') === ${JSON.stringify(taskId)})
+    const marker = [...(row?.querySelectorAll('*') || [])]
+      .filter((item) => item.innerText?.includes(${JSON.stringify(SELF_ADMIN_MARKER)}))
+      .sort((left, right) => left.innerText.length - right.innerText.length)[0]
+    marker?.scrollIntoView({ block: 'center', inline: 'nearest' })
+    const rect = marker?.getBoundingClientRect()
+    return Boolean(rect && rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight)
+  })()`,
+  )
+  if (!visible) throw new Error('Annotation self-admin marker is not visible for the screenshot')
+}
+
+async function revealDatasetEvidence(cdp, sessionId, title) {
+  const visible = await evaluate(
     cdp,
     sessionId,
     `(() => {
     const card = [...document.querySelectorAll('.detail-card')].find((item) => item.querySelector('.ant-card-head-title')?.innerText.includes(${JSON.stringify(title)}))
-    card?.scrollIntoView({ block: 'center' })
-    return true
+    const marker = [...(card?.querySelectorAll('*') || [])]
+      .filter((item) => item.innerText?.includes(${JSON.stringify(SELF_ADMIN_MARKER)}))
+      .sort((left, right) => left.innerText.length - right.innerText.length)[0]
+    marker?.scrollIntoView({ block: 'center', inline: 'nearest' })
+    const rect = marker?.getBoundingClientRect()
+    return Boolean(rect && rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight)
   })()`,
   )
+  if (!visible) throw new Error(`${title} self-admin marker is not visible for the screenshot`)
 }
 
 async function capture(cdp, sessionId, directory, name) {

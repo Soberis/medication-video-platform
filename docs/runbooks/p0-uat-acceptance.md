@@ -29,7 +29,7 @@
 
 ## 本地浏览器预检查（开发证据）
 
-`pnpm run p0-web:preflight` 是明确授权的本地开发预检查，不是正式 UAT。它只接受 `DATA_PROFILE=synthetic` 和 `localhost`/loopback Web 地址；使用独立临时 Edge 配置，只点击登录，结束前退出登录。不会上传、播放、下载、创建、冻结、审批或导出。
+`pnpm run p0-web:preflight` 是明确授权的本地开发预检查，不是正式 UAT。它只接受 `DATA_PROFILE=synthetic` 和 `localhost`/loopback Web 地址；使用独立临时 Edge 配置，只点击登录，结束前退出登录。除认证会话的登录和退出外，不会写入业务数据：不会上传、播放、下载、创建、冻结、审批或导出。
 
 它在四档视口检查登录页、指定标注任务行和数据集详情；标注必须同时显示复核通过、自审标记和 post-clean PASS，数据集分别检查冻结和导出卡片。截图和 JSON 结果写到已忽略的 `reports/web-preflight/run-*`；不得提交其中的图片、Cookie、URL 或凭据。
 
