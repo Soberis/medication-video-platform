@@ -80,7 +80,7 @@ cd /path/to/medication-video-platform
 ./scripts/start-local.sh
 ```
 
-在 Windows PowerShell 上启动本地基础设施和 Core API：
+在 Windows PowerShell 7 上启动本地基础设施和 Core API：
 
 ```powershell
 $repositoryRoot = git rev-parse --show-toplevel
@@ -105,7 +105,7 @@ macOS / Linux 常用命令：
 pnpm run local-scripts:test
 ```
 
-Windows PowerShell 常用命令：
+Windows PowerShell 7 常用命令：
 
 ```powershell
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
@@ -127,12 +127,21 @@ pnpm run web:dev
 
 ## 验证
 
+macOS / Linux：
+
+```bash
+./scripts/quality-gate.sh --strict
+pnpm run api:test
+```
+
+Windows PowerShell 7：
+
 ```powershell
 .\scripts\quality-gate.ps1 -Strict
 pnpm run api:test
 ```
 
-macOS / Linux 可用 `pwsh ./scripts/quality-gate.ps1 -Strict` 运行同一质量门禁；`api:test` 需要本地基础设施和 Core API 已启动，并且只能使用合成开发身份和合成视频。
+两套质量门禁覆盖同一组活动组件；macOS / Linux 不依赖 PowerShell。`api:test` 需要本地基础设施和 Core API 已启动，并且只能使用合成开发身份和合成视频。
 
 ## 数据安全
 

@@ -93,11 +93,18 @@ MediaPipe 不进入 P0 关键路径。
 
 ## Verification
 
-阶段 0 可运行：
+阶段 0 在 macOS / Linux 可运行：
+
+```bash
+./scripts/check-environment.sh
+./scripts/quality-gate.sh --strict
+```
+
+Windows PowerShell 7 可运行：
 
 ```powershell
 .\scripts\check-environment.ps1
-.\scripts\quality-gate.ps1
+.\scripts\quality-gate.ps1 -Strict
 ```
 
 组件工程生成后，质量门禁应覆盖：

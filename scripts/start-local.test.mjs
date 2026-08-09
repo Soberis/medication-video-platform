@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,9 +10,15 @@ import test from 'node:test'
 const execFileAsync = promisify(execFile)
 const scriptPath = fileURLToPath(new URL('start-local.sh', import.meta.url))
 const commonScriptPath = fileURLToPath(new URL('local-common.sh', import.meta.url))
-const shellScripts = ['local-common.sh', 'start-local.sh', 'status-local.sh', 'stop-local.sh'].map(
-  (name) => fileURLToPath(new URL(name, import.meta.url)),
-)
+const qualityGateScriptPath = fileURLToPath(new URL('quality-gate.sh', import.meta.url))
+const shellScripts = [
+  'check-environment.sh',
+  'local-common.sh',
+  'quality-gate.sh',
+  'start-local.sh',
+  'status-local.sh',
+  'stop-local.sh',
+].map((name) => fileURLToPath(new URL(name, import.meta.url)))
 const posixOnly = {
   skip: process.platform === 'win32' ? 'POSIX shell tests require a POSIX host' : false,
 }
@@ -30,8 +36,55 @@ async function runStartLocal(...args) {
   }
 }
 
+async function runQualityGate(...args) {
+  try {
+    const result = await execFileAsync('bash', [qualityGateScriptPath, ...args])
+    return { ...result, code: 0 }
+  } catch (error) {
+    return {
+      code: error.code,
+      stdout: error.stdout ?? '',
+      stderr: error.stderr ?? '',
+    }
+  }
+}
+
 test('macOS/Linux local scripts have valid Bash syntax', posixOnly, async () => {
   await execFileAsync('bash', ['-n', ...shellScripts])
+})
+
+test('macOS/Linux quality gate exposes a native strict mode', posixOnly, async () => {
+  const result = await runQualityGate('--help')
+
+  assert.equal(result.code, 0)
+  assert.match(result.stdout, /--strict/)
+  assert.match(result.stdout, /PowerShell/i)
+})
+
+test('macOS/Linux quality gate rejects unknown options before running checks', posixOnly, async () => {
+  const result = await runQualityGate('--unknown-option')
+
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /Unknown option/)
+  assert.doesNotMatch(result.stdout, /\[(?:PASS|FAIL|SKIP)\]/)
+})
+
+test('macOS/Linux quality gate resolves a repository path containing spaces', posixOnly, async (context) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'medication quality gate '))
+  const linkedRepository = join(temporaryDirectory, 'repository with spaces')
+  const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
+
+  context.after(async () => {
+    await rm(temporaryDirectory, { recursive: true, force: true })
+  })
+
+  await symlink(repositoryRoot, linkedRepository, 'dir')
+  const result = await execFileAsync('bash', [
+    join(linkedRepository, 'scripts', 'quality-gate.sh'),
+    '--help',
+  ])
+
+  assert.match(result.stdout, /--strict/)
 })
 
 test('help documents controlled restart and synthetic recovery options', posixOnly, async () => {
