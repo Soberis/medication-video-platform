@@ -477,9 +477,14 @@ elseif (Test-Path -LiteralPath $platformPom) {
         Add-Failure 'platform-api has pom.xml but Maven Wrapper is missing'
     }
     else {
-        & $mavenWrapper -f $platformPom verify
+        if ($Changed) {
+            & $mavenWrapper -f $platformPom verify -DskipTests
+        }
+        else {
+            & $mavenWrapper -f $platformPom verify
+        }
         if ($LASTEXITCODE -eq 0) {
-            Add-Pass 'Java verify'
+            Add-Pass $(if ($Changed) { 'Java fast verify (tests skipped)' } else { 'Java verify' })
         }
         else {
             Add-Failure "Java verify exited with code $LASTEXITCODE"
@@ -496,7 +501,10 @@ if (-not (Test-ChangedPath 'apps/web')) {
 }
 elseif (Test-Path -LiteralPath $webPackage) {
     $webManifest = Get-Content -LiteralPath $webPackage -Raw | ConvertFrom-Json
-    foreach ($script in @('format:check', 'lint', 'type-check', 'test', 'build')) {
+    $webScripts = if ($Changed) { @('format:check', 'lint', 'type-check', 'test') } else {
+        @('format:check', 'lint', 'type-check', 'test', 'build')
+    }
+    foreach ($script in $webScripts) {
         if ($webManifest.scripts.PSObject.Properties.Name -contains $script) {
             & pnpm --dir (Join-Path $root 'apps/web') run $script
             if ($LASTEXITCODE -eq 0) {

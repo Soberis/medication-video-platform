@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 strict=false
+changed_only=false
 failures=0
 skipped=0
 repository_paths_file=""
@@ -18,6 +19,7 @@ Run the repository quality gates natively on macOS/Linux. PowerShell is not requ
 
 Options:
   --strict, -Strict  Require every active component gate; skipped gates fail the run.
+  --changed, -Changed  Check only components touched by the current working tree.
   -h, --help         Show this help.
 EOF
 }
@@ -26,6 +28,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --strict|-Strict)
             strict=true
+            shift
+            ;;
+        --changed|-Changed)
+            changed_only=true
             shift
             ;;
         -h|--help)
@@ -40,6 +46,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if $strict && $changed_only; then
+    echo '--strict and --changed cannot be used together. Use --strict before merging.' >&2
+    exit 2
+fi
+
 add_failure() {
     echo "[FAIL] $1"
     failures=$((failures + 1))
@@ -52,6 +63,29 @@ add_pass() {
 add_skip() {
     echo "[SKIP] $1"
     skipped=$((skipped + 1))
+}
+
+changed_files=''
+if $changed_only; then
+    changed_files="$(
+        {
+            git -C "$PROJECT_ROOT" -c core.quotepath=false diff --name-only --cached
+            git -C "$PROJECT_ROOT" -c core.quotepath=false diff --name-only
+            git -C "$PROJECT_ROOT" -c core.quotepath=false ls-files --others --exclude-standard
+        } | LC_ALL=C sort -u
+    )"
+fi
+
+has_changed_path() {
+    local prefix="$1"
+    local changed_path
+    if ! $changed_only; then
+        return 0
+    fi
+    while IFS= read -r changed_path; do
+        [[ "$changed_path" == "$prefix" || "$changed_path" == "$prefix/"* ]] && return 0
+    done <<< "$changed_files"
+    return 1
 }
 
 validate_json() {
@@ -436,15 +470,25 @@ else
 fi
 
 platform_pom="$PROJECT_ROOT/services/platform-api/pom.xml"
-if [[ -f "$platform_pom" ]]; then
+if ! has_changed_path 'services/platform-api'; then
+    add_skip 'Java verify: no platform-api changes'
+elif [[ -f "$platform_pom" ]]; then
     maven_wrapper="$PROJECT_ROOT/services/platform-api/mvnw"
     if [[ ! -f "$maven_wrapper" ]]; then
         add_failure 'platform-api has pom.xml but Maven Wrapper is missing'
     else
-        "$maven_wrapper" -f "$platform_pom" verify
+        if $changed_only; then
+            "$maven_wrapper" -f "$platform_pom" verify -DskipTests
+        else
+            "$maven_wrapper" -f "$platform_pom" verify
+        fi
         exit_code=$?
         if ((exit_code == 0)); then
-            add_pass 'Java verify'
+            if $changed_only; then
+                add_pass 'Java fast verify (tests skipped)'
+            else
+                add_pass 'Java verify'
+            fi
         else
             add_failure "Java verify exited with code $exit_code"
         fi
@@ -454,8 +498,14 @@ else
 fi
 
 web_package="$PROJECT_ROOT/apps/web/package.json"
-if [[ -f "$web_package" ]]; then
-    web_scripts=('format:check' 'lint' 'type-check' 'test' 'build')
+if ! has_changed_path 'apps/web'; then
+    add_skip 'Web gates: no apps/web changes'
+elif [[ -f "$web_package" ]]; then
+    if $changed_only; then
+        web_scripts=('format:check' 'lint' 'type-check' 'test')
+    else
+        web_scripts=('format:check' 'lint' 'type-check' 'test' 'build')
+    fi
     for script_name in "${web_scripts[@]}"; do
         if node -e '
 const manifest = require(process.argv[1]);
@@ -479,7 +529,9 @@ else
 fi
 
 synthetic_upload_client="$PROJECT_ROOT/tools/synthetic-upload-client/index.mjs"
-if [[ -f "$synthetic_upload_client" ]]; then
+if ! has_changed_path 'tools/synthetic-upload-client'; then
+    add_skip 'Synthetic upload client unit tests: no related changes'
+elif [[ -f "$synthetic_upload_client" ]]; then
     pnpm --dir "$PROJECT_ROOT" run synthetic-upload:test
     exit_code=$?
     if ((exit_code == 0)); then
@@ -492,7 +544,9 @@ else
 fi
 
 dataset_export_acceptance="$PROJECT_ROOT/tools/dataset-export-acceptance/index.mjs"
-if [[ -f "$dataset_export_acceptance" ]]; then
+if ! has_changed_path 'tools/dataset-export-acceptance'; then
+    add_skip 'Dataset export acceptance guard unit tests: no related changes'
+elif [[ -f "$dataset_export_acceptance" ]]; then
     pnpm --dir "$PROJECT_ROOT" run dataset-export:acceptance:test
     exit_code=$?
     if ((exit_code == 0)); then
@@ -505,7 +559,9 @@ else
 fi
 
 web_preflight="$PROJECT_ROOT/tools/web-preflight/index.mjs"
-if [[ -f "$web_preflight" ]]; then
+if ! has_changed_path 'tools/web-preflight'; then
+    add_skip 'P0 Web preflight guard unit tests: no related changes'
+elif [[ -f "$web_preflight" ]]; then
     pnpm --dir "$PROJECT_ROOT" run p0-web:preflight:test
     exit_code=$?
     if ((exit_code == 0)); then
@@ -517,7 +573,9 @@ else
     add_skip 'P0 Web preflight tool has not been generated yet'
 fi
 
-if ! command -v bash >/dev/null 2>&1; then
+if ! has_changed_path 'scripts'; then
+    add_skip 'macOS/Linux local script tests: no script changes'
+elif ! command -v bash >/dev/null 2>&1; then
     add_failure 'Bash is required to validate the macOS/Linux local scripts'
 else
     pnpm --dir "$PROJECT_ROOT" run local-scripts:test
@@ -554,6 +612,11 @@ if ((${#python_projects[@]} == 0)); then
 else
     for python_project in "${python_projects[@]}"; do
         project_dir="$(dirname "$python_project")"
+        relative_project_dir="${project_dir#"$PROJECT_ROOT/"}"
+        if ! has_changed_path "$relative_project_dir"; then
+            add_skip "Python gates: no changes in $relative_project_dir"
+            continue
+        fi
         project_failed=false
 
         if ! pushd "$project_dir" >/dev/null; then
