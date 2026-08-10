@@ -898,10 +898,31 @@ code {
   pointer-events: none;
 }
 
-.hand-pose-overlay circle {
-  fill: #36cfc9;
+.hand-pose-bounding-box {
+  fill: transparent;
+  stroke-width: 3;
+}
+
+.hand-pose-bone {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hand-pose-landmark {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.hand-pose-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  paint-order: stroke;
   stroke: #101828;
-  stroke-width: 0.003;
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .playback-primary-action,

@@ -209,6 +209,17 @@ export default function AssetDetailView() {
     }
   }, [assetId, projectId])
 
+  useEffect(() => {
+    if (!handPoseJob || handPoseJob.status === 'SUCCEEDED' || handPoseJob.status === 'FAILED') {
+      return undefined
+    }
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadHandPoseCandidates()
+    }
+    const timer = window.setInterval(refresh, 3_000)
+    return () => window.clearInterval(timer)
+  }, [handPoseJob, loadHandPoseCandidates])
+
   const loadMediaReport = useCallback(async () => {
     mediaReportRequest.current?.abort()
     const request = new AbortController()
@@ -585,13 +596,13 @@ export default function AssetDetailView() {
       const job = await requestHandPoseCandidates(projectId, assetId)
       setHandPoseJob(job)
       setHandPoseCandidates({ job, candidates: [] })
-      void message.success('手部姿态候选已排队。')
+      void message.success('手部姿态检测已开始。')
     } catch (error) {
       setActionErrorCode(
         error instanceof CatalogApiError ? error.errorCode : 'HAND_POSE_REQUEST_FAILED',
       )
       setActionErrorMessage(
-        error instanceof CatalogApiError ? error.message : '手部姿态候选暂未提交，请稍后重试。',
+        error instanceof CatalogApiError ? error.message : '手部姿态检测暂未提交，请稍后重试。',
       )
     } finally {
       setIsRequestingHandPose(false)
@@ -698,13 +709,14 @@ export default function AssetDetailView() {
           {detail.status === 'INGESTED' ? (
             <Card
               className="detail-card"
-              title={<strong id="hand-pose-title">手部姿态候选</strong>}
+              title={<strong id="hand-pose-title">手部姿态检测</strong>}
               variant="outlined"
               aria-labelledby="hand-pose-title"
             >
-              <p className="app-eyebrow">Ego 手部姿态</p>
+              <p className="app-eyebrow">舱内相机 · 二维候选</p>
               <p>
-                使用已批准的离线模型为此视频生成双手关键点候选。结果必须经人工审核，不会自动改变正式标注或训练数据。
+                检测到手时，会在播放视频上叠加手框、21
+                个关键点、骨架和左右手标识。结果仍须人工审核，不会自动改变正式标注或训练数据。
               </p>
               {canRequestHandPose ? (
                 <Button
@@ -712,53 +724,28 @@ export default function AssetDetailView() {
                   loading={isRequestingHandPose}
                   onClick={() => void requestHandPose()}
                 >
-                  生成手部姿态候选
+                  检测手部姿态
                 </Button>
               ) : null}
               {handPoseJob ? (
                 <Alert
                   className="playback-feedback"
                   type={handPoseJob.status === 'SUCCEEDED' ? 'success' : 'info'}
-                  title={handPoseJob.status === 'SUCCEEDED' ? '候选已生成' : '候选生成已排队'}
+                  title={
+                    handPoseJob.status === 'SUCCEEDED' ? '手部姿态检测完成' : '正在检测手部姿态'
+                  }
                   description={
-                    <>
-                      任务 <code>{handPoseJob.ai_job_id}</code> 当前状态为 {handPoseJob.status}。
-                      {handPoseJob.status === 'SUCCEEDED'
-                        ? ` 已收到 ${handPoseCandidates?.candidates.length ?? 0} 条关键点候选；它们仍需人工审核。`
-                        : ' 候选审核功能将在 Worker 回传后启用；请刷新状态以查看关键点候选。'}
-                    </>
+                    handPoseJob.status === 'SUCCEEDED'
+                      ? `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
+                      : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
                   }
                   showIcon
                 />
               ) : null}
               {handPoseCandidates?.candidates?.[0] ? (
-                <Card className="playback-feedback" size="small" title="首帧候选关键点预览">
-                  <svg
-                    aria-label="候选手部关键点叠加预览"
-                    viewBox="0 0 1 1"
-                    style={{
-                      display: 'block',
-                      width: 'min(100%, 360px)',
-                      aspectRatio: '1 / 1',
-                      background: '#101828',
-                    }}
-                  >
-                    {handPoseCandidates.candidates[0].landmarks.map((landmark, index) => (
-                      <circle
-                        key={index}
-                        cx={landmark.x}
-                        cy={landmark.y}
-                        r="0.012"
-                        fill="#36cfc9"
-                      />
-                    ))}
-                  </svg>
-                  <p className="app-eyebrow">
-                    时间点 {handPoseCandidates.candidates[0].frame_timestamp_ms} ms，
-                    {handPoseCandidates.candidates[0].handedness} 手，
-                    {handPoseCandidates.candidates[0].valid_landmark_count}/21 个有效点。
-                  </p>
-                </Card>
+                <p className="form-hint playback-feedback">
+                  已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
+                </p>
               ) : null}
             </Card>
           ) : null}

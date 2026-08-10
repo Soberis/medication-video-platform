@@ -1720,9 +1720,9 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    expect(await screen.findByText('手部姿态候选')).toBeInTheDocument()
+    expect(await screen.findByText('手部姿态检测')).toBeInTheDocument()
     expect(screen.getByText(/不会自动改变正式标注或训练数据/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '生成手部姿态候选' }))
+    await user.click(screen.getByRole('button', { name: '检测手部姿态' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/v1/projects/${projectId}/clip-assets/${assetId}/hand-pose-jobs`,
@@ -1733,9 +1733,9 @@ describe('catalog views', () => {
         }),
       ),
     )
-    expect(await screen.findByText('候选生成已排队')).toBeInTheDocument()
-    expect(screen.getByText(/候选审核功能将在 Worker 回传后启用/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '生成手部姿态候选' })).not.toBeInTheDocument()
+    expect(await screen.findByText('正在检测手部姿态')).toBeInTheDocument()
+    expect(screen.getByText(/页面会自动刷新状态/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {

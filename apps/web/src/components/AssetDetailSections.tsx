@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Descriptions, Select, Tag } from 'antd'
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
@@ -10,6 +10,7 @@ import type {
   MediaReport,
 } from '@/api/catalog'
 import type { AssetFolder, ProjectMembership } from '@/api/projects'
+import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import {
   qualityDecisionLabels,
   qualityReasonLabels,
@@ -76,14 +77,41 @@ export function PlaybackCard({
   onStartPlayback,
 }: PlaybackCardProps) {
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
-  const activeCandidates = useMemo(
-    () =>
-      candidateOverlay.filter(
-        (candidate) => Math.abs(candidate.frame_timestamp_ms - playbackTimeMs) <= 120,
-      ),
-    [candidateOverlay, playbackTimeMs],
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(
+    null,
   )
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return undefined
+    const withVideoFrameCallback = video as HTMLVideoElement & {
+      cancelVideoFrameCallback?: (handle: number) => void
+      requestVideoFrameCallback?: (
+        callback: (now: number, metadata: { mediaTime: number }) => void,
+      ) => number
+    }
+    let frameHandle: number | undefined
+    let animationFrame: number | undefined
+    if (withVideoFrameCallback.requestVideoFrameCallback) {
+      const onVideoFrame = (_now: number, metadata: { mediaTime: number }) => {
+        setPlaybackTimeMs(metadata.mediaTime * 1000)
+        frameHandle = withVideoFrameCallback.requestVideoFrameCallback?.(onVideoFrame)
+      }
+      frameHandle = withVideoFrameCallback.requestVideoFrameCallback(onVideoFrame)
+    } else {
+      const onAnimationFrame = () => {
+        setPlaybackTimeMs(video.currentTime * 1000)
+        animationFrame = window.requestAnimationFrame(onAnimationFrame)
+      }
+      animationFrame = window.requestAnimationFrame(onAnimationFrame)
+    }
+    return () => {
+      if (frameHandle !== undefined) withVideoFrameCallback.cancelVideoFrameCallback?.(frameHandle)
+      if (animationFrame !== undefined) window.cancelAnimationFrame(animationFrame)
+    }
+  }, [grant?.grant_id])
 
   return (
     <Card
@@ -124,39 +152,36 @@ export function PlaybackCard({
             />
           ) : null}
           {!playbackFailed ? (
-            <div className="video-stage">
+            <div
+              className="video-stage"
+              style={
+                videoDimensions
+                  ? { aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}` }
+                  : undefined
+              }
+            >
               <video
+                ref={videoRef}
                 className="review-video"
                 controls
                 preload="none"
                 playsInline
                 aria-label="视频预览"
                 src={grant.media_url}
-                onLoadedMetadata={onLoadedMetadata}
+                onLoadedMetadata={(event) => {
+                  setVideoDimensions({
+                    width: event.currentTarget.videoWidth,
+                    height: event.currentTarget.videoHeight,
+                  })
+                  setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
+                  onLoadedMetadata()
+                }}
                 onTimeUpdate={(event) => setPlaybackTimeMs(event.currentTarget.currentTime * 1000)}
                 onError={onPlaybackError}
               >
                 当前浏览器不支持视频播放。
               </video>
-              {activeCandidates.length > 0 ? (
-                <svg
-                  className="hand-pose-overlay"
-                  aria-label="当前时间点的 AI 手部关键点候选"
-                  viewBox="0 0 1 1"
-                  preserveAspectRatio="none"
-                >
-                  {activeCandidates.flatMap((candidate) =>
-                    candidate.landmarks.map((landmark, index) => (
-                      <circle
-                        key={`${candidate.frame_timestamp_ms}-${candidate.hand_index}-${index}`}
-                        cx={landmark.x}
-                        cy={landmark.y}
-                        r="0.009"
-                      />
-                    )),
-                  )}
-                </svg>
-              ) : null}
+              <HandPoseOverlay candidates={candidateOverlay} playbackTimeMs={playbackTimeMs} />
             </div>
           ) : null}
           <div className="playback-toolbar">

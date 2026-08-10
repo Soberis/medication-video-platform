@@ -134,13 +134,15 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
 FR-042 当前 `PI`：已存在 AIJob、Outbox、RabbitMQ、独立 AI Worker、租约/心跳、输入摘要校验、结果回传
-及候选查看的实现，但它们没有书面 Phase A `GO`，也没有获批 Ego Golden Set 的实际评估或合成跨进程
-验收。V1.15 明确这些实现只能视为草稿：当前仍缺 Ego role 准入、完整 profile/帧级事实、AI Outbox
-capability 发布后脱敏、自然键并发幂等、最终存储决策和人工 ACCEPT/MODIFY/REJECT 到正式 revision 的闭环。
-不得把当前代码或契约测试误称为识别、候选标注或正式训练数据需求完成。
+及单路候选查看的实现。资产详情现在可将最近候选帧渲染为 bbox、21 点、骨架和左右手标签，并在非终态时
+低频刷新；它仍受平台开关保护，且不等同于 Session 动态批量编排或启用授权。尚未取得书面 Phase A `GO`，
+也没有获批舱内相机 Golden Set 的实际评估或合成跨进程验收。V1.15/V1.16 明确这些实现只能视为草稿：当前
+仍缺获批舱内相机 role 的正式准入、完整 profile/帧级事实、AI Outbox capability 发布后脱敏、自然键并发
+幂等、最终存储决策、Session 级动态 N 路编排/自动媒体检测，以及人工 ACCEPT/MODIFY/REJECT 到正式 revision
+的闭环。不得把当前代码或契约测试误称为识别、候选标注或正式训练数据需求完成。
 
 FR-042A 当前 `PI`：`tools/hand-pose-poc` 已实现 PyAV PTS 解码、MediaPipe VIDEO/SRGB 调用边界、
-最多双手 21 点结果、截图风格 Overlay、逐帧 JSONL、summary 和纯合成自动测试。尚未使用获批 Ego
+最多双手 21 点结果、截图风格 Overlay、逐帧 JSONL、summary 和纯合成自动测试。尚未使用获批舱内相机
 Golden Set 和离线模型完成实际效果评估，因此不能达到 `UAT`，也不能声称已经达到参考截图效果。
 
 FR-042B 当前 `D1`：V1.15 已冻结“手部姿态候选标注”只包含手部关键点候选和人工审核，不包含自动

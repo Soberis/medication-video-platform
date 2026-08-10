@@ -47,7 +47,7 @@ class HandPoseJobService {
 			AiCandidateJobRepository repository, AiCandidateJobIdempotencyReceiptRepository receiptRepository,
 			AuditEventRecorder auditRecorder, AiCandidateJobAttemptQueueService attemptQueue,
 			@Value("${platform.ai.hand-pose.model-sha256:}") String modelSha256,
-			@Value("${platform.ai.hand-pose.approved-camera-roles:EGO}") String approvedCameraRoles,
+			@Value("${platform.ai.hand-pose.approved-camera-roles:}") String approvedCameraRoles,
 			@Value("${platform.ai.hand-pose.enabled:false}") boolean enabled) {
 		this.projectAccessService = projectAccessService;
 		this.assetCatalog = assetCatalog;
@@ -137,7 +137,7 @@ class HandPoseJobService {
 		}
 		if (input.cameraRole() == null || !approvedCameraRoles.contains(input.cameraRole())) {
 			throw new HandPoseJobException("CLIP_ASSET_CAMERA_ROLE_NOT_APPROVED_FOR_AI_CANDIDATES",
-					"Only a pre-approved Ego camera role can receive hand pose candidates.", 409);
+					"Only a pre-approved in-cabin camera role can receive hand pose candidates.", 409);
 		}
 	}
 

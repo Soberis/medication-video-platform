@@ -93,9 +93,9 @@ created_at / updated_at / terminal_at / correlation_id
 2. `MANUAL`：用户调用 Session analysis facade。`aicandidate` 记录本次相机快照和每路
    `ANALYZING/MEDIA_PREPARATION` 意图，并请求 `assetcapture` 确保各路媒体检查；不等待 Worker，不由
    浏览器逐路继续调用。
-3. `AUTO_FOR_APPROVED_CAMERA`：媒体成功事件到达后，`aicandidate` 对所属 Session 的快照持续聚合；每路
-   达到媒体终态后更新对应项，全部相机路均有确定状态时以 `PROJECT_POLICY` 固化批量分析。策略、相机角色、
-   授权或媒体条件不满足的路不创建 AIJob，但必须保留安全原因。
+3. `AUTO_FOR_APPROVED_CAMERA`：CaptureSession 的相机快照可确定后，Core API 以 `PROJECT_POLICY` 幂等地
+   创建/复用批量分析及其相机路项；每路媒体结果事件只更新对应项。这样即使媒体陆续到达、进程重启或页面从未
+   打开，服务端仍保存完整批量意图。策略、相机角色、授权或媒体条件不满足的路不创建 AIJob，但必须保留安全原因。
 4. 某路媒体成功事件到达已有批量意图后，`aicandidate` 重新检查该路输入摘要、CameraStream、项目/角色
    授权与 profile，成功才在同一 `aicandidate` 事务创建该路 AIJob、attempt、Outbox 与审计。
 
@@ -108,7 +108,7 @@ stateDiagram-v2
     [*] --> NOT_REQUESTED
     NOT_REQUESTED --> ANALYZING: session request / policy trigger
     ANALYZING --> ANALYZING: any item MEDIA_PREPARATION -> HAND_POSE
-    ANALYZING --> READY: all terminal and every eligible item ready
+    ANALYZING --> READY: all terminal and every item ready
     ANALYZING --> PARTIALLY_READY: all terminal and some items ready
     ANALYZING --> FAILED: all terminal and no item ready
     ANALYZING --> INELIGIBLE: no item is eligible
@@ -179,6 +179,24 @@ AIJob 创建、Worker 领取/心跳、输入下载大小/SHA-256 验证、严格
 Worker 成功只代表候选已被 Core API 验证并持久化；只有在候选完整性、input/profile 摘要和有效 attempt
 均校验通过后，才可发布 analysis `READY`。一份部分或重复回传不得覆盖已存在的候选事实。
 
+### 5.1 二维手部 Overlay 的输出边界
+
+每个被选中的视频帧按冻结 profile 调用 MediaPipe Hand Landmarker。结果必须保留三种不同事实：
+
+| 帧事实 | 结果要求 | 网页效果 |
+| --- | --- | --- |
+| 未执行推理 | `inference_performed=false` | 不绘制，不能伪装为无手。 |
+| 已推理、未检测到手 | `inference_performed=true` 且 `hands=[]` | 不绘制手框或骨架。 |
+| 已推理、检测到 1/2 手 | 每只手含 handedness、分数、bbox、21 个 landmark 和有效点数 | 绘制 bbox、骨架、点位和左右手标签。 |
+
+这是“视频中有手就标出手”的二维候选效果，和参考图中原始画面上的手部骨架一致。bbox 来自冻结的
+landmark 包络算法，handedness score 仅为类别分数，不能被表述成 bbox 检测置信度。无效 NaN/Inf 点及其
+连接线不绘制，但同一帧其余有效点仍可展示。
+
+本设计不实现参考图可能包含的三维/空间视图：V1.16 不启用 world landmarks、跨相机匹配、相机标定、
+三角化或 3D 轨迹重建。它们需要独立的输入标定事实、时间同步精度、坐标系、误差阈值和人工验收，不能由
+二维 MediaPipe Overlay 隐式推断。
+
 ## 6. Web 交互与 Overlay
 
 ### 6.1 分析卡片
@@ -223,6 +241,9 @@ stage 的宽高比从 `videoWidth/videoHeight` 动态取得，不能硬编码 16
 候选按 `frame_timestamp_ms` 分组；播放时只取当前播放时刻最近的一组，超过已冻结容忍窗口则不绘制。
 优先 `requestVideoFrameCallback()` 同步视频帧，浏览器不支持时降级到 `requestAnimationFrame`/`timeupdate`，并在
 卸载时取消回调。播放刷新频率不能伪造超过候选采样率的推理事实。
+
+页面默认只播放用户选中的一路原视频；其余相机路只作为动态选择项及状态摘要，不自动同时播放或预加载。
+参考图中的多面板布局不是首版验收要求：首版以“选中相机的视频 + 同步二维 Overlay”完成可用闭环。
 
 ## 7. 实施顺序与验证
 
