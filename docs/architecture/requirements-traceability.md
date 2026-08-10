@@ -1,8 +1,8 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.14/配药视频数据管理平台需求文档_V1.14.md`
-> 继承需求基线：V1.13、V1.12、V1.11 及其历史继承基线
+> 当前需求基线：`docs/requirements/baselines/V1.15/配药视频数据管理平台需求文档_V1.15.md`
+> 继承需求基线：V1.14、V1.13、V1.12、V1.11 及其历史继承基线
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-08-10
 
@@ -133,20 +133,19 @@ FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`�
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
 
-FR-042 当前 `PI`：Flyway V51、`ai-hand-pose-job.v1`、OpenAPI 与 `HandPoseJobContractTests` 已覆盖
-ACTIVE 项目成员、已完成媒体处理的视频、固定离线模型 SHA-256 与 10 FPS profile、幂等、首个
-attempt、Outbox 和追加式审计。V51 预留候选存储的不可变事实表，但此阶段尚无 MediaPipe Worker
-lease/result 回写、候选查询/叠加、关键点 Golden Set 或手部姿态正式 revision；不得把这部分基础设施
-误称为手部识别或标注流程完成。按 V1.13，该平台切片暂停扩张，只有 Phase A 评估得到人工 `GO`
-后才继续。
+FR-042 当前 `PI`：已存在 AIJob、Outbox、RabbitMQ、独立 AI Worker、租约/心跳、输入摘要校验、结果回传
+及候选查看的实现，但它们没有书面 Phase A `GO`，也没有获批 Ego Golden Set 的实际评估或合成跨进程
+验收。V1.15 明确这些实现只能视为草稿：当前仍缺 Ego role 准入、完整 profile/帧级事实、AI Outbox
+capability 发布后脱敏、自然键并发幂等、最终存储决策和人工 ACCEPT/MODIFY/REJECT 到正式 revision 的闭环。
+不得把当前代码或契约测试误称为识别、候选标注或正式训练数据需求完成。
 
 FR-042A 当前 `PI`：`tools/hand-pose-poc` 已实现 PyAV PTS 解码、MediaPipe VIDEO/SRGB 调用边界、
 最多双手 21 点结果、截图风格 Overlay、逐帧 JSONL、summary 和纯合成自动测试。尚未使用获批 Ego
 Golden Set 和离线模型完成实际效果评估，因此不能达到 `UAT`，也不能声称已经达到参考截图效果。
 
-FR-042B 当前 `D1`：V1.14 已冻结“Ego 姿态候选标注”只包含手部关键点候选和人工审核，不包含自动
-动作/Step 或正式数据集放行。现有工作区 AIJob 草稿尚缺安全的 outbox capability 脱敏、Ego 准入、
-完整候选事实和审核接口，不能作为该需求实现证据。
+FR-042B 当前 `D1`：V1.15 已冻结“Ego 姿态候选标注”只包含手部关键点候选和人工审核，不包含自动
+动作/Step 或正式数据集放行。详细的输入准入、profile、帧级结果、存储、Outbox、Worker、人工审核和
+验收门禁见 `hand-pose-candidate-phase-b.md`；在书面 `GO` 前不得继续以现有实现扩大功能面。
 
 FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、不可变复核决定、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V49 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、受控冻结、v2 导出执行、失联恢复和管理员受控重放；2026-08-03 的 Windows 本地合成跨进程证据已记录在运行手册，但其双管理员事实只属于历史 V1.10 证据。当前仍不含 AnnotationProject、指南版本、抽样复核、WARNING 批准例外、更强泄漏组或历史 v1 的真实执行；对象框已按 V1.10 明确后置为 P1。
 

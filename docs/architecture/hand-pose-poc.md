@@ -1,8 +1,8 @@
 # Ego Hand Pose PoC 技术设计
 
-> 版本：TD-HP-POC-V1
+> 版本：TD-HP-POC-V2
 > 状态：Phase A 实施基线
-> 对齐需求：V1.13 FR-042A
+> 对齐需求：V1.15 FR-042A
 > 日期：2026-08-10
 
 ## 1. 目标和边界
@@ -118,19 +118,20 @@ Phase B 复用已批准的 `AIJob → CandidateAnnotation → Human Review` 边�
 文件布局作为生产契约。Dense landmark 是否进对象存储、结果 Schema、lease/result API、资产准入和
 网络策略都要在 GO 决策后单独冻结；在第二个真实用例出现前不抽象通用 AI 框架。
 
-## 9. 现有 Phase B 草稿审查
+## 9. Golden Set 前的实现收口
 
-仓库工作区已有一组尚未提交的 AIJob/Flyway/OpenAPI 草稿。其合同测试通过只证明已写断言，不代表
-可以合入；V1.13 Phase A 期间保持草稿状态。进入 Phase B 前至少解决：
+在使用获批 Golden Set 前，必须处理下列不改变识别算法的工具问题：
 
-1. Outbox 发布确认后的 capability 脱敏当前只覆盖 media/export schema，未覆盖
-   `ai-hand-pose-job.v1`，原始 `lease_token` 会留在已发布 payload；
-2. 自然键去重返回旧 job 时没有保存新 `Idempotency-Key` 的 receipt，随后复用该 key 不能稳定冲突；
-   并发自然键冲突也可能落为未处理的数据库异常；
-3. 当前准入只验证 `INGESTED video`，没有证明资产绑定的是单路 Ego camera role；
-4. 预建的 `candidate_annotation` 缺少 V1.12 要求的图像尺寸、有效关键点数、bbox recipe 和 margin
-   等不可变事实，且 dense 数据存储策略尚未经过试点；
-5. 生产 profile 只固定 FPS，没有冻结 detection/presence/tracking 阈值、handedness 方向策略、bbox
-   recipe 和完整参数摘要。
+1. NaN/Inf landmark 仅跳过对应点与连接线，其余有效点继续渲染和序列化；
+2. PTS 回退必须与已存在的时间原点连续，或在混合 PTS 时稳定失败，不能产生隐式倒退；
+3. 失败后的 `.partial` 产物必须有安全清理/恢复路径；
+4. `duration_ms` 和端到端吞吐指标必须如实命名；
+5. 为上述边界增加合成自动测试。
 
-这些问题不在 Phase A 中顺手修补；它们用于阻止把尚未验证的基础设施误提交为完成需求。
+这些是 Phase A 证据质量要求，不是绕过 Golden Set 或书面 `GO` 的理由。
+
+## 10. 与 Phase B 的边界
+
+现有平台代码可能已经含有 AIJob、Worker、候选回传或候选 Overlay 的实现草稿，但它们不属于本 PoC
+运行链路，也不构成启用授权。书面 `GO` 后的输入准入、profile、结果、Outbox、存储、人工审核与验收
+规范统一见 [Ego Hand Pose Candidate Phase B 技术设计](./hand-pose-candidate-phase-b.md)。
