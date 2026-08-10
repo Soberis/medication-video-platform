@@ -125,7 +125,12 @@ $requiredFiles = @(
     'workers/export-worker/src/medication_export_worker/__main__.py',
     'workers/export-worker/src/medication_export_worker/processor.py',
     'workers/export-worker/src/medication_export_worker/package_builder.py',
+    'tools/hand-pose-poc/pyproject.toml',
+    'tools/hand-pose-poc/uv.lock',
+    'tools/hand-pose-poc/README.md',
+    'tools/hand-pose-poc/src/hand_pose_poc/cli.py',
     'docs/requirements/README.md',
+    'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md',
     'docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md',
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md',
     'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md',
@@ -538,10 +543,10 @@ else {
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/](workers|plugins)[\\/]' }
+    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/]hand-pose-poc)[\\/]' }
 
 if ($pythonProjects.Count -eq 0) {
-    Write-Host '[DEFER] Python gates: Worker and Plugin projects are activated in later delivery stages' -ForegroundColor Yellow
+    Write-Host '[DEFER] Python gates: active Python projects are activated in later delivery stages' -ForegroundColor Yellow
 }
 else {
     foreach ($project in $pythonProjects) {

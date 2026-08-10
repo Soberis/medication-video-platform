@@ -84,6 +84,9 @@ temp/
 *.pth
 *.safetensors
 *.bin
+hand_pose_overlay.mp4*
+hand_landmarks.jsonl*
+run_summary.json*
 
 # Generated exports and datasets
 datasets/

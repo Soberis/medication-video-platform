@@ -8,6 +8,7 @@
 | --- | --- |
 | [配药平台技术设计](./配药平台技术设计.md) | 总体范围、技术选型、模块边界和实施顺序 |
 | [需求追踪矩阵](./requirements-traceability.md) | FR/NFR 到模块、契约、表和验收证据 |
+| [Ego Hand Pose PoC](./hand-pose-poc.md) | Phase A 本地推理、PTS、Overlay、JSONL 和效果评估边界 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |

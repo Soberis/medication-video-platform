@@ -1,10 +1,10 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md`
-> 继承需求基线：V1.10、V1.9、V1.8、V1.7、V1.6、V1.5、V1.4、V1.3、V1.2 与 `docs/requirements/baselines/V1.1.13/配药视频数据管理平台需求文档_V1.1.13.md`
+> 当前需求基线：`docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md`
+> 继承需求基线：V1.12、V1.11 及其历史继承基线
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
-> 最后更新：2026-08-09
+> 最后更新：2026-08-10
 
 ## 1. 目的
 
@@ -110,7 +110,7 @@ FR-025 当前为 `DEFERRED`：历史 V19～V21 表与约束保留以保证迁移
 
 ### 3.4 V1.2～V1.11 新增与细化需求
 
-V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁；V1.10 将 P0 收敛为主 Step 训练包并后置 Object/COCO；V1.11 将 P0 标注复核、冻结和导出改为受限单管理员审批，并要求同人决定记录 `SELF_ADMIN_APPROVAL`。按纵向切片实现时同步更新 OpenAPI、迁移、测试和本矩阵状态，不预建空接口。
+V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确内部平台账号、边端自动上传和账号管理；V1.4 明确直接播放、人工质量判断先于标注、机器只生成候选；V1.5 将专门隐私和隔离能力移出 P0；V1.6 明确项目改名/归档和视频软删除不触发物理销毁；V1.7 明确上传完整性通过后即可人工播放，媒体技术检测不是播放审批；V1.8 冻结桌面视口和宽屏布局验收范围；V1.9 将继承条款中的 Vue 质量门禁替换为 React 质量门禁；V1.10 将 P0 收敛为主 Step 训练包并后置 Object/COCO；V1.11 将 P0 标注复核、冻结和导出改为受限单管理员审批，并要求同人决定记录 `SELF_ADMIN_APPROVAL`；V1.12 新增 Ego 双手二维姿态候选；V1.13 把交付顺序收敛为先完成隔离 PoC 和 Golden Set 评估，再决定是否继续平台接入。按纵向切片实现时同步更新需求、设计、测试和本矩阵状态，不预建空能力。
 
 | 需求 | 优先级 | 领域模块 | 计划契约面 | 主要持久化 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -123,12 +123,25 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确
 | FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放已完成上传完整性校验、未删除的 MP4；媒体检测不阻断人工查看；短期 URL 不落库；状态和错误清楚 | PI |
 | FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | I |
 | FR-041 机器候选标注边界 | P1 | `aicandidate`、`annotationreview` | candidate annotation API/event | candidate_annotation、annotation_revision | 机器结果不能覆盖正式标签；人工确认和独立复核后才可能入集 | D1 |
+| FR-042 Ego 手部姿态候选标注 | P1 | `aicandidate`、`annotationreview` | hand-pose AI job/result；candidate review API | ai_job、ai_job_attempt、candidate_annotation、annotation_revision | 固定输入/模型/采样事实；最多双手、21 个二维关键点；人工确认后才形成正式 revision | PI |
+| FR-042A Ego 手部姿态本地 PoC | P1 | `tools/hand-pose-poc` | 本地 CLI；Overlay MP4；逐帧 JSONL；summary | 无平台持久化 | PTS 严格递增、RGB、0/1/2 手、21 点、骨架、模型摘要和质量门禁；真实 Ego 效果待 Golden Set | PI |
 
 “上传后可播放”由 FR-007 与 V1.4 FR-039 共同细化；“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
 FR-039 当前 `PI` 证据和边界：OpenAPI、`ClipAssetPlaybackContractTests`、React API/页面测试已覆盖 ADMIN/MEMBER 项目成员、媒体状态、软删除、MP4、短期 `DATA_REVIEW` URL、no-store 和 URL 不进入审计。Range/seek 浏览器矩阵和 UAT 尚未完成。
 
 FR-040 当前 `I` 证据和边界：Flyway V27、OpenAPI、`QualityReviewContractTests` 和 React API/页面测试已覆盖项目隔离、已入库/未删除守卫、固定结论与原因、版本并发保护、相同结论幂等和追加式审计。Flyway V28、`AnnotationTaskContractTests` 和 Web 任务入口进一步验证只有 `QUALIFIED` 资产可创建标注任务。
+
+FR-042 当前 `PI`：Flyway V51、`ai-hand-pose-job.v1`、OpenAPI 与 `HandPoseJobContractTests` 已覆盖
+ACTIVE 项目管理员、已完成媒体处理的视频、固定离线模型 SHA-256 与 10 FPS profile、幂等、首个
+attempt、Outbox 和追加式审计。V51 预留候选存储的不可变事实表，但此阶段尚无 MediaPipe Worker
+lease/result 回写、候选查询/叠加、关键点 Golden Set 或手部姿态正式 revision；不得把这部分基础设施
+误称为手部识别或标注流程完成。按 V1.13，该平台切片暂停扩张，只有 Phase A 评估得到人工 `GO`
+后才继续。
+
+FR-042A 当前 `PI`：`tools/hand-pose-poc` 已实现 PyAV PTS 解码、MediaPipe VIDEO/SRGB 调用边界、
+最多双手 21 点结果、截图风格 Overlay、逐帧 JSONL、summary 和纯合成自动测试。尚未使用获批 Ego
+Golden Set 和离线模型完成实际效果评估，因此不能达到 `UAT`，也不能声称已经达到参考截图效果。
 
 FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、不可变复核决定、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V49 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、受控冻结、v2 导出执行、失联恢复和管理员受控重放；2026-08-03 的 Windows 本地合成跨进程证据已记录在运行手册，但其双管理员事实只属于历史 V1.10 证据。当前仍不含 AnnotationProject、指南版本、抽样复核、WARNING 批准例外、更强泄漏组或历史 v1 的真实执行；对象框已按 V1.10 明确后置为 P1。
 

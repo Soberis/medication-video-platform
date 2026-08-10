@@ -192,7 +192,12 @@ required_files=(
     'workers/export-worker/src/medication_export_worker/__main__.py'
     'workers/export-worker/src/medication_export_worker/processor.py'
     'workers/export-worker/src/medication_export_worker/package_builder.py'
+    'tools/hand-pose-poc/pyproject.toml'
+    'tools/hand-pose-poc/uv.lock'
+    'tools/hand-pose-poc/README.md'
+    'tools/hand-pose-poc/src/hand_pose_poc/cli.py'
     'docs/requirements/README.md'
+    'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md'
     'docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md'
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md'
     'docs/requirements/baselines/V1.2/配药视频数据管理平台需求文档_V1.2.md'
@@ -524,7 +529,7 @@ else
 fi
 
 python_projects=()
-for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins"; do
+for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/hand-pose-poc"; do
     [[ -d "$python_search_root" ]] || continue
     while IFS= read -r -d '' python_project; do
         python_projects[${#python_projects[@]}]="$python_project"
@@ -544,7 +549,7 @@ for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins"; do
 done
 
 if ((${#python_projects[@]} == 0)); then
-    echo '[DEFER] Python gates: Worker and Plugin projects are activated in later delivery stages'
+    echo '[DEFER] Python gates: active Python projects are activated in later delivery stages'
 else
     for python_project in "${python_projects[@]}"; do
         project_dir="$(dirname "$python_project")"
