@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Final
 
 import numpy as np
@@ -26,13 +27,16 @@ def render_overlay(
 
     for hand in hands:
         color = _COLORS.get(hand.handedness, _COLORS["Unknown"])
-        points = tuple(
-            (normalized_to_pixel(point.x, width), normalized_to_pixel(point.y, height))
-            for point in hand.landmarks
-        )
+        points = tuple(_point_or_none(point.x, point.y, width, height) for point in hand.landmarks)
         for start, end in HAND_CONNECTIONS:
-            draw.line((points[start], points[end]), fill=color, width=line_width)
-        for x, y in points:
+            start_point = points[start]
+            end_point = points[end]
+            if start_point is not None and end_point is not None:
+                draw.line((start_point, end_point), fill=color, width=line_width)
+        for point in points:
+            if point is None:
+                continue
+            x, y = point
             draw.ellipse(
                 (x - radius, y - radius, x + radius, y + radius), fill=color, outline=(0, 0, 0)
             )
@@ -44,3 +48,9 @@ def render_overlay(
         draw.text((label_x, label_y), label, fill=color)
 
     return np.asarray(image, dtype=np.uint8)
+
+
+def _point_or_none(x: float, y: float, width: int, height: int) -> tuple[int, int] | None:
+    if not math.isfinite(x) or not math.isfinite(y):
+        return None
+    return normalized_to_pixel(x, width), normalized_to_pixel(y, height)

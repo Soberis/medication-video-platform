@@ -78,7 +78,10 @@ export function PlaybackCard({
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
   const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
   const activeCandidates = useMemo(
-    () => candidateOverlay.filter((candidate) => Math.abs(candidate.frame_timestamp_ms - playbackTimeMs) <= 120),
+    () =>
+      candidateOverlay.filter(
+        (candidate) => Math.abs(candidate.frame_timestamp_ms - playbackTimeMs) <= 120,
+      ),
     [candidateOverlay, playbackTimeMs],
   )
 

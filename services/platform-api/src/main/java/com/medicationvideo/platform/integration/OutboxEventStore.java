@@ -57,12 +57,12 @@ class OutboxEventStore {
 				UPDATE outbox_event
 				SET published_at = ?,
 				    payload_json = CASE
-				        WHEN schema_version IN ('media-probe-job.v1', 'dataset-export-job.v1')
+					    WHEN schema_version IN ('media-probe-job.v1', 'dataset-export-job.v1', 'ai-hand-pose-job.v1')
 				        THEN payload_json - 'lease_token'
 				        ELSE payload_json
 				    END,
 				    payload_redacted_at = CASE
-				        WHEN schema_version IN ('media-probe-job.v1', 'dataset-export-job.v1') THEN ?
+					WHEN schema_version IN ('media-probe-job.v1', 'dataset-export-job.v1', 'ai-hand-pose-job.v1') THEN ?
 				        ELSE payload_redacted_at
 				    END,
 				    claim_token = NULL,

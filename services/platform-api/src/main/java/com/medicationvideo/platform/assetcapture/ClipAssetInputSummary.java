@@ -12,5 +12,5 @@ import java.util.UUID;
  * declaration.
  */
 public record ClipAssetInputSummary(UUID clipAssetId, UUID projectId, String contentType, long inputSizeBytes,
-		String inputDigest, ClipAssetStatus status, Instant createdAt, Instant updatedAt) {
+		String inputDigest, ClipAssetStatus status, String cameraRole, Instant createdAt, Instant updatedAt) {
 }

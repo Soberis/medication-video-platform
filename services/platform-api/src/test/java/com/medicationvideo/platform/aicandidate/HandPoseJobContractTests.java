@@ -29,16 +29,17 @@ class HandPoseJobContractTests {
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM candidate_annotation");
 		this.jdbcTemplate.update("DELETE FROM ai_job_attempt");
+		this.jdbcTemplate.update("DELETE FROM ai_job_idempotency_receipt");
 		this.jdbcTemplate.update("DELETE FROM ai_job");
 		this.jdbcTemplate.update("DELETE FROM outbox_event WHERE aggregate_type = 'AiJob'");
 	}
 
 	@Test
 	void migrationCreatesCandidateOnlyTables() {
-		assertEquals(3, this.jdbcTemplate.queryForObject("""
+		assertEquals(4, this.jdbcTemplate.queryForObject("""
 				SELECT count(*) FROM information_schema.tables
 				WHERE table_schema = 'public'
-				 AND table_name IN ('ai_job', 'ai_job_attempt', 'candidate_annotation')
+				 AND table_name IN ('ai_job', 'ai_job_attempt', 'candidate_annotation', 'ai_job_idempotency_receipt')
 				""", Integer.class));
 	}
 

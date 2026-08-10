@@ -18,7 +18,8 @@ record AiHandPoseResultRequest(@NotBlank @Pattern(regexp = "^ai-hand-pose-result
 		@NotNull UUID messageId, @NotNull UUID jobId, @NotNull @Min(1) Integer attempt,
 		@NotBlank @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
 		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String inputSha256,
-		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String modelSha256, @NotNull Instant startedAt,
+		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String modelSha256,
+		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String profileSha256, @NotNull Instant startedAt,
 		@NotNull Instant completedAt, @NotNull @Size(max = 20000) List<@Valid AiHandPoseCandidatePayload> candidates) {
 
 	@AssertTrue(message = "completed_at must not precede started_at.")

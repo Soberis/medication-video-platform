@@ -7,7 +7,7 @@
   "required": [
     "schema_version", "message_id", "job_id", "attempt", "lease_token", "project_id", "clip_asset_id",
     "input_sha256", "input_size_bytes", "content_type", "algorithm_key", "algorithm_version",
-    "model_sha256", "sampling_fps", "requested_at"
+    "model_sha256", "sampling_fps", "profile_sha256", "requested_at"
   ],
   "properties": {
     "schema_version": { "const": "ai-hand-pose-job.v1" },
@@ -24,6 +24,7 @@
     "algorithm_version": { "const": "v1" },
     "model_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "sampling_fps": { "type": "integer", "minimum": 1, "maximum": 15 },
+    "profile_sha256": { "const": "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626" },
     "requested_at": { "type": "string", "format": "date-time" }
   }
 }

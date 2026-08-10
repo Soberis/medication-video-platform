@@ -13,11 +13,26 @@ final class HandPoseProfile {
 
 	static final int SAMPLING_FPS = 10;
 
-	private HandPoseProfile() {
-	}
+	static final int MAX_HANDS = 2;
 
-	static String fingerprint(String modelSha256) {
-		return sha256(String.join("\n", ALGORITHM_KEY, ALGORITHM_VERSION, modelSha256, Integer.toString(SAMPLING_FPS)));
+	static final String MIN_HAND_DETECTION_CONFIDENCE = "0.5";
+
+	static final String MIN_HAND_PRESENCE_CONFIDENCE = "0.5";
+
+	static final String MIN_TRACKING_CONFIDENCE = "0.5";
+
+	static final String HANDEDNESS_POLICY = "MEDIAPIPE_REPORTED";
+
+	static final String TIMESTAMP_POLICY = "CONTAINER_PTS_STRICTLY_INCREASING";
+
+	static final String BOUNDING_BOX_RECIPE = "FINITE_NORMALIZED_LANDMARK_BOUNDS_V1";
+
+	static final String PROFILE_SHA256 = sha256(
+			String.join("\n", ALGORITHM_KEY, ALGORITHM_VERSION, Integer.toString(SAMPLING_FPS),
+					Integer.toString(MAX_HANDS), MIN_HAND_DETECTION_CONFIDENCE, MIN_HAND_PRESENCE_CONFIDENCE,
+					MIN_TRACKING_CONFIDENCE, HANDEDNESS_POLICY, TIMESTAMP_POLICY, BOUNDING_BOX_RECIPE));
+
+	private HandPoseProfile() {
 	}
 
 	static String sha256(String value) {

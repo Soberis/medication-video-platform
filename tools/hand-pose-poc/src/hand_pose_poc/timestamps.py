@@ -23,6 +23,7 @@ class TimestampNormalizer:
         self._allow_fallback = allow_fallback
         self._origin_ms: int | None = None
         self._previous_ms: int | None = None
+        self._timeline_source: str | None = None
         self.fallback_frames = 0
 
     def next(self, frame_index: int, pts: int | None, time_base: Fraction | None) -> VideoTimestamp:
@@ -37,6 +38,14 @@ class TimestampNormalizer:
             raise TimestampError(
                 "A decoded frame has no container PTS. Re-run with "
                 "--allow-fps-timestamp-fallback only after reviewing the source video."
+            )
+
+        if self._timeline_source is None:
+            self._timeline_source = source
+        elif source != self._timeline_source:
+            raise TimestampError(
+                "A video timestamp timeline cannot mix container PTS with nominal-FPS fallback; "
+                f"frame={frame_index}, active={self._timeline_source}, received={source}."
             )
 
         if self._origin_ms is None:

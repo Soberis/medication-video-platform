@@ -61,7 +61,8 @@ class AiJobExecutionService {
 				now);
 		return new AiWorkerLeaseResponse(job.getAiJobId(), attempt.getAttempt(), grant.inputUrl(), grant.expiresAt(),
 				attempt.getLeaseUntil(), this.heartbeatInterval.toSeconds(), job.getInputSha256(),
-				job.getInputSizeBytes(), job.getContentType(), job.getModelSha256(), job.getSamplingFps());
+				job.getInputSizeBytes(), job.getContentType(), job.getModelSha256(), job.getSamplingFps(),
+				job.getProfileSha256());
 	}
 
 	@Transactional
@@ -87,7 +88,8 @@ class AiJobExecutionService {
 		}
 		if (!constantTimeEquals(leaseToken, request.leaseToken())
 				|| !constantTimeEquals(job.getInputSha256(), request.inputSha256())
-				|| !constantTimeEquals(job.getModelSha256(), request.modelSha256())) {
+				|| !constantTimeEquals(job.getModelSha256(), request.modelSha256())
+				|| !constantTimeEquals(job.getProfileSha256(), request.profileSha256())) {
 			throw new HandPoseJobException("AI_HAND_POSE_RESULT_DIGEST_MISMATCH",
 					"The result does not match the frozen AI job inputs.", 409);
 		}

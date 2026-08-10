@@ -1,8 +1,8 @@
 # 需求追踪矩阵
 
 > 文档状态：P0 设计基线（评审稿）  
-> 当前需求基线：`docs/requirements/baselines/V1.15/配药视频数据管理平台需求文档_V1.15.md`
-> 继承需求基线：V1.14、V1.13、V1.12、V1.11 及其历史继承基线
+> 当前需求基线：`docs/requirements/baselines/V1.16/配药视频数据管理平台需求文档_V1.16.md`
+> 继承需求基线：V1.15、V1.14、V1.13、V1.12、V1.11 及其历史继承基线
 > 总体设计：`docs/architecture/配药平台技术设计.md`  
 > 最后更新：2026-08-10
 
@@ -123,9 +123,9 @@ V1.2 增加项目/文件夹、本地上传、删除和两级角色；V1.3 明确
 | FR-039 项目内视频直接播放审核 | P0 | `assetcapture`、Web、`governance` | playback grants | clip_asset、audit_event | ACTIVE 项目成员显式播放已完成上传完整性校验、未删除的 MP4；媒体检测不阻断人工查看；短期 URL 不落库；状态和错误清楚 | PI |
 | FR-040 人工训练数据质量判断 | P0 | `qualitycleaning`、Web、`governance` | quality review commands/query | quality_review、audit_event | QUALIFIED/REJECTED/NEEDS_REVIEW 与稳定原因；仅 QUALIFIED 可进入标注 | I |
 | FR-041 机器候选标注边界 | P1 | `aicandidate`、`annotationreview` | candidate annotation API/event | candidate_annotation、annotation_revision | 机器结果不能覆盖正式标签；人工确认和独立复核后才可能入集 | D1 |
-| FR-042 Ego 手部姿态候选标注 | P1 | `aicandidate`、`annotationreview` | hand-pose AI job/result；candidate review API | ai_job、ai_job_attempt、candidate_annotation、annotation_revision | 固定输入/模型/采样事实；最多双手、21 个二维关键点；人工确认后才形成正式 revision | PI |
-| FR-042A Ego 手部姿态本地 PoC | P1 | `tools/hand-pose-poc` | 本地 CLI；Overlay MP4；逐帧 JSONL；summary | 无平台持久化 | PTS 严格递增、RGB、0/1/2 手、21 点、骨架、模型摘要和质量门禁；真实 Ego 效果待 Golden Set | PI |
-| FR-042B Ego 姿态候选标注闭环 | P1 | `aicandidate`、`annotationreview` | candidate result/review API | candidate_annotation、annotation_revision、audit_event | 候选含输入、模型、几何与参数事实；人工接受/修改/拒绝后才进入正式修订 | D1 |
+| FR-042 舱内多机位手部姿态候选标注 | P1 | `aicandidate`、`annotationreview` | hand-pose AI job/result；candidate review API | ai_job、ai_job_attempt、candidate_annotation、annotation_revision | 固定输入/模型/采样事实；每路视频最多双手、21 个二维关键点；人工确认后才形成正式 revision | PI |
+| FR-042A 舱内多机位手部姿态本地 PoC | P1 | `tools/hand-pose-poc` | 本地 CLI；Overlay MP4；逐帧 JSONL；summary | 无平台持久化 | PTS 严格递增、RGB、0/1/2 手、21 点、骨架、模型摘要和质量门禁；真实舱内相机效果待 Golden Set | PI |
+| FR-042B 舱内多机位姿态候选标注闭环 | P1 | `aicandidate`、`annotationreview` | candidate result/review API | candidate_annotation、annotation_revision、audit_event | 候选含输入、模型、几何与参数事实；人工接受/修改/拒绝后才进入正式修订 | D1 |
 
 “上传后可播放”由 FR-007 与 V1.4 FR-039 共同细化；“标定数据功能”按业务意图归一为既有 FR-011～FR-018 的视频标注闭环。用户界面可以使用“数据标注”文案，领域/API 始终使用 annotation；相机内外参 calibration 仍不属于该新增需求。
 
@@ -143,9 +143,11 @@ FR-042A 当前 `PI`：`tools/hand-pose-poc` 已实现 PyAV PTS 解码、MediaPip
 最多双手 21 点结果、截图风格 Overlay、逐帧 JSONL、summary 和纯合成自动测试。尚未使用获批 Ego
 Golden Set 和离线模型完成实际效果评估，因此不能达到 `UAT`，也不能声称已经达到参考截图效果。
 
-FR-042B 当前 `D1`：V1.15 已冻结“Ego 姿态候选标注”只包含手部关键点候选和人工审核，不包含自动
-动作/Step 或正式数据集放行。详细的输入准入、profile、帧级结果、存储、Outbox、Worker、人工审核和
-验收门禁见 `hand-pose-candidate-phase-b.md`；在书面 `GO` 前不得继续以现有实现扩大功能面。
+FR-042B 当前 `D1`：V1.15 已冻结“手部姿态候选标注”只包含手部关键点候选和人工审核，不包含自动
+动作/Step 或正式数据集放行。V1.16 增加自动媒体技术检查、单一分析入口、持久化意图和可选项目级
+自动策略的目标设计；输入改为获批舱内固定/多机位相机，由 CaptureSession 按动态数量 N 路批量编排、逐路独立产出和重试，当前代码仍未取得 Phase A `GO`，故不得启用。详细的输入准入、profile、帧级结果、
+存储、Outbox、Worker、人工审核和验收门禁见 `hand-pose-candidate-phase-b.md`，编排和 Overlay 见
+`hand-pose-analysis-orchestration.md`。
 
 FR-011/FR-012/FR-015/FR-016/FR-017/FR-018 当前 `PI`：Flyway V28/V30～V34、OpenAPI、post-clean profile、后端契约测试和 React 测试已覆盖任务创建、不可变主 Step Schema、修订提交、不可变复核决定、返工与同步 post-clean。任务列表在一次 `REPEATABLE_READ` 中返回与当前身份可见范围完全一致的待提交、待修改、待复核和已完成计数；四类互斥且总和等于可见任务数，不写投影表或审计。Flyway V37/V39～V49 进一步覆盖 CaptureSession 级准入、不可变 DatasetVersion 证据、pilot/holdout、构建配置、确定性快照、技术校验、受控冻结、v2 导出执行、失联恢复和管理员受控重放；2026-08-03 的 Windows 本地合成跨进程证据已记录在运行手册，但其双管理员事实只属于历史 V1.10 证据。当前仍不含 AnnotationProject、指南版本、抽样复核、WARNING 批准例外、更强泄漏组或历史 v1 的真实执行；对象框已按 V1.10 明确后置为 P1。
 

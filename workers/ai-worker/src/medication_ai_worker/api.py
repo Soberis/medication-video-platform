@@ -31,6 +31,7 @@ class LeaseGrant:
     input_sha256: str
     input_size_bytes: int
     model_sha256: str
+    profile_sha256: str
     lease_until: datetime
     heartbeat_interval_seconds: float
 
@@ -119,6 +120,7 @@ class CoreApiClient:
                 str(body["input_sha256"]),
                 input_size,
                 str(body["model_sha256"]),
+                str(body["profile_sha256"]),
                 _timestamp(body, "lease_until"),
                 _positive_number(body, "heartbeat_interval_seconds"),
             )
@@ -128,6 +130,7 @@ class CoreApiClient:
             grant.input_sha256 != job.input_sha256
             or grant.input_size_bytes != job.input_size_bytes
             or grant.model_sha256 != job.model_sha256
+            or grant.profile_sha256 != job.profile_sha256
         ):
             raise StaleError("Core API lease grant does not match frozen broker inputs")
         return grant
@@ -173,6 +176,7 @@ class CoreApiClient:
             "lease_token": job.lease_token,
             "input_sha256": job.input_sha256,
             "model_sha256": job.model_sha256,
+            "profile_sha256": job.profile_sha256,
             "started_at": started_at.isoformat().replace("+00:00", "Z"),
             "completed_at": datetime.now(started_at.tzinfo).isoformat().replace("+00:00", "Z"),
             "candidates": candidates,

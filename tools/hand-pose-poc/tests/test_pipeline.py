@@ -60,7 +60,7 @@ def test_pipeline_writes_overlay_and_one_json_record_per_decoded_frame(tmp_path:
     assert len(records[1]["hands"][0]["landmarks"]) == 21
     assert video.width == 96
     assert video.height == 64
-    assert video.duration_ms == 200
+    assert video.last_frame_timestamp_ms == 200
     assert video.decoded_frames == 3
     assert video.audio_preserved is False
     assert statistics.decoded_frames == 3

@@ -17,6 +17,12 @@ from .timestamps import SampleGate, TimestampNormalizer
 
 LOGGER = logging.getLogger(__name__)
 
+PARTIAL_OUTPUT_FILENAMES = (
+    "hand_pose_overlay.mp4.partial",
+    "hand_landmarks.jsonl.partial",
+    "run_summary.json.partial",
+)
+
 
 class HandDetector(Protocol):
     def detect(
@@ -48,7 +54,7 @@ class VideoFacts:
     height: int
     nominal_fps: float
     codec: str
-    duration_ms: int
+    last_frame_timestamp_ms: int
     decoded_frames: int
     audio_preserved: bool = False
 

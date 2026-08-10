@@ -72,6 +72,31 @@ class OutboxEventStoreContractTests {
 	}
 
 	@Test
+	void scrubsAiLeaseCapabilityOnlyAfterPublisherConfirmation() {
+		var now = Instant.now();
+		var outboxId = UUID.randomUUID();
+		this.jdbcTemplate.update("""
+				INSERT INTO outbox_event (
+				    outbox_event_id, aggregate_type, aggregate_id, event_type, schema_version,
+				    exchange_name, routing_key, payload_json, occurred_at, available_at)
+				VALUES (?, 'AiJob', ?, 'AiHandPoseJobRequestedV1', 'ai-hand-pose-job.v1',
+				        'platform.ai.v1', 'ai.hand-pose.requested.v1', CAST(? AS JSONB), ?, ?)
+				""", outboxId, UUID.randomUUID(),
+				"{\"schema_version\":\"ai-hand-pose-job.v1\",\"lease_token\":\"secret\"}", Timestamp.from(now),
+				Timestamp.from(now));
+
+		var claimed = this.store.claim(1, now.plusSeconds(1), Duration.ofSeconds(30)).getFirst();
+		this.store.markPublished(outboxId, claimed.claimToken(), now.plusSeconds(2));
+
+		assertEquals(1, this.jdbcTemplate.queryForObject("""
+				SELECT count(*) FROM outbox_event
+				WHERE outbox_event_id = ?
+				  AND NOT jsonb_exists(payload_json, 'lease_token')
+				  AND payload_redacted_at IS NOT NULL
+				""", Integer.class, outboxId));
+	}
+
+	@Test
 	void doesNotClaimAnEventBeforeItsAvailableAtDeadline() {
 		var now = Instant.now();
 		var availableAt = now.plusSeconds(5);

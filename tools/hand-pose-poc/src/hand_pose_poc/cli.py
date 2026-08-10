@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .digest import sha256_file
 from .landmarker import LandmarkerConfig, MediaPipeHandDetector
-from .pipeline import PipelineConfig, process_video, statistics_dict
+from .pipeline import PARTIAL_OUTPUT_FILENAMES, PipelineConfig, process_video, statistics_dict
 
 LOGGER = logging.getLogger("hand-pose-poc")
 
@@ -38,8 +38,7 @@ def _run(args: argparse.Namespace) -> int:
         raise ValueError("Phase A accepts MP4 input only.")
     if not model_path.is_file():
         raise ValueError("The offline Hand Landmarker model does not exist.")
-    if output_dir.exists() and any(output_dir.iterdir()):
-        raise ValueError("The output directory must be empty to avoid overwriting evidence.")
+    _prepare_output_dir(output_dir)
 
     landmarker_config = LandmarkerConfig(
         num_hands=args.num_hands,
@@ -85,7 +84,7 @@ def _run(args: argparse.Namespace) -> int:
         },
         "performance": {
             "processing_seconds": round(elapsed_seconds, 6),
-            "average_inference_frames_per_second": round(throughput, 6),
+            "end_to_end_inference_frame_throughput_fps": round(throughput, 6),
         },
     }
     summary_partial = output_dir / "run_summary.json.partial"
@@ -99,6 +98,16 @@ def _run(args: argparse.Namespace) -> int:
         statistics.inference_frames,
     )
     return 0
+
+
+def _prepare_output_dir(output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for filename in PARTIAL_OUTPUT_FILENAMES:
+        partial = output_dir / filename
+        if partial.is_file():
+            partial.unlink()
+    if any(output_dir.iterdir()):
+        raise ValueError("The output directory must be empty to avoid overwriting evidence.")
 
 
 def _parser() -> argparse.ArgumentParser:

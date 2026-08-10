@@ -1,11 +1,38 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from pathlib import Path
 from typing import Any
 
 import av
 import mediapipe as mp
+
+ALGORITHM_KEY = "MEDIAPIPE_HAND_LANDMARKER"
+ALGORITHM_VERSION = "v1"
+MAX_HANDS = 2
+MIN_HAND_DETECTION_CONFIDENCE = 0.5
+MIN_HAND_PRESENCE_CONFIDENCE = 0.5
+MIN_TRACKING_CONFIDENCE = 0.5
+HANDEDNESS_POLICY = "MEDIAPIPE_REPORTED"
+TIMESTAMP_POLICY = "CONTAINER_PTS_STRICTLY_INCREASING"
+BOUNDING_BOX_RECIPE = "FINITE_NORMALIZED_LANDMARK_BOUNDS_V1"
+PROFILE_SHA256 = hashlib.sha256(
+    "\n".join(
+        (
+            ALGORITHM_KEY,
+            ALGORITHM_VERSION,
+            "10",
+            str(MAX_HANDS),
+            str(MIN_HAND_DETECTION_CONFIDENCE),
+            str(MIN_HAND_PRESENCE_CONFIDENCE),
+            str(MIN_TRACKING_CONFIDENCE),
+            HANDEDNESS_POLICY,
+            TIMESTAMP_POLICY,
+            BOUNDING_BOX_RECIPE,
+        )
+    ).encode()
+).hexdigest()
 
 
 def candidates_from_video(
@@ -14,10 +41,10 @@ def candidates_from_video(
     options = mp.tasks.vision.HandLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
         running_mode=mp.tasks.vision.RunningMode.VIDEO,
-        num_hands=2,
-        min_hand_detection_confidence=0.5,
-        min_hand_presence_confidence=0.5,
-        min_tracking_confidence=0.5,
+        num_hands=MAX_HANDS,
+        min_hand_detection_confidence=MIN_HAND_DETECTION_CONFIDENCE,
+        min_hand_presence_confidence=MIN_HAND_PRESENCE_CONFIDENCE,
+        min_tracking_confidence=MIN_TRACKING_CONFIDENCE,
     )
     candidates: list[dict[str, object]] = []
     detector = mp.tasks.vision.HandLandmarker.create_from_options(options)
@@ -92,8 +119,11 @@ def _detect_all(
 
 def _timestamp_ms(frame: Any, stream: Any, previous: int) -> int:
     if frame.pts is None or stream.time_base is None:
-        return previous + 1
-    return max(previous + 1, round(float(frame.pts * stream.time_base) * 1000))
+        raise ValueError("Video frames must provide container presentation timestamps")
+    timestamp = round(float(frame.pts * stream.time_base) * 1000)
+    if timestamp <= previous:
+        raise ValueError("Video presentation timestamps must be strictly increasing")
+    return timestamp
 
 
 def _handedness(value: str | None) -> str:

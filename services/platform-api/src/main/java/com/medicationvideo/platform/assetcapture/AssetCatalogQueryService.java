@@ -330,8 +330,14 @@ public class AssetCatalogQueryService {
 			.filter(existing -> !existing.isDeleted())
 			.orElseThrow(() -> new AssetCatalogQueryException("CLIP_ASSET_NOT_FOUND",
 					"The clip asset was not found in the current project."));
+		var cameraRole = this.streamRepository.findByClipAssetId(clipAssetId)
+			.map(stream -> this.snapshotMemberRepository.findById(stream.getCameraSetSnapshotMemberId())
+				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching snapshot member."))
+				.getCameraRole())
+			.orElse(null);
 		return new ClipAssetInputSummary(asset.getClipAssetId(), asset.getProjectId(), asset.getContentType(),
-				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), asset.getCreatedAt(), asset.getUpdatedAt());
+				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), cameraRole, asset.getCreatedAt(),
+				asset.getUpdatedAt());
 	}
 
 	private CaptureSessionListItemResponse mapCaptureSession(ResultSet resultSet, int rowNumber) throws SQLException {

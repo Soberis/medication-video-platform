@@ -98,7 +98,9 @@ export default function AssetDetailView() {
   const [createdAnnotationTask, setCreatedAnnotationTask] = useState<AnnotationTask | null>(null)
   const [isCreatingAnnotationTask, setIsCreatingAnnotationTask] = useState(false)
   const [handPoseJob, setHandPoseJob] = useState<HandPoseJob | null>(null)
-  const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(null)
+  const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(
+    null,
+  )
   const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
@@ -313,7 +315,15 @@ export default function AssetDetailView() {
     } finally {
       if (detailRequest.current === request) detailRequest.current = null
     }
-  }, [assetId, loadHandPoseCandidates, loadMediaReport, loadQualityReview, projectId, resetMediaReport, resetPlayback])
+  }, [
+    assetId,
+    loadHandPoseCandidates,
+    loadMediaReport,
+    loadQualityReview,
+    projectId,
+    resetMediaReport,
+    resetPlayback,
+  ])
   const loadProjectRole = useCallback(async () => {
     roleRequest.current?.abort()
     const request = new AbortController()
@@ -726,10 +736,21 @@ export default function AssetDetailView() {
                   <svg
                     aria-label="候选手部关键点叠加预览"
                     viewBox="0 0 1 1"
-                    style={{ display: 'block', width: 'min(100%, 360px)', aspectRatio: '1 / 1', background: '#101828' }}
+                    style={{
+                      display: 'block',
+                      width: 'min(100%, 360px)',
+                      aspectRatio: '1 / 1',
+                      background: '#101828',
+                    }}
                   >
                     {handPoseCandidates.candidates[0].landmarks.map((landmark, index) => (
-                      <circle key={index} cx={landmark.x} cy={landmark.y} r="0.012" fill="#36cfc9" />
+                      <circle
+                        key={index}
+                        cx={landmark.x}
+                        cy={landmark.y}
+                        r="0.012"
+                        fill="#36cfc9"
+                      />
                     ))}
                   </svg>
                   <p className="app-eyebrow">

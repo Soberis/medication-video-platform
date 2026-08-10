@@ -9,7 +9,7 @@ from pathlib import Path
 from medication_ai_worker.api import CoreApiClient, PermanentError, RetryableError, StaleError
 from medication_ai_worker.config import Settings
 from medication_ai_worker.contracts import AiJob, ContractError
-from medication_ai_worker.landmarker import candidates_from_video
+from medication_ai_worker.landmarker import PROFILE_SHA256, candidates_from_video
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +33,9 @@ class Processor:
             return Disposition.REJECT
         if job.model_sha256 != self._settings.model_sha256:
             LOGGER.error("Rejected AI job with an unapproved model digest job_id=%s", job.job_id)
+            return Disposition.REJECT
+        if job.profile_sha256 != PROFILE_SHA256:
+            LOGGER.error("Rejected AI job with an unsupported profile job_id=%s", job.job_id)
             return Disposition.REJECT
         try:
             grant = self._client.acquire(job)

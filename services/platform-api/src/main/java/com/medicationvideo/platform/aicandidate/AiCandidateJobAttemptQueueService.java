@@ -29,7 +29,7 @@ class AiCandidateJobAttemptQueueService {
 		this.dispatchPort.enqueue(new AiHandPoseJobEnvelope("ai-hand-pose-job.v1", messageId, job.getAiJobId(), attempt,
 				capability.token(), job.getProjectId(), job.getClipAssetId(), job.getInputSha256(),
 				job.getInputSizeBytes(), job.getContentType(), job.getAlgorithmKey(), job.getAlgorithmVersion(),
-				job.getModelSha256(), job.getSamplingFps(), requestedAt), requestedAt);
+				job.getModelSha256(), job.getSamplingFps(), job.getProfileSha256(), requestedAt), requestedAt);
 	}
 
 }

@@ -6,5 +6,5 @@ import java.util.UUID;
 
 record AiWorkerLeaseResponse(UUID jobId, int attempt, URI inputUrl, Instant expiresAt, Instant leaseUntil,
 		long heartbeatIntervalSeconds, String inputSha256, long inputSizeBytes, String contentType, String modelSha256,
-		int samplingFps) {
+		int samplingFps, String profileSha256) {
 }

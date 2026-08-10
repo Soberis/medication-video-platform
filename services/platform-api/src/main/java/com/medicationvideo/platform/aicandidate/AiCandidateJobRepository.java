@@ -18,9 +18,9 @@ interface AiCandidateJobRepository extends JpaRepository<AiCandidateJob, UUID> {
 	@Query("SELECT job FROM AiCandidateJob job WHERE job.aiJobId = :aiJobId")
 	Optional<AiCandidateJob> findForUpdate(@Param("aiJobId") UUID aiJobId);
 
-	Optional<AiCandidateJob> findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFps(
+	Optional<AiCandidateJob> findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFpsAndProfileSha256(
 			UUID projectId, UUID clipAssetId, String inputSha256, String algorithmKey, String algorithmVersion,
-			String modelSha256, int samplingFps);
+			String modelSha256, int samplingFps, String profileSha256);
 
 	Optional<AiCandidateJob> findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(UUID projectId, UUID clipAssetId);
 

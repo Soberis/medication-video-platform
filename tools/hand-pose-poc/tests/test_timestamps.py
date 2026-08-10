@@ -37,6 +37,14 @@ def test_missing_pts_requires_explicit_fallback() -> None:
     assert normalizer.fallback_frames == 2
 
 
+def test_pts_and_fallback_cannot_mix_in_one_video_timeline() -> None:
+    normalizer = TimestampNormalizer(Fraction(25, 1), allow_fallback=True)
+    normalizer.next(0, 0, Fraction(1, 1000))
+
+    with pytest.raises(TimestampError, match="cannot mix"):
+        normalizer.next(1, None, None)
+
+
 def test_sample_gate_uses_timestamps_not_frame_modulo() -> None:
     gate = SampleGate(10)
     assert gate.should_infer(0)

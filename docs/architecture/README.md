@@ -10,6 +10,7 @@
 | [需求追踪矩阵](./requirements-traceability.md) | FR/NFR 到模块、契约、表和验收证据 |
 | [Ego Hand Pose PoC](./hand-pose-poc.md) | Phase A 本地推理、PTS、Overlay、JSONL 和效果评估边界 |
 | [Ego Hand Pose Candidate Phase B](./hand-pose-candidate-phase-b.md) | GO 后的 Ego 准入、冻结 profile、帧级结果、Worker、审核与验收门禁 |
+| [舱内多机位 Hand Pose Analysis 编排](./hand-pose-analysis-orchestration.md) | V1.16 自动媒体检查、单一分析入口、持久化意图、策略和 Skeleton Overlay 设计 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |

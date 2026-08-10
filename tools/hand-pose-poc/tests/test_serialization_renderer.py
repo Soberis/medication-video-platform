@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from hand_pose_poc.models import FrameObservation
@@ -42,3 +44,14 @@ def test_renderer_draws_skeleton_without_gui() -> None:
     assert rendered.shape == source.shape
     assert rendered.dtype == np.uint8
     assert np.count_nonzero(rendered) > 0
+
+
+def test_renderer_skips_non_finite_landmarks_without_failing() -> None:
+    source = np.zeros((200, 300, 3), dtype=np.uint8)
+    observation = hand()
+    invalid_landmark = replace(observation.landmarks[0], x=float("nan"))
+    invalid_hand = replace(observation, landmarks=(invalid_landmark, *observation.landmarks[1:]))
+
+    rendered = render_overlay(source, (invalid_hand,))
+
+    assert rendered.shape == source.shape

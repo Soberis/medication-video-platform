@@ -46,6 +46,9 @@ class AiCandidateJob {
 	@Column(name = "sampling_fps", nullable = false, updatable = false)
 	private int samplingFps;
 
+	@Column(name = "profile_sha256", nullable = false, length = 64, updatable = false)
+	private String profileSha256;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 32)
 	private AiCandidateJobStatus status;
@@ -85,6 +88,7 @@ class AiCandidateJob {
 		this.inputSizeBytes = inputSizeBytes;
 		this.contentType = contentType;
 		this.samplingFps = HandPoseProfile.SAMPLING_FPS;
+		this.profileSha256 = HandPoseProfile.PROFILE_SHA256;
 		this.status = AiCandidateJobStatus.QUEUED;
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
@@ -138,6 +142,10 @@ class AiCandidateJob {
 
 	int getSamplingFps() {
 		return this.samplingFps;
+	}
+
+	String getProfileSha256() {
+		return this.profileSha256;
 	}
 
 	AiCandidateJobStatus getStatus() {

@@ -24,6 +24,7 @@ FIELDS = frozenset(
         "algorithm_version",
         "model_sha256",
         "sampling_fps",
+        "profile_sha256",
         "requested_at",
     }
 )
@@ -44,6 +45,7 @@ class AiJob:
     content_type: str
     model_sha256: str
     sampling_fps: int
+    profile_sha256: str
 
     @classmethod
     def from_bytes(cls, body: bytes) -> AiJob:
@@ -69,6 +71,7 @@ class AiJob:
             content_type=_string(value, "content_type", CONTENT_TYPE),
             model_sha256=_string(value, "model_sha256", SHA256),
             sampling_fps=_sampling(value),
+            profile_sha256=_string(value, "profile_sha256", SHA256),
         )
 
 
