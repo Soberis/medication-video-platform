@@ -65,6 +65,7 @@ def _run(args: argparse.Namespace) -> int:
     summary = {
         "schema_version": "hand-pose-poc-summary.v1",
         "algorithm": "mediapipe-hand-landmarker",
+        "model_name": model_path.name,
         "model_sha256": model_sha256,
         "software": {
             "hand_pose_poc": importlib.metadata.version("hand-pose-poc"),

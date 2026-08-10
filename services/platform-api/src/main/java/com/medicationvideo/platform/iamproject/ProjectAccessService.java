@@ -26,6 +26,16 @@ public class ProjectAccessService {
 	}
 
 	@Transactional(propagation = Propagation.MANDATORY)
+	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
+		var project = this.projectRepository.findForUpdate(projectId)
+			.orElseThrow(ProjectAccessService::projectNotFound);
+		if (project.getStatus() != ProjectStatus.ACTIVE) {
+			throw projectNotFound();
+		}
+		return requireActiveMembership(projectId, actorId).getRole();
+	}
+
+	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireAdministrator(UUID projectId, String actorId) {
 		requireEnabledPlatformAdministrator();
 		var project = this.projectRepository.findForUpdate(projectId)

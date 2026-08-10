@@ -48,6 +48,8 @@ class VideoFacts:
     height: int
     nominal_fps: float
     codec: str
+    duration_ms: int
+    decoded_frames: int
     audio_preserved: bool = False
 
 
@@ -132,7 +134,14 @@ def process_video(
         codec = video_stream.codec_context.name or "unknown"
         overlay_partial.replace(overlay_path)
         jsonl_partial.replace(jsonl_path)
-        return VideoFacts(width, height, float(nominal_fps), codec), statistics
+        return VideoFacts(
+            width,
+            height,
+            float(nominal_fps),
+            codec,
+            statistics.last_timestamp_ms,
+            statistics.decoded_frames,
+        ), statistics
 
 
 def statistics_dict(statistics: RunStatistics) -> dict[str, Any]:

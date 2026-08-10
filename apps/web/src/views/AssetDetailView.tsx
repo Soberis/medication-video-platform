@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Tag } from 'antd'
+import { Alert, App as AntdApp, Button, Card, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -10,10 +10,12 @@ import {
   getClipAsset,
   getClipAssetMediaReport,
   recoverCurrentClipAssetMediaProbeDelivery,
+  requestHandPoseCandidates,
   requestClipAssetMediaProbe,
   type ClipAssetPlaybackGrant,
   type ClipAssetRead,
   type MediaReport,
+  type HandPoseJob,
 } from '@/api/catalog'
 import {
   assignClipAssetFolder,
@@ -93,6 +95,8 @@ export default function AssetDetailView() {
   const [selectedAnnotationAssignee, setSelectedAnnotationAssignee] = useState('')
   const [createdAnnotationTask, setCreatedAnnotationTask] = useState<AnnotationTask | null>(null)
   const [isCreatingAnnotationTask, setIsCreatingAnnotationTask] = useState(false)
+  const [handPoseJob, setHandPoseJob] = useState<HandPoseJob | null>(null)
+  const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
   const qualityRequest = useRef<AbortController | null>(null)
@@ -114,6 +118,8 @@ export default function AssetDetailView() {
     detail?.status === 'INGESTED' &&
     qualityReview?.decision === 'QUALIFIED' &&
     annotationAssignees.length > 0
+  const canRequestHandPose =
+    projectRole !== null && detail?.status === 'INGESTED' && handPoseJob === null
   const classificationChanged = selectedFolderId !== (detail?.folder_id ?? '')
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
@@ -252,6 +258,7 @@ export default function AssetDetailView() {
       setDetail(response)
       resetPlayback()
       setCreatedAnnotationTask(null)
+      setHandPoseJob(null)
       setSelectedFolderId(response.folder_id ?? '')
       setLoadState('success')
       if (response.status === 'INGESTED') {
@@ -535,6 +542,26 @@ export default function AssetDetailView() {
       setIsCreatingAnnotationTask(false)
     }
   }
+  async function requestHandPose() {
+    if (!canRequestHandPose || isRequestingHandPose) return
+    setIsRequestingHandPose(true)
+    setActionErrorCode('')
+    setActionErrorMessage('')
+    try {
+      const job = await requestHandPoseCandidates(projectId, assetId)
+      setHandPoseJob(job)
+      void message.success('手部姿态候选已排队。')
+    } catch (error) {
+      setActionErrorCode(
+        error instanceof CatalogApiError ? error.errorCode : 'HAND_POSE_REQUEST_FAILED',
+      )
+      setActionErrorMessage(
+        error instanceof CatalogApiError ? error.message : '手部姿态候选暂未提交，请稍后重试。',
+      )
+    } finally {
+      setIsRequestingHandPose(false)
+    }
+  }
   function handlePlaybackError() {
     if (!playbackGrant) return
     const expiresAt = new Date(playbackGrant.expires_at).getTime()
@@ -632,6 +659,42 @@ export default function AssetDetailView() {
             errorCode={mediaReportErrorCode}
             errorMessage={mediaReportErrorMessage}
           />
+          {canRequestHandPose || handPoseJob ? (
+            <Card
+              className="detail-card"
+              title={<strong id="hand-pose-title">手部姿态候选</strong>}
+              variant="outlined"
+              aria-labelledby="hand-pose-title"
+            >
+              <p className="app-eyebrow">Ego 手部姿态</p>
+              <p>
+                使用已批准的离线模型为此视频生成双手关键点候选。结果必须经人工审核，不会自动改变正式标注或训练数据。
+              </p>
+              {canRequestHandPose ? (
+                <Button
+                  type="primary"
+                  loading={isRequestingHandPose}
+                  onClick={() => void requestHandPose()}
+                >
+                  生成手部姿态候选
+                </Button>
+              ) : null}
+              {handPoseJob ? (
+                <Alert
+                  className="playback-feedback"
+                  type="info"
+                  title="候选生成已排队"
+                  description={
+                    <>
+                      任务 <code>{handPoseJob.ai_job_id}</code> 已提交。请稍后刷新；候选审核功能将在
+                      Worker 回传后启用。
+                    </>
+                  }
+                  showIcon
+                />
+              ) : null}
+            </Card>
+          ) : null}
           <QualityReviewCard
             assetStatus={detail.status}
             canReview={canReviewQuality}

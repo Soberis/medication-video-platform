@@ -1714,6 +1714,30 @@ describe('catalog views', () => {
     expect(await screen.findByText('标注任务已创建并分配')).toBeInTheDocument()
   })
 
+  it('lets a project member queue hand pose candidates without presenting them as formal annotations', async () => {
+    const fetchMock = stubAsset({ role: 'MEMBER', status: 'INGESTED', handPose: true })
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('hand-pose-ui-0001') })
+    const user = userEvent.setup()
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    expect(await screen.findByText('手部姿态候选')).toBeInTheDocument()
+    expect(screen.getByText(/不会自动改变正式标注或训练数据/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '生成手部姿态候选' }))
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/clip-assets/${assetId}/hand-pose-jobs`,
+        expect.objectContaining({
+          method: 'POST',
+          cache: 'no-store',
+          headers: expect.objectContaining({ 'Idempotency-Key': 'hand-pose-ui-0001' }),
+        }),
+      ),
+    )
+    expect(await screen.findByText('候选生成已排队')).toBeInTheDocument()
+    expect(screen.getByText(/候选审核功能将在 Worker 回传后启用/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '生成手部姿态候选' })).not.toBeInTheDocument()
+  })
+
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
     const folderId = 'a0000000-0000-4000-8000-000000000001'
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
@@ -1797,6 +1821,7 @@ function stubAsset(options: {
   quality?: object
   playback?: boolean
   mediaProbe?: boolean
+  handPose?: boolean
   deliveryRecovery?: boolean
   annotationTask?: boolean
   activity?: boolean
@@ -1859,6 +1884,27 @@ function stubAsset(options: {
             clip_asset_id: assetId,
             job_type: 'MEDIA_PROBE',
             status: 'QUEUED',
+          },
+          202,
+        ),
+      )
+    if (url.endsWith('/hand-pose-jobs') && options.handPose)
+      return Promise.resolve(
+        jsonResponse(
+          {
+            ai_job_id: 'b1000000-0000-4000-8000-000000000001',
+            project_id: projectId,
+            clip_asset_id: assetId,
+            algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
+            algorithm_version: 'v1',
+            model_sha256: 'a'.repeat(64),
+            input_sha256: 'b'.repeat(64),
+            input_size_bytes: 8_388_608,
+            sampling_fps: 10,
+            status: 'QUEUED',
+            requested_by: 'local-synthetic-admin',
+            created_at: '2026-08-10T01:00:00Z',
+            updated_at: '2026-08-10T01:00:00Z',
           },
           202,
         ),

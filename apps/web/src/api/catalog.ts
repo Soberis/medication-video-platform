@@ -489,6 +489,22 @@ export interface MediaProbeJob {
   status: 'REQUESTED' | 'QUEUED' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED'
 }
 
+export interface HandPoseJob {
+  ai_job_id: string
+  project_id: string
+  clip_asset_id: string
+  algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER'
+  algorithm_version: 'v1'
+  model_sha256: string
+  input_sha256: string
+  input_size_bytes: number
+  sampling_fps: number
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  requested_by: string
+  created_at: string
+  updated_at: string
+}
+
 export interface MediaJobDeliveryRecovery {
   recovery_id: string
   media_job_id: string
@@ -573,6 +589,9 @@ const errorMessages: Record<string, string> = {
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
   CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
+  AI_HAND_POSE_MODEL_NOT_CONFIGURED: '手部姿态模型尚未由管理员配置，当前不能生成候选。',
+  CLIP_ASSET_NOT_READY_FOR_AI_CANDIDATES: '视频尚未完成媒体入库，当前不能生成手部姿态候选。',
+  AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED: '本次姿态候选请求与已提交请求冲突，请刷新后重试。',
   MEDIA_JOB_NOT_FOUND: '当前视频没有可恢复的媒体检测任务，请先发起检测或刷新状态。',
   MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED:
     '原检测任务尚未确认发布，不能执行恢复。请刷新状态后重试。',
@@ -1092,6 +1111,23 @@ export async function requestClipAssetMediaProbe(projectId: string, clipAssetId:
     },
   )
   if (response.ok) return (await response.json()) as MediaProbeJob
+  throw await toCatalogError(response)
+}
+
+export async function requestHandPoseCandidates(projectId: string, clipAssetId: string) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-jobs`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as HandPoseJob
   throw await toCatalogError(response)
 }
 

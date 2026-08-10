@@ -1,12 +1,17 @@
 ﻿[CmdletBinding()]
 param(
-    [switch]$Strict
+    [switch]$Strict,
+    [switch]$Changed
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $failures = [System.Collections.Generic.List[string]]::new()
 $skipped = [System.Collections.Generic.List[string]]::new()
+
+if ($Strict -and $Changed) {
+    throw '-Strict and -Changed cannot be used together. Use -Strict before merging.'
+}
 
 function Add-Failure {
     param([string]$Message)
@@ -53,6 +58,25 @@ function Get-GitRepositoryPaths {
     }
 
     $output -split [char]0 | Where-Object { $_ }
+}
+
+$changedFiles = @()
+if ($Changed) {
+    $changedFiles = @(
+        & git -C $root -c core.quotepath=false diff --name-only --cached
+        & git -C $root -c core.quotepath=false diff --name-only
+        & git -C $root -c core.quotepath=false ls-files --others --exclude-standard
+    ) | Where-Object { $_ } | Sort-Object -Unique
+}
+
+function Test-ChangedPath {
+    param([string]$RelativePath)
+
+    if (-not $Changed) {
+        return $true
+    }
+    $prefix = $RelativePath.TrimEnd('/', '\') + '/'
+    return @($changedFiles | Where-Object { $_ -eq $RelativePath -or $_.StartsWith($prefix) }).Count -gt 0
 }
 
 $hardcodedWindowsPaths = @(
@@ -130,6 +154,7 @@ $requiredFiles = @(
     'tools/hand-pose-poc/README.md',
     'tools/hand-pose-poc/src/hand_pose_poc/cli.py',
     'docs/requirements/README.md',
+    'docs/requirements/baselines/V1.14/配药视频数据管理平台需求文档_V1.14.md',
     'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md',
     'docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md',
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md',
@@ -442,7 +467,10 @@ else {
 }
 
 $platformPom = Join-Path $root 'services/platform-api/pom.xml'
-if (Test-Path -LiteralPath $platformPom) {
+if (-not (Test-ChangedPath 'services/platform-api')) {
+    Add-Skip 'Java verify: no platform-api changes'
+}
+elseif (Test-Path -LiteralPath $platformPom) {
     $mavenWrapperName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'mvnw.cmd' } else { 'mvnw' }
     $mavenWrapper = Join-Path $root "services/platform-api/$mavenWrapperName"
     if (-not (Test-Path -LiteralPath $mavenWrapper)) {
@@ -463,7 +491,10 @@ else {
 }
 
 $webPackage = Join-Path $root 'apps/web/package.json'
-if (Test-Path -LiteralPath $webPackage) {
+if (-not (Test-ChangedPath 'apps/web')) {
+    Add-Skip 'Web gates: no apps/web changes'
+}
+elseif (Test-Path -LiteralPath $webPackage) {
     $webManifest = Get-Content -LiteralPath $webPackage -Raw | ConvertFrom-Json
     foreach ($script in @('format:check', 'lint', 'type-check', 'test', 'build')) {
         if ($webManifest.scripts.PSObject.Properties.Name -contains $script) {
@@ -485,7 +516,10 @@ else {
 }
 
 $syntheticUploadClient = Join-Path $root 'tools/synthetic-upload-client/index.mjs'
-if (Test-Path -LiteralPath $syntheticUploadClient -PathType Leaf) {
+if (-not (Test-ChangedPath 'tools/synthetic-upload-client')) {
+    Add-Skip 'Synthetic upload client unit tests: no related changes'
+}
+elseif (Test-Path -LiteralPath $syntheticUploadClient -PathType Leaf) {
     & pnpm --dir $root run synthetic-upload:test
     if ($LASTEXITCODE -eq 0) {
         Add-Pass 'Synthetic upload client unit tests'
@@ -499,7 +533,10 @@ else {
 }
 
 $datasetExportAcceptance = Join-Path $root 'tools/dataset-export-acceptance/index.mjs'
-if (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
+if (-not (Test-ChangedPath 'tools/dataset-export-acceptance')) {
+    Add-Skip 'Dataset export acceptance guard unit tests: no related changes'
+}
+elseif (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
     & pnpm --dir $root run dataset-export:acceptance:test
     if ($LASTEXITCODE -eq 0) {
         Add-Pass 'Dataset export acceptance guard unit tests'
@@ -513,7 +550,10 @@ else {
 }
 
 $webPreflight = Join-Path $root 'tools/web-preflight/index.mjs'
-if (Test-Path -LiteralPath $webPreflight -PathType Leaf) {
+if (-not (Test-ChangedPath 'tools/web-preflight')) {
+    Add-Skip 'P0 Web preflight guard unit tests: no related changes'
+}
+elseif (Test-Path -LiteralPath $webPreflight -PathType Leaf) {
     & pnpm --dir $root run p0-web:preflight:test
     if ($LASTEXITCODE -eq 0) {
         Add-Pass 'P0 Web preflight guard unit tests'
@@ -526,7 +566,10 @@ else {
     Add-Skip 'P0 Web preflight tool has not been generated yet'
 }
 
-if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+if (-not (Test-ChangedPath 'scripts')) {
+    Add-Skip 'macOS/Linux local script tests: no script changes'
+}
+elseif ($IsWindows -or $env:OS -eq 'Windows_NT') {
     Add-Pass 'macOS/Linux local script tests are not applicable on Windows'
 }
 elseif ($null -eq (Get-Command bash -ErrorAction SilentlyContinue)) {
@@ -545,8 +588,15 @@ else {
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/]hand-pose-poc)[\\/]' }
 
+if ($Changed) {
+    $pythonProjects = @($pythonProjects | Where-Object {
+            $relativeProjectPath = [IO.Path]::GetRelativePath($root, $_.DirectoryName).Replace('\', '/')
+            Test-ChangedPath $relativeProjectPath
+        })
+}
+
 if ($pythonProjects.Count -eq 0) {
-    Write-Host '[DEFER] Python gates: active Python projects are activated in later delivery stages' -ForegroundColor Yellow
+    Add-Skip 'Python gates: no active Python project changes'
 }
 else {
     foreach ($project in $pythonProjects) {

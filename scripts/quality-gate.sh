@@ -197,6 +197,7 @@ required_files=(
     'tools/hand-pose-poc/README.md'
     'tools/hand-pose-poc/src/hand_pose_poc/cli.py'
     'docs/requirements/README.md'
+    'docs/requirements/baselines/V1.14/配药视频数据管理平台需求文档_V1.14.md'
     'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md'
     'docs/requirements/baselines/V1.11/配药视频数据管理平台需求文档_V1.11.md'
     'docs/requirements/baselines/V1.10/配药视频数据管理平台需求文档_V1.10.md'

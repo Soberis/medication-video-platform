@@ -3404,6 +3404,97 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs:
+    post:
+      operationId: requestHandPoseCandidates
+      tags:
+        - AI Candidates
+      summary: Queue one offline MediaPipe Hand Landmarker candidate job
+      description: >-
+        Requires an authenticated ACTIVE project member and an approved offline model SHA-256 in server
+        configuration. The platform snapshots a media-processed video input, creates attempt 1 and a
+        transactional Outbox envelope. Results remain candidate annotations and cannot create formal
+        annotations, quality decisions or dataset entries automatically.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: ^[A-Za-z0-9._:-]+$
+      responses:
+        "202":
+          description: The immutable job is queued, or the same idempotent request is returned.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandPoseJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /ai-jobs/{ai_job_id}:
+    get:
+      operationId: getHandPoseJob
+      tags:
+        - AI Candidates
+      summary: Get a hand pose candidate job
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: ai_job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Project-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The current job representation.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandPoseJobResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-delivery-recoveries:
     post:
       operationId: recoverCurrentClipAssetMediaProbeDelivery
@@ -5056,6 +5147,37 @@ components:
         endpoints. Outside local/test it is a signed JWT with HTTPS issuer/JWK Set, a non-empty
         subject, bounded validity and exactly the configured Export Worker audience. Its audience
         must differ from Media Worker; local/test retains a distinct synthetic static bearer only.
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthorized:
+      description: Authentication is missing or invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Forbidden:
+      description: The caller is not authorized for this operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: The requested resource is not visible to the caller.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Conflict:
+      description: The request conflicts with current resource state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
   headers:
     NoStore:
       description: Prevents clients and intermediaries from retaining authorization-sensitive data.
@@ -9396,6 +9518,65 @@ components:
           type: string
           const: QUEUED
         created_at:
+          type: string
+          format: date-time
+    HandPoseJobResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - ai_job_id
+        - project_id
+        - clip_asset_id
+        - algorithm_key
+        - algorithm_version
+        - model_sha256
+        - input_sha256
+        - input_size_bytes
+        - sampling_fps
+        - status
+        - requested_by
+        - created_at
+        - updated_at
+      properties:
+        ai_job_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        clip_asset_id:
+          type: string
+          format: uuid
+        algorithm_key:
+          type: string
+          const: MEDIAPIPE_HAND_LANDMARKER
+        algorithm_version:
+          type: string
+          const: v1
+        model_sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        input_sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        input_size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sampling_fps:
+          type: integer
+          minimum: 1
+          maximum: 15
+          const: 10
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
+        requested_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
     MediaJobResponse:

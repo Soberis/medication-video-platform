@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/ai-hand-pose-job-v1.schema.json",
+  "title": "AI Hand Pose Job v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "message_id", "job_id", "attempt", "lease_token", "project_id", "clip_asset_id",
+    "input_sha256", "input_size_bytes", "content_type", "algorithm_key", "algorithm_version",
+    "model_sha256", "sampling_fps", "requested_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "ai-hand-pose-job.v1" },
+    "message_id": { "type": "string", "format": "uuid" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "lease_token": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43,128}$" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "clip_asset_id": { "type": "string", "format": "uuid" },
+    "input_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "input_size_bytes": { "type": "integer", "minimum": 1 },
+    "content_type": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$" },
+    "algorithm_key": { "const": "MEDIAPIPE_HAND_LANDMARKER" },
+    "algorithm_version": { "const": "v1" },
+    "model_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "sampling_fps": { "type": "integer", "minimum": 1, "maximum": 15 },
+    "requested_at": { "type": "string", "format": "date-time" }
+  }
+}
