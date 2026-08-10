@@ -37,15 +37,16 @@ class Processor:
         try:
             grant = self._client.acquire(job)
             started_at = datetime.now(UTC)
-            with tempfile.TemporaryDirectory(
-                dir=self._settings.temp_dir, prefix="ai-hand-pose-"
-            ) as directory:
-                input_path = Path(directory) / "input.mp4"
-                self._client.download(grant, input_path)
-                candidates = candidates_from_video(
-                    input_path, self._settings.model_path, job.sampling_fps
-                )
-            self._client.submit(job, started_at, candidates)
+            with self._client.maintain_lease(job, grant):
+                with tempfile.TemporaryDirectory(
+                    dir=self._settings.temp_dir, prefix="ai-hand-pose-"
+                ) as directory:
+                    input_path = Path(directory) / "input.mp4"
+                    self._client.download(grant, input_path)
+                    candidates = candidates_from_video(
+                        input_path, self._settings.model_path, job.sampling_fps
+                    )
+                self._client.submit(job, started_at, candidates)
         except StaleError:
             LOGGER.info(
                 "Acknowledged stale AI attempt job_id=%s attempt=%d", job.job_id, job.attempt

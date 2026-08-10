@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event, Lock, Thread
+from types import TracebackType
+from typing import Self
 
 import httpx
 
@@ -28,6 +31,62 @@ class LeaseGrant:
     input_sha256: str
     input_size_bytes: int
     model_sha256: str
+    lease_until: datetime
+    heartbeat_interval_seconds: float
+
+
+class LeaseMonitor:
+    def __init__(self, client: CoreApiClient, job: AiJob, grant: LeaseGrant) -> None:
+        self._client = client
+        self._job = job
+        self._lease_until = grant.lease_until
+        self._interval = grant.heartbeat_interval_seconds
+        self._stop = Event()
+        self._lock = Lock()
+        self._failure: Exception | None = None
+        self._thread = Thread(target=self._run, name=f"ai-lease-{job.attempt}", daemon=True)
+
+    def __enter__(self) -> Self:
+        self._thread.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_value, traceback
+        self._stop.set()
+        self._thread.join()
+        if exc_type is None:
+            self.ensure_current()
+
+    def ensure_current(self) -> None:
+        with self._lock:
+            failure = self._failure
+        if failure is not None:
+            raise failure
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            try:
+                lease_until, interval = self._client.heartbeat(self._job)
+            except RetryableError:
+                with self._lock:
+                    if datetime.now(UTC) >= self._lease_until:
+                        self._failure = StaleError(
+                            "AI job lease expired while Core API was unavailable"
+                        )
+                        return
+                continue
+            except (StaleError, PermanentError) as exc:
+                with self._lock:
+                    self._failure = exc
+                return
+            with self._lock:
+                self._lease_until = lease_until
+                self._interval = interval
 
 
 class CoreApiClient:
@@ -60,6 +119,8 @@ class CoreApiClient:
                 str(body["input_sha256"]),
                 input_size,
                 str(body["model_sha256"]),
+                _timestamp(body, "lease_until"),
+                _positive_number(body, "heartbeat_interval_seconds"),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise PermanentError("Core API returned an invalid AI lease grant") from exc
@@ -70,6 +131,19 @@ class CoreApiClient:
         ):
             raise StaleError("Core API lease grant does not match frozen broker inputs")
         return grant
+
+    def maintain_lease(self, job: AiJob, grant: LeaseGrant) -> LeaseMonitor:
+        return LeaseMonitor(self, job, grant)
+
+    def heartbeat(self, job: AiJob) -> tuple[datetime, float]:
+        response = self._request(
+            "POST",
+            f"/api/v1/internal/ai-jobs/{job.job_id}/attempts/{job.attempt}/heartbeat",
+            job,
+            {"worker_id": self._worker_id},
+        )
+        body = self._json(response)
+        return _timestamp(body, "lease_until"), _positive_number(body, "heartbeat_interval_seconds")
 
     def download(self, grant: LeaseGrant, target: Path) -> None:
         digest, size = hashlib.sha256(), 0
@@ -136,3 +210,23 @@ class CoreApiClient:
         if not isinstance(value, dict):
             raise PermanentError("Core API returned invalid JSON")
         return value
+
+
+def _timestamp(value: dict[str, object], field: str) -> datetime:
+    candidate = value.get(field)
+    if not isinstance(candidate, str):
+        raise PermanentError(f"Core API returned invalid {field}")
+    try:
+        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise PermanentError(f"Core API returned invalid {field}") from exc
+    if parsed.tzinfo is None:
+        raise PermanentError(f"Core API returned invalid {field}")
+    return parsed
+
+
+def _positive_number(value: dict[str, object], field: str) -> float:
+    candidate = value.get(field)
+    if isinstance(candidate, bool) or not isinstance(candidate, (int, float)) or candidate <= 0:
+        raise PermanentError(f"Core API returned invalid {field}")
+    return float(candidate)

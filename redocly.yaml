@@ -4,6 +4,3 @@ apis:
 
 extends:
   - recommended
-
-rules:
-  no-unused-components: off
