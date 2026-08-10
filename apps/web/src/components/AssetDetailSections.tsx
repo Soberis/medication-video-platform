@@ -40,10 +40,8 @@ interface PlaybackCardProps {
   candidateOverlay: HandPoseCandidate[]
   canPlay: boolean
   canRecoverMissingMediaProbe: boolean
-  canRequestMediaProbe: boolean
   grant: ClipAssetPlaybackGrant | null
   isRecoveringMediaProbe: boolean
-  isRequestingMediaProbe: boolean
   isRequestingPlayback: boolean
   mediaProbeMessage: string
   playbackMessage: string
@@ -52,7 +50,6 @@ interface PlaybackCardProps {
   onLoadedMetadata: () => void
   onPlaybackError: () => void
   onRecoverMissingMediaProbe: () => void
-  onRequestMediaProbe: () => void
   onStartPlayback: () => void
 }
 
@@ -61,10 +58,8 @@ export function PlaybackCard({
   candidateOverlay,
   canPlay,
   canRecoverMissingMediaProbe,
-  canRequestMediaProbe,
   grant,
   isRecoveringMediaProbe,
-  isRequestingMediaProbe,
   isRequestingPlayback,
   mediaProbeMessage,
   playbackMessage,
@@ -73,7 +68,6 @@ export function PlaybackCard({
   onLoadedMetadata,
   onPlaybackError,
   onRecoverMissingMediaProbe,
-  onRequestMediaProbe,
   onStartPlayback,
 }: PlaybackCardProps) {
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
@@ -193,14 +187,6 @@ export function PlaybackCard({
             <Button onClick={onClose}>关闭视频</Button>
           </div>
         </>
-      ) : null}
-      {canRequestMediaProbe ? (
-        <div className="playback-toolbar media-probe-toolbar">
-          <Button loading={isRequestingMediaProbe} onClick={onRequestMediaProbe}>
-            检测媒体信息
-          </Button>
-          <p className="form-hint">补充时长、编码和完整解码结果，不影响直接查看。</p>
-        </div>
       ) : null}
       {mediaProbeMessage ? (
         <p className="form-hint media-probe-message">{mediaProbeMessage}</p>

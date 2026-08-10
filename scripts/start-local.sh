@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/local-common.sh"
 
 start_worker=false
+start_ai_worker=false
 infrastructure_only=false
 restart_api=false
 restart_export_worker=false
@@ -20,6 +21,7 @@ Usage: ./scripts/start-local.sh [options]
 
 Options:
   --worker                                      Start Media Worker and Export Worker after Core API.
+  --ai-worker                                   Start only the AI Worker after Core API.
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
   --restart-export-worker                       Restart the Export Worker managed by this script.
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --worker)
             start_worker=true
+            shift
+            ;;
+        --ai-worker)
+            start_ai_worker=true
             shift
             ;;
         --infrastructure-only)
@@ -86,7 +92,7 @@ if $export_worker_synthetic_lease_loss_first_attempt && ! $start_worker; then
     echo "Synthetic Export Worker lease-loss injection requires --worker." >&2
     exit 2
 fi
-if $infrastructure_only && { $start_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt || $export_worker_synthetic_lease_loss_first_attempt; }; then
+if $infrastructure_only && { $start_worker || $start_ai_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt || $export_worker_synthetic_lease_loss_first_attempt; }; then
     echo "Infrastructure-only startup cannot start or restart applications." >&2
     exit 2
 fi
@@ -277,14 +283,46 @@ if $start_worker; then
             exit 1
         fi
     fi
+
+fi
+
+if $start_ai_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" != "true" ]]; then
+    echo "AI Worker startup requires AI_HAND_POSE_ENABLED=true." >&2
+    exit 1
+fi
+if $start_ai_worker || { $start_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" == "true" ]]; }; then
+    for required_variable in AI_HAND_POSE_MODEL_PATH AI_HAND_POSE_MODEL_SHA256; do
+        if [[ -z "${!required_variable:-}" ]]; then
+            echo "AI Worker startup requires ${required_variable} when AI_HAND_POSE_ENABLED=true." >&2
+            exit 1
+        fi
+    done
+    if [[ -z "${AI_WORKER_BEARER_TOKEN:-}" && -z "${AI_WORKER_BEARER_TOKEN_FILE:-}" ]]; then
+        echo "AI Worker startup requires AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE when AI_HAND_POSE_ENABLED=true." >&2
+        exit 1
+    fi
+    require_command uv "AI Worker startup requires uv." || exit 1
+    if managed_process_running ai-worker; then
+        echo "AI Worker is already managed by this script (PID $(managed_process_pid ai-worker))."
+    else
+        start_managed_process \
+            ai-worker "AI Worker" "$LOG_DIRECTORY/ai-worker.log" \
+            uv run --directory "$PROJECT_ROOT/workers/ai-worker" ai-worker
+        sleep 1
+        if ! managed_process_running ai-worker; then
+            echo "AI Worker exited during startup. Inspect: $LOG_DIRECTORY/ai-worker.log and $LOG_DIRECTORY/ai-worker.log.error.log" >&2
+            exit 1
+        fi
+    fi
 fi
 
 echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
 echo "Start Web separately: pnpm run web:dev"
-if ! $start_worker; then
-    echo "Start Workers when needed: ./scripts/start-local.sh --worker"
+if ! $start_worker && ! $start_ai_worker; then
+    echo "Start AI detection when needed: ./scripts/start-local.sh --ai-worker"
+    echo "Start media and export workers when needed: ./scripts/start-local.sh --worker"
 fi
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

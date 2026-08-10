@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medicationvideo.platform.mediaprivacy.MediaProbeSchedulingService;
+
 @Service
 class UploadBatchCompletionService {
 
@@ -19,12 +21,16 @@ class UploadBatchCompletionService {
 
 	private final CaptureEventLogRepository captureEventLogRepository;
 
+	private final MediaProbeSchedulingService mediaProbeSchedulingService;
+
 	UploadBatchCompletionService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
-			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository) {
+			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository,
+			MediaProbeSchedulingService mediaProbeSchedulingService) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.captureEventLogRepository = captureEventLogRepository;
+		this.mediaProbeSchedulingService = mediaProbeSchedulingService;
 	}
 
 	@Transactional
@@ -61,6 +67,9 @@ class UploadBatchCompletionService {
 			.toList();
 		this.clipAssetRepository.saveAllAndFlush(assets);
 		this.captureEventLogRepository.saveAllAndFlush(eventLogs);
+		for (var asset : assets) {
+			this.mediaProbeSchedulingService.ensureForUploadedClip(projectId, asset.getClipAssetId());
+		}
 		batch.markCompleted(verifiedManifestSha256, now);
 		this.batchRepository.saveAndFlush(batch);
 		return UploadBatchCompletionResponse.from(batch, assets);

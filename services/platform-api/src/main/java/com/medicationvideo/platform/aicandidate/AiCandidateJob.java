@@ -175,6 +175,14 @@ class AiCandidateJob {
 		}
 	}
 
+	void requeueAfterMissingDelivery(Instant now) {
+		if (this.status != AiCandidateJobStatus.QUEUED) {
+			throw new HandPoseJobException("AI_HAND_POSE_DELIVERY_RECOVERY_STATE_CONFLICT",
+					"Only a queued AI job can be requeued after a missing delivery.", 409);
+		}
+		this.updatedAt = now;
+	}
+
 	void succeed(Instant now) {
 		this.status = AiCandidateJobStatus.SUCCEEDED;
 		this.updatedAt = now;

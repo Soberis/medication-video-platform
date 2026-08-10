@@ -2,6 +2,7 @@ package com.medicationvideo.platform.aicandidate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -12,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.medicationvideo.platform.assetcapture.ClipAssetMediaIngestService;
+import com.medicationvideo.platform.assetcapture.ClipAssetAnalysisReadService;
 
 @Service
 class AiJobExecutionService {
@@ -21,7 +22,7 @@ class AiJobExecutionService {
 
 	private final AiCandidateJobAttemptRepository attemptRepository;
 
-	private final ClipAssetMediaIngestService assetIngest;
+	private final ClipAssetAnalysisReadService assetRead;
 
 	private final JdbcTemplate jdbcTemplate;
 
@@ -34,14 +35,14 @@ class AiJobExecutionService {
 	private final Duration resultClockSkew;
 
 	AiJobExecutionService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
-			ClipAssetMediaIngestService assetIngest, JdbcTemplate jdbcTemplate,
+			ClipAssetAnalysisReadService assetRead, JdbcTemplate jdbcTemplate,
 			@Value("${platform.ai.hand-pose.lease-duration:PT30M}") Duration leaseDuration,
 			@Value("${platform.ai.hand-pose.heartbeat-interval:PT5M}") Duration heartbeatInterval,
 			@Value("${platform.ai.hand-pose.input-authorization-ttl:PT15M}") Duration inputAuthorizationLifetime,
 			@Value("${platform.ai.hand-pose.result-clock-skew:PT5M}") Duration resultClockSkew) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
-		this.assetIngest = assetIngest;
+		this.assetRead = assetRead;
 		this.jdbcTemplate = jdbcTemplate;
 		this.leaseDuration = leaseDuration;
 		this.heartbeatInterval = heartbeatInterval;
@@ -57,8 +58,8 @@ class AiJobExecutionService {
 		requireLease(attempt, leaseToken);
 		attempt.acquire(request.workerId(), now, this.leaseDuration);
 		job.start(now);
-		var grant = this.assetIngest.begin(job.getProjectId(), job.getClipAssetId(), this.inputAuthorizationLifetime,
-				now);
+		var grant = this.assetRead.authorize(job.getProjectId(), job.getClipAssetId(), job.getInputSha256(),
+				this.inputAuthorizationLifetime, now);
 		return new AiWorkerLeaseResponse(job.getAiJobId(), attempt.getAttempt(), grant.inputUrl(), grant.expiresAt(),
 				attempt.getLeaseUntil(), this.heartbeatInterval.toSeconds(), job.getInputSha256(),
 				job.getInputSizeBytes(), job.getContentType(), job.getModelSha256(), job.getSamplingFps(),
@@ -113,6 +114,7 @@ class AiJobExecutionService {
 			throw new HandPoseJobException("AI_HAND_POSE_RESULT_TIME_INVALID",
 					"The Worker result timestamps exceed the approved clock-skew window.", 409);
 		}
+		var receivedAt = Timestamp.from(now);
 		for (var candidate : request.candidates()) {
 			this.jdbcTemplate.update("""
 					INSERT INTO candidate_annotation (
@@ -123,11 +125,11 @@ class AiJobExecutionService {
 					""", UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), job.getClipAssetId(),
 					candidate.frameTimestampMs(), candidate.handIndex(), candidate.handedness(),
 					candidate.handednessScore(), candidate.boundingBox().toString(), candidate.landmarks().toString(),
-					candidate.imageWidth(), candidate.imageHeight(), candidate.validLandmarkCount(), now);
+					candidate.imageWidth(), candidate.imageHeight(), candidate.validLandmarkCount(), receivedAt);
 		}
 		this.jdbcTemplate.update(
 				"INSERT INTO ai_job_result_inbox (message_id, ai_job_id, attempt, result_sha256, received_at) VALUES (?, ?, ?, ?, ?)",
-				request.messageId(), jobId, attemptNumber, digest, now);
+				request.messageId(), jobId, attemptNumber, digest, receivedAt);
 		attempt.succeed(now);
 		job.succeed(now);
 	}

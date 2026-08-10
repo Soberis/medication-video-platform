@@ -14,6 +14,7 @@ import {
 import { getProject, type ProjectRole } from '@/api/projects'
 import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { paths } from '@/app/paths'
+import { SessionCameraPlayback } from '@/components/SessionCameraPlayback'
 import {
   assemblyStatusLabels,
   declaredSyncStatusLabels,
@@ -283,6 +284,7 @@ function SessionDetailContent() {
               </Tag>
             </div>
           </section>
+          <SessionCameraPlayback projectId={projectId} streams={detail.streams} />
           <Card
             className="detail-card"
             variant="outlined"

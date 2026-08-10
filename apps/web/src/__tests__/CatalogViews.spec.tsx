@@ -297,7 +297,7 @@ describe('catalog views', () => {
     expect(screen.getByText('本次配药操作的技术检测尚未通过')).toBeInTheDocument()
     expect(screen.getByText('有视频尚未通过人工质量判断')).toBeInTheDocument()
     expect(screen.getByText('有视频尚未提交人工标注')).toBeInTheDocument()
-    expect(document.querySelectorAll('.detail-card')).toHaveLength(3)
+    expect(document.querySelectorAll('.detail-card')).toHaveLength(4)
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-sessions/${sessionId}`,
       expect.any(Object),
@@ -1509,6 +1509,66 @@ describe('catalog views', () => {
     expect(screen.getByRole('button', { name: /重\s*试/ })).toBeInTheDocument()
   })
 
+  it('lets a member start hand-pose detection from the selected session camera', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/dataset-admission-preview')) return Promise.resolve(jsonResponse(eligibleAdmissionPreview()))
+      if (url.endsWith('/hand-pose-candidates')) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code: 'AI_HAND_POSE_JOB_NOT_FOUND',
+              error_message: 'No hand-pose job exists yet.',
+            },
+            404,
+          ),
+        )
+      }
+      if (url.endsWith('/hand-pose-jobs') && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              ai_job_id: 'b1000000-0000-4000-8000-000000000001',
+              project_id: projectId,
+              clip_asset_id: assetId,
+              algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
+              algorithm_version: 'v1',
+              model_sha256: 'a'.repeat(64),
+              input_sha256: 'b'.repeat(64),
+              input_size_bytes: 8_388_608,
+              sampling_fps: 10,
+              status: 'QUEUED',
+              requested_by: 'local-synthetic-admin',
+              created_at: '2026-08-10T01:00:00Z',
+              updated_at: '2026-08-10T01:00:00Z',
+            },
+            202,
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(captureSessionDetail()))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('session-hand-pose-ui-0001') })
+    const user = userEvent.setup()
+
+    renderSessionDetail()
+
+    await user.click(await screen.findByRole('button', { name: '检测相机 1 的手部姿态' }))
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/clip-assets/${assetId}/hand-pose-jobs`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'Idempotency-Key': 'session-hand-pose-ui-0001' }),
+        }),
+      ),
+    )
+    expect(
+      await screen.findByText(/手部检测：(正在检测，页面会自动更新。|排队较久未开始，可重新提交。)/),
+    ).toBeInTheDocument()
+  })
+
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     renderAssetDetail()
@@ -1627,8 +1687,8 @@ describe('catalog views', () => {
     expect(screen.queryByText('must-not-be-returned')).not.toBeInTheDocument()
   })
 
-  it('lets a project member play an uploaded video and separately start media detection', async () => {
-    const fetchMock = stubAsset({
+  it('lets a project member play an uploaded video without requiring a manual media-detection step', async () => {
+    stubAsset({
       role: 'MEMBER',
       status: 'UPLOADED',
       playback: true,
@@ -1639,12 +1699,7 @@ describe('catalog views', () => {
     expect(await screen.findByText('上传完成，待检测')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '播放视频' }))
     expect(await screen.findByLabelText('视频预览')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '检测媒体信息' }))
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${assetId}/media-probe-jobs`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-    expect(await screen.findByText(/媒体检测已排队/)).toBeInTheDocument()
+    expect(screen.queryByText('检测媒体信息')).not.toBeInTheDocument()
     expect(screen.getByLabelText('视频预览')).toBeInTheDocument()
   })
 

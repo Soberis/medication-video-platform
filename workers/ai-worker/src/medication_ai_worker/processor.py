@@ -60,12 +60,16 @@ class Processor:
                 "Retrying AI attempt after transient dependency error job_id=%s", job.job_id
             )
             return Disposition.REQUEUE
+        except PermanentError as exc:
+            LOGGER.error(
+                "Rejected AI attempt because Core API rejected it job_id=%s reason=%s",
+                job.job_id,
+                exc,
+            )
+            return Disposition.REJECT
         except (OSError, RuntimeError, ValueError):
             LOGGER.exception(
                 "AI inference failed; broker delivery will retry job_id=%s", job.job_id
             )
             return Disposition.REQUEUE
-        except PermanentError:
-            LOGGER.error("Rejected AI attempt because Core API rejected it job_id=%s", job.job_id)
-            return Disposition.REJECT
         return Disposition.ACK

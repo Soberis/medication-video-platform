@@ -25,6 +25,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
@@ -32,6 +33,7 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@TestPropertySource(properties = "platform.media-probe.auto-on-upload-completion=true")
 class UploadBatchCompletionContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
@@ -76,6 +78,9 @@ class UploadBatchCompletionContractTests {
 	@BeforeEach
 	void clearUploads() {
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
+		this.jdbcTemplate.update("DELETE FROM outbox_event WHERE aggregate_type = 'MediaJob'");
+		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
+		this.jdbcTemplate.update("DELETE FROM media_job");
 		this.captureEventLogRepository.deleteAll();
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();
@@ -126,6 +131,8 @@ class UploadBatchCompletionContractTests {
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.clipAssetRepository.count());
 		assertEquals(1, this.captureEventLogRepository.count());
+		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job", Integer.class));
+		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job_attempt", Integer.class));
 		var eventLog = this.captureEventLogRepository.findAll().getFirst();
 		assertEquals(EVENT_LOG_CLIENT_FILE_ID, eventLog.getClientFileId());
 		assertEquals("synthetic-edge-01", eventLog.getDeviceId());

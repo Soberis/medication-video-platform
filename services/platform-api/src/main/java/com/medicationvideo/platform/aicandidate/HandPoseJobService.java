@@ -3,6 +3,7 @@ package com.medicationvideo.platform.aicandidate;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.Arrays;
@@ -24,6 +25,8 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 @Service
 class HandPoseJobService {
+
+	private static final Duration DELIVERY_RECOVERY_DELAY = Duration.ofMinutes(5);
 
 	private final ProjectAccessService projectAccessService;
 
@@ -82,6 +85,7 @@ class HandPoseJobService {
 		}
 		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
 		ensureEligible(input, this.approvedCameraRoles);
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var natural = this.repository
 			.findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFpsAndProfileSha256(
 					projectId, clipAssetId, input.inputDigest(), HandPoseProfile.ALGORITHM_KEY,
@@ -89,10 +93,10 @@ class HandPoseJobService {
 					HandPoseProfile.PROFILE_SHA256);
 		if (natural.isPresent()) {
 			var job = requireSameRequest(natural.get(), fingerprint);
+			requeueStalledDelivery(job, now, actorId, projectRole.name(), requestId, traceId);
 			this.recordReceipt(job, idempotencyKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
 			return HandPoseJobResponse.from(job);
 		}
-		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var job = this.repository
 			.save(AiCandidateJob.queue(projectId, clipAssetId, this.modelSha256, input.inputDigest(),
 					input.inputSizeBytes(), input.contentType(), idempotencyKey, fingerprint, actorId, now));
@@ -104,6 +108,23 @@ class HandPoseJobService {
 				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
 						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
 		return HandPoseJobResponse.from(job);
+	}
+
+	private void requeueStalledDelivery(AiCandidateJob job, Instant now, String actorId, String projectRole,
+			String requestId, String traceId) {
+		if (job.getStatus() != AiCandidateJobStatus.QUEUED)
+			return;
+		var attempt = this.attemptQueue.latest(job.getAiJobId());
+		if (attempt == null || attempt.getStatus() != AiCandidateJobAttemptStatus.QUEUED
+				|| now.isBefore(attempt.getCreatedAt().plus(DELIVERY_RECOVERY_DELAY)))
+			return;
+		attempt.markDeliveryMissing(now);
+		job.requeueAfterMissingDelivery(now);
+		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, job.getProjectId(),
+				"AI_HAND_POSE_JOB_DELIVERY_REQUEUED", "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
+				"MISSING_BROKER_DELIVERY", requestId, traceId, "ROLE_" + projectRole,
+				java.util.Map.of("source_attempt", Integer.toString(attempt.getAttempt()))));
 	}
 
 	@Transactional(readOnly = true)

@@ -15,4 +15,7 @@ interface AiCandidateJobAttemptRepository extends JpaRepository<AiCandidateJobAt
 	Optional<AiCandidateJobAttempt> findByAiJobIdAndAttempt(@Param("aiJobId") UUID aiJobId,
 			@Param("attempt") int attempt);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<AiCandidateJobAttempt> findFirstByAiJobIdOrderByAttemptDesc(UUID aiJobId);
+
 }

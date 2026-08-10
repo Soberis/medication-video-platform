@@ -50,7 +50,8 @@ class HandPoseJobController {
 					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
 			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
 		var actor = requireActor(authentication);
-		var body = this.service.queue(projectId, clipAssetId, actor.actorId(), idempotencyKey, requestId,
+		var resolvedRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
+		var body = this.service.queue(projectId, clipAssetId, actor.actorId(), idempotencyKey, resolvedRequestId,
 				MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
 			.location(URI.create("/api/v1/ai-jobs/" + body.aiJobId()))

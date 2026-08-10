@@ -200,7 +200,10 @@ class CoreApiClient:
         if response.status_code in {404, 409}:
             raise StaleError("AI job attempt is no longer current")
         if response.status_code in {401, 403} or (400 <= response.status_code < 500):
-            raise PermanentError("Core API rejected AI Worker request")
+            raise PermanentError(
+                f"Core API rejected AI Worker request status={response.status_code}"
+                f" error_code={_error_code(response)}"
+            )
         if response.status_code >= 500:
             raise RetryableError("Core API is temporarily unavailable")
         return response
@@ -234,3 +237,13 @@ def _positive_number(value: dict[str, object], field: str) -> float:
     if isinstance(candidate, bool) or not isinstance(candidate, (int, float)) or candidate <= 0:
         raise PermanentError(f"Core API returned invalid {field}")
     return float(candidate)
+
+
+def _error_code(response: httpx.Response) -> str:
+    try:
+        body = response.json()
+    except ValueError:
+        return "UNPARSEABLE"
+    if isinstance(body, dict) and isinstance(body.get("error_code"), str):
+        return body["error_code"]
+    return "UNSPECIFIED"

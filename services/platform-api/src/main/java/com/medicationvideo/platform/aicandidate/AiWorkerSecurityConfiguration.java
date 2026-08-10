@@ -17,7 +17,7 @@ import com.medicationvideo.platform.mediaprivacy.LocalMediaWorkerAuthenticationF
 class AiWorkerSecurityConfiguration {
 
 	@Bean
-	@Order(1)
+	@Order(0)
 	SecurityFilterChain aiWorkerSecurityFilterChain(HttpSecurity http,
 			@Value("${platform.security.local-ai-worker-bearer-token:}") String bearerToken) throws Exception {
 		var workerFilter = new LocalMediaWorkerAuthenticationFilter(bearerToken, "local-ai-worker", "ROLE_AI_WORKER");

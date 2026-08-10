@@ -32,4 +32,8 @@ class AiCandidateJobAttemptQueueService {
 				job.getModelSha256(), job.getSamplingFps(), job.getProfileSha256(), requestedAt), requestedAt);
 	}
 
+	AiCandidateJobAttempt latest(UUID jobId) {
+		return this.attemptRepository.findFirstByAiJobIdOrderByAttemptDesc(jobId).orElse(null);
+	}
+
 }

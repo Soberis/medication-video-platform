@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$Worker,
+    [switch]$AiWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
     [switch]$RestartExportWorker,
@@ -25,7 +26,7 @@ function Import-LocalEnvironment {
         if ($parts.Count -ne 2 -or -not $parts[0]) {
             throw "Invalid local environment line: $line"
         }
-        [Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1], 'Process')
+        Set-Item -LiteralPath ("Env:" + $parts[0].Trim()) -Value $parts[1]
     }
 }
 
@@ -89,9 +90,12 @@ function Start-LocalProcess {
         [string]$Arguments,
         [string]$LogPath
     )
+    $childEnvironment = @{}
+    Get-ChildItem Env: | ForEach-Object { $childEnvironment[$_.Name] = $_.Value }
     $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $root `
         -PassThru `
-        -WindowStyle Hidden -RedirectStandardOutput $LogPath -RedirectStandardError "$LogPath.error.log"
+        -WindowStyle Hidden -RedirectStandardOutput $LogPath -RedirectStandardError "$LogPath.error.log" `
+        -Environment $childEnvironment
     $managedProcesses[$Key] = [ordered]@{
         processId = $process.Id
         name = $Name
@@ -216,7 +220,7 @@ if ($ExportWorkerSyntheticFailFirstAttempt -and -not $Worker) {
 if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $Worker) {
     throw 'Synthetic Export Worker lease-loss injection requires workers to be enabled.'
 }
-if ($InfrastructureOnly -and ($Worker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt -or $ExportWorkerSyntheticLeaseLossFirstAttempt)) {
+if ($InfrastructureOnly -and ($Worker -or $AiWorker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt -or $ExportWorkerSyntheticLeaseLossFirstAttempt)) {
     throw 'Infrastructure-only startup cannot start or restart applications.'
 }
 if ($ExportWorkerSyntheticFailFirstAttempt -and -not $RestartExportWorker) {
@@ -306,11 +310,37 @@ if ($Worker) {
     }
 }
 
+if ($AiWorker -and $env:AI_HAND_POSE_ENABLED -ne 'true') {
+    throw 'AI Worker startup requires AI_HAND_POSE_ENABLED=true.'
+}
+if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
+    foreach ($requiredVariable in @('AI_HAND_POSE_MODEL_PATH', 'AI_HAND_POSE_MODEL_SHA256')) {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($requiredVariable, 'Process'))) {
+            throw "AI Worker startup requires $requiredVariable when AI_HAND_POSE_ENABLED=true."
+        }
+    }
+    $aiWorkerBearerToken = [Environment]::GetEnvironmentVariable('AI_WORKER_BEARER_TOKEN', 'Process')
+    $aiWorkerBearerTokenFile = [Environment]::GetEnvironmentVariable('AI_WORKER_BEARER_TOKEN_FILE', 'Process')
+    if ([string]::IsNullOrWhiteSpace($aiWorkerBearerToken) -and [string]::IsNullOrWhiteSpace($aiWorkerBearerTokenFile)) {
+        throw 'AI Worker startup requires AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE when AI_HAND_POSE_ENABLED=true.'
+    }
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        throw 'AI Worker startup requires uv.'
+    }
+    if (Test-ManagedProcessRunning 'ai-worker') {
+        Write-Host "AI Worker is already managed by this script (PID $($managedProcesses['ai-worker'].processId))." -ForegroundColor Yellow
+    }
+    else {
+        Start-LocalProcess 'ai-worker' 'AI Worker' 'cmd.exe' "/c uv run --directory workers/ai-worker ai-worker" (Join-Path $logDirectory 'ai-worker.log')
+    }
+}
+
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
-if (-not $Worker) {
-    Write-Host 'Start Workers when needed: .\scripts\start-local.ps1 -Worker' -ForegroundColor Cyan
+if (-not $Worker -and -not $AiWorker) {
+    Write-Host 'Start AI detection when needed: .\scripts\start-local.ps1 -AiWorker' -ForegroundColor Cyan
+    Write-Host 'Start media and export workers when needed: .\scripts\start-local.ps1 -Worker' -ForegroundColor Cyan
 }
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

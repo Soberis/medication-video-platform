@@ -12,7 +12,6 @@ import {
   getLatestHandPoseCandidates,
   recoverCurrentClipAssetMediaProbeDelivery,
   requestHandPoseCandidates,
-  requestClipAssetMediaProbe,
   type ClipAssetPlaybackGrant,
   type ClipAssetRead,
   type MediaReport,
@@ -72,10 +71,8 @@ export default function AssetDetailView() {
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle')
   const [playbackMessage, setPlaybackMessage] = useState('')
   const [isRequestingPlayback, setIsRequestingPlayback] = useState(false)
-  const [isRequestingMediaProbe, setIsRequestingMediaProbe] = useState(false)
   const [isRecoveringMediaProbe, setIsRecoveringMediaProbe] = useState(false)
   const [mediaProbeMessage, setMediaProbeMessage] = useState('')
-  const [mediaProbeSubmitted, setMediaProbeSubmitted] = useState(false)
   const [mediaReport, setMediaReport] = useState<MediaReport | null>(null)
   const [mediaReportLoadState, setMediaReportLoadState] = useState<
     'idle' | 'loading' | 'success' | 'error'
@@ -114,8 +111,6 @@ export default function AssetDetailView() {
 
   const canDelete = projectRole === 'ADMIN'
   const canPlay = projectRole !== null && detail?.content_type === 'video/mp4'
-  const canRequestMediaProbe =
-    projectRole !== null && detail?.status === 'UPLOADED' && !mediaProbeSubmitted
   const canRecoverMissingMediaProbe = projectRole === 'ADMIN' && detail?.status === 'UPLOADED'
   const canReviewQuality = projectRole !== null && detail?.status === 'INGESTED'
   const canCreateAnnotationTask =
@@ -135,18 +130,11 @@ export default function AssetDetailView() {
           '视频已完成上传完整性校验。点击播放后获取短期只读地址；媒体检测不影响人工查看，也不会自动改变质量结论。',
         type: 'success' as const,
       }
-    if (mediaProbeSubmitted)
-      return {
-        title: '媒体检测已提交',
-        description:
-          '任务正在队列中等待 Worker 执行。你仍可直接播放视频；检测结果用于补充时长、编码和完整解码等技术事实。',
-        type: 'warning' as const,
-      }
     if (detail.status === 'UPLOADED')
       return {
-        title: '媒体检测尚未开始',
+        title: '媒体检测等待处理',
         description:
-          '视频已经保存，可直接人工查看。媒体检测用于确认时长、编码和完整解码等技术事实。',
+          '上传完成后平台已自动创建或复用检测任务。视频可直接人工查看；检测会补充时长、编码和完整解码等技术事实。',
         type: 'info' as const,
       }
     if (detail.status === 'INGESTING')
@@ -167,7 +155,7 @@ export default function AssetDetailView() {
       description: '请确认当前账号已加入项目，并且视频为平台支持的 MP4 格式。',
       type: 'info' as const,
     }
-  }, [canPlay, detail, mediaProbeSubmitted])
+  }, [canPlay, detail])
 
   const clearPlaybackExpiryTimer = useCallback(() => {
     if (playbackExpiryTimer.current !== null) {
@@ -372,7 +360,6 @@ export default function AssetDetailView() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setMediaProbeSubmitted(false)
       setMediaProbeMessage('')
       void loadDetail()
       void loadProjectRole()
@@ -471,27 +458,6 @@ export default function AssetDetailView() {
       setIsRequestingPlayback(false)
     }
   }
-  async function requestMediaProbe() {
-    if (!canRequestMediaProbe || isRequestingMediaProbe) return
-    setIsRequestingMediaProbe(true)
-    setActionErrorCode('')
-    setActionErrorMessage('')
-    setMediaProbeMessage('')
-    try {
-      const job = await requestClipAssetMediaProbe(projectId, assetId)
-      setMediaProbeSubmitted(true)
-      setMediaProbeMessage(`媒体检测已排队（任务 ${job.media_job_id}）。请稍后刷新状态。`)
-    } catch (error) {
-      setActionErrorCode(
-        error instanceof CatalogApiError ? error.errorCode : 'MEDIA_PROBE_REQUEST_FAILED',
-      )
-      setActionErrorMessage(
-        error instanceof CatalogApiError ? error.message : '媒体检测暂未提交，请稍后重试。',
-      )
-    } finally {
-      setIsRequestingMediaProbe(false)
-    }
-  }
   async function recoverMissingMediaProbe() {
     if (!canRecoverMissingMediaProbe || isRecoveringMediaProbe) return
     const changeReference = await prompt({
@@ -523,7 +489,6 @@ export default function AssetDetailView() {
         intent.idempotencyKey,
       )
       mediaProbeRecoveryIntent.current = null
-      setMediaProbeSubmitted(true)
       setMediaProbeMessage(`媒体检测已恢复为第 ${recovery.new_attempt} 次尝试。请稍后刷新状态。`)
       void message.success('媒体检测恢复命令已记录并排队。')
     } catch (error) {
@@ -659,7 +624,6 @@ export default function AssetDetailView() {
               <Tag color={statusTone(detail.status)}>{assetStatusLabels[detail.status]}</Tag>
               <Button
                 onClick={() => {
-                  setMediaProbeSubmitted(false)
                   void loadDetail()
                 }}
               >
@@ -681,10 +645,8 @@ export default function AssetDetailView() {
             candidateOverlay={handPoseCandidates?.candidates ?? []}
             canPlay={canPlay}
             canRecoverMissingMediaProbe={canRecoverMissingMediaProbe}
-            canRequestMediaProbe={canRequestMediaProbe}
             grant={playbackGrant}
             isRecoveringMediaProbe={isRecoveringMediaProbe}
-            isRequestingMediaProbe={isRequestingMediaProbe}
             isRequestingPlayback={isRequestingPlayback}
             mediaProbeMessage={mediaProbeMessage}
             playbackMessage={playbackMessage}
@@ -696,7 +658,6 @@ export default function AssetDetailView() {
             }}
             onPlaybackError={handlePlaybackError}
             onRecoverMissingMediaProbe={() => void recoverMissingMediaProbe()}
-            onRequestMediaProbe={() => void requestMediaProbe()}
             onStartPlayback={() => void startPlayback()}
           />
           <MediaReportCard

@@ -102,6 +102,15 @@ class AiCandidateJobAttempt {
 		this.updatedAt = now;
 	}
 
+	void markDeliveryMissing(Instant now) {
+		if (this.status != AiCandidateJobAttemptStatus.QUEUED) {
+			throw new HandPoseJobException("AI_HAND_POSE_DELIVERY_RECOVERY_STATE_CONFLICT",
+					"Only a queued AI job attempt can be recovered after a missing delivery.", 409);
+		}
+		this.status = AiCandidateJobAttemptStatus.FAILED;
+		this.updatedAt = now;
+	}
+
 	void requireActiveLease(Instant now) {
 		if (this.status != AiCandidateJobAttemptStatus.RUNNING || this.leaseUntil == null
 				|| !now.isBefore(this.leaseUntil)) {
@@ -120,6 +129,14 @@ class AiCandidateJobAttempt {
 
 	int getAttempt() {
 		return this.attempt;
+	}
+
+	AiCandidateJobAttemptStatus getStatus() {
+		return this.status;
+	}
+
+	Instant getCreatedAt() {
+		return this.createdAt;
 	}
 
 	Instant getLeaseUntil() {
