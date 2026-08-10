@@ -1,8 +1,16 @@
-# Medication Video Platform
+# 配药视频数据管理平台
 
-护士配药多相机视频数据管理平台，用于视频入库、资产管理、标注复核、清洗和数据集导出。
+对接医院边端采集系统接收固定舱内相机视频，在云端完成视频/数据管理、MediaPipe 手部预标注、Ego 配药动作标注与数据清洗；手部预标注是当前优先交付方向。当前产品基线见
+[V1.17 需求文档](./docs/requirements/baselines/V1.17/配药视频数据管理平台需求文档_V1.17.md) 与
+[MVP 技术设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)。
 
 ## 当前阶段
+
+V1.17 已将项目的首要矛盾收敛为“完整保留云端数据生产链，同时不让用户操作内部技术概念”。医院边端设备负责
+采集、缓存和上传策略，平台仅负责对接接收与云端处理。日常前端目标为“视频管理、数据管理、手部检测、Ego 标注
+与清洗、上传接入、设置”；视频库使用服务端分页，并支持时间、相机、来源、检测、标注和清洗状态筛选。MediaPipe
+只产生手部候选，不能代替人工标注或清洗结论；数据集构建与导出保留为清洗通过后的后续演进能力。
+以下内容是已有实现清单和历史演进记录，不代表当前继续扩展的产品范围。
 
 Sprint 0 已完成，上传/资产和最小人工审核、标注、管理员复核、后置清洗已形成可运行切片；Sprint 3 已交付可解释的数据集准入、`DRAFT` 草稿、可复现划分、不可变构建配置、显式启动、关系快照封印、冻结前技术校验、管理员冻结审批，以及 Step-only 训练包的申请、管理员审批、后台生成、服务端校验和短期下载授权。V1.11 允许拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 自审/自批，但同人决定必须显示为 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不获得管理员命令权限。`DatasetVersion` 当前可从 `DRAFT → BUILDING → VALIDATING → FROZEN`，`DatasetExport` 可从 `REQUESTED → QUEUED → RUNNING → AVAILABLE/FAILED`，可重试错误经 `RETRY_WAIT` 创建新 attempt。
 
