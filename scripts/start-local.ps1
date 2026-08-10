@@ -211,6 +211,12 @@ $apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
 
+# Local startup is intentionally detection-ready: media ingestion needs the Media Worker,
+# and the AI Worker starts automatically below whenever the approved AI configuration is enabled.
+if (-not $InfrastructureOnly) {
+    $Worker = $true
+}
+
 if ($RestartExportWorker -and -not $Worker) {
     throw 'Restarting the Export Worker requires workers to be enabled.'
 }
@@ -338,9 +344,6 @@ if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
-if (-not $Worker -and -not $AiWorker) {
-    Write-Host 'Start AI detection when needed: .\scripts\start-local.ps1 -AiWorker' -ForegroundColor Cyan
-    Write-Host 'Start media and export workers when needed: .\scripts\start-local.ps1 -Worker' -ForegroundColor Cyan
-}
+Write-Host 'Workers: Media and Export started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true.' -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

@@ -20,7 +20,7 @@ usage() {
 Usage: ./scripts/start-local.sh [options]
 
 Options:
-  --worker                                      Start Media Worker and Export Worker after Core API.
+  --worker                                      Legacy compatibility flag; Workers start by default.
   --ai-worker                                   Start only the AI Worker after Core API.
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
@@ -79,6 +79,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Default local startup is detection-ready. The AI Worker is started below when the approved
+# AI configuration is enabled, while --infrastructure-only remains the explicit opt-out.
+if ! $infrastructure_only; then
+    start_worker=true
+fi
 
 if $restart_export_worker && ! $start_worker; then
     echo "Restarting the Export Worker requires --worker." >&2
@@ -320,9 +326,6 @@ echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
 echo "Start Web separately: pnpm run web:dev"
-if ! $start_worker && ! $start_ai_worker; then
-    echo "Start AI detection when needed: ./scripts/start-local.sh --ai-worker"
-    echo "Start media and export workers when needed: ./scripts/start-local.sh --worker"
-fi
+echo "Workers: Media and Export started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true."
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

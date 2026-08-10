@@ -92,7 +92,7 @@ Set-Location $repositoryRoot
 
 在仓库任意子目录中执行上述命令即可；脚本会基于自身位置定位仓库根目录，因此项目移动到其他磁盘或目录后无需修改脚本。
 
-在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本默认最长等待 180 秒，直到 Core API 健康。前端需由 pnpm 单独启动；需要媒体探测或数据集导出时，再显式启动两个 Worker。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
+在启动前，于未提交的 `.env` 中设置 `PLATFORM_BOOTSTRAP_ADMIN_USERNAME` 和至少 12 位的 `PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`，首次启动会创建该管理员账号；之后使用 Web 登录页登录。`.env.example` 提供本地默认值，`.env` 只需写入要覆盖的值。启动脚本默认最长等待 180 秒，直到 Core API 健康，并默认启动媒体与导出 Worker；当 `.env` 中已启用并配置手部检测时，也会自动启动 AI Worker。前端需由 pnpm 单独启动。Web 默认地址为 `http://localhost:5173/login`，Core API 健康检查为 `http://localhost:8080/actuator/health`。后台日志位于 `logs/local/`。应用不持久化密码或会话令牌；认证服务暂不可用时，登录页只在当前页面内保留密码输入以便重试，刷新或离开页面即清除。
 
 macOS / Linux 常用命令：
 
@@ -100,9 +100,9 @@ macOS / Linux 常用命令：
 ./scripts/status-local.sh
 ./scripts/stop-local.sh
 ./scripts/stop-local.sh --keep-infrastructure
-./scripts/start-local.sh --worker
+./scripts/start-local.sh
 ./scripts/start-local.sh --restart-api
-./scripts/start-local.sh --worker --restart-export-worker
+./scripts/start-local.sh --restart-export-worker
 pnpm run local-scripts:test
 ```
 
@@ -112,7 +112,7 @@ Windows PowerShell 7 常用命令：
 .\scripts\status-local.ps1              # 查看容器、端口、后台进程和日志位置
 .\scripts\stop-local.ps1                # 停止脚本启动的后端/Worker 和本地容器，保留数据卷
 .\scripts\stop-local.ps1 -KeepInfrastructure
-.\scripts\start-local.ps1 -Worker       # 需要媒体探测或导出时显式启动两个 Worker
+.\scripts\start-local.ps1               # 默认启动媒体/导出 Worker；启用 AI 配置时也启动 AI Worker
 .\scripts\start-local.ps1 -RestartApi   # 仅重启脚本启动的 Core API；保留前端、Worker 与容器
 ```
 
