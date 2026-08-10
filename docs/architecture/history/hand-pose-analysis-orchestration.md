@@ -2,8 +2,10 @@
 
 > 版本：TD-HP-ANALYSIS-V1  
 > 状态：V1.16 实施前设计；受 V1.15 Phase A `GO` 门禁约束  
-> 对齐需求：[V1.16](../requirements/baselines/V1.16/配药视频数据管理平台需求文档_V1.16.md) 与 [V1.15 Phase B](./hand-pose-candidate-phase-b.md)  
+> 对齐需求：[V1.16](../../requirements/baselines/V1.16/配药视频数据管理平台需求文档_V1.16.md) 与 [V1.15 Phase B](./hand-pose-candidate-phase-b.md)
 > 日期：2026-08-10
+
+> 历史状态：SUPERSEDED。当前单视频优先、归组、权限、状态和容量规则以 [V1.18 当前技术设计](../video-hand-pose-mvp-technical-design.md) 为准。
 
 ## 1. 目的与边界
 

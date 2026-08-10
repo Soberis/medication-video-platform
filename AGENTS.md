@@ -11,10 +11,10 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.14/配药视频数据管理平台需求文档_V1.14.md`：当前业务需求基线；未变更条款继承 V1.13 及其历史继承基线。
-3. `docs/architecture/配药平台技术设计.md`：总体架构、技术选型、模块边界和实施顺序。
+2. `docs/requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md`：当前业务需求基线；未变更条款继承 V1.17 及其历史继承基线。
+3. `docs/architecture/video-hand-pose-mvp-technical-design.md`：当前云端数据闭环、手部预标注、状态、容量和实施顺序设计。
 4. `docs/adr/`：已经冻结的技术决策。
-5. `docs/architecture/` 中由主技术设计链接的专题详细设计。
+5. `docs/architecture/` 中标记为“当前规范”的专题详细设计。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
 7. 真实代码、数据库迁移和测试结果。
 
@@ -44,18 +44,17 @@
 严格遵循：
 
 ```text
-仓库骨架和质量门禁
-→ P0 上传与资产
-→ P0 隐私、标注和清洗
-→ P0 数据集与导出
-→ P0 集成测试和 UAT
-→ AI Plugin SDK
-→ Mock Plugin
-→ MediaPipe 试点
-→ 对照评估和启停决策
+边端接收对接
+→ 视频与数据管理
+→ P0 单视频 MediaPipe 手部预标注
+→ 配药动作标注与复核
+→ 数据清洗与可用数据
+→ P0 集成测试与授权样本算法评估
+→ P1 显式批量预标注和项目自动策略
+→ 后续数据集构建、导出与模型演进
 ```
 
-MediaPipe 不进入 P0 关键路径。
+MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只能产生 `CandidateAnnotation`，不得绕过人工确认、复核和清洗进入正式数据。
 
 ## MVP Simplicity
 

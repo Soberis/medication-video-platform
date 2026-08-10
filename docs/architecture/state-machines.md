@@ -395,7 +395,7 @@ SUBMITTED revision → APPROVED review
 - 当前只支持每个 revision 一条复核决定。`REJECTED` 会把同一任务退回受分配人；再次提交产生下一个 revision，旧 revision 和 review 永不覆盖。
 - `APPROVED` 会把任务推进到 `COMPLETED`，并在同一事务内为该 revision 生成 post-clean run/result；重复的相同复核请求不得重复创建任务迁移、run、result 或审计。
 
-## 11. AI 候选状态（P1）
+## 11. AI 候选状态（历史候选处置）
 
 ```text
 GENERATED → PENDING_REVIEW → ACCEPTED
@@ -407,6 +407,18 @@ GENERATED/PENDING_REVIEW → EXPIRED
 - ACCEPTED/MODIFIED 必须产生可追溯的新 AnnotationRevision。
 - `CandidateAnnotation.status` 与正式 `Review.status` 是不同概念，数据库字段不得都模糊命名为 `review_status`。
 - 候选过期条件包括输入摘要变化、schema 不兼容、算法撤销或隐私放行撤销。
+
+### 11.1 V1.18 单视频手部预标注状态
+
+当前 P0 的手部预标注与候选人工处置正交。正式状态分三层，禁止折叠为同一 `status`：
+
+| 层 | 枚举 | 规则 |
+| --- | --- | --- |
+| Asset | `UPLOADED`、`INGESTING`、`INGESTED`、`INGEST_FAILED` | 继承 ClipAsset 入库状态机；只有 `INGESTED` 可请求预标注。 |
+| Hand job | `NOT_REQUESTED`、`QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED` | `NOT_REQUESTED` 是无 AIJob 的查询投影；其余值映射 AIJob。 |
+| Hand result | `UNKNOWN`、`HAND_DETECTED`、`NO_HAND_DETECTED` | 仅 `SUCCEEDED` job 可写终态结果；未发现手不等于失败。 |
+
+项目 `MEMBER` 或 `ADMIN` 对有权访问、未删除的 `INGESTED` 视频可提交幂等单视频请求。P0 不定义 batch job 或自动策略。Worker 回传只能写 `CandidateAnnotation` 与 run summary，不能推进正式标注、复核或清洗状态。
 
 ## 12. 关键兼容性守卫
 

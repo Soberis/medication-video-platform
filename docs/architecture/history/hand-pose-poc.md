@@ -5,6 +5,8 @@
 > 对齐需求：V1.15 FR-042A
 > 日期：2026-08-10
 
+> 历史状态：SUPERSEDED。`Ego` 为历史内部命名；当前产品语言和实施规则以 [V1.18 当前技术设计](../video-hand-pose-mvp-technical-design.md) 为准。
+
 ## 1. 目标和边界
 
 本设计只回答一个问题：MediaPipe Hand Landmarker 在第一人称配药操作视频中，能否稳定生成接近

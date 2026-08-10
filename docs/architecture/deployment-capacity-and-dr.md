@@ -39,17 +39,16 @@
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
 | 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
-| 数据集与导出 | Export Worker | AI Worker、无证据的 Redis |
-| P1 | AI Worker 和插件 | 不影响 P0 人工闭环 |
+| 数据集与导出 | Export Worker | 无证据的 Redis |
+| 手部预标注 | AI Worker、RabbitMQ、获批准的本地模型 | 批量与自动预标注策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。
 
-### 2.3 P1
+### 2.3 后续能力
 
-- AI Worker；
-- AI Plugin SDK 和插件镜像；
+- 显式批量和自动手部预标注；
 - 模型离线仓库/批准清单；
-- AI 评估作业。
+- 算法效果评估作业。
 
 ## 3. 环境分离
 
