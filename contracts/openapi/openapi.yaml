@@ -3495,6 +3495,33 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-candidates:
+    get:
+      operationId: getLatestHandPoseCandidates
+      tags: [AI Candidates]
+      summary: Get the latest hand pose job and candidate keypoints for a clip asset
+      description: >-
+        Returns candidate-only output for the latest job. It is visible to project members but is
+        never a formal annotation, quality decision or dataset input until the normal human review
+        flow records a separate annotation revision.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The latest job and its immutable candidate keypoints.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-delivery-recoveries:
     post:
       operationId: recoverCurrentClipAssetMediaProbeDelivery
@@ -9691,6 +9718,33 @@ components:
         updated_at:
           type: string
           format: date-time
+    HandPoseCandidateResponse:
+      type: object
+      additionalProperties: false
+      required: [job, candidates]
+      properties:
+        job: { $ref: "#/components/schemas/HandPoseJobResponse" }
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/HandPoseCandidate" }
+    HandPoseCandidate:
+      type: object
+      additionalProperties: false
+      required: [frame_timestamp_ms, image_width, image_height, hand_index, handedness, handedness_score, bounding_box, landmarks, valid_landmark_count]
+      properties:
+        frame_timestamp_ms: { type: integer, format: int64, minimum: 0 }
+        image_width: { type: integer, minimum: 1 }
+        image_height: { type: integer, minimum: 1 }
+        hand_index: { type: integer, minimum: 0, maximum: 1 }
+        handedness: { type: string, enum: [LEFT, RIGHT, UNKNOWN] }
+        handedness_score: { type: number, minimum: 0, maximum: 1 }
+        bounding_box: { type: object }
+        landmarks:
+          type: array
+          minItems: 21
+          maxItems: 21
+          items: { type: object }
+        valid_landmark_count: { type: integer, minimum: 0, maximum: 21 }
     MediaJobResponse:
       type: object
       additionalProperties: false

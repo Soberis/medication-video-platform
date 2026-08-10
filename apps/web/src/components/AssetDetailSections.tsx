@@ -1,8 +1,14 @@
 import { Alert, Button, Card, Descriptions, Select, Tag } from 'antd'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
-import type { ClipAssetPlaybackGrant, ClipAssetRead, MediaReport } from '@/api/catalog'
+import type {
+  ClipAssetPlaybackGrant,
+  ClipAssetRead,
+  HandPoseCandidate,
+  MediaReport,
+} from '@/api/catalog'
 import type { AssetFolder, ProjectMembership } from '@/api/projects'
 import {
   qualityDecisionLabels,
@@ -30,6 +36,7 @@ export interface PlaybackAvailability {
 
 interface PlaybackCardProps {
   availability: PlaybackAvailability | null
+  candidateOverlay: HandPoseCandidate[]
   canPlay: boolean
   canRecoverMissingMediaProbe: boolean
   canRequestMediaProbe: boolean
@@ -50,6 +57,7 @@ interface PlaybackCardProps {
 
 export function PlaybackCard({
   availability,
+  candidateOverlay,
   canPlay,
   canRecoverMissingMediaProbe,
   canRequestMediaProbe,
@@ -68,6 +76,11 @@ export function PlaybackCard({
   onStartPlayback,
 }: PlaybackCardProps) {
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
+  const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
+  const activeCandidates = useMemo(
+    () => candidateOverlay.filter((candidate) => Math.abs(candidate.frame_timestamp_ms - playbackTimeMs) <= 120),
+    [candidateOverlay, playbackTimeMs],
+  )
 
   return (
     <Card
@@ -117,10 +130,30 @@ export function PlaybackCard({
                 aria-label="视频预览"
                 src={grant.media_url}
                 onLoadedMetadata={onLoadedMetadata}
+                onTimeUpdate={(event) => setPlaybackTimeMs(event.currentTarget.currentTime * 1000)}
                 onError={onPlaybackError}
               >
                 当前浏览器不支持视频播放。
               </video>
+              {activeCandidates.length > 0 ? (
+                <svg
+                  className="hand-pose-overlay"
+                  aria-label="当前时间点的 AI 手部关键点候选"
+                  viewBox="0 0 1 1"
+                  preserveAspectRatio="none"
+                >
+                  {activeCandidates.flatMap((candidate) =>
+                    candidate.landmarks.map((landmark, index) => (
+                      <circle
+                        key={`${candidate.frame_timestamp_ms}-${candidate.hand_index}-${index}`}
+                        cx={landmark.x}
+                        cy={landmark.y}
+                        r="0.009"
+                      />
+                    )),
+                  )}
+                </svg>
+              ) : null}
             </div>
           ) : null}
           <div className="playback-toolbar">

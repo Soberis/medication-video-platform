@@ -505,6 +505,23 @@ export interface HandPoseJob {
   updated_at: string
 }
 
+export interface HandPoseCandidate {
+  frame_timestamp_ms: number
+  image_width: number
+  image_height: number
+  hand_index: number
+  handedness: 'LEFT' | 'RIGHT' | 'UNKNOWN'
+  handedness_score: number
+  bounding_box: { x: number; y: number; width: number; height: number }
+  landmarks: Array<{ x: number; y: number; z: number }>
+  valid_landmark_count: number
+}
+
+export interface HandPoseCandidateResponse {
+  job: HandPoseJob
+  candidates: HandPoseCandidate[]
+}
+
 export interface MediaJobDeliveryRecovery {
   recovery_id: string
   media_job_id: string
@@ -1128,6 +1145,15 @@ export async function requestHandPoseCandidates(projectId: string, clipAssetId: 
     },
   )
   if (response.ok) return (await response.json()) as HandPoseJob
+  throw await toCatalogError(response)
+}
+
+export async function getLatestHandPoseCandidates(projectId: string, clipAssetId: string) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-candidates`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  if (response.ok) return (await response.json()) as HandPoseCandidateResponse
   throw await toCatalogError(response)
 }
 

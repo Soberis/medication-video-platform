@@ -28,8 +28,20 @@ class HandPoseJobController {
 
 	private final HandPoseJobService service;
 
-	HandPoseJobController(HandPoseJobService service) {
+	private final HandPoseCandidateQueryService candidateQueryService;
+
+	HandPoseJobController(HandPoseJobService service, HandPoseCandidateQueryService candidateQueryService) {
 		this.service = service;
+		this.candidateQueryService = candidateQueryService;
+	}
+
+	@GetMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-candidates")
+	ResponseEntity<HandPoseCandidateResponse> getLatestCandidates(@PathVariable UUID projectId,
+			@PathVariable UUID clipAssetId, Authentication authentication) {
+		var actor = requireActor(authentication);
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.candidateQueryService.getLatest(projectId, clipAssetId, actor.actorId()));
 	}
 
 	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-jobs")

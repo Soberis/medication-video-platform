@@ -9,6 +9,7 @@ import {
   deleteClipAsset,
   getClipAsset,
   getClipAssetMediaReport,
+  getLatestHandPoseCandidates,
   recoverCurrentClipAssetMediaProbeDelivery,
   requestHandPoseCandidates,
   requestClipAssetMediaProbe,
@@ -16,6 +17,7 @@ import {
   type ClipAssetRead,
   type MediaReport,
   type HandPoseJob,
+  type HandPoseCandidateResponse,
 } from '@/api/catalog'
 import {
   assignClipAssetFolder,
@@ -96,6 +98,7 @@ export default function AssetDetailView() {
   const [createdAnnotationTask, setCreatedAnnotationTask] = useState<AnnotationTask | null>(null)
   const [isCreatingAnnotationTask, setIsCreatingAnnotationTask] = useState(false)
   const [handPoseJob, setHandPoseJob] = useState<HandPoseJob | null>(null)
+  const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(null)
   const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
@@ -184,6 +187,25 @@ export default function AssetDetailView() {
     setMediaReportErrorCode('')
     setMediaReportErrorMessage('')
   }, [])
+  const loadHandPoseCandidates = useCallback(async () => {
+    try {
+      const response = await getLatestHandPoseCandidates(projectId, assetId)
+      if (!response.job || !Array.isArray(response.candidates)) {
+        setHandPoseJob(null)
+        setHandPoseCandidates(null)
+        return
+      }
+      setHandPoseJob(response.job)
+      setHandPoseCandidates(response)
+    } catch (error) {
+      if (error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND') {
+        setHandPoseJob(null)
+        setHandPoseCandidates(null)
+        return
+      }
+      setHandPoseCandidates(null)
+    }
+  }, [assetId, projectId])
 
   const loadMediaReport = useCallback(async () => {
     mediaReportRequest.current?.abort()
@@ -259,11 +281,13 @@ export default function AssetDetailView() {
       resetPlayback()
       setCreatedAnnotationTask(null)
       setHandPoseJob(null)
+      setHandPoseCandidates(null)
       setSelectedFolderId(response.folder_id ?? '')
       setLoadState('success')
       if (response.status === 'INGESTED') {
         void loadQualityReview()
         void loadMediaReport()
+        void loadHandPoseCandidates()
       } else {
         resetMediaReport()
         setQualityReview({
@@ -289,7 +313,7 @@ export default function AssetDetailView() {
     } finally {
       if (detailRequest.current === request) detailRequest.current = null
     }
-  }, [assetId, loadMediaReport, loadQualityReview, projectId, resetMediaReport, resetPlayback])
+  }, [assetId, loadHandPoseCandidates, loadMediaReport, loadQualityReview, projectId, resetMediaReport, resetPlayback])
   const loadProjectRole = useCallback(async () => {
     roleRequest.current?.abort()
     const request = new AbortController()
@@ -550,6 +574,7 @@ export default function AssetDetailView() {
     try {
       const job = await requestHandPoseCandidates(projectId, assetId)
       setHandPoseJob(job)
+      setHandPoseCandidates({ job, candidates: [] })
       void message.success('手部姿态候选已排队。')
     } catch (error) {
       setActionErrorCode(
@@ -632,6 +657,7 @@ export default function AssetDetailView() {
           ) : null}
           <PlaybackCard
             availability={playbackAvailability}
+            candidateOverlay={handPoseCandidates?.candidates ?? []}
             canPlay={canPlay}
             canRecoverMissingMediaProbe={canRecoverMissingMediaProbe}
             canRequestMediaProbe={canRequestMediaProbe}
@@ -659,7 +685,7 @@ export default function AssetDetailView() {
             errorCode={mediaReportErrorCode}
             errorMessage={mediaReportErrorMessage}
           />
-          {canRequestHandPose || handPoseJob ? (
+          {detail.status === 'INGESTED' ? (
             <Card
               className="detail-card"
               title={<strong id="hand-pose-title">手部姿态候选</strong>}
@@ -682,16 +708,36 @@ export default function AssetDetailView() {
               {handPoseJob ? (
                 <Alert
                   className="playback-feedback"
-                  type="info"
-                  title="候选生成已排队"
+                  type={handPoseJob.status === 'SUCCEEDED' ? 'success' : 'info'}
+                  title={handPoseJob.status === 'SUCCEEDED' ? '候选已生成' : '候选生成已排队'}
                   description={
                     <>
-                      任务 <code>{handPoseJob.ai_job_id}</code> 已提交。请稍后刷新；候选审核功能将在
-                      Worker 回传后启用。
+                      任务 <code>{handPoseJob.ai_job_id}</code> 当前状态为 {handPoseJob.status}。
+                      {handPoseJob.status === 'SUCCEEDED'
+                        ? ` 已收到 ${handPoseCandidates?.candidates.length ?? 0} 条关键点候选；它们仍需人工审核。`
+                        : ' 候选审核功能将在 Worker 回传后启用；请刷新状态以查看关键点候选。'}
                     </>
                   }
                   showIcon
                 />
+              ) : null}
+              {handPoseCandidates?.candidates?.[0] ? (
+                <Card className="playback-feedback" size="small" title="首帧候选关键点预览">
+                  <svg
+                    aria-label="候选手部关键点叠加预览"
+                    viewBox="0 0 1 1"
+                    style={{ display: 'block', width: 'min(100%, 360px)', aspectRatio: '1 / 1', background: '#101828' }}
+                  >
+                    {handPoseCandidates.candidates[0].landmarks.map((landmark, index) => (
+                      <circle key={index} cx={landmark.x} cy={landmark.y} r="0.012" fill="#36cfc9" />
+                    ))}
+                  </svg>
+                  <p className="app-eyebrow">
+                    时间点 {handPoseCandidates.candidates[0].frame_timestamp_ms} ms，
+                    {handPoseCandidates.candidates[0].handedness} 手，
+                    {handPoseCandidates.candidates[0].valid_landmark_count}/21 个有效点。
+                  </p>
+                </Card>
               ) : null}
             </Card>
           ) : null}

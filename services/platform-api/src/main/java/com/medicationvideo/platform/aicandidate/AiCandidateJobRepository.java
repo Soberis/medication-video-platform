@@ -22,4 +22,6 @@ interface AiCandidateJobRepository extends JpaRepository<AiCandidateJob, UUID> {
 			UUID projectId, UUID clipAssetId, String inputSha256, String algorithmKey, String algorithmVersion,
 			String modelSha256, int samplingFps);
 
+	Optional<AiCandidateJob> findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(UUID projectId, UUID clipAssetId);
+
 }
