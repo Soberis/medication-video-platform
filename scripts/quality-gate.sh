@@ -74,6 +74,10 @@ if $changed_only; then
             git -C "$PROJECT_ROOT" -c core.quotepath=false ls-files --others --exclude-standard
         } | LC_ALL=C sort -u
     )"
+    if [[ -z "$changed_files" ]]; then
+        echo 'No uncommitted changes; fast quality gate has nothing to verify.'
+        exit 0
+    fi
 fi
 
 has_changed_path() {
@@ -354,7 +358,9 @@ if ((latest_matches == 0)); then
 fi
 
 openapi_contract="$PROJECT_ROOT/contracts/openapi/openapi.yaml"
-if [[ -f "$openapi_contract" ]]; then
+if $changed_only && ! has_changed_path 'contracts/openapi'; then
+    add_skip 'OpenAPI lint: no contract changes'
+elif [[ -f "$openapi_contract" ]]; then
     pnpm --dir "$PROJECT_ROOT" run contract:lint
     exit_code=$?
     if ((exit_code == 0)); then
@@ -478,14 +484,14 @@ elif [[ -f "$platform_pom" ]]; then
         add_failure 'platform-api has pom.xml but Maven Wrapper is missing'
     else
         if $changed_only; then
-            "$maven_wrapper" -f "$platform_pom" verify -DskipTests
+            "$maven_wrapper" -f "$platform_pom" spring-javaformat:validate compiler:compile -DskipTests
         else
             "$maven_wrapper" -f "$platform_pom" verify
         fi
         exit_code=$?
         if ((exit_code == 0)); then
             if $changed_only; then
-                add_pass 'Java fast verify (tests skipped)'
+                add_pass 'Java fast compile and format validation'
             else
                 add_pass 'Java verify'
             fi
@@ -502,7 +508,7 @@ if ! has_changed_path 'apps/web'; then
     add_skip 'Web gates: no apps/web changes'
 elif [[ -f "$web_package" ]]; then
     if $changed_only; then
-        web_scripts=('format:check' 'lint' 'type-check' 'test')
+        web_scripts=('format:check' 'lint' 'type-check')
     else
         web_scripts=('format:check' 'lint' 'type-check' 'test' 'build')
     fi
@@ -531,6 +537,8 @@ fi
 synthetic_upload_client="$PROJECT_ROOT/tools/synthetic-upload-client/index.mjs"
 if ! has_changed_path 'tools/synthetic-upload-client'; then
     add_skip 'Synthetic upload client unit tests: no related changes'
+elif $changed_only; then
+    add_skip 'Synthetic upload client unit tests: deferred to full verification'
 elif [[ -f "$synthetic_upload_client" ]]; then
     pnpm --dir "$PROJECT_ROOT" run synthetic-upload:test
     exit_code=$?
@@ -546,6 +554,8 @@ fi
 dataset_export_acceptance="$PROJECT_ROOT/tools/dataset-export-acceptance/index.mjs"
 if ! has_changed_path 'tools/dataset-export-acceptance'; then
     add_skip 'Dataset export acceptance guard unit tests: no related changes'
+elif $changed_only; then
+    add_skip 'Dataset export acceptance guard unit tests: deferred to full verification'
 elif [[ -f "$dataset_export_acceptance" ]]; then
     pnpm --dir "$PROJECT_ROOT" run dataset-export:acceptance:test
     exit_code=$?
@@ -561,6 +571,8 @@ fi
 web_preflight="$PROJECT_ROOT/tools/web-preflight/index.mjs"
 if ! has_changed_path 'tools/web-preflight'; then
     add_skip 'P0 Web preflight guard unit tests: no related changes'
+elif $changed_only; then
+    add_skip 'P0 Web preflight guard unit tests: deferred to full verification'
 elif [[ -f "$web_preflight" ]]; then
     pnpm --dir "$PROJECT_ROOT" run p0-web:preflight:test
     exit_code=$?
@@ -648,10 +660,14 @@ else
             add_failure "mypy failed: $project_dir"
         fi
 
-        uv run pytest
-        if (($? != 0)); then
-            project_failed=true
-            add_failure "pytest failed: $project_dir"
+        if $changed_only; then
+            add_skip "pytest: deferred to full verification for $project_dir"
+        else
+            uv run pytest
+            if (($? != 0)); then
+                project_failed=true
+                add_failure "pytest failed: $project_dir"
+            fi
         fi
 
         if [[ "$(basename "$project_dir")" == 'export-worker' ]]; then

@@ -67,6 +67,10 @@ if ($Changed) {
         & git -C $root -c core.quotepath=false diff --name-only
         & git -C $root -c core.quotepath=false ls-files --others --exclude-standard
     ) | Where-Object { $_ } | Sort-Object -Unique
+    if ($changedFiles.Count -eq 0) {
+        Write-Host 'No uncommitted changes; fast quality gate has nothing to verify.' -ForegroundColor Green
+        exit 0
+    }
 }
 
 function Test-ChangedPath {
@@ -348,7 +352,10 @@ else {
 }
 
 $openApiContract = Join-Path $root 'contracts/openapi/openapi.yaml'
-if (Test-Path -LiteralPath $openApiContract -PathType Leaf) {
+if ($Changed -and -not (Test-ChangedPath 'contracts/openapi')) {
+    Add-Skip 'OpenAPI lint: no contract changes'
+}
+elseif (Test-Path -LiteralPath $openApiContract -PathType Leaf) {
     & pnpm --dir $root run contract:lint
     if ($LASTEXITCODE -eq 0) {
         Add-Pass 'OpenAPI lint'
@@ -478,13 +485,13 @@ elseif (Test-Path -LiteralPath $platformPom) {
     }
     else {
         if ($Changed) {
-            & $mavenWrapper -f $platformPom verify -DskipTests
+            & $mavenWrapper -f $platformPom spring-javaformat:validate compiler:compile -DskipTests
         }
         else {
             & $mavenWrapper -f $platformPom verify
         }
         if ($LASTEXITCODE -eq 0) {
-            Add-Pass $(if ($Changed) { 'Java fast verify (tests skipped)' } else { 'Java verify' })
+            Add-Pass $(if ($Changed) { 'Java fast compile and format validation' } else { 'Java verify' })
         }
         else {
             Add-Failure "Java verify exited with code $LASTEXITCODE"
@@ -501,7 +508,7 @@ if (-not (Test-ChangedPath 'apps/web')) {
 }
 elseif (Test-Path -LiteralPath $webPackage) {
     $webManifest = Get-Content -LiteralPath $webPackage -Raw | ConvertFrom-Json
-    $webScripts = if ($Changed) { @('format:check', 'lint', 'type-check', 'test') } else {
+    $webScripts = if ($Changed) { @('format:check', 'lint', 'type-check') } else {
         @('format:check', 'lint', 'type-check', 'test', 'build')
     }
     foreach ($script in $webScripts) {
@@ -527,6 +534,9 @@ $syntheticUploadClient = Join-Path $root 'tools/synthetic-upload-client/index.mj
 if (-not (Test-ChangedPath 'tools/synthetic-upload-client')) {
     Add-Skip 'Synthetic upload client unit tests: no related changes'
 }
+elseif ($Changed) {
+    Add-Skip 'Synthetic upload client unit tests: deferred to full verification'
+}
 elseif (Test-Path -LiteralPath $syntheticUploadClient -PathType Leaf) {
     & pnpm --dir $root run synthetic-upload:test
     if ($LASTEXITCODE -eq 0) {
@@ -544,6 +554,9 @@ $datasetExportAcceptance = Join-Path $root 'tools/dataset-export-acceptance/inde
 if (-not (Test-ChangedPath 'tools/dataset-export-acceptance')) {
     Add-Skip 'Dataset export acceptance guard unit tests: no related changes'
 }
+elseif ($Changed) {
+    Add-Skip 'Dataset export acceptance guard unit tests: deferred to full verification'
+}
 elseif (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
     & pnpm --dir $root run dataset-export:acceptance:test
     if ($LASTEXITCODE -eq 0) {
@@ -560,6 +573,9 @@ else {
 $webPreflight = Join-Path $root 'tools/web-preflight/index.mjs'
 if (-not (Test-ChangedPath 'tools/web-preflight')) {
     Add-Skip 'P0 Web preflight guard unit tests: no related changes'
+}
+elseif ($Changed) {
+    Add-Skip 'P0 Web preflight guard unit tests: deferred to full verification'
 }
 elseif (Test-Path -LiteralPath $webPreflight -PathType Leaf) {
     & pnpm --dir $root run p0-web:preflight:test
@@ -632,10 +648,15 @@ else {
                 $projectFailed = $true
                 Add-Failure "mypy failed: $projectDir"
             }
-            & uv run pytest
-            if ($LASTEXITCODE -ne 0) {
-                $projectFailed = $true
-                Add-Failure "pytest failed: $projectDir"
+            if ($Changed) {
+                Add-Skip "pytest: deferred to full verification for $projectDir"
+            }
+            else {
+                & uv run pytest
+                if ($LASTEXITCODE -ne 0) {
+                    $projectFailed = $true
+                    Add-Failure "pytest failed: $projectDir"
+                }
             }
             if ((Split-Path -Leaf $projectDir) -eq 'export-worker') {
                 $digestOutput = @(& uv run python -c "from pathlib import Path; from medication_export_worker.config import calculate_software_digest; print(calculate_software_digest(Path('.').resolve()))")
