@@ -21,7 +21,7 @@ class AiLeaseCapabilityFactory {
 		return new Capability(token, sha256(token));
 	}
 
-	private static String sha256(String token) {
+	static String sha256(String token) {
 		try {
 			return HexFormat.of()
 				.formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.US_ASCII)));

@@ -4,10 +4,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 interface AiCandidateJobRepository extends JpaRepository<AiCandidateJob, UUID> {
 
 	Optional<AiCandidateJob> findByProjectIdAndIdempotencyKey(UUID projectId, String idempotencyKey);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT job FROM AiCandidateJob job WHERE job.aiJobId = :aiJobId")
+	Optional<AiCandidateJob> findForUpdate(@Param("aiJobId") UUID aiJobId);
 
 	Optional<AiCandidateJob> findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFps(
 			UUID projectId, UUID clipAssetId, String inputSha256, String algorithmKey, String algorithmVersion,

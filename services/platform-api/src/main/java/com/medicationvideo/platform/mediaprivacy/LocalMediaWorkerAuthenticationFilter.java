@@ -16,14 +16,24 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-final class LocalMediaWorkerAuthenticationFilter extends OncePerRequestFilter {
+public final class LocalMediaWorkerAuthenticationFilter extends OncePerRequestFilter {
 
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final byte[] expectedToken;
 
-	LocalMediaWorkerAuthenticationFilter(String expectedToken) {
+	private final String actor;
+
+	private final String role;
+
+	public LocalMediaWorkerAuthenticationFilter(String expectedToken) {
+		this(expectedToken, "local-media-worker", "ROLE_MEDIA_WORKER");
+	}
+
+	public LocalMediaWorkerAuthenticationFilter(String expectedToken, String actor, String role) {
 		this.expectedToken = expectedToken.getBytes(StandardCharsets.UTF_8);
+		this.actor = actor;
+		this.role = role;
 	}
 
 	@Override
@@ -38,8 +48,8 @@ final class LocalMediaWorkerAuthenticationFilter extends OncePerRequestFilter {
 			return;
 		}
 
-		var authentication = new UsernamePasswordAuthenticationToken(new MediaWorkerActor("local-media-worker"), null,
-				List.of(new SimpleGrantedAuthority("ROLE_MEDIA_WORKER")));
+		var authentication = new UsernamePasswordAuthenticationToken(new MediaWorkerActor(this.actor), null,
+				List.of(new SimpleGrantedAuthority(this.role)));
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		filterChain.doFilter(request, response);
 	}

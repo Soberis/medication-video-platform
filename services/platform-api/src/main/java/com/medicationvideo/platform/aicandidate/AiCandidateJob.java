@@ -160,4 +160,21 @@ class AiCandidateJob {
 		return this.updatedAt;
 	}
 
+	void start(Instant now) {
+		if (this.status == AiCandidateJobStatus.QUEUED) {
+			this.status = AiCandidateJobStatus.RUNNING;
+			this.updatedAt = now;
+		}
+	}
+
+	void succeed(Instant now) {
+		this.status = AiCandidateJobStatus.SUCCEEDED;
+		this.updatedAt = now;
+	}
+
+	void fail(Instant now) {
+		this.status = AiCandidateJobStatus.FAILED;
+		this.updatedAt = now;
+	}
+
 }

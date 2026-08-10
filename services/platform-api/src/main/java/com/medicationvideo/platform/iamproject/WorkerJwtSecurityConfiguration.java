@@ -46,6 +46,8 @@ class WorkerJwtSecurityConfiguration {
 
 	private static final String EXPORT_WORKER_ROLE = "ROLE_EXPORT_WORKER";
 
+	private static final String AI_WORKER_ROLE = "ROLE_AI_WORKER";
+
 	private static final Duration MAX_CLOCK_SKEW = Duration.ofMinutes(5);
 
 	private static final OAuth2Error MISSING_SUBJECT = new OAuth2Error("invalid_token",
@@ -76,6 +78,21 @@ class WorkerJwtSecurityConfiguration {
 		return decoder(issuerUri, jwkSetUri, requiredExportAudience, clockSkew);
 	}
 
+	@Bean("aiWorkerJwtDecoder")
+	JwtDecoder aiWorkerJwtDecoder(@Value("${platform.security.worker-jwt.issuer-uri:}") String issuerUri,
+			@Value("${platform.security.worker-jwt.jwk-set-uri:}") String jwkSetUri,
+			@Value("${platform.security.worker-jwt.media-audience:}") String mediaAudience,
+			@Value("${platform.security.worker-jwt.export-audience:}") String exportAudience,
+			@Value("${platform.security.worker-jwt.ai-audience:}") String aiAudience,
+			@Value("${platform.security.worker-jwt.clock-skew:PT1M}") Duration clockSkew) {
+		var requiredAiAudience = requireText(aiAudience, "AI Worker JWT audience");
+		if (requiredAiAudience.equals(requireText(mediaAudience, "Media Worker JWT audience"))
+				|| requiredAiAudience.equals(requireText(exportAudience, "Export Worker JWT audience"))) {
+			throw new IllegalArgumentException("AI Worker JWT audience must differ from Media and Export Workers.");
+		}
+		return decoder(issuerUri, jwkSetUri, requiredAiAudience, clockSkew);
+	}
+
 	@Bean
 	@Order(1)
 	SecurityFilterChain mediaWorkerJwtSecurityFilterChain(HttpSecurity http,
@@ -88,6 +105,13 @@ class WorkerJwtSecurityConfiguration {
 	SecurityFilterChain exportWorkerJwtSecurityFilterChain(HttpSecurity http,
 			@Qualifier("exportWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
 		return workerChain(http, "/api/v1/internal/dataset-exports/**", decoder, EXPORT_WORKER_ROLE);
+	}
+
+	@Bean
+	@Order(1)
+	SecurityFilterChain aiWorkerJwtSecurityFilterChain(HttpSecurity http,
+			@Qualifier("aiWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
+		return workerChain(http, "/api/v1/internal/ai-jobs/**", decoder, AI_WORKER_ROLE);
 	}
 
 	static JwtDecoder decoder(String issuerUri, String jwkSetUri, String audience, Duration clockSkew) {

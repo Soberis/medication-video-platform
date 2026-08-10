@@ -4779,6 +4779,94 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/lease:
+    post:
+      operationId: acquireAiHandPoseJobLease
+      tags: [AI Candidates]
+      summary: Acquire frozen input for one AI hand pose attempt
+      security: [{ aiWorkerBearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/AiJobId"
+        - $ref: "#/components/parameters/AiJobAttempt"
+        - $ref: "#/components/parameters/AiLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiWorkerLeaseRequest"
+      responses:
+        "200":
+          description: The current attempt owns the lease and received a read-only input grant.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiWorkerLeaseResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Object storage could not issue the input read grant.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/heartbeat:
+    post:
+      operationId: renewAiHandPoseJobLease
+      tags: [AI Candidates]
+      summary: Renew the current AI Worker's active attempt lease
+      security: [{ aiWorkerBearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/AiJobId"
+        - $ref: "#/components/parameters/AiJobAttempt"
+        - $ref: "#/components/parameters/AiLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiWorkerLeaseRequest" }
+      responses:
+        "200":
+          description: The active lease was renewed.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiWorkerHeartbeatResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/result:
+    put:
+      operationId: acceptAiHandPoseResult
+      tags: [AI Candidates]
+      summary: Idempotently accept one MediaPipe hand pose candidate result
+      description: >-
+        Internal AI Worker endpoint. Validates the service identity, opaque lease, frozen media and
+        model SHA-256 values, timing window and result-message identity. Accepted detections are
+        persisted only as CandidateAnnotation records; they never create formal annotations.
+      security: [{ aiWorkerBearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/AiJobId"
+        - $ref: "#/components/parameters/AiJobAttempt"
+        - $ref: "#/components/parameters/AiLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "../events/ai-hand-pose-result-v1.schema.json" }
+      responses:
+        "204":
+          description: Result accepted, or its exact previous receipt replayed.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/lease:
     post:
       operationId: acquireDatasetExportLease
@@ -5084,6 +5172,22 @@ components:
         minLength: 43
         maxLength: 128
         pattern: ^[A-Za-z0-9_-]+$
+    AiJobId:
+      name: ai_job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AiJobAttempt:
+      name: attempt
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    AiLeaseToken:
+      name: X-AI-Lease-Token
+      in: header
+      required: true
+      description: Opaque capability from the restricted AI broker envelope; never log it.
+      schema: { type: string, minLength: 43, maxLength: 128, pattern: "^[A-Za-z0-9_-]+$" }
     DatasetExportId:
       name: dataset_export_id
       in: path
@@ -5147,6 +5251,14 @@ components:
         endpoints. Outside local/test it is a signed JWT with HTTPS issuer/JWK Set, a non-empty
         subject, bounded validity and exactly the configured Export Worker audience. Its audience
         must differ from Media Worker; local/test retains a distinct synthetic static bearer only.
+    aiWorkerBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Independent AI Worker service identity accepted only by internal AI candidate job endpoints.
+        Outside local/test it is a signed JWT with its own exact audience; local/test retains a
+        distinct synthetic static bearer only.
   responses:
     BadRequest:
       description: The request is invalid.
@@ -9722,6 +9834,41 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+    AiWorkerLeaseRequest:
+      type: object
+      additionalProperties: false
+      required: [worker_id]
+      properties:
+        worker_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+    AiWorkerLeaseResponse:
+      type: object
+      additionalProperties: false
+      required: [job_id, attempt, input_url, expires_at, lease_until, heartbeat_interval_seconds, input_sha256, input_size_bytes, content_type, model_sha256, sampling_fps]
+      properties:
+        job_id: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        input_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        lease_until: { type: string, format: date-time }
+        heartbeat_interval_seconds: { type: integer, format: int64, minimum: 1 }
+        input_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        input_size_bytes: { type: integer, format: int64, minimum: 1 }
+        content_type: { type: string }
+        model_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        sampling_fps: { type: integer, minimum: 1, maximum: 15 }
+    AiWorkerHeartbeatResponse:
+      type: object
+      additionalProperties: false
+      required: [job_id, attempt, lease_until, heartbeat_interval_seconds]
+      properties:
+        job_id: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        lease_until: { type: string, format: date-time }
+        heartbeat_interval_seconds: { type: integer, format: int64, minimum: 1 }
     MediaLeaseResponse:
       type: object
       additionalProperties: false
