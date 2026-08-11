@@ -643,7 +643,7 @@ else {
                 $projectFailed = $true
                 Add-Failure "Ruff failed: $projectDir"
             }
-            & uv run mypy .
+            & uv run python -m mypy .
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "mypy failed: $projectDir"
@@ -652,7 +652,7 @@ else {
                 Add-Skip "pytest: deferred to full verification for $projectDir"
             }
             else {
-                & uv run pytest
+                & uv run python -m pytest
                 if ($LASTEXITCODE -ne 0) {
                     $projectFailed = $true
                     Add-Failure "pytest failed: $projectDir"

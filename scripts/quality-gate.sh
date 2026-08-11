@@ -654,7 +654,7 @@ else
             add_failure "Ruff failed: $project_dir"
         fi
 
-        uv run mypy .
+        uv run python -m mypy .
         if (($? != 0)); then
             project_failed=true
             add_failure "mypy failed: $project_dir"
@@ -663,7 +663,7 @@ else
         if $changed_only; then
             add_skip "pytest: deferred to full verification for $project_dir"
         else
-            uv run pytest
+            uv run python -m pytest
             if (($? != 0)); then
                 project_failed=true
                 add_failure "pytest failed: $project_dir"

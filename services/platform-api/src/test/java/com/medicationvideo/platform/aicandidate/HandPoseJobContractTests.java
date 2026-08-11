@@ -28,6 +28,7 @@ class HandPoseJobContractTests {
 	void clearState() {
 		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM candidate_annotation");
+		this.jdbcTemplate.update("DELETE FROM ai_job_result_inbox");
 		this.jdbcTemplate.update("DELETE FROM ai_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM ai_job_idempotency_receipt");
 		this.jdbcTemplate.update("DELETE FROM ai_job");

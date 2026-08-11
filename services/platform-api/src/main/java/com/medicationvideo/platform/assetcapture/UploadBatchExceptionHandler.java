@@ -15,7 +15,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
 @RestControllerAdvice(assignableTypes = { UploadBatchController.class, UploadFileController.class,
-		UploadMultipartController.class, CameraConfigurationController.class, AssetCatalogController.class })
+		UploadMultipartController.class, CameraConfigurationController.class, AssetCatalogController.class,
+		ExternalVideoIngestManifestController.class })
 class UploadBatchExceptionHandler {
 
 	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,

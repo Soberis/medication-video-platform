@@ -52,7 +52,9 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
       ? candidateData.candidates
       : []
   const handPoseJob =
-    candidateData && candidateData.assetId === selectedStream?.clip_asset_id ? candidateData.job : null
+    candidateData && candidateData.assetId === selectedStream?.clip_asset_id
+      ? candidateData.job
+      : null
   const canResubmitQueuedHandPose =
     handPoseJob?.status === 'QUEUED' &&
     queuedRecoveryClock - new Date(handPoseJob.updated_at).getTime() >= QUEUED_RECOVERY_DELAY_MS
@@ -213,7 +215,7 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
                   ? '未完成，请稍后重试。'
                   : handPoseJob.status === 'QUEUED' && canResubmitQueuedHandPose
                     ? '排队较久未开始，可重新提交。'
-                  : '正在检测，页面会自动更新。'}
+                    : '正在检测，页面会自动更新。'}
             </span>
           ) : (
             <span>还未对该相机视频执行手部检测。</span>
@@ -231,7 +233,9 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
               ? `重新提交相机 ${orderedStreams.indexOf(selectedStream) + 1} 的检测`
               : `检测相机 ${orderedStreams.indexOf(selectedStream) + 1} 的手部姿态`}
           </Button>
-          {handPoseMessage ? <span className="inline-action-message">{handPoseMessage}</span> : null}
+          {handPoseMessage ? (
+            <span className="inline-action-message">{handPoseMessage}</span>
+          ) : null}
         </div>
       ) : null}
       {selectedStream ? (

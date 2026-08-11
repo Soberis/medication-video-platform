@@ -49,6 +49,46 @@ class AiCandidateJobAttempt {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
+	@Column(name = "analysis_complete")
+	private Boolean analysisComplete;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "hand_result", length = 32)
+	private HandPoseResult handResult;
+
+	@Column(name = "started_at")
+	private Instant startedAt;
+
+	@Column(name = "completed_at")
+	private Instant completedAt;
+
+	@Column(name = "total_video_frames")
+	private Long totalVideoFrames;
+
+	@Column(name = "inference_frame_count")
+	private Long inferenceFrameCount;
+
+	@Column(name = "frames_with_hand")
+	private Long framesWithHand;
+
+	@Column(name = "frames_without_hand")
+	private Long framesWithoutHand;
+
+	@Column(name = "left_hand_detection_count")
+	private Long leftHandDetectionCount;
+
+	@Column(name = "right_hand_detection_count")
+	private Long rightHandDetectionCount;
+
+	@Column(name = "invalid_landmark_count")
+	private Long invalidLandmarkCount;
+
+	@Column(name = "processing_duration_ms")
+	private Long processingDurationMs;
+
+	@Column(name = "failure_reason", length = 128)
+	private String failureReason;
+
 	protected AiCandidateJobAttempt() {
 	}
 
@@ -96,6 +136,22 @@ class AiCandidateJobAttempt {
 		this.updatedAt = now;
 	}
 
+	void recordRun(AiHandPoseResultRequest request) {
+		this.analysisComplete = request.analysisComplete();
+		this.handResult = request.handResult();
+		this.startedAt = request.startedAt();
+		this.completedAt = request.completedAt();
+		this.totalVideoFrames = request.totalVideoFrames();
+		this.inferenceFrameCount = request.inferenceFrameCount();
+		this.framesWithHand = request.framesWithHand();
+		this.framesWithoutHand = request.framesWithoutHand();
+		this.leftHandDetectionCount = request.leftHandDetectionCount();
+		this.rightHandDetectionCount = request.rightHandDetectionCount();
+		this.invalidLandmarkCount = request.invalidLandmarkCount();
+		this.processingDurationMs = request.processingDurationMs();
+		this.failureReason = request.failureReason();
+	}
+
 	void fail(Instant now) {
 		requireActiveLease(now);
 		this.status = AiCandidateJobAttemptStatus.FAILED;
@@ -141,6 +197,58 @@ class AiCandidateJobAttempt {
 
 	Instant getLeaseUntil() {
 		return this.leaseUntil;
+	}
+
+	boolean isAnalysisComplete() {
+		return Boolean.TRUE.equals(this.analysisComplete);
+	}
+
+	String getHandResult() {
+		return this.handResult == null ? null : this.handResult.name();
+	}
+
+	Instant getStartedAt() {
+		return this.startedAt;
+	}
+
+	Instant getCompletedAt() {
+		return this.completedAt;
+	}
+
+	Long getTotalVideoFrames() {
+		return this.totalVideoFrames;
+	}
+
+	Long getInferenceFrameCount() {
+		return this.inferenceFrameCount;
+	}
+
+	Long getFramesWithHand() {
+		return this.framesWithHand;
+	}
+
+	Long getFramesWithoutHand() {
+		return this.framesWithoutHand;
+	}
+
+	Long getLeftHandDetectionCount() {
+		return this.leftHandDetectionCount;
+	}
+
+	Long getRightHandDetectionCount() {
+		return this.rightHandDetectionCount;
+	}
+
+	Long getInvalidLandmarkCount() {
+		return this.invalidLandmarkCount;
+	}
+
+	Long getProcessingDurationMs() {
+		return this.processingDurationMs;
+	}
+
+	String getFailureReason() {
+		return this.failureReason;
 	}
 
 	static AiCandidateJobAttempt queue(UUID aiJobId, int attempt, UUID messageId, String leaseTokenHash,

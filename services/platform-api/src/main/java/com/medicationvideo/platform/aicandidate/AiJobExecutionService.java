@@ -115,23 +115,35 @@ class AiJobExecutionService {
 					"The Worker result timestamps exceed the approved clock-skew window.", 409);
 		}
 		var receivedAt = Timestamp.from(now);
-		for (var candidate : request.candidates()) {
-			this.jdbcTemplate.update("""
-					INSERT INTO candidate_annotation (
-					    candidate_annotation_id, ai_job_id, project_id, clip_asset_id, frame_timestamp_ms, hand_index,
-					    handedness, handedness_score, bounding_box, landmarks, image_width, image_height,
-					    valid_landmark_count, created_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), CAST(? AS JSONB), ?, ?, ?, ?)
-					""", UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), job.getClipAssetId(),
-					candidate.frameTimestampMs(), candidate.handIndex(), candidate.handedness(),
-					candidate.handednessScore(), candidate.boundingBox().toString(), candidate.landmarks().toString(),
-					candidate.imageWidth(), candidate.imageHeight(), candidate.validLandmarkCount(), receivedAt);
+		if (request.outcome() == AiHandPoseRunOutcome.SUCCEEDED) {
+			for (var candidate : request.candidates()) {
+				this.jdbcTemplate.update(
+						"""
+								INSERT INTO candidate_annotation (
+								    candidate_annotation_id, ai_job_id, project_id, clip_asset_id, frame_timestamp_ms, hand_index,
+								    handedness, handedness_score, bounding_box, landmarks, image_width, image_height,
+								    valid_landmark_count, created_at)
+								VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), CAST(? AS JSONB), ?, ?, ?, ?)
+								""",
+						UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), job.getClipAssetId(),
+						candidate.frameTimestampMs(), candidate.handIndex(), candidate.handedness(),
+						candidate.handednessScore(), candidate.boundingBox().toString(),
+						candidate.landmarks().toString(), candidate.imageWidth(), candidate.imageHeight(),
+						candidate.validLandmarkCount(), receivedAt);
+			}
 		}
 		this.jdbcTemplate.update(
 				"INSERT INTO ai_job_result_inbox (message_id, ai_job_id, attempt, result_sha256, received_at) VALUES (?, ?, ?, ?, ?)",
 				request.messageId(), jobId, attemptNumber, digest, receivedAt);
-		attempt.succeed(now);
-		job.succeed(now);
+		attempt.recordRun(request);
+		if (request.outcome() == AiHandPoseRunOutcome.SUCCEEDED) {
+			attempt.succeed(now);
+			job.succeed(now, request.handResult());
+		}
+		else {
+			attempt.fail(now);
+			job.fail(now);
+		}
 	}
 
 	private AiCandidateJob lockJob(UUID jobId) {

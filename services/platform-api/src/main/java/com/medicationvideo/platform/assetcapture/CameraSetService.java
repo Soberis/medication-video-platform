@@ -39,7 +39,7 @@ class CameraSetService {
 		var fingerprint = fingerprint(cameraSetKey, configurationVersion, request);
 		var existing = find(projectId, cameraSetKey, configurationVersion);
 		if (existing != null) {
-			return requireSameConfiguration(existing, fingerprint);
+			return requireSameConfiguration(existing, fingerprint, request);
 		}
 
 		try {
@@ -53,7 +53,7 @@ class CameraSetService {
 		catch (DataIntegrityViolationException exception) {
 			var concurrent = find(projectId, cameraSetKey, configurationVersion);
 			if (concurrent != null) {
-				return requireSameConfiguration(concurrent, fingerprint);
+				return requireSameConfiguration(concurrent, fingerprint, request);
 			}
 			throw exception;
 		}
@@ -63,7 +63,7 @@ class CameraSetService {
 			CameraSetRequest request, String fingerprint) {
 		var existing = find(projectId, cameraSetKey, configurationVersion);
 		if (existing != null) {
-			return requireSameConfiguration(existing, fingerprint);
+			return requireSameConfiguration(existing, fingerprint, request);
 		}
 		var channelIds = request.members().stream().map(CameraSetMemberRequest::cameraChannelId).toList();
 		var ownedChannels = this.channelRepository.findAllByProjectIdAndCameraChannelIdIn(projectId, channelIds);
@@ -90,9 +90,19 @@ class CameraSetService {
 			.orElse(null);
 	}
 
-	private CameraSetResponse requireSameConfiguration(CameraSetConfiguration configuration, String fingerprint) {
-		if (!MessageDigest.isEqual(configuration.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
-				fingerprint.getBytes(StandardCharsets.US_ASCII))) {
+	private CameraSetResponse requireSameConfiguration(CameraSetConfiguration configuration, String fingerprint,
+			CameraSetRequest request) {
+		var sameFingerprint = MessageDigest.isEqual(
+				configuration.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
+				fingerprint.getBytes(StandardCharsets.US_ASCII));
+		var legacyDefault = request.members().stream().allMatch(member -> member.enabledForHandDetection());
+		if (!sameFingerprint && legacyDefault) {
+			sameFingerprint = MessageDigest.isEqual(
+					configuration.getRequestFingerprint().getBytes(StandardCharsets.US_ASCII),
+					legacyFingerprint(configuration.getCameraSetKey(), configuration.getConfigurationVersion(), request)
+						.getBytes(StandardCharsets.US_ASCII));
+		}
+		if (!sameFingerprint) {
 			throw failure("CAMERA_SET_VERSION_CONFLICT",
 					"The immutable camera set version already exists with different content.");
 		}
@@ -120,6 +130,15 @@ class CameraSetService {
 	}
 
 	private static String fingerprint(String cameraSetKey, int configurationVersion, CameraSetRequest request) {
+		return fingerprint(cameraSetKey, configurationVersion, request, true);
+	}
+
+	private static String legacyFingerprint(String cameraSetKey, int configurationVersion, CameraSetRequest request) {
+		return fingerprint(cameraSetKey, configurationVersion, request, false);
+	}
+
+	private static String fingerprint(String cameraSetKey, int configurationVersion, CameraSetRequest request,
+			boolean includeHandDetectionFlag) {
 		var canonical = new StringBuilder("camera-set-v1\n").append(cameraSetKey)
 			.append('\n')
 			.append(configurationVersion)
@@ -129,16 +148,21 @@ class CameraSetService {
 		request.members()
 			.stream()
 			.sorted(java.util.Comparator.comparingInt(CameraSetMemberRequest::cameraIndex))
-			.forEach(member -> canonical.append(member.cameraChannelId())
-				.append('\t')
-				.append(member.cameraIndex())
-				.append('\t')
-				.append(member.cameraRole())
-				.append('\t')
-				.append(member.mountPosition())
-				.append('\t')
-				.append(member.enabled())
-				.append('\n'));
+			.forEach(member -> {
+				canonical.append(member.cameraChannelId())
+					.append('\t')
+					.append(member.cameraIndex())
+					.append('\t')
+					.append(member.cameraRole())
+					.append('\t')
+					.append(member.mountPosition())
+					.append('\t')
+					.append(member.enabled());
+				if (includeHandDetectionFlag) {
+					canonical.append('\t').append(member.enabledForHandDetection());
+				}
+				canonical.append('\n');
+			});
 		try {
 			return HexFormat.of()
 				.formatHex(MessageDigest.getInstance("SHA-256")

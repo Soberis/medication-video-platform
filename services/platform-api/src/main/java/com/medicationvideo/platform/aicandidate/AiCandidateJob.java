@@ -53,6 +53,10 @@ class AiCandidateJob {
 	@Column(name = "status", nullable = false, length = 32)
 	private AiCandidateJobStatus status;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "hand_result", nullable = false, length = 32)
+	private HandPoseResult handResult;
+
 	@Column(name = "idempotency_key", nullable = false, length = 128, updatable = false)
 	private String idempotencyKey;
 
@@ -90,6 +94,7 @@ class AiCandidateJob {
 		this.samplingFps = HandPoseProfile.SAMPLING_FPS;
 		this.profileSha256 = HandPoseProfile.PROFILE_SHA256;
 		this.status = AiCandidateJobStatus.QUEUED;
+		this.handResult = HandPoseResult.UNKNOWN;
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
 		this.requestedBy = requestedBy;
@@ -152,6 +157,10 @@ class AiCandidateJob {
 		return this.status;
 	}
 
+	HandPoseResult getHandResult() {
+		return this.handResult;
+	}
+
 	String getRequestFingerprint() {
 		return this.requestFingerprint;
 	}
@@ -183,13 +192,15 @@ class AiCandidateJob {
 		this.updatedAt = now;
 	}
 
-	void succeed(Instant now) {
+	void succeed(Instant now, HandPoseResult handResult) {
 		this.status = AiCandidateJobStatus.SUCCEEDED;
+		this.handResult = handResult;
 		this.updatedAt = now;
 	}
 
 	void fail(Instant now) {
 		this.status = AiCandidateJobStatus.FAILED;
+		this.handResult = HandPoseResult.UNKNOWN;
 		this.updatedAt = now;
 	}
 

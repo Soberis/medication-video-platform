@@ -5,5 +5,6 @@ import java.util.UUID;
 
 record ClipAssetSessionBindingResponse(UUID captureSessionId, UUID cameraStreamId, UUID cameraChannelId,
 		int cameraIndex, String cameraRole, String mountPosition, Instant recordStartUtc, long timeOffsetMs,
-		DeclaredSyncStatus declaredSyncStatus, CameraStreamStatus streamStatus, CaptureQualityStatus qualityStatus) {
+		DeclaredSyncStatus declaredSyncStatus, CameraStreamStatus streamStatus, CaptureQualityStatus qualityStatus,
+		boolean enabledForHandDetection) {
 }

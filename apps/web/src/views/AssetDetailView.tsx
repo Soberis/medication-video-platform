@@ -119,7 +119,10 @@ export default function AssetDetailView() {
     qualityReview?.decision === 'QUALIFIED' &&
     annotationAssignees.length > 0
   const canRequestHandPose =
-    projectRole !== null && detail?.status === 'INGESTED' && handPoseJob === null
+    projectRole !== null &&
+    detail?.status === 'INGESTED' &&
+    detail.session_binding?.enabled_for_hand_detection !== false &&
+    handPoseJob === null
   const classificationChanged = selectedFolderId !== (detail?.folder_id ?? '')
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
@@ -691,14 +694,33 @@ export default function AssetDetailView() {
               {handPoseJob ? (
                 <Alert
                   className="playback-feedback"
-                  type={handPoseJob.status === 'SUCCEEDED' ? 'success' : 'info'}
+                  type={
+                    handPoseJob.status === 'FAILED'
+                      ? 'error'
+                      : handPoseJob.status === 'SUCCEEDED'
+                        ? 'success'
+                        : 'info'
+                  }
                   title={
-                    handPoseJob.status === 'SUCCEEDED' ? '手部姿态检测完成' : '正在检测手部姿态'
+                    handPoseJob.status === 'FAILED'
+                      ? '手部检测失败'
+                      : handPoseJob.status !== 'SUCCEEDED'
+                        ? '正在检测手部姿态'
+                        : handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                          ? '检测完成：未发现手部'
+                          : handPoseJob.hand_result === 'HAND_DETECTED'
+                            ? '检测完成：发现手部'
+                            : '手部姿态检测完成'
                   }
                   description={
-                    handPoseJob.status === 'SUCCEEDED'
-                      ? `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
-                      : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
+                    handPoseJob.status === 'FAILED'
+                      ? (handPoseJob.run_summary?.failure_reason ??
+                        '本次手部检测未完成，请稍后重试。')
+                      : handPoseJob.status === 'SUCCEEDED'
+                        ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                          ? '本次视频已完整分析，但没有发现可用手部候选。原视频仍可直接播放。'
+                          : `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
+                        : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
                   }
                   showIcon
                 />

@@ -167,9 +167,10 @@ public class AssetCatalogQueryService {
 				       stream.camera_stream_id,
 				       stream.camera_channel_id,
 				       stream.camera_index,
-				       member.camera_role,
-				       member.mount_position,
-				       stream.record_start_utc,
+				      member.camera_role,
+				      member.mount_position,
+				      member.enabled_for_hand_detection,
+				     stream.record_start_utc,
 				       stream.time_offset_ms,
 				       stream.declared_sync_status,
 				       stream.stream_status,
@@ -330,14 +331,14 @@ public class AssetCatalogQueryService {
 			.filter(existing -> !existing.isDeleted())
 			.orElseThrow(() -> new AssetCatalogQueryException("CLIP_ASSET_NOT_FOUND",
 					"The clip asset was not found in the current project."));
-		var cameraRole = this.streamRepository.findByClipAssetId(clipAssetId)
+		var binding = this.streamRepository.findByClipAssetId(clipAssetId)
 			.map(stream -> this.snapshotMemberRepository.findById(stream.getCameraSetSnapshotMemberId())
-				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching snapshot member."))
-				.getCameraRole())
-			.orElse(null);
+				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching snapshot member.")));
+		var cameraRole = binding.map(CameraSetSnapshotMember::getCameraRole).orElse(null);
+		var enabledForHandDetection = binding.map(CameraSetSnapshotMember::isEnabledForHandDetection).orElse(false);
 		return new ClipAssetInputSummary(asset.getClipAssetId(), asset.getProjectId(), asset.getContentType(),
-				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), cameraRole, asset.getCreatedAt(),
-				asset.getUpdatedAt());
+				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), cameraRole, enabledForHandDetection,
+				asset.getCreatedAt(), asset.getUpdatedAt());
 	}
 
 	private CaptureSessionListItemResponse mapCaptureSession(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -364,7 +365,8 @@ public class AssetCatalogQueryService {
 					resultSet.getLong("time_offset_ms"),
 					DeclaredSyncStatus.valueOf(resultSet.getString("declared_sync_status")),
 					CameraStreamStatus.valueOf(resultSet.getString("stream_status")),
-					CaptureQualityStatus.valueOf(resultSet.getString("stream_quality_status")));
+					CaptureQualityStatus.valueOf(resultSet.getString("stream_quality_status")),
+					resultSet.getBoolean("enabled_for_hand_detection"));
 		}
 		var response = new ClipAssetReadResponse(resultSet.getObject("clip_asset_id", UUID.class),
 				resultSet.getObject("batch_id", UUID.class), resultSet.getObject("source_upload_file_id", UUID.class),
@@ -388,7 +390,7 @@ public class AssetCatalogQueryService {
 		return new ClipAssetSessionBindingResponse(stream.getCaptureSessionId(), stream.getCameraStreamId(),
 				stream.getCameraChannelId(), stream.getCameraIndex(), member.getCameraRole(), member.getMountPosition(),
 				stream.getRecordStartUtc(), stream.getTimeOffsetMs(), stream.getDeclaredSyncStatus(),
-				stream.getStreamStatus(), stream.getQualityStatus());
+				stream.getStreamStatus(), stream.getQualityStatus(), member.isEnabledForHandDetection());
 	}
 
 	private static Instant instant(ResultSet resultSet, String column) throws SQLException {

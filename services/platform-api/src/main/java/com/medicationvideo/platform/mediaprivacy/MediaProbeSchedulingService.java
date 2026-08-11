@@ -6,13 +6,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.medicationvideo.platform.assetcapture.MediaProbeSchedulingPort;
+
 /**
  * Public cross-module application service for scheduling the frozen media probe after
  * upload integrity has completed. It deliberately exposes neither job internals nor
  * broker details.
  */
 @Service
-public class MediaProbeSchedulingService {
+public class MediaProbeSchedulingService implements MediaProbeSchedulingPort {
 
 	private final MediaJobService mediaJobService;
 
@@ -25,6 +27,7 @@ public class MediaProbeSchedulingService {
 	}
 
 	@Transactional
+	@Override
 	public void ensureForUploadedClip(UUID projectId, UUID clipAssetId) {
 		if (!this.autoOnUploadCompletion) {
 			return;

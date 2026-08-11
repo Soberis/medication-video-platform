@@ -50,7 +50,7 @@ export default function AppShell() {
             项目
           </NavLink>
           {projectId ? <NavLink to={paths.sessions(projectId)}>配药操作</NavLink> : null}
-          {projectId ? <NavLink to={paths.assets(projectId)}>视频资产</NavLink> : null}
+          {projectId ? <NavLink to={paths.videos(projectId)}>视频管理</NavLink> : null}
           {projectId ? <NavLink to={paths.annotationTasks(projectId)}>标注任务</NavLink> : null}
           {projectId ? <NavLink to={paths.datasets(projectId)}>数据集版本</NavLink> : null}
           <NavLink end to={paths.localUpload}>
@@ -72,6 +72,11 @@ export default function AppShell() {
               {projectId ? (
                 <NavLink end to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
                   采集事件日志
+                </NavLink>
+              ) : null}
+              {projectId ? (
+                <NavLink end to={paths.assets(projectId)} onClick={closeManagementMenu}>
+                  视频资产（高级）
                 </NavLink>
               ) : null}
               <NavLink end to={paths.uploads} onClick={closeManagementMenu}>

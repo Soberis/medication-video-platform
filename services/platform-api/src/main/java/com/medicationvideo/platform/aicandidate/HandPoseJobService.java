@@ -6,10 +6,8 @@ import java.time.Instant;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +20,7 @@ import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
+import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 
 @Service
 class HandPoseJobService {
@@ -40,17 +39,18 @@ class HandPoseJobService {
 
 	private final AiCandidateJobAttemptQueueService attemptQueue;
 
-	private final String modelSha256;
+	private final MediaDurationQueryService durationQueryService;
 
-	private final Set<String> approvedCameraRoles;
+	private final String modelSha256;
 
 	private final boolean enabled;
 
+	@Autowired
 	HandPoseJobService(ProjectAccessService projectAccessService, AssetCatalogQueryService assetCatalog,
 			AiCandidateJobRepository repository, AiCandidateJobIdempotencyReceiptRepository receiptRepository,
 			AuditEventRecorder auditRecorder, AiCandidateJobAttemptQueueService attemptQueue,
+			MediaDurationQueryService durationQueryService,
 			@Value("${platform.ai.hand-pose.model-sha256:}") String modelSha256,
-			@Value("${platform.ai.hand-pose.approved-camera-roles:}") String approvedCameraRoles,
 			@Value("${platform.ai.hand-pose.enabled:false}") boolean enabled) {
 		this.projectAccessService = projectAccessService;
 		this.assetCatalog = assetCatalog;
@@ -58,12 +58,21 @@ class HandPoseJobService {
 		this.receiptRepository = receiptRepository;
 		this.auditRecorder = auditRecorder;
 		this.attemptQueue = attemptQueue;
+		this.durationQueryService = durationQueryService;
 		this.modelSha256 = modelSha256;
-		this.approvedCameraRoles = Arrays.stream(approvedCameraRoles.split(","))
-			.map(String::trim)
-			.filter(role -> role.matches("^[A-Z][A-Z0-9_]{0,63}$"))
-			.collect(Collectors.toUnmodifiableSet());
 		this.enabled = enabled;
+	}
+
+	/**
+	 * Compatibility constructor for narrow unit tests; the old role value is
+	 * intentionally ignored.
+	 */
+	HandPoseJobService(ProjectAccessService projectAccessService, AssetCatalogQueryService assetCatalog,
+			AiCandidateJobRepository repository, AiCandidateJobIdempotencyReceiptRepository receiptRepository,
+			AuditEventRecorder auditRecorder, AiCandidateJobAttemptQueueService attemptQueue, String modelSha256,
+			String ignoredApprovedCameraRoles, boolean enabled) {
+		this(projectAccessService, assetCatalog, repository, receiptRepository, auditRecorder, attemptQueue,
+				(MediaDurationQueryService) null, modelSha256, enabled);
 	}
 
 	@Transactional
@@ -75,16 +84,17 @@ class HandPoseJobService {
 		var fingerprint = fingerprint(projectId, clipAssetId);
 		var receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
 		if (receipt.isPresent()) {
-			return HandPoseJobResponse.from(requireSameRequest(receipt.get(), fingerprint));
+			return response(requireSameRequest(receipt.get(), fingerprint));
 		}
 		var legacyReplay = this.repository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
 		if (legacyReplay.isPresent()) {
 			var job = requireSameRequest(legacyReplay.get(), fingerprint);
 			this.recordReceipt(job, idempotencyKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
-			return HandPoseJobResponse.from(job);
+			return response(job);
 		}
 		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
-		ensureEligible(input, this.approvedCameraRoles);
+		ensureEligible(input);
+		ensureCapacity(input, projectId, clipAssetId);
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var natural = this.repository
 			.findByProjectIdAndClipAssetIdAndInputSha256AndAlgorithmKeyAndAlgorithmVersionAndModelSha256AndSamplingFpsAndProfileSha256(
@@ -95,7 +105,7 @@ class HandPoseJobService {
 			var job = requireSameRequest(natural.get(), fingerprint);
 			requeueStalledDelivery(job, now, actorId, projectRole.name(), requestId, traceId);
 			this.recordReceipt(job, idempotencyKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
-			return HandPoseJobResponse.from(job);
+			return response(job);
 		}
 		var job = this.repository
 			.save(AiCandidateJob.queue(projectId, clipAssetId, this.modelSha256, input.inputDigest(),
@@ -107,7 +117,7 @@ class HandPoseJobService {
 				"MEDIAPIPE_HAND_LANDMARKER", requestId, traceId, "ROLE_" + projectRole.name(),
 				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
 						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
-		return HandPoseJobResponse.from(job);
+		return response(job);
 	}
 
 	private void requeueStalledDelivery(AiCandidateJob job, Instant now, String actorId, String projectRole,
@@ -134,7 +144,7 @@ class HandPoseJobService {
 			.filter(candidate -> candidate.getProjectId().equals(projectId))
 			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_JOB_NOT_FOUND",
 					"The hand pose job was not found.", 404));
-		return HandPoseJobResponse.from(job);
+		return response(job);
 	}
 
 	private void validateModel() {
@@ -151,15 +161,31 @@ class HandPoseJobService {
 		}
 	}
 
-	private static void ensureEligible(ClipAssetInputSummary input, Set<String> approvedCameraRoles) {
+	private void ensureCapacity(ClipAssetInputSummary input, UUID projectId, UUID clipAssetId) {
+		if (this.durationQueryService == null) {
+			return;
+		}
+		var durationFact = this.durationQueryService.findLatestVerifiedDurationFact(projectId, clipAssetId)
+			.filter(fact -> fact.inputDigest().equals(input.inputDigest()))
+			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_MEDIA_SUMMARY_REQUIRED",
+					"A verified media summary is required before hand detection can start.", 409));
+		HandPoseCapacityGuard.requireWithinP0ResultLimit(durationFact.durationMicroseconds(),
+				HandPoseProfile.SAMPLING_FPS, HandPoseProfile.MAX_HANDS);
+	}
+
+	private static void ensureEligible(ClipAssetInputSummary input) {
 		if (input.status() != ClipAssetStatus.INGESTED || !input.contentType().startsWith("video/")) {
 			throw new HandPoseJobException("CLIP_ASSET_NOT_READY_FOR_AI_CANDIDATES",
 					"Only a media-processed video clip asset can receive hand pose candidates.", 409);
 		}
-		if (input.cameraRole() == null || !approvedCameraRoles.contains(input.cameraRole())) {
-			throw new HandPoseJobException("CLIP_ASSET_CAMERA_ROLE_NOT_APPROVED_FOR_AI_CANDIDATES",
-					"Only a pre-approved in-cabin camera role can receive hand pose candidates.", 409);
+		if (!input.enabledForHandDetection()) {
+			throw new HandPoseJobException("CLIP_ASSET_CAMERA_HAND_DETECTION_DISABLED",
+					"Hand detection is disabled for the camera that captured this video.", 409);
 		}
+	}
+
+	private HandPoseJobResponse response(AiCandidateJob job) {
+		return HandPoseJobResponse.from(job, this.attemptQueue.latest(job.getAiJobId()));
 	}
 
 	private AiCandidateJob requireSameRequest(AiCandidateJobIdempotencyReceipt receipt, String fingerprint) {

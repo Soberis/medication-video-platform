@@ -15,6 +15,8 @@ final class HandPoseProfile {
 
 	static final int MAX_HANDS = 2;
 
+	static final int MAX_CANDIDATES = 20_000;
+
 	static final String MIN_HAND_DETECTION_CONFIDENCE = "0.5";
 
 	static final String MIN_HAND_PRESENCE_CONFIDENCE = "0.5";

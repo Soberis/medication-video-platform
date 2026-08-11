@@ -8,8 +8,6 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.medicationvideo.platform.mediaprivacy.MediaProbeSchedulingService;
-
 @Service
 class UploadBatchCompletionService {
 
@@ -21,16 +19,16 @@ class UploadBatchCompletionService {
 
 	private final CaptureEventLogRepository captureEventLogRepository;
 
-	private final MediaProbeSchedulingService mediaProbeSchedulingService;
+	private final MediaProbeSchedulingPort mediaProbeSchedulingPort;
 
 	UploadBatchCompletionService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
 			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository,
-			MediaProbeSchedulingService mediaProbeSchedulingService) {
+			MediaProbeSchedulingPort mediaProbeSchedulingPort) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.captureEventLogRepository = captureEventLogRepository;
-		this.mediaProbeSchedulingService = mediaProbeSchedulingService;
+		this.mediaProbeSchedulingPort = mediaProbeSchedulingPort;
 	}
 
 	@Transactional
@@ -68,7 +66,7 @@ class UploadBatchCompletionService {
 		this.clipAssetRepository.saveAllAndFlush(assets);
 		this.captureEventLogRepository.saveAllAndFlush(eventLogs);
 		for (var asset : assets) {
-			this.mediaProbeSchedulingService.ensureForUploadedClip(projectId, asset.getClipAssetId());
+			this.mediaProbeSchedulingPort.ensureForUploadedClip(projectId, asset.getClipAssetId());
 		}
 		batch.markCompleted(verifiedManifestSha256, now);
 		this.batchRepository.saveAndFlush(batch);

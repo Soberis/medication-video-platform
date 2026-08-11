@@ -327,8 +327,19 @@ if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
     }
     $aiWorkerBearerToken = [Environment]::GetEnvironmentVariable('AI_WORKER_BEARER_TOKEN', 'Process')
     $aiWorkerBearerTokenFile = [Environment]::GetEnvironmentVariable('AI_WORKER_BEARER_TOKEN_FILE', 'Process')
+    if (-not [string]::IsNullOrWhiteSpace($aiWorkerBearerToken) -and -not [string]::IsNullOrWhiteSpace($aiWorkerBearerTokenFile)) {
+        throw 'Configure exactly one of AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE.'
+    }
     if ([string]::IsNullOrWhiteSpace($aiWorkerBearerToken) -and [string]::IsNullOrWhiteSpace($aiWorkerBearerTokenFile)) {
         throw 'AI Worker startup requires AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE when AI_HAND_POSE_ENABLED=true.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($aiWorkerBearerTokenFile)) {
+        if (-not [IO.Path]::IsPathRooted($aiWorkerBearerTokenFile)) {
+            throw 'AI_WORKER_BEARER_TOKEN_FILE must be an absolute path.'
+        }
+        if (-not (Test-Path -LiteralPath $aiWorkerBearerTokenFile -PathType Leaf)) {
+            throw 'AI_WORKER_BEARER_TOKEN_FILE does not point to a readable token file.'
+        }
     }
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         throw 'AI Worker startup requires uv.'

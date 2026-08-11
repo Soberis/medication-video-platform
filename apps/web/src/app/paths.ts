@@ -5,6 +5,7 @@ export const paths = {
   session: (projectId: string, sessionId: string) =>
     `/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}`,
   assets: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/assets`,
+  videos: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/videos`,
   asset: (projectId: string, assetId: string) =>
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
   annotationTasks: (projectId: string) =>

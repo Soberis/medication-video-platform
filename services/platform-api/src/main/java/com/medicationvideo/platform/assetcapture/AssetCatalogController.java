@@ -33,11 +33,14 @@ class AssetCatalogController {
 
 	private final AssetCaptureProjectAuthorizer authorizer;
 
+	private final VideoSummaryQueryService videoSummaryQueryService;
+
 	AssetCatalogController(AssetCatalogQueryService service, ClipAssetActivityQueryService activityQueryService,
-			AssetCaptureProjectAuthorizer authorizer) {
+			AssetCaptureProjectAuthorizer authorizer, VideoSummaryQueryService videoSummaryQueryService) {
 		this.service = service;
 		this.activityQueryService = activityQueryService;
 		this.authorizer = authorizer;
+		this.videoSummaryQueryService = videoSummaryQueryService;
 	}
 
 	@GetMapping("/capture-sessions")
@@ -89,6 +92,29 @@ class AssetCatalogController {
 		this.authorizer.requireMember(projectId, actor.actorId());
 		var response = this.service.listClipAssets(projectId, captureSessionId, batchId, deviceId, cameraRole, status,
 				folderId, unclassified, recordedFrom, recordedBefore, cursor, limit);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	@GetMapping("/videos")
+	ResponseEntity<VideoSummaryPage> listVideos(@PathVariable UUID projectId,
+			@RequestParam(name = "media_status", required = false) ClipAssetStatus mediaStatus,
+			@RequestParam(name = "hand_status", required = false) @Pattern(regexp = "^[A-Z_]{1,32}$") String handStatus,
+			@RequestParam(name = "hand_result", required = false) @Pattern(regexp = "^[A-Z_]{1,32}$") String handResult,
+			@RequestParam(name = "camera_number", required = false) @Min(1) @Max(64) Integer cameraNumber,
+			@RequestParam(name = "captured_from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant capturedFrom,
+			@RequestParam(name = "captured_before",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant capturedBefore,
+			@RequestParam(name = "received_from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant receivedFrom,
+			@RequestParam(name = "received_before",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant receivedBefore,
+			@RequestParam(required = false) @Size(max = 512) String cursor,
+			@RequestParam(defaultValue = "50") @Min(1) @Max(100) int limit, Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
+		var response = this.videoSummaryQueryService.list(projectId, mediaStatus, handStatus, handResult, cameraNumber,
+				capturedFrom, capturedBefore, receivedFrom, receivedBefore, cursor, limit);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 

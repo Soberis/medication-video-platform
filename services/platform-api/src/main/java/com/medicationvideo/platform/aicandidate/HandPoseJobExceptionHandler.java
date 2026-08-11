@@ -14,7 +14,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = HandPoseJobController.class)
+@RestControllerAdvice(assignableTypes = { HandPoseJobController.class, AiWorkerController.class })
 class HandPoseJobExceptionHandler {
 
 	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,

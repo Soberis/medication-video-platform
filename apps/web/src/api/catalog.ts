@@ -38,6 +38,7 @@ export interface CameraSetSnapshotMember {
   camera_role: string
   mount_position: string
   enabled: boolean
+  enabled_for_hand_detection?: boolean
 }
 
 export interface CameraSetSnapshot {
@@ -63,6 +64,7 @@ export interface CameraStream {
   sync_status: DeclaredSyncStatus
   stream_status: CameraStreamStatus
   quality_status: CaptureQualityStatus
+  enabled_for_hand_detection?: boolean
 }
 
 export interface CaptureSessionDetail {
@@ -430,6 +432,7 @@ export interface ClipAssetSessionBinding {
   declared_sync_status: DeclaredSyncStatus
   stream_status: CameraStreamStatus
   quality_status: CaptureQualityStatus
+  enabled_for_hand_detection?: boolean
 }
 
 export interface ClipAssetRead {
@@ -500,9 +503,27 @@ export interface HandPoseJob {
   input_size_bytes: number
   sampling_fps: number
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
+  run_summary?: HandPoseRunSummary | null
   requested_by: string
   created_at: string
   updated_at: string
+}
+
+export interface HandPoseRunSummary {
+  analysis_complete: boolean
+  hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
+  total_video_frames: number
+  inference_frame_count: number
+  frames_with_hand: number
+  frames_without_hand: number
+  left_hand_detection_count: number
+  right_hand_detection_count: number
+  invalid_landmark_count: number
+  processing_duration_ms: number
+  started_at: string
+  completed_at: string
+  failure_reason?: string | null
 }
 
 export interface HandPoseCandidate {
@@ -520,6 +541,35 @@ export interface HandPoseCandidate {
 export interface HandPoseCandidateResponse {
   job: HandPoseJob
   candidates: HandPoseCandidate[]
+}
+
+export type VideoSummaryMediaStatus = ClipAssetStatus
+export type VideoSummaryHandStatus = 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+export type VideoSummaryHandResult = 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
+
+export interface VideoSummary {
+  video_id: string
+  display_name: string
+  camera_number: number | null
+  captured_at: string | null
+  received_at: string
+  media_status: VideoSummaryMediaStatus
+  hand_status: VideoSummaryHandStatus
+  hand_result: VideoSummaryHandResult
+  annotation_status: string
+  cleaning_status: string
+  retention_status: string
+}
+
+export interface VideoSummaryFilters {
+  mediaStatus?: VideoSummaryMediaStatus
+  handStatus?: VideoSummaryHandStatus
+  handResult?: VideoSummaryHandResult
+  cameraNumber?: number
+  capturedFrom?: string
+  capturedBefore?: string
+  receivedFrom?: string
+  receivedBefore?: string
 }
 
 export interface MediaJobDeliveryRecovery {
@@ -608,6 +658,10 @@ const errorMessages: Record<string, string> = {
   CLIP_ASSET_NOT_PROBEABLE: '当前视频不处于可检测状态，请刷新后重试。',
   AI_HAND_POSE_MODEL_NOT_CONFIGURED: '手部姿态模型尚未由管理员配置，当前不能生成候选。',
   CLIP_ASSET_NOT_READY_FOR_AI_CANDIDATES: '视频尚未完成媒体入库，当前不能生成手部姿态候选。',
+  CLIP_ASSET_CAMERA_HAND_DETECTION_DISABLED: '当前相机未启用手部检测，请联系管理员调整相机配置。',
+  AI_HAND_POSE_MEDIA_SUMMARY_REQUIRED: '视频媒体检查摘要尚未就绪，请刷新后重试。',
+  AI_HAND_POSE_INPUT_EXCEEDS_P0_RESULT_LIMIT: '当前视频长度超出本阶段单视频手部检测范围。',
+  AI_HAND_POSE_INFERENCE_FAILED: '手部检测未完成，请稍后重试。',
   AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED: '本次姿态候选请求与已提交请求冲突，请刷新后重试。',
   MEDIA_JOB_NOT_FOUND: '当前视频没有可恢复的媒体检测任务，请先发起检测或刷新状态。',
   MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED:
@@ -1028,6 +1082,28 @@ export function listClipAssets(
   add(query, 'cursor', cursor ?? undefined)
   return readJson<CatalogPage<ClipAssetRead>>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets?${query.toString()}`,
+    signal,
+  )
+}
+
+export function listVideoSummaries(
+  projectId: string,
+  filters: VideoSummaryFilters,
+  cursor: string | null,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ limit: '50' })
+  add(query, 'media_status', filters.mediaStatus)
+  add(query, 'hand_status', filters.handStatus)
+  add(query, 'hand_result', filters.handResult)
+  add(query, 'camera_number', filters.cameraNumber?.toString())
+  add(query, 'captured_from', filters.capturedFrom)
+  add(query, 'captured_before', filters.capturedBefore)
+  add(query, 'received_from', filters.receivedFrom)
+  add(query, 'received_before', filters.receivedBefore)
+  add(query, 'cursor', cursor ?? undefined)
+  return readJson<CatalogPage<VideoSummary>>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/videos?${query.toString()}`,
     signal,
   )
 }

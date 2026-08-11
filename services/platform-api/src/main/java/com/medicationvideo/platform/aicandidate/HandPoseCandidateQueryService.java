@@ -18,14 +18,17 @@ class HandPoseCandidateQueryService {
 
 	private final AiCandidateJobRepository jobRepository;
 
+	private final AiCandidateJobAttemptRepository attemptRepository;
+
 	private final JdbcTemplate jdbcTemplate;
 
 	private final ObjectMapper objectMapper;
 
 	HandPoseCandidateQueryService(ProjectAccessService projectAccessService, AiCandidateJobRepository jobRepository,
-			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+			AiCandidateJobAttemptRepository attemptRepository, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this.projectAccessService = projectAccessService;
 		this.jobRepository = jobRepository;
+		this.attemptRepository = attemptRepository;
 		this.jdbcTemplate = jdbcTemplate;
 		this.objectMapper = objectMapper;
 	}
@@ -49,7 +52,8 @@ class HandPoseCandidateQueryService {
 						resultSet.getDouble("handedness_score"), readJson(resultSet.getString("bounding_box")),
 						readJson(resultSet.getString("landmarks")), resultSet.getInt("valid_landmark_count")),
 				job.getAiJobId());
-		return new HandPoseCandidateResponse(HandPoseJobResponse.from(job), List.copyOf(candidates));
+		var attempt = this.attemptRepository.findFirstByAiJobIdOrderByAttemptDesc(job.getAiJobId()).orElse(null);
+		return new HandPoseCandidateResponse(HandPoseJobResponse.from(job, attempt), List.copyOf(candidates));
 	}
 
 	private tools.jackson.databind.JsonNode readJson(String source) {

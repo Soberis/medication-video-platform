@@ -11,6 +11,7 @@ from typing import Self
 import httpx
 
 from medication_ai_worker.contracts import AiJob
+from medication_ai_worker.landmarker import InferenceResult
 
 
 class RetryableError(RuntimeError):
@@ -167,9 +168,12 @@ class CoreApiClient:
         if size != grant.input_size_bytes or digest.hexdigest() != grant.input_sha256:
             raise PermanentError("Downloaded input digest differs from frozen AI job")
 
-    def submit(self, job: AiJob, started_at: datetime, candidates: list[dict[str, object]]) -> None:
-        result = {
-            "schema_version": "ai-hand-pose-result.v1",
+    def submit(
+        self, job: AiJob, started_at: datetime, result: InferenceResult, processing_duration_ms: int
+    ) -> None:
+        summary = result.summary
+        payload: dict[str, object] = {
+            "schema_version": "ai-hand-pose-result.v2",
             "message_id": str(job.message_id),
             "job_id": str(job.job_id),
             "attempt": job.attempt,
@@ -179,7 +183,59 @@ class CoreApiClient:
             "profile_sha256": job.profile_sha256,
             "started_at": started_at.isoformat().replace("+00:00", "Z"),
             "completed_at": datetime.now(started_at.tzinfo).isoformat().replace("+00:00", "Z"),
-            "candidates": candidates,
+            "outcome": "SUCCEEDED",
+            "analysis_complete": True,
+            "hand_result": "HAND_DETECTED" if summary.frames_with_hand > 0 else "NO_HAND_DETECTED",
+            "total_video_frames": summary.total_video_frames,
+            "inference_frame_count": summary.inference_frame_count,
+            "frames_with_hand": summary.frames_with_hand,
+            "frames_without_hand": summary.frames_without_hand,
+            "left_hand_detection_count": summary.left_hand_detection_count,
+            "right_hand_detection_count": summary.right_hand_detection_count,
+            "invalid_landmark_count": summary.invalid_landmark_count,
+            "processing_duration_ms": processing_duration_ms,
+            "failure_reason": None,
+            "candidates": result.candidates,
+        }
+        self._request(
+            "PUT",
+            f"/api/v1/internal/ai-jobs/{job.job_id}/attempts/{job.attempt}/result",
+            job,
+            payload,
+        )
+
+    def submit_failure(
+        self,
+        job: AiJob,
+        started_at: datetime,
+        failure_reason: str,
+        processing_duration_ms: int,
+    ) -> None:
+        completed_at = datetime.now(started_at.tzinfo)
+        result = {
+            "schema_version": "ai-hand-pose-result.v2",
+            "message_id": str(job.message_id),
+            "job_id": str(job.job_id),
+            "attempt": job.attempt,
+            "lease_token": job.lease_token,
+            "input_sha256": job.input_sha256,
+            "model_sha256": job.model_sha256,
+            "profile_sha256": job.profile_sha256,
+            "started_at": started_at.isoformat().replace("+00:00", "Z"),
+            "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+            "outcome": "FAILED",
+            "analysis_complete": False,
+            "hand_result": "UNKNOWN",
+            "total_video_frames": 0,
+            "inference_frame_count": 0,
+            "frames_with_hand": 0,
+            "frames_without_hand": 0,
+            "left_hand_detection_count": 0,
+            "right_hand_detection_count": 0,
+            "invalid_landmark_count": 0,
+            "processing_duration_ms": processing_duration_ms,
+            "failure_reason": failure_reason[:128],
+            "candidates": [],
         }
         self._request(
             "PUT",
@@ -245,5 +301,5 @@ def _error_code(response: httpx.Response) -> str:
     except ValueError:
         return "UNPARSEABLE"
     if isinstance(body, dict) and isinstance(body.get("error_code"), str):
-        return body["error_code"]
+        return str(body["error_code"])
     return "UNSPECIFIED"

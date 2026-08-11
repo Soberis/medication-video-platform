@@ -34,6 +34,9 @@ class CameraSetSnapshotMember {
 	@Column(name = "enabled", nullable = false, updatable = false)
 	private boolean enabled;
 
+	@Column(name = "enabled_for_hand_detection", nullable = false, updatable = false)
+	private boolean enabledForHandDetection;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -48,6 +51,7 @@ class CameraSetSnapshotMember {
 		this.cameraRole = source.getCameraRole();
 		this.mountPosition = source.getMountPosition();
 		this.enabled = source.isEnabled();
+		this.enabledForHandDetection = source.isEnabledForHandDetection();
 		this.createdAt = createdAt;
 	}
 
@@ -77,6 +81,10 @@ class CameraSetSnapshotMember {
 
 	boolean isEnabled() {
 		return this.enabled;
+	}
+
+	boolean isEnabledForHandDetection() {
+		return this.enabledForHandDetection;
 	}
 
 }

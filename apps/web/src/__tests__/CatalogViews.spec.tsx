@@ -1512,7 +1512,8 @@ describe('catalog views', () => {
   it('lets a member start hand-pose detection from the selected session camera', async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
-      if (url.endsWith('/dataset-admission-preview')) return Promise.resolve(jsonResponse(eligibleAdmissionPreview()))
+      if (url.endsWith('/dataset-admission-preview'))
+        return Promise.resolve(jsonResponse(eligibleAdmissionPreview()))
       if (url.endsWith('/hand-pose-candidates')) {
         return Promise.resolve(
           jsonResponse(
@@ -1565,7 +1566,9 @@ describe('catalog views', () => {
       ),
     )
     expect(
-      await screen.findByText(/手部检测：(正在检测，页面会自动更新。|排队较久未开始，可重新提交。)/),
+      await screen.findByText(
+        /手部检测：(正在检测，页面会自动更新。|排队较久未开始，可重新提交。)/,
+      ),
     ).toBeInTheDocument()
   })
 

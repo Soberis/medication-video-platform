@@ -303,9 +303,23 @@ if $start_ai_worker || { $start_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" ==
             exit 1
         fi
     done
+    if [[ -n "${AI_WORKER_BEARER_TOKEN:-}" && -n "${AI_WORKER_BEARER_TOKEN_FILE:-}" ]]; then
+        echo "Configure exactly one of AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE." >&2
+        exit 1
+    fi
     if [[ -z "${AI_WORKER_BEARER_TOKEN:-}" && -z "${AI_WORKER_BEARER_TOKEN_FILE:-}" ]]; then
         echo "AI Worker startup requires AI_WORKER_BEARER_TOKEN or AI_WORKER_BEARER_TOKEN_FILE when AI_HAND_POSE_ENABLED=true." >&2
         exit 1
+    fi
+    if [[ -n "${AI_WORKER_BEARER_TOKEN_FILE:-}" ]]; then
+        if [[ "${AI_WORKER_BEARER_TOKEN_FILE}" != /* ]]; then
+            echo "AI_WORKER_BEARER_TOKEN_FILE must be an absolute path." >&2
+            exit 1
+        fi
+        if [[ ! -f "${AI_WORKER_BEARER_TOKEN_FILE}" ]]; then
+            echo "AI_WORKER_BEARER_TOKEN_FILE does not point to a readable token file." >&2
+            exit 1
+        fi
     fi
     require_command uv "AI Worker startup requires uv." || exit 1
     if managed_process_running ai-worker; then

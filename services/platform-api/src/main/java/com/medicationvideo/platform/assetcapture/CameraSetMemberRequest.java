@@ -10,5 +10,15 @@ import jakarta.validation.constraints.Pattern;
 
 record CameraSetMemberRequest(@NotNull UUID cameraChannelId, @Min(0) @Max(63) int cameraIndex,
 		@NotBlank @Pattern(regexp = "^[A-Z][A-Z0-9_]{0,63}$") String cameraRole,
-		@NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String mountPosition, boolean enabled) {
+		@NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String mountPosition, boolean enabled,
+		Boolean enabledForHandDetection) {
+
+	CameraSetMemberRequest {
+		enabledForHandDetection = enabledForHandDetection == null ? Boolean.TRUE : enabledForHandDetection;
+	}
+
+	CameraSetMemberRequest(UUID cameraChannelId, int cameraIndex, String cameraRole, String mountPosition,
+			boolean enabled) {
+		this(cameraChannelId, cameraIndex, cameraRole, mountPosition, enabled, true);
+	}
 }
