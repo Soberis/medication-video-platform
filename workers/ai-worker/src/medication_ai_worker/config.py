@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import socket
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
+
+WORKER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,8 +42,8 @@ class Settings:
         if not _sha256(model_sha256) or _file_sha256(model_path) != model_sha256:
             raise ValueError("AI_HAND_POSE_MODEL_SHA256 must match the offline model bytes")
         worker_id = values.get("AI_WORKER_ID", f"ai-worker-{socket.gethostname()}-{os.getpid()}")
-        if not worker_id or len(worker_id) > 128:
-            raise ValueError("AI_WORKER_ID must contain 1 to 128 characters")
+        if WORKER_ID.fullmatch(worker_id) is None:
+            raise ValueError("AI_WORKER_ID must contain 1 to 128 safe identifier characters")
         temp = values.get("AI_WORKER_TEMP_DIR")
         return cls(
             base_url,

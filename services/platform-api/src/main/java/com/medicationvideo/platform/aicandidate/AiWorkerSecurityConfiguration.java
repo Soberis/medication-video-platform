@@ -24,15 +24,44 @@ class AiWorkerSecurityConfiguration {
 	@Order(0)
 	SecurityFilterChain aiWorkerSecurityFilterChain(HttpSecurity http,
 			@Value("${platform.security.local-ai-worker-bearer-token:}") String bearerToken,
-			@Value("${platform.security.local-ai-worker-bearer-token-file:}") String bearerTokenFile) throws Exception {
-		var workerFilter = new LocalMediaWorkerAuthenticationFilter(resolveBearerToken(bearerToken, bearerTokenFile),
-				"local-ai-worker", "ROLE_AI_WORKER");
+			@Value("${platform.security.local-ai-worker-bearer-token-file:}") String bearerTokenFile,
+			@Value("${platform.security.local-ai-worker-id:local-ai-worker}") String workerId,
+			@Value("${platform.security.local-worker-bearer-token:}") String mediaBearerToken,
+			@Value("${platform.security.local-export-worker-bearer-token:}") String exportBearerToken)
+			throws Exception {
+		var resolvedBearerToken = resolveBearerToken(bearerToken, bearerTokenFile);
+		requireDistinctWorkerTokens(resolvedBearerToken, mediaBearerToken, exportBearerToken);
+		var workerFilter = new LocalMediaWorkerAuthenticationFilter(resolvedBearerToken, validateWorkerId(workerId),
+				"ROLE_AI_WORKER");
 		return http.securityMatcher("/api/v1/internal/ai-jobs/**")
 			.csrf(csrf -> csrf.disable())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
 			.addFilterBefore(workerFilter, UsernamePasswordAuthenticationFilter.class)
 			.build();
+	}
+
+	private static String validateWorkerId(String workerId) {
+		var value = workerId == null ? "" : workerId.trim();
+		if (!value.matches("^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")) {
+			throw new IllegalStateException("AI_WORKER_ID must contain 1 to 128 safe identifier characters.");
+		}
+		return value;
+	}
+
+	static void requireDistinctWorkerTokens(String aiToken, String mediaToken, String exportToken) {
+		var ai = aiToken == null ? "" : aiToken.trim();
+		var media = mediaToken == null ? "" : mediaToken.trim();
+		var export = exportToken == null ? "" : exportToken.trim();
+		if (!ai.isEmpty() && ai.equals(media)) {
+			throw new IllegalStateException("AI and media Worker bearer tokens must be different.");
+		}
+		if (!ai.isEmpty() && ai.equals(export)) {
+			throw new IllegalStateException("AI and export Worker bearer tokens must be different.");
+		}
+		if (!media.isEmpty() && media.equals(export)) {
+			throw new IllegalStateException("Media and export Worker bearer tokens must be different.");
+		}
 	}
 
 	static String resolveBearerToken(String bearerToken, String bearerTokenFile) {

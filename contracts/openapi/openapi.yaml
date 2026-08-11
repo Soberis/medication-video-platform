@@ -2879,8 +2879,9 @@ paths:
       summary: Validate an explicit external video ingest manifest
       description: >-
         Validates the versioned external manifest and its explicit capture-group/camera-number
-        identity. The platform never derives a group from filenames, upload order or timestamps;
-        file bytes continue through the existing upload flow.
+        identity. expected_camera_numbers is the theoretical fixed-camera set; videos is the
+        actual declared set for this Capture. The platform never derives a group or camera identity
+        from filenames, upload order or timestamps; file bytes continue through the existing upload flow.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       requestBody:
@@ -2899,6 +2900,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/capture-sessions:
     get:
       operationId: listCaptureSessions
@@ -3097,6 +3099,9 @@ paths:
         read in this page query, so clients do not need one request per video.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
+        - name: source
+          in: query
+          schema: { $ref: "#/components/schemas/UploadSourceType" }
         - name: media_status
           in: query
           schema: { $ref: "#/components/schemas/ClipAssetStatus" }
@@ -3104,12 +3109,22 @@ paths:
           in: query
           schema:
             type: string
-            pattern: ^[A-Z_]{1,32}$
+            enum: [NOT_REQUESTED, QUEUED, RUNNING, SUCCEEDED, FAILED]
         - name: hand_result
           in: query
           schema:
             type: string
             enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
+        - name: annotation_status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
+        - name: cleaning_status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_STARTED, PASS, WARNING, REJECT]
         - name: camera_number
           in: query
           schema: { type: integer, minimum: 1, maximum: 64 }
@@ -3156,16 +3171,60 @@ paths:
         - $ref: "#/components/parameters/ProjectId"
         - name: from
           in: query
+          deprecated: true
+          description: Legacy alias for captured_from; captured_from takes precedence when both are supplied.
           schema: { type: string, format: date-time }
         - name: to
           in: query
+          deprecated: true
+          description: Legacy alias for captured_before; captured_before takes precedence when both are supplied.
           schema: { type: string, format: date-time }
+        - name: cameraNumber
+          in: query
+          deprecated: true
+          description: Legacy alias for camera_number; camera_number takes precedence when both are supplied.
+          schema: { type: integer, minimum: 1, maximum: 64 }
         - name: source
           in: query
           schema: { $ref: "#/components/schemas/UploadSourceType" }
-        - name: cameraNumber
+        - name: media_status
+          in: query
+          schema: { $ref: "#/components/schemas/ClipAssetStatus" }
+        - name: hand_status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_REQUESTED, QUEUED, RUNNING, SUCCEEDED, FAILED]
+        - name: hand_result
+          in: query
+          schema:
+            type: string
+            enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
+        - name: annotation_status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
+        - name: cleaning_status
+          in: query
+          schema:
+            type: string
+            enum: [NOT_STARTED, PASS, WARNING, REJECT]
+        - name: camera_number
           in: query
           schema: { type: integer, minimum: 1, maximum: 64 }
+        - name: captured_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: captured_before
+          in: query
+          schema: { type: string, format: date-time }
+        - name: received_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: received_before
+          in: query
+          schema: { type: string, format: date-time }
       responses:
         "200":
           description: Project-scoped data-management summary.
@@ -3526,7 +3585,33 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs:
+  /projects/{project_id}/videos/{video_id}/hand-pose-detections:
+    get:
+      operationId: getVideoHandPoseDetection
+      tags: [AI Candidates]
+      summary: Get the latest hand pose detection state and candidate keypoints for a video
+      description: >-
+        Returns the latest candidate-only run for the video. The response is identical to the
+        hand-pose-candidates resource and never represents a formal annotation, quality decision
+        or dataset input.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: video_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The latest job and its immutable candidate keypoints.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       operationId: requestHandPoseCandidates
       tags:
@@ -3541,7 +3626,7 @@ paths:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
+        - name: video_id
           in: path
           required: true
           schema:
@@ -3580,7 +3665,7 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs/retry:
+  /projects/{project_id}/videos/{video_id}/hand-pose-detections/retry:
     post:
       operationId: retryHandPoseCandidates
       tags: [AI Candidates]
@@ -3592,7 +3677,7 @@ paths:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
+        - name: video_id
           in: path
           required: true
           schema: { type: string, format: uuid }
@@ -3618,6 +3703,32 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{project_id}/videos/{video_id}/hand-pose-detections/status:
+    get:
+      operationId: getVideoHandPoseDetectionStatus
+      tags: [AI Candidates]
+      summary: Get the latest hand pose detection state through the status alias
+      description: >-
+        Compatibility alias for reading the latest video hand-pose candidate run. It returns the
+        same candidate-only representation as the base hand-pose-detections GET operation.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: video_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The latest job and its immutable candidate keypoints.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /ai-jobs/{ai_job_id}:
     get:
       operationId: getHandPoseJob
@@ -3655,15 +3766,42 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-candidates:
+  /projects/{project_id}/videos/{video_id}/hand-pose-candidates:
     get:
       operationId: getLatestHandPoseCandidates
       tags: [AI Candidates]
-      summary: Get the latest hand pose job and candidate keypoints for a clip asset
+      summary: Get the latest hand pose run and candidate keypoints for a video
       description: >-
         Returns candidate-only output for the latest job. It is visible to project members but is
         never a formal annotation, quality decision or dataset input until the normal human review
         flow records a separate annotation revision.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: video_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The latest job and its immutable candidate keypoints.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-candidates:
+    get:
+      operationId: getLatestHandPoseCandidatesLegacy
+      deprecated: true
+      tags: [AI Candidates]
+      summary: Get the latest hand pose candidates through the legacy clip-asset route
+      description: >-
+        Deprecated compatibility route. New product clients use the corresponding video resource.
+        The response remains candidate-only and cannot bypass human annotation and review.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -3682,6 +3820,78 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs:
+    post:
+      operationId: requestHandPoseCandidatesLegacy
+      deprecated: true
+      tags: [AI Candidates]
+      summary: Queue a hand pose candidate job through the legacy clip-asset route
+      description: >-
+        Deprecated compatibility route. It queues the same bounded, candidate-only MediaPipe job
+        as the canonical video hand-pose-detections operation.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
+      responses:
+        "202":
+          description: The immutable job is queued, or the same idempotent request is returned.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Location:
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseJobResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs/retry:
+    post:
+      operationId: retryHandPoseCandidatesLegacy
+      deprecated: true
+      tags: [AI Candidates]
+      summary: Retry a hand pose candidate job through the legacy clip-asset route
+      description: >-
+        Deprecated compatibility route. It creates the same bounded next attempt as the canonical
+        video hand-pose-detections retry operation.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
+      responses:
+        "202":
+          description: The next AI job attempt was queued.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Location:
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseJobResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-delivery-recoveries:
     post:
       operationId: recoverCurrentClipAssetMediaProbeDelivery
@@ -4992,6 +5202,7 @@ paths:
               schema: { $ref: "#/components/schemas/AiWorkerLeaseResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "503":
@@ -5024,6 +5235,7 @@ paths:
               schema: { $ref: "#/components/schemas/AiWorkerHeartbeatResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/result:
@@ -5052,6 +5264,7 @@ paths:
             Cache-Control: { $ref: "#/components/headers/NoStore" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /internal/dataset-exports/{dataset_export_id}/attempts/{attempt}/lease:
@@ -8400,6 +8613,7 @@ components:
           format: int32
           minimum: 0
           maximum: 63
+          description: Canonical 0-based fixed-camera identity; camera_number is camera_index + 1 and gaps are preserved.
         camera_role:
           type: string
           minLength: 1
@@ -8447,6 +8661,7 @@ components:
           format: int32
           minimum: 0
           maximum: 63
+          description: Canonical 0-based fixed-camera identity; camera_number is camera_index + 1 and gaps are preserved.
         camera_role:
           type: string
           minLength: 1
@@ -8700,13 +8915,14 @@ components:
         - media_status
         - hand_status
         - hand_result
+        - hand_retryable
         - annotation_status
         - cleaning_status
         - retention_status
       properties:
         video_id: { type: string, format: uuid }
         display_name: { type: string, minLength: 1, maxLength: 128 }
-        source_name: { type: string, minLength: 1, maxLength: 32 }
+        source_name: { $ref: "#/components/schemas/UploadSourceType" }
         camera_number: { type: [integer, "null"], minimum: 1, maximum: 64 }
         captured_at: { type: [string, "null"], format: date-time }
         received_at: { type: string, format: date-time }
@@ -8718,8 +8934,12 @@ components:
           type: string
           enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
         hand_retryable: { type: boolean }
-        annotation_status: { type: string, minLength: 1, maxLength: 32 }
-        cleaning_status: { type: string, minLength: 1, maxLength: 32 }
+        annotation_status:
+          type: string
+          enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
+        cleaning_status:
+          type: string
+          enum: [NOT_STARTED, PASS, WARNING, REJECT]
         retention_status: { type: string, minLength: 1, maxLength: 64 }
     DataManagementSummary:
       type: object
@@ -8766,7 +8986,13 @@ components:
         - video_count
       properties:
         manifest_id: { type: string, format: uuid }
-        status: { type: string, enum: [ACCEPTED, BOUND] }
+        status:
+          type: string
+          enum: [ACCEPTED, BOUND]
+          description: >-
+            ACCEPTED means the explicit manifest is persisted but not bound. BOUND means it is
+            uniquely bound to one UploadBatch; it does not mean that CaptureSession assembly or
+            media ingestion is complete.
         schema_version: { type: string, const: external-video-ingest-v1 }
         capture_group_key: { type: string, minLength: 1, maxLength: 128 }
         key_source:
@@ -10010,7 +10236,9 @@ components:
           type: string
           enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
         run_summary:
-          $ref: "#/components/schemas/HandPoseRunSummary"
+          anyOf:
+            - $ref: "#/components/schemas/HandPoseRunSummary"
+            - type: "null"
         requested_by:
           type: string
         created_at:
@@ -10077,13 +10305,28 @@ components:
         hand_index: { type: integer, minimum: 0, maximum: 1 }
         handedness: { type: string, enum: [LEFT, RIGHT, UNKNOWN] }
         handedness_score: { type: number, minimum: 0, maximum: 1 }
-        bounding_box: { type: object }
+        bounding_box:
+          type: object
+          additionalProperties: false
+          required: [x, y, width, height]
+          properties:
+            x: { type: number }
+            y: { type: number }
+            width: { type: number, exclusiveMinimum: 0 }
+            height: { type: number, exclusiveMinimum: 0 }
         landmarks:
           type: array
           minItems: 21
           maxItems: 21
-          items: { type: object }
-        valid_landmark_count: { type: integer, minimum: 0, maximum: 21 }
+          items:
+            type: object
+            additionalProperties: false
+            required: [x, y, z]
+            properties:
+              x: { type: number }
+              y: { type: number }
+              z: { type: number }
+        valid_landmark_count: { type: integer, minimum: 21, maximum: 21 }
     MediaJobResponse:
       type: object
       additionalProperties: false
@@ -10236,7 +10479,7 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
     AiWorkerLeaseResponse:
       type: object
       additionalProperties: false
@@ -10252,7 +10495,7 @@ components:
         input_size_bytes: { type: integer, format: int64, minimum: 1 }
         content_type: { type: string }
         model_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-        sampling_fps: { type: integer, minimum: 1, maximum: 15 }
+        sampling_fps: { type: integer, const: 10 }
         profile_sha256: { type: string, const: 3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626 }
     AiWorkerHeartbeatResponse:
       type: object

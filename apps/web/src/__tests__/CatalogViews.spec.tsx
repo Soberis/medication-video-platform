@@ -296,7 +296,7 @@ describe('catalog views', () => {
     expect(screen.getByText('尚未准备完成')).toBeInTheDocument()
     expect(screen.getByText('本次配药操作的技术检测尚未通过')).toBeInTheDocument()
     expect(screen.getByText('有视频尚未通过人工质量判断')).toBeInTheDocument()
-    expect(screen.getByText('有视频尚未提交人工标注')).toBeInTheDocument()
+    expect(screen.getByText('有视频尚未提交人工配药动作标注')).toBeInTheDocument()
     expect(document.querySelectorAll('.detail-card')).toHaveLength(4)
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-sessions/${sessionId}`,
@@ -1525,7 +1525,7 @@ describe('catalog views', () => {
           ),
         )
       }
-      if (url.endsWith('/hand-pose-jobs') && init?.method === 'POST') {
+      if (url.endsWith('/hand-pose-detections') && init?.method === 'POST') {
         return Promise.resolve(
           jsonResponse(
             {
@@ -1558,24 +1558,24 @@ describe('catalog views', () => {
     await user.click(await screen.findByRole('button', { name: '检测相机 1 的手部姿态' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/clip-assets/${assetId}/hand-pose-jobs`,
+        `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections`,
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({ 'Idempotency-Key': 'session-hand-pose-ui-0001' }),
         }),
       ),
     )
-    expect(
-      await screen.findByText(
-        /手部检测：(正在检测，页面会自动更新。|排队较久未开始，可重新提交。)/,
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/手部检测：正在检测，页面会自动更新。/)).toBeInTheDocument()
   })
 
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     renderAssetDetail()
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('视频详情')
+    expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/videos`,
+    )
     expect(screen.getByText('可以直接查看视频')).toBeInTheDocument()
     expect(screen.getByText(/视频已完成上传完整性校验/)).toBeInTheDocument()
     expect(screen.getAllByText('90000000-0000-4000-8000-000000000001').length).toBeGreaterThan(0)
@@ -1757,9 +1757,9 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail()
     expect(
-      await screen.findByText('该视频已通过人工质量判断。请选择项目成员并创建标注任务。'),
+      await screen.findByText('该视频已通过人工质量判断。请选择项目成员并创建配药动作标注。'),
     ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '创建标注任务' }))
+    await user.click(screen.getByRole('button', { name: '创建配药动作标注' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/v1/projects/${projectId}/clip-assets/${assetId}/annotation-tasks`,
@@ -1769,7 +1769,7 @@ describe('catalog views', () => {
         }),
       ),
     )
-    expect(await screen.findByText('标注任务已创建并分配')).toBeInTheDocument()
+    expect(await screen.findByText('配药动作标注已创建并分配')).toBeInTheDocument()
   })
 
   it('lets a project member queue hand pose candidates without presenting them as formal annotations', async () => {
@@ -1779,11 +1779,11 @@ describe('catalog views', () => {
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
     expect(await screen.findByText('手部姿态检测')).toBeInTheDocument()
-    expect(screen.getByText(/不会自动改变正式标注或训练数据/)).toBeInTheDocument()
+    expect(screen.getByText(/结果只是手部预标注候选，仍须人工确认/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '检测手部姿态' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/clip-assets/${assetId}/hand-pose-jobs`,
+        `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections`,
         expect.objectContaining({
           method: 'POST',
           cache: 'no-store',
@@ -1794,6 +1794,47 @@ describe('catalog views', () => {
     expect(await screen.findByText('正在检测手部姿态')).toBeInTheDocument()
     expect(screen.getByText(/页面会自动刷新状态/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
+  })
+
+  it('does not offer an AssetDetail retry when the failed run is not retryable', async () => {
+    stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      handPoseState: failedHandPoseJob(false),
+    })
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    expect(await screen.findByText('手部检测失败')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
+    expect(screen.getByText('AI_HAND_POSE_INFERENCE_FAILED')).toBeInTheDocument()
+  })
+
+  it('uses the AssetDetail retry endpoint only for a retryable failed run', async () => {
+    const fetchMock = stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      handPoseState: failedHandPoseJob(true),
+    })
+    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('asset-retry-ui-0001') })
+    const user = userEvent.setup()
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    await user.click(await screen.findByRole('button', { name: '重试检测' }))
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections/retry`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'Idempotency-Key': 'asset-retry-ui-0001' }),
+        }),
+      ),
+    )
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/hand-pose-detections') && init?.method === 'POST',
+      ),
+    ).toBe(false)
   })
 
   it('loads project folders and renders the asset classification in the explicit project scope', async () => {
@@ -1880,6 +1921,7 @@ function stubAsset(options: {
   playback?: boolean
   mediaProbe?: boolean
   handPose?: boolean
+  handPoseState?: object
   deliveryRecovery?: boolean
   annotationTask?: boolean
   activity?: boolean
@@ -1946,7 +1988,7 @@ function stubAsset(options: {
           202,
         ),
       )
-    if (url.endsWith('/hand-pose-jobs') && options.handPose)
+    if (url.endsWith('/hand-pose-detections') && options.handPose)
       return Promise.resolve(
         jsonResponse(
           {
@@ -1966,6 +2008,12 @@ function stubAsset(options: {
           },
           202,
         ),
+      )
+    if (url.endsWith('/hand-pose-candidates') && options.handPoseState)
+      return Promise.resolve(jsonResponse({ job: options.handPoseState, candidates: [] }))
+    if (url.endsWith('/hand-pose-detections/retry') && options.handPoseState)
+      return Promise.resolve(
+        jsonResponse({ ...options.handPoseState, status: 'QUEUED', run_summary: null }, 202),
       )
     if (url.endsWith('/media-probe-delivery-recoveries') && options.deliveryRecovery)
       return Promise.resolve(
@@ -2035,6 +2083,42 @@ function assetDetail(status: 'UPLOADED' | 'INGESTED') {
     session_binding: null,
     created_at: '2026-07-15T01:03:03Z',
     updated_at: '2026-07-15T01:03:03Z',
+  }
+}
+
+function failedHandPoseJob(retryable: boolean) {
+  return {
+    ai_job_id: 'b1000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    clip_asset_id: assetId,
+    algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
+    algorithm_version: 'v1',
+    model_sha256: 'a'.repeat(64),
+    input_sha256: 'b'.repeat(64),
+    input_size_bytes: 8_388_608,
+    sampling_fps: 10,
+    profile_sha256: 'c'.repeat(64),
+    status: 'FAILED',
+    hand_result: 'UNKNOWN',
+    run_summary: {
+      analysis_complete: false,
+      hand_result: 'UNKNOWN',
+      total_video_frames: 10,
+      inference_frame_count: 1,
+      frames_with_hand: 0,
+      frames_without_hand: 1,
+      left_hand_detection_count: 0,
+      right_hand_detection_count: 0,
+      invalid_landmark_count: 0,
+      processing_duration_ms: 10,
+      started_at: '2026-08-11T02:00:00Z',
+      completed_at: '2026-08-11T02:00:01Z',
+      failure_reason: 'AI_HAND_POSE_INFERENCE_FAILED',
+      retryable,
+    },
+    requested_by: 'local-synthetic-admin',
+    created_at: '2026-08-11T02:00:00Z',
+    updated_at: '2026-08-11T02:00:01Z',
   }
 }
 function jsonResponse(body: object, status = 200) {

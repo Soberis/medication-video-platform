@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.aicandidate;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -27,6 +28,15 @@ class AiWorkerTokenFileTests {
 	void rejectsTwoConfiguredIdentitySources() {
 		assertThrows(IllegalStateException.class, () -> AiWorkerSecurityConfiguration.resolveBearerToken("direct",
 				Path.of("token.txt").toAbsolutePath().toString()));
+	}
+
+	@Test
+	void rejectsBearerTokenReuseAcrossWorkerRoles() {
+		assertThrows(IllegalStateException.class,
+				() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("shared", "shared", "export"));
+		assertThrows(IllegalStateException.class,
+				() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("ai", "media", "ai"));
+		assertDoesNotThrow(() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("ai", "media", "export"));
 	}
 
 }

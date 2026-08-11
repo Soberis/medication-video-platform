@@ -502,6 +502,7 @@ export interface HandPoseJob {
   input_sha256: string
   input_size_bytes: number
   sampling_fps: number
+  profile_sha256: string
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
   hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
   run_summary?: HandPoseRunSummary | null
@@ -547,6 +548,9 @@ export interface HandPoseCandidateResponse {
 export type VideoSummaryMediaStatus = ClipAssetStatus
 export type VideoSummaryHandStatus = 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
 export type VideoSummaryHandResult = 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
+export type VideoSummarySource = 'HOSPITAL_REMOTE' | 'PLATFORM_LOCAL'
+export type VideoSummaryAnnotationStatus = 'NOT_STARTED' | 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
+export type VideoSummaryCleaningStatus = 'NOT_STARTED' | 'PASS' | 'WARNING' | 'REJECT'
 
 export interface VideoSummary {
   video_id: string
@@ -559,8 +563,8 @@ export interface VideoSummary {
   hand_status: VideoSummaryHandStatus
   hand_result: VideoSummaryHandResult
   hand_retryable: boolean
-  annotation_status: string
-  cleaning_status: string
+  annotation_status: VideoSummaryAnnotationStatus
+  cleaning_status: VideoSummaryCleaningStatus
   retention_status: string
 }
 
@@ -578,9 +582,12 @@ export interface DataManagementSummary {
 }
 
 export interface VideoSummaryFilters {
+  source?: VideoSummarySource
   mediaStatus?: VideoSummaryMediaStatus
   handStatus?: VideoSummaryHandStatus
   handResult?: VideoSummaryHandResult
+  annotationStatus?: VideoSummaryAnnotationStatus
+  cleaningStatus?: VideoSummaryCleaningStatus
   cameraNumber?: number
   capturedFrom?: string
   capturedBefore?: string
@@ -678,6 +685,9 @@ const errorMessages: Record<string, string> = {
   AI_HAND_POSE_MEDIA_SUMMARY_REQUIRED: '视频媒体检查摘要尚未就绪，请刷新后重试。',
   AI_HAND_POSE_INPUT_EXCEEDS_P0_RESULT_LIMIT: '当前视频长度超出本阶段单视频手部检测范围。',
   AI_HAND_POSE_INFERENCE_FAILED: '手部检测未完成，请稍后重试。',
+  AI_HAND_POSE_INVALID_OUTPUT: '手部检测输出无效，请稍后重试。',
+  AI_HAND_POSE_RETRY_NOT_ALLOWED: '本次手部检测失败不支持重试，请查看失败原因。',
+  AI_HAND_POSE_RETRY_LIMIT_REACHED: '手部检测已达到最大尝试次数，不能继续重试。',
   AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED: '本次姿态候选请求与已提交请求冲突，请刷新后重试。',
   MEDIA_JOB_NOT_FOUND: '当前视频没有可恢复的媒体检测任务，请先发起检测或刷新状态。',
   MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED:
@@ -1109,9 +1119,12 @@ export function listVideoSummaries(
   signal?: AbortSignal,
 ) {
   const query = new URLSearchParams({ limit: '50' })
+  add(query, 'source', filters.source)
   add(query, 'media_status', filters.mediaStatus)
   add(query, 'hand_status', filters.handStatus)
   add(query, 'hand_result', filters.handResult)
+  add(query, 'annotation_status', filters.annotationStatus)
+  add(query, 'cleaning_status', filters.cleaningStatus)
   add(query, 'camera_number', filters.cameraNumber?.toString())
   add(query, 'captured_from', filters.capturedFrom)
   add(query, 'captured_before', filters.capturedBefore)
@@ -1124,9 +1137,26 @@ export function listVideoSummaries(
   )
 }
 
-export function getDataManagementSummary(projectId: string, signal?: AbortSignal) {
+export function getDataManagementSummary(
+  projectId: string,
+  filters: VideoSummaryFilters,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams()
+  add(query, 'source', filters.source)
+  add(query, 'media_status', filters.mediaStatus)
+  add(query, 'hand_status', filters.handStatus)
+  add(query, 'hand_result', filters.handResult)
+  add(query, 'annotation_status', filters.annotationStatus)
+  add(query, 'cleaning_status', filters.cleaningStatus)
+  add(query, 'camera_number', filters.cameraNumber?.toString())
+  add(query, 'captured_from', filters.capturedFrom)
+  add(query, 'captured_before', filters.capturedBefore)
+  add(query, 'received_from', filters.receivedFrom)
+  add(query, 'received_before', filters.receivedBefore)
+  const suffix = query.size === 0 ? '' : `?${query.toString()}`
   return readJson<DataManagementSummary>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/video-data/summary`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/video-data/summary${suffix}`,
     signal,
   )
 }
@@ -1230,9 +1260,9 @@ export async function requestClipAssetMediaProbe(projectId: string, clipAssetId:
   throw await toCatalogError(response)
 }
 
-export async function requestHandPoseCandidates(projectId: string, clipAssetId: string) {
+export async function requestHandPoseCandidates(projectId: string, videoId: string) {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-jobs`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-detections`,
     {
       method: 'POST',
       headers: {
@@ -1247,9 +1277,9 @@ export async function requestHandPoseCandidates(projectId: string, clipAssetId: 
   throw await toCatalogError(response)
 }
 
-export async function retryHandPoseCandidates(projectId: string, clipAssetId: string) {
+export async function retryHandPoseCandidates(projectId: string, videoId: string) {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-jobs/retry`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-detections/retry`,
     {
       method: 'POST',
       headers: {
@@ -1264,9 +1294,9 @@ export async function retryHandPoseCandidates(projectId: string, clipAssetId: st
   throw await toCatalogError(response)
 }
 
-export async function getLatestHandPoseCandidates(projectId: string, clipAssetId: string) {
+export async function getLatestHandPoseCandidates(projectId: string, videoId: string) {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-candidates`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-candidates`,
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
   )
   if (response.ok) return (await response.json()) as HandPoseCandidateResponse

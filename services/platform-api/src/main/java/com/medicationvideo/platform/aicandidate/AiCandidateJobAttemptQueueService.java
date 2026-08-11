@@ -36,4 +36,8 @@ class AiCandidateJobAttemptQueueService {
 		return this.attemptRepository.findLatestForUpdate(jobId).stream().findFirst().orElse(null);
 	}
 
+	AiCandidateJobAttempt latestReadOnly(UUID jobId) {
+		return this.attemptRepository.findFirstByAiJobIdOrderByAttemptDesc(jobId).orElse(null);
+	}
+
 }

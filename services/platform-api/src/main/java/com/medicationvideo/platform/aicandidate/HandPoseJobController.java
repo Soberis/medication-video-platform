@@ -59,6 +59,18 @@ class HandPoseJobController {
 			.body(body);
 	}
 
+	/**
+	 * V1.18 canonical video-facing name. A video id is the existing clip asset id; the
+	 * legacy clip-assets route remains a compatibility alias.
+	 */
+	@PostMapping("/projects/{projectId}/videos/{videoId}/hand-pose-detections")
+	ResponseEntity<HandPoseJobResponse> queueVideo(@PathVariable UUID projectId, @PathVariable UUID videoId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
+		return queue(projectId, videoId, idempotencyKey, requestId, authentication);
+	}
+
 	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-jobs/retry")
 	ResponseEntity<HandPoseJobResponse> retry(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
 			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
@@ -74,6 +86,14 @@ class HandPoseJobController {
 			.body(body);
 	}
 
+	@PostMapping("/projects/{projectId}/videos/{videoId}/hand-pose-detections/retry")
+	ResponseEntity<HandPoseJobResponse> retryVideo(@PathVariable UUID projectId, @PathVariable UUID videoId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
+		return retry(projectId, videoId, idempotencyKey, requestId, authentication);
+	}
+
 	@GetMapping("/ai-jobs/{aiJobId}")
 	ResponseEntity<HandPoseJobResponse> get(@PathVariable UUID aiJobId,
 			@RequestHeader(name = "X-Project-Id") UUID projectId, Authentication authentication) {
@@ -81,6 +101,14 @@ class HandPoseJobController {
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
 			.body(this.service.get(projectId, aiJobId, actor.actorId()));
+	}
+
+	@GetMapping({ "/projects/{projectId}/videos/{videoId}/hand-pose-detections",
+			"/projects/{projectId}/videos/{videoId}/hand-pose-detections/status",
+			"/projects/{projectId}/videos/{videoId}/hand-pose-candidates" })
+	ResponseEntity<HandPoseCandidateResponse> getLatestVideoCandidates(@PathVariable UUID projectId,
+			@PathVariable UUID videoId, Authentication authentication) {
+		return getLatestCandidates(projectId, videoId, authentication);
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {

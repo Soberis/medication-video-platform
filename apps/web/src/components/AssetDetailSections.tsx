@@ -304,7 +304,7 @@ export function MediaReportCard({
       <Alert
         type="error"
         title="媒体检测失败"
-        description="该视频仍可人工查看，但不能记录质量结论或进入标注流程。"
+        description="该视频仍可人工查看，但不能记录质量结论或进入配药动作标注流程。"
         showIcon
       />
     )
@@ -384,7 +384,7 @@ export function QualityReviewCard({
   return (
     <Card className="detail-card" title={<strong>人工质量判断</strong>} variant="outlined">
       <p className="form-hint">
-        根据实际画面判断该视频是否适合进入标注。播放本身不会自动产生质量结论。
+        根据实际画面判断该视频是否适合进入配药动作标注。播放本身不会自动产生质量结论。
       </p>
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
@@ -478,26 +478,26 @@ export function AnnotationTaskCard({
   onSelectedAssigneeChange,
 }: AnnotationTaskCardProps) {
   return (
-    <Card className="detail-card" title={<strong>标注任务</strong>} variant="outlined">
+    <Card className="detail-card" title={<strong>配药动作标注</strong>} variant="outlined">
       {createdTask ? (
         <>
           <Alert
-            title="标注任务已创建并分配"
-            description={`执行人：${createdTask.assignee_actor_id}。请在标注任务页提交时间段标注；当前项目管理员可对提交结果进行复核。`}
+            title="配药动作标注已创建并分配"
+            description={`执行人：${createdTask.assignee_actor_id}。请在配药动作标注页提交时间段；当前项目管理员可对提交结果进行复核。`}
             type="success"
             showIcon
           />
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
-            查看标注任务
+            查看配药动作标注
           </Link>
         </>
       ) : (
         <>
-          <p className="form-hint">该视频已通过人工质量判断。请选择项目成员并创建标注任务。</p>
+          <p className="form-hint">该视频已通过人工质量判断。请选择项目成员并创建配药动作标注。</p>
           <div className="annotation-task-actions">
             <Select
               value={selectedAssignee}
-              aria-label="标注任务执行人"
+              aria-label="配药动作标注执行人"
               onChange={onSelectedAssigneeChange}
               options={assignees.map((member) => ({
                 value: member.actor_id,
@@ -510,7 +510,7 @@ export function AnnotationTaskCard({
               disabled={!selectedAssignee}
               onClick={onCreate}
             >
-              创建标注任务
+              创建配药动作标注
             </Button>
           </div>
         </>

@@ -23,7 +23,7 @@
     "algorithm_key": { "const": "MEDIAPIPE_HAND_LANDMARKER" },
     "algorithm_version": { "const": "v1" },
     "model_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "sampling_fps": { "type": "integer", "minimum": 1, "maximum": 15 },
+    "sampling_fps": { "type": "integer", "const": 10 },
     "profile_sha256": { "const": "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626" },
     "requested_at": { "type": "string", "format": "date-time" }
   }

@@ -13,9 +13,11 @@ import {
   getDatasetVersion,
   getDatasetVersionCurrentAdmission,
   getCaptureSessionDatasetAdmissionPreview,
+  getDataManagementSummary,
   listClipAssetActivity,
   listCaptureEventLogs,
   listDatasetVersions,
+  listVideoSummaries,
   requestDatasetExport,
   requestHandPoseCandidates,
   requestClipAssetMediaProbe,
@@ -30,6 +32,47 @@ const captureSessionId = '40000000-0000-4000-8000-000000000001'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('catalog API', () => {
+  it('uses the identical bounded filter set for video rows and aggregate summary', async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ items: [], next_cursor: null }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const filters = {
+      source: 'PLATFORM_LOCAL' as const,
+      mediaStatus: 'INGESTED' as const,
+      handStatus: 'SUCCEEDED' as const,
+      handResult: 'NO_HAND_DETECTED' as const,
+      annotationStatus: 'COMPLETED' as const,
+      cleaningStatus: 'PASS' as const,
+      cameraNumber: 5,
+      capturedFrom: '2026-08-10T00:00:00Z',
+      capturedBefore: '2026-08-11T00:00:00Z',
+    }
+
+    await listVideoSummaries(projectId, filters, null)
+    await getDataManagementSummary(projectId, filters)
+
+    const rowUrl = new URL(String(fetchMock.mock.calls[0]?.[0]), 'http://localhost')
+    const summaryUrl = new URL(String(fetchMock.mock.calls[1]?.[0]), 'http://localhost')
+    for (const key of [
+      'source',
+      'media_status',
+      'hand_status',
+      'hand_result',
+      'annotation_status',
+      'cleaning_status',
+      'camera_number',
+      'captured_from',
+      'captured_before',
+    ]) {
+      expect(summaryUrl.searchParams.get(key)).toBe(rowUrl.searchParams.get(key))
+    }
+  })
+
   it('soft deletes a clip asset with a fresh idempotency key and a reason', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -135,7 +178,7 @@ describe('catalog API', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/hand-pose-jobs`,
+      `/api/v1/projects/${projectId}/videos/${clipAssetId}/hand-pose-detections`,
       expect.objectContaining({
         method: 'POST',
         cache: 'no-store',

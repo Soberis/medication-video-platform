@@ -111,6 +111,9 @@ $requiredFiles = @(
     'contracts/events/media-probe-job-v1.schema.json',
     'contracts/events/media-probe-result-v1.schema.json',
     'contracts/events/media-dead-letter-v1.schema.json',
+    'contracts/events/ai-hand-pose-job-v1.schema.json',
+    'contracts/events/ai-hand-pose-result-v2.schema.json',
+    'contracts/events/ai-hand-pose-dead-letter-v1.schema.json',
     'contracts/events/dataset-export-job-v1.schema.json',
     'contracts/events/dataset-export-result-v1.schema.json',
     'contracts/events/dataset-export-dead-letter-v1.schema.json',
@@ -244,6 +247,21 @@ foreach ($datasetExportEventContract in @(
     }
     catch {
         Add-Failure "Dataset export event JSON Schema is invalid ($datasetExportEventContract): $($_.Exception.Message)"
+    }
+}
+
+foreach ($aiEventContract in @(
+    'ai-hand-pose-job-v1.schema.json',
+    'ai-hand-pose-result-v2.schema.json',
+    'ai-hand-pose-dead-letter-v1.schema.json'
+)) {
+    try {
+        Get-Content -LiteralPath (Join-Path $root "contracts/events/$aiEventContract") -Raw |
+            ConvertFrom-Json | Out-Null
+        Add-Pass "AI hand-pose event JSON Schema is valid JSON: $aiEventContract"
+    }
+    catch {
+        Add-Failure "AI hand-pose event JSON Schema is invalid ($aiEventContract): $($_.Exception.Message)"
     }
 }
 

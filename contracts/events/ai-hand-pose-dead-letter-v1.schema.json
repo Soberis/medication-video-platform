@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
+  "title": "AiHandPoseDeadLetterV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dead_letter_id",
+    "observed_at",
+    "reason_code",
+    "safe_summary",
+    "body_sha256",
+    "body_size_bytes"
+  ],
+  "properties": {
+    "schema_version": { "const": "ai-hand-pose-dead-letter.v1" },
+    "dead_letter_id": { "type": "string", "format": "uuid" },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "reason_code": {
+      "enum": [
+        "AI_HAND_POSE_CONTRACT_INVALID",
+        "AI_HAND_POSE_PROFILE_UNSUPPORTED",
+        "AI_HAND_POSE_MODEL_UNSUPPORTED",
+        "AI_HAND_POSE_ACQUIRE_REJECTED",
+        "AI_HAND_POSE_LEASE_REJECTED",
+        "AI_HAND_POSE_RESULT_REJECTED"
+      ]
+    },
+    "safe_summary": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "body_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "body_size_bytes": { "type": "integer", "minimum": 0 },
+    "message_id": { "type": "string", "format": "uuid" },
+    "job_id": { "type": "string", "format": "uuid" },
+    "attempt": { "type": "integer", "minimum": 1 }
+  },
+  "oneOf": [
+    { "required": ["message_id", "job_id", "attempt"] },
+    {
+      "not": {
+        "anyOf": [
+          { "required": ["message_id"] },
+          { "required": ["job_id"] },
+          { "required": ["attempt"] }
+        ]
+      }
+    }
+  ]
+}

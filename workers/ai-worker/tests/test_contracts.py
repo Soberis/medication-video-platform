@@ -24,6 +24,15 @@ def test_job_contract_exposes_the_frozen_profile_digest() -> None:
     assert job.profile_sha256 == PROFILE_SHA256
 
 
+@pytest.mark.parametrize("sampling_fps", [1, 9, 11, 15])
+def test_job_contract_rejects_non_frozen_sampling_rate(sampling_fps: int) -> None:
+    payload = _payload()
+    payload["sampling_fps"] = sampling_fps
+
+    with pytest.raises(ContractError, match="sampling_fps"):
+        AiJob.from_bytes(json.dumps(payload).encode())
+
+
 def _payload() -> dict[str, object]:
     return {
         "schema_version": "ai-hand-pose-job.v1",

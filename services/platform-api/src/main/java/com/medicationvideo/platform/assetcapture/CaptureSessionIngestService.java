@@ -240,7 +240,10 @@ class CaptureSessionIngestService {
 		var configuredByChannel = configuredMembers.stream()
 			.collect(Collectors.toUnmodifiableMap(CameraSetMember::getCameraChannelId, Function.identity()));
 		validateStreamBindings(metadata.streams(), assetsByClientId, configuredByChannel, projectId);
-		validateExternalManifestBindings(batch, metadata, assetsByClientId);
+		var filesByClientId = this.fileRepository.findAllByBatchIdOrderByCreatedAtAscUploadFileIdAsc(batchId)
+			.stream()
+			.collect(Collectors.toUnmodifiableMap(UploadFile::getClientFileId, Function.identity()));
+		validateExternalManifestBindings(batch, metadata, assetsByClientId, filesByClientId, configuredMembers);
 
 		var receivedCameraCount = Math.toIntExact(metadata.streams()
 			.stream()
@@ -302,7 +305,8 @@ class CaptureSessionIngestService {
 	}
 
 	private void validateExternalManifestBindings(UploadBatch batch, CaptureSessionMetadataV1 metadata,
-			Map<UUID, ClipAsset> assetsByClientId) {
+			Map<UUID, ClipAsset> assetsByClientId, Map<UUID, UploadFile> filesByClientId,
+			List<CameraSetMember> configuredMembers) {
 		if (batch.getExternalManifestId() == null) {
 			return;
 		}
@@ -310,21 +314,71 @@ class CaptureSessionIngestService {
 			.filter(candidate -> candidate.getProjectId().equals(batch.getProjectId()))
 			.orElseThrow(() -> failure("EXTERNAL_MANIFEST_NOT_FOUND",
 					"The upload batch references an external manifest outside the current project."));
+		if (manifest.getStatus() != ExternalVideoIngestManifestStatus.BOUND) {
+			throw failure("EXTERNAL_MANIFEST_NOT_BOUND",
+					"The upload batch references an external manifest that is not bound.");
+		}
+		if (!manifest.getSourceDeviceId().equals(batch.getDeviceId())
+				|| !manifest.getSourceDeviceId().equals(metadata.deviceId())) {
+			throw failure("EXTERNAL_MANIFEST_DEVICE_MISMATCH",
+					"The external manifest source_device_id must match the frozen batch and session device facts.");
+		}
+		if (!manifest.getTimezone().equals(metadata.deviceTimezone())) {
+			throw failure("EXTERNAL_MANIFEST_TIMEZONE_MISMATCH",
+					"The external manifest timezone must match the frozen capture-session timezone.");
+		}
 		if (metadata.expectedCameraCount() != manifest.getExpectedCameraNumbers().size()) {
 			throw failure("EXTERNAL_MANIFEST_CAMERA_SET_MISMATCH",
 					"Capture metadata expected_camera_count does not match the external manifest.");
+		}
+		var enabledCameraNumbers = configuredMembers.stream()
+			.filter(CameraSetMember::isEnabled)
+			.map(member -> member.getCameraIndex() + 1)
+			.collect(Collectors.toUnmodifiableSet());
+		var expectedCameraNumbers = manifest.getExpectedCameraNumbers()
+			.stream()
+			.collect(Collectors.toUnmodifiableSet());
+		if (!expectedCameraNumbers.equals(enabledCameraNumbers)) {
+			throw failure("EXTERNAL_MANIFEST_CAMERA_SET_MISMATCH",
+					"The external manifest expected camera set does not match the enabled server CameraSet.");
 		}
 		var entries = this.externalManifestVideoRepository
 			.findAllByManifestIdOrderByCameraNumber(manifest.getManifestId())
 			.stream()
 			.collect(Collectors.toUnmodifiableMap(ExternalVideoIngestManifestVideo::getClientFileId,
 					Function.identity()));
+		var streamClientFileIds = metadata.streams()
+			.stream()
+			.map(CaptureSessionMetadataV1.Stream::clientFileId)
+			.collect(Collectors.toUnmodifiableSet());
+		var streamCameraNumbers = metadata.streams()
+			.stream()
+			.map(stream -> stream.cameraIndex() + 1)
+			.collect(Collectors.toUnmodifiableSet());
+		var manifestCameraNumbers = entries.values()
+			.stream()
+			.map(ExternalVideoIngestManifestVideo::getCameraNumber)
+			.collect(Collectors.toUnmodifiableSet());
+		if (!entries.keySet().equals(streamClientFileIds) || !manifestCameraNumbers.equals(streamCameraNumbers)) {
+			throw failure("EXTERNAL_MANIFEST_CAMERA_BINDING_MISMATCH",
+					"The final CaptureSession streams must exactly match the external manifest video set.");
+		}
 		for (var stream : metadata.streams()) {
 			var asset = assetsByClientId.get(stream.clientFileId());
 			var entry = entries.get(stream.clientFileId());
-			if (asset == null || entry == null || entry.getCameraNumber() != stream.cameraIndex() + 1) {
+			var file = filesByClientId.get(stream.clientFileId());
+			if (asset == null || entry == null || file == null || file.getFileKind() != UploadFileKind.VIDEO
+					|| entry.getCameraNumber() != stream.cameraIndex() + 1
+					|| entry.getDeclaredSizeBytes() != file.getSizeBytes()
+					|| !entry.getSha256().equals(file.getSha256()) || !entry.getFileName().equals(file.getFileName())
+					|| asset.getSizeBytes() != entry.getDeclaredSizeBytes()
+					|| !asset.getSha256().equals(entry.getSha256())) {
 				throw failure("EXTERNAL_MANIFEST_CAMERA_BINDING_MISMATCH",
-						"Every external-manifest video must retain its declared camera number when bound.");
+						"Every external-manifest video must retain its declared camera number and file facts when bound.");
+			}
+			if (entry.getRecordStartAt() != null && !entry.getRecordStartAt().equals(stream.recordStartUtc())) {
+				throw failure("EXTERNAL_MANIFEST_RECORD_START_MISMATCH",
+						"Every declared external record_start_at must match its frozen CaptureSession stream fact.");
 			}
 		}
 	}

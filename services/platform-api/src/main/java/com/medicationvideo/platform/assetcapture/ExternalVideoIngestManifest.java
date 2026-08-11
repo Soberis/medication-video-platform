@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,7 +77,7 @@ class ExternalVideoIngestManifest {
 		this.sourceBatchId = request.sourceBatchId();
 		this.captureGroupKey = request.captureGroup().captureGroupKey();
 		this.keySource = request.captureGroup().keySource();
-		this.capturedAt = request.captureGroup().capturedAt();
+		this.capturedAt = request.captureGroup().capturedAt().truncatedTo(ChronoUnit.MICROS);
 		this.timezone = request.captureGroup().timezone();
 		this.expectedCameraNumbers = request.captureGroup().expectedCameraNumbers().stream().sorted().toList();
 		this.status = ExternalVideoIngestManifestStatus.ACCEPTED;
@@ -137,7 +138,18 @@ class ExternalVideoIngestManifest {
 	}
 
 	void markBound(Instant now) {
+		if (this.status != ExternalVideoIngestManifestStatus.ACCEPTED) {
+			throw new IllegalStateException("An external ingest manifest can only be bound once.");
+		}
 		this.status = ExternalVideoIngestManifestStatus.BOUND;
+		this.updatedAt = now;
+	}
+
+	void releaseForRetry(Instant now) {
+		if (this.status != ExternalVideoIngestManifestStatus.BOUND) {
+			throw new IllegalStateException("Only a bound external ingest manifest can be released for retry.");
+		}
+		this.status = ExternalVideoIngestManifestStatus.ACCEPTED;
 		this.updatedAt = now;
 	}
 

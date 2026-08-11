@@ -1,7 +1,9 @@
 package com.medicationvideo.platform.aicandidate;
 
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -40,14 +42,18 @@ record AiHandPoseResultRequest(@NotBlank @Pattern(regexp = "^ai-hand-pose-result
 	@AssertTrue(message = "run summary frame counts must describe the sampled video.")
 	boolean validFrameSummary() {
 		var countsArePresent = this.totalVideoFrames != null && this.inferenceFrameCount != null
-				&& this.framesWithHand != null && this.framesWithoutHand != null
+				&& this.framesWithHand != null && this.framesWithoutHand != null && this.totalVideoFrames >= 0
+				&& this.inferenceFrameCount >= 0 && this.framesWithHand >= 0 && this.framesWithoutHand >= 0
 				&& this.totalVideoFrames >= this.inferenceFrameCount
-				&& this.framesWithHand + this.framesWithoutHand == this.inferenceFrameCount;
+				&& sumAtMost(this.framesWithHand, this.framesWithoutHand, this.inferenceFrameCount);
 		if (!countsArePresent) {
 			return false;
 		}
-		return this.outcome != AiHandPoseRunOutcome.SUCCEEDED
-				|| (this.totalVideoFrames > 0 && this.inferenceFrameCount > 0);
+		if (this.outcome == AiHandPoseRunOutcome.SUCCEEDED) {
+			return sumEquals(this.framesWithHand, this.framesWithoutHand, this.inferenceFrameCount)
+					&& this.totalVideoFrames > 0 && this.inferenceFrameCount > 0;
+		}
+		return true;
 	}
 
 	@AssertTrue(message = "hand result must match the explicit terminal outcome and candidates.")
@@ -57,18 +63,77 @@ record AiHandPoseResultRequest(@NotBlank @Pattern(regexp = "^ai-hand-pose-result
 			return false;
 		}
 		if (this.outcome == AiHandPoseRunOutcome.SUCCEEDED) {
-			if (!this.analysisComplete || (this.handResult != HandPoseResult.HAND_DETECTED
-					&& this.handResult != HandPoseResult.NO_HAND_DETECTED)) {
+			if (!this.analysisComplete
+					|| (this.handResult != HandPoseResult.HAND_DETECTED
+							&& this.handResult != HandPoseResult.NO_HAND_DETECTED)
+					|| this.failureReason != null || !Long.valueOf(0).equals(this.invalidLandmarkCount)) {
 				return false;
 			}
 			if (this.handResult == HandPoseResult.NO_HAND_DETECTED) {
-				return this.candidates.isEmpty() && this.framesWithHand == 0
-						&& this.framesWithoutHand.equals(this.inferenceFrameCount);
+				return this.candidates.isEmpty() && Long.valueOf(0).equals(this.framesWithHand)
+						&& this.framesWithoutHand != null && this.framesWithoutHand.equals(this.inferenceFrameCount)
+						&& Long.valueOf(0).equals(this.leftHandDetectionCount)
+						&& Long.valueOf(0).equals(this.rightHandDetectionCount);
 			}
-			return !this.candidates.isEmpty() && this.framesWithHand > 0;
+			return validHandDetectedSummary();
 		}
 		return !this.analysisComplete && this.handResult == HandPoseResult.UNKNOWN && this.candidates.isEmpty()
-				&& this.failureReason != null && !this.failureReason.isBlank();
+				&& this.failureReason != null && !this.failureReason.isBlank() && validFailedCounts();
+	}
+
+	private boolean validFailedCounts() {
+		return validLeftRightCounts() && this.invalidLandmarkCount != null && this.invalidLandmarkCount >= 0;
+	}
+
+	private boolean validLeftRightCounts() {
+		if (this.framesWithHand == null || this.leftHandDetectionCount == null || this.rightHandDetectionCount == null
+				|| this.framesWithHand < 0 || this.leftHandDetectionCount < 0 || this.rightHandDetectionCount < 0) {
+			return false;
+		}
+		var limit = BigInteger.valueOf(this.framesWithHand).shiftLeft(1);
+		var left = BigInteger.valueOf(this.leftHandDetectionCount);
+		var right = BigInteger.valueOf(this.rightHandDetectionCount);
+		return left.compareTo(limit) <= 0 && right.compareTo(limit) <= 0 && left.add(right).compareTo(limit) <= 0;
+	}
+
+	private boolean validHandDetectedSummary() {
+		if (this.candidates.isEmpty() || this.framesWithHand == null || this.framesWithHand <= 0
+				|| this.inferenceFrameCount == null || this.framesWithHand > this.inferenceFrameCount
+				|| !this.candidates.stream().allMatch(candidate -> candidate != null && candidate.validGeometry())) {
+			return false;
+		}
+		var candidateFrameCount = this.candidates.stream()
+			.map(AiHandPoseCandidatePayload::frameTimestampMs)
+			.distinct()
+			.count();
+		var uniqueHandSlots = this.candidates.stream()
+			.map(candidate -> Map.entry(candidate.frameTimestampMs(), candidate.handIndex()))
+			.distinct()
+			.count();
+		var maximumCandidateCount = BigInteger.valueOf(this.framesWithHand).shiftLeft(1);
+		if (candidateFrameCount != this.framesWithHand
+				|| BigInteger.valueOf(this.candidates.size()).compareTo(maximumCandidateCount) > 0
+				|| uniqueHandSlots != this.candidates.size()) {
+			return false;
+		}
+		var left = this.candidates.stream().filter(candidate -> "LEFT".equals(candidate.handedness())).count();
+		var right = this.candidates.stream().filter(candidate -> "RIGHT".equals(candidate.handedness())).count();
+		return Long.valueOf(left).equals(this.leftHandDetectionCount)
+				&& Long.valueOf(right).equals(this.rightHandDetectionCount);
+	}
+
+	private static boolean sumAtMost(Long first, Long second, Long limit) {
+		if (first == null || second == null || limit == null || first < 0 || second < 0 || limit < 0) {
+			return false;
+		}
+		return BigInteger.valueOf(first).add(BigInteger.valueOf(second)).compareTo(BigInteger.valueOf(limit)) <= 0;
+	}
+
+	private static boolean sumEquals(Long first, Long second, Long expected) {
+		if (first == null || second == null || expected == null || first < 0 || second < 0 || expected < 0) {
+			return false;
+		}
+		return BigInteger.valueOf(first).add(BigInteger.valueOf(second)).equals(BigInteger.valueOf(expected));
 	}
 }
 
@@ -82,11 +147,13 @@ record AiHandPoseCandidatePayload(@Min(0) long frameTimestampMs, @Min(1) int ima
 	@AssertTrue(message = "bounding_box must be an object and landmarks must contain 21 points.")
 	boolean validGeometry() {
 		if (this.boundingBox == null || !this.boundingBox.isObject() || this.landmarks == null
-				|| !this.landmarks.isArray() || this.landmarks.size() != 21) {
+				|| !this.landmarks.isArray() || this.landmarks.size() != 21 || this.validLandmarkCount != 21
+				|| !Double.isFinite(this.handednessScore) || this.handednessScore < 0 || this.handednessScore > 1) {
 			return false;
 		}
 		if (!finite(this.boundingBox, "x") || !finite(this.boundingBox, "y") || !finite(this.boundingBox, "width")
-				|| !finite(this.boundingBox, "height")) {
+				|| !finite(this.boundingBox, "height") || this.boundingBox.get("width").asDouble() <= 0
+				|| this.boundingBox.get("height").asDouble() <= 0) {
 			return false;
 		}
 		for (var point : this.landmarks) {

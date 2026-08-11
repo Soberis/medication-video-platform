@@ -17,16 +17,24 @@ class UploadBatchCompletionService {
 
 	private final ClipAssetRepository clipAssetRepository;
 
+	private final ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository;
+
+	private final ExternalVideoIngestManifestRepository externalManifestRepository;
+
 	private final CaptureEventLogRepository captureEventLogRepository;
 
 	private final MediaProbeSchedulingPort mediaProbeSchedulingPort;
 
 	UploadBatchCompletionService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
 			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository,
-			MediaProbeSchedulingPort mediaProbeSchedulingPort) {
+			MediaProbeSchedulingPort mediaProbeSchedulingPort,
+			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository,
+			ExternalVideoIngestManifestRepository externalManifestRepository) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.clipAssetRepository = clipAssetRepository;
+		this.externalManifestVideoRepository = externalManifestVideoRepository;
+		this.externalManifestRepository = externalManifestRepository;
 		this.captureEventLogRepository = captureEventLogRepository;
 		this.mediaProbeSchedulingPort = mediaProbeSchedulingPort;
 	}
@@ -50,6 +58,7 @@ class UploadBatchCompletionService {
 			throw failure("UPLOAD_BATCH_MANIFEST_CHECKSUM_MISMATCH",
 					"The registered file manifest does not match the batch declaration.");
 		}
+		requireExternalManifestVideos(batch, files);
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var assets = files.stream()
@@ -101,6 +110,40 @@ class UploadBatchCompletionService {
 		if (files.stream().anyMatch(file -> !file.getSha256().equals(file.getVerifiedSha256()))) {
 			throw new IllegalStateException("An uploaded file has inconsistent verified integrity state.");
 		}
+	}
+
+	private void requireExternalManifestVideos(UploadBatch batch, List<UploadFile> files) {
+		if (batch.getExternalManifestId() == null) {
+			return;
+		}
+		var manifest = this.externalManifestRepository.findById(batch.getExternalManifestId())
+			.filter(candidate -> candidate.getProjectId().equals(batch.getProjectId()))
+			.orElseThrow(() -> failure("EXTERNAL_MANIFEST_NOT_FOUND",
+					"The upload batch references an external manifest outside the current project."));
+		if (manifest.getStatus() != ExternalVideoIngestManifestStatus.BOUND) {
+			throw failure("EXTERNAL_MANIFEST_NOT_BOUND",
+					"The upload batch references an external manifest that is not bound.");
+		}
+		var expected = this.externalManifestVideoRepository
+			.findAllByManifestIdOrderByCameraNumber(batch.getExternalManifestId());
+		var expectedByClientFileId = expected.stream()
+			.collect(java.util.stream.Collectors.toUnmodifiableMap(ExternalVideoIngestManifestVideo::getClientFileId,
+					java.util.function.Function.identity()));
+		var videos = files.stream().filter(file -> file.getFileKind() == UploadFileKind.VIDEO).toList();
+		var actualClientFileIds = videos.stream()
+			.map(UploadFile::getClientFileId)
+			.collect(java.util.stream.Collectors.toSet());
+		if (!expectedByClientFileId.keySet().equals(actualClientFileIds) || videos.stream()
+			.anyMatch(file -> !matches(expectedByClientFileId.get(file.getClientFileId()), file))) {
+			throw failure("EXTERNAL_MANIFEST_VIDEO_SET_MISMATCH",
+					"Every external-manifest video must be registered exactly once with its declared file facts.");
+		}
+	}
+
+	private static boolean matches(ExternalVideoIngestManifestVideo expected, UploadFile actual) {
+		return expected != null && expected.getDeclaredSizeBytes() == actual.getSizeBytes()
+				&& expected.getSha256().equals(actual.getSha256())
+				&& expected.getFileName().equals(actual.getFileName());
 	}
 
 	private static UploadBatchCompletionException failure(String errorCode, String message) {

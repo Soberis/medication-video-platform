@@ -152,7 +152,7 @@ export default function AssetDetailView() {
       return {
         title: '媒体检测未通过',
         description:
-          '技术检测未完成，但仍可人工查看并决定是否保留。该视频不能进入标注或训练数据流程。',
+          '技术检测未完成，但仍可人工查看并决定是否保留。该视频不能进入配药动作标注或训练数据流程。',
         type: 'error' as const,
       }
     return {
@@ -543,7 +543,7 @@ export default function AssetDetailView() {
       setCreatedAnnotationTask(
         await createAnnotationTask(projectId, assetId, selectedAnnotationAssignee),
       )
-      void message.success('标注任务已创建并分配。')
+      void message.success('配药动作标注已创建并分配。')
     } catch (error) {
       setActionErrorCode(
         error instanceof AnnotationTaskApiError
@@ -551,7 +551,9 @@ export default function AssetDetailView() {
           : 'ANNOTATION_TASK_REQUEST_FAILED',
       )
       setActionErrorMessage(
-        error instanceof AnnotationTaskApiError ? error.message : '标注任务暂未创建，请稍后重试。',
+        error instanceof AnnotationTaskApiError
+          ? error.message
+          : '配药动作标注暂未创建，请稍后重试。',
       )
     } finally {
       setIsCreatingAnnotationTask(false)
@@ -564,7 +566,7 @@ export default function AssetDetailView() {
     setActionErrorMessage('')
     try {
       const job =
-        handPoseJob?.status === 'FAILED'
+        handPoseJob?.status === 'FAILED' && handPoseJob.run_summary?.retryable === true
           ? await retryHandPoseCandidates(projectId, assetId)
           : await requestHandPoseCandidates(projectId, assetId)
       setHandPoseJob(job)
@@ -599,7 +601,7 @@ export default function AssetDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑">
-        <Link to={paths.assets(projectId)}>视频资产</Link>
+        <Link to={paths.videos(projectId)}>视频管理</Link>
         <span aria-hidden="true">/</span>
         <span>详情</span>
       </nav>
@@ -687,7 +689,7 @@ export default function AssetDetailView() {
               <p className="app-eyebrow">舱内相机 · 二维候选</p>
               <p>
                 检测到手时，会在播放视频上叠加手框、21
-                个关键点、骨架和左右手标识。结果仍须人工审核，不会自动改变正式标注或训练数据。
+                个关键点、骨架和左右手标识。结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
               </p>
               {canRequestHandPose ? (
                 <Button

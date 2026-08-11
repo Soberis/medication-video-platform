@@ -88,7 +88,7 @@ describe('annotation task list view', () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
-    expect(await screen.findByLabelText('项目标注任务进度')).toHaveTextContent(
+    expect(await screen.findByLabelText('项目配药动作标注进度')).toHaveTextContent(
       '项目任务1待提交1待修改0待复核0已完成0',
     )
     expect(screen.getByText('已分配')).toBeInTheDocument()
@@ -133,7 +133,7 @@ describe('annotation task list view', () => {
     await user.click(within(dialog).getByRole('combobox', { name: '标注片段 1 的标签' }))
     expect(await screen.findByText('准备工作区')).toBeInTheDocument()
     await user.click(screen.getByText('拿取药品'))
-    await user.click(within(dialog).getByRole('button', { name: '提交标注' }))
+    await user.click(within(dialog).getByRole('button', { name: '提交配药动作标注' }))
     const revisionCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(revisionCall).toBeDefined()
     expect(JSON.parse(String(revisionCall?.[1]?.body))).toEqual({
@@ -184,6 +184,35 @@ describe('annotation task list view', () => {
     expect(screen.getByText(/主流程时间片段存在重叠/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
+  }, 20_000)
+
+  it('reloads the current task state from the server when the page is re-entered', async () => {
+    const submittedTask = {
+      ...assignedTask,
+      status: 'SUBMITTED',
+      can_submit: false,
+      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+    }
+    const responses = [taskList([assignedTask]), taskList([submittedTask])]
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
+      if (url.endsWith('/annotation-tasks')) {
+        return jsonResponse(responses.shift() ?? taskList([submittedTask]))
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const firstRender = renderView()
+    expect(await screen.findByText('已分配')).toBeInTheDocument()
+    firstRender.unmount()
+
+    renderView()
+    expect(await screen.findByText('已提交')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/annotation-tasks')),
+    ).toHaveLength(2)
   })
 
   it('marks an administrator review of their own revision as SELF_ADMIN_APPROVAL', async () => {

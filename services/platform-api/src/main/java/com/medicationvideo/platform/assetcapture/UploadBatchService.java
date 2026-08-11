@@ -9,7 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,17 +24,20 @@ class UploadBatchService {
 
 	private final ExternalVideoIngestManifestRepository externalManifestRepository;
 
+	private final JdbcTemplate jdbcTemplate;
+
 	private final Duration batchTtl;
 
 	UploadBatchService(UploadBatchRepository repository, AssetFolderRepository folderRepository,
 			ExternalVideoIngestManifestRepository externalManifestRepository,
-			@Value("${platform.upload.batch-ttl:PT24H}") Duration batchTtl) {
+			@Value("${platform.upload.batch-ttl:PT24H}") Duration batchTtl, JdbcTemplate jdbcTemplate) {
 		if (batchTtl.isZero() || batchTtl.isNegative()) {
 			throw new IllegalArgumentException("Upload batch TTL must be positive.");
 		}
 		this.repository = repository;
 		this.folderRepository = folderRepository;
 		this.externalManifestRepository = externalManifestRepository;
+		this.jdbcTemplate = jdbcTemplate;
 		this.batchTtl = batchTtl;
 	}
 
@@ -43,34 +46,31 @@ class UploadBatchService {
 		var sourceType = request.uploadSourceType() == null ? UploadSourceType.HOSPITAL_REMOTE
 				: request.uploadSourceType();
 		var fingerprint = fingerprint(request, sourceType);
+		lockIdempotencyKey(request.projectId(), idempotencyKey);
 		var existing = this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey);
 		if (existing.isPresent()) {
 			return requireSameRequest(existing.get(), fingerprint);
 		}
-		validateSourceRequest(request, sourceType);
+		var externalManifest = validateSourceRequest(request, sourceType, idempotencyKey);
+		// A manifest row is pessimistically locked by validateSourceRequest. Re-read
+		// the idempotency key after that lock: another request with the same key may
+		// have committed while this request was waiting for the manifest lock.
+		existing = this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey);
+		if (existing.isPresent()) {
+			return requireSameRequest(existing.get(), fingerprint);
+		}
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(request.projectId(), idempotencyKey, fingerprint, request.deviceId(),
 				sourceType, request.assetFolderId(), actor.actorId(), request.fileCount(), request.totalSizeBytes(),
 				request.manifestSha256(), request.externalManifestId(), now.plus(this.batchTtl), now);
 
-		try {
-			var saved = this.repository.saveAndFlush(batch);
-			if (request.externalManifestId() != null) {
-				this.externalManifestRepository.findById(request.externalManifestId()).ifPresent(manifest -> {
-					manifest.markBound(now);
-					this.externalManifestRepository.save(manifest);
-				});
-			}
-			return saved;
+		var saved = this.repository.saveAndFlush(batch);
+		if (externalManifest != null) {
+			externalManifest.markBound(now);
+			this.externalManifestRepository.saveAndFlush(externalManifest);
 		}
-		catch (DataIntegrityViolationException exception) {
-			var concurrent = this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey);
-			if (concurrent.isPresent()) {
-				return requireSameRequest(concurrent.get(), fingerprint);
-			}
-			throw exception;
-		}
+		return saved;
 	}
 
 	private static UploadBatch requireSameRequest(UploadBatch batch, String fingerprint) {
@@ -81,7 +81,8 @@ class UploadBatchService {
 		return batch;
 	}
 
-	private void validateSourceRequest(UploadBatchInitRequest request, UploadSourceType sourceType) {
+	private ExternalVideoIngestManifest validateSourceRequest(UploadBatchInitRequest request,
+			UploadSourceType sourceType, String idempotencyKey) {
 		if (sourceType == UploadSourceType.PLATFORM_LOCAL && request.fileCount() != 1) {
 			throw new UploadBatchInputException("PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED",
 					"Each platform-local upload batch must contain exactly one video.");
@@ -94,16 +95,26 @@ class UploadBatchService {
 			throw new UploadBatchInputException("UPLOAD_SOURCE_FOLDER_UNSUPPORTED",
 					"An asset folder can only be selected for a platform-local upload.");
 		}
+		ExternalVideoIngestManifest externalManifest = null;
 		if (request.externalManifestId() != null) {
 			if (sourceType != UploadSourceType.HOSPITAL_REMOTE) {
 				throw new UploadBatchInputException("EXTERNAL_MANIFEST_SOURCE_UNSUPPORTED",
 						"An external ingest manifest can only be bound to a hospital-remote upload batch.");
 			}
-			this.externalManifestRepository.findById(request.externalManifestId())
-				.filter(manifest -> manifest.getProjectId().equals(request.projectId()))
-				.filter(manifest -> manifest.getStatus() == ExternalVideoIngestManifestStatus.ACCEPTED)
+			externalManifest = this.externalManifestRepository
+				.findForBinding(request.externalManifestId(), request.projectId())
 				.orElseThrow(() -> new UploadBatchInputException("EXTERNAL_MANIFEST_NOT_FOUND",
 						"The external ingest manifest was not found in the current project."));
+			if (!externalManifest.getSourceDeviceId().equals(request.deviceId())) {
+				throw new UploadBatchInputException("EXTERNAL_MANIFEST_DEVICE_MISMATCH",
+						"The external manifest source_device_id must match the upload batch device_id.");
+			}
+			if (externalManifest.getStatus() == ExternalVideoIngestManifestStatus.BOUND
+					&& this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey)
+						.isEmpty()) {
+				throw new UploadBatchInputException("EXTERNAL_MANIFEST_ALREADY_BOUND",
+						"The external ingest manifest is already bound to an upload batch.");
+			}
 		}
 		if (request.assetFolderId() != null
 				&& this.folderRepository.findByFolderIdAndProjectId(request.assetFolderId(), request.projectId())
@@ -111,6 +122,17 @@ class UploadBatchService {
 			throw new UploadBatchInputException("ASSET_FOLDER_NOT_FOUND",
 					"The selected asset folder was not found in the current project.");
 		}
+		return externalManifest;
+	}
+
+	private void lockIdempotencyKey(java.util.UUID projectId, String idempotencyKey) {
+		this.jdbcTemplate.execute((java.sql.Connection connection) -> {
+			try (var statement = connection.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+				statement.setString(1, projectId + "\nUPLOAD_BATCH\n" + idempotencyKey);
+				statement.execute();
+				return null;
+			}
+		});
 	}
 
 	private static String fingerprint(UploadBatchInitRequest request, UploadSourceType sourceType) {

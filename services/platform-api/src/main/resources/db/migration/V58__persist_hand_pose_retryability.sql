@@ -1,0 +1,2 @@
+ALTER TABLE ai_job_attempt
+    ADD COLUMN retryable BOOLEAN NOT NULL DEFAULT FALSE;

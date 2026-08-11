@@ -34,12 +34,16 @@ class AiJobExecutionService {
 
 	private final Duration resultClockSkew;
 
+	private final int maxAttempts;
+
 	AiJobExecutionService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
 			ClipAssetAnalysisReadService assetRead, JdbcTemplate jdbcTemplate,
 			@Value("${platform.ai.hand-pose.lease-duration:PT30M}") Duration leaseDuration,
 			@Value("${platform.ai.hand-pose.heartbeat-interval:PT5M}") Duration heartbeatInterval,
 			@Value("${platform.ai.hand-pose.input-authorization-ttl:PT15M}") Duration inputAuthorizationLifetime,
-			@Value("${platform.ai.hand-pose.result-clock-skew:PT5M}") Duration resultClockSkew) {
+			@Value("${platform.ai.hand-pose.result-clock-skew:PT5M}") Duration resultClockSkew,
+			@Value("${platform.ai.hand-pose.max-attempts:3}") int maxAttempts) {
+		HandPoseRetryPolicy.validateMaxAttempts(maxAttempts);
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.assetRead = assetRead;
@@ -48,15 +52,18 @@ class AiJobExecutionService {
 		this.heartbeatInterval = heartbeatInterval;
 		this.inputAuthorizationLifetime = inputAuthorizationLifetime;
 		this.resultClockSkew = resultClockSkew;
+		this.maxAttempts = maxAttempts;
 	}
 
 	@Transactional
-	AiWorkerLeaseResponse acquire(UUID jobId, int attemptNumber, String leaseToken, AiWorkerLeaseRequest request) {
+	AiWorkerLeaseResponse acquire(UUID jobId, int attemptNumber, String leaseToken, AiWorkerLeaseRequest request,
+			String authenticatedWorkerId) {
 		var now = now();
 		var job = lockJob(jobId);
 		var attempt = lockAttempt(jobId, attemptNumber);
+		requireWorkerIdentity(request.workerId(), authenticatedWorkerId);
 		requireLease(attempt, leaseToken);
-		attempt.acquire(request.workerId(), now, this.leaseDuration);
+		attempt.acquire(authenticatedWorkerId, now, this.leaseDuration);
 		job.start(now);
 		var grant = this.assetRead.authorize(job.getProjectId(), job.getClipAssetId(), job.getInputSha256(),
 				this.inputAuthorizationLifetime, now);
@@ -67,21 +74,28 @@ class AiJobExecutionService {
 	}
 
 	@Transactional
-	AiWorkerHeartbeatResponse heartbeat(UUID jobId, int attemptNumber, String leaseToken,
-			AiWorkerLeaseRequest request) {
+	AiWorkerHeartbeatResponse heartbeat(UUID jobId, int attemptNumber, String leaseToken, AiWorkerLeaseRequest request,
+			String authenticatedWorkerId) {
 		var now = now();
+		var job = lockJob(jobId);
 		var attempt = lockAttempt(jobId, attemptNumber);
+		requireWorkerIdentity(request.workerId(), authenticatedWorkerId);
 		requireLease(attempt, leaseToken);
-		attempt.heartbeat(request.workerId(), now, this.leaseDuration);
+		if (job.getStatus() != AiCandidateJobStatus.RUNNING) {
+			throw new HandPoseJobException("STALE_ATTEMPT", "The AI job is no longer running.", 409);
+		}
+		attempt.heartbeat(authenticatedWorkerId, now, this.leaseDuration);
 		return new AiWorkerHeartbeatResponse(jobId, attempt.getAttempt(), attempt.getLeaseUntil(),
 				this.heartbeatInterval.toSeconds());
 	}
 
 	@Transactional
-	void acceptResult(UUID jobId, int attemptNumber, String leaseToken, AiHandPoseResultRequest request) {
+	void acceptResult(UUID jobId, int attemptNumber, String leaseToken, AiHandPoseResultRequest request,
+			String authenticatedWorkerId) {
 		var now = now();
 		var job = lockJob(jobId);
 		var attempt = lockAttempt(jobId, attemptNumber);
+		attempt.requireWorker(authenticatedWorkerId);
 		if (!jobId.equals(request.jobId()) || attemptNumber != request.attempt()
 				|| !attempt.getMessageId().equals(request.messageId())) {
 			throw new HandPoseJobException("AI_HAND_POSE_RESULT_IDENTITY_MISMATCH",
@@ -139,7 +153,7 @@ class AiJobExecutionService {
 		this.jdbcTemplate.update(
 				"INSERT INTO ai_job_result_inbox (message_id, ai_job_id, attempt, result_sha256, received_at) VALUES (?, ?, ?, ?, ?)",
 				request.messageId(), jobId, attemptNumber, digest, receivedAt);
-		attempt.recordRun(request);
+		attempt.recordRun(request, this.maxAttempts);
 		if (request.outcome() == AiHandPoseRunOutcome.SUCCEEDED) {
 			attempt.succeed(now);
 			job.succeed(now, request.handResult());
@@ -164,6 +178,14 @@ class AiJobExecutionService {
 	private static void requireLease(AiCandidateJobAttempt attempt, String token) {
 		if (!attempt.matchesLeaseHash(AiLeaseCapabilityFactory.sha256(token))) {
 			throw new HandPoseJobException("AI_HAND_POSE_LEASE_INVALID", "The AI job lease token is invalid.", 409);
+		}
+	}
+
+	private static void requireWorkerIdentity(String requestWorkerId, String authenticatedWorkerId) {
+		if (authenticatedWorkerId == null || authenticatedWorkerId.isBlank()
+				|| !authenticatedWorkerId.equals(requestWorkerId)) {
+			throw new HandPoseJobException("AI_HAND_POSE_WORKER_IDENTITY_MISMATCH",
+					"The AI Worker request identity does not match the authenticated Worker.", 403);
 		}
 	}
 

@@ -244,25 +244,26 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     // Keep the stable fallback for proxy and non-JSON failures.
   }
   const messages: Record<string, string> = {
-    ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '只有已判定合格的视频才能创建标注任务。',
-    ANNOTATION_TASK_NOT_READY: '视频完成媒体检测后才能创建标注任务。',
-    ANNOTATION_TASK_ALREADY_EXISTS: '该视频已有标注任务，请在标注任务中继续处理。',
+    ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '只有已判定合格的视频才能创建配药动作标注。',
+    ANNOTATION_TASK_NOT_READY: '视频完成媒体检测后才能创建配药动作标注。',
+    ANNOTATION_TASK_ALREADY_EXISTS: '该视频已有配药动作标注，请在配药动作标注页面继续处理。',
     ANNOTATION_TASK_IDEMPOTENCY_KEY_REUSED: '本次创建请求与已提交请求冲突，请刷新后重试。',
     ANNOTATION_TASK_NOT_ASSIGNEE: '只有该任务的执行人可以提交标注。',
-    ANNOTATION_TASK_ALREADY_SUBMITTED: '该任务已经提交标注，等待后续复核。',
+    ANNOTATION_TASK_ALREADY_SUBMITTED: '该配药动作标注已经提交，等待后续复核。',
     ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该视频已不再满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间片段的结束时间必须晚于开始时间。',
     ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了媒体检测确认的视频时长。',
     ANNOTATION_LABEL_NOT_ALLOWED: '所选标签不在当前标注规范中，请重新选择。',
     ANNOTATION_PRIMARY_STEP_OVERLAP: '主流程步骤的时间范围不能重叠，请调整后重试。',
-    ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',
+    ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '配药动作标注提交者不能复核自己的标注。',
     ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',
-    ANNOTATION_POST_CLEANING_RECHECK_NOT_READY: '当前标注、任务或视频状态不允许重新核对清洗。',
+    ANNOTATION_POST_CLEANING_RECHECK_NOT_READY:
+      '当前配药动作标注、任务或视频状态不允许重新核对清洗。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(
-    messages[errorCode] ?? '标注任务暂未创建，请稍后重试。',
+    messages[errorCode] ?? '配药动作标注暂未创建，请稍后重试。',
     errorCode,
   )
 }

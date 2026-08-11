@@ -607,6 +607,29 @@ code {
   align-items: end;
 }
 
+.catalog-filters > label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: #344054;
+  font-weight: 600;
+}
+
+.catalog-filters > label > input[type='datetime-local'] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  color: #1d2939;
+  background: #fff;
+}
+
+.catalog-filters > label > .ant-input-number {
+  width: 100%;
+  min-height: 44px;
+}
+
 .catalog-filters.asset-filters {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

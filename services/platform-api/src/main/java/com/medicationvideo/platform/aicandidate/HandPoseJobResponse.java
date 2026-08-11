@@ -20,11 +20,16 @@ record HandPoseJobResponse(UUID aiJobId, UUID projectId, UUID clipAssetId, Strin
 	}
 
 	static HandPoseJobResponse from(AiCandidateJob job, AiCandidateJobAttempt attempt) {
+		return from(job, attempt, Integer.MAX_VALUE);
+	}
+
+	static HandPoseJobResponse from(AiCandidateJob job, AiCandidateJobAttempt attempt, int maxAttempts) {
 		return new HandPoseJobResponse(job.getAiJobId(), job.getProjectId(), job.getClipAssetId(),
 				job.getAlgorithmKey(), job.getAlgorithmVersion(), job.getModelSha256(), job.getInputSha256(),
 				job.getInputSizeBytes(), job.getSamplingFps(), job.getProfileSha256(), job.getStatus().name(),
 				job.getHandResult().name(),
-				attempt == null || attempt.getStartedAt() == null ? null : HandPoseRunSummary.from(attempt),
+				attempt == null || attempt.getStartedAt() == null ? null
+						: HandPoseRunSummary.from(attempt, maxAttempts),
 				job.getRequestedBy(), job.getCreatedAt(), job.getUpdatedAt());
 	}
 

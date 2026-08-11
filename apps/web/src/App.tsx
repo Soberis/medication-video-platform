@@ -5,10 +5,14 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 
 const managementRoutePatterns = [
+  '/projects/:projectId/sessions/*',
+  '/projects/:projectId/datasets/*',
+  '/projects/:projectId/assets/*',
   '/projects/:projectId/folders',
   '/projects/:projectId/members',
   '/projects/:projectId/event-logs',
   paths.uploads,
+  paths.localUpload,
   paths.accounts,
 ] as const
 
@@ -49,16 +53,24 @@ export default function AppShell() {
           <NavLink end to={paths.projects}>
             项目
           </NavLink>
-          {projectId ? <NavLink to={paths.sessions(projectId)}>配药操作</NavLink> : null}
           {projectId ? <NavLink to={paths.videos(projectId)}>视频管理</NavLink> : null}
-          {projectId ? <NavLink to={paths.annotationTasks(projectId)}>标注任务</NavLink> : null}
-          {projectId ? <NavLink to={paths.datasets(projectId)}>数据集版本</NavLink> : null}
-          <NavLink end to={paths.localUpload}>
-            本地上传
-          </NavLink>
+          {projectId ? <NavLink to={paths.annotationTasks(projectId)}>配药动作标注</NavLink> : null}
           <details className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}>
             <summary>管理</summary>
             <div className="nav-more-menu">
+              {projectId ? (
+                <NavLink end to={paths.sessions(projectId)} onClick={closeManagementMenu}>
+                  多相机查看
+                </NavLink>
+              ) : null}
+              {projectId && isAdministrator ? (
+                <NavLink end to={paths.datasets(projectId)} onClick={closeManagementMenu}>
+                  数据集版本（后续）
+                </NavLink>
+              ) : null}
+              <NavLink end to={paths.localUpload} onClick={closeManagementMenu}>
+                本地上传（辅助）
+              </NavLink>
               {projectId ? (
                 <NavLink end to={paths.folders(projectId)} onClick={closeManagementMenu}>
                   文件夹
@@ -69,19 +81,21 @@ export default function AppShell() {
                   项目成员
                 </NavLink>
               ) : null}
-              {projectId ? (
+              {projectId && isAdministrator ? (
                 <NavLink end to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
                   采集事件日志
                 </NavLink>
               ) : null}
-              {projectId ? (
+              {projectId && isAdministrator ? (
                 <NavLink end to={paths.assets(projectId)} onClick={closeManagementMenu}>
                   视频资产（高级）
                 </NavLink>
               ) : null}
-              <NavLink end to={paths.uploads} onClick={closeManagementMenu}>
-                上传排障
-              </NavLink>
+              {isAdministrator ? (
+                <NavLink end to={paths.uploads} onClick={closeManagementMenu}>
+                  上传排障
+                </NavLink>
+              ) : null}
               {isAdministrator ? (
                 <NavLink end to={paths.accounts} onClick={closeManagementMenu}>
                   账号管理

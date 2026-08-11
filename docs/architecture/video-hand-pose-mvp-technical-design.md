@@ -109,7 +109,7 @@ sequenceDiagram
     participant AI as AI Worker
     participant DB as PostgreSQL
 
-    Web->>API: 发起单路或显式批量预标注
+    Web->>API: 显式发起一个视频的预标注
     API->>DB: 冻结输入并创建/复用 AIJob + Outbox
     API->>MQ: 发布尝试
     MQ->>AI: 投递任务
@@ -157,7 +157,7 @@ sequenceDiagram
 ```text
 VideoManagementView       视频分页、筛选、播放、归档、预标注入口
 DataManagementView        数据规模/来源/相机/状态概览，跳转视频或任务列表
-HandDetectionView         预标注进度、批量操作、失败重试、Overlay 快捷入口
+HandDetectionView         单视频预标注进度、受控失败重试、Overlay 快捷入口
 ActionAnnotationCleaningView 配药动作标注任务、revision、复核和清洗任务
 UploadIntegrationView     外部上传批次状态与本地测试上传
 SettingsView              接入、模型、相机与权限配置

@@ -165,6 +165,10 @@ class AiCandidateJob {
 		return this.requestFingerprint;
 	}
 
+	String getIdempotencyKey() {
+		return this.idempotencyKey;
+	}
+
 	String getRequestedBy() {
 		return this.requestedBy;
 	}
@@ -184,11 +188,12 @@ class AiCandidateJob {
 		}
 	}
 
-	void requeueAfterMissingDelivery(Instant now) {
-		if (this.status != AiCandidateJobStatus.QUEUED) {
-			throw new HandPoseJobException("AI_HAND_POSE_DELIVERY_RECOVERY_STATE_CONFLICT",
-					"Only a queued AI job can be requeued after a missing delivery.", 409);
+	void requeueAfterLostAttempt(Instant now) {
+		if (this.status != AiCandidateJobStatus.RUNNING) {
+			throw new HandPoseJobException("STALE_ATTEMPT", "The AI job is no longer running.", 409);
 		}
+		this.status = AiCandidateJobStatus.QUEUED;
+		this.handResult = HandPoseResult.UNKNOWN;
 		this.updatedAt = now;
 	}
 

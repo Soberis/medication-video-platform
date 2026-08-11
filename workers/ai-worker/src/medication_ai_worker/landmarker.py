@@ -84,20 +84,25 @@ def _detect_all(
     total_video_frames = 0
     inference_frame_count = 0
     frames_with_hand = 0
+    frames_without_hand = 0
     left_hand_detection_count = 0
     right_hand_detection_count = 0
     invalid_landmark_count = 0
     invalid_hand_frame_count = 0
     with av.open(path) as container:
         stream = container.streams.video[0]
+        # Keep this timestamp current for every decoded frame, including frames
+        # that are skipped by the sampler.  Otherwise a duplicate PTS hidden in
+        # a skipped interval could reach MediaPipe and violate VIDEO mode's
+        # monotonic timestamp contract.
         last_timestamp = -1
         next_sample = 0
         for frame in container.decode(stream):
             total_video_frames += 1
             timestamp = _timestamp_ms(frame, stream, last_timestamp)
-            if timestamp <= last_timestamp or timestamp < next_sample:
-                continue
             last_timestamp = timestamp
+            if timestamp < next_sample:
+                continue
             next_sample = timestamp + 1000 // sampling_fps
             inference_frame_count += 1
             rgb = frame.to_ndarray(format="rgb24")
@@ -105,66 +110,115 @@ def _detect_all(
                 mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), timestamp
             )
             frame_candidates: list[dict[str, object]] = []
-            for index, landmarks in enumerate(result.hand_landmarks[:2]):
-                if len(landmarks) != 21:
-                    invalid_landmark_count += abs(len(landmarks) - 21)
-                    invalid_hand_frame_count += 1
+            has_landmarks_field = hasattr(result, "hand_landmarks")
+            raw_landmarks = getattr(result, "hand_landmarks", [])
+            frame_has_invalid_hand = not has_landmarks_field
+            if has_landmarks_field:
+                try:
+                    detected_landmarks = list(raw_landmarks)
+                except TypeError:
+                    # ``None``/non-iterable detector output is an invalid
+                    # observation, not a legitimate no-hand frame.
+                    detected_landmarks = []
+                    frame_has_invalid_hand = True
+            else:
+                detected_landmarks = []
+            frame_has_invalid_hand |= len(detected_landmarks) > MAX_HANDS
+            handedness_groups = getattr(result, "handedness", [])
+            for index, landmarks in enumerate(detected_landmarks[:MAX_HANDS]):
+                try:
+                    points_in_observation = list(landmarks)
+                except TypeError:
+                    points_in_observation = []
+                    frame_has_invalid_hand = True
+                landmark_count = len(points_in_observation)
+                if landmark_count != 21:
+                    invalid_landmark_count += abs(landmark_count - 21)
+                    frame_has_invalid_hand = True
                     continue
-                category = result.handedness[index][0] if result.handedness[index] else None
-                points = [
-                    {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
-                    for point in landmarks
-                ]
-                finite = [
-                    point
-                    for point in points
-                    if math.isfinite(point["x"])
-                    and math.isfinite(point["y"])
-                    and math.isfinite(point["z"])
-                ]
-                invalid_landmark_count += len(points) - len(finite)
-                if len(finite) != len(points):
-                    invalid_hand_frame_count += 1
+
+                points: list[dict[str, float]] = []
+                invalid_points = 0
+                for point in points_in_observation:
+                    try:
+                        values = {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
+                    except (AttributeError, TypeError, ValueError):
+                        invalid_points += 1
+                        continue
+                    if not all(math.isfinite(value) for value in values.values()):
+                        invalid_points += 1
+                        continue
+                    points.append(values)
+                invalid_landmark_count += invalid_points
+                if invalid_points > 0:
+                    frame_has_invalid_hand = True
                     continue
+
+                category = _first_category(handedness_groups, index)
+                handedness_score = _handedness_score(category)
+                try:
+                    image_width = int(frame.width)
+                    image_height = int(frame.height)
+                except (AttributeError, OverflowError, TypeError, ValueError):
+                    image_width = 0
+                    image_height = 0
+                if handedness_score is None or image_width <= 0 or image_height <= 0:
+                    frame_has_invalid_hand = True
+                    continue
+
                 min_x, max_x = (
-                    min(point["x"] for point in finite),
-                    max(point["x"] for point in finite),
+                    min(point["x"] for point in points),
+                    max(point["x"] for point in points),
                 )
                 min_y, max_y = (
-                    min(point["y"] for point in finite),
-                    max(point["y"] for point in finite),
+                    min(point["y"] for point in points),
+                    max(point["y"] for point in points),
                 )
+                bounding_box = {
+                    "x": min_x,
+                    "y": min_y,
+                    "width": max(max_x - min_x, 0.000001),
+                    "height": max(max_y - min_y, 0.000001),
+                }
+                if not all(math.isfinite(value) for value in bounding_box.values()):
+                    frame_has_invalid_hand = True
+                    continue
                 candidate = {
                     "frame_timestamp_ms": timestamp,
-                    "image_width": frame.width,
-                    "image_height": frame.height,
+                    "image_width": image_width,
+                    "image_height": image_height,
                     "hand_index": index,
-                    "handedness": _handedness(None if category is None else category.category_name),
-                    "handedness_score": 0.0 if category is None else float(category.score or 0),
-                    "bounding_box": {
-                        "x": min_x,
-                        "y": min_y,
-                        "width": max(max_x - min_x, 0.000001),
-                        "height": max(max_y - min_y, 0.000001),
-                    },
+                    "handedness": _handedness(
+                        None if category is None else getattr(category, "category_name", None)
+                    ),
+                    "handedness_score": handedness_score,
+                    "bounding_box": bounding_box,
                     "landmarks": points,
-                    "valid_landmark_count": len(finite),
+                    "valid_landmark_count": 21,
                 }
                 frame_candidates.append(candidate)
-                candidates.append(candidate)
                 handedness = candidate["handedness"]
                 if handedness == "LEFT":
                     left_hand_detection_count += 1
                 elif handedness == "RIGHT":
                     right_hand_detection_count += 1
+            if frame_has_invalid_hand:
+                invalid_hand_frame_count += 1
+            else:
+                candidates.extend(frame_candidates)
             if frame_candidates:
                 frames_with_hand += 1
+            elif not frame_has_invalid_hand:
+                # Invalid-only frames are intentionally excluded from both
+                # hand/no-hand counts.  A true no-hand observation is only an
+                # empty, structurally valid detector result.
+                frames_without_hand += 1
 
     return InferenceSummary(
         total_video_frames=total_video_frames,
         inference_frame_count=inference_frame_count,
         frames_with_hand=frames_with_hand,
-        frames_without_hand=inference_frame_count - frames_with_hand,
+        frames_without_hand=frames_without_hand,
         left_hand_detection_count=left_hand_detection_count,
         right_hand_detection_count=right_hand_detection_count,
         invalid_landmark_count=invalid_landmark_count,
@@ -181,5 +235,27 @@ def _timestamp_ms(frame: Any, stream: Any, previous: int) -> int:
     return timestamp
 
 
+def _first_category(groups: Any, index: int) -> Any | None:
+    try:
+        group = groups[index]
+        return group[0] if group else None
+    except (IndexError, KeyError, TypeError):
+        return None
+
+
+def _handedness_score(category: Any | None) -> float | None:
+    if category is None:
+        return 0.0
+    raw_score = getattr(category, "score", 0.0)
+    if raw_score is None:
+        return 0.0
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        return None
+    return score if math.isfinite(score) and 0 <= score <= 1 else None
+
+
 def _handedness(value: str | None) -> str:
-    return {"left": "LEFT", "right": "RIGHT"}.get((value or "").lower(), "UNKNOWN")
+    normalized = value.lower() if isinstance(value, str) else ""
+    return {"left": "LEFT", "right": "RIGHT"}.get(normalized, "UNKNOWN")

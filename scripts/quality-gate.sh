@@ -188,6 +188,9 @@ required_files=(
     'contracts/events/media-probe-job-v1.schema.json'
     'contracts/events/media-probe-result-v1.schema.json'
     'contracts/events/media-dead-letter-v1.schema.json'
+    'contracts/events/ai-hand-pose-job-v1.schema.json'
+    'contracts/events/ai-hand-pose-result-v2.schema.json'
+    'contracts/events/ai-hand-pose-dead-letter-v1.schema.json'
     'contracts/events/dataset-export-job-v1.schema.json'
     'contracts/events/dataset-export-result-v1.schema.json'
     'contracts/events/dataset-export-dead-letter-v1.schema.json'
@@ -294,6 +297,18 @@ for contract_name in "${dataset_export_event_contracts[@]}"; do
         "contracts/events/$contract_name" \
         "Dataset export event JSON Schema is valid JSON: $contract_name" \
         "Dataset export event JSON Schema is invalid ($contract_name)"
+done
+
+ai_event_contracts=(
+    'ai-hand-pose-job-v1.schema.json'
+    'ai-hand-pose-result-v2.schema.json'
+    'ai-hand-pose-dead-letter-v1.schema.json'
+)
+for contract_name in "${ai_event_contracts[@]}"; do
+    validate_json \
+        "contracts/events/$contract_name" \
+        "AI hand-pose event JSON Schema is valid JSON: $contract_name" \
+        "AI hand-pose event JSON Schema is invalid ($contract_name)"
 done
 
 validate_profile \

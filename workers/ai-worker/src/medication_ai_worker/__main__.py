@@ -13,7 +13,7 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     settings = Settings.from_environment()
     client = CoreApiClient(
-        settings.platform_api_base_url, settings.read_bearer_token(), settings.worker_id
+        settings.platform_api_base_url, settings.read_bearer_token, settings.worker_id
     )
     try:
         AiConsumer(settings.rabbitmq_url, Processor(client, settings)).run()

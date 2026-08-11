@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event, Lock, Thread
 from types import TracebackType
 from typing import Self
+from urllib.parse import urlparse
 
 import httpx
 
-from medication_ai_worker.contracts import AiJob
+from medication_ai_worker.contracts import CONTENT_TYPE, SHA256, AiJob
 from medication_ai_worker.landmarker import InferenceResult, InferenceSummary
 
 
@@ -26,6 +28,32 @@ class PermanentError(RuntimeError):
     pass
 
 
+class _BearerTokenAuth(httpx.Auth):
+    """Read the service identity for every Core API request.
+
+    Production rotates short-lived JWTs by atomically replacing the configured
+    token file.  Reading it from the auth flow (rather than at process startup)
+    means the next request observes the new file without ever logging its
+    contents.
+    """
+
+    def __init__(self, provider: Callable[[], str]) -> None:
+        self._provider = provider
+
+    def auth_flow(
+        self,
+        request: httpx.Request,
+    ) -> Generator[httpx.Request, httpx.Response, None]:
+        try:
+            token = self._provider()
+        except (OSError, ValueError) as exc:
+            raise PermanentError("AI Worker service identity is unavailable") from exc
+        if len(token) < 32 or any(character.isspace() for character in token):
+            raise PermanentError("AI Worker service identity is unavailable")
+        request.headers["Authorization"] = f"Bearer {token}"
+        yield request
+
+
 @dataclass(frozen=True, slots=True)
 class LeaseGrant:
     input_url: str
@@ -35,6 +63,11 @@ class LeaseGrant:
     profile_sha256: str
     lease_until: datetime
     heartbeat_interval_seconds: float
+    # Defaults preserve the small test/fake-client constructor used by the
+    # worker's existing unit tests.  Real Core API grants always populate and
+    # validate both frozen fields below.
+    sampling_fps: int = 10
+    content_type: str = "video/mp4"
 
 
 class LeaseMonitor:
@@ -92,13 +125,22 @@ class LeaseMonitor:
 
 
 class CoreApiClient:
-    def __init__(self, base_url: str, token: str, worker_id: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        bearer_token: str | Callable[[], str],
+        worker_id: str,
+        *,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         self._worker_id = worker_id
+        token_provider = (lambda: bearer_token) if isinstance(bearer_token, str) else bearer_token
         self._client = httpx.Client(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {token}"},
+            auth=_BearerTokenAuth(token_provider),
             timeout=httpx.Timeout(30, read=120),
             follow_redirects=False,
+            transport=transport,
         )
 
     def close(self) -> None:
@@ -113,24 +155,32 @@ class CoreApiClient:
         )
         body = self._json(response)
         try:
-            input_size = body["input_size_bytes"]
-            if isinstance(input_size, bool) or not isinstance(input_size, int):
-                raise ValueError("input_size_bytes must be an integer")
+            input_url = _http_url(body, "input_url")
+            input_sha256 = _digest(body, "input_sha256")
+            input_size = _positive_integer(body, "input_size_bytes")
+            content_type = _content_type(body)
+            model_sha256 = _digest(body, "model_sha256")
+            sampling_fps = _positive_integer(body, "sampling_fps")
+            profile_sha256 = _digest(body, "profile_sha256")
             grant = LeaseGrant(
-                str(body["input_url"]),
-                str(body["input_sha256"]),
+                input_url,
+                input_sha256,
                 input_size,
-                str(body["model_sha256"]),
-                str(body["profile_sha256"]),
+                model_sha256,
+                profile_sha256,
                 _timestamp(body, "lease_until"),
                 _positive_number(body, "heartbeat_interval_seconds"),
+                sampling_fps,
+                content_type,
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise PermanentError("Core API returned an invalid AI lease grant") from exc
         if (
             grant.input_sha256 != job.input_sha256
             or grant.input_size_bytes != job.input_size_bytes
+            or grant.content_type != job.content_type
             or grant.model_sha256 != job.model_sha256
+            or grant.sampling_fps != job.sampling_fps
             or grant.profile_sha256 != job.profile_sha256
         ):
             raise StaleError("Core API lease grant does not match frozen broker inputs")
@@ -295,6 +345,37 @@ def _positive_number(value: dict[str, object], field: str) -> float:
     if isinstance(candidate, bool) or not isinstance(candidate, (int, float)) or candidate <= 0:
         raise PermanentError(f"Core API returned invalid {field}")
     return float(candidate)
+
+
+def _positive_integer(value: dict[str, object], field: str) -> int:
+    candidate = value.get(field)
+    if isinstance(candidate, bool) or not isinstance(candidate, int) or candidate < 1:
+        raise ValueError(f"Core API returned invalid {field}")
+    return candidate
+
+
+def _digest(value: dict[str, object], field: str) -> str:
+    candidate = value.get(field)
+    if not isinstance(candidate, str) or SHA256.fullmatch(candidate) is None:
+        raise ValueError(f"Core API returned invalid {field}")
+    return candidate
+
+
+def _content_type(value: dict[str, object]) -> str:
+    candidate = value.get("content_type")
+    if not isinstance(candidate, str) or CONTENT_TYPE.fullmatch(candidate) is None:
+        raise ValueError("Core API returned invalid content_type")
+    return candidate
+
+
+def _http_url(value: dict[str, object], field: str) -> str:
+    candidate = value.get(field)
+    if not isinstance(candidate, str):
+        raise ValueError(f"Core API returned invalid {field}")
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"Core API returned invalid {field}")
+    return candidate
 
 
 def _error_code(response: httpx.Response) -> str:

@@ -1,4 +1,4 @@
-import { Button, Card, Empty, Select, Table, Tag } from 'antd'
+import { Button, Card, Empty, InputNumber, Select, Table, Tag } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -10,10 +10,13 @@ import {
   retryHandPoseCandidates,
   type DataManagementSummary,
   type VideoSummary,
+  type VideoSummaryAnnotationStatus,
+  type VideoSummaryCleaningStatus,
   type VideoSummaryFilters,
   type VideoSummaryHandResult,
   type VideoSummaryHandStatus,
   type VideoSummaryMediaStatus,
+  type VideoSummarySource,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { formatDateTime, statusTone } from '@/catalog-presentation'
@@ -39,6 +42,25 @@ const handResultLabels: Record<VideoSummaryHandResult, string> = {
   NO_HAND_DETECTED: '未发现手部',
 }
 
+const sourceLabels: Record<VideoSummarySource, string> = {
+  HOSPITAL_REMOTE: '医院边端',
+  PLATFORM_LOCAL: '平台本地上传',
+}
+
+const annotationStatusLabels: Record<VideoSummaryAnnotationStatus, string> = {
+  NOT_STARTED: '待创建',
+  ASSIGNED: '待标注',
+  SUBMITTED: '待复核',
+  COMPLETED: '已完成',
+}
+
+const cleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> = {
+  NOT_STARTED: '待清洗',
+  PASS: '通过',
+  WARNING: '需关注',
+  REJECT: '不通过',
+}
+
 export default function VideoManagementView() {
   const { projectId = '' } = useParams()
   const [filters, setFilters] = useState<VideoSummaryFilters>({})
@@ -47,6 +69,7 @@ export default function VideoManagementView() {
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [summary, setSummary] = useState<DataManagementSummary | null>(null)
+  const [summaryError, setSummaryError] = useState(false)
   const [actionVideoId, setActionVideoId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
@@ -56,17 +79,29 @@ export default function VideoManagementView() {
       activeRequest.current?.abort()
       const request = new AbortController()
       activeRequest.current = request
-      if (!append) setLoadState('loading')
+      if (!append) {
+        setLoadState('loading')
+        setSummary(null)
+        setSummaryError(false)
+      }
       setErrorMessage('')
       try {
-        const [page, nextSummary] = await Promise.all([
+        const [pageResult, summaryResult] = await Promise.allSettled([
           listVideoSummaries(projectId, nextFilters, append ? nextCursor : null, request.signal),
-          getDataManagementSummary(projectId, request.signal),
+          getDataManagementSummary(projectId, nextFilters, request.signal),
         ])
         if (activeRequest.current !== request) return
+        if (pageResult.status === 'rejected') throw pageResult.reason
+        if (summaryResult.status === 'fulfilled') {
+          setSummary(summaryResult.value)
+          setSummaryError(false)
+        } else {
+          setSummary(null)
+          setSummaryError(true)
+        }
+        const page = pageResult.value
         setItems((current) => (append ? [...current, ...page.items] : page.items))
         setNextCursor(page.next_cursor)
-        setSummary(nextSummary)
         setLoadState('success')
       } catch (error) {
         if (request.signal.aborted || activeRequest.current !== request) return
@@ -102,8 +137,10 @@ export default function VideoManagementView() {
   async function startHandPose(row: VideoSummary) {
     if (
       actionVideoId !== null ||
+      row.media_status !== 'INGESTED' ||
       row.hand_status === 'QUEUED' ||
       row.hand_status === 'RUNNING' ||
+      row.hand_status === 'SUCCEEDED' ||
       (row.hand_status === 'FAILED' && !row.hand_retryable)
     )
       return
@@ -142,7 +179,7 @@ export default function VideoManagementView() {
         <div>
           <p className="app-eyebrow">V1.18 P0 · 单视频闭环</p>
           <h1 id="video-management-title">视频管理</h1>
-          <p>从媒体入库到手部候选和人工标注，按单个视频查看当前状态。</p>
+          <p>从媒体入库到手部候选和人工配药动作标注，按单个固定机位视频查看当前状态。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadPage(false)}>
           刷新
@@ -168,7 +205,19 @@ export default function VideoManagementView() {
               <strong>{summary.usable_count}</strong>
             </div>
             <div>
-              <span className="cell-secondary">待标注 / 待复核 / 待清洗</span>
+              <span className="cell-secondary">来源分布</span>
+              <strong>{formatCountMap(summary.counts_by_source, sourceCountLabel)}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">相机分布</span>
+              <strong>{formatCountMap(summary.counts_by_camera, cameraCountLabel)}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">媒体状态分布</span>
+              <strong>{formatCountMap(summary.counts_by_status, mediaCountLabel)}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">待配药动作标注 / 待复核 / 待清洗</span>
               <strong>
                 {summary.pending_annotation} / {summary.pending_review} / {summary.pending_cleaning}
               </strong>
@@ -176,8 +225,57 @@ export default function VideoManagementView() {
           </div>
         </Card>
       ) : null}
+      {summaryError ? (
+        <div className="catalog-notice" role="status">
+          数据管理汇总暂不可用，视频列表仍可使用。
+        </div>
+      ) : null}
       <Card className="filter-card" variant="outlined">
         <div className="catalog-filters video-management-filters">
+          <label>
+            来源
+            <Select
+              allowClear
+              value={filters.source}
+              placeholder="全部"
+              options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
+              onChange={(value) =>
+                applyFilters({ ...filters, source: value as VideoSummarySource | undefined })
+              }
+            />
+          </label>
+          <label>
+            相机编号
+            <InputNumber
+              min={1}
+              max={64}
+              value={filters.cameraNumber}
+              placeholder="全部"
+              onChange={(value) =>
+                applyFilters({ ...filters, cameraNumber: value === null ? undefined : value })
+              }
+            />
+          </label>
+          <label>
+            拍摄开始
+            <input
+              type="datetime-local"
+              value={toLocalDateTimeInput(filters.capturedFrom)}
+              onChange={(event) =>
+                applyFilters({ ...filters, capturedFrom: toInstant(event.currentTarget.value) })
+              }
+            />
+          </label>
+          <label>
+            拍摄截止
+            <input
+              type="datetime-local"
+              value={toLocalDateTimeInput(filters.capturedBefore)}
+              onChange={(event) =>
+                applyFilters({ ...filters, capturedBefore: toInstant(event.currentTarget.value) })
+              }
+            />
+          </label>
           <label>
             媒体状态
             <Select
@@ -226,6 +324,42 @@ export default function VideoManagementView() {
               }
             />
           </label>
+          <label>
+            配药动作标注
+            <Select
+              allowClear
+              value={filters.annotationStatus}
+              placeholder="全部"
+              options={Object.entries(annotationStatusLabels).map(([value, label]) => ({
+                value,
+                label,
+              }))}
+              onChange={(value) =>
+                applyFilters({
+                  ...filters,
+                  annotationStatus: value as VideoSummaryAnnotationStatus | undefined,
+                })
+              }
+            />
+          </label>
+          <label>
+            清洗结论
+            <Select
+              allowClear
+              value={filters.cleaningStatus}
+              placeholder="全部"
+              options={Object.entries(cleaningStatusLabels).map(([value, label]) => ({
+                value,
+                label,
+              }))}
+              onChange={(value) =>
+                applyFilters({
+                  ...filters,
+                  cleaningStatus: value as VideoSummaryCleaningStatus | undefined,
+                })
+              }
+            />
+          </label>
           <Button onClick={() => applyFilters({})}>清除筛选</Button>
         </div>
       </Card>
@@ -262,7 +396,9 @@ export default function VideoManagementView() {
                 render: (_, row) => (
                   <>
                     <strong className="mono-wrap">{row.display_name}</strong>
-                    <span className="cell-secondary">来源 {row.source_name}</span>
+                    <span className="cell-secondary">
+                      来源 {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
+                    </span>
                   </>
                 ),
               },
@@ -303,9 +439,24 @@ export default function VideoManagementView() {
                   </>
                 ),
               },
-              { title: '标注', dataIndex: 'annotation_status', width: 110 },
-              { title: '清洗', dataIndex: 'cleaning_status', width: 110 },
-              { title: '留存', dataIndex: 'retention_status', width: 170 },
+              {
+                title: '配药动作标注',
+                dataIndex: 'annotation_status',
+                width: 150,
+                render: (value: VideoSummaryAnnotationStatus) => annotationStatusLabels[value],
+              },
+              {
+                title: '清洗',
+                dataIndex: 'cleaning_status',
+                width: 110,
+                render: (value: VideoSummaryCleaningStatus) => cleaningStatusLabels[value],
+              },
+              {
+                title: '留存',
+                dataIndex: 'retention_status',
+                width: 170,
+                render: (value: string) => retentionStatusLabel(value),
+              },
               {
                 title: '操作',
                 width: 220,
@@ -318,7 +469,9 @@ export default function VideoManagementView() {
                       <Button size="small" disabled>
                         检测中
                       </Button>
-                    ) : row.hand_status === 'FAILED' && row.hand_retryable ? (
+                    ) : row.hand_status === 'FAILED' &&
+                      row.hand_retryable &&
+                      row.media_status === 'INGESTED' ? (
                       <Button
                         size="small"
                         loading={actionVideoId === row.video_id}
@@ -328,7 +481,7 @@ export default function VideoManagementView() {
                       </Button>
                     ) : row.hand_status === 'FAILED' ? (
                       <span className="cell-secondary">不可重试</span>
-                    ) : row.hand_status !== 'SUCCEEDED' ? (
+                    ) : row.hand_status !== 'SUCCEEDED' && row.media_status === 'INGESTED' ? (
                       <Button
                         size="small"
                         loading={actionVideoId === row.video_id}
@@ -336,9 +489,11 @@ export default function VideoManagementView() {
                       >
                         检测手部
                       </Button>
+                    ) : row.hand_status !== 'SUCCEEDED' ? (
+                      <span className="cell-secondary">媒体尚未入库，不能检测</span>
                     ) : null}
                     <Link className="text-link" to={paths.annotationTasks(projectId)}>
-                      进入标注
+                      进入配药动作标注
                     </Link>
                   </span>
                 ),
@@ -356,6 +511,45 @@ export default function VideoManagementView() {
       ) : null}
     </>
   )
+}
+
+function toInstant(value: string) {
+  return value ? new Date(value).toISOString() : undefined
+}
+
+function toLocalDateTimeInput(value?: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+function retentionStatusLabel(value: string) {
+  const labels: Record<string, string> = {
+    NOT_ASSESSED: '未评估',
+    RELEASE_REVIEW_REQUIRED: '待放行复核',
+    QUARANTINE_REQUIRED: '需隔离',
+    DEIDENTIFICATION_REQUIRED: '需去标识化',
+  }
+  return labels[value] ?? '需人工确认'
+}
+
+function formatCountMap(values: Record<string, number>, label: (key: string) => string) {
+  const entries = Object.entries(values)
+  if (entries.length === 0) return '暂无'
+  return entries.map(([key, count]) => `${label(key)} ${count}`).join(' · ')
+}
+
+function sourceCountLabel(value: string) {
+  return sourceLabels[value as VideoSummarySource] ?? '其他来源'
+}
+
+function cameraCountLabel(value: string) {
+  return /^\d+$/.test(value) ? `相机 ${value}` : '未绑定相机'
+}
+
+function mediaCountLabel(value: string) {
+  return mediaStatusLabels[value as VideoSummaryMediaStatus] ?? '其他状态'
 }
 
 function formatBytes(bytes: number) {

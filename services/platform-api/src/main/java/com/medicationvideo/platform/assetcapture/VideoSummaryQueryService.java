@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -25,14 +26,19 @@ public class VideoSummaryQueryService {
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 
-	VideoSummaryQueryService(NamedParameterJdbcTemplate jdbcTemplate) {
+	private final int handPoseMaxAttempts;
+
+	VideoSummaryQueryService(NamedParameterJdbcTemplate jdbcTemplate,
+			@Value("${platform.ai.hand-pose.max-attempts:3}") int handPoseMaxAttempts) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.handPoseMaxAttempts = handPoseMaxAttempts;
 	}
 
 	@Transactional(readOnly = true)
-	public VideoSummaryPage list(UUID projectId, ClipAssetStatus mediaStatus, String handStatus, String handResult,
-			Integer cameraNumber, Instant capturedFrom, Instant capturedBefore, Instant receivedFrom,
-			Instant receivedBefore, String cursor, int limit) {
+	public VideoSummaryPage list(UUID projectId, UploadSourceType source, ClipAssetStatus mediaStatus,
+			String handStatus, String handResult, String annotationStatus, String cleaningStatus, Integer cameraNumber,
+			Instant capturedFrom, Instant capturedBefore, Instant receivedFrom, Instant receivedBefore, String cursor,
+			int limit) {
 		if (capturedFrom != null && capturedBefore != null && !capturedFrom.isBefore(capturedBefore)) {
 			throw new AssetCatalogQueryException("INVALID_TIME_RANGE",
 					"captured_from must be earlier than captured_before.");
@@ -44,66 +50,98 @@ public class VideoSummaryQueryService {
 		var decodedCursor = cursor == null ? null : AssetCatalogCursor.decode(CURSOR_KIND, cursor);
 		var sql = new StringBuilder(
 				"""
-						SELECT asset.clip_asset_id AS video_id,
-						       COALESCE(NULLIF(source_file.file_name, ''),
-						                'video-' || COALESCE((stream.camera_index + 1)::text, 'unknown') || '.mp4') AS display_name,
-						       stream.camera_index + 1 AS camera_number,
-						       stream.record_start_utc AS captured_at,
-						       asset.created_at AS received_at,
-						       batch.upload_source_type AS source_name,
-						       asset.asset_status AS media_status,
-						       COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
-						       COALESCE(hand.hand_result, 'UNKNOWN') AS hand_result,
-						       COALESCE(hand.hand_retryable, FALSE) AS hand_retryable,
-						       COALESCE(annotation.task_status, 'NOT_STARTED') AS annotation_status,
-						       COALESCE(cleaning.run_status, 'NOT_STARTED') AS cleaning_status,
-						       COALESCE(retention.required_action, 'NOT_ASSESSED') AS retention_status
-						FROM clip_asset asset
-						JOIN upload_batch batch ON batch.batch_id = asset.batch_id
-						LEFT JOIN upload_file source_file ON source_file.upload_file_id = asset.source_upload_file_id
+									SELECT asset.clip_asset_id AS video_id,
+									       COALESCE(NULLIF(source_file.file_name, ''),
+									                'video-' || COALESCE((stream.camera_index + 1)::text, 'unknown') || '.mp4') AS display_name,
+									       stream.camera_index + 1 AS camera_number,
+									       stream.record_start_utc AS captured_at,
+									       asset.created_at AS received_at,
+									       batch.upload_source_type AS source_name,
+									       asset.asset_status AS media_status,
+									       COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
+									       COALESCE(hand.hand_result, 'UNKNOWN') AS hand_result,
+									       COALESCE(hand.hand_retryable, FALSE) AS hand_retryable,
+									      COALESCE(annotation.task_status, 'NOT_STARTED') AS annotation_status,
+									      COALESCE(cleaning.outcome, 'NOT_STARTED') AS cleaning_status,
+									       COALESCE(retention.required_action, 'NOT_ASSESSED') AS retention_status
+									FROM clip_asset asset
+									JOIN upload_batch batch ON batch.batch_id = asset.batch_id
+									LEFT JOIN upload_file source_file ON source_file.upload_file_id = asset.source_upload_file_id
+									LEFT JOIN LATERAL (
+									    SELECT camera_index, record_start_utc
+									    FROM camera_stream
+									    WHERE clip_asset_id = asset.clip_asset_id
+									    ORDER BY created_at DESC, camera_stream_id DESC
+									    LIMIT 1
+									) stream ON TRUE
+									LEFT JOIN LATERAL (
+									    SELECT job.status, job.hand_result,
+									           (job.status = 'FAILED' AND COALESCE(attempt.retryable, FALSE)
+									            AND attempt.attempt < :handPoseMaxAttempts) AS hand_retryable
+									    FROM ai_job job
+									    LEFT JOIN LATERAL (
+									        SELECT attempt, retryable
+									        FROM ai_job_attempt
+									        WHERE ai_job_id = job.ai_job_id
+									        ORDER BY attempt DESC
+									        LIMIT 1
+									    ) attempt ON TRUE
+									    WHERE job.project_id = asset.project_id AND job.clip_asset_id = asset.clip_asset_id
+									    ORDER BY job.created_at DESC, job.ai_job_id DESC
+									    LIMIT 1
+									) hand ON TRUE
+									LEFT JOIN LATERAL (
+									    SELECT task.task_status, revision.annotation_revision_id
+									    FROM annotation_task task
+									    LEFT JOIN LATERAL (
+									        SELECT revision.annotation_revision_id
+									        FROM annotation_revision revision
+						        WHERE revision.project_id = task.project_id
+						          AND revision.annotation_task_id = task.annotation_task_id
+						          AND revision.clip_asset_id = task.clip_asset_id
+						        ORDER BY revision.revision_number DESC, revision.submitted_at DESC,
+						                 revision.annotation_revision_id DESC
+									        LIMIT 1
+									    ) revision ON TRUE
+									    WHERE task.project_id = asset.project_id
+									      AND task.clip_asset_id = asset.clip_asset_id
+									    LIMIT 1
+						) annotation ON TRUE
 						LEFT JOIN LATERAL (
-						    SELECT camera_index, record_start_utc
-						    FROM camera_stream
-						    WHERE clip_asset_id = asset.clip_asset_id
-						    ORDER BY created_at DESC, camera_stream_id DESC
+						    SELECT quality.decision AS quality_decision, quality.version AS quality_review_version
+						    FROM quality_review quality
+						    WHERE quality.project_id = asset.project_id
+						      AND quality.clip_asset_id = asset.clip_asset_id
 						    LIMIT 1
-						) stream ON TRUE
+						) quality_fact ON TRUE
 						LEFT JOIN LATERAL (
-						    SELECT job.status, job.hand_result,
-						           (job.status = 'FAILED' AND attempt.failure_reason IN
-						             ('AI_HAND_POSE_INFERENCE_FAILED', 'AI_HAND_POSE_INVALID_OUTPUT')) AS hand_retryable
-						    FROM ai_job job
-						    LEFT JOIN LATERAL (
-						        SELECT failure_reason
-						        FROM ai_job_attempt
-						        WHERE ai_job_id = job.ai_job_id
-						        ORDER BY attempt DESC
-						        LIMIT 1
-						    ) attempt ON TRUE
-						    WHERE job.project_id = asset.project_id AND job.clip_asset_id = asset.clip_asset_id
-						    ORDER BY job.created_at DESC, job.ai_job_id DESC
-						    LIMIT 1
-						) hand ON TRUE
-						LEFT JOIN annotation_task annotation
-						  ON annotation.project_id = asset.project_id AND annotation.clip_asset_id = asset.clip_asset_id
-						LEFT JOIN LATERAL (
-						    SELECT run_status
-						    FROM cleaning_run
-						    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
-						    ORDER BY completed_at DESC, cleaning_run_id DESC
-						    LIMIT 1
-						) cleaning ON TRUE
-						LEFT JOIN LATERAL (
-						    SELECT required_action
-						    FROM privacy_assessment
-						    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
-						    ORDER BY assessed_at DESC, privacy_assessment_id DESC
-						    LIMIT 1
-						) retention ON TRUE
-						WHERE asset.project_id = :projectId
-						  AND asset.deleted_at IS NULL
-						""");
+						    SELECT result.outcome
+									    FROM cleaning_run run
+									    JOIN cleaning_result result ON result.cleaning_run_id = run.cleaning_run_id
+						    WHERE run.project_id = asset.project_id AND run.clip_asset_id = asset.clip_asset_id
+						      AND run.annotation_revision_id = annotation.annotation_revision_id
+						      AND run.quality_review_version = quality_fact.quality_review_version
+						      AND quality_fact.quality_decision = 'QUALIFIED'
+						      AND run.run_status = 'SUCCEEDED'
+									    ORDER BY result.evaluated_at DESC, result.cleaning_result_id DESC
+									    LIMIT 1
+									) cleaning ON TRUE
+									LEFT JOIN LATERAL (
+									    SELECT required_action
+									    FROM privacy_assessment
+									    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
+									    ORDER BY assessed_at DESC, privacy_assessment_id DESC
+									    LIMIT 1
+									) retention ON TRUE
+									WHERE asset.project_id = :projectId
+									  AND asset.deleted_at IS NULL
+									""");
 		var parameters = new MapSqlParameterSource("projectId", projectId);
+		parameters.addValue("handPoseMaxAttempts", this.handPoseMaxAttempts);
+		if (source != null) {
+			sql.append(" AND batch.upload_source_type = :source\n");
+			parameters.addValue("source", source.name());
+		}
 		if (mediaStatus != null) {
 			sql.append(" AND asset.asset_status = :mediaStatus\n");
 			parameters.addValue("mediaStatus", mediaStatus.name());
@@ -116,30 +154,38 @@ public class VideoSummaryQueryService {
 			sql.append(" AND COALESCE(hand.hand_result, 'UNKNOWN') = :handResult\n");
 			parameters.addValue("handResult", handResult);
 		}
+		if (annotationStatus != null) {
+			sql.append(" AND COALESCE(annotation.task_status, 'NOT_STARTED') = :annotationStatus\n");
+			parameters.addValue("annotationStatus", annotationStatus);
+		}
+		if (cleaningStatus != null) {
+			sql.append(" AND COALESCE(cleaning.outcome, 'NOT_STARTED') = :cleaningStatus\n");
+			parameters.addValue("cleaningStatus", cleaningStatus);
+		}
 		if (cameraNumber != null) {
 			sql.append(" AND stream.camera_index + 1 = :cameraNumber\n");
 			parameters.addValue("cameraNumber", cameraNumber);
 		}
 		if (capturedFrom != null) {
 			sql.append(" AND stream.record_start_utc >= :capturedFrom\n");
-			parameters.addValue("capturedFrom", capturedFrom);
+			parameters.addValue("capturedFrom", java.sql.Timestamp.from(capturedFrom));
 		}
 		if (capturedBefore != null) {
 			sql.append(" AND stream.record_start_utc < :capturedBefore\n");
-			parameters.addValue("capturedBefore", capturedBefore);
+			parameters.addValue("capturedBefore", java.sql.Timestamp.from(capturedBefore));
 		}
 		if (receivedFrom != null) {
 			sql.append(" AND asset.created_at >= :receivedFrom\n");
-			parameters.addValue("receivedFrom", receivedFrom);
+			parameters.addValue("receivedFrom", java.sql.Timestamp.from(receivedFrom));
 		}
 		if (receivedBefore != null) {
 			sql.append(" AND asset.created_at < :receivedBefore\n");
-			parameters.addValue("receivedBefore", receivedBefore);
+			parameters.addValue("receivedBefore", java.sql.Timestamp.from(receivedBefore));
 		}
 		if (decodedCursor != null) {
 			sql.append(" AND (asset.created_at < :cursorReceivedAt OR (asset.created_at = :cursorReceivedAt"
 					+ " AND asset.clip_asset_id < :cursorId))\n");
-			parameters.addValue("cursorReceivedAt", decodedCursor.recordedAt());
+			parameters.addValue("cursorReceivedAt", java.sql.Timestamp.from(decodedCursor.recordedAt()));
 			parameters.addValue("cursorId", decodedCursor.id());
 		}
 		sql.append(" ORDER BY asset.created_at DESC, asset.clip_asset_id DESC LIMIT :pageSize");

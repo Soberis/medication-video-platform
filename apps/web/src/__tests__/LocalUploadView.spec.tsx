@@ -53,6 +53,10 @@ describe('LocalUploadView', () => {
 
     expect(fileInput).not.toBeDisabled()
     expect(screen.getByText(/平台会按顺序分别上传/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看项目视频' })).toHaveAttribute(
+      'href',
+      `/projects/${project.project_id}/videos`,
+    )
   })
 
   it('clears a project that is no longer authorized after refresh', async () => {

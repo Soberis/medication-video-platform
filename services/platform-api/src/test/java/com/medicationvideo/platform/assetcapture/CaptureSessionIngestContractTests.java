@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -15,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
@@ -55,6 +57,10 @@ class CaptureSessionIngestContractTests {
 
 	private static final UUID VIDEO_TWO_ID = UUID.fromString("30000000-0000-0000-0000-000000000002");
 
+	private static final UUID VIDEO_THREE_ID = UUID.fromString("30000000-0000-0000-0000-000000000004");
+
+	private static final UUID VIDEO_FIVE_ID = UUID.fromString("30000000-0000-0000-0000-000000000005");
+
 	private static final UUID METADATA_ID = UUID.fromString("30000000-0000-0000-0000-000000000003");
 
 	private static final long PART_SIZE = 8_388_608L;
@@ -62,6 +68,10 @@ class CaptureSessionIngestContractTests {
 	private static final String VIDEO_SHA_ONE = "a".repeat(64);
 
 	private static final String VIDEO_SHA_TWO = "b".repeat(64);
+
+	private static final String VIDEO_SHA_THREE = "c".repeat(64);
+
+	private static final String VIDEO_SHA_FIVE = "d".repeat(64);
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -100,10 +110,18 @@ class CaptureSessionIngestContractTests {
 	private CameraStreamRepository streamRepository;
 
 	@Autowired
+	private ExternalVideoIngestManifestRepository externalManifestRepository;
+
+	@Autowired
+	private ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository;
+
+	@Autowired
 	private UploadBatchCompletionService batchCompletionService;
 
 	@Autowired
 	private FakeObjectStorage objectStorage;
+
+	private final List<UUID> externalManifestIds = new ArrayList<>();
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -162,6 +180,76 @@ class CaptureSessionIngestContractTests {
 		assertEquals(1, this.snapshotRepository.count());
 		assertEquals(2, this.snapshotMemberRepository.count());
 		assertEquals(2, this.streamRepository.count());
+	}
+
+	@Test
+	void preservesSparseExternalCameraNumbersInTheFinalCaptureStreams() throws Exception {
+		var configuration = fiveCameraSet(PROJECT_ID);
+		var captureSessionId = UUID.randomUUID();
+		var manifestId = createBoundExternalManifest(PROJECT_ID);
+		var videoEntries = List.of(
+				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
+				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
+						"camera-3.mp4"),
+				new ManifestEntry(VIDEO_FIVE_ID, UploadFileKind.VIDEO, "video/mp4", 14, VIDEO_SHA_FIVE,
+						"camera-5.mp4"));
+		var metadata = metadata(captureSessionId, configuration.cameraSetId(), 5,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.channelIds().get(0), 0, true, 0, "PASS"),
+						new StreamSpec(VIDEO_THREE_ID, configuration.channelIds().get(2), 2, true, 0, "PASS"),
+						new StreamSpec(VIDEO_FIVE_ID, configuration.channelIds().get(4), 4, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, videoEntries, manifestId);
+		this.objectStorage.bytes = metadata;
+
+		ingest(batch.getBatchId()).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.camera_set_snapshot.members.length()").value(5))
+			.andExpect(jsonPath("$.streams.length()").value(3))
+			.andExpect(jsonPath("$.streams[0].camera_index").value(0))
+			.andExpect(jsonPath("$.streams[1].camera_index").value(2))
+			.andExpect(jsonPath("$.streams[2].camera_index").value(4));
+
+		assertEquals(List.of(0, 2, 4),
+				this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId)
+					.stream()
+					.map(CameraStream::getCameraIndex)
+					.toList());
+	}
+
+	@Test
+	void rejectsExternalBatchCompletionWhenManifestVideosAreMissing() {
+		var manifestId = createBoundExternalManifest(PROJECT_ID);
+		var videoEntries = List.of(
+				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
+				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
+						"camera-3.mp4"));
+
+		var exception = assertThrows(UploadBatchCompletionException.class,
+				() -> completedBatch(PROJECT_ID, new byte[] { 1 }, videoEntries, manifestId));
+
+		assertEquals("EXTERNAL_MANIFEST_VIDEO_SET_MISMATCH", exception.getErrorCode());
+		assertEquals(0, this.clipAssetRepository.count());
+	}
+
+	@Test
+	void rejectsAnExternalManifestWhenTheFinalStreamCameraSetDiffers() throws Exception {
+		var configuration = fiveCameraSet(PROJECT_ID);
+		var captureSessionId = UUID.randomUUID();
+		var manifestId = createBoundExternalManifest(PROJECT_ID);
+		var videoEntries = List.of(
+				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
+				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
+						"camera-3.mp4"),
+				new ManifestEntry(VIDEO_FIVE_ID, UploadFileKind.VIDEO, "video/mp4", 14, VIDEO_SHA_FIVE,
+						"camera-5.mp4"));
+		var metadata = metadata(captureSessionId, configuration.cameraSetId(), 5,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.channelIds().get(0), 0, true, 0, "PASS"),
+						new StreamSpec(VIDEO_THREE_ID, configuration.channelIds().get(3), 3, true, 0, "PASS"),
+						new StreamSpec(VIDEO_FIVE_ID, configuration.channelIds().get(4), 4, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, videoEntries, manifestId);
+		this.objectStorage.bytes = metadata;
+
+		ingest(batch.getBatchId()).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_CAMERA_BINDING_MISMATCH"));
+		assertEquals(0, this.sessionRepository.count());
 	}
 
 	@Test
@@ -329,6 +417,12 @@ class CaptureSessionIngestContractTests {
 		if (videoCount == 2) {
 			entries.add(new ManifestEntry(VIDEO_TWO_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_TWO));
 		}
+		return completedBatch(projectId, metadata, entries, null);
+	}
+
+	private UploadBatch completedBatch(UUID projectId, byte[] metadata, List<ManifestEntry> videoEntries,
+			UUID externalManifestId) {
+		var entries = new java.util.ArrayList<>(videoEntries);
 		entries.add(new ManifestEntry(METADATA_ID, UploadFileKind.METADATA, "application/json", metadata.length,
 				sha256(metadata)));
 		var manifestEntries = List.copyOf(entries);
@@ -336,17 +430,17 @@ class CaptureSessionIngestContractTests {
 		var batch = UploadBatch.initiate(projectId, "capture-complete-" + UUID.randomUUID(), VIDEO_SHA_ONE,
 				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor",
 				manifestEntries.size(), manifestEntries.stream().mapToLong(ManifestEntry::sizeBytes).sum(),
-				manifestSha256(manifestEntries), now.plusSeconds(3600), now);
+				manifestSha256(manifestEntries), externalManifestId, now.plusSeconds(3600), now);
 		batch.markUploading(now);
 		this.batchRepository.saveAndFlush(batch);
 
 		for (var index = 0; index < manifestEntries.size(); index++) {
 			var entry = manifestEntries.get(index);
-			var file = UploadFile.register(batch.getBatchId(), entry.clientFileId(),
-					"capture-file-" + entry.clientFileId(), VIDEO_SHA_ONE,
-					new UploadFileRegistrationRequest(entry.kind(), entry.contentType(), entry.sizeBytes(),
-							entry.sha256(), PART_SIZE),
-					1, now.plus(index, ChronoUnit.MICROS));
+			var file = UploadFile
+				.register(batch.getBatchId(), entry.clientFileId(), "capture-file-" + entry.clientFileId(),
+						VIDEO_SHA_ONE, new UploadFileRegistrationRequest(entry.kind(), entry.contentType(),
+								entry.sizeBytes(), entry.sha256(), PART_SIZE, entry.fileName()),
+						1, now.plus(index, ChronoUnit.MICROS));
 			file.attachMultipartSession(new MultipartObjectStorage.CreatedUpload("synthetic-bucket",
 					"capture/" + file.getUploadFileId(), "upload-" + file.getUploadFileId()), now);
 			file.markUploading(now);
@@ -359,6 +453,45 @@ class CaptureSessionIngestContractTests {
 		}
 		this.batchCompletionService.complete(projectId, batch.getBatchId());
 		return this.batchRepository.findById(batch.getBatchId()).orElseThrow();
+	}
+
+	private MultiCameraConfiguration fiveCameraSet(UUID projectId) {
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var cameraSet = this.cameraSetRepository.saveAndFlush(CameraSetConfiguration.create(projectId,
+				"set-five-" + UUID.randomUUID(), 1, "layout-2026-01", "e".repeat(64), now));
+		var channelIds = new ArrayList<UUID>();
+		for (var index = 0; index < 5; index++) {
+			var channel = this.channelRepository
+				.saveAndFlush(CameraChannel.provision(projectId, "channel-five-" + UUID.randomUUID(), now));
+			channelIds.add(channel.getCameraChannelId());
+			this.cameraSetMemberRepository.saveAndFlush(CameraSetMember.create(cameraSet.getCameraSetId(),
+					new CameraSetMemberRequest(channel.getCameraChannelId(), index, "CAMERA_" + (index + 1),
+							"fixed-camera-" + (index + 1), true),
+					now));
+		}
+		return new MultiCameraConfiguration(cameraSet.getCameraSetId(), List.copyOf(channelIds));
+	}
+
+	private UUID createBoundExternalManifest(UUID projectId) {
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var request = new ExternalVideoIngestManifestRequest("external-video-ingest-v1", "synthetic-edge",
+				"synthetic-edge-01", null,
+				new ExternalVideoCaptureGroup("capture-external-" + UUID.randomUUID(),
+						ExternalVideoCaptureGroupKeySource.UPSTREAM_MANIFEST_KEY, Instant.parse("2026-07-15T01:02:03Z"),
+						"Asia/Shanghai", List.of(1, 2, 3, 4, 5)),
+				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null),
+						new ExternalVideoManifestVideo(VIDEO_THREE_ID, 3, "camera-3.mp4", 13L, VIDEO_SHA_THREE, null),
+						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)));
+		var manifest = ExternalVideoIngestManifest.accept(projectId, request, now);
+		this.externalManifestRepository.saveAndFlush(manifest);
+		this.externalManifestVideoRepository.saveAllAndFlush(request.videos()
+			.stream()
+			.map(video -> ExternalVideoIngestManifestVideo.accept(manifest.getManifestId(), video))
+			.toList());
+		manifest.markBound(now);
+		this.externalManifestRepository.saveAndFlush(manifest);
+		this.externalManifestIds.add(manifest.getManifestId());
+		return manifest.getManifestId();
 	}
 
 	private static byte[] metadata(UUID captureSessionId, UUID cameraSetId, int expectedCameraCount,
@@ -408,6 +541,12 @@ class CaptureSessionIngestContractTests {
 		this.partRepository.deleteAll();
 		this.fileRepository.deleteAll();
 		this.batchRepository.deleteAll();
+		for (var manifestId : this.externalManifestIds) {
+			this.externalManifestVideoRepository
+				.deleteAll(this.externalManifestVideoRepository.findAllByManifestIdOrderByCameraNumber(manifestId));
+			this.externalManifestRepository.deleteById(manifestId);
+		}
+		this.externalManifestIds.clear();
 		this.cameraSetMemberRepository.deleteAll();
 		this.cameraSetRepository.deleteAll();
 		this.channelRepository.deleteAll();
@@ -534,8 +673,15 @@ class CaptureSessionIngestContractTests {
 			long timeOffsetMs, String syncStatus) {
 	}
 
+	private record MultiCameraConfiguration(UUID cameraSetId, List<UUID> channelIds) {
+	}
+
 	private record ManifestEntry(UUID clientFileId, UploadFileKind kind, String contentType, long sizeBytes,
-			String sha256) {
+			String sha256, String fileName) {
+
+		ManifestEntry(UUID clientFileId, UploadFileKind kind, String contentType, long sizeBytes, String sha256) {
+			this(clientFileId, kind, contentType, sizeBytes, sha256, null);
+		}
 	}
 
 }

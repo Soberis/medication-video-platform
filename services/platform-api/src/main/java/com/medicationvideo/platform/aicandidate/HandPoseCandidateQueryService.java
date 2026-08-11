@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,13 +25,18 @@ class HandPoseCandidateQueryService {
 
 	private final ObjectMapper objectMapper;
 
+	private final int maxAttempts;
+
 	HandPoseCandidateQueryService(ProjectAccessService projectAccessService, AiCandidateJobRepository jobRepository,
-			AiCandidateJobAttemptRepository attemptRepository, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+			AiCandidateJobAttemptRepository attemptRepository, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+			@Value("${platform.ai.hand-pose.max-attempts:3}") int maxAttempts) {
 		this.projectAccessService = projectAccessService;
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.jdbcTemplate = jdbcTemplate;
 		this.objectMapper = objectMapper;
+		HandPoseRetryPolicy.validateMaxAttempts(maxAttempts);
+		this.maxAttempts = maxAttempts;
 	}
 
 	@Transactional(readOnly = true)
@@ -53,7 +59,8 @@ class HandPoseCandidateQueryService {
 						readJson(resultSet.getString("landmarks")), resultSet.getInt("valid_landmark_count")),
 				job.getAiJobId());
 		var attempt = this.attemptRepository.findFirstByAiJobIdOrderByAttemptDesc(job.getAiJobId()).orElse(null);
-		return new HandPoseCandidateResponse(HandPoseJobResponse.from(job, attempt), List.copyOf(candidates));
+		return new HandPoseCandidateResponse(HandPoseJobResponse.from(job, attempt, this.maxAttempts),
+				List.copyOf(candidates));
 	}
 
 	private tools.jackson.databind.JsonNode readJson(String source) {

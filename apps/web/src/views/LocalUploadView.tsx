@@ -363,7 +363,7 @@ export default function LocalUploadView() {
                     : `开始上传${selectedFiles.length > 1 ? `（${selectedFiles.length} 个视频）` : ''}`}
               </Button>
               {selectedProjectId ? (
-                <Link className="text-link" to={paths.assets(selectedProjectId)}>
+                <Link className="text-link" to={paths.videos(selectedProjectId)}>
                   查看项目视频
                 </Link>
               ) : null}

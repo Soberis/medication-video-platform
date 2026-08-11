@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.medication-video-platform.invalid/external-video-ingest-v1.schema.json",
   "title": "External Video Ingest Manifest V1",
-  "description": "Cloud-side ingest manifest submitted by an external hospital edge or capture system. It does not authorize or expose edge-device control.",
+  "description": "Cloud-side ingest manifest submitted after an external fixed-camera capture has produced video data. It declares identity and file evidence only; it does not authorize or expose edge-device control.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -71,7 +71,8 @@
         },
         "captured_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Upstream capture declaration; it is not used to infer camera identity or group membership."
         },
         "timezone": {
           "type": "string",
@@ -129,7 +130,8 @@
         },
         "record_start_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Optional upstream stream-start declaration. It is not a camera identity key and is not grouped by time proximity."
         }
       }
     }

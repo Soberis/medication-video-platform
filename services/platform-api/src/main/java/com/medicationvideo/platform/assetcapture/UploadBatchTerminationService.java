@@ -24,13 +24,17 @@ class UploadBatchTerminationService {
 
 	private final UploadCleanupTaskStore cleanupStore;
 
+	private final ExternalVideoIngestManifestRepository externalManifestRepository;
+
 	private final AuditEventRecorder auditRecorder;
 
 	UploadBatchTerminationService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
-			UploadCleanupTaskStore cleanupStore, AuditEventRecorder auditRecorder) {
+			UploadCleanupTaskStore cleanupStore, ExternalVideoIngestManifestRepository externalManifestRepository,
+			AuditEventRecorder auditRecorder) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.cleanupStore = cleanupStore;
+		this.externalManifestRepository = externalManifestRepository;
 		this.auditRecorder = auditRecorder;
 	}
 
@@ -60,10 +64,10 @@ class UploadBatchTerminationService {
 			throw new UploadBatchTerminationException("UPLOAD_FILE_COMPLETION_IN_PROGRESS",
 					"An upload file is still completing; retry after its completion lease ends.", true);
 		}
-		terminate(batch, files, status, reason, now);
+		var releasedManifest = terminate(batch, files, status, reason, now);
 		recordAudit(batch, expired ? AuditActorType.SYSTEM : AuditActorType.USER, expired ? EXPIRY_ACTOR : actorId,
 				expired ? "UPLOAD_BATCH_EXPIRE" : "UPLOAD_BATCH_ABORT", reason, requestId,
-				expired ? "TTL_POLICY" : administrator ? "ROLE_ADMIN" : "BATCH_INITIATOR");
+				expired ? "TTL_POLICY" : administrator ? "ROLE_ADMIN" : "BATCH_INITIATOR", releasedManifest);
 		return UploadBatchTerminationResponse.from(batch, this.cleanupStore.summarize(batch.getBatchId()));
 	}
 
@@ -78,13 +82,13 @@ class UploadBatchTerminationService {
 		if (files.stream().anyMatch(file -> file.hasActiveCompletionLease(now))) {
 			return false;
 		}
-		terminate(batch, files, UploadBatchStatus.EXPIRED, "UPLOAD_BATCH_TTL_EXPIRED", now);
+		var releasedManifest = terminate(batch, files, UploadBatchStatus.EXPIRED, "UPLOAD_BATCH_TTL_EXPIRED", now);
 		recordAudit(batch, AuditActorType.SYSTEM, EXPIRY_ACTOR, "UPLOAD_BATCH_EXPIRE", "UPLOAD_BATCH_TTL_EXPIRED",
-				"upload-expiry-" + batch.getBatchId(), "TTL_POLICY");
+				"upload-expiry-" + batch.getBatchId(), "TTL_POLICY", releasedManifest);
 		return true;
 	}
 
-	private void terminate(UploadBatch batch, java.util.List<UploadFile> files, UploadBatchStatus batchStatus,
+	private boolean terminate(UploadBatch batch, java.util.List<UploadFile> files, UploadBatchStatus batchStatus,
 			String reasonCode, Instant now) {
 		var fileStatus = batchStatus == UploadBatchStatus.EXPIRED ? UploadFileStatus.EXPIRED : UploadFileStatus.ABORTED;
 		for (var file : files) {
@@ -93,18 +97,39 @@ class UploadBatchTerminationService {
 			}
 			file.terminate(fileStatus, now);
 		}
+		var releasedManifest = releaseExternalManifest(batch, now);
 		batch.terminate(batchStatus, reasonCode, now);
 		this.fileRepository.saveAll(files);
 		this.batchRepository.save(batch);
+		return releasedManifest;
+	}
+
+	private boolean releaseExternalManifest(UploadBatch batch, Instant now) {
+		if (batch.getExternalManifestId() == null) {
+			return false;
+		}
+		var manifest = this.externalManifestRepository
+			.findForBinding(batch.getExternalManifestId(), batch.getProjectId())
+			.orElseThrow(() -> new IllegalStateException("An upload batch references a missing external manifest."));
+		if (manifest.getStatus() == ExternalVideoIngestManifestStatus.BOUND) {
+			manifest.releaseForRetry(now);
+			this.externalManifestRepository.save(manifest);
+			return true;
+		}
+		if (manifest.getStatus() == ExternalVideoIngestManifestStatus.ACCEPTED) {
+			return false;
+		}
+		throw new IllegalStateException("An upload batch references an external manifest in an invalid state.");
 	}
 
 	private void recordAudit(UploadBatch batch, AuditActorType actorType, String actorId, String action,
-			String reasonCode, String requestId, String authorizationReference) {
+			String reasonCode, String requestId, String authorizationReference, boolean releasedManifest) {
 		var cleanup = this.cleanupStore.summarize(batch.getBatchId());
 		this.auditRecorder.record(new AuditEventCommand(batch.getTerminatedAt(), actorType, actorId,
 				batch.getProjectId(), action, "UploadBatch", batch.getBatchId().toString(), batch.getStatus().name(),
-				AuditOutcome.SUCCEEDED, reasonCode, requestId, null, authorizationReference, Map.of("status",
-						batch.getStatus().name(), "cleanup_task_count", Integer.toString(cleanup.taskCount()))));
+				AuditOutcome.SUCCEEDED, reasonCode, requestId, null, authorizationReference,
+				Map.of("status", batch.getStatus().name(), "cleanup_task_count", Integer.toString(cleanup.taskCount()),
+						"external_manifest_released_for_retry", Boolean.toString(releasedManifest))));
 	}
 
 	private static Instant now() {

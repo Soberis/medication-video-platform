@@ -48,13 +48,13 @@ describe('App', () => {
     const navigation = screen.getByRole('navigation', { name: '主导航' })
     expect(within(navigation).queryByText('配药操作')).not.toBeInTheDocument()
     expect(within(navigation).queryByText('视频资产')).not.toBeInTheDocument()
-    expect(within(navigation).queryByText('标注任务')).not.toBeInTheDocument()
+    expect(within(navigation).queryByText('配药动作标注')).not.toBeInTheDocument()
     expect(within(navigation).getByRole('link', { name: '项目' })).toHaveAttribute(
       'aria-current',
       'page',
     )
     expect(within(navigation).getByText('管理')).toBeInTheDocument()
-    expect(screen.getByText('上传排障')).toBeInTheDocument()
+    expect(screen.queryByText('上传排障')).not.toBeInTheDocument()
     expect(screen.queryByText('账号管理')).not.toBeInTheDocument()
     expect(screen.queryByText('新建项目')).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/projects')
@@ -71,7 +71,7 @@ describe('App', () => {
     ).toBeGreaterThan(0)
   })
 
-  it('offers every project member the project-scoped event-log index under management', () => {
+  it('keeps the project-scoped event-log index in administrator diagnostics', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
       [
@@ -82,7 +82,7 @@ describe('App', () => {
         },
       ],
       [`/projects/${projectId}/event-logs`],
-      { username: 'project-member', role: 'MEMBER' },
+      { username: 'platform-admin', role: 'ADMIN' },
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
@@ -93,11 +93,44 @@ describe('App', () => {
     expect(within(navigation).getByRole('link', { name: '项目' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).queryByText('项目成员')).not.toBeInTheDocument()
+    expect(within(navigation).getByText('项目成员')).toBeInTheDocument()
     expect(screen.getByText('采集事件日志页面')).toBeInTheDocument()
   })
 
-  it('only highlights local upload on the local-upload page', () => {
+  it('keeps the ordinary project workflow in the primary navigation', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    renderRouter(
+      [
+        {
+          path: `/projects/:projectId/videos`,
+          element: <AppShell />,
+          children: [{ index: true, element: <div>视频管理页面</div> }],
+        },
+      ],
+      [`/projects/${projectId}/videos`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '多相机查看' })).toBeInTheDocument()
+    expect(
+      within(navigation).queryByRole('link', { name: '数据集版本（后续）' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(navigation).queryByRole('link', { name: '视频资产（高级）' }),
+    ).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: '采集事件日志' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: '上传排障' })).not.toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '本地上传（辅助）' })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
+  })
+
+  it('only highlights local upload in the management menu on the local-upload page', () => {
     renderRouter(
       [
         {
@@ -111,13 +144,11 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '本地上传' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '本地上传（辅助）' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('details')).not.toHaveClass(
-      'nav-more-active',
-    )
+    expect(within(navigation).getByText('管理').closest('details')).toHaveClass('nav-more-active')
     expect(within(navigation).getByText('上传排障').closest('a')).not.toHaveAttribute(
       'aria-current',
     )

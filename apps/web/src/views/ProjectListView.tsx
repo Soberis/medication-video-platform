@@ -183,7 +183,7 @@ export default function ProjectListView() {
                       {project.current_role === 'ADMIN' ? '管理员' : '普通用户'}
                     </Tag>
                   </div>
-                  <p>在项目内统一管理配药操作、视频资产、标注任务和文件夹。</p>
+                  <p>在项目内统一管理配药操作、视频资产、配药动作标注和文件夹。</p>
                 </div>
                 <div className="project-list-actions">
                   <Link

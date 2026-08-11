@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -48,7 +49,8 @@ class ExternalVideoIngestManifestVideo {
 		this.fileName = video.fileName();
 		this.declaredSizeBytes = video.declaredSizeBytes();
 		this.sha256 = video.sha256();
-		this.recordStartAt = video.recordStartAt();
+		this.recordStartAt = video.recordStartAt() == null ? null
+				: video.recordStartAt().truncatedTo(ChronoUnit.MICROS);
 	}
 
 	static ExternalVideoIngestManifestVideo accept(UUID manifestId, ExternalVideoManifestVideo video) {

@@ -63,7 +63,7 @@ const admissionReasonLabels: Record<string, string> = {
   CLIP_ASSET_DELETED: '有视频已经删除',
   QUALITY_REVIEW_NOT_QUALIFIED: '有视频尚未通过人工质量判断',
   QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING: '人工质量结论已变更，需要重新完成清洗检查',
-  ANNOTATION_REVISION_MISSING: '有视频尚未提交人工标注',
+  ANNOTATION_REVISION_MISSING: '有视频尚未提交人工配药动作标注',
   ANNOTATION_REVIEW_NOT_APPROVED: '有标注尚未通过管理员复核',
   POST_CLEANING_MISSING: '有已复核标注尚未完成清洗检查',
   POST_CLEANING_WARNING: '有标注清洗结果需要人工确认',

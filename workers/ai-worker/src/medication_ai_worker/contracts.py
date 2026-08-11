@@ -91,8 +91,8 @@ def _positive(value: dict[str, object], field: str) -> int:
 
 def _sampling(value: dict[str, object]) -> int:
     candidate = _positive(value, "sampling_fps")
-    if candidate > 15:
-        raise ContractError("sampling_fps must not exceed 15")
+    if candidate != 10:
+        raise ContractError("sampling_fps must equal the frozen P0 value 10")
     return candidate
 
 

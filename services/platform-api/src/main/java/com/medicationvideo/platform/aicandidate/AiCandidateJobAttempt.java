@@ -1,9 +1,9 @@
 package com.medicationvideo.platform.aicandidate;
 
-import java.time.Instant;
-import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -89,6 +89,9 @@ class AiCandidateJobAttempt {
 	@Column(name = "failure_reason", length = 128)
 	private String failureReason;
 
+	@Column(name = "retryable", nullable = false)
+	private boolean retryable;
+
 	protected AiCandidateJobAttempt() {
 	}
 
@@ -136,7 +139,7 @@ class AiCandidateJobAttempt {
 		this.updatedAt = now;
 	}
 
-	void recordRun(AiHandPoseResultRequest request) {
+	void recordRun(AiHandPoseResultRequest request, int maxAttempts) {
 		this.analysisComplete = request.analysisComplete();
 		this.handResult = request.handResult();
 		this.startedAt = request.startedAt();
@@ -150,21 +153,44 @@ class AiCandidateJobAttempt {
 		this.invalidLandmarkCount = request.invalidLandmarkCount();
 		this.processingDurationMs = request.processingDurationMs();
 		this.failureReason = request.failureReason();
+		this.retryable = request.outcome() == AiHandPoseRunOutcome.FAILED
+				&& HandPoseRetryPolicy.isRetryable(request.failureReason(), this.attempt, maxAttempts);
 	}
 
 	void fail(Instant now) {
 		requireActiveLease(now);
 		this.status = AiCandidateJobAttemptStatus.FAILED;
+		this.completedAt = now;
 		this.updatedAt = now;
 	}
 
-	void markDeliveryMissing(Instant now) {
-		if (this.status != AiCandidateJobAttemptStatus.QUEUED) {
-			throw new HandPoseJobException("AI_HAND_POSE_DELIVERY_RECOVERY_STATE_CONFLICT",
-					"Only a queued AI job attempt can be recovered after a missing delivery.", 409);
+	/**
+	 * Mark a running attempt as terminal after its lease has expired. The AI attempt
+	 * schema predates an explicit LOST state, so FAILED plus a stable recovery reason is
+	 * the equivalent terminal state. A later result carrying this attempt's capability is
+	 * rejected by {@link #requireActiveLease(Instant)}.
+	 */
+	void lose(Instant now) {
+		if (this.status != AiCandidateJobAttemptStatus.RUNNING) {
+			throw new HandPoseJobException("STALE_ATTEMPT", "The AI job attempt is no longer running.", 409);
 		}
 		this.status = AiCandidateJobAttemptStatus.FAILED;
+		this.failureReason = "AI_HAND_POSE_WORKER_LEASE_LOST";
+		this.retryable = true;
+		this.completedAt = now;
 		this.updatedAt = now;
+	}
+
+	boolean isRecoverableAt(Instant cutoff) {
+		return this.status == AiCandidateJobAttemptStatus.RUNNING && this.leaseUntil != null
+				&& !this.leaseUntil.isAfter(cutoff);
+	}
+
+	void requireWorker(String workerId) {
+		if (workerId == null || workerId.isBlank() || !workerId.equals(this.workerId)) {
+			throw new HandPoseJobException("AI_HAND_POSE_WORKER_IDENTITY_MISMATCH",
+					"The AI Worker identity does not own this lease.", 403);
+		}
 	}
 
 	void requireActiveLease(Instant now) {
@@ -249,6 +275,14 @@ class AiCandidateJobAttempt {
 
 	String getFailureReason() {
 		return this.failureReason;
+	}
+
+	String getWorkerId() {
+		return this.workerId;
+	}
+
+	boolean isRetryable() {
+		return this.retryable;
 	}
 
 	static AiCandidateJobAttempt queue(UUID aiJobId, int attempt, UUID messageId, String leaseTokenHash,

@@ -42,7 +42,12 @@ class UploadBatchExceptionHandler {
 
 	@ExceptionHandler(UploadBatchInputException.class)
 	ResponseEntity<ApiErrorResponse> batchInput(UploadBatchInputException exception) {
-		return error(HttpStatus.BAD_REQUEST, exception.getErrorCode(), exception.getMessage());
+		var status = switch (exception.getErrorCode()) {
+			case "EXTERNAL_MANIFEST_CONFLICT", "EXTERNAL_MANIFEST_ALREADY_BOUND", "EXTERNAL_MANIFEST_DEVICE_MISMATCH" ->
+				HttpStatus.CONFLICT;
+			default -> HttpStatus.BAD_REQUEST;
+		};
+		return error(status, exception.getErrorCode(), exception.getMessage());
 	}
 
 	@ExceptionHandler(UploadBatchNotFoundException.class)
