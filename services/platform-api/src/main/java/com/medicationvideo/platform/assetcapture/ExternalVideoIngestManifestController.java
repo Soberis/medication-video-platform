@@ -33,8 +33,12 @@ class ExternalVideoIngestManifestController {
 
 	private final AssetCaptureProjectAuthorizer authorizer;
 
-	ExternalVideoIngestManifestController(AssetCaptureProjectAuthorizer authorizer) {
+	private final ExternalVideoIngestManifestService service;
+
+	ExternalVideoIngestManifestController(AssetCaptureProjectAuthorizer authorizer,
+			ExternalVideoIngestManifestService service) {
 		this.authorizer = authorizer;
+		this.service = service;
 	}
 
 	@PostMapping
@@ -44,10 +48,7 @@ class ExternalVideoIngestManifestController {
 			throw new UploadBatchAuthorizationException();
 		}
 		this.authorizer.requireMember(projectId, actor.actorId());
-		var group = request.captureGroup();
-		var response = new ExternalVideoIngestManifestAcceptedResponse(request.schemaVersion(), group.captureGroupKey(),
-				group.keySource().name(), group.capturedAt(), group.expectedCameraNumbers().size(),
-				request.videos().size());
+		var response = this.service.accept(projectId, request);
 		return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -91,6 +92,6 @@ record ExternalVideoManifestVideo(@NotNull UUID clientFileId, @NotNull @Min(1) @
 		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String sha256, Instant recordStartAt) {
 }
 
-record ExternalVideoIngestManifestAcceptedResponse(String schemaVersion, String captureGroupKey, String keySource,
-		Instant capturedAt, int expectedCameraCount, int videoCount) {
+record ExternalVideoIngestManifestAcceptedResponse(UUID manifestId, String status, String schemaVersion,
+		String captureGroupKey, String keySource, Instant capturedAt, int expectedCameraCount, int videoCount) {
 }

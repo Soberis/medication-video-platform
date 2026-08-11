@@ -32,12 +32,13 @@ export function splitParts(bytes, partSizeBytes = DEFAULT_PART_SIZE_BYTES) {
   return parts
 }
 
-export function createUploadFile(fileKind, contentType, bytes, clientFileId = randomUUID()) {
+export function createUploadFile(fileKind, contentType, bytes, clientFileId = randomUUID(), fileName = null) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
     throw new TypeError('Synthetic upload file must be a non-empty Buffer')
   }
   return {
     clientFileId,
+    fileName,
     fileKind,
     contentType,
     bytes,
@@ -142,7 +143,7 @@ export class SyntheticUploadClient {
     const deviceId = 'synthetic-edge-uploader-01'
     const recordedAt = new Date().toISOString()
     const captureSessionId = randomUUID()
-    const videoFile = createUploadFile('VIDEO', 'video/mp4', videoBytes)
+    const videoFile = createUploadFile('VIDEO', 'video/mp4', videoBytes, randomUUID(), 'synthetic-video.mp4')
 
     const metadata = createSyntheticMetadata({
       cameraChannelId: camera.cameraChannelId,
@@ -156,6 +157,8 @@ export class SyntheticUploadClient {
       'METADATA',
       'application/json',
       Buffer.from(`${JSON.stringify(metadata)}\n`, 'utf8'),
+      randomUUID(),
+      'capture-session-metadata.json',
     )
     const eventFile = createUploadFile(
       'EVENT_LOG',
@@ -170,6 +173,8 @@ export class SyntheticUploadClient {
         })}\n`,
         'utf8',
       ),
+      randomUUID(),
+      'capture-event-log.ndjson',
     )
     const files = [videoFile, metadataFile, eventFile]
     const manifestSha256 = sha256Hex(buildManifest(files))
@@ -200,6 +205,7 @@ export class SyntheticUploadClient {
             size_bytes: file.bytes.length,
             sha256: file.sha256,
             part_size_bytes: file.partSizeBytes,
+            file_name: file.fileName,
           },
         },
       )

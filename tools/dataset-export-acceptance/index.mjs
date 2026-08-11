@@ -277,6 +277,10 @@ export function requireMediaProbeJob(mediaProbe) {
   return mediaJobId
 }
 
+export function isMediaProbeAlreadyScheduled(error) {
+  return error?.status === 409 && error?.errorCode === 'CLIP_ASSET_NOT_PROBEABLE'
+}
+
 export function requireActorIdentity(value, expectedActorId, label) {
   if (value !== expectedActorId) {
     throw new Error(`${label} does not identify the expected administrator`)
@@ -1242,12 +1246,18 @@ async function prepareEligibleSession({
   if (typeof clipAssetId !== 'string') {
     throw new Error('Synthetic upload did not return a clip asset')
   }
-  const mediaProbe = await administrator.request(
-    'request synthetic media probe',
-    `/projects/${projectId}/clip-assets/${clipAssetId}/media-probe-jobs`,
-    { method: 'POST', idempotencyKey: key('dataset-export-acceptance-media-probe') },
-  )
-  requireMediaProbeJob(mediaProbe)
+  try {
+    const mediaProbe = await administrator.request(
+      'request synthetic media probe',
+      `/projects/${projectId}/clip-assets/${clipAssetId}/media-probe-jobs`,
+      { method: 'POST', idempotencyKey: key('dataset-export-acceptance-media-probe') },
+    )
+    requireMediaProbeJob(mediaProbe)
+  } catch (error) {
+    if (!isMediaProbeAlreadyScheduled(error)) {
+      throw error
+    }
+  }
   await waitFor(
     'media ingestion',
     async () =>

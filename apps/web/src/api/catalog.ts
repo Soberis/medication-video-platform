@@ -524,6 +524,7 @@ export interface HandPoseRunSummary {
   started_at: string
   completed_at: string
   failure_reason?: string | null
+  retryable: boolean
 }
 
 export interface HandPoseCandidate {
@@ -550,15 +551,30 @@ export type VideoSummaryHandResult = 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETE
 export interface VideoSummary {
   video_id: string
   display_name: string
+  source_name: string
   camera_number: number | null
   captured_at: string | null
   received_at: string
   media_status: VideoSummaryMediaStatus
   hand_status: VideoSummaryHandStatus
   hand_result: VideoSummaryHandResult
+  hand_retryable: boolean
   annotation_status: string
   cleaning_status: string
   retention_status: string
+}
+
+export interface DataManagementSummary {
+  total_videos: number
+  total_duration: number
+  storage_bytes: number
+  counts_by_source: Record<string, number>
+  counts_by_camera: Record<string, number>
+  counts_by_status: Record<string, number>
+  pending_annotation: number
+  pending_review: number
+  pending_cleaning: number
+  usable_count: number
 }
 
 export interface VideoSummaryFilters {
@@ -1108,6 +1124,13 @@ export function listVideoSummaries(
   )
 }
 
+export function getDataManagementSummary(projectId: string, signal?: AbortSignal) {
+  return readJson<DataManagementSummary>(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/video-data/summary`,
+    signal,
+  )
+}
+
 export function listCaptureEventLogs(
   projectId: string,
   filters: CaptureEventLogFilters,
@@ -1210,6 +1233,23 @@ export async function requestClipAssetMediaProbe(projectId: string, clipAssetId:
 export async function requestHandPoseCandidates(projectId: string, clipAssetId: string) {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-jobs`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as HandPoseJob
+  throw await toCatalogError(response)
+}
+
+export async function retryHandPoseCandidates(projectId: string, clipAssetId: string) {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/hand-pose-jobs/retry`,
     {
       method: 'POST',
       headers: {

@@ -12,6 +12,7 @@ import {
   getLatestHandPoseCandidates,
   recoverCurrentClipAssetMediaProbeDelivery,
   requestHandPoseCandidates,
+  retryHandPoseCandidates,
   type ClipAssetPlaybackGrant,
   type ClipAssetRead,
   type MediaReport,
@@ -122,7 +123,8 @@ export default function AssetDetailView() {
     projectRole !== null &&
     detail?.status === 'INGESTED' &&
     detail.session_binding?.enabled_for_hand_detection !== false &&
-    handPoseJob === null
+    (handPoseJob === null ||
+      (handPoseJob.status === 'FAILED' && handPoseJob.run_summary?.retryable === true))
   const classificationChanged = selectedFolderId !== (detail?.folder_id ?? '')
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
@@ -561,10 +563,15 @@ export default function AssetDetailView() {
     setActionErrorCode('')
     setActionErrorMessage('')
     try {
-      const job = await requestHandPoseCandidates(projectId, assetId)
+      const job =
+        handPoseJob?.status === 'FAILED'
+          ? await retryHandPoseCandidates(projectId, assetId)
+          : await requestHandPoseCandidates(projectId, assetId)
       setHandPoseJob(job)
       setHandPoseCandidates({ job, candidates: [] })
-      void message.success('手部姿态检测已开始。')
+      void message.success(
+        handPoseJob?.status === 'FAILED' ? '手部姿态检测已重新排队。' : '手部姿态检测已开始。',
+      )
     } catch (error) {
       setActionErrorCode(
         error instanceof CatalogApiError ? error.errorCode : 'HAND_POSE_REQUEST_FAILED',
@@ -688,7 +695,7 @@ export default function AssetDetailView() {
                   loading={isRequestingHandPose}
                   onClick={() => void requestHandPose()}
                 >
-                  检测手部姿态
+                  {handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态'}
                 </Button>
               ) : null}
               {handPoseJob ? (
@@ -715,7 +722,9 @@ export default function AssetDetailView() {
                   description={
                     handPoseJob.status === 'FAILED'
                       ? (handPoseJob.run_summary?.failure_reason ??
-                        '本次手部检测未完成，请稍后重试。')
+                        (handPoseJob.run_summary?.retryable === true
+                          ? '本次手部检测未完成，请稍后重试。'
+                          : '本次手部检测未完成，当前错误不支持自动重试。'))
                       : handPoseJob.status === 'SUCCEEDED'
                         ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
                           ? '本次视频已完整分析，但没有发现可用手部候选。原视频仍可直接播放。'

@@ -33,6 +33,10 @@ class CaptureSessionIngestService {
 
 	private final UploadFileRepository fileRepository;
 
+	private final ExternalVideoIngestManifestRepository externalManifestRepository;
+
+	private final ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository;
+
 	private final ClipAssetRepository clipAssetRepository;
 
 	private final CameraSetConfigurationRepository cameraSetRepository;
@@ -58,6 +62,8 @@ class CaptureSessionIngestService {
 	private final TransactionTemplate transactionTemplate;
 
 	CaptureSessionIngestService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
+			ExternalVideoIngestManifestRepository externalManifestRepository,
+			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository,
 			ClipAssetRepository clipAssetRepository, CameraSetConfigurationRepository cameraSetRepository,
 			CameraSetMemberRepository cameraSetMemberRepository, CaptureSessionRepository sessionRepository,
 			CameraSetSnapshotRepository snapshotRepository, CameraSetSnapshotMemberRepository snapshotMemberRepository,
@@ -66,6 +72,8 @@ class CaptureSessionIngestService {
 			TransactionTemplate transactionTemplate) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
+		this.externalManifestRepository = externalManifestRepository;
+		this.externalManifestVideoRepository = externalManifestVideoRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.cameraSetRepository = cameraSetRepository;
 		this.cameraSetMemberRepository = cameraSetMemberRepository;
@@ -232,6 +240,7 @@ class CaptureSessionIngestService {
 		var configuredByChannel = configuredMembers.stream()
 			.collect(Collectors.toUnmodifiableMap(CameraSetMember::getCameraChannelId, Function.identity()));
 		validateStreamBindings(metadata.streams(), assetsByClientId, configuredByChannel, projectId);
+		validateExternalManifestBindings(batch, metadata, assetsByClientId);
 
 		var receivedCameraCount = Math.toIntExact(metadata.streams()
 			.stream()
@@ -289,6 +298,34 @@ class CaptureSessionIngestService {
 		if (clientFileIds.size() != assetsByClientId.size()) {
 			throw failure("CAPTURE_SESSION_VIDEO_BINDING_MISMATCH",
 					"Every video asset in the completed batch must be bound exactly once.");
+		}
+	}
+
+	private void validateExternalManifestBindings(UploadBatch batch, CaptureSessionMetadataV1 metadata,
+			Map<UUID, ClipAsset> assetsByClientId) {
+		if (batch.getExternalManifestId() == null) {
+			return;
+		}
+		var manifest = this.externalManifestRepository.findById(batch.getExternalManifestId())
+			.filter(candidate -> candidate.getProjectId().equals(batch.getProjectId()))
+			.orElseThrow(() -> failure("EXTERNAL_MANIFEST_NOT_FOUND",
+					"The upload batch references an external manifest outside the current project."));
+		if (metadata.expectedCameraCount() != manifest.getExpectedCameraNumbers().size()) {
+			throw failure("EXTERNAL_MANIFEST_CAMERA_SET_MISMATCH",
+					"Capture metadata expected_camera_count does not match the external manifest.");
+		}
+		var entries = this.externalManifestVideoRepository
+			.findAllByManifestIdOrderByCameraNumber(manifest.getManifestId())
+			.stream()
+			.collect(Collectors.toUnmodifiableMap(ExternalVideoIngestManifestVideo::getClientFileId,
+					Function.identity()));
+		for (var stream : metadata.streams()) {
+			var asset = assetsByClientId.get(stream.clientFileId());
+			var entry = entries.get(stream.clientFileId());
+			if (asset == null || entry == null || entry.getCameraNumber() != stream.cameraIndex() + 1) {
+				throw failure("EXTERNAL_MANIFEST_CAMERA_BINDING_MISMATCH",
+						"Every external-manifest video must retain its declared camera number when bound.");
+			}
 		}
 	}
 

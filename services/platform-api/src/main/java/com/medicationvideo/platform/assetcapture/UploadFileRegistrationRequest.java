@@ -12,5 +12,11 @@ record UploadFileRegistrationRequest(@NotNull UploadFileKind fileKind,
 		@NotBlank @Size(min = 3, max = 128) @Pattern(
 				regexp = "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+\\-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+\\-]*$") String contentType,
 		@Positive long sizeBytes, @NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String sha256,
-		@Min(8_388_608) @Max(67_108_864) long partSizeBytes) {
+		@Min(8_388_608) @Max(67_108_864) long partSizeBytes,
+		@Size(max = 255) @Pattern(regexp = "^[^\\\\/\\p{Cntrl}]+$") String fileName) {
+
+	UploadFileRegistrationRequest(UploadFileKind fileKind, String contentType, long sizeBytes, String sha256,
+			long partSizeBytes) {
+		this(fileKind, contentType, sizeBytes, sha256, partSizeBytes, null);
+	}
 }

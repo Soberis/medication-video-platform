@@ -1,7 +1,9 @@
 package com.medicationvideo.platform.aicandidate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -28,6 +30,14 @@ class HandPoseJobServiceTests {
 
 		assertEquals("AI_HAND_POSE_FEATURE_NOT_ENABLED", exception.getErrorCode());
 		verifyNoInteractions(access);
+	}
+
+	@Test
+	void exposesOnlyWorkerInferenceFailuresAsManualRetryable() {
+		assertTrue(HandPoseRetryPolicy.isRetryable("AI_HAND_POSE_INFERENCE_FAILED"));
+		assertTrue(HandPoseRetryPolicy.isRetryable("AI_HAND_POSE_INVALID_OUTPUT"));
+		assertFalse(HandPoseRetryPolicy.isRetryable("AI_HAND_POSE_INPUT_EXCEEDS_P0_RESULT_LIMIT"));
+		assertFalse(HandPoseRetryPolicy.isRetryable("AI_HAND_POSE_MODEL_NOT_CONFIGURED"));
 	}
 
 }

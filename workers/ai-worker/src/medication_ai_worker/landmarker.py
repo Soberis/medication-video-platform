@@ -45,6 +45,7 @@ class InferenceSummary:
     left_hand_detection_count: int
     right_hand_detection_count: int
     invalid_landmark_count: int
+    invalid_hand_frame_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +87,7 @@ def _detect_all(
     left_hand_detection_count = 0
     right_hand_detection_count = 0
     invalid_landmark_count = 0
+    invalid_hand_frame_count = 0
     with av.open(path) as container:
         stream = container.streams.video[0]
         last_timestamp = -1
@@ -106,6 +108,7 @@ def _detect_all(
             for index, landmarks in enumerate(result.hand_landmarks[:2]):
                 if len(landmarks) != 21:
                     invalid_landmark_count += abs(len(landmarks) - 21)
+                    invalid_hand_frame_count += 1
                     continue
                 category = result.handedness[index][0] if result.handedness[index] else None
                 points = [
@@ -120,7 +123,8 @@ def _detect_all(
                     and math.isfinite(point["z"])
                 ]
                 invalid_landmark_count += len(points) - len(finite)
-                if not finite:
+                if len(finite) != len(points):
+                    invalid_hand_frame_count += 1
                     continue
                 min_x, max_x = (
                     min(point["x"] for point in finite),
@@ -164,6 +168,7 @@ def _detect_all(
         left_hand_detection_count=left_hand_detection_count,
         right_hand_detection_count=right_hand_detection_count,
         invalid_landmark_count=invalid_landmark_count,
+        invalid_hand_frame_count=invalid_hand_frame_count,
     )
 
 

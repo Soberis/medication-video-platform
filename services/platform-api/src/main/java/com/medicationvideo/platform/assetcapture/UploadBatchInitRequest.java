@@ -10,5 +10,9 @@ import jakarta.validation.constraints.Positive;
 record UploadBatchInitRequest(@NotNull UUID projectId,
 		@NotBlank @Pattern(regexp = "^[A-Za-z0-9._:-]{1,128}$") String deviceId, UploadSourceType uploadSourceType,
 		UUID assetFolderId, @Positive int fileCount, @Positive long totalSizeBytes,
-		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String manifestSha256) {
+		@NotBlank @Pattern(regexp = "^[a-f0-9]{64}$") String manifestSha256, UUID externalManifestId) {
+	UploadBatchInitRequest(UUID projectId, String deviceId, UploadSourceType uploadSourceType, UUID assetFolderId,
+			int fileCount, long totalSizeBytes, String manifestSha256) {
+		this(projectId, deviceId, uploadSourceType, assetFolderId, fileCount, totalSizeBytes, manifestSha256, null);
+	}
 }

@@ -192,6 +192,16 @@ class AiCandidateJob {
 		this.updatedAt = now;
 	}
 
+	void requeueForManualRetry(Instant now) {
+		if (this.status != AiCandidateJobStatus.FAILED) {
+			throw new HandPoseJobException("AI_HAND_POSE_RETRY_STATE_CONFLICT",
+					"Only a failed AI job can be manually retried.", 409);
+		}
+		this.status = AiCandidateJobStatus.QUEUED;
+		this.handResult = HandPoseResult.UNKNOWN;
+		this.updatedAt = now;
+	}
+
 	void succeed(Instant now, HandPoseResult handResult) {
 		this.status = AiCandidateJobStatus.SUCCEEDED;
 		this.handResult = handResult;

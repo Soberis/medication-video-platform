@@ -5,7 +5,7 @@ import java.time.Instant;
 record HandPoseRunSummary(boolean analysisComplete, String handResult, Long totalVideoFrames, Long inferenceFrameCount,
 		Long framesWithHand, Long framesWithoutHand, Long leftHandDetectionCount, Long rightHandDetectionCount,
 		Long invalidLandmarkCount, Long processingDurationMs, Instant startedAt, Instant completedAt,
-		String failureReason) {
+		String failureReason, boolean retryable) {
 
 	static HandPoseRunSummary from(AiCandidateJobAttempt attempt) {
 		return new HandPoseRunSummary(attempt.isAnalysisComplete(), attempt.getHandResult(),
@@ -13,6 +13,6 @@ record HandPoseRunSummary(boolean analysisComplete, String handResult, Long tota
 				attempt.getFramesWithoutHand(), attempt.getLeftHandDetectionCount(),
 				attempt.getRightHandDetectionCount(), attempt.getInvalidLandmarkCount(),
 				attempt.getProcessingDurationMs(), attempt.getStartedAt(), attempt.getCompletedAt(),
-				attempt.getFailureReason());
+				attempt.getFailureReason(), HandPoseRetryPolicy.isRetryable(attempt.getFailureReason()));
 	}
 }

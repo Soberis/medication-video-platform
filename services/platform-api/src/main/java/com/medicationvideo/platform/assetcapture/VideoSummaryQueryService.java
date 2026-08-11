@@ -42,52 +42,67 @@ public class VideoSummaryQueryService {
 					"received_from must be earlier than received_before.");
 		}
 		var decodedCursor = cursor == null ? null : AssetCatalogCursor.decode(CURSOR_KIND, cursor);
-		var sql = new StringBuilder("""
-				SELECT asset.clip_asset_id AS video_id,
-				       asset.client_file_id::text AS display_name,
-				       stream.camera_index + 1 AS camera_number,
-				       stream.record_start_utc AS captured_at,
-				       asset.created_at AS received_at,
-				       asset.asset_status AS media_status,
-				       COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
-				       COALESCE(hand.hand_result, 'UNKNOWN') AS hand_result,
-				       COALESCE(annotation.task_status, 'NOT_STARTED') AS annotation_status,
-				       COALESCE(cleaning.run_status, 'NOT_STARTED') AS cleaning_status,
-				       COALESCE(retention.required_action, 'NOT_ASSESSED') AS retention_status
-				FROM clip_asset asset
-				LEFT JOIN LATERAL (
-				    SELECT camera_index, record_start_utc
-				    FROM camera_stream
-				    WHERE clip_asset_id = asset.clip_asset_id
-				    ORDER BY created_at DESC, camera_stream_id DESC
-				    LIMIT 1
-				) stream ON TRUE
-				LEFT JOIN LATERAL (
-				    SELECT status, hand_result
-				    FROM ai_job
-				    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
-				    ORDER BY created_at DESC, ai_job_id DESC
-				    LIMIT 1
-				) hand ON TRUE
-				LEFT JOIN annotation_task annotation
-				  ON annotation.project_id = asset.project_id AND annotation.clip_asset_id = asset.clip_asset_id
-				LEFT JOIN LATERAL (
-				    SELECT run_status
-				    FROM cleaning_run
-				    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
-				    ORDER BY completed_at DESC, cleaning_run_id DESC
-				    LIMIT 1
-				) cleaning ON TRUE
-				LEFT JOIN LATERAL (
-				    SELECT required_action
-				    FROM privacy_assessment
-				    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
-				    ORDER BY assessed_at DESC, privacy_assessment_id DESC
-				    LIMIT 1
-				) retention ON TRUE
-				WHERE asset.project_id = :projectId
-				  AND asset.deleted_at IS NULL
-				""");
+		var sql = new StringBuilder(
+				"""
+						SELECT asset.clip_asset_id AS video_id,
+						       COALESCE(NULLIF(source_file.file_name, ''),
+						                'video-' || COALESCE((stream.camera_index + 1)::text, 'unknown') || '.mp4') AS display_name,
+						       stream.camera_index + 1 AS camera_number,
+						       stream.record_start_utc AS captured_at,
+						       asset.created_at AS received_at,
+						       batch.upload_source_type AS source_name,
+						       asset.asset_status AS media_status,
+						       COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
+						       COALESCE(hand.hand_result, 'UNKNOWN') AS hand_result,
+						       COALESCE(hand.hand_retryable, FALSE) AS hand_retryable,
+						       COALESCE(annotation.task_status, 'NOT_STARTED') AS annotation_status,
+						       COALESCE(cleaning.run_status, 'NOT_STARTED') AS cleaning_status,
+						       COALESCE(retention.required_action, 'NOT_ASSESSED') AS retention_status
+						FROM clip_asset asset
+						JOIN upload_batch batch ON batch.batch_id = asset.batch_id
+						LEFT JOIN upload_file source_file ON source_file.upload_file_id = asset.source_upload_file_id
+						LEFT JOIN LATERAL (
+						    SELECT camera_index, record_start_utc
+						    FROM camera_stream
+						    WHERE clip_asset_id = asset.clip_asset_id
+						    ORDER BY created_at DESC, camera_stream_id DESC
+						    LIMIT 1
+						) stream ON TRUE
+						LEFT JOIN LATERAL (
+						    SELECT job.status, job.hand_result,
+						           (job.status = 'FAILED' AND attempt.failure_reason IN
+						             ('AI_HAND_POSE_INFERENCE_FAILED', 'AI_HAND_POSE_INVALID_OUTPUT')) AS hand_retryable
+						    FROM ai_job job
+						    LEFT JOIN LATERAL (
+						        SELECT failure_reason
+						        FROM ai_job_attempt
+						        WHERE ai_job_id = job.ai_job_id
+						        ORDER BY attempt DESC
+						        LIMIT 1
+						    ) attempt ON TRUE
+						    WHERE job.project_id = asset.project_id AND job.clip_asset_id = asset.clip_asset_id
+						    ORDER BY job.created_at DESC, job.ai_job_id DESC
+						    LIMIT 1
+						) hand ON TRUE
+						LEFT JOIN annotation_task annotation
+						  ON annotation.project_id = asset.project_id AND annotation.clip_asset_id = asset.clip_asset_id
+						LEFT JOIN LATERAL (
+						    SELECT run_status
+						    FROM cleaning_run
+						    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
+						    ORDER BY completed_at DESC, cleaning_run_id DESC
+						    LIMIT 1
+						) cleaning ON TRUE
+						LEFT JOIN LATERAL (
+						    SELECT required_action
+						    FROM privacy_assessment
+						    WHERE project_id = asset.project_id AND clip_asset_id = asset.clip_asset_id
+						    ORDER BY assessed_at DESC, privacy_assessment_id DESC
+						    LIMIT 1
+						) retention ON TRUE
+						WHERE asset.project_id = :projectId
+						  AND asset.deleted_at IS NULL
+						""");
 		var parameters = new MapSqlParameterSource("projectId", projectId);
 		if (mediaStatus != null) {
 			sql.append(" AND asset.asset_status = :mediaStatus\n");
@@ -143,8 +158,9 @@ public class VideoSummaryQueryService {
 		return new VideoSummary(resultSet.getObject("video_id", UUID.class), resultSet.getString("display_name"),
 				(resultSet.getObject("camera_number") instanceof Number number) ? number.intValue() : null,
 				instant(resultSet, "captured_at"), instant(resultSet, "received_at"),
-				resultSet.getString("media_status"), resultSet.getString("hand_status"),
-				resultSet.getString("hand_result"), resultSet.getString("annotation_status"),
+				resultSet.getString("source_name"), resultSet.getString("media_status"),
+				resultSet.getString("hand_status"), resultSet.getString("hand_result"),
+				resultSet.getBoolean("hand_retryable"), resultSet.getString("annotation_status"),
 				resultSet.getString("cleaning_status"), resultSet.getString("retention_status"));
 	}
 

@@ -50,12 +50,21 @@ class Processor:
                     self._client.download(grant, input_path)
                     result = analyze_video(input_path, self._settings.model_path, job.sampling_fps)
                 processing_duration_ms = max(0, round((time.monotonic() - started_clock) * 1000))
-                if len(result.candidates) > 20_000:
+                if result.summary.invalid_hand_frame_count > 0:
+                    self._client.submit_failure(
+                        job,
+                        started_at,
+                        "AI_HAND_POSE_INVALID_OUTPUT",
+                        processing_duration_ms,
+                        result.summary,
+                    )
+                elif len(result.candidates) > 20_000:
                     self._client.submit_failure(
                         job,
                         started_at,
                         "AI_HAND_POSE_INPUT_EXCEEDS_P0_RESULT_LIMIT",
                         processing_duration_ms,
+                        result.summary,
                     )
                 else:
                     self._client.submit(job, started_at, result, processing_duration_ms)

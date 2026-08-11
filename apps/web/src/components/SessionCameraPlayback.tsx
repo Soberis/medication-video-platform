@@ -6,6 +6,7 @@ import {
   CatalogApiError,
   getLatestHandPoseCandidates,
   requestHandPoseCandidates,
+  retryHandPoseCandidates,
   type CameraStream,
   type ClipAssetPlaybackGrant,
   type HandPoseCandidate,
@@ -58,6 +59,9 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
   const canResubmitQueuedHandPose =
     handPoseJob?.status === 'QUEUED' &&
     queuedRecoveryClock - new Date(handPoseJob.updated_at).getTime() >= QUEUED_RECOVERY_DELAY_MS
+  const canRetryFailedHandPose =
+    handPoseJob?.status === 'FAILED' && handPoseJob.run_summary?.retryable === true
+  const canResubmitHandPose = canResubmitQueuedHandPose || canRetryFailedHandPose
   const grant =
     playback && playback.assetId === selectedStream?.clip_asset_id ? playback.grant : null
 
@@ -141,11 +145,13 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
   }, [projectId, requestingPlayback, selectedStream])
 
   const requestHandPose = useCallback(async () => {
-    if (!selectedStream || requestingHandPose || (handPoseJob && !canResubmitQueuedHandPose)) return
+    if (!selectedStream || requestingHandPose || (handPoseJob && !canResubmitHandPose)) return
     setRequestingHandPose(true)
     setHandPoseMessage('')
     try {
-      const job = await requestHandPoseCandidates(projectId, selectedStream.clip_asset_id)
+      const job = canRetryFailedHandPose
+        ? await retryHandPoseCandidates(projectId, selectedStream.clip_asset_id)
+        : await requestHandPoseCandidates(projectId, selectedStream.clip_asset_id)
       setCandidateData({ assetId: selectedStream.clip_asset_id, job, candidates: [] })
       setHandPoseMessage('已提交手部检测，完成后会自动在视频上显示骨架。')
     } catch (error) {
@@ -155,7 +161,14 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
     } finally {
       setRequestingHandPose(false)
     }
-  }, [canResubmitQueuedHandPose, handPoseJob, projectId, requestingHandPose, selectedStream])
+  }, [
+    canResubmitHandPose,
+    canRetryFailedHandPose,
+    handPoseJob,
+    projectId,
+    requestingHandPose,
+    selectedStream,
+  ])
 
   const selectStream = useCallback((cameraStreamId: string) => {
     setSelectedStreamId(cameraStreamId)
@@ -223,15 +236,19 @@ export function SessionCameraPlayback({ projectId, streams }: SessionCameraPlayb
           <Button
             disabled={
               selectedStream.stream_status !== 'INGESTED' ||
-              (handPoseJob !== null && !canResubmitQueuedHandPose)
+              (handPoseJob !== null && !canResubmitHandPose)
             }
             loading={requestingHandPose}
             onClick={() => void requestHandPose()}
             type="primary"
           >
-            {canResubmitQueuedHandPose
-              ? `重新提交相机 ${orderedStreams.indexOf(selectedStream) + 1} 的检测`
-              : `检测相机 ${orderedStreams.indexOf(selectedStream) + 1} 的手部姿态`}
+            {handPoseJob?.status === 'FAILED' && !canRetryFailedHandPose
+              ? '检测失败（不可重试）'
+              : canRetryFailedHandPose
+                ? `重试相机 ${orderedStreams.indexOf(selectedStream) + 1} 的检测`
+                : canResubmitQueuedHandPose
+                  ? `重新提交相机 ${orderedStreams.indexOf(selectedStream) + 1} 的检测`
+                  : `检测相机 ${orderedStreams.indexOf(selectedStream) + 1} 的手部姿态`}
           </Button>
           {handPoseMessage ? (
             <span className="inline-action-message">{handPoseMessage}</span>

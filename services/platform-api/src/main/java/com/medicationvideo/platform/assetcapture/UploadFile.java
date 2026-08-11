@@ -25,6 +25,9 @@ class UploadFile {
 	@Column(name = "client_file_id", nullable = false, updatable = false)
 	private UUID clientFileId;
 
+	@Column(name = "file_name", length = 255, updatable = false)
+	private String fileName;
+
 	@Column(name = "idempotency_key", nullable = false, length = 128, updatable = false)
 	private String idempotencyKey;
 
@@ -102,10 +105,11 @@ class UploadFile {
 
 	private UploadFile(UUID uploadFileId, UUID batchId, UUID clientFileId, String idempotencyKey,
 			String requestFingerprint, UploadFileKind fileKind, String contentType, long sizeBytes, String sha256,
-			long partSizeBytes, int totalParts, Instant createdAt) {
+			long partSizeBytes, int totalParts, String fileName, Instant createdAt) {
 		this.uploadFileId = uploadFileId;
 		this.batchId = batchId;
 		this.clientFileId = clientFileId;
+		this.fileName = fileName;
 		this.idempotencyKey = idempotencyKey;
 		this.requestFingerprint = requestFingerprint;
 		this.fileKind = fileKind;
@@ -123,7 +127,7 @@ class UploadFile {
 			UploadFileRegistrationRequest request, int totalParts, Instant createdAt) {
 		return new UploadFile(UUID.randomUUID(), batchId, clientFileId, idempotencyKey, requestFingerprint,
 				request.fileKind(), request.contentType(), request.sizeBytes(), request.sha256(),
-				request.partSizeBytes(), totalParts, createdAt);
+				request.partSizeBytes(), totalParts, request.fileName(), createdAt);
 	}
 
 	UUID getUploadFileId() {
@@ -136,6 +140,10 @@ class UploadFile {
 
 	UUID getClientFileId() {
 		return this.clientFileId;
+	}
+
+	String getFileName() {
+		return this.fileName;
 	}
 
 	String getRequestFingerprint() {

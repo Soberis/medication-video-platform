@@ -19,6 +19,7 @@ import {
   requireLeaseLossRecovery,
   requireMemberPermissionDenied,
   requireMediaProbeJob,
+  isMediaProbeAlreadyScheduled,
   requireUnchangedState,
   sha256Hex,
   uuidV5,
@@ -43,6 +44,18 @@ test('acceptance mode keeps the normal path explicit and rejects unknown options
   })
   assert.throws(() => parseAcceptanceMode(['--unexpected']), /Usage/)
   assert.throws(() => parseAcceptanceMode(['--recovery', '--lease-loss-recovery']), /Usage/)
+})
+
+test('acceptance tolerates the Core API auto-scheduling media probe after upload completion', () => {
+  assert.equal(
+    isMediaProbeAlreadyScheduled({ status: 409, errorCode: 'CLIP_ASSET_NOT_PROBEABLE' }),
+    true,
+  )
+  assert.equal(
+    isMediaProbeAlreadyScheduled({ status: 409, errorCode: 'PROJECT_ACCESS_DENIED' }),
+    false,
+  )
+  assert.equal(isMediaProbeAlreadyScheduled({ status: 400, errorCode: 'CLIP_ASSET_NOT_PROBEABLE' }), false)
 })
 
 test('DLQ preparation requires both acceptance authorizations, loopback credentials, and bootstrap project context', () => {

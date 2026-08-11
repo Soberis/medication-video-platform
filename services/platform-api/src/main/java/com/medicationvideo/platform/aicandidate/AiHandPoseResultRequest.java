@@ -39,9 +39,15 @@ record AiHandPoseResultRequest(@NotBlank @Pattern(regexp = "^ai-hand-pose-result
 
 	@AssertTrue(message = "run summary frame counts must describe the sampled video.")
 	boolean validFrameSummary() {
-		return this.totalVideoFrames != null && this.inferenceFrameCount != null && this.framesWithHand != null
-				&& this.framesWithoutHand != null && this.totalVideoFrames >= this.inferenceFrameCount
+		var countsArePresent = this.totalVideoFrames != null && this.inferenceFrameCount != null
+				&& this.framesWithHand != null && this.framesWithoutHand != null
+				&& this.totalVideoFrames >= this.inferenceFrameCount
 				&& this.framesWithHand + this.framesWithoutHand == this.inferenceFrameCount;
+		if (!countsArePresent) {
+			return false;
+		}
+		return this.outcome != AiHandPoseRunOutcome.SUCCEEDED
+				|| (this.totalVideoFrames > 0 && this.inferenceFrameCount > 0);
 	}
 
 	@AssertTrue(message = "hand result must match the explicit terminal outcome and candidates.")
@@ -75,7 +81,25 @@ record AiHandPoseCandidatePayload(@Min(0) long frameTimestampMs, @Min(1) int ima
 
 	@AssertTrue(message = "bounding_box must be an object and landmarks must contain 21 points.")
 	boolean validGeometry() {
-		return this.boundingBox != null && this.boundingBox.isObject() && this.landmarks != null
-				&& this.landmarks.isArray() && this.landmarks.size() == 21;
+		if (this.boundingBox == null || !this.boundingBox.isObject() || this.landmarks == null
+				|| !this.landmarks.isArray() || this.landmarks.size() != 21) {
+			return false;
+		}
+		if (!finite(this.boundingBox, "x") || !finite(this.boundingBox, "y") || !finite(this.boundingBox, "width")
+				|| !finite(this.boundingBox, "height")) {
+			return false;
+		}
+		for (var point : this.landmarks) {
+			if (point == null || !point.isObject() || !finite(point, "x") || !finite(point, "y")
+					|| !finite(point, "z")) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static boolean finite(JsonNode object, String field) {
+		var value = object.get(field);
+		return value != null && value.isNumber() && Double.isFinite(value.asDouble());
 	}
 }

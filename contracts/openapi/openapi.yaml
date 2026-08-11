@@ -3143,6 +3143,41 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/video-data/summary:
+    get:
+      operationId: getVideoDataSummary
+      tags:
+        - Video Management
+      summary: Get aggregate video-management counters for one project
+      description: >-
+        Returns duration in microseconds and storage in bytes. Counts are computed from the same
+        project-scoped, non-deleted video population used by the video-management read model.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: source
+          in: query
+          schema: { $ref: "#/components/schemas/UploadSourceType" }
+        - name: cameraNumber
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 64 }
+      responses:
+        "200":
+          description: Project-scoped data-management summary.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataManagementSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{project_id}/clip-assets:
     get:
       operationId: listClipAssets
@@ -3545,6 +3580,44 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs/retry:
+    post:
+      operationId: retryHandPoseCandidates
+      tags: [AI Candidates]
+      summary: Retry a bounded, retryable failed hand pose candidate job
+      description: >-
+        Reuses the existing AI job and creates the next immutable attempt. Only Worker failures
+        explicitly marked retryable can be retried, and the server enforces a maximum attempt count.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: clip_asset_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
+      responses:
+        "202":
+          description: The next AI job attempt was queued.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HandPoseJobResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /ai-jobs/{ai_job_id}:
     get:
       operationId: getHandPoseJob
@@ -5769,6 +5842,10 @@ components:
             `upload-file-manifest-v1\n`; sort entries by lowercase client_file_id; append one line
             per file as `client_file_id<TAB>file_kind<TAB>content_type<TAB>size_bytes<TAB>sha256<TAB>part_size_bytes\n`.
             Excludes credentials, signed URLs, storage upload IDs and server-assigned IDs.
+        external_manifest_id:
+          type: [string, "null"]
+          format: uuid
+          description: Persisted explicit external camera manifest to bind to this upload batch.
     UploadBatch:
       type: object
       additionalProperties: false
@@ -5795,6 +5872,9 @@ components:
         upload_source_type:
           $ref: "#/components/schemas/UploadSourceType"
         asset_folder_id:
+          type: [string, "null"]
+          format: uuid
+        external_manifest_id:
           type: [string, "null"]
           format: uuid
         file_count:
@@ -6005,6 +6085,9 @@ components:
         asset_folder_id:
           type: [string, "null"]
           format: uuid
+        external_manifest_id:
+          type: [string, "null"]
+          format: uuid
         file_count:
           type: integer
           format: int32
@@ -6105,6 +6188,10 @@ components:
           minimum: 8388608
           maximum: 67108864
           description: Planned part size from 8 MiB through 64 MiB; the last part may be smaller.
+        file_name:
+          type: [string, "null"]
+          maxLength: 255
+          description: Original client filename. Required for a video bound to an external ingest manifest.
     UploadFile:
       type: object
       additionalProperties: false
@@ -6130,6 +6217,9 @@ components:
         client_file_id:
           type: string
           format: uuid
+        file_name:
+          type: [string, "null"]
+          maxLength: 255
         file_kind:
           $ref: "#/components/schemas/UploadFileKind"
         content_type:
@@ -8603,6 +8693,7 @@ components:
       required:
         - video_id
         - display_name
+        - source_name
         - camera_number
         - captured_at
         - received_at
@@ -8615,6 +8706,7 @@ components:
       properties:
         video_id: { type: string, format: uuid }
         display_name: { type: string, minLength: 1, maxLength: 128 }
+        source_name: { type: string, minLength: 1, maxLength: 32 }
         camera_number: { type: [integer, "null"], minimum: 1, maximum: 64 }
         captured_at: { type: [string, "null"], format: date-time }
         received_at: { type: string, format: date-time }
@@ -8625,13 +8717,47 @@ components:
         hand_result:
           type: string
           enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
+        hand_retryable: { type: boolean }
         annotation_status: { type: string, minLength: 1, maxLength: 32 }
         cleaning_status: { type: string, minLength: 1, maxLength: 32 }
         retention_status: { type: string, minLength: 1, maxLength: 64 }
+    DataManagementSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - total_videos
+        - total_duration
+        - storage_bytes
+        - counts_by_source
+        - counts_by_camera
+        - counts_by_status
+        - pending_annotation
+        - pending_review
+        - pending_cleaning
+        - usable_count
+      properties:
+        total_videos: { type: integer, format: int64, minimum: 0 }
+        total_duration: { type: integer, format: int64, minimum: 0, description: Total duration in microseconds. }
+        storage_bytes: { type: integer, format: int64, minimum: 0 }
+        counts_by_source:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 0 }
+        counts_by_camera:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 0 }
+        counts_by_status:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 0 }
+        pending_annotation: { type: integer, format: int64, minimum: 0 }
+        pending_review: { type: integer, format: int64, minimum: 0 }
+        pending_cleaning: { type: integer, format: int64, minimum: 0 }
+        usable_count: { type: integer, format: int64, minimum: 0 }
     ExternalVideoIngestManifestAccepted:
       type: object
       additionalProperties: false
       required:
+        - manifest_id
+        - status
         - schema_version
         - capture_group_key
         - key_source
@@ -8639,6 +8765,8 @@ components:
         - expected_camera_count
         - video_count
       properties:
+        manifest_id: { type: string, format: uuid }
+        status: { type: string, enum: [ACCEPTED, BOUND] }
         schema_version: { type: string, const: external-video-ingest-v1 }
         capture_group_key: { type: string, minLength: 1, maxLength: 128 }
         key_source:
@@ -9916,6 +10044,7 @@ components:
         - processing_duration_ms
         - started_at
         - completed_at
+        - retryable
       properties:
         analysis_complete: { type: boolean }
         hand_result:
@@ -9936,6 +10065,7 @@ components:
             - type: string
               maxLength: 128
             - type: "null"
+        retryable: { type: boolean }
     HandPoseCandidate:
       type: object
       additionalProperties: false

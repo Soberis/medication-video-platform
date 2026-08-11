@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.aicandidate;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +89,38 @@ class AiHandPoseResultContractTests {
 				((Number) attemptState.get("inference_frame_count")).longValue());
 		org.junit.jupiter.api.Assertions.assertEquals(0, this.jdbcTemplate
 			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+	}
+
+	@Test
+	void rejectsSuccessfulResultsThatContainNoDecodedOrSampledFrames() throws Exception {
+		var jobId = UUID.randomUUID();
+		var attempt = UUID.randomUUID();
+		var messageId = UUID.randomUUID();
+		var lease = "A".repeat(43);
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		insertRunningJob(jobId, attempt, messageId, AiLeaseCapabilityFactory.sha256(lease), now);
+		var timestamp = now.toString();
+		var result = """
+				{"schema_version":"ai-hand-pose-result.v2","message_id":"%s","job_id":"%s","attempt":1,
+				"lease_token":"%s","input_sha256":"%s","model_sha256":"%s","profile_sha256":"%s",
+				"started_at":"%s","completed_at":"%s","outcome":"SUCCEEDED","analysis_complete":true,
+				"hand_result":"NO_HAND_DETECTED","total_video_frames":0,"inference_frame_count":0,
+				"frames_with_hand":0,"frames_without_hand":0,"left_hand_detection_count":0,
+				"right_hand_detection_count":0,"invalid_landmark_count":0,"processing_duration_ms":0,
+				"failure_reason":null,"candidates":[]}
+				""".formatted(messageId, jobId, lease, INPUT_SHA256, MODEL_SHA256, HandPoseProfile.PROFILE_SHA256,
+				timestamp, timestamp);
+
+		this.mockMvc
+			.perform(put("/api/v1/internal/ai-jobs/{jobId}/attempts/1/result", jobId)
+				.header("Authorization", "Bearer " + AI_TOKEN)
+				.header("X-AI-Lease-Token", lease)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(result))
+			.andExpect(status().isBadRequest());
+
+		assertEquals("RUNNING",
+				this.jdbcTemplate.queryForObject("SELECT status FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
 	}
 
 	private void insertRunningJob(UUID jobId, UUID attemptId, UUID messageId, String leaseHash, Instant now) {

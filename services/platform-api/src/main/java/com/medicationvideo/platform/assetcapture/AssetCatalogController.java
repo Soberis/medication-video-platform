@@ -35,12 +35,16 @@ class AssetCatalogController {
 
 	private final VideoSummaryQueryService videoSummaryQueryService;
 
+	private final DataManagementSummaryQueryService dataManagementSummaryQueryService;
+
 	AssetCatalogController(AssetCatalogQueryService service, ClipAssetActivityQueryService activityQueryService,
-			AssetCaptureProjectAuthorizer authorizer, VideoSummaryQueryService videoSummaryQueryService) {
+			AssetCaptureProjectAuthorizer authorizer, VideoSummaryQueryService videoSummaryQueryService,
+			DataManagementSummaryQueryService dataManagementSummaryQueryService) {
 		this.service = service;
 		this.activityQueryService = activityQueryService;
 		this.authorizer = authorizer;
 		this.videoSummaryQueryService = videoSummaryQueryService;
+		this.dataManagementSummaryQueryService = dataManagementSummaryQueryService;
 	}
 
 	@GetMapping("/capture-sessions")
@@ -116,6 +120,21 @@ class AssetCatalogController {
 		var response = this.videoSummaryQueryService.list(projectId, mediaStatus, handStatus, handResult, cameraNumber,
 				capturedFrom, capturedBefore, receivedFrom, receivedBefore, cursor, limit);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	@GetMapping("/video-data/summary")
+	ResponseEntity<DataManagementSummary> getVideoDataSummary(@PathVariable UUID projectId,
+			@RequestParam(name = "from",
+					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+			@RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+			@RequestParam(required = false) UploadSourceType source,
+			@RequestParam(name = "cameraNumber", required = false) @Min(1) @Max(64) Integer cameraNumber,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.authorizer.requireMember(projectId, actor.actorId());
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.dataManagementSummaryQueryService.get(projectId, from, to, source, cameraNumber));
 	}
 
 	@GetMapping("/clip-assets/{clipAssetId}")

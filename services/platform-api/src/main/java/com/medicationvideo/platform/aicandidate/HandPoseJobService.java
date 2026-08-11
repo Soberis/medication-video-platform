@@ -45,13 +45,19 @@ class HandPoseJobService {
 
 	private final boolean enabled;
 
+	private final int maxAttempts;
+
 	@Autowired
 	HandPoseJobService(ProjectAccessService projectAccessService, AssetCatalogQueryService assetCatalog,
 			AiCandidateJobRepository repository, AiCandidateJobIdempotencyReceiptRepository receiptRepository,
 			AuditEventRecorder auditRecorder, AiCandidateJobAttemptQueueService attemptQueue,
 			MediaDurationQueryService durationQueryService,
 			@Value("${platform.ai.hand-pose.model-sha256:}") String modelSha256,
-			@Value("${platform.ai.hand-pose.enabled:false}") boolean enabled) {
+			@Value("${platform.ai.hand-pose.enabled:false}") boolean enabled,
+			@Value("${platform.ai.hand-pose.max-attempts:3}") int maxAttempts) {
+		if (maxAttempts < 1 || maxAttempts > 10) {
+			throw new IllegalArgumentException("Hand pose max attempts must be between 1 and 10.");
+		}
 		this.projectAccessService = projectAccessService;
 		this.assetCatalog = assetCatalog;
 		this.repository = repository;
@@ -61,6 +67,7 @@ class HandPoseJobService {
 		this.durationQueryService = durationQueryService;
 		this.modelSha256 = modelSha256;
 		this.enabled = enabled;
+		this.maxAttempts = maxAttempts;
 	}
 
 	/**
@@ -72,7 +79,7 @@ class HandPoseJobService {
 			AuditEventRecorder auditRecorder, AiCandidateJobAttemptQueueService attemptQueue, String modelSha256,
 			String ignoredApprovedCameraRoles, boolean enabled) {
 		this(projectAccessService, assetCatalog, repository, receiptRepository, auditRecorder, attemptQueue,
-				(MediaDurationQueryService) null, modelSha256, enabled);
+				(MediaDurationQueryService) null, modelSha256, enabled, 3);
 	}
 
 	@Transactional
@@ -117,6 +124,49 @@ class HandPoseJobService {
 				"MEDIAPIPE_HAND_LANDMARKER", requestId, traceId, "ROLE_" + projectRole.name(),
 				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
 						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
+		return response(job);
+	}
+
+	@Transactional
+	HandPoseJobResponse retry(UUID projectId, UUID clipAssetId, String actorId, String idempotencyKey, String requestId,
+			String traceId) {
+		ensureEnabled();
+		var projectRole = this.projectAccessService.lockAndRequireMember(projectId, actorId);
+		validateModel();
+		var fingerprint = fingerprint(projectId, clipAssetId);
+		var receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
+		if (receipt.isPresent()) {
+			return response(requireSameRequest(receipt.get(), fingerprint));
+		}
+		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
+		ensureEligible(input);
+		ensureCapacity(input, projectId, clipAssetId);
+		var job = this.repository.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, clipAssetId)
+			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_JOB_NOT_FOUND",
+					"No hand pose job exists for this video.", 404));
+		var attempt = this.attemptQueue.latest(job.getAiJobId());
+		if (job.getStatus() != AiCandidateJobStatus.FAILED || attempt == null
+				|| attempt.getStatus() != AiCandidateJobAttemptStatus.FAILED) {
+			throw new HandPoseJobException("AI_HAND_POSE_RETRY_NOT_ALLOWED",
+					"Only a terminally failed hand pose job can be retried.", 409);
+		}
+		if (!HandPoseRetryPolicy.isRetryable(attempt.getFailureReason())) {
+			throw new HandPoseJobException("AI_HAND_POSE_RETRY_NOT_ALLOWED",
+					"This hand pose failure is not eligible for manual retry.", 409);
+		}
+		if (attempt.getAttempt() >= this.maxAttempts) {
+			throw new HandPoseJobException("AI_HAND_POSE_RETRY_LIMIT_REACHED",
+					"The maximum number of hand pose attempts has been reached.", 409);
+		}
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		job.requeueForManualRetry(now);
+		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
+		this.recordReceipt(job, idempotencyKey, fingerprint, now);
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"AI_HAND_POSE_JOB_MANUAL_RETRY_QUEUED", "AIJob", job.getAiJobId().toString(),
+				Integer.toString(attempt.getAttempt() + 1), AuditOutcome.SUCCEEDED, attempt.getFailureReason(),
+				requestId, traceId, "ROLE_" + projectRole.name(), java.util.Map.of("clip_asset_id",
+						clipAssetId.toString(), "source_attempt", Integer.toString(attempt.getAttempt()))));
 		return response(job);
 	}
 

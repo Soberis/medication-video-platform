@@ -38,6 +38,9 @@ class UploadBatch {
 	@Column(name = "asset_folder_id", updatable = false)
 	private UUID assetFolderId;
 
+	@Column(name = "external_manifest_id", updatable = false)
+	private UUID externalManifestId;
+
 	@Column(name = "initiated_by_actor_id", nullable = false, length = 128, updatable = false)
 	private String initiatedByActorId;
 
@@ -84,7 +87,7 @@ class UploadBatch {
 
 	private UploadBatch(UUID batchId, UUID projectId, String idempotencyKey, String requestFingerprint, String deviceId,
 			UploadSourceType uploadSourceType, UUID assetFolderId, String initiatedByActorId, int fileCount,
-			long totalSizeBytes, String manifestSha256, Instant expiresAt, Instant createdAt) {
+			long totalSizeBytes, String manifestSha256, UUID externalManifestId, Instant expiresAt, Instant createdAt) {
 		this.batchId = batchId;
 		this.projectId = projectId;
 		this.idempotencyKey = idempotencyKey;
@@ -92,6 +95,7 @@ class UploadBatch {
 		this.deviceId = deviceId;
 		this.uploadSourceType = uploadSourceType;
 		this.assetFolderId = assetFolderId;
+		this.externalManifestId = externalManifestId;
 		this.initiatedByActorId = initiatedByActorId;
 		this.fileCount = fileCount;
 		this.totalSizeBytes = totalSizeBytes;
@@ -104,10 +108,17 @@ class UploadBatch {
 
 	static UploadBatch initiate(UUID projectId, String idempotencyKey, String requestFingerprint, String deviceId,
 			UploadSourceType uploadSourceType, UUID assetFolderId, String initiatedByActorId, int fileCount,
-			long totalSizeBytes, String manifestSha256, Instant expiresAt, Instant createdAt) {
+			long totalSizeBytes, String manifestSha256, UUID externalManifestId, Instant expiresAt, Instant createdAt) {
 		return new UploadBatch(UUID.randomUUID(), projectId, idempotencyKey, requestFingerprint, deviceId,
 				uploadSourceType, assetFolderId, initiatedByActorId, fileCount, totalSizeBytes, manifestSha256,
-				expiresAt, createdAt);
+				externalManifestId, expiresAt, createdAt);
+	}
+
+	static UploadBatch initiate(UUID projectId, String idempotencyKey, String requestFingerprint, String deviceId,
+			UploadSourceType uploadSourceType, UUID assetFolderId, String initiatedByActorId, int fileCount,
+			long totalSizeBytes, String manifestSha256, Instant expiresAt, Instant createdAt) {
+		return initiate(projectId, idempotencyKey, requestFingerprint, deviceId, uploadSourceType, assetFolderId,
+				initiatedByActorId, fileCount, totalSizeBytes, manifestSha256, null, expiresAt, createdAt);
 	}
 
 	UUID getBatchId() {
@@ -132,6 +143,10 @@ class UploadBatch {
 
 	UUID getAssetFolderId() {
 		return this.assetFolderId;
+	}
+
+	UUID getExternalManifestId() {
+		return this.externalManifestId;
 	}
 
 	String getInitiatedByActorId() {

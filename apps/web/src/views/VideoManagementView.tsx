@@ -4,7 +4,11 @@ import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
+  getDataManagementSummary,
   listVideoSummaries,
+  requestHandPoseCandidates,
+  retryHandPoseCandidates,
+  type DataManagementSummary,
   type VideoSummary,
   type VideoSummaryFilters,
   type VideoSummaryHandResult,
@@ -42,6 +46,9 @@ export default function VideoManagementView() {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
+  const [summary, setSummary] = useState<DataManagementSummary | null>(null)
+  const [actionVideoId, setActionVideoId] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
 
   const loadPage = useCallback(
@@ -52,15 +59,14 @@ export default function VideoManagementView() {
       if (!append) setLoadState('loading')
       setErrorMessage('')
       try {
-        const page = await listVideoSummaries(
-          projectId,
-          nextFilters,
-          append ? nextCursor : null,
-          request.signal,
-        )
+        const [page, nextSummary] = await Promise.all([
+          listVideoSummaries(projectId, nextFilters, append ? nextCursor : null, request.signal),
+          getDataManagementSummary(projectId, request.signal),
+        ])
         if (activeRequest.current !== request) return
         setItems((current) => (append ? [...current, ...page.items] : page.items))
         setNextCursor(page.next_cursor)
+        setSummary(nextSummary)
         setLoadState('success')
       } catch (error) {
         if (request.signal.aborted || activeRequest.current !== request) return
@@ -93,6 +99,43 @@ export default function VideoManagementView() {
     void loadPage(false, nextFilters)
   }
 
+  async function startHandPose(row: VideoSummary) {
+    if (
+      actionVideoId !== null ||
+      row.hand_status === 'QUEUED' ||
+      row.hand_status === 'RUNNING' ||
+      (row.hand_status === 'FAILED' && !row.hand_retryable)
+    )
+      return
+    setActionVideoId(row.video_id)
+    setActionMessage('')
+    try {
+      const job =
+        row.hand_status === 'FAILED' && row.hand_retryable
+          ? await retryHandPoseCandidates(projectId, row.video_id)
+          : await requestHandPoseCandidates(projectId, row.video_id)
+      setItems((current) =>
+        current.map((item) =>
+          item.video_id === row.video_id
+            ? {
+                ...item,
+                hand_status: job.status,
+                hand_result: job.hand_result,
+                hand_retryable: false,
+              }
+            : item,
+        ),
+      )
+      setActionMessage(row.hand_status === 'FAILED' ? '已重新排队手部检测。' : '已排队手部检测。')
+    } catch (error) {
+      setActionMessage(
+        error instanceof CatalogApiError ? error.message : '手部检测请求失败，请稍后重试。',
+      )
+    } finally {
+      setActionVideoId(null)
+    }
+  }
+
   return (
     <>
       <section className="page-heading" aria-labelledby="video-management-title">
@@ -105,6 +148,34 @@ export default function VideoManagementView() {
           刷新
         </Button>
       </section>
+      {summary ? (
+        <Card className="summary-card" variant="outlined" aria-label="数据管理汇总">
+          <div className="summary-grid">
+            <div>
+              <span className="cell-secondary">视频总数</span>
+              <strong>{summary.total_videos}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">总时长</span>
+              <strong>{formatDuration(summary.total_duration)}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">存储量</span>
+              <strong>{formatBytes(summary.storage_bytes)}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">可用数据</span>
+              <strong>{summary.usable_count}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">待标注 / 待复核 / 待清洗</span>
+              <strong>
+                {summary.pending_annotation} / {summary.pending_review} / {summary.pending_cleaning}
+              </strong>
+            </div>
+          </div>
+        </Card>
+      ) : null}
       <Card className="filter-card" variant="outlined">
         <div className="catalog-filters video-management-filters">
           <label>
@@ -169,6 +240,11 @@ export default function VideoManagementView() {
           <Button onClick={() => void loadPage(false)}>重试</Button>
         </div>
       ) : null}
+      {actionMessage ? (
+        <div className="catalog-notice" role="status">
+          {actionMessage}
+        </div>
+      ) : null}
       {loadState === 'success' && items.length === 0 ? (
         <Empty description="当前没有符合条件的视频。" />
       ) : null}
@@ -186,7 +262,7 @@ export default function VideoManagementView() {
                 render: (_, row) => (
                   <>
                     <strong className="mono-wrap">{row.display_name}</strong>
-                    <span className="cell-secondary">{row.video_id}</span>
+                    <span className="cell-secondary">来源 {row.source_name}</span>
                   </>
                 ),
               },
@@ -232,12 +308,35 @@ export default function VideoManagementView() {
               { title: '留存', dataIndex: 'retention_status', width: 170 },
               {
                 title: '操作',
-                width: 170,
+                width: 220,
                 render: (_, row) => (
                   <span className="table-actions">
                     <Link className="text-link" to={paths.asset(projectId, row.video_id)}>
-                      查看 / 检测
+                      {row.hand_status === 'SUCCEEDED' ? '播放 / 查看结果' : '播放'}
                     </Link>
+                    {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
+                      <Button size="small" disabled>
+                        检测中
+                      </Button>
+                    ) : row.hand_status === 'FAILED' && row.hand_retryable ? (
+                      <Button
+                        size="small"
+                        loading={actionVideoId === row.video_id}
+                        onClick={() => void startHandPose(row)}
+                      >
+                        重试检测
+                      </Button>
+                    ) : row.hand_status === 'FAILED' ? (
+                      <span className="cell-secondary">不可重试</span>
+                    ) : row.hand_status !== 'SUCCEEDED' ? (
+                      <Button
+                        size="small"
+                        loading={actionVideoId === row.video_id}
+                        onClick={() => void startHandPose(row)}
+                      >
+                        检测手部
+                      </Button>
+                    ) : null}
                     <Link className="text-link" to={paths.annotationTasks(projectId)}>
                       进入标注
                     </Link>
@@ -257,4 +356,18 @@ export default function VideoManagementView() {
       ) : null}
     </>
   )
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+}
+
+function formatDuration(microseconds: number) {
+  const totalSeconds = Math.max(0, Math.round(microseconds / 1_000_000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours > 0 ? `${hours}时${minutes}分` : `${minutes}分${seconds}秒`
 }

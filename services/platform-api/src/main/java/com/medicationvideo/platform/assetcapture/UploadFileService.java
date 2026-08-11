@@ -20,9 +20,13 @@ class UploadFileService {
 
 	private final UploadFileRepository fileRepository;
 
-	UploadFileService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository) {
+	private final ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository;
+
+	UploadFileService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
+			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
+		this.externalManifestVideoRepository = externalManifestVideoRepository;
 	}
 
 	@Transactional
@@ -54,6 +58,17 @@ class UploadFileService {
 				&& request.fileKind() != UploadFileKind.VIDEO) {
 			throw new UploadFileRegistrationException("PLATFORM_LOCAL_VIDEO_REQUIRED",
 					"A platform-local upload batch accepts exactly one VIDEO file.");
+		}
+		if (batch.getExternalManifestId() != null && request.fileKind() == UploadFileKind.VIDEO) {
+			var expected = this.externalManifestVideoRepository
+				.findByManifestIdAndClientFileId(batch.getExternalManifestId(), clientFileId)
+				.orElseThrow(() -> new UploadFileRegistrationException("EXTERNAL_MANIFEST_VIDEO_MISMATCH",
+						"The video client_file_id is not declared by the bound external manifest."));
+			if (expected.getDeclaredSizeBytes() != request.sizeBytes() || !expected.getSha256().equals(request.sha256())
+					|| !expected.getFileName().equals(request.fileName())) {
+				throw new UploadFileRegistrationException("EXTERNAL_MANIFEST_VIDEO_MISMATCH",
+						"The video registration does not match the bound external manifest.");
+			}
 		}
 
 		var registeredCount = this.fileRepository.countByBatchId(batchId);
@@ -96,7 +111,7 @@ class UploadFileService {
 	private static String fingerprint(UUID batchId, UUID clientFileId, UploadFileRegistrationRequest request) {
 		var canonical = String.join("\n", batchId.toString(), clientFileId.toString(), request.fileKind().name(),
 				request.contentType(), Long.toString(request.sizeBytes()), request.sha256(),
-				Long.toString(request.partSizeBytes()));
+				Long.toString(request.partSizeBytes()), request.fileName() == null ? "" : request.fileName());
 		try {
 			var digest = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
 			return HexFormat.of().formatHex(digest);

@@ -11,7 +11,7 @@ from typing import Self
 import httpx
 
 from medication_ai_worker.contracts import AiJob
-from medication_ai_worker.landmarker import InferenceResult
+from medication_ai_worker.landmarker import InferenceResult, InferenceSummary
 
 
 class RetryableError(RuntimeError):
@@ -210,8 +210,10 @@ class CoreApiClient:
         started_at: datetime,
         failure_reason: str,
         processing_duration_ms: int,
+        summary: InferenceSummary | None = None,
     ) -> None:
         completed_at = datetime.now(started_at.tzinfo)
+        run_summary = summary or InferenceSummary(0, 0, 0, 0, 0, 0, 0, 0)
         result = {
             "schema_version": "ai-hand-pose-result.v2",
             "message_id": str(job.message_id),
@@ -226,13 +228,13 @@ class CoreApiClient:
             "outcome": "FAILED",
             "analysis_complete": False,
             "hand_result": "UNKNOWN",
-            "total_video_frames": 0,
-            "inference_frame_count": 0,
-            "frames_with_hand": 0,
-            "frames_without_hand": 0,
-            "left_hand_detection_count": 0,
-            "right_hand_detection_count": 0,
-            "invalid_landmark_count": 0,
+            "total_video_frames": run_summary.total_video_frames,
+            "inference_frame_count": run_summary.inference_frame_count,
+            "frames_with_hand": run_summary.frames_with_hand,
+            "frames_without_hand": run_summary.frames_without_hand,
+            "left_hand_detection_count": run_summary.left_hand_detection_count,
+            "right_hand_detection_count": run_summary.right_hand_detection_count,
+            "invalid_landmark_count": run_summary.invalid_landmark_count,
             "processing_duration_ms": processing_duration_ms,
             "failure_reason": failure_reason[:128],
             "candidates": [],
