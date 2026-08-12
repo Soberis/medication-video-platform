@@ -3,7 +3,7 @@
 这是一次性、纯合成、非生产验证工具。它不调用 Core API，不连接 PostgreSQL、RabbitMQ 或对象
 存储，也不创建正式同步表、正式 API、正式 Worker 路由或 DatasetVersion 事实。
 
-工具使用 FFmpeg 生成五组低分辨率合成 MP4，并通过 FFprobe 读取每帧原始 PTS：
+工具使用 FFmpeg 生成七组低分辨率合成 MP4，并通过 FFprobe 读取每帧原始 PTS：
 
 - Case A：Expected/Actual 均为 Camera `[1,2,3]`；
 - Case B：Expected `[1,2,3,4,5]`、Actual `[1,3,5]`；
@@ -11,6 +11,9 @@
 - Case D：Camera 3 局部缺帧，并在 Camera 2 的 fixture manifest 中注入一个稳定的
   `SYNTHETIC_DECODE_VALIDATION_FAILED` 帧；
 - Case E：VFR、非零原始 PTS。
+- Case F：Camera 1 从 Capture 0 ms 开始、Camera 2 晚 80 ms 开始，使用单锚点
+  offset-only 映射；
+- Case G：Camera 2 使用两锚点合成真值和 `+1000 ppm` drift 的仿射映射。
 
 Case D 的 `INVALID` 是 manifest 层故障注入，用于验证 `INVALID` 与 `MISSING` 的逻辑契约，
 不是损坏 MP4 的解码器检出证明。所有 MP4 都由本机 FFmpeg 生成到 `tmp/`，受仓库
@@ -34,6 +37,10 @@ uv run golden-capture-g0 --worker-trials 3
 `tmp/v1.19-g0/`。可用 `--work-dir` 和 `--evidence-out` 覆盖位置。
 
 ## 证据边界
+
+每一路实际 stream 必须显式提供可信 `anchor_source_ns` / `anchor_capture_ns` 映射；只有多锚点
+合成真值才能提供 `drift_ppm`。没有可信 anchor/common clock 时工具以
+`TRUSTED_STREAM_TO_CAPTURE_MAPPING_REQUIRED` 拒绝同步，不会把各路首帧默认为同时发生。
 
 `30 Hz + 20 ms` 只作为本工具比较候选时使用的 `G0_MEASUREMENT_ONLY_NOT_APPROVED` profile，
 不是生产同步 profile。输出同时比较 10/25/30 Hz、10/15/20 ms、不同压缩与 row-group

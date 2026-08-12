@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from fractions import Fraction
 
+import pytest
 from conftest import GoldenData
 
 from golden_capture_g0.media import sha256_file
 from golden_capture_g0.model import SyncProfile
 from golden_capture_g0.sync import (
+    SynchronizationUnavailableError,
     build_frame_slots,
     input_manifest_sha256,
     logical_content_sha256,
+    map_capture_to_source_time,
+    map_source_to_capture_time,
 )
 
 PROFILE_30HZ_20MS = SyncProfile(Fraction(30), 20_000_000)
@@ -142,6 +147,100 @@ def test_case_e_has_stable_vfr_and_nonzero_raw_pts(golden_data: GoldenData) -> N
     assert len(raw_vfr_deltas) > 1
     assert len(normalized_vfr_deltas) > 1
     assert vfr.frames[0].source_pts_ns == 0
+
+
+def test_case_f_applies_cross_camera_offset_before_nearest_mapping(
+    golden_data: GoldenData,
+) -> None:
+    capture = golden_data.captures["case_f_cross_camera_offset"]
+    streams = golden_data.streams[capture.name]
+    slots = build_frame_slots(capture, streams, PROFILE_30HZ_20MS)
+    camera_two_start = next(
+        slot for slot in slots if slot.camera_number == 2 and slot.capture_timestamp_ns == 0
+    )
+    first_camera_two_mapping = next(
+        slot
+        for slot in slots
+        if slot.camera_number == 2 and slot.capture_timestamp_ns == 66_666_667
+    )
+
+    assert streams[1].frames[0].source_pts_ns == streams[2].frames[0].source_pts_ns == 0
+    assert camera_two_start.frame_state == "MISSING"
+    assert camera_two_start.frame_reason_code == "NO_FRAME_WITHIN_TOLERANCE"
+    assert first_camera_two_mapping.frame_state == "PRESENT"
+    assert first_camera_two_mapping.source_pts_ns == 0
+    assert first_camera_two_mapping.sync_error_ns == 13_333_333
+    assert first_camera_two_mapping.sync_error_ns != (
+        first_camera_two_mapping.source_pts_ns - first_camera_two_mapping.capture_timestamp_ns
+    )
+
+
+def test_case_g_inverse_maps_target_and_forward_maps_drift_error(
+    golden_data: GoldenData,
+) -> None:
+    capture = golden_data.captures["case_g_affine_drift"]
+    streams = golden_data.streams[capture.name]
+    mapping = streams[2].spec.time_mapping
+    assert mapping is not None
+    slots = build_frame_slots(capture, streams, PROFILE_30HZ_20MS)
+    camera_two_at_one_second = next(
+        slot
+        for slot in slots
+        if slot.camera_number == 2 and slot.capture_timestamp_ns == 1_000_000_000
+    )
+
+    assert map_capture_to_source_time(1_000_000_000, mapping) == Fraction(1_000_000_000_000, 1001)
+    assert camera_two_at_one_second.source_pts_ns == 1_000_000_000
+    assert map_source_to_capture_time(camera_two_at_one_second.source_pts_ns, mapping) == (
+        1_001_000_000
+    )
+    assert camera_two_at_one_second.sync_error_ns == 1_000_000
+
+
+def test_sync_rejects_stream_without_trusted_capture_mapping(
+    golden_data: GoldenData,
+) -> None:
+    capture = golden_data.captures["case_f_cross_camera_offset"]
+    original_streams = golden_data.streams[capture.name]
+    stream = original_streams[2]
+    mapping = stream.spec.time_mapping
+    assert mapping is not None
+
+    for unavailable_mapping in (None, replace(mapping, trusted=False)):
+        streams = dict(original_streams)
+        streams[2] = replace(stream, spec=replace(stream.spec, time_mapping=unavailable_mapping))
+        with pytest.raises(SynchronizationUnavailableError) as error:
+            build_frame_slots(capture, streams, PROFILE_30HZ_20MS)
+
+        assert error.value.code == "TRUSTED_STREAM_TO_CAPTURE_MAPPING_REQUIRED"
+        assert error.value.camera_number == 2
+
+
+def test_single_anchor_cannot_claim_measured_drift(golden_data: GoldenData) -> None:
+    capture = golden_data.captures["case_f_cross_camera_offset"]
+    mapping = golden_data.streams[capture.name][2].spec.time_mapping
+    assert mapping is not None
+
+    with pytest.raises(ValueError, match="drift_ppm requires at least two anchors"):
+        replace(mapping, drift_ppm=Fraction(1), anchor_count=1)
+
+
+def test_time_mapping_is_part_of_frozen_input_manifest(golden_data: GoldenData) -> None:
+    capture = golden_data.captures["case_f_cross_camera_offset"]
+    streams = dict(golden_data.streams[capture.name])
+    changed = dict(streams)
+    original = changed[2]
+    mapping = original.spec.time_mapping
+    assert mapping is not None
+    changed[2] = replace(
+        original,
+        spec=replace(
+            original.spec,
+            time_mapping=replace(mapping, anchor_capture_ns=mapping.anchor_capture_ns + 1),
+        ),
+    )
+
+    assert input_manifest_sha256(capture, streams) != input_manifest_sha256(capture, changed)
 
 
 def test_frozen_input_and_profile_are_order_independent_and_reproducible(

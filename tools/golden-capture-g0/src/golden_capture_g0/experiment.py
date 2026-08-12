@@ -7,7 +7,7 @@ import platform
 import statistics
 import subprocess
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -30,6 +30,7 @@ from golden_capture_g0.parquet_artifact import (
 )
 from golden_capture_g0.rational import round_half_even
 from golden_capture_g0.sync import (
+    SynchronizationUnavailableError,
     build_frame_slots,
     input_manifest_sha256,
     logical_content_sha256,
@@ -76,7 +77,7 @@ def run_experiment(
     final_hashes = {path: sha256_file(Path(path)) for path in initial_hashes}
     immutable = initial_hashes == final_hashes
     return {
-        "evidence_version": "v1.19-g0-evidence.v1",
+        "evidence_version": "v1.19-g0-evidence.v2",
         "scope": "SYNTHETIC_ONLY_NON_PRODUCTION",
         "environment": _environment(),
         "fixture_path": fixture_path.as_posix(),
@@ -86,15 +87,16 @@ def run_experiment(
         "canonical_parquet": canonical_measurements,
         "physical_layout_candidates": layout_measurements,
         "rounding_evidence": _rounding_evidence(),
+        "time_mapping_evidence": _time_mapping_evidence(captures, streams_by_capture),
         "reference_candidates": _reference_candidates(captures),
         "worker_capacity_measurement": capacity,
         "source_media_immutable": immutable,
         "source_media_sha256_before": initial_hashes,
         "source_media_sha256_after": final_hashes,
         "freeze_assessment": {
-            "timeline_rule": "NO",
-            "reference_rule": "NO",
-            "tolerance": "NO",
+            "timeline_rule": "YES_PARAMETERIZED_EXACT_RATIONAL",
+            "reference_rule": "YES_REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING",
+            "tolerance": "YES_PARAMETERIZED_INCLUSIVE_CAPTURE_TIME_ERROR",
             "rounding": "YES",
             "parquet_schema": "YES",
             "parquet_physical_layout": "NO",
@@ -327,6 +329,7 @@ def _media_evidence(
                     "synthetic_invalid_frame_indices": sorted(
                         stream.spec.invalid_source_frame_indices
                     ),
+                    "time_mapping": _time_mapping_payload(stream),
                 }
             )
         result.append(
@@ -380,13 +383,75 @@ def _rounding_evidence() -> dict[str, Any]:
     }
 
 
+def _time_mapping_evidence(
+    captures: tuple[CaptureSpec, ...],
+    streams_by_capture: dict[str, dict[int, ProbedStream]],
+) -> dict[str, Any]:
+    offset_capture = _capture(captures, "case_f_cross_camera_offset")
+    offset_slots = build_frame_slots(
+        offset_capture,
+        streams_by_capture[offset_capture.name],
+        MEASUREMENT_PROFILE,
+    )
+    drift_capture = _capture(captures, "case_g_affine_drift")
+    drift_slots = build_frame_slots(
+        drift_capture,
+        streams_by_capture[drift_capture.name],
+        MEASUREMENT_PROFILE,
+    )
+    camera_two_at_zero = next(
+        slot for slot in offset_slots if slot.camera_number == 2 and slot.capture_timestamp_ns == 0
+    )
+    camera_two_at_one_second = next(
+        slot
+        for slot in drift_slots
+        if slot.camera_number == 2 and slot.capture_timestamp_ns == 1_000_000_000
+    )
+    untrusted_streams = dict(streams_by_capture[offset_capture.name])
+    untrusted = untrusted_streams[2]
+    untrusted_streams[2] = replace(untrusted, spec=replace(untrusted.spec, time_mapping=None))
+    rejection_code = None
+    try:
+        build_frame_slots(offset_capture, untrusted_streams, MEASUREMENT_PROFILE)
+    except SynchronizationUnavailableError as error:
+        rejection_code = error.code
+    return {
+        "algorithm": [
+            "inverse_map_capture_target_to_source_time",
+            "nearest_source_pts_with_deterministic_tie_break",
+            "forward_map_selected_source_frame_to_capture_time",
+            "sync_error_ns_equals_mapped_capture_time_minus_target_capture_time",
+        ],
+        "offset_case": {
+            "camera_2_anchor_capture_ns": 80_000_000,
+            "camera_2_capture_zero_state": camera_two_at_zero.frame_state,
+            "camera_2_capture_zero_reason": camera_two_at_zero.frame_reason_code,
+            "summary": summarize_slots(offset_slots),
+        },
+        "drift_case": {
+            "camera_2_drift_ppm": 1_000,
+            "camera_2_anchor_count": 2,
+            "target_capture_timestamp_ns": camera_two_at_one_second.capture_timestamp_ns,
+            "selected_source_pts_ns": camera_two_at_one_second.source_pts_ns,
+            "sync_error_ns": camera_two_at_one_second.sync_error_ns,
+            "summary": summarize_slots(drift_slots),
+        },
+        "untrusted_time_basis_rejection_code": rejection_code,
+    }
+
+
 def _reference_candidates(captures: tuple[CaptureSpec, ...]) -> list[dict[str, Any]]:
     return [
         {
-            "candidate": "SYNTHETIC_EXPLICIT_CAPTURE_CLOCK",
+            "candidate": "TRUSTED_STREAM_TO_CAPTURE_MAPPING",
             "available_cases": len(captures),
             "total_cases": len(captures),
-            "limitation": "fixture truth is not evidence that the edge has a verified common clock",
+            "contract": (
+                "every present stream requires an explicit trusted common-clock or anchor mapping"
+            ),
+            "limitation": (
+                "synthetic truth validates mapping semantics, not the production anchor source"
+            ),
         },
         {
             "candidate": "LOWEST_EXPECTED_CAMERA_NUMBER_STREAM",
@@ -398,7 +463,7 @@ def _reference_candidates(captures: tuple[CaptureSpec, ...]) -> list[dict[str, A
             "total_cases": len(captures),
             "limitation": (
                 "all G0 fixtures happen to contain Camera 1; "
-                "missing-reference failover was not validated"
+                "reference selection remains a production profile parameter"
             ),
         },
         {
@@ -410,6 +475,21 @@ def _reference_candidates(captures: tuple[CaptureSpec, ...]) -> list[dict[str, A
             ),
         },
     ]
+
+
+def _time_mapping_payload(stream: ProbedStream) -> dict[str, Any] | None:
+    mapping = stream.spec.time_mapping
+    if mapping is None:
+        return None
+    return {
+        "anchor_source_ns": mapping.anchor_source_ns,
+        "anchor_capture_ns": mapping.anchor_capture_ns,
+        "drift_ppm": (None if mapping.drift_ppm is None else _fraction_payload(mapping.drift_ppm)),
+        "method": mapping.method,
+        "source": mapping.source,
+        "anchor_count": mapping.anchor_count,
+        "trusted": mapping.trusted,
+    }
 
 
 def _environment() -> dict[str, Any]:

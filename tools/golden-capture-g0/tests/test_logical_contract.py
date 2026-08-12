@@ -23,6 +23,8 @@ def test_synchronized_frame_contract_matches_parquet_logical_columns(
 
     assert list(properties) == canonical_schema().names
     assert set(cast(list[str], contract["required"])) == set(canonical_schema().names)
+    sync_error = cast(dict[str, Any], properties["sync_error_ns"])
+    assert "mapped_capture_time(source_frame)" in str(sync_error["description"])
 
     capture = golden_data.captures["case_d_local_gap_and_invalid"]
     slots = build_frame_slots(

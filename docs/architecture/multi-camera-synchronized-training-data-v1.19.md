@@ -1,13 +1,13 @@
 # 固定多相机同步逐帧训练数据技术设计（V1.19 草案）
 
-> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.3<br>
-> 状态：草案；尚非当前规范，不授权开始 V1.19 编码  
+> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.4<br>
+> 状态：草案；S1 逻辑 Contract READY，授权后续 B/S2 仅按批准 profile 开发，本文不授权真实生产同步<br>
 > 日期：2026-08-12  
 > 对齐需求：[V1.19 需求草案](../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)  
 > G0 证据：[V1.19 G0 Golden Capture 验证报告](../validation/v1.19-g0-golden-capture.md)
 > 当前正式设计：[V1.18 手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)  
 > 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](./asynchronous-job-protocol.md)、[领域模型与数据所有权](./domain-model-and-data-ownership.md)
-> 修订说明：DRAFT.3 依据 G0 冻结有理数 half-even 时间换算、nearest tie-break、Canonical logical row v1、排序和 provenance；timeline rate、reference、tolerance 数值、正式同步 profile、Parquet 物理布局和 Worker 容量仍为 `PENDING`，因此尚不授权 S2。
+> 修订说明：DRAFT.4 依据 G0 A.1 冻结跨相机 anchor/offset/drift 正反仿射映射、Capture 域 `sync_error_ns` 和无可信时基拒绝规则。timeline rate、reference 来源、tolerance 数值、Parquet 物理布局和 Worker 容量继续作为版本化生产 profile/部署参数 `PENDING`，不再阻塞参数化 B/S2；没有批准的生产 profile 时只能运行 `TEST/G0`。
 
 ## 1. 设计结论
 
@@ -251,6 +251,7 @@ expected camera members and camera_number
 each CameraStream ID / ClipAsset ID / raw SHA-256 / size / content type
 each accepted MediaReport ID / input digest / timing digest
 edge-declared clock observations with explicit source
+each trusted anchor_source_ns / anchor_capture_ns / drift_ppm / method / source / anchor_count
 selected sync profile key + SHA-256
 algorithm key/version
 ```
@@ -265,23 +266,26 @@ algorithm key/version
 
 本节给出经 Golden Capture 验证的算法形状和仍待确认的生产参数。方向是“基于媒体 PTS 与获批准 offset/drift/anchor 的固定有理数时间步 + 有误差记录的邻近帧映射”；它支持固定 FPS、不同 FPS 和 VFR，不使用文件数组 index、时间邻近猜测或未经批准的图像内容对齐。
 
-G0 后以下内容仍为 `PENDING`：
+以下生产选择仍为 `PENDING`，但它们是版本化 profile 参数，不得硬编码，也不阻塞参数化同步
+pipeline 的实现：
 
 ```text
 algorithm_key / algorithm_version
 timeline rate/step 的具体值
 allowed_tolerance_ns
 warning/reject tolerance
-reference clock/stream rule
-capture-sync profile key/version
+reference clock/stream 的具体来源和降级选择
+production capture-sync profile key/version
 ```
 
-G0 已冻结：有理数 PTS/timeline/affine 计算使用 `ROUND_HALF_EVEN`；每个 timeline position 从
+G0 A.1 已冻结：有理数 PTS/timeline/affine 计算使用 `ROUND_HALF_EVEN`；每个 timeline position 从
 `origin + exact rational index × step` 独立换算，禁止反复累加已舍入的整数 interval；nearest
 同误差按 earlier PTS、较小 source frame index、较小 same-PTS ordinal 消歧；
+先反向映射 Capture target 到 source time、选择最近 PTS、再正向映射选中帧；
+`sync_error_ns = mapped_capture_time(source_frame) - target_capture_timestamp_ns`，且
 `abs(sync_error_ns) <= allowed_tolerance_ns` 才允许 `PRESENT`。最终参数值进入服务器批准且有
-摘要的 profile；调用方始终不能提交任意算法参数。生产 rate/reference/tolerance 未冻结，因此
-正式 profile v1 仍为 `PENDING`。
+摘要的 profile；调用方始终不能提交任意算法参数。正式生产 profile v1 仍为 `PENDING`，但
+`TEST/G0` profile 足以支持 B/S2 开发验证，不得用于真实生产数据。
 
 ### 6.2 媒体时间
 
@@ -310,9 +314,25 @@ t_capture_ns =
 
 只有一个可靠锚点时 `drift_ppm = null`，计算按 offset-only 规则执行。多锚点拟合必须保存方法、残差、异常点规则和测量误差。
 
+选择源帧时使用精确有理数反向映射：
+
+```text
+target_source_ns =
+    anchor_source_pts_ns
+    + (target_capture_timestamp_ns - anchor_capture_ns) / scale
+```
+
+在 source PTS 上执行 nearest 和 tie-break 后，再用正向映射计算选中帧的 Capture 时间与
+`sync_error_ns`。禁止直接用归一化 `source_pts_ns` 与 Capture target 相减；逐路归一到首帧只定义
+各自 stream 原点，不证明这些首帧同时发生。
+
 ### 6.4 Reference 与时间轴边界候选
 
-reference 可以来自可靠公共 Capture clock，也可以来自一条获批准的已验证 stream。选择哪一种、stream 的选择优先级以及 reference 缺失时的处理均为 `PENDING`；“最小可用 `camera_number`”只能作为 Golden Capture 的对照候选，不能在评审前成为正式规则。最终选择必须写入 revision，不能在页面查询时重新计算。
+reference 可以来自可靠公共 Capture clock，也可以来自一条获批准的已验证 stream。Contract
+冻结为：每一路实际 stream 必须具有到 Capture 时间的可信映射；没有可信 common clock/anchor
+时以稳定原因拒绝同步，绝不默认各路首帧同时发生。选择哪一种生产来源、stream 的选择优先级
+以及 reference 缺失时是否允许 profile 内的已批准降级仍为 `PENDING`；“最小可用
+`camera_number`”不成为默认规则。最终选择必须写入 revision，不能在页面查询时重新计算。
 
 时间轴采用已冻结的有理数换算形状，但 rate/step 具体值仍为 `PENDING`：
 
@@ -326,19 +346,22 @@ sync_frame_index(i) = i, i >= 0
 revision/profile 必须保存准确的 rate/step 分子、分母。只有 step 可被整数纳秒精确表达时才可仅
 保存 `timeline_interval_ns`；G0 的 30 Hz `100,000,000/3 ns` 证明该字段不能作为通用唯一事实。
 
-无论最终选择何种 reference，都不得使用服务器接收时间补齐。reference 不可用时是失败、降级还是改用另一个获批准来源，必须由 Golden Capture 结果和版本化 profile 冻结。
+无论最终选择何种 reference，都不得使用服务器接收时间补齐。reference 不可用时只能失败，
+或改用 profile 中另一个能为每路提供可信映射的已批准来源；不能降级为逐路首帧对齐。
 
 ### 6.5 Frame 选择规则与待确认参数
 
-G0 已用以下 nearest-frame 流程完成对照：
+G0 A.1 已用以下 nearest-frame 流程完成对照：
 
 1. 缺少 CameraStream：生成 `MISSING`；
 2. 将目标 Capture 时间反向映射到 source time；
 3. 在该 stream 中选择绝对误差最小的可展示 PTS；
 4. 同误差按 earlier PTS、较小 source frame index、较小 same-PTS ordinal 选择；
-5. `abs(sync_error_ns) > allowed_tolerance_ns`：生成 `MISSING`；等于边界仍允许 `PRESENT`；
-6. 命中媒体位置但解码/PTS 校验失败：生成 `INVALID` 和稳定原因码；
-7. 其余生成 `PRESENT`，保存源帧定位和带符号 `sync_error_ns`。
+5. 把选中 source frame 正向映射回 Capture time，并计算
+   `sync_error_ns = mapped_capture_time - target_capture_timestamp_ns`；
+6. `abs(sync_error_ns) > allowed_tolerance_ns`：生成 `MISSING`；等于边界仍允许 `PRESENT`；
+7. 命中媒体位置但解码/PTS 校验失败：生成 `INVALID` 和稳定原因码；
+8. 其余生成 `PRESENT`，保存源帧定位和带符号 `sync_error_ns`。
 
 G0 已验证 nearest-frame、tie-breaker 和边界包含关系；tolerance 数值未冻结。其他已冻结不变量为：误差必须记录；超出获批准误差时明确 `MISSING`；禁止线性插帧、静默复用上一帧/下一帧、压缩 `sync_frame_index` 或改变 Camera 编号。
 
@@ -397,7 +420,7 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 | `source_pts_ordinal` | INT32 | 是 | 同 PTS 多帧时消歧 |
 | `frame_state` | UTF8 enum | 否 | `PRESENT/MISSING/INVALID` |
 | `frame_reason_code` | UTF8 | 是 | `INVALID` 必填，`MISSING` 可记录稳定原因 |
-| `sync_error_ns` | INT64 | 是 | `PRESENT` 必填；带符号 |
+| `sync_error_ns` | INT64 | 是 | `PRESENT` 必填；`mapped_capture_time(source_frame) - target_capture_timestamp_ns`，带符号 |
 | `hand_detection_state` | UTF8 enum | 否 | `HANDS_DETECTED/NO_DETECTION/FAILED/NOT_RUN` |
 | `ai_job_id` | UTF8 UUID | 是 | 实际运行 AI 时填写 |
 | `candidate_count` | INT32 | 否 | 默认 0；最多 2 |
@@ -729,7 +752,7 @@ capture_sync_lease_recoveries_total
 - RabbitMQ backlog、lease 超时和恢复时间；
 - P1 多视频浏览器解码和 UI 对齐误差；该项不阻塞核心 P0 数据闭环。
 
-没有这些测量时，timeline rate、tolerance、page limit、索引/row group、并发、超时和保留期继续为 `PENDING`。
+没有这些测量时，生产 timeline rate/tolerance、page limit、索引/row group、并发、超时和保留期继续为 `PENDING`，不能发布相应生产 profile 或容量承诺；这些部署/业务值不阻塞参数化 B/S2 代码。
 
 ### 14.5 草案需求追踪
 
@@ -756,8 +779,8 @@ capture_sync_lease_recoveries_total
 | 顺序 | 改动 | 完成门槛 |
 | --- | --- | --- |
 | G0 Golden Capture | 使用一次性、非生产验证工具比较时间轴、reference、tolerance、舍入、索引/row group 和容量候选 | 保存合成输入、理论真值、测试环境、测量结果和推荐结论；不创建生产表或正式 API |
-| S1 Domain/Contract | 需求/技术评审、OpenAPI 草案、事件/profile、Parquet Schema、ADR（如需新依赖） | G0 支持的算法/profile/Schema 获批准；仍无证据的值保持 `PENDING` 并阻止相关实现 |
-| S2 Sync index | `assetcapture` job/revision、Worker PTS mapping、artifact 注册 | Golden Capture 同步矩阵与重试闭环通过 |
+| S1 Domain/Contract | 需求/技术评审、参数化 profile 形状、Canonical logical Schema、ADR（如需新依赖） | G0 支持的算法/Schema 获批准；生产参数无证据时保持 `PENDING`，但不阻塞参数化实现 |
+| B / S2 Sync pipeline | `CaptureSession → CaptureSyncJob → SyncRevision → profile-driven PTS/anchor mapping → Frame Slot → Canonical Parquet` | Golden Capture A.1 通过；仅允许批准 profile，生产 profile 未批准时限 `TEST/G0` |
 | S3 Canonical artifact | 完整 Schema、逻辑/物理摘要、兼容性验证 | 相同冻结输入可复现，不静默覆盖 |
 | S4 Artifact provenance | MP4/Frame/Sync Revision 及可选 AI/Annotation 只读关联 | 任一结构化行端到端追溯通过 |
 | S5 P0-late minimum query | timeline/frames query port、有界数据范围读取、项目隔离 | 核心 P0 完成；稳定分页、revision 绑定和容量验证通过 |
@@ -781,18 +804,23 @@ capture_sync_lease_recoveries_total
 
 ## 17. 设计冻结清单
 
-进入 S2 生产实现前必须由 G0 和 S1 关闭以下适用的 `PENDING`：
+S1 逻辑 Contract 已 `READY`。进入 B/S2 时，算法参数全部从不可变、带摘要的 SyncProfile 获取，
+不得硬编码 `30 Hz`、`20 ms` 或默认 reference。生产 profile 未批准时只允许 `TEST/G0` 输入，
+不得开放真实生产同步。下列 `PENDING` 分别阻止对应生产 profile、部署承诺或后续切片，而不再
+整体阻止 B/S2 参数化代码：
 
 | 决策 | 所需证据 | Owner |
 | --- | --- | --- |
-| timeline interval/rate | Golden Capture 的源 FPS/VFR 与训练用途 | 产品 + 算法 + 数据工程 |
-| reference 选择 | 相机角色、缺路概率和共同 clock 能力 | 产品 + 边端 + 算法 |
-| allowed/warning/reject tolerance | 同步误差分布与标注边界容忍度 | 算法 + 标注负责人 |
-| clock/anchor/drift 来源 | 边端协议、媒体探测和误差测量 | 边端 + 平台 |
+| production timeline interval/rate | Golden Capture 的源 FPS/VFR 与训练用途 | 生产 SyncProfile |
+| production reference 选择 | 相机角色、缺路概率和共同 clock 能力 | 生产 SyncProfile；无可信映射始终拒绝 |
+| production allowed/warning/reject tolerance | 同步误差分布与标注边界容忍度 | 生产 SyncProfile |
+| production clock/anchor/drift 来源 | 边端协议、媒体探测和误差测量 | 生产 SyncProfile |
 | Parquet writer/Schema/row group | Python/Java 兼容和容量基准 | 数据工程 + 平台 |
 | Frame API page/window | 候选索引策略的查询放大与 Web 场景 | 后端 + Web |
 | Worker lease/retry/concurrency | P95 时长和故障注入 | 平台运维 |
 | artifact retention | 数据用途、容量和治理要求 | 数据负责人 + governance |
 | Web UI 对齐误差 | 目标浏览器与硬件解码测试 | Web + QA |
 
-如任一值没有证据，保留 `PENDING` 并阻止对应 Contract/实现冻结，不以示例值代替批准结论。P1 专属的 Web UI 对齐误差不阻塞核心 P0，但必须在开始 S6 前关闭。
+如任一值没有证据，保留 `PENDING` 并阻止对应生产 profile、容量承诺或后续切片，不以示例值
+代替批准结论。它不推翻已冻结的参数化逻辑 Contract。P1 专属的 Web UI 对齐误差不阻塞核心
+P0，但必须在开始 S6 前关闭。

@@ -13,6 +13,27 @@ Pattern = Literal["CFR", "GAP", "VFR"]
 
 
 @dataclass(frozen=True, slots=True)
+class StreamTimeMapping:
+    anchor_source_ns: int
+    anchor_capture_ns: int
+    drift_ppm: Fraction | None
+    method: str
+    source: str
+    anchor_count: int
+    trusted: bool
+
+    def __post_init__(self) -> None:
+        if self.anchor_count < 1:
+            raise ValueError("time mapping anchor_count must be positive")
+        if not self.method or not self.source:
+            raise ValueError("time mapping method and source must be explicit")
+        if self.drift_ppm is not None and self.anchor_count < 2:
+            raise ValueError("drift_ppm requires at least two anchors")
+        if self.drift_ppm is not None and self.drift_ppm <= -1_000_000:
+            raise ValueError("time mapping scale must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class StreamSpec:
     camera_number: int
     camera_stream_id: str
@@ -21,6 +42,7 @@ class StreamSpec:
     source_rate: Fraction
     pattern: Pattern
     pts_offset_seconds: Fraction
+    time_mapping: StreamTimeMapping | None
     invalid_source_frame_indices: frozenset[int] = field(default_factory=frozenset)
     no_detection_source_frame_indices: frozenset[int] = field(default_factory=frozenset)
 
@@ -63,7 +85,7 @@ class ProbedStream:
 class SyncProfile:
     timeline_rate: Fraction
     allowed_tolerance_ns: int
-    reference_rule: str = "SYNTHETIC_EXPLICIT_CAPTURE_CLOCK"
+    reference_rule: str = "REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING"
     rounding_rule: str = "ROUND_HALF_EVEN"
     tie_breaker: str = "EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL"
 
@@ -135,6 +157,7 @@ def _stream_spec(value: dict[str, Any]) -> StreamSpec:
         source_rate=Fraction(str(value["source_rate"])),
         pattern=cast(Pattern, pattern),
         pts_offset_seconds=Fraction(str(value["pts_offset_seconds"])),
+        time_mapping=_time_mapping(value.get("time_mapping")),
         invalid_source_frame_indices=frozenset(
             int(index) for index in cast(list[int], value.get("invalid_source_frame_indices", []))
         ),
@@ -142,6 +165,22 @@ def _stream_spec(value: dict[str, Any]) -> StreamSpec:
             int(index)
             for index in cast(list[int], value.get("no_detection_source_frame_indices", []))
         ),
+    )
+
+
+def _time_mapping(value: object) -> StreamTimeMapping | None:
+    if value is None:
+        return None
+    mapping = cast(dict[str, Any], value)
+    drift_value = mapping.get("drift_ppm")
+    return StreamTimeMapping(
+        anchor_source_ns=int(mapping["anchor_source_ns"]),
+        anchor_capture_ns=int(mapping["anchor_capture_ns"]),
+        drift_ppm=None if drift_value is None else Fraction(str(drift_value)),
+        method=str(mapping["method"]),
+        source=str(mapping["source"]),
+        anchor_count=int(mapping["anchor_count"]),
+        trusted=bool(mapping["trusted"]),
     )
 
 

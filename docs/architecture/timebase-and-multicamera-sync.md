@@ -2,7 +2,7 @@
 
 > 文档状态：P0 详细设计（评审稿）  
 > 适用数据：多相机 RGB 视频；深度、IR、点云和三维标定不属于 P0  
-> 最后更新：2026-07-14
+> 最后更新：2026-08-12
 
 ## 1. 目标
 
@@ -106,6 +106,17 @@ time_offset_ms_at_origin =
 ```
 
 该派生值不能替代锚点字段作为事实来源。
+
+帧选择必须先把 Capture/session target 精确反向映射到 stream time，在源 PTS 中选择最近帧，
+再把选中帧正向映射回 Capture/session time。同步误差定义为：
+
+```text
+sync_error = mapped_session_time(selected_source_frame) - target_session_time
+```
+
+不得直接用归一化 stream PTS 减 session target。每路 `pts_origin` 归零只建立该 stream 的相对
+时间，不证明不同 stream 的首帧同时发生。没有可信 common clock 或 anchor 映射时属于 S0，
+不具备多机位同步条件；不得以首帧对齐静默降级。
 
 ### 4.2 drift 可用条件
 

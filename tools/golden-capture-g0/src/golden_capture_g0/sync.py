@@ -16,6 +16,7 @@ from golden_capture_g0.model import (
     HandDetectionState,
     ProbedStream,
     SourceFrame,
+    StreamTimeMapping,
     SyncProfile,
 )
 from golden_capture_g0.rational import round_half_even
@@ -26,6 +27,14 @@ SYNTHETIC_MODEL_SHA256 = hashlib.sha256(b"v1.19-g0-synthetic-no-detection-model"
 SYNTHETIC_AI_PROFILE_SHA256 = hashlib.sha256(b"v1.19-g0-synthetic-no-detection-profile").digest()
 
 
+class SynchronizationUnavailableError(ValueError):
+    code = "TRUSTED_STREAM_TO_CAPTURE_MAPPING_REQUIRED"
+
+    def __init__(self, camera_number: int) -> None:
+        self.camera_number = camera_number
+        super().__init__(f"{self.code}: camera_number={camera_number}")
+
+
 def build_frame_slots(
     capture: CaptureSpec,
     streams: dict[int, ProbedStream],
@@ -34,6 +43,10 @@ def build_frame_slots(
     unexpected = set(streams) - set(capture.expected_camera_numbers)
     if unexpected:
         raise ValueError(f"unexpected camera numbers: {sorted(unexpected)}")
+    for camera_number, actual_stream in sorted(streams.items()):
+        mapping = actual_stream.spec.time_mapping
+        if mapping is None or not mapping.trusted:
+            raise SynchronizationUnavailableError(camera_number)
     slots: list[FrameSlot] = []
     for sync_frame_index, capture_timestamp_ns in enumerate(
         build_timeline(capture.duration_seconds, profile.timeline_rate)
@@ -106,6 +119,7 @@ def input_manifest_sha256(capture: CaptureSpec, streams: dict[int, ProbedStream]
                 "size_bytes": stream.size_bytes,
                 "time_base": _fraction_payload(stream.time_base),
                 "pts_origin": stream.pts_origin,
+                "time_mapping": _time_mapping_payload(stream.spec.time_mapping),
                 "frames": [
                     {
                         "source_frame_index": frame.source_frame_index,
@@ -218,8 +232,13 @@ def _map_stream_slot(
     stream: ProbedStream,
     tolerance_ns: int,
 ) -> FrameSlot:
-    frame = _nearest_frame(stream.frames, capture_timestamp_ns)
-    error_ns = frame.source_pts_ns - capture_timestamp_ns
+    mapping = stream.spec.time_mapping
+    if mapping is None or not mapping.trusted:
+        raise SynchronizationUnavailableError(stream.spec.camera_number)
+    target_source_ns = map_capture_to_source_time(capture_timestamp_ns, mapping)
+    frame = _nearest_frame(stream.frames, target_source_ns)
+    mapped_capture_ns = map_source_to_capture_time(frame.source_pts_ns, mapping)
+    error_ns = mapped_capture_ns - capture_timestamp_ns
     if abs(error_ns) > tolerance_ns:
         return _slot(
             capture,
@@ -334,7 +353,29 @@ def _slot(
     )
 
 
-def _nearest_frame(frames: tuple[SourceFrame, ...], target_ns: int) -> SourceFrame:
+def map_source_to_capture_time(source_pts_ns: int, mapping: StreamTimeMapping) -> int:
+    return mapping.anchor_capture_ns + round_half_even(
+        Fraction(source_pts_ns - mapping.anchor_source_ns) * _mapping_scale(mapping)
+    )
+
+
+def map_capture_to_source_time(capture_timestamp_ns: int, mapping: StreamTimeMapping) -> Fraction:
+    return Fraction(mapping.anchor_source_ns) + Fraction(
+        capture_timestamp_ns - mapping.anchor_capture_ns
+    ) / _mapping_scale(mapping)
+
+
+def _mapping_scale(mapping: StreamTimeMapping) -> Fraction:
+    drift_ppm = mapping.drift_ppm if mapping.drift_ppm is not None else Fraction(0)
+    scale = Fraction(1) + drift_ppm / 1_000_000
+    if scale <= 0:
+        raise ValueError("time mapping scale must be positive")
+    return scale
+
+
+def _nearest_frame(frames: tuple[SourceFrame, ...], target_ns: Fraction) -> SourceFrame:
+    if not frames:
+        raise ValueError("stream must contain at least one source frame")
     timestamps = [frame.source_pts_ns for frame in frames]
     insertion = bisect.bisect_left(timestamps, target_ns)
     candidate_indices = {max(0, insertion - 1), min(len(frames) - 1, insertion)}
@@ -363,6 +404,20 @@ def _ceil_fraction(value: Fraction) -> int:
 
 def _fraction_payload(value: Fraction) -> dict[str, int]:
     return {"numerator": value.numerator, "denominator": value.denominator}
+
+
+def _time_mapping_payload(mapping: StreamTimeMapping | None) -> dict[str, object] | None:
+    if mapping is None:
+        return None
+    return {
+        "anchor_source_ns": mapping.anchor_source_ns,
+        "anchor_capture_ns": mapping.anchor_capture_ns,
+        "drift_ppm": (None if mapping.drift_ppm is None else _fraction_payload(mapping.drift_ppm)),
+        "method": mapping.method,
+        "source": mapping.source,
+        "anchor_count": mapping.anchor_count,
+        "trusted": mapping.trusted,
+    }
 
 
 def _sha256_json(value: object) -> str:

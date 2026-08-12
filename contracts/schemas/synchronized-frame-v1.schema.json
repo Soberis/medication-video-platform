@@ -94,7 +94,7 @@
     },
     "sync_error_ns": {
       "type": ["integer", "null"],
-      "description": "Signed source_pts_ns minus capture_timestamp_ns for a PRESENT mapping."
+      "description": "Signed mapped_capture_time(source_frame) minus target capture_timestamp_ns for a PRESENT mapping. The stream-to-Capture anchor/offset/drift mapping is frozen provenance."
     },
     "hand_detection_state": {
       "type": "string",

@@ -1,5 +1,5 @@
 {
-  "fixture_version": "v1.19-g0.synthetic.v1",
+  "fixture_version": "v1.19-g0.synthetic.v2",
   "artifact_created_at": "2026-08-12T00:00:00Z",
   "cases": [
     {
@@ -17,7 +17,16 @@
           "file_name": "alpha-unrelated-name.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 1,
@@ -26,7 +35,16 @@
           "file_name": "zeta-uploaded-last.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 3,
@@ -35,7 +53,16 @@
           "file_name": "middle-file.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         }
       ]
     },
@@ -54,7 +81,16 @@
           "file_name": "first-in-manifest.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 1,
@@ -63,7 +99,16 @@
           "file_name": "not-camera-one.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 3,
@@ -72,7 +117,16 @@
           "file_name": "camera-three-without-number.mp4",
           "source_rate": "25/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         }
       ]
     },
@@ -91,7 +145,16 @@
           "file_name": "uploaded-before-reference.mp4",
           "source_rate": "25/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 1,
@@ -100,7 +163,16 @@
           "file_name": "reference-without-camera-name.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         }
       ]
     },
@@ -119,7 +191,16 @@
           "file_name": "gap-stream.mp4",
           "source_rate": "30/1",
           "pattern": "GAP",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 1,
@@ -128,7 +209,16 @@
           "file_name": "healthy-a.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "0"
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 2,
@@ -138,6 +228,15 @@
           "source_rate": "30/1",
           "pattern": "CFR",
           "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          },
           "invalid_source_frame_indices": [45],
           "no_detection_source_frame_indices": [30]
         }
@@ -158,7 +257,16 @@
           "file_name": "vfr-source.mp4",
           "source_rate": "30/1",
           "pattern": "VFR",
-          "pts_offset_seconds": "3"
+          "pts_offset_seconds": "3",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
         },
         {
           "camera_number": 1,
@@ -167,7 +275,108 @@
           "file_name": "cfr-source.mp4",
           "source_rate": "30/1",
           "pattern": "CFR",
-          "pts_offset_seconds": "3"
+          "pts_offset_seconds": "3",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_CAPTURE_CLOCK",
+            "anchor_count": 1,
+            "trusted": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "case_f_cross_camera_offset",
+      "capture_id": "10000000-0000-0000-0000-0000000000f1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000f1",
+      "capture_group_key": "g0-case-f",
+      "duration_seconds": "2",
+      "expected_camera_numbers": [1, 2],
+      "streams": [
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000f2",
+          "video_id": "40000000-0000-0000-0000-0000000000f2",
+          "file_name": "offset-camera-two-first.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "5",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 80000000,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_EVENT",
+            "anchor_count": 1,
+            "trusted": true
+          }
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000f1",
+          "video_id": "40000000-0000-0000-0000-0000000000f1",
+          "file_name": "offset-camera-one-second.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "2",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_EVENT",
+            "anchor_count": 1,
+            "trusted": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "case_g_affine_drift",
+      "capture_id": "10000000-0000-0000-0000-0000000000a7",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000a7",
+      "capture_group_key": "g0-case-g",
+      "duration_seconds": "4",
+      "expected_camera_numbers": [1, 2],
+      "streams": [
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000a7",
+          "video_id": "40000000-0000-0000-0000-0000000000a7",
+          "file_name": "drift-reference-second.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": null,
+            "method": "OFFSET_ONLY",
+            "source": "SYNTHETIC_COMMON_EVENT",
+            "anchor_count": 1,
+            "trusted": true
+          }
+        },
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000b7",
+          "video_id": "40000000-0000-0000-0000-0000000000b7",
+          "file_name": "drift-camera-first.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0",
+          "time_mapping": {
+            "anchor_source_ns": 0,
+            "anchor_capture_ns": 0,
+            "drift_ppm": "1000/1",
+            "method": "AFFINE_TWO_ANCHOR",
+            "source": "SYNTHETIC_TWO_ANCHOR_TRUTH",
+            "anchor_count": 2,
+            "trusted": true
+          }
         }
       ]
     }
