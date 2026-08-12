@@ -237,6 +237,11 @@ required_files=(
     'tools/hand-pose-poc/uv.lock'
     'tools/hand-pose-poc/README.md'
     'tools/hand-pose-poc/src/hand_pose_poc/cli.py'
+    'tools/golden-capture-g0/pyproject.toml'
+    'tools/golden-capture-g0/uv.lock'
+    'tools/golden-capture-g0/README.md'
+    'tools/golden-capture-g0/fixtures/golden-captures.json'
+    'tools/golden-capture-g0/src/golden_capture_g0/experiment.py'
     'docs/requirements/README.md'
     'docs/requirements/baselines/V1.14/配药视频数据管理平台需求文档_V1.14.md'
     'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md'
@@ -615,7 +620,7 @@ else
 fi
 
 python_projects=()
-for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/hand-pose-poc"; do
+for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/hand-pose-poc" "$PROJECT_ROOT/tools/golden-capture-g0"; do
     [[ -d "$python_search_root" ]] || continue
     while IFS= read -r -d '' python_project; do
         python_projects[${#python_projects[@]}]="$python_project"

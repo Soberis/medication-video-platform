@@ -1,0 +1,175 @@
+{
+  "fixture_version": "v1.19-g0.synthetic.v1",
+  "artifact_created_at": "2026-08-12T00:00:00Z",
+  "cases": [
+    {
+      "name": "case_a_complete_three_camera",
+      "capture_id": "10000000-0000-0000-0000-0000000000a1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000a1",
+      "capture_group_key": "g0-case-a",
+      "duration_seconds": "2",
+      "expected_camera_numbers": [1, 2, 3],
+      "streams": [
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000a2",
+          "video_id": "40000000-0000-0000-0000-0000000000a2",
+          "file_name": "alpha-unrelated-name.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000a1",
+          "video_id": "40000000-0000-0000-0000-0000000000a1",
+          "file_name": "zeta-uploaded-last.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 3,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000a3",
+          "video_id": "40000000-0000-0000-0000-0000000000a3",
+          "file_name": "middle-file.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        }
+      ]
+    },
+    {
+      "name": "case_b_missing_routes",
+      "capture_id": "10000000-0000-0000-0000-0000000000b1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000b1",
+      "capture_group_key": "g0-case-b",
+      "duration_seconds": "2",
+      "expected_camera_numbers": [1, 2, 3, 4, 5],
+      "streams": [
+        {
+          "camera_number": 5,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000b5",
+          "video_id": "40000000-0000-0000-0000-0000000000b5",
+          "file_name": "first-in-manifest.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000b1",
+          "video_id": "40000000-0000-0000-0000-0000000000b1",
+          "file_name": "not-camera-one.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 3,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000b3",
+          "video_id": "40000000-0000-0000-0000-0000000000b3",
+          "file_name": "camera-three-without-number.mp4",
+          "source_rate": "25/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        }
+      ]
+    },
+    {
+      "name": "case_c_different_fps",
+      "capture_id": "10000000-0000-0000-0000-0000000000c1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000c1",
+      "capture_group_key": "g0-case-c",
+      "duration_seconds": "2",
+      "expected_camera_numbers": [1, 2],
+      "streams": [
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000c2",
+          "video_id": "40000000-0000-0000-0000-0000000000c2",
+          "file_name": "uploaded-before-reference.mp4",
+          "source_rate": "25/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000c1",
+          "video_id": "40000000-0000-0000-0000-0000000000c1",
+          "file_name": "reference-without-camera-name.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        }
+      ]
+    },
+    {
+      "name": "case_d_local_gap_and_invalid",
+      "capture_id": "10000000-0000-0000-0000-0000000000d1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000d1",
+      "capture_group_key": "g0-case-d",
+      "duration_seconds": "3",
+      "expected_camera_numbers": [1, 2, 3],
+      "streams": [
+        {
+          "camera_number": 3,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000d3",
+          "video_id": "40000000-0000-0000-0000-0000000000d3",
+          "file_name": "gap-stream.mp4",
+          "source_rate": "30/1",
+          "pattern": "GAP",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000d1",
+          "video_id": "40000000-0000-0000-0000-0000000000d1",
+          "file_name": "healthy-a.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0"
+        },
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000d2",
+          "video_id": "40000000-0000-0000-0000-0000000000d2",
+          "file_name": "synthetic-invalid-marker.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "0",
+          "invalid_source_frame_indices": [45],
+          "no_detection_source_frame_indices": [30]
+        }
+      ]
+    },
+    {
+      "name": "case_e_vfr_nonzero_pts",
+      "capture_id": "10000000-0000-0000-0000-0000000000e1",
+      "sync_revision_id": "20000000-0000-0000-0000-0000000000e1",
+      "capture_group_key": "g0-case-e",
+      "duration_seconds": "3",
+      "expected_camera_numbers": [1, 2],
+      "streams": [
+        {
+          "camera_number": 2,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000e2",
+          "video_id": "40000000-0000-0000-0000-0000000000e2",
+          "file_name": "vfr-source.mp4",
+          "source_rate": "30/1",
+          "pattern": "VFR",
+          "pts_offset_seconds": "3"
+        },
+        {
+          "camera_number": 1,
+          "camera_stream_id": "30000000-0000-0000-0000-0000000000e1",
+          "video_id": "40000000-0000-0000-0000-0000000000e1",
+          "file_name": "cfr-source.mp4",
+          "source_rate": "30/1",
+          "pattern": "CFR",
+          "pts_offset_seconds": "3"
+        }
+      ]
+    }
+  ]
+}

@@ -1,12 +1,13 @@
 # 固定多相机同步逐帧训练数据技术设计（V1.19 草案）
 
-> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.2<br>
+> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.3<br>
 > 状态：草案；尚非当前规范，不授权开始 V1.19 编码  
 > 日期：2026-08-12  
 > 对齐需求：[V1.19 需求草案](../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)  
+> G0 证据：[V1.19 G0 Golden Capture 验证报告](../validation/v1.19-g0-golden-capture.md)
 > 当前正式设计：[V1.18 手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)  
 > 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](./asynchronous-job-protocol.md)、[领域模型与数据所有权](./domain-model-and-data-ownership.md)
-> 修订说明：DRAFT.2 收紧核心 P0；`AnnotationRevision.sync_revision_id` 改为条件可空引用；算法名、舍入、reference、Parquet 物理布局等在 Golden Capture 验证前均为设计候选而非冻结规范。
+> 修订说明：DRAFT.3 依据 G0 冻结有理数 half-even 时间换算、nearest tie-break、Canonical logical row v1、排序和 provenance；timeline rate、reference、tolerance 数值、正式同步 profile、Parquet 物理布局和 Worker 容量仍为 `PENDING`，因此尚不授权 S2。
 
 ## 1. 设计结论
 
@@ -50,9 +51,9 @@ video_id     = clip_asset_id
 
 现有标注和播放器规范以整数毫秒表达 `t_stream_ms`、`t_session_ms`；V1.19 Canonical Artifact 使用整数纳秒字段以避免交换格式丢失媒体时基信息。兼容规则为：
 
-- 同步计算内部使用有理数 PTS，最终按获批准的舍入规则转换为 `int64 ns`；
+- 同步计算内部使用有理数 PTS，最终按 G0 已验证的 `ROUND_HALF_EVEN` 转换为 `int64 ns`；
 - `_ns` 表示存储单位，不表示设备具备纳秒测量精度；必须同时保存 `time_basis_source`、`time_precision_ns` 或不确定度；
-- 现有 AnnotationRevision 继续使用整数毫秒，不做破坏性迁移；从同步时间到标注时间的舍入规则在 Golden Capture 验证前为 `PENDING`，获批准后进入 profile digest；
+- 现有 AnnotationRevision 继续使用整数毫秒，不做破坏性迁移；从同步纳秒到既有标注毫秒的投影规则是独立决策，本轮没有 AnnotationRevision 往返证据，继续为 `PENDING` 并进入后续 profile digest；
 - 原始 `pts`、`time_base_num`、`time_base_den` 和同 PTS ordinal 保存在输入/工件 manifest 中，不能只保留换算后值。
 
 ### 2.3 现有数据集能力
@@ -171,7 +172,8 @@ reference_clock_source
 time_basis_source
 capture_origin_utc nullable
 time_precision_ns nullable
-timeline_interval_ns
+timeline_rate_numerator / timeline_rate_denominator
+timeline_step_numerator_ns / timeline_step_denominator
 allowed_tolerance_ns
 algorithm_key / algorithm_version
 sync_profile_key / sync_profile_sha256
@@ -257,26 +259,29 @@ algorithm key/version
 
 输入 manifest 使用字段排序、UTF-8、LF 和无多余空白的规范化序列计算 SHA-256。Worker 返回的 `input_manifest_sha256` 必须与 job 一致；任何媒体摘要、snapshot、profile 或算法变化都拒绝结果提交。
 
-## 6. 同步算法设计候选（Golden Capture 验证前）
+## 6. 同步算法设计（G0 已验证部分规则）
 
 ### 6.1 支持范围
 
-本节给出用于 Golden Capture 的候选算法族，不冻结正式 `algorithm_key`、舍入、reference 或参数。候选方向是“基于媒体 PTS 与获批准 offset/drift/anchor 的固定间隔时间轴 + 有误差记录的邻近帧映射”；它必须支持固定 FPS、不同 FPS 和 VFR，不使用文件数组 index、时间邻近猜测或未经批准的图像内容对齐。
+本节给出经 Golden Capture 验证的算法形状和仍待确认的生产参数。方向是“基于媒体 PTS 与获批准 offset/drift/anchor 的固定有理数时间步 + 有误差记录的邻近帧映射”；它支持固定 FPS、不同 FPS 和 VFR，不使用文件数组 index、时间邻近猜测或未经批准的图像内容对齐。
 
-以下内容在 Golden Capture 测量和设计评审前均为 `PENDING`：
+G0 后以下内容仍为 `PENDING`：
 
 ```text
 algorithm_key / algorithm_version
-timeline_interval_ns
+timeline rate/step 的具体值
 allowed_tolerance_ns
 warning/reject tolerance
 reference clock/stream rule
-integer rounding rule
-tie-breaker
 capture-sync profile key/version
 ```
 
-最终值进入服务器批准且有摘要的 profile；调用方始终不能提交任意算法参数。
+G0 已冻结：有理数 PTS/timeline/affine 计算使用 `ROUND_HALF_EVEN`；每个 timeline position 从
+`origin + exact rational index × step` 独立换算，禁止反复累加已舍入的整数 interval；nearest
+同误差按 earlier PTS、较小 source frame index、较小 same-PTS ordinal 消歧；
+`abs(sync_error_ns) <= allowed_tolerance_ns` 才允许 `PRESENT`。最终参数值进入服务器批准且有
+摘要的 profile；调用方始终不能提交任意算法参数。生产 rate/reference/tolerance 未冻结，因此
+正式 profile v1 仍为 `PENDING`。
 
 ### 6.2 媒体时间
 
@@ -286,10 +291,10 @@ capture-sync profile key/version
 raw_pts
 time_base_num / time_base_den
 pts_ordinal
-source_pts_ns = round_profile((raw_pts - pts_origin) × time_base_num / time_base_den × 1e9)
+source_pts_ns = ROUND_HALF_EVEN((raw_pts - pts_origin) × time_base_num / time_base_den × 1e9)
 ```
 
-`round_profile` 的具体规则尚未冻结。`pts_origin`、舍入方式和重复 PTS 处理进入 profile。DTS 只作解码诊断；展示和同步使用 PTS。PTS 缺失、非单调、重复、回退和 gap 按现有时间基准规范生成明确质量证据。
+`pts_origin`、舍入方式和重复 PTS 处理进入 profile/manifest。DTS 只作解码诊断；展示和同步使用 PTS。PTS 缺失、非单调、重复、回退和 gap 按现有时间基准规范生成明确质量证据。
 
 ### 6.3 映射到 Capture 时间
 
@@ -300,37 +305,42 @@ scale = 1 + drift_ppm / 1_000_000
 
 t_capture_ns =
     anchor_capture_ns
-    + round_profile((source_pts_ns - anchor_source_pts_ns) × scale)
+    + ROUND_HALF_EVEN((source_pts_ns - anchor_source_pts_ns) × scale)
 ```
 
-`round_profile` 的具体规则为 `PENDING`。只有一个可靠锚点时 `drift_ppm = null`，计算按 offset-only 规则执行。多锚点拟合必须保存方法、残差、异常点规则和测量误差。
+只有一个可靠锚点时 `drift_ppm = null`，计算按 offset-only 规则执行。多锚点拟合必须保存方法、残差、异常点规则和测量误差。
 
 ### 6.4 Reference 与时间轴边界候选
 
 reference 可以来自可靠公共 Capture clock，也可以来自一条获批准的已验证 stream。选择哪一种、stream 的选择优先级以及 reference 缺失时的处理均为 `PENDING`；“最小可用 `camera_number`”只能作为 Golden Capture 的对照候选，不能在评审前成为正式规则。最终选择必须写入 revision，不能在页面查询时重新计算。
 
-以下固定间隔时间轴是验证候选，不是已冻结规范：
+时间轴采用已冻结的有理数换算形状，但 rate/step 具体值仍为 `PENDING`：
 
 ```text
-capture_timestamp_ns(i) = origin_ns + i × timeline_interval_ns
+capture_timestamp_ns(i) =
+    origin_ns
+    + ROUND_HALF_EVEN(i × timeline_step_numerator_ns / timeline_step_denominator)
 sync_frame_index(i) = i, i >= 0
 ```
 
+revision/profile 必须保存准确的 rate/step 分子、分母。只有 step 可被整数纳秒精确表达时才可仅
+保存 `timeline_interval_ns`；G0 的 30 Hz `100,000,000/3 ns` 证明该字段不能作为通用唯一事实。
+
 无论最终选择何种 reference，都不得使用服务器接收时间补齐。reference 不可用时是失败、降级还是改用另一个获批准来源，必须由 Golden Capture 结果和版本化 profile 冻结。
 
-### 6.5 Frame 选择候选与不变量
+### 6.5 Frame 选择规则与待确认参数
 
-Golden Capture 首轮可以用以下 nearest-frame 流程作对照：
+G0 已用以下 nearest-frame 流程完成对照：
 
 1. 缺少 CameraStream：生成 `MISSING`；
 2. 将目标 Capture 时间反向映射到 source time；
 3. 在该 stream 中选择绝对误差最小的可展示 PTS；
-4. 使用待验证的确定性 tie-breaker；
-5. 误差大于 `allowed_tolerance_ns`：生成 `MISSING`；
+4. 同误差按 earlier PTS、较小 source frame index、较小 same-PTS ordinal 选择；
+5. `abs(sync_error_ns) > allowed_tolerance_ns`：生成 `MISSING`；等于边界仍允许 `PRESENT`；
 6. 命中媒体位置但解码/PTS 校验失败：生成 `INVALID` 和稳定原因码；
 7. 其余生成 `PRESENT`，保存源帧定位和带符号 `sync_error_ns`。
 
-其中 nearest-frame、tie-breaker 和边界包含关系均未冻结。已冻结的不变量只有：误差必须记录；超出获批准误差时允许明确 `MISSING`；禁止线性插帧、静默复用上一帧/下一帧、压缩 `sync_frame_index` 或改变 Camera 编号。
+G0 已验证 nearest-frame、tie-breaker 和边界包含关系；tolerance 数值未冻结。其他已冻结不变量为：误差必须记录；超出获批准误差时明确 `MISSING`；禁止线性插帧、静默复用上一帧/下一帧、压缩 `sync_frame_index` 或改变 Camera 编号。
 
 ### 6.6 状态不变量
 
@@ -350,9 +360,9 @@ hand_detection_state = NOT_RUN
 
 V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确的时间换算和容忍窗口投影到 Frame Slot；匹配规则、窗口和 tie-breaker 进入 artifact schema/profile。映射不修改原 `CandidateAnnotation`。
 
-## 7. Canonical Parquet Schema 候选
+## 7. Canonical Logical Row V1 与 Parquet 候选
 
-本节冻结逻辑粒度、身份、状态和 provenance 需求，不冻结文件名、具体物理类型、压缩、dictionary、row group 或 writer/runtime。后者必须通过 Golden Capture 的跨语言兼容与容量测试后进入版本化 Schema/profile。
+本节与可执行 [`synchronized-frame-v1.schema.json`](../../contracts/schemas/synchronized-frame-v1.schema.json) 冻结逻辑粒度、身份、状态、空值、排序和 provenance。G0 的 Python/PyArrow 物理类型验证没有覆盖跨语言或目标规模，不冻结文件名、具体物理类型、压缩、dictionary、row group、partition 或 writer/runtime。
 
 ### 7.1 主表粒度与排序
 
@@ -368,11 +378,12 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 
 ### 7.2 字段
 
-以下物理类型均为候选；实现契约只采用 Golden Capture 验证后获批准的版本。
+字段存在性、可空性与逻辑规则已冻结；下表 Parquet 物理类型仍为候选，必须在目标规模、Java/
+跨语言和对象存储验证后另行批准。
 
 | 字段 | 候选 Parquet 逻辑类型 | 可空 | 逻辑规则 |
 | --- | --- | --- | --- |
-| `schema_version` | UTF8 | 否 | 候选值 `synchronized-frame.v1`，最终版本由 S1 冻结 |
+| `schema_version` | UTF8 | 否 | 逻辑契约值 `synchronized-frame.v1` |
 | `capture_id` | UTF8 UUID | 否 | 等于 `capture_session_id` |
 | `capture_group_key` | UTF8 | 是 | 外部显式归组存在时填写；平台本地上传可空 |
 | `sync_revision_id` | UTF8 UUID | 否 | 不可变同步修订 |
@@ -418,13 +429,19 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 
 ### 8.1 契约
 
-完成 Golden Capture 验证后，S1 才新增并冻结相应契约。以下名称是草案候选，不表示文件已经存在或版本已经批准：
+G0 后只新增并冻结了 Canonical logical row v1。正式同步事件和 profile 因生产参数仍
+`PENDING` 而不得创建；以下事件/profile 名称仍是草案候选：
 
 ```text
 contracts/events/capture-sync-job-v1.schema.json
 contracts/events/capture-sync-result-v1.schema.json
 contracts/events/capture-sync-dead-letter-v1.schema.json
 contracts/profiles/capture-sync-baseline-v1.json
+```
+
+当前已存在的逻辑契约：
+
+```text
 contracts/schemas/synchronized-frame-v1.schema.json
 ```
 
@@ -526,7 +543,8 @@ current_sync_revision_id
 latest_job_status
 time_basis_source
 capture_origin_utc
-timeline_interval_ns
+timeline_rate_numerator / timeline_rate_denominator
+timeline_step_numerator_ns / timeline_step_denominator
 sync_frame_count
 first_capture_timestamp_ns
 last_capture_timestamp_ns
