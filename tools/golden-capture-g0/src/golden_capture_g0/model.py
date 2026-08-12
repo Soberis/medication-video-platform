@@ -10,6 +10,11 @@ from typing import Any, Literal, cast
 FrameState = Literal["PRESENT", "MISSING", "INVALID"]
 HandDetectionState = Literal["HANDS_DETECTED", "NO_DETECTION", "FAILED", "NOT_RUN"]
 Pattern = Literal["CFR", "GAP", "VFR"]
+REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING = "REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING"
+ROUND_HALF_EVEN = "ROUND_HALF_EVEN"
+EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL = (
+    "EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,9 +90,21 @@ class ProbedStream:
 class SyncProfile:
     timeline_rate: Fraction
     allowed_tolerance_ns: int
-    reference_rule: str = "REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING"
-    rounding_rule: str = "ROUND_HALF_EVEN"
-    tie_breaker: str = "EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL"
+    reference_rule: str
+    rounding_rule: str
+    tie_breaker: str
+
+    def __post_init__(self) -> None:
+        if self.timeline_rate <= 0:
+            raise ValueError("timeline_rate must be positive")
+        if self.allowed_tolerance_ns < 0:
+            raise ValueError("allowed_tolerance_ns must not be negative")
+        if self.reference_rule != REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING:
+            raise ValueError("the frozen trusted stream-to-Capture reference rule is required")
+        if self.rounding_rule != ROUND_HALF_EVEN:
+            raise ValueError("the frozen ROUND_HALF_EVEN rule is required")
+        if self.tie_breaker != EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL:
+            raise ValueError("the frozen nearest-frame tie-breaker is required")
 
 
 @dataclass(frozen=True, slots=True)

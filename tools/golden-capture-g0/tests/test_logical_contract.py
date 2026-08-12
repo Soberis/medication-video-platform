@@ -9,9 +9,25 @@ from typing import Any, cast
 from conftest import GoldenData
 from jsonschema import Draft202012Validator
 
-from golden_capture_g0.model import FrameSlot, SyncProfile
+from golden_capture_g0.model import (
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    FrameSlot,
+    SyncProfile,
+)
 from golden_capture_g0.parquet_artifact import canonical_schema
 from golden_capture_g0.sync import build_frame_slots
+
+
+def _profile() -> SyncProfile:
+    return SyncProfile(
+        Fraction(30),
+        20_000_000,
+        REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+        ROUND_HALF_EVEN,
+        EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    )
 
 
 def test_synchronized_frame_contract_matches_parquet_logical_columns(
@@ -30,7 +46,7 @@ def test_synchronized_frame_contract_matches_parquet_logical_columns(
     slots = build_frame_slots(
         capture,
         golden_data.streams[capture.name],
-        SyncProfile(Fraction(30), 20_000_000),
+        _profile(),
     )
     validator = Draft202012Validator(contract)
     for slot in slots:
@@ -43,7 +59,7 @@ def test_contract_rejects_ai_conclusion_for_missing_slot(golden_data: GoldenData
     slots = build_frame_slots(
         capture,
         golden_data.streams[capture.name],
-        SyncProfile(Fraction(30), 20_000_000),
+        _profile(),
     )
     missing = next(slot for slot in slots if slot.frame_state == "MISSING")
     row = _logical_row(missing)

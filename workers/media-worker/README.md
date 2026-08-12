@@ -1,8 +1,15 @@
 # Media Worker
 
-最小媒体探测 Worker，只消费 `media-probe-job.v1`，不连接平台数据库。它通过 Core API
+最小媒体探测 Worker，同时提供独立的 Canonical artifact writer；不连接平台数据库。媒体探测路径只消费 `media-probe-job.v1`，通过 Core API
 取得 job-scoped 短期只读 URL，流式下载并独立复核大小和 SHA-256，再使用 FFprobe/FFmpeg
 提取媒体事实和执行完整视频流解码，最后按 `media-probe-result.v1` 提交结果。
+
+Canonical artifact writer 只接受调用方已经完成同步映射的 Frame Slot 输入，验证
+`contracts/schemas/synchronized-frame-v1.schema.json` 的逻辑约束，按
+`capture_id,sync_revision_id,sync_frame_index,camera_number` 规范排序后写出 Parquet、manifest
+和 provenance。它不计算 anchor/drift、timeline 或 tolerance，不连接 PostgreSQL，不创建同步
+revision/job，也不上传对象存储。默认 Parquet 物理布局是本地/测试用的非生产默认；生产布局和
+容量参数仍需单独批准。
 
 安全与运行边界：
 
@@ -25,6 +32,17 @@ $env:MEDIA_WORKER_BEARER_TOKEN='local-media-worker-bearer-token-do-not-reuse'
 $env:DATA_PROFILE='synthetic'
 uv run media-worker
 ```
+
+对已经冻结的合成 Frame Slot 输入，可直接在 Python 中调用：
+
+```python
+from medication_media_worker.artifact_writer import CanonicalArtifactWriter
+
+result = CanonicalArtifactWriter().write(input_data, "./out/synchronized-frames.parquet")
+```
+
+`result.manifest` 是最小 manifest 的内存表示；调用方可以将其以 JSON 保存为 sidecar。writer
+只产生调用方指定的本地输出，不执行业务状态提交。
 
 所需环境变量：
 

@@ -20,7 +20,15 @@ from golden_capture_g0.media import (
     sha256_file,
     verify_full_decode,
 )
-from golden_capture_g0.model import CaptureSpec, ProbedStream, SyncProfile, load_capture_specs
+from golden_capture_g0.model import (
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    CaptureSpec,
+    ProbedStream,
+    SyncProfile,
+    load_capture_specs,
+)
 from golden_capture_g0.parquet_artifact import (
     WriterOptions,
     bounded_read,
@@ -38,7 +46,13 @@ from golden_capture_g0.sync import (
     summarize_slots,
 )
 
-MEASUREMENT_PROFILE = SyncProfile(Fraction(30, 1), 20_000_000)
+MEASUREMENT_PROFILE = SyncProfile(
+    Fraction(30, 1),
+    20_000_000,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+)
 CANDIDATE_RATES = (Fraction(10, 1), Fraction(25, 1), Fraction(30, 1))
 CANDIDATE_TOLERANCES_NS = (10_000_000, 15_000_000, 20_000_000)
 
@@ -112,7 +126,13 @@ def _candidate_measurements(
     measurements: list[dict[str, Any]] = []
     for rate in CANDIDATE_RATES:
         for tolerance_ns in CANDIDATE_TOLERANCES_NS:
-            profile = SyncProfile(rate, tolerance_ns)
+            profile = SyncProfile(
+                rate,
+                tolerance_ns,
+                REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+                ROUND_HALF_EVEN,
+                EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+            )
             for capture in captures:
                 slots = build_frame_slots(capture, streams_by_capture[capture.name], profile)
                 summary = summarize_slots(slots)

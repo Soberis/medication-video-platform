@@ -6,7 +6,12 @@ from pathlib import Path
 import pyarrow.parquet as pq
 from conftest import GoldenData
 
-from golden_capture_g0.model import SyncProfile
+from golden_capture_g0.model import (
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    SyncProfile,
+)
 from golden_capture_g0.parquet_artifact import (
     WriterOptions,
     bounded_read,
@@ -20,7 +25,13 @@ from golden_capture_g0.sync import (
     profile_sha256,
 )
 
-PROFILE = SyncProfile(Fraction(30), 20_000_000)
+PROFILE = SyncProfile(
+    Fraction(30),
+    20_000_000,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+)
 
 
 def test_canonical_parquet_has_slot_grain_states_and_stable_sort(

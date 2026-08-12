@@ -8,7 +8,12 @@ import pytest
 from conftest import GoldenData
 
 from golden_capture_g0.media import sha256_file
-from golden_capture_g0.model import SyncProfile
+from golden_capture_g0.model import (
+    EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+    ROUND_HALF_EVEN,
+    SyncProfile,
+)
 from golden_capture_g0.sync import (
     SynchronizationUnavailableError,
     build_frame_slots,
@@ -18,7 +23,29 @@ from golden_capture_g0.sync import (
     map_source_to_capture_time,
 )
 
-PROFILE_30HZ_20MS = SyncProfile(Fraction(30), 20_000_000)
+
+def _profile(rate: Fraction, tolerance_ns: int) -> SyncProfile:
+    return SyncProfile(
+        rate,
+        tolerance_ns,
+        REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+        ROUND_HALF_EVEN,
+        EARLIER_PTS_THEN_SOURCE_FRAME_INDEX_THEN_PTS_ORDINAL,
+    )
+
+
+PROFILE_30HZ_20MS = _profile(Fraction(30), 20_000_000)
+
+
+def test_sync_profile_requires_explicit_frozen_rules() -> None:
+    with pytest.raises(ValueError, match="tie-breaker"):
+        SyncProfile(
+            Fraction(30),
+            20_000_000,
+            REQUIRE_TRUSTED_STREAM_TO_CAPTURE_MAPPING,
+            ROUND_HALF_EVEN,
+            "LATEST_SOURCE_FRAME",
+        )
 
 
 def test_case_a_complete_matrix_is_not_driven_by_manifest_order(golden_data: GoldenData) -> None:
@@ -62,7 +89,7 @@ def test_case_c_uses_pts_not_frame_array_index(golden_data: GoldenData) -> None:
 def test_tolerance_is_inclusive_and_excess_error_is_missing(golden_data: GoldenData) -> None:
     capture = golden_data.captures["case_c_different_fps"]
     streams = golden_data.streams[capture.name]
-    strict_slots = build_frame_slots(capture, streams, SyncProfile(Fraction(30), 15_000_000))
+    strict_slots = build_frame_slots(capture, streams, _profile(Fraction(30), 15_000_000))
     half_frame_slots = build_frame_slots(capture, streams, PROFILE_30HZ_20MS)
 
     assert any(
@@ -85,7 +112,7 @@ def test_nearest_tie_breaker_selects_earlier_pts(golden_data: GoldenData) -> Non
     slots = build_frame_slots(
         capture,
         golden_data.streams[capture.name],
-        SyncProfile(Fraction(10), 20_000_000),
+        _profile(Fraction(10), 20_000_000),
     )
     tied = next(
         slot
