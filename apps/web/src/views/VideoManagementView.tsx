@@ -20,10 +20,7 @@ import {
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { formatDateTime, statusTone } from '@/catalog-presentation'
-import {
-  parseVideoFilters,
-  replaceVideoFiltersInSearchParams,
-} from '@/catalog-video-filters'
+import { parseVideoFilters, replaceVideoFiltersInSearchParams } from '@/catalog-video-filters'
 
 const mediaStatusLabels: Record<VideoSummaryMediaStatus, string> = {
   UPLOADED: '待处理',
@@ -84,11 +81,7 @@ export default function VideoManagementView() {
   const activeRequest = useRef<AbortController | null>(null)
 
   const loadPage = useCallback(
-    async (
-      append = false,
-      nextFilters: VideoSummaryFilters = {},
-      cursor: string | null = null,
-    ) => {
+    async (append = false, nextFilters: VideoSummaryFilters = {}, cursor: string | null = null) => {
       activeRequest.current?.abort()
       const request = new AbortController()
       activeRequest.current = request
@@ -132,9 +125,11 @@ export default function VideoManagementView() {
   )
 
   useEffect(() => {
-    setItems([])
-    setNextCursor(null)
-    const timer = window.setTimeout(() => void loadPage(false, filters), 0)
+    const timer = window.setTimeout(() => {
+      setItems([])
+      setNextCursor(null)
+      void loadPage(false, filters)
+    }, 0)
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()

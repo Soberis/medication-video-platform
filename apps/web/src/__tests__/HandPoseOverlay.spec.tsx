@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
+import { PlaybackCard } from '@/components/AssetDetailSections'
 
 const landmarks = Array.from({ length: 21 }, (_, index) => ({
   x: 0.1 + index * 0.01,
@@ -146,5 +147,62 @@ describe('HandPoseOverlay', () => {
     )
 
     expect(container.firstChild).toBeNull()
+  })
+
+  it('keeps the sampled timestamp through playback events and follows video dimensions', () => {
+    const { container } = render(
+      <PlaybackCard
+        availability={null}
+        candidateOverlay={[
+          {
+            frame_timestamp_ms: 1_000,
+            image_width: 1280,
+            image_height: 720,
+            hand_index: 0,
+            handedness: 'LEFT',
+            handedness_score: 0.91,
+            bounding_box: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+            landmarks,
+            valid_landmark_count: 21,
+          },
+        ]}
+        canPlay
+        canRecoverMissingMediaProbe={false}
+        grant={{
+          grant_id: 'grant-1',
+          purpose: 'DATA_REVIEW',
+          media_url: '/synthetic/authorized-hand.mp4',
+          expires_at: '2026-08-12T10:00:00Z',
+          content_type: 'video/mp4',
+        }}
+        isRecoveringMediaProbe={false}
+        isRequestingPlayback={false}
+        mediaProbeMessage=""
+        playbackMessage=""
+        playbackState="ready"
+        onClose={() => undefined}
+        onLoadedMetadata={() => undefined}
+        onPlaybackError={() => undefined}
+        onRecoverMissingMediaProbe={() => undefined}
+        onStartPlayback={() => undefined}
+      />,
+    )
+    const video = screen.getByLabelText('视频预览')
+    Object.defineProperties(video, {
+      currentTime: { configurable: true, value: 1 },
+      videoWidth: { configurable: true, value: 1920 },
+      videoHeight: { configurable: true, value: 1080 },
+    })
+
+    fireEvent.loadedMetadata(video)
+    expect(container.querySelector('.video-stage')).toHaveStyle('aspect-ratio: 1920 / 1080')
+    fireEvent.play(video)
+    fireEvent.pause(video)
+    fireEvent.timeUpdate(video)
+    expect(container.querySelector('.hand-pose-overlay')).toBeInTheDocument()
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 1.091 })
+    fireEvent.timeUpdate(video)
+    expect(container.querySelector('.hand-pose-overlay')).toBeNull()
   })
 })

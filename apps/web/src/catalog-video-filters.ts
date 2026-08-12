@@ -21,7 +21,10 @@ export const videoFilterSearchParamNames = [
   'cleaningStatus',
 ] as const
 
-const sourceValues = ['HOSPITAL_REMOTE', 'PLATFORM_LOCAL'] as const satisfies readonly VideoSummarySource[]
+const sourceValues = [
+  'HOSPITAL_REMOTE',
+  'PLATFORM_LOCAL',
+] as const satisfies readonly VideoSummarySource[]
 const mediaStatusValues = [
   'UPLOADED',
   'INGESTING',
@@ -59,10 +62,7 @@ export function parseVideoFilters(searchParams: URLSearchParams): VideoSummaryFi
   const mediaStatus = parseEnum(searchParams.get('mediaStatus'), mediaStatusValues)
   const handStatus = parseEnum(searchParams.get('handStatus'), handStatusValues)
   const handResult = parseEnum(searchParams.get('handResult'), handResultValues)
-  const annotationStatus = parseEnum(
-    searchParams.get('annotationStatus'),
-    annotationStatusValues,
-  )
+  const annotationStatus = parseEnum(searchParams.get('annotationStatus'), annotationStatusValues)
   const cleaningStatus = parseEnum(searchParams.get('cleaningStatus'), cleaningStatusValues)
   const cameraNumber = parsePositiveInteger(searchParams.get('cameraNumber'))
   const capturedFrom = parseIsoInstant(searchParams.get('capturedFrom'))
@@ -113,9 +113,7 @@ export function replaceVideoFiltersInSearchParams(
 }
 
 function parseEnum<T extends string>(value: string | null, values: readonly T[]) {
-  return value !== null && (values as readonly string[]).includes(value)
-    ? (value as T)
-    : undefined
+  return value !== null && (values as readonly string[]).includes(value) ? (value as T) : undefined
 }
 
 function setEnum<T extends string>(
@@ -138,12 +136,26 @@ function parsePositiveInteger(value: string | null) {
 function parseIsoInstant(value: string | null) {
   if (value === null) return undefined
   const normalized = value.trim()
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(
-    normalized,
-  )
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(
+      normalized,
+    )
   if (!match) return undefined
 
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , , , offsetHourText, offsetMinuteText] = match
+  const [
+    ,
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText,
+    ,
+    ,
+    ,
+    offsetHourText,
+    offsetMinuteText,
+  ] = match
   const year = Number(yearText)
   const month = Number(monthText)
   const day = Number(dayText)

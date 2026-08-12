@@ -47,9 +47,7 @@ describe('video filter URL state', () => {
 
   it('removes only video filter params while preserving unrelated route params', () => {
     const next = replaceVideoFiltersInSearchParams(
-      new URLSearchParams(
-        'tab=quality&source=PLATFORM_LOCAL&cameraNumber=3&unknown=keep',
-      ),
+      new URLSearchParams('tab=quality&source=PLATFORM_LOCAL&cameraNumber=3&unknown=keep'),
       {},
     )
 

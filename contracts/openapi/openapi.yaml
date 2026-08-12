@@ -3793,6 +3793,65 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/ai/evaluations:
+    post:
+      operationId: createAiEvaluation
+      tags: [AI Candidates]
+      summary: Record one immutable V1.18 algorithm evaluation
+      description: >-
+        Records the seven frozen V1.18 evaluation metrics against an explicitly bound sample,
+        model digest and profile digest. Metrics without authorized evidence must remain PENDING
+        with a null value. CandidateAnnotation rows are not ground truth and are never used by this
+        operation; the record is append-only audited and does not tune or train a model.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiEvaluationCreateRequest" }
+      responses:
+        "201":
+          description: The immutable evaluation record was created.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Location:
+              schema: { type: string, format: uri-reference }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiEvaluationResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/ai/evaluations/{evaluation_id}:
+    get:
+      operationId: getAiEvaluation
+      tags: [AI Candidates]
+      summary: Read one project-scoped algorithm evaluation
+      description: >-
+        Returns the immutable evaluation facts and their audit-bound evidence status. A PENDING
+        metric has a null value and is not evidence of a zero result.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: evaluation_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The immutable evaluation record.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiEvaluationResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-candidates:
     get:
       operationId: getLatestHandPoseCandidatesLegacy
@@ -10176,6 +10235,131 @@ components:
         created_at:
           type: string
           format: date-time
+    AiEvaluationCreateRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        At least one of sample_version or sample_sha256 must bind the record to an authorized
+        sample. The seven metric keys are fixed by V1.18 and must each occur exactly once.
+      required:
+        - model_sha256
+        - profile_sha256
+        - parameter_adjustment_note
+        - metrics
+      properties:
+        sample_version:
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 128
+              pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
+            - type: "null"
+        sample_sha256:
+          anyOf:
+            - type: string
+              pattern: "^[a-f0-9]{64}$"
+            - type: "null"
+        model_sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        profile_sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+        parameter_adjustment_note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: "^[^\\x00-\\x1F\\x7F]*$"
+        metrics:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items: { $ref: "#/components/schemas/AiEvaluationMetricRequest" }
+    AiEvaluationMetricRequest:
+      type: object
+      additionalProperties: false
+      required: [metric_key, status]
+      properties:
+        metric_key:
+          type: string
+          enum:
+            - HAND_FRAME_RECALL
+            - NO_HAND_FRAME_FALSE_POSITIVE_RATE
+            - LANDMARK_21_VALID_RATE
+            - HANDEDNESS_ACCURACY
+            - FAST_MOTION_OCCLUSION_USEFULNESS
+            - OVERLAY_TIME_ERROR
+            - PROCESSING_TIME_PER_MINUTE
+        status:
+          type: string
+          enum: [PENDING, RECORDED]
+        value:
+          anyOf:
+            - type: number
+              minimum: 0
+            - type: "null"
+          description: Must be null for PENDING; RECORDED requires finite non-negative evidence.
+    AiEvaluationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - evaluation_id
+        - project_id
+        - sample_version
+        - sample_sha256
+        - model_sha256
+        - profile_sha256
+        - status
+        - parameter_adjustment_note
+        - metrics
+        - created_by
+        - created_at
+        - schema_version
+      properties:
+        evaluation_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        sample_version:
+          anyOf:
+            - type: string
+            - type: "null"
+        sample_sha256:
+          anyOf:
+            - type: string
+              pattern: "^[a-f0-9]{64}$"
+            - type: "null"
+        model_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        profile_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        status: { type: string, enum: [PENDING, RECORDED] }
+        parameter_adjustment_note: { type: string, minLength: 1, maxLength: 2000 }
+        metrics:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items: { $ref: "#/components/schemas/AiEvaluationMetric" }
+        created_by: { type: string, minLength: 1, maxLength: 128 }
+        created_at: { type: string, format: date-time }
+        schema_version: { type: string, const: ai-evaluation.v1 }
+    AiEvaluationMetric:
+      type: object
+      additionalProperties: false
+      required: [metric_key, status, value]
+      properties:
+        metric_key:
+          type: string
+          enum:
+            - HAND_FRAME_RECALL
+            - NO_HAND_FRAME_FALSE_POSITIVE_RATE
+            - LANDMARK_21_VALID_RATE
+            - HANDEDNESS_ACCURACY
+            - FAST_MOTION_OCCLUSION_USEFULNESS
+            - OVERLAY_TIME_ERROR
+            - PROCESSING_TIME_PER_MINUTE
+        status: { type: string, enum: [PENDING, RECORDED] }
+        value:
+          anyOf:
+            - type: number
+              minimum: 0
+            - type: "null"
     HandPoseJobResponse:
       type: object
       additionalProperties: false
