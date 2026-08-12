@@ -1,11 +1,12 @@
 # 固定多相机同步逐帧训练数据技术设计（V1.19 草案）
 
-> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.1  
+> 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.2<br>
 > 状态：草案；尚非当前规范，不授权开始 V1.19 编码  
 > 日期：2026-08-12  
 > 对齐需求：[V1.19 需求草案](../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)  
 > 当前正式设计：[V1.18 手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)  
 > 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](./asynchronous-job-protocol.md)、[领域模型与数据所有权](./domain-model-and-data-ownership.md)
+> 修订说明：DRAFT.2 收紧核心 P0；`AnnotationRevision.sync_revision_id` 改为条件可空引用；算法名、舍入、reference、Parquet 物理布局等在 Golden Capture 验证前均为设计候选而非冻结规范。
 
 ## 1. 设计结论
 
@@ -17,8 +18,8 @@ CaptureSession + CameraSetSnapshot + CameraStream + immutable MP4
 → immutable CaptureSyncRevision
 → canonical synchronized-frame Parquet
 → bounded Core API query
-→ Session detail synchronized playback
-→ DatasetVersion freezes the accepted sync revision
+→ [P1] Session detail synchronized playback
+→ [P1] DatasetVersion freezes the accepted sync revision
 ```
 
 本设计冻结以下方向：
@@ -27,7 +28,7 @@ CaptureSession + CameraSetSnapshot + CameraStream + immutable MP4
 2. 现有 OpenAPI 已有 `/capture-sessions` 列表和详情。V1.19 在该资源下增加同步子资源，不再创建语义重复的 `/captures` 路由。
 3. Capture 同步由 `assetcapture` 拥有；`integration` 只负责消息和对象存储适配，不拥有同步真值。
 4. 同步结果以不可变 revision 表达。重新同步创建新 revision，旧标注和冻结数据集继续引用旧 revision。
-5. PostgreSQL 保存作业、状态、摘要、revision、工件元数据和 row-group 索引；完整 Frame Slot 矩阵进入版本化 Parquet。
+5. PostgreSQL 保存作业、状态、摘要、revision、工件元数据和有界查询索引；完整 Frame Slot 矩阵进入版本化 Parquet。
 6. V1.19 只做基于时基和 PTS 的时间对齐，不做图像内容对齐、跨相机关联或三维融合。
 7. Canonical synchronized-frame artifact 只证明同步结构与血缘，不自动成为可用训练标签。
 
@@ -51,7 +52,7 @@ video_id     = clip_asset_id
 
 - 同步计算内部使用有理数 PTS，最终按获批准的舍入规则转换为 `int64 ns`；
 - `_ns` 表示存储单位，不表示设备具备纳秒测量精度；必须同时保存 `time_basis_source`、`time_precision_ns` 或不确定度；
-- 现有 AnnotationRevision 继续使用整数毫秒，不做破坏性迁移；从同步时间到标注时间的转换为 `round_half_even(ns / 1_000_000)`，转换规则进入 revision/profile digest；
+- 现有 AnnotationRevision 继续使用整数毫秒，不做破坏性迁移；从同步时间到标注时间的舍入规则在 Golden Capture 验证前为 `PENDING`，获批准后进入 profile digest；
 - 原始 `pts`、`time_base_num`、`time_base_den` 和同 PTS ordinal 保存在输入/工件 manifest 中，不能只保留换算后值。
 
 ### 2.3 现有数据集能力
@@ -59,6 +60,10 @@ video_id     = clip_asset_id
 现有 `DatasetVersion`、member session/stream、build specification、snapshot、validation、freeze、export 和审批流程继续使用。V1.19 只向冻结证据增加已接受的 `CaptureSyncRevision` 和 Canonical Artifact 摘要；不得创建第二套 DatasetVersion 或绕过现有冻结审批。
 
 生成同步 Parquet 不会放宽当前 dataset admission。缺路 Capture 可以生成结构化同步证据，但能否进入正式 DatasetVersion 仍由版本化准入 profile、人工标注、Review 和 Cleaning 守卫决定。
+
+### 2.4 交付优先级
+
+核心 P0 只闭合 `Capture → Timeline → Frame Slot → Sync Revision → Canonical Parquet → Artifact Provenance`。有界查询只服务验收、排障和后续消费者。完整多机位同步播放与 DatasetVersion 深度集成为 P1，不能与核心 P0 同时铺开。
 
 ## 3. 组件与事实流
 
@@ -88,7 +93,7 @@ flowchart LR
 | `assetcapture` | 同步命令、job/attempt、同步 profile 引用、`CaptureSyncRevision`、逐路映射摘要、同步工件注册和查询端口 | 不写 AI Candidate、正式 Annotation、Cleaning 或 DatasetVersion 表 |
 | `mediaprivacy` | 通过公开查询提供已验证 MediaReport、PTS/time-base 摘要和媒体可读性 | 不写 Capture 同步状态 |
 | `aicandidate` | 通过公开查询返回 AIJob、Attempt、采样时间和 Candidate 血缘 | 不把 Frame Slot 变成正式标注 |
-| `annotationreview` | 继续拥有正式 revision；未来 revision 可引用 `sync_revision_id` | 不写同步工件或数据集 |
+| `annotationreview` | 继续拥有正式 revision；只有同步多机位场景创建/投影的 revision 才可选引用 `sync_revision_id` | 不强制既有或单视频 AnnotationRevision 绑定同步修订；不写同步工件或数据集 |
 | `qualitycleaning` | 提供当前 CleaningRun/Result 事实 | 不因同步成功自动 PASS |
 | `datasetexport` | 在既有 DatasetVersion 构建快照中冻结同步 revision/artifact 引用，生成正式训练数据包 | 不重新计算或覆盖 Capture 同步真值 |
 | `governance` | 同步重跑、高风险工件/数据集操作的审计和既有审批 | 不拥有业务状态 |
@@ -161,7 +166,8 @@ capture_sync_job_attempt_id
 project_id
 capture_session_id
 supersedes_sync_revision_id nullable
-reference_camera_number
+reference_camera_number nullable
+reference_clock_source
 time_basis_source
 capture_origin_utc nullable
 time_precision_ns nullable
@@ -181,7 +187,7 @@ processing_duration_ms
 created_at / created_by
 ```
 
-Revision 不提供 update 接口。`supersedes_sync_revision_id` 只表达演进链，不使旧 revision 失效或被删除。Capture 读模型可以指向当前接受的 revision，但 DatasetVersion 和 AnnotationRevision 必须保存其实际使用的 revision ID。
+Revision 不提供 update 接口。`supersedes_sync_revision_id` 只表达演进链，不使旧 revision 失效或被删除。Capture 读模型可以指向当前接受的 revision。DatasetVersion 使用同步数据时必须保存实际采用的 sync revision ID；`AnnotationRevision.sync_revision_id` 为 nullable，只有同步多机位视图中创建、编辑或投影的标注才保存实际使用的 revision ID，既有和单视频标注保持为空。
 
 ### 4.4 CaptureSyncStreamRevision
 
@@ -230,7 +236,7 @@ created_at
 
 对象位置仅限服务端和获授权 Worker 使用，普通产品 API 不返回。工件注册后不可覆盖；对象键和摘要必须唯一，销毁走既有 governance 保留流程。
 
-`artifact_manifest` 保存 row-group 的 `ordinal/min_sync_frame_index/max_sync_frame_index/row_count`、writer/runtime 摘要、Schema digest、排序、压缩、输入 manifest 和 profile digest。它是有界索引，不复制每一行 Frame Slot。
+`artifact_manifest` 保存可支持有界查询的分段范围摘要，以及 writer/runtime、Schema、排序、压缩、输入 manifest 和 profile digest。具体采用 row group、sidecar 或其他索引方式在 Golden Capture 后冻结；manifest 不复制每一行 Frame Slot。
 
 ## 5. 输入冻结
 
@@ -251,19 +257,26 @@ algorithm key/version
 
 输入 manifest 使用字段排序、UTF-8、LF 和无多余空白的规范化序列计算 SHA-256。Worker 返回的 `input_manifest_sha256` 必须与 job 一致；任何媒体摘要、snapshot、profile 或算法变化都拒绝结果提交。
 
-## 6. 同步算法 V1
+## 6. 同步算法设计候选（Golden Capture 验证前）
 
 ### 6.1 支持范围
 
-P0 算法键建议为：
+本节给出用于 Golden Capture 的候选算法族，不冻结正式 `algorithm_key`、舍入、reference 或参数。候选方向是“基于媒体 PTS 与获批准 offset/drift/anchor 的固定间隔时间轴 + 有误差记录的邻近帧映射”；它必须支持固定 FPS、不同 FPS 和 VFR，不使用文件数组 index、时间邻近猜测或未经批准的图像内容对齐。
+
+以下内容在 Golden Capture 测量和设计评审前均为 `PENDING`：
 
 ```text
-PTS_FIXED_INTERVAL_NEAREST_V1
+algorithm_key / algorithm_version
+timeline_interval_ns
+allowed_tolerance_ns
+warning/reject tolerance
+reference clock/stream rule
+integer rounding rule
+tie-breaker
+capture-sync profile key/version
 ```
 
-它支持固定 FPS、不同 FPS 和 VFR；只使用媒体 PTS、获批准的 offset/drift/anchor 和固定间隔时间轴，不使用图像特征、文件数组 index 或内容相似度。
-
-`timeline_interval_ns`、`allowed_tolerance_ns`、reference 选择和舍入规则全部来自服务器批准且有摘要的 `capture-sync-baseline-v1` profile。具体数值在 Golden Capture 测量前保持 `PENDING`，调用方不能提交任意参数。
+最终值进入服务器批准且有摘要的 profile；调用方始终不能提交任意算法参数。
 
 ### 6.2 媒体时间
 
@@ -273,10 +286,10 @@ PTS_FIXED_INTERVAL_NEAREST_V1
 raw_pts
 time_base_num / time_base_den
 pts_ordinal
-source_pts_ns = round_half_even((raw_pts - pts_origin) × time_base_num / time_base_den × 1e9)
+source_pts_ns = round_profile((raw_pts - pts_origin) × time_base_num / time_base_den × 1e9)
 ```
 
-`pts_origin`、舍入方式和重复 PTS 处理进入 profile。DTS 只作解码诊断；展示和同步使用 PTS。PTS 缺失、非单调、重复、回退和 gap 按现有时间基准规范生成明确质量证据。
+`round_profile` 的具体规则尚未冻结。`pts_origin`、舍入方式和重复 PTS 处理进入 profile。DTS 只作解码诊断；展示和同步使用 PTS。PTS 缺失、非单调、重复、回退和 gap 按现有时间基准规范生成明确质量证据。
 
 ### 6.3 映射到 Capture 时间
 
@@ -287,37 +300,37 @@ scale = 1 + drift_ppm / 1_000_000
 
 t_capture_ns =
     anchor_capture_ns
-    + round_half_even((source_pts_ns - anchor_source_pts_ns) × scale)
+    + round_profile((source_pts_ns - anchor_source_pts_ns) × scale)
 ```
 
-只有一个可靠锚点时 `drift_ppm = null`，计算按 offset-only 规则执行。多锚点拟合必须保存方法、残差、异常点规则和测量误差。
+`round_profile` 的具体规则为 `PENDING`。只有一个可靠锚点时 `drift_ppm = null`，计算按 offset-only 规则执行。多锚点拟合必须保存方法、残差、异常点规则和测量误差。
 
-### 6.4 Reference 与时间轴边界
+### 6.4 Reference 与时间轴边界候选
 
-P0 的 reference 选择规则由 profile 固定；候选规则为“冻结输入中最小 `camera_number` 的可用、已验证 stream”。最终选择必须写入 revision，不能在页面查询时重新计算。
+reference 可以来自可靠公共 Capture clock，也可以来自一条获批准的已验证 stream。选择哪一种、stream 的选择优先级以及 reference 缺失时的处理均为 `PENDING`；“最小可用 `camera_number`”只能作为 Golden Capture 的对照候选，不能在评审前成为正式规则。最终选择必须写入 revision，不能在页面查询时重新计算。
 
-时间轴从 reference stream 映射后的首个有效可展示 PTS 开始，到最后一个有效可展示 PTS 结束：
+以下固定间隔时间轴是验证候选，不是已冻结规范：
 
 ```text
 capture_timestamp_ns(i) = origin_ns + i × timeline_interval_ns
 sync_frame_index(i) = i, i >= 0
 ```
 
-reference stream 不可用时 job 失败，不使用服务器接收时间补齐。若未来采用上游公共 clock 的显式起止窗口，必须通过新算法/profile 版本引入。
+无论最终选择何种 reference，都不得使用服务器接收时间补齐。reference 不可用时是失败、降级还是改用另一个获批准来源，必须由 Golden Capture 结果和版本化 profile 冻结。
 
-### 6.5 Frame 选择
+### 6.5 Frame 选择候选与不变量
 
-对每个 `capture_timestamp_ns × expected camera_number`：
+Golden Capture 首轮可以用以下 nearest-frame 流程作对照：
 
 1. 缺少 CameraStream：生成 `MISSING`；
 2. 将目标 Capture 时间反向映射到 source time；
 3. 在该 stream 中选择绝对误差最小的可展示 PTS；
-4. 并列时选择较早 PTS，再选择较小 `pts_ordinal`，保证确定性；
+4. 使用待验证的确定性 tie-breaker；
 5. 误差大于 `allowed_tolerance_ns`：生成 `MISSING`；
 6. 命中媒体位置但解码/PTS 校验失败：生成 `INVALID` 和稳定原因码；
 7. 其余生成 `PRESENT`，保存源帧定位和带符号 `sync_error_ns`。
 
-禁止线性插帧、静默复用上一帧/下一帧、压缩 `sync_frame_index` 或改变 Camera 编号。
+其中 nearest-frame、tie-breaker 和边界包含关系均未冻结。已冻结的不变量只有：误差必须记录；超出获批准误差时允许明确 `MISSING`；禁止线性插帧、静默复用上一帧/下一帧、压缩 `sync_frame_index` 或改变 Camera 编号。
 
 ### 6.6 状态不变量
 
@@ -337,11 +350,13 @@ hand_detection_state = NOT_RUN
 
 V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确的时间换算和容忍窗口投影到 Frame Slot；匹配规则、窗口和 tie-breaker 进入 artifact schema/profile。映射不修改原 `CandidateAnnotation`。
 
-## 7. Canonical Parquet Schema V1
+## 7. Canonical Parquet Schema 候选
+
+本节冻结逻辑粒度、身份、状态和 provenance 需求，不冻结文件名、具体物理类型、压缩、dictionary、row group 或 writer/runtime。后者必须通过 Golden Capture 的跨语言兼容与容量测试后进入版本化 Schema/profile。
 
 ### 7.1 主表粒度与排序
 
-文件名建议为 `synchronized-frames.parquet`。一行表示一个同步修订中一个 Sync Frame 的一个预期 Camera Slot。
+一行表示一个同步修订中一个 Sync Frame 的一个预期 Camera Slot。`synchronized-frames.parquet` 仅为候选文件名。
 
 主键语义和物理排序：
 
@@ -353,9 +368,11 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 
 ### 7.2 字段
 
-| 字段 | Parquet 逻辑类型 | 可空 | 规则 |
+以下物理类型均为候选；实现契约只采用 Golden Capture 验证后获批准的版本。
+
+| 字段 | 候选 Parquet 逻辑类型 | 可空 | 逻辑规则 |
 | --- | --- | --- | --- |
-| `schema_version` | UTF8 | 否 | 固定 `synchronized-frame.v1` |
+| `schema_version` | UTF8 | 否 | 候选值 `synchronized-frame.v1`，最终版本由 S1 冻结 |
 | `capture_id` | UTF8 UUID | 否 | 等于 `capture_session_id` |
 | `capture_group_key` | UTF8 | 是 | 外部显式归组存在时填写；平台本地上传可空 |
 | `sync_revision_id` | UTF8 UUID | 否 | 不可变同步修订 |
@@ -391,17 +408,17 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 
 要使字节摘要可复现，writer/runtime 版本、ZSTD/其他压缩参数、dictionary、row-group 切分和 metadata 顺序必须进入 profile。未冻结这些参数前，只能承诺逻辑内容可复现，不能声称 Parquet 字节完全相同。
 
-### 7.4 Row group 与查询索引
+### 7.4 Row group 与查询索引候选
 
-Row group 必须按完整的 `sync_frame_index` 边界切分，不能把同一 Sync Frame 的不同 Camera 随机拆散。每个 row group 的最小/最大 index、行数和字节范围写入 artifact manifest，并在 PostgreSQL 保存有界索引摘要。
+为了支持有界 Frame Slot 查询，artifact 必须提供可验证的区间索引，但是否使用 row group 边界、sidecar index 或其他 Parquet metadata 由 Golden Capture 测试决定。优先验证“不要拆散同一 Sync Frame 的 Camera slots”是否能降低查询复杂度和读放大；在取得数据前它不是正式约束。
 
-具体 row-group 目标行数和文件大小在容量测试前为 `PENDING`。不得在没有目标相机数、时长和查询窗口数据时编造固定值。
+索引方式、row-group 切分、目标行数和文件大小均为 `PENDING`。不得在没有目标相机数、时长和查询窗口数据时编造固定值。
 
 ## 8. 异步执行与结果提交
 
 ### 8.1 契约
 
-S1 新增并冻结：
+完成 Golden Capture 验证后，S1 才新增并冻结相应契约。以下名称是草案候选，不表示文件已经存在或版本已经批准：
 
 ```text
 contracts/events/capture-sync-job-v1.schema.json
@@ -531,9 +548,9 @@ cursor optional
 limit optional
 ```
 
-`limit` 计 Frame Slot 行，默认值和最大值在 S1 容量测试后冻结。cursor 必须绑定 `sync_revision_id + sync_frame_index + camera_number + filters`，不能在 revision 变化后静默继续。响应只返回产品字段和逻辑引用，不返回 bucket、object key、row group、Worker 或租约。
+`limit` 计 Frame Slot 行，默认值和最大值在 G0 测量、S1 评审后冻结。cursor 必须绑定 `sync_revision_id + sync_frame_index + camera_number + filters`，不能在 revision 变化后静默继续。响应只返回产品字段和逻辑引用，不返回 bucket、object key、row group、Worker 或租约。
 
-Core API 通过 `SynchronizedFrameQueryPort` 读取 artifact manifest 和目标 row group；对象存储适配器只做范围读取。Web 不直接下载完整 Parquet，不在浏览器自行扫描或拼装业务真值。
+Core API 通过 `SynchronizedFrameQueryPort` 读取 artifact manifest 和目标数据范围；具体索引/范围读取策略在 Golden Capture 后冻结。Web 不直接下载完整 Parquet，不在浏览器自行扫描或拼装业务真值。
 
 ### 10.4 安全与缓存
 
@@ -544,7 +561,7 @@ Core API 通过 `SynchronizedFrameQueryPort` 读取 artifact manifest 和目标 
 
 所有路径、Schema、错误码和兼容规则必须同步更新 OpenAPI 与契约测试。
 
-## 11. Web 设计
+## 11. P1 Web 设计
 
 不新增一套顶层信息架构。扩展现有：
 
@@ -581,7 +598,7 @@ Core API 通过 `SynchronizedFrameQueryPort` 读取 artifact manifest 和目标 
 - 首屏不预加载所有相机完整视频或完整 Frame Slot；采用服务端分页、窗口缓存和取消过期请求；
 - 技术 ID、PTS、误差、模型/profile 摘要默认折叠，普通用户主线只显示业务状态。
 
-## 12. DatasetVersion 与正式训练数据
+## 12. P1 DatasetVersion 与正式训练数据
 
 S7 扩展既有构建快照，使每个 `dataset_member_session` 冻结：
 
@@ -597,7 +614,7 @@ logical_content_sha256
 - revision 与 Capture/project 一致且未被销毁；
 - artifact SHA、logical digest 和 Schema version 可验证；
 - 每个纳入 stream 的 raw SHA 与既有 dataset member evidence 一致；
-- AnnotationRevision 引用的时间换算/同步 revision 明确；
+- DatasetVersion 同时冻结实际采用的 `capture_sync_revision_id` 和 `annotation_revision_id`；如果 AnnotationRevision 的 nullable `sync_revision_id` 有值，它必须与 DatasetVersion 选择一致；如果为空，则按 DatasetVersion 冻结的同步修订和获批准的换算 profile 生成导出投影，不回写原 AnnotationRevision；
 - Review `APPROVED`、Cleaning `PASS` 和 LabelSchema digest 仍满足现有准入；
 - missing/invalid camera 是否允许由 dataset build profile 明确，不能从同步成功推断。
 
@@ -621,7 +638,7 @@ worker_hours_per_day =
     sessions_per_day × duration_seconds × measured_realtime_factor / 3600
 ```
 
-上线前按平均/P95 时长、相机数、FPS/VFR、缺帧率、AI 采样率、查询窗口、保留期和对象存储复制开销测量。PostgreSQL 行数只随 job/revision/stream/row-group 摘要增长，不随每个 Frame Slot 线性增长。
+上线前按平均/P95 时长、相机数、FPS/VFR、缺帧率、AI 采样率、查询窗口、保留期和对象存储复制开销测量。PostgreSQL 行数只随 job/revision/stream/工件分段索引摘要增长，不随每个 Frame Slot 线性增长。
 
 ### 13.2 指标
 
@@ -652,9 +669,9 @@ capture_sync_lease_recoveries_total
 
 ### 14.1 单元与属性测试
 
-- PTS 有理数到 ns 的舍入、非零 origin、重复/回退 PTS、VFR 和 gap；
+- 经 Golden Capture 批准后的 PTS 有理数到 ns 舍入、非零 origin、重复/回退 PTS、VFR 和 gap；
 - offset-only、正/负 drift、单/多锚点映射；
-- nearest-frame tie-break、tolerance 边界和 `MISSING/INVALID` 互斥；
+- 获批准映射算法的 tie-break、tolerance 边界和 `MISSING/INVALID` 互斥；
 - N 路动态矩阵、缺路不重编号、行数不变量；
 - `NOT_RUN/NO_DETECTION/FAILED/HANDS_DETECTED` 不变量；
 - Canonical 排序、逻辑摘要和重试确定性。
@@ -679,22 +696,22 @@ capture_sync_lease_recoveries_total
 6. AI 10 FPS 对源视频高 FPS 的 `NOT_RUN` 投影；
 7. Core API → RabbitMQ → Worker → temporary artifact → result → accepted revision；
 8. duplicate delivery、lease expiry、Retry、迟到结果、篡改 digest 和 DLQ；
-9. Frame Slot API 跨 row group 分页、revision 变化和项目隔离；
-10. Session Web 同步播放、缺帧提示、键盘操作和无障碍名称；
+9. Frame Slot API 跨工件分段分页、revision 变化和项目隔离；
+10. P1 Session Web 同步播放、缺帧提示、键盘操作和无障碍名称；
 11. 原 MP4 前后 SHA-256 一致；
-12. DatasetVersion 冻结后可追溯到 accepted sync revision、人工 revision、Review 和 Cleaning。
+12. P1 DatasetVersion 冻结后可追溯到 accepted sync revision、人工 revision、Review 和 Cleaning。
 
 ### 14.4 容量验收
 
 至少使用目标 P50/P95 时长和相机数的合成数据测量：
 
 - Worker realtime factor、CPU/内存/临时磁盘和对象存储吞吐；
-- Parquet 压缩比、row-group 查询放大和 Frame API P50/P95/P99；
+- Parquet 压缩比、候选索引策略的查询放大和 Frame API P50/P95/P99；
 - PostgreSQL job/revision/index 增长；
 - RabbitMQ backlog、lease 超时和恢复时间；
-- 多视频浏览器解码和 UI 对齐误差。
+- P1 多视频浏览器解码和 UI 对齐误差；该项不阻塞核心 P0 数据闭环。
 
-没有这些测量时，timeline rate、tolerance、page limit、row group、并发、超时和保留期继续为 `PENDING`。
+没有这些测量时，timeline rate、tolerance、page limit、索引/row group、并发、超时和保留期继续为 `PENDING`。
 
 ### 14.5 草案需求追踪
 
@@ -708,24 +725,26 @@ capture_sync_lease_recoveries_total
 | V19-FR-004 Frame Slot 三态 | 6.5、7.2 | 三态互斥、空值守卫、缺路/局部缺帧/无效帧测试 |
 | V19-FR-005 作业与同步修订 | 4.1～4.5、8、9 | 幂等、租约恢复、迟到结果、revision 不可变和摘要复核 |
 | V19-FR-006 AI sample 分离 | 6.6、7.2 | 30 FPS 源视频/10 FPS inference 的 `NOT_RUN` 投影测试 |
-| V19-FR-007 Candidate 隔离 | 6.6、12 | 无自动 Annotation/Review/Cleaning 的集成守卫 |
+| V19-FR-007 Candidate 隔离 | 6.6、16 | 无自动 Annotation/Review/Cleaning 的集成守卫 |
 | V19-FR-008 Canonical Parquet | 7、8.3 | Schema golden、排序/唯一/行数、逻辑与物理摘要测试 |
-| V19-FR-009 Provenance | 5、7.2、12 | 结构化行到 MP4/同步/人工/清洗的端到端追溯测试 |
-| V19-FR-010 查询 | 10 | 项目隔离、revision-bound cursor、row-group 跨页和无泄密测试 |
-| V19-FR-011 Web 查看 | 11 | 状态/gap/同步播放、键盘、可访问性与浏览器 E2E |
+| V19-FR-009 Artifact Provenance | 5、7.2、8.3 | 结构化行到 MP4、源帧、同步修订和可选 AI/人工引用的追溯测试 |
+| V19-FR-010 查询 | 10 | 项目隔离、revision-bound cursor、跨工件分段分页和无泄密测试 |
+| V19-FR-011 P1 Web 查看 | 11 | 状态/gap/同步播放、键盘、可访问性与浏览器 E2E |
 | V19-FR-012 容量门禁 | 7.4、13、14.4 | P50/P95 合成规模基准；PostgreSQL 无逐 Frame Slot 线性增长 |
+| V19-FR-013 P1 DatasetVersion 集成 | 2.3、12 | 同时冻结 sync/annotation revision；nullable 标注引用和既有准入回归 |
 
 ## 15. 实施切片
 
 | 顺序 | 改动 | 完成门槛 |
 | --- | --- | --- |
-| S1 Contract | 需求/技术评审、OpenAPI 草案、事件/profile、Parquet Schema、ADR（如需新依赖） | 所有 `PENDING` 参数有负责人、测量方法和冻结结论 |
+| G0 Golden Capture | 使用一次性、非生产验证工具比较时间轴、reference、tolerance、舍入、索引/row group 和容量候选 | 保存合成输入、理论真值、测试环境、测量结果和推荐结论；不创建生产表或正式 API |
+| S1 Domain/Contract | 需求/技术评审、OpenAPI 草案、事件/profile、Parquet Schema、ADR（如需新依赖） | G0 支持的算法/profile/Schema 获批准；仍无证据的值保持 `PENDING` 并阻止相关实现 |
 | S2 Sync index | `assetcapture` job/revision、Worker PTS mapping、artifact 注册 | Golden Capture 同步矩阵与重试闭环通过 |
-| S3 Query | timeline/frames query port、row-group range read、项目隔离 | 稳定分页、revision 绑定和容量验证通过 |
-| S4 Canonical artifact | 完整 Schema、逻辑/物理摘要、兼容性验证 | 相同冻结输入可复现，不静默覆盖 |
-| S5 Provenance | AI/Annotation/Review/Cleaning 只读关联 | 任一正式行端到端追溯通过 |
-| S6 Web | Session detail 同步摘要和简单多机位查看 | 状态、gap、权限、可访问性和性能验收通过 |
-| S7 Dataset | 既有 DatasetVersion 冻结 sync revision/artifact | 准入、审批、冻结、导出和原流程回归通过 |
+| S3 Canonical artifact | 完整 Schema、逻辑/物理摘要、兼容性验证 | 相同冻结输入可复现，不静默覆盖 |
+| S4 Artifact provenance | MP4/Frame/Sync Revision 及可选 AI/Annotation 只读关联 | 任一结构化行端到端追溯通过 |
+| S5 P0-late minimum query | timeline/frames query port、有界数据范围读取、项目隔离 | 核心 P0 完成；稳定分页、revision 绑定和容量验证通过 |
+| S6 P1 Web | Session detail 同步摘要和简单多机位查看 | 核心 P0 完成；状态、gap、权限、可访问性和性能验收通过 |
+| S7 P1 Dataset | 既有 DatasetVersion 同时冻结 sync/annotation revision 和 artifact | 核心 P0 完成；准入、审批、冻结、导出和原流程回归通过 |
 
 每一切片独立合入并通过严格质量门禁后再开始下一项。V1.19 不修改 V1.18 历史 Flyway migration，不用未完成的后续抽象阻塞当前纵向闭环。
 
@@ -744,7 +763,7 @@ capture_sync_lease_recoveries_total
 
 ## 17. 设计冻结清单
 
-进入 S2 编码前必须关闭以下 `PENDING`：
+进入 S2 生产实现前必须由 G0 和 S1 关闭以下适用的 `PENDING`：
 
 | 决策 | 所需证据 | Owner |
 | --- | --- | --- |
@@ -753,9 +772,9 @@ capture_sync_lease_recoveries_total
 | allowed/warning/reject tolerance | 同步误差分布与标注边界容忍度 | 算法 + 标注负责人 |
 | clock/anchor/drift 来源 | 边端协议、媒体探测和误差测量 | 边端 + 平台 |
 | Parquet writer/Schema/row group | Python/Java 兼容和容量基准 | 数据工程 + 平台 |
-| Frame API page/window | row-group 查询放大与 Web 场景 | 后端 + Web |
+| Frame API page/window | 候选索引策略的查询放大与 Web 场景 | 后端 + Web |
 | Worker lease/retry/concurrency | P95 时长和故障注入 | 平台运维 |
 | artifact retention | 数据用途、容量和治理要求 | 数据负责人 + governance |
 | Web UI 对齐误差 | 目标浏览器与硬件解码测试 | Web + QA |
 
-如任一值没有证据，保留 `PENDING` 并阻止对应 Contract/实现冻结，不以示例值代替批准结论。
+如任一值没有证据，保留 `PENDING` 并阻止对应 Contract/实现冻结，不以示例值代替批准结论。P1 专属的 Web UI 对齐误差不阻塞核心 P0，但必须在开始 S6 前关闭。
