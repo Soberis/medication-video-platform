@@ -196,9 +196,7 @@ export function PlaybackCard({
           <Button loading={isRecoveringMediaProbe} onClick={onRecoverMissingMediaProbe}>
             恢复已丢失的检测任务
           </Button>
-          <p className="form-hint">
-            仅在 RabbitMQ 已确认原任务消息不存在时使用；会创建新的受审计尝试。
-          </p>
+          <p className="form-hint">仅在已确认原任务消息不存在时使用；会创建新的受审计尝试。</p>
         </div>
       ) : null}
     </Card>

@@ -205,6 +205,11 @@ def test_more_than_two_hand_observations_make_the_frame_invalid(
 
     assert summary.invalid_hand_frame_count == 1
     assert summary.invalid_landmark_count == 0
+    assert summary.inference_frame_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
     assert candidates == []
 
 
@@ -239,6 +244,11 @@ def test_valid_hand_emits_exactly_21_finite_landmarks_and_bounded_metadata(
 
     assert summary.invalid_landmark_count == 0
     assert summary.invalid_hand_frame_count == 0
+    assert summary.inference_frame_count == 1
+    assert summary.frames_with_hand == 1
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 1
+    assert summary.right_hand_detection_count == 0
     assert len(candidates) == 1
     candidate = candidates[0]
     candidate_landmarks = cast(list[dict[str, float]], candidate["landmarks"])
@@ -249,6 +259,118 @@ def test_valid_hand_emits_exactly_21_finite_landmarks_and_bounded_metadata(
     assert all(math.isfinite(value) for point in candidate_landmarks for value in point.values())
     candidate_box = cast(dict[str, float], candidate["bounding_box"])
     assert all(math.isfinite(value) for value in candidate_box.values())
+
+
+def test_valid_no_hand_observation_counts_as_a_valid_no_hand_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = SimpleNamespace(hand_landmarks=[], handedness=[])
+    frame = SimpleNamespace(
+        pts=0,
+        width=1280,
+        height=720,
+        to_ndarray=lambda format: object(),
+    )
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: result)
+    monkeypatch.setattr(
+        landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer([frame]))
+    )
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 1
+    assert summary.invalid_hand_frame_count == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
+    assert candidates == []
+
+
+def test_valid_and_invalid_hands_in_one_frame_invalidate_and_discard_the_whole_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    valid_points = [SimpleNamespace(x=0.1 + index * 0.01, y=0.2, z=0.0) for index in range(21)]
+    invalid_points = list(valid_points)
+    invalid_points[0] = SimpleNamespace(x=float("nan"), y=0.2, z=0.0)
+    result = SimpleNamespace(
+        hand_landmarks=[valid_points, invalid_points],
+        handedness=[
+            [SimpleNamespace(category_name="Left", score=0.9)],
+            [SimpleNamespace(category_name="Right", score=0.8)],
+        ],
+    )
+    frame = SimpleNamespace(
+        pts=0,
+        width=1280,
+        height=720,
+        to_ndarray=lambda format: object(),
+    )
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: result)
+    monkeypatch.setattr(
+        landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer([frame]))
+    )
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 1
+    assert summary.invalid_hand_frame_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
+    assert candidates == []
+
+
+def test_two_valid_hands_commit_two_candidates_and_count_each_handedness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    landmarks = [SimpleNamespace(x=0.1 + index * 0.01, y=0.2, z=0.0) for index in range(21)]
+    result = SimpleNamespace(
+        hand_landmarks=[landmarks, landmarks],
+        handedness=[
+            [SimpleNamespace(category_name="Left", score=0.9)],
+            [SimpleNamespace(category_name="Right", score=0.8)],
+        ],
+    )
+    frame = SimpleNamespace(
+        pts=0,
+        width=1280,
+        height=720,
+        to_ndarray=lambda format: object(),
+    )
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: result)
+    monkeypatch.setattr(
+        landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer([frame]))
+    )
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 1
+    assert summary.frames_with_hand == 1
+    assert summary.frames_without_hand == 0
+    assert summary.invalid_hand_frame_count == 0
+    assert summary.left_hand_detection_count == 1
+    assert summary.right_hand_detection_count == 1
+    assert len(candidates) == 2
 
 
 def test_nonfinite_handedness_score_invalidates_the_observed_hand(
@@ -280,6 +402,88 @@ def test_nonfinite_handedness_score_invalidates_the_observed_hand(
 
     assert summary.invalid_landmark_count == 0
     assert summary.invalid_hand_frame_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
+    assert candidates == []
+
+
+@pytest.mark.parametrize("coordinate", ["x", "y", "z"])
+def test_nonfinite_landmark_coordinate_invalidates_the_whole_frame(
+    monkeypatch: pytest.MonkeyPatch, coordinate: str
+) -> None:
+    values = {"x": 0.1, "y": 0.2, "z": 0.0}
+    values[coordinate] = float("nan")
+    landmarks = [SimpleNamespace(**values)] + [
+        SimpleNamespace(x=0.1, y=0.2, z=0.0) for _ in range(20)
+    ]
+    result = SimpleNamespace(
+        hand_landmarks=[landmarks],
+        handedness=[[SimpleNamespace(category_name="Left", score=0.9)]],
+    )
+    frame = SimpleNamespace(
+        pts=0,
+        width=1280,
+        height=720,
+        to_ndarray=lambda format: object(),
+    )
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: result)
+    monkeypatch.setattr(
+        landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer([frame]))
+    )
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 1
+    assert summary.invalid_hand_frame_count == 1
+    assert summary.invalid_landmark_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
+    assert candidates == []
+
+
+def test_unrecognized_handedness_is_invalid_not_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    landmarks = [SimpleNamespace(x=0.1, y=0.2, z=0.0) for _ in range(21)]
+    result = SimpleNamespace(
+        hand_landmarks=[landmarks],
+        handedness=[[SimpleNamespace(category_name="Sideways", score=0.9)]],
+    )
+    frame = SimpleNamespace(
+        pts=0,
+        width=1280,
+        height=720,
+        to_ndarray=lambda format: object(),
+    )
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: result)
+    monkeypatch.setattr(
+        landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer([frame]))
+    )
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 1
+    assert summary.invalid_hand_frame_count == 1
+    assert summary.frames_with_hand == 0
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 0
+    assert summary.right_hand_detection_count == 0
     assert candidates == []
 
 

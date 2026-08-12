@@ -110,6 +110,8 @@ def _detect_all(
                 mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), timestamp
             )
             frame_candidates: list[dict[str, object]] = []
+            frame_left_count = 0
+            frame_right_count = 0
             has_landmarks_field = hasattr(result, "hand_landmarks")
             raw_landmarks = getattr(result, "hand_landmarks", [])
             frame_has_invalid_hand = not has_landmarks_field
@@ -165,6 +167,12 @@ def _detect_all(
                 if handedness_score is None or image_width <= 0 or image_height <= 0:
                     frame_has_invalid_hand = True
                     continue
+                normalized_handedness = _handedness(
+                    None if category is None else getattr(category, "category_name", None)
+                )
+                if normalized_handedness is None:
+                    frame_has_invalid_hand = True
+                    continue
 
                 min_x, max_x = (
                     min(point["x"] for point in points),
@@ -188,27 +196,25 @@ def _detect_all(
                     "image_width": image_width,
                     "image_height": image_height,
                     "hand_index": index,
-                    "handedness": _handedness(
-                        None if category is None else getattr(category, "category_name", None)
-                    ),
+                    "handedness": normalized_handedness,
                     "handedness_score": handedness_score,
                     "bounding_box": bounding_box,
                     "landmarks": points,
                     "valid_landmark_count": 21,
                 }
                 frame_candidates.append(candidate)
-                handedness = candidate["handedness"]
-                if handedness == "LEFT":
-                    left_hand_detection_count += 1
-                elif handedness == "RIGHT":
-                    right_hand_detection_count += 1
+                if normalized_handedness == "LEFT":
+                    frame_left_count += 1
+                elif normalized_handedness == "RIGHT":
+                    frame_right_count += 1
             if frame_has_invalid_hand:
                 invalid_hand_frame_count += 1
-            else:
+            elif frame_candidates:
                 candidates.extend(frame_candidates)
-            if frame_candidates:
                 frames_with_hand += 1
-            elif not frame_has_invalid_hand:
+                left_hand_detection_count += frame_left_count
+                right_hand_detection_count += frame_right_count
+            else:
                 # Invalid-only frames are intentionally excluded from both
                 # hand/no-hand counts.  A true no-hand observation is only an
                 # empty, structurally valid detector result.
@@ -256,6 +262,10 @@ def _handedness_score(category: Any | None) -> float | None:
     return score if math.isfinite(score) and 0 <= score <= 1 else None
 
 
-def _handedness(value: str | None) -> str:
-    normalized = value.lower() if isinstance(value, str) else ""
-    return {"left": "LEFT", "right": "RIGHT"}.get(normalized, "UNKNOWN")
+def _handedness(value: str | None) -> str | None:
+    if value is None:
+        return "UNKNOWN"
+    if not isinstance(value, str):
+        return None
+    normalized = value.lower()
+    return {"left": "LEFT", "right": "RIGHT", "unknown": "UNKNOWN"}.get(normalized)

@@ -1411,7 +1411,7 @@ function exportStatusPresentation(status: DatasetExport['status']) {
     case 'QUEUED':
       return {
         title: '已批准，等待生成训练包',
-        description: '审批决定和首次任务已经记录，后台 Worker 尚未开始读取冻结输入。',
+        description: '审批决定和首次任务已经记录，后台处理尚未开始读取冻结输入。',
         label: '等待生成',
         color: 'processing',
       } as const

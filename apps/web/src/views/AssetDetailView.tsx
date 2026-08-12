@@ -468,7 +468,7 @@ export default function AssetDetailView() {
     const changeReference = await prompt({
       title: '恢复已丢失的检测任务',
       description:
-        '仅在 RabbitMQ 已确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的受审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
+        '仅在已确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的受审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
       confirmText: '确认恢复',
       placeholder: '例如：INC-20260805-001',
       validate: (value) =>
