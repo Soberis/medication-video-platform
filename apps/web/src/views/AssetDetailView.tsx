@@ -1,6 +1,6 @@
 import { Alert, App as AntdApp, Button, Card, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
 import { AnnotationTaskApiError, createAnnotationTask, type AnnotationTask } from '@/api/annotation'
 import {
@@ -54,6 +54,7 @@ import { usePromptDialog } from '@/components/PromptDialog'
 
 export default function AssetDetailView() {
   const { projectId = '', id: assetId = '' } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
   const prompt = usePromptDialog()
@@ -601,7 +602,7 @@ export default function AssetDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑">
-        <Link to={paths.videos(projectId)}>视频管理</Link>
+        <Link to={{ pathname: paths.videos(projectId), search: location.search }}>视频管理</Link>
         <span aria-hidden="true">/</span>
         <span>详情</span>
       </nav>

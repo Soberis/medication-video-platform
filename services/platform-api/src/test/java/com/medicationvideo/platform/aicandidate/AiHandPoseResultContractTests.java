@@ -33,6 +33,8 @@ class AiHandPoseResultContractTests {
 
 	private static final String INPUT_SHA256 = "a".repeat(64);
 
+	private UUID lastInsertedClipAssetId;
+
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
@@ -100,6 +102,9 @@ class AiHandPoseResultContractTests {
 				((Number) attemptState.get("inference_frame_count")).longValue());
 		org.junit.jupiter.api.Assertions.assertEquals(0, this.jdbcTemplate
 			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+		assertEquals(0,
+				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision WHERE clip_asset_id = ?",
+						Integer.class, this.lastInsertedClipAssetId));
 	}
 
 	@Test
@@ -174,6 +179,9 @@ class AiHandPoseResultContractTests {
 			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
 		assertEquals(21, this.jdbcTemplate.queryForObject(
 				"SELECT valid_landmark_count FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+		assertEquals(0,
+				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision WHERE clip_asset_id = ?",
+						Integer.class, this.lastInsertedClipAssetId));
 	}
 
 	@Test
@@ -521,6 +529,7 @@ class AiHandPoseResultContractTests {
 	private void insertRunningJob(UUID jobId, UUID attemptId, UUID messageId, String leaseHash, Instant now) {
 		var projectId = UUID.randomUUID();
 		var clipAssetId = UUID.randomUUID();
+		this.lastInsertedClipAssetId = clipAssetId;
 		var batchId = UUID.randomUUID();
 		var uploadFileId = UUID.randomUUID();
 		var clientFileId = UUID.randomUUID();

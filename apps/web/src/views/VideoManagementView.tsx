@@ -1,6 +1,6 @@
 import { Button, Card, Empty, InputNumber, Select, Table, Tag } from 'antd'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
 import {
   CatalogApiError,
@@ -20,6 +20,10 @@ import {
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { formatDateTime, statusTone } from '@/catalog-presentation'
+import {
+  parseVideoFilters,
+  replaceVideoFiltersInSearchParams,
+} from '@/catalog-video-filters'
 
 const mediaStatusLabels: Record<VideoSummaryMediaStatus, string> = {
   UPLOADED: '待处理',
@@ -63,7 +67,12 @@ const cleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> = {
 
 export default function VideoManagementView() {
   const { projectId = '' } = useParams()
-  const [filters, setFilters] = useState<VideoSummaryFilters>({})
+  const location = useLocation()
+  const navigate = useNavigate()
+  const filters = useMemo(
+    () => parseVideoFilters(new URLSearchParams(location.search)),
+    [location.search],
+  )
   const [items, setItems] = useState<VideoSummary[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -75,7 +84,11 @@ export default function VideoManagementView() {
   const activeRequest = useRef<AbortController | null>(null)
 
   const loadPage = useCallback(
-    async (append = false, nextFilters = filters) => {
+    async (
+      append = false,
+      nextFilters: VideoSummaryFilters = {},
+      cursor: string | null = null,
+    ) => {
       activeRequest.current?.abort()
       const request = new AbortController()
       activeRequest.current = request
@@ -87,7 +100,7 @@ export default function VideoManagementView() {
       setErrorMessage('')
       try {
         const [pageResult, summaryResult] = await Promise.allSettled([
-          listVideoSummaries(projectId, nextFilters, append ? nextCursor : null, request.signal),
+          listVideoSummaries(projectId, nextFilters, append ? cursor : null, request.signal),
           getDataManagementSummary(projectId, nextFilters, request.signal),
         ])
         if (activeRequest.current !== request) return
@@ -115,23 +128,34 @@ export default function VideoManagementView() {
         if (activeRequest.current === request) activeRequest.current = null
       }
     },
-    [filters, nextCursor, projectId],
+    [projectId],
   )
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadPage(false, {}), 0)
+    setItems([])
+    setNextCursor(null)
+    const timer = window.setTimeout(() => void loadPage(false, filters), 0)
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  }, [filters, loadPage, projectId])
 
   function applyFilters(nextFilters: VideoSummaryFilters) {
-    setFilters(nextFilters)
-    setItems([])
-    setNextCursor(null)
-    void loadPage(false, nextFilters)
+    const nextSearchParams = replaceVideoFiltersInSearchParams(
+      new URLSearchParams(location.search),
+      nextFilters,
+    )
+    const nextSearch = nextSearchParams.toString()
+    const currentSearch = location.search.startsWith('?')
+      ? location.search.slice(1)
+      : location.search
+    if (nextSearch === currentSearch) return
+    void navigate({
+      pathname: location.pathname,
+      search: nextSearch ? `?${nextSearch}` : '',
+      hash: location.hash,
+    })
   }
 
   async function startHandPose(row: VideoSummary) {
@@ -181,7 +205,7 @@ export default function VideoManagementView() {
           <h1 id="video-management-title">视频管理</h1>
           <p>从媒体入库到手部候选和人工配药动作标注，按单个固定机位视频查看当前状态。</p>
         </div>
-        <Button loading={loadState === 'loading'} onClick={() => void loadPage(false)}>
+        <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
           刷新
         </Button>
       </section>
@@ -248,7 +272,6 @@ export default function VideoManagementView() {
             相机编号
             <InputNumber
               min={1}
-              max={64}
               value={filters.cameraNumber}
               placeholder="全部"
               onChange={(value) =>
@@ -371,7 +394,7 @@ export default function VideoManagementView() {
       {loadState === 'error' ? (
         <div className="catalog-error" role="alert">
           <span>{errorMessage}</span>
-          <Button onClick={() => void loadPage(false)}>重试</Button>
+          <Button onClick={() => void loadPage(false, filters)}>重试</Button>
         </div>
       ) : null}
       {actionMessage ? (
@@ -462,7 +485,13 @@ export default function VideoManagementView() {
                 width: 220,
                 render: (_, row) => (
                   <span className="table-actions">
-                    <Link className="text-link" to={paths.asset(projectId, row.video_id)}>
+                    <Link
+                      className="text-link"
+                      to={{
+                        pathname: paths.asset(projectId, row.video_id),
+                        search: location.search,
+                      }}
+                    >
                       {row.hand_status === 'SUCCEEDED' ? '播放 / 查看结果' : '播放'}
                     </Link>
                     {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
@@ -502,7 +531,10 @@ export default function VideoManagementView() {
           />
           {nextCursor ? (
             <div className="catalog-pagination">
-              <Button loading={loadState === 'loading'} onClick={() => void loadPage(true)}>
+              <Button
+                loading={loadState === 'loading'}
+                onClick={() => void loadPage(true, filters, nextCursor)}
+              >
                 加载更多
               </Button>
             </div>
