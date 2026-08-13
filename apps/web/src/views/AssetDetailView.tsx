@@ -20,12 +20,8 @@ import {
   type HandPoseCandidateResponse,
 } from '@/api/catalog'
 import {
-  assignClipAssetFolder,
   getProject,
-  listAssetFolders,
   listProjectMemberships,
-  unclassifyClipAsset,
-  type AssetFolder,
   type ProjectMembership,
   type ProjectRole,
 } from '@/api/projects'
@@ -43,7 +39,6 @@ import { AssetActivityCard } from '@/components/AssetActivityCard'
 import {
   AnnotationTaskCard,
   AssetFacts,
-  ClassificationCard,
   DangerZoneCard,
   MediaReportCard,
   PlaybackCard,
@@ -65,9 +60,6 @@ export default function AssetDetailView() {
   const [actionErrorCode, setActionErrorCode] = useState('')
   const [actionErrorMessage, setActionErrorMessage] = useState('')
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
-  const [folders, setFolders] = useState<AssetFolder[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState('')
-  const [isClassifying, setIsClassifying] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [playbackGrant, setPlaybackGrant] = useState<ClipAssetPlaybackGrant | null>(null)
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle')
@@ -126,7 +118,6 @@ export default function AssetDetailView() {
     detail.session_binding?.enabled_for_hand_detection !== false &&
     (handPoseJob === null ||
       (handPoseJob.status === 'FAILED' && handPoseJob.run_summary?.retryable === true))
-  const classificationChanged = selectedFolderId !== (detail?.folder_id ?? '')
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
     if (canPlay)
@@ -289,7 +280,6 @@ export default function AssetDetailView() {
       setCreatedAnnotationTask(null)
       setHandPoseJob(null)
       setHandPoseCandidates(null)
-      setSelectedFolderId(response.folder_id ?? '')
       setLoadState('success')
       if (response.status === 'INGESTED') {
         void loadQualityReview()
@@ -339,18 +329,12 @@ export default function AssetDetailView() {
       if (roleRequest.current !== request) return
       setProjectRole(project.current_role)
       if (project.current_role !== 'ADMIN') {
-        setFolders([])
         setAnnotationAssignees([])
         setSelectedAnnotationAssignee('')
         return
       }
-      const [folderResult, membershipResult] = await Promise.allSettled([
-        listAssetFolders(projectId, request.signal),
-        listProjectMemberships(projectId, request.signal),
-      ])
+      const memberships = await listProjectMemberships(projectId, request.signal)
       if (request.signal.aborted || roleRequest.current !== request) return
-      setFolders(folderResult.status === 'fulfilled' ? folderResult.value : [])
-      const memberships = membershipResult.status === 'fulfilled' ? membershipResult.value : []
       setAnnotationAssignees(memberships)
       setSelectedAnnotationAssignee((current) =>
         memberships.some((membership) => membership.actor_id === current)
@@ -406,31 +390,6 @@ export default function AssetDetailView() {
       )
     } finally {
       setIsDeleting(false)
-    }
-  }
-  async function updateClassification() {
-    if (!detail || !canDelete || !classificationChanged || isClassifying) return
-    setIsClassifying(true)
-    setActionErrorCode('')
-    setActionErrorMessage('')
-    try {
-      if (selectedFolderId) {
-        await assignClipAssetFolder(projectId, assetId, selectedFolderId)
-        void message.success('视频已归类到所选文件夹。')
-      } else {
-        await unclassifyClipAsset(projectId, assetId)
-        void message.success('视频已取消分类。')
-      }
-      await loadDetail()
-    } catch (error) {
-      setActionErrorCode(
-        error instanceof CatalogApiError ? error.errorCode : 'CLIP_ASSET_CLASSIFICATION_FAILED',
-      )
-      setActionErrorMessage(
-        error instanceof CatalogApiError ? error.message : '视频分类未更新，请稍后重试。',
-      )
-    } finally {
-      setIsClassifying(false)
     }
   }
   async function startPlayback() {
@@ -771,17 +730,7 @@ export default function AssetDetailView() {
               onSelectedAssigneeChange={setSelectedAnnotationAssignee}
             />
           ) : null}
-          {canDelete ? (
-            <ClassificationCard
-              changed={classificationChanged}
-              folders={folders}
-              isSaving={isClassifying}
-              selectedFolderId={selectedFolderId}
-              onSave={() => void updateClassification()}
-              onSelectedFolderChange={setSelectedFolderId}
-            />
-          ) : null}
-          <AssetFacts detail={detail} projectId={projectId} />
+          <AssetFacts detail={detail} />
           <AssetActivityCard key={assetId} assetId={assetId} projectId={projectId} />
           {canDelete ? (
             <DangerZoneCard isDeleting={isDeleting} onDelete={() => void confirmDelete()} />

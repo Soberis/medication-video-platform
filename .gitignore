@@ -39,6 +39,10 @@ node_modules/
 .coverage
 htmlcov/
 
+# Repository-local pytest basetemp (per-project; avoids the Windows %TEMP% pytest junction)
+.runtime/
+.pytest-tmp/
+
 # IDE and OS
 .idea/
 .vscode/

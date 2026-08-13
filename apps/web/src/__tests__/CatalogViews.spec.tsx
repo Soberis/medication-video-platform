@@ -1579,7 +1579,6 @@ describe('catalog views', () => {
     expect(screen.getByText(/视频已完成上传完整性校验/)).toBeInTheDocument()
     expect(screen.getAllByText('90000000-0000-4000-8000-000000000001').length).toBeGreaterThan(0)
     expect(screen.getByText(/尚未绑定到 CaptureSession/)).toBeInTheDocument()
-    expect(screen.getAllByText('未分类').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '播放视频' })).toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain('object_key')
@@ -1593,29 +1592,15 @@ describe('catalog views', () => {
     expect(screen.queryByRole('button', { name: '删除视频' })).not.toBeInTheDocument()
   })
 
-  it('shows the existing project folders to an administrator classifying a video', async () => {
-    const folderId = 'a0000000-0000-4000-8000-000000000001'
-    const fetchMock = stubAsset({
-      role: 'ADMIN',
-      status: 'UPLOADED',
-      folders: [
-        {
-          folder_id: folderId,
-          project_id: projectId,
-          display_name: '待标注',
-          version: 0,
-          created_at: '2026-07-15T01:03:03Z',
-          updated_at: '2026-07-15T01:03:03Z',
-        },
-      ],
-    })
+  it('does not show the folder classification surface in LEAN-P0', async () => {
+    const fetchMock = stubAsset({ role: 'ADMIN', status: 'UPLOADED' })
     renderAssetDetail()
-    expect(await screen.findByText('视频分类')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/asset-folders`,
-      expect.any(Object),
+    expect(await screen.findByText('视频详情')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '更新分类' })).not.toBeInTheDocument()
+    expect(screen.queryByText('视频分类')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/asset-folders'))).toBe(
+      false,
     )
-    expect(screen.getByRole('button', { name: '更新分类' })).toBeInTheDocument()
   })
 
   it('lets a project member request playback only after an explicit click', async () => {
@@ -1871,7 +1856,6 @@ function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER
 function stubAsset(options: {
   role: 'ADMIN' | 'MEMBER'
   status: 'UPLOADED' | 'INGESTED'
-  folders?: object[]
   memberships?: object[]
   mediaReport?: object
   quality?: object
@@ -1895,8 +1879,6 @@ function stubAsset(options: {
           created_at: '2026-07-15T01:03:03Z',
         }),
       )
-    if (url.endsWith('/asset-folders'))
-      return Promise.resolve(jsonResponse({ items: options.folders ?? [] }))
     if (url.endsWith('/memberships'))
       return Promise.resolve(jsonResponse({ items: options.memberships ?? [] }))
     if (url.endsWith('/media-report'))

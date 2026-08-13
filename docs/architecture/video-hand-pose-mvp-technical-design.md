@@ -1,9 +1,11 @@
 # 配药视频数据管理平台：手部预标注优先技术设计
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：对应 V1.18 当前实施设计<br>
+> 状态：对应 V1.20 LEAN-P0 当前实施设计<br>
 > 日期：2026-08-10<br>
-> 对齐需求：[V1.18 配药视频数据管理平台需求文档](../requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md)
+> 对齐需求：[V1.20 配药视频数据管理平台需求文档](../requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md)
+
+V1.20 继承本文的单视频数据闭环设计。CaptureSession 仅保留为隐藏的接入事实；V1.19 多相机同步、DatasetVersion/Export 与 AI Evaluation 平台化均为 DEFERRED，不属于本文当前实施范围。
 
 ## 1. 设计目标与系统边界
 

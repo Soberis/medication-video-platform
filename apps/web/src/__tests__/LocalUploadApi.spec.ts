@@ -84,10 +84,7 @@ describe('platform-local upload API', () => {
     const progress = vi.fn()
     const file = new File(['synthetic-v'], 'synthetic.mp4', { type: 'video/mp4' })
 
-    const result = await uploadPlatformLocalVideo(
-      { projectId, assetFolderId: null, file },
-      progress,
-    )
+    const result = await uploadPlatformLocalVideo({ projectId, file }, progress)
 
     expect(result).toEqual({
       batchId,

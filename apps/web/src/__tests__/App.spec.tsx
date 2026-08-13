@@ -72,7 +72,7 @@ describe('App', () => {
     ).toBeGreaterThan(0)
   })
 
-  it('keeps the project-scoped event-log index in administrator diagnostics', () => {
+  it('keeps the event-log page reachable by URL while hiding it from product navigation', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
       [
@@ -87,14 +87,13 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    const eventLogLink = within(navigation).getByRole('link', { name: '采集事件日志' })
-    expect(eventLogLink).toHaveAttribute('href', `/projects/${projectId}/event-logs`)
-    expect(eventLogLink).toHaveAttribute('aria-current', 'page')
-    expect(within(navigation).getByText('管理').closest('details')).toHaveClass('nav-more-active')
+    expect(within(navigation).queryByRole('link', { name: '采集事件日志' })).not.toBeInTheDocument()
+    expect(within(navigation).getByText('管理').closest('details')).not.toHaveClass(
+      'nav-more-active',
+    )
     expect(within(navigation).getByRole('link', { name: '项目' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).getByText('项目成员')).toBeInTheDocument()
     expect(screen.getByText('采集事件日志页面')).toBeInTheDocument()
   })
 
@@ -118,7 +117,7 @@ describe('App', () => {
       'page',
     )
     expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '多相机查看' })).toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: '多相机查看' })).not.toBeInTheDocument()
     expect(within(navigation).queryByRole('link', { name: '文件夹' })).not.toBeInTheDocument()
     expect(
       within(navigation).queryByRole('link', { name: '数据集版本（后续）' }),

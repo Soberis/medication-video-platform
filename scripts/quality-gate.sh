@@ -683,7 +683,12 @@ else
         if $changed_only; then
             add_skip "pytest: deferred to full verification for $project_dir"
         else
-            uv run python -m pytest
+            # Keep parity with quality-gate.ps1: a repository-local per-project
+            # basetemp avoids the Windows %TEMP% pytest-of-<user>/pytest-current
+            # junction whose session-finish cleanup can fail with access denied.
+            pytest_basetemp="$PROJECT_ROOT/.runtime/pytest/${relative_project_dir//\//_}"
+            mkdir -p "$pytest_basetemp"
+            uv run python -m pytest "--basetemp=$pytest_basetemp"
             if (($? != 0)); then
                 project_failed=true
                 add_failure "pytest failed: $project_dir"

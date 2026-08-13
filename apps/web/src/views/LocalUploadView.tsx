@@ -9,7 +9,7 @@ import {
   type LocalUploadProgress,
   uploadPlatformLocalVideo,
 } from '@/api/local-upload'
-import { listAssetFolders, listProjects, type AssetFolder, type DataProject } from '@/api/projects'
+import { listProjects, type DataProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { formatBytes } from '@/catalog-presentation'
 
@@ -86,22 +86,16 @@ function taskDescription(task: UploadTask) {
 
 export default function LocalUploadView() {
   const [projects, setProjects] = useState<DataProject[]>([])
-  const [folders, setFolders] = useState<AssetFolder[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [tasks, dispatchTasks] = useReducer(taskReducer, [])
   const [projectLoadState, setProjectLoadState] = useState<'loading' | 'success' | 'error'>(
     'loading',
   )
-  const [folderLoadState, setFolderLoadState] = useState<'idle' | 'loading' | 'success' | 'error'>(
-    'idle',
-  )
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'completed'>('idle')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const projectRequest = useRef<AbortController | null>(null)
-  const folderRequest = useRef<AbortController | null>(null)
   const uploadRequest = useRef<AbortController | null>(null)
   const isUploading = uploadState === 'uploading'
   const canStart =
@@ -149,41 +143,11 @@ export default function LocalUploadView() {
       if (projectRequest.current === request) projectRequest.current = null
     }
   }, [])
-  const loadFolders = useCallback(async (projectId: string) => {
-    folderRequest.current?.abort()
-    setSelectedFolderId(null)
-    setFolders([])
-    if (!projectId) {
-      setFolderLoadState('idle')
-      return
-    }
-    const request = new AbortController()
-    folderRequest.current = request
-    setFolderLoadState('loading')
-    try {
-      const response = await listAssetFolders(projectId, request.signal)
-      if (folderRequest.current !== request) return
-      setFolders(response)
-      setFolderLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || folderRequest.current !== request) return
-      setFolderLoadState('error')
-      setErrorCode(
-        error instanceof CatalogApiError ? error.errorCode : 'ASSET_FOLDER_REQUEST_FAILED',
-      )
-      setErrorMessage(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取项目文件夹，请稍后重试。',
-      )
-    } finally {
-      if (folderRequest.current === request) folderRequest.current = null
-    }
-  }, [])
   useEffect(() => {
     const timer = window.setTimeout(() => void loadProjects(), 0)
     return () => {
       window.clearTimeout(timer)
       projectRequest.current?.abort()
-      folderRequest.current?.abort()
       uploadRequest.current?.abort()
     }
   }, [loadProjects])
@@ -194,10 +158,9 @@ export default function LocalUploadView() {
       setUploadState('idle')
       setErrorCode('')
       setErrorMessage('')
-      void loadFolders(selectedProjectId)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadFolders, selectedProjectId])
+  }, [selectedProjectId])
 
   function selectFiles(event: React.ChangeEvent<HTMLInputElement>) {
     setSelectedFiles(Array.from(event.target.files ?? []))
@@ -211,7 +174,6 @@ export default function LocalUploadView() {
     if (!canStart) return
     const files = [...selectedFiles]
     const projectId = selectedProjectId
-    const folderId = selectedFolderId
     const request = new AbortController()
     uploadRequest.current = request
     dispatchTasks({ type: 'initialize', files })
@@ -222,7 +184,7 @@ export default function LocalUploadView() {
       dispatchTasks({ type: 'running', id })
       try {
         const result = await uploadPlatformLocalVideo(
-          { projectId, assetFolderId: folderId, file },
+          { projectId, file },
           (progress) => dispatchTasks({ type: 'progress', id, progress }),
           request.signal,
         )
@@ -298,33 +260,6 @@ export default function LocalUploadView() {
                   label: `${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '普通用户'}）`,
                 }))}
               />
-            </div>
-            <div className="local-upload-field">
-              <label htmlFor="local-upload-folder">项目文件夹（可选）</label>
-              <Select
-                id="local-upload-folder"
-                value={selectedFolderId}
-                allowClear
-                loading={folderLoadState === 'loading'}
-                disabled={isUploading || !selectedProjectId}
-                placeholder="不分类"
-                onChange={(value) => setSelectedFolderId(value ?? null)}
-                options={folders.map((folder) => ({
-                  value: folder.folder_id,
-                  label: folder.display_name,
-                }))}
-              />
-              {selectedProjectId && folderLoadState === 'success' && folders.length === 0 ? (
-                <p className="form-hint">当前项目没有文件夹，视频将保持未分类。</p>
-              ) : null}
-              {selectedProjectId && folderLoadState === 'error' ? (
-                <div className="inline-form-error" role="alert">
-                  <span>项目文件夹读取失败，可重试或保持未分类上传。</span>
-                  <Button type="link" onClick={() => void loadFolders(selectedProjectId)}>
-                    重试
-                  </Button>
-                </div>
-              ) : null}
             </div>
             <div className="local-upload-field local-upload-files-field">
               <label htmlFor="local-upload-files">本机视频</label>

@@ -27,7 +27,6 @@ export interface LocalUploadProgress {
 
 export interface PlatformLocalUploadRequest {
   readonly projectId: string
-  readonly assetFolderId: string | null
   readonly file: File
 }
 
@@ -64,13 +63,12 @@ interface ApiErrorBody {
 }
 
 const errorMessages: Record<string, string> = {
-  INVALID_REQUEST: '上传信息不符合要求，请检查项目、文件夹和视频后重试。',
+  INVALID_REQUEST: '上传信息不符合要求，请检查项目和视频后重试。',
   PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前用户无权向该项目上传视频。',
   PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED: '每个本地上传批次只能包含一个视频。',
   PLATFORM_LOCAL_VIDEO_REQUIRED: '本地上传只能登记一个视频文件。',
   PLATFORM_LOCAL_DEVICE_INVALID: '本地上传来源标识无效。',
-  UPLOAD_SOURCE_FOLDER_UNSUPPORTED: '当前上传来源不支持选择项目文件夹。',
   UPLOAD_BATCH_EXPIRED: '上传批次已过期，请重新开始。',
   UPLOAD_PART_AUTHORIZATION_FAILED: '无法取得视频分片上传授权，请稍后重试。',
   UPLOAD_FILE_SHA256_MISMATCH: '服务器校验到视频内容不完整或已变化，请重新选择文件后上传。',
@@ -127,7 +125,6 @@ export async function uploadPlatformLocalVideo(
       project_id: request.projectId,
       device_id: 'PLATFORM_LOCAL',
       upload_source_type: 'PLATFORM_LOCAL',
-      asset_folder_id: request.assetFolderId,
       file_count: 1,
       total_size_bytes: request.file.size,
       manifest_sha256: manifestSha256,

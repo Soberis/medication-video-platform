@@ -5,6 +5,8 @@
 > 性质：**只读审计**，不落任何代码改动；产出分类清单供评审，评审通过后再单独执行禁用/删除。
 > 对齐：[AGENTS.md](../../AGENTS.md) Sources of Truth、MVP Simplicity、Delivery Order
 
+> 执行说明：本文的 Git 状态是审计发生时的历史快照，不代表当前工作区。已批准结论以 [V1.20 LEAN-P0 正式基线](../requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md) 为准。
+
 ## 0. Audit Snapshot（可复现快照）
 
 ```text

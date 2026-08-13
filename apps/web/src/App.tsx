@@ -5,11 +5,8 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 
 const managementRoutePatterns = [
-  '/projects/:projectId/sessions/*',
-  '/projects/:projectId/datasets/*',
   '/projects/:projectId/assets/*',
   '/projects/:projectId/members',
-  '/projects/:projectId/event-logs',
   paths.uploads,
   paths.localUpload,
   paths.accounts,
@@ -57,11 +54,6 @@ export default function AppShell() {
           <details className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}>
             <summary>管理</summary>
             <div className="nav-more-menu">
-              {projectId ? (
-                <NavLink end to={paths.sessions(projectId)} onClick={closeManagementMenu}>
-                  多相机查看
-                </NavLink>
-              ) : null}
               {isAdministrator ? (
                 <NavLink end to={paths.localUpload} onClick={closeManagementMenu}>
                   本地上传（辅助）
@@ -70,11 +62,6 @@ export default function AppShell() {
               {projectId && isAdministrator ? (
                 <NavLink end to={paths.memberships(projectId)} onClick={closeManagementMenu}>
                   项目成员
-                </NavLink>
-              ) : null}
-              {projectId && isAdministrator ? (
-                <NavLink end to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
-                  采集事件日志
                 </NavLink>
               ) : null}
               {isAdministrator ? (

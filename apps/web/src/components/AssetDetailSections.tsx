@@ -9,7 +9,7 @@ import type {
   HandPoseCandidate,
   MediaReport,
 } from '@/api/catalog'
-import type { AssetFolder, ProjectMembership } from '@/api/projects'
+import type { ProjectMembership } from '@/api/projects'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import {
   qualityDecisionLabels,
@@ -517,48 +517,7 @@ export function AnnotationTaskCard({
   )
 }
 
-interface ClassificationCardProps {
-  changed: boolean
-  folders: AssetFolder[]
-  isSaving: boolean
-  selectedFolderId: string
-  onSave: () => void
-  onSelectedFolderChange: (folderId: string) => void
-}
-
-export function ClassificationCard({
-  changed,
-  folders,
-  isSaving,
-  selectedFolderId,
-  onSave,
-  onSelectedFolderChange,
-}: ClassificationCardProps) {
-  return (
-    <Card className="detail-card" title={<strong>视频分类</strong>} variant="outlined">
-      <p className="form-hint">仅在当前项目内归类；取消分类不会删除视频，也不会改变项目权限。</p>
-      <div className="asset-classification-actions">
-        <Select
-          value={selectedFolderId}
-          aria-label="视频文件夹"
-          onChange={onSelectedFolderChange}
-          options={[
-            { label: '未分类', value: '' },
-            ...folders.map((folder) => ({
-              label: folder.display_name,
-              value: folder.folder_id,
-            })),
-          ]}
-        />
-        <Button type="primary" disabled={!changed} loading={isSaving} onClick={onSave}>
-          更新分类
-        </Button>
-      </div>
-    </Card>
-  )
-}
-
-export function AssetFacts({ detail, projectId }: { detail: ClipAssetRead; projectId: string }) {
+export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
   return (
     <>
       <Card className="detail-card" title={<strong>文件信息</strong>} variant="outlined">
@@ -567,11 +526,6 @@ export function AssetFacts({ detail, projectId }: { detail: ClipAssetRead; proje
           items={[
             { key: 'content', label: '内容类型', children: detail.content_type },
             { key: 'size', label: '文件大小', children: formatBytes(detail.size_bytes) },
-            {
-              key: 'folder',
-              label: '文件夹',
-              children: detail.folder_id ? <code>{detail.folder_id}</code> : '未分类',
-            },
             {
               key: 'batch',
               label: '批次 ID',
@@ -602,14 +556,7 @@ export function AssetFacts({ detail, projectId }: { detail: ClipAssetRead; proje
               {
                 key: 'session',
                 label: '所属 Session',
-                children: (
-                  <Link
-                    className="text-link"
-                    to={paths.session(projectId, detail.session_binding.capture_session_id)}
-                  >
-                    {detail.session_binding.capture_session_id}
-                  </Link>
-                ),
+                children: <code>{detail.session_binding.capture_session_id}</code>,
               },
               {
                 key: 'camera',

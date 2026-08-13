@@ -277,9 +277,9 @@ if $start_worker; then
         fi
     fi
 
-    if managed_process_running export-worker; then
-        echo "Export Worker is already managed by this script (PID $(managed_process_pid export-worker))."
-    else
+    # Export Worker is FROZEN under LEAN-P0 and no longer part of the default startup chain.
+    # Keep the existing explicit recovery path without starting it during ordinary P0 startup.
+    if $restart_export_worker; then
         start_managed_process \
             export-worker "Export Worker" "$LOG_DIRECTORY/export-worker.log" \
             uv run --directory "$PROJECT_ROOT/workers/export-worker" export-worker
@@ -340,6 +340,6 @@ echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
 echo "Start Web separately: pnpm run web:dev"
-echo "Workers: Media and Export started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true."
+echo "Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true. Export Worker is FROZEN and not started by default."
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

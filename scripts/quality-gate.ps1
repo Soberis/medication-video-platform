@@ -42,6 +42,17 @@ function Get-Sha256Hex {
     }
 }
 
+function Get-PythonBasetemp {
+    param([string]$ProjectDir)
+
+    # The default pytest basetemp (%TEMP%\pytest-of-<user>\pytest-current) is a
+    # reparse point on Windows and its session-finish cleanup can fail with
+    # PermissionError [WinError 5] Access denied. Give every Python project its
+    # own repository-local basetemp so runs never share the system junction.
+    $relative = [IO.Path]::GetRelativePath($root, $ProjectDir).Replace('\', '_').Replace('/', '_')
+    return Join-Path $root (".runtime/pytest/$relative")
+}
+
 function Get-GitRepositoryPaths {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = 'git'
@@ -675,7 +686,9 @@ else {
                 Add-Skip "pytest: deferred to full verification for $projectDir"
             }
             else {
-                & uv run python -m pytest
+                $basetemp = Get-PythonBasetemp $projectDir
+                New-Item -ItemType Directory -Force -Path $basetemp | Out-Null
+                & uv run python -m pytest "--basetemp=$basetemp"
                 if ($LASTEXITCODE -ne 0) {
                     $projectFailed = $true
                     Add-Failure "pytest failed: $projectDir"

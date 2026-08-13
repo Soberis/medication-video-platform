@@ -308,10 +308,9 @@ if ($Worker) {
     else {
         Start-LocalProcess 'worker' 'Media Worker' 'cmd.exe' "/c uv run --directory workers/media-worker media-worker" (Join-Path $logDirectory 'worker.log')
     }
-    if (Test-ManagedProcessRunning 'export-worker') {
-        Write-Host "Export Worker is already managed by this script (PID $($managedProcesses['export-worker'].processId))." -ForegroundColor Yellow
-    }
-    else {
+    # Export Worker is FROZEN under LEAN-P0 and no longer part of the default startup chain.
+    # Keep the existing explicit recovery path without starting it during ordinary P0 startup.
+    if ($RestartExportWorker) {
         Start-LocalProcess 'export-worker' 'Export Worker' 'cmd.exe' "/c uv run --directory workers/export-worker export-worker" (Join-Path $logDirectory 'export-worker.log')
     }
 }
@@ -355,6 +354,6 @@ if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
-Write-Host 'Workers: Media and Export started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true.' -ForegroundColor Cyan
+Write-Host 'Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true. Export Worker is FROZEN and not started by default.' -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

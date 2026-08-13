@@ -12,23 +12,6 @@ export interface DataProject {
   created_at: string
 }
 
-export interface AssetFolder {
-  folder_id: string
-  project_id: string
-  display_name: string
-  version: number
-  created_at: string
-  updated_at: string
-}
-
-export interface ClipAssetFolderAssignment {
-  clip_asset_id: string
-  project_id: string
-  folder_id: string | null
-  version: number
-  updated_at: string
-}
-
 export interface ProjectMembership {
   membership_id: string
   project_id: string
@@ -117,40 +100,6 @@ export async function removeProjectMembership(
   )
 }
 
-export async function listAssetFolders(
-  projectId: string,
-  signal?: AbortSignal,
-): Promise<AssetFolder[]> {
-  return (
-    await readJson<ListResponse<AssetFolder>>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders`,
-      signal,
-    )
-  ).items
-}
-
-export function assignClipAssetFolder(
-  projectId: string,
-  clipAssetId: string,
-  folderId: string,
-): Promise<ClipAssetFolderAssignment> {
-  return writeJson<ClipAssetFolderAssignment>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/folder`,
-    'PUT',
-    { folder_id: folderId },
-  )
-}
-
-export function unclassifyClipAsset(
-  projectId: string,
-  clipAssetId: string,
-): Promise<ClipAssetFolderAssignment> {
-  return writeJson<ClipAssetFolderAssignment>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/folder`,
-    'DELETE',
-  )
-}
-
 async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     method: 'GET',
@@ -199,11 +148,7 @@ async function projectApiError(response: Response): Promise<CatalogApiError> {
   const errorMessage =
     errorCode === 'PROJECT_ACCESS_DENIED'
       ? '当前身份没有执行此操作的权限。'
-      : errorCode === 'ASSET_FOLDER_NAME_CONFLICT'
-        ? '当前项目中已存在同名文件夹。'
-        : errorCode === 'ASSET_FOLDER_NOT_FOUND'
-          ? '未找到该文件夹，或它已被其他管理员删除。'
-          : '暂时无法读取或更新项目数据，请稍后重试。'
+      : '暂时无法读取或更新项目数据，请稍后重试。'
   return new CatalogApiError(
     errorMessage,
     errorCode,

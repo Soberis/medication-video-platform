@@ -9,6 +9,7 @@ import test from 'node:test'
 
 const execFileAsync = promisify(execFile)
 const scriptPath = fileURLToPath(new URL('start-local.sh', import.meta.url))
+const powershellScriptPath = fileURLToPath(new URL('start-local.ps1', import.meta.url))
 const commonScriptPath = fileURLToPath(new URL('local-common.sh', import.meta.url))
 const qualityGateScriptPath = fileURLToPath(new URL('quality-gate.sh', import.meta.url))
 const shellScripts = [
@@ -95,6 +96,30 @@ test('help documents controlled restart and synthetic recovery options', posixOn
   assert.match(result.stdout, /--restart-export-worker/)
   assert.match(result.stdout, /--export-worker-synthetic-fail-first-attempt/)
   assert.match(result.stdout, /--export-worker-synthetic-lease-loss-first-attempt/)
+})
+
+test('Export Worker stays out of default startup while explicit restart remains available', async () => {
+  const [shellSource, powershellSource] = await Promise.all([
+    readFile(scriptPath, 'utf8'),
+    readFile(powershellScriptPath, 'utf8'),
+  ])
+
+  assert.match(
+    shellSource,
+    /if \$restart_export_worker; then[\s\S]*?start_managed_process \\\s*export-worker "Export Worker"/,
+  )
+  assert.match(
+    powershellSource,
+    /if \(\$RestartExportWorker\) \{[\s\S]*?Start-LocalProcess 'export-worker' 'Export Worker'/,
+  )
+  assert.doesNotMatch(
+    shellSource,
+    /if managed_process_running export-worker; then[\s\S]*?else[\s\S]*?start_managed_process/,
+  )
+  assert.doesNotMatch(
+    powershellSource,
+    /if \(Test-ManagedProcessRunning 'export-worker'\)[\s\S]*?else[\s\S]*?Start-LocalProcess 'export-worker'/,
+  )
 })
 
 test('Export Worker restart requires workers to be enabled', posixOnly, async () => {
