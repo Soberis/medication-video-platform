@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import { Button } from 'antd'
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router'
+import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router'
 
 import AppShell from '@/App'
 import { useAuth } from '@/app/auth'
@@ -47,6 +47,15 @@ function AdministratorBoundary() {
   return auth.session?.role === 'ADMIN' ? <Outlet /> : <Navigate replace to={paths.projects} />
 }
 
+export function LegacyProjectAssetListRedirect() {
+  const { projectId } = useParams()
+  return projectId ? (
+    <Navigate replace to={paths.videos(projectId)} />
+  ) : (
+    <Navigate replace to={paths.projects} />
+  )
+}
+
 export const router = createBrowserRouter([
   {
     path: paths.login,
@@ -78,6 +87,10 @@ export const router = createBrowserRouter([
             lazy: async () => ({
               Component: (await import('@/views/VideoManagementView')).default,
             }),
+          },
+          {
+            path: '/projects/:projectId/assets',
+            element: <LegacyProjectAssetListRedirect />,
           },
           {
             path: '/projects/:projectId/assets/:id',

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import AppShell from '@/App'
+import { LegacyProjectAssetListRedirect } from '@/app/router'
 import { renderRoute, renderRouter } from '@/test/render'
 import ProjectListView from '@/views/ProjectListView'
 
@@ -131,6 +132,28 @@ describe('App', () => {
       within(navigation).queryByRole('link', { name: '本地上传（辅助）' }),
     ).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
+  })
+
+  it('redirects legacy project asset list URLs to video management', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    const { router } = renderRouter(
+      [
+        {
+          path: '/projects/:projectId/assets',
+          element: <LegacyProjectAssetListRedirect />,
+        },
+        {
+          path: '/projects/:projectId/videos',
+          element: <AppShell />,
+          children: [{ index: true, element: <div>视频管理页面</div> }],
+        },
+      ],
+      [`/projects/${projectId}/assets`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    expect(router.state.location.pathname).toBe(`/projects/${projectId}/videos`)
+    expect(screen.getByText('视频管理页面')).toBeInTheDocument()
   })
 
   it('only highlights local upload in the management menu on the local-upload page', () => {

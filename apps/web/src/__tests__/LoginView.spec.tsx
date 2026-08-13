@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRouter } from '@/test/render'
+import { LegacyProjectAssetListRedirect } from '@/app/router'
 import LoginView from '@/views/LoginView'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -74,8 +75,8 @@ describe('LoginView', () => {
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
     await user.click(screen.getByRole('button', { name: /登\s*录/ }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/project-1/assets'))
-    expect(await screen.findByText('Assets')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/project-1/videos'))
+    expect(await screen.findByText('Videos')).toBeInTheDocument()
   })
 })
 
@@ -84,7 +85,11 @@ function renderLogin(entry = '/login') {
     [
       { path: '/login', element: <LoginView /> },
       { path: '/projects', element: <div>Projects</div> },
-      { path: '/projects/:projectId/assets', element: <div>Assets</div> },
+      {
+        path: '/projects/:projectId/assets',
+        element: <LegacyProjectAssetListRedirect />,
+      },
+      { path: '/projects/:projectId/videos', element: <div>Videos</div> },
     ],
     [entry],
   )
