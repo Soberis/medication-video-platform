@@ -129,36 +129,6 @@ export async function listAssetFolders(
   ).items
 }
 
-export function createAssetFolder(projectId: string, displayName: string): Promise<AssetFolder> {
-  return writeJson<AssetFolder>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders`,
-    'POST',
-    {
-      display_name: displayName,
-    },
-  )
-}
-
-export function renameAssetFolder(
-  projectId: string,
-  folderId: string,
-  displayName: string,
-): Promise<AssetFolder> {
-  return writeJson<AssetFolder>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders/${encodeURIComponent(folderId)}`,
-    'PUT',
-    { display_name: displayName },
-  )
-}
-
-export async function deleteAssetFolder(projectId: string, folderId: string): Promise<void> {
-  const response = await write(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/asset-folders/${encodeURIComponent(folderId)}`,
-    'DELETE',
-  )
-  if (response.status !== 204) throw await projectApiError(response)
-}
-
 export function assignClipAssetFolder(
   projectId: string,
   clipAssetId: string,

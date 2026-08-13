@@ -61,7 +61,14 @@ class UploadBatchController {
 					max = 128) @Pattern(regexp = "^[A-Za-z0-9._:-]+$") String idempotencyKey,
 			@Valid @RequestBody UploadBatchInitRequest request, Authentication authentication) {
 		var actor = requireActor(authentication);
-		this.authorizer.requireMember(request.projectId(), actor.actorId());
+		var sourceType = request.uploadSourceType() == null ? UploadSourceType.HOSPITAL_REMOTE
+				: request.uploadSourceType();
+		if (sourceType == UploadSourceType.PLATFORM_LOCAL) {
+			this.authorizer.requireAdministrator(request.projectId(), actor.actorId());
+		}
+		else {
+			this.authorizer.requireMember(request.projectId(), actor.actorId());
+		}
 		var batch = this.service.initialize(actor, idempotencyKey, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadBatchResponse.from(batch));
 	}
@@ -72,7 +79,7 @@ class UploadBatchController {
 					max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$") String requestId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var administrator = access.role() == ProjectRole.ADMIN;
 		var response = this.terminationService.abort(access.projectId(), actor.actorId(), administrator, batchId,
 				requestId);
@@ -82,7 +89,7 @@ class UploadBatchController {
 	@GetMapping("/{batchId}")
 	ResponseEntity<UploadBatchProgressResponse> getBatch(@PathVariable UUID batchId, Authentication authentication) {
 		var actor = requireActor(authentication);
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var response = this.progressQueryService.getBatch(batchId, access.projectId());
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -90,7 +97,7 @@ class UploadBatchController {
 	@GetMapping("/{batchId}/files")
 	ResponseEntity<UploadFileProgressListResponse> getFiles(@PathVariable UUID batchId, Authentication authentication) {
 		var actor = requireActor(authentication);
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var response = this.progressQueryService.getFiles(batchId, access.projectId());
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -99,7 +106,7 @@ class UploadBatchController {
 	ResponseEntity<UploadBatchCompletionResponse> completeBatch(@PathVariable UUID batchId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var response = this.completionService.complete(access.projectId(), batchId);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
@@ -108,7 +115,7 @@ class UploadBatchController {
 	ResponseEntity<CaptureSessionResponse> ingestCaptureSession(@PathVariable UUID batchId,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var batch = this.progressQueryService.getBatch(batchId, access.projectId());
 		var response = batch.uploadSourceType() == UploadSourceType.PLATFORM_LOCAL
 				? this.platformLocalCaptureSessionService.ingest(access.projectId(), batchId)

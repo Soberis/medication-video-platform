@@ -396,7 +396,7 @@ export default function AssetDetailView() {
     try {
       await deleteClipAsset(projectId, assetId, reason.trim())
       void message.success('视频已删除，并已从普通视频列表中隐藏。')
-      await navigate(paths.assets(projectId), { replace: true })
+      await navigate(paths.videos(projectId), { replace: true })
     } catch (error) {
       setActionErrorCode(
         error instanceof CatalogApiError ? error.errorCode : 'CLIP_ASSET_DELETE_FAILED',

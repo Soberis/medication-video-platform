@@ -700,16 +700,6 @@ def _validate_ai_state(row: FrameSlot, ai: dict[str, AIProvenance]) -> None:
         ):
             raise ArtifactValidationError("NOT_RUN must not carry AI provenance or candidates")
         return
-    if state == "FAILED" and row.ai_job_id is None:
-        if (
-            any(
-                value is not None
-                for value in (row.candidate_artifact_ref, row.model_sha256, row.profile_sha256)
-            )
-            or row.candidate_count != 0
-        ):
-            raise ArtifactValidationError("FAILED without AI provenance must not carry AI output")
-        return
     if row.ai_job_id is None or row.ai_job_id not in ai:
         raise ArtifactValidationError(f"{state} requires AI job and attempt provenance")
     provenance = ai[row.ai_job_id]

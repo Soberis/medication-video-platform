@@ -8,7 +8,6 @@ const managementRoutePatterns = [
   '/projects/:projectId/sessions/*',
   '/projects/:projectId/datasets/*',
   '/projects/:projectId/assets/*',
-  '/projects/:projectId/folders',
   '/projects/:projectId/members',
   '/projects/:projectId/event-logs',
   paths.uploads,
@@ -63,17 +62,9 @@ export default function AppShell() {
                   多相机查看
                 </NavLink>
               ) : null}
-              {projectId && isAdministrator ? (
-                <NavLink end to={paths.datasets(projectId)} onClick={closeManagementMenu}>
-                  数据集版本（后续）
-                </NavLink>
-              ) : null}
-              <NavLink end to={paths.localUpload} onClick={closeManagementMenu}>
-                本地上传（辅助）
-              </NavLink>
-              {projectId ? (
-                <NavLink end to={paths.folders(projectId)} onClick={closeManagementMenu}>
-                  文件夹
+              {isAdministrator ? (
+                <NavLink end to={paths.localUpload} onClick={closeManagementMenu}>
+                  本地上传（辅助）
                 </NavLink>
               ) : null}
               {projectId && isAdministrator ? (
@@ -84,11 +75,6 @@ export default function AppShell() {
               {projectId && isAdministrator ? (
                 <NavLink end to={paths.eventLogs(projectId)} onClick={closeManagementMenu}>
                   采集事件日志
-                </NavLink>
-              ) : null}
-              {projectId && isAdministrator ? (
-                <NavLink end to={paths.assets(projectId)} onClick={closeManagementMenu}>
-                  视频资产（高级）
                 </NavLink>
               ) : null}
               {isAdministrator ? (

@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,6 +19,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.jayway.jsonpath.JsonPath;
+
 import tools.jackson.databind.json.JsonMapper;
 
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
@@ -28,6 +31,8 @@ import com.medicationvideo.platform.support.ProjectMembershipTestData;
 class UploadBatchContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
+
+	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
 
 	private static final String PROJECT_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -128,7 +133,7 @@ class UploadBatchContractTests {
 				""".formatted(PROJECT_ID, MANIFEST_SHA256);
 
 		this.mockMvc
-			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", "platform-local-init-0001")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(request))
@@ -136,6 +141,58 @@ class UploadBatchContractTests {
 			.andExpect(jsonPath("$.device_id").value("PLATFORM_LOCAL"))
 			.andExpect(jsonPath("$.upload_source_type").value("PLATFORM_LOCAL"))
 			.andExpect(jsonPath("$.file_count").value(1));
+	}
+
+	@Test
+	void rejectsPlatformLocalUploadForProjectMember() throws Exception {
+		var request = """
+				{
+				  "project_id": "%s",
+				  "device_id": "PLATFORM_LOCAL",
+				  "upload_source_type": "PLATFORM_LOCAL",
+				  "file_count": 1,
+				  "total_size_bytes": 8388608,
+				  "manifest_sha256": "%s"
+				}
+				""".formatted(PROJECT_ID, MANIFEST_SHA256);
+
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", "platform-local-member-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+
+		assertEquals(0, this.repository.count());
+	}
+
+	@Test
+	void rejectsProjectMemberFromFollowingAnExistingPlatformLocalBatch() throws Exception {
+		var request = """
+				{
+				  "project_id": "%s",
+				  "device_id": "PLATFORM_LOCAL",
+				  "upload_source_type": "PLATFORM_LOCAL",
+				  "file_count": 1,
+				  "total_size_bytes": 8388608,
+				  "manifest_sha256": "%s"
+				}
+				""".formatted(PROJECT_ID, MANIFEST_SHA256);
+		var response = this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "platform-local-follow-up-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		var batchId = JsonPath.<String>read(response, "$.batch_id");
+
+		this.mockMvc.perform(get("/api/v1/upload/{batchId}", batchId).header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 	}
 
 	@Test
@@ -152,7 +209,7 @@ class UploadBatchContractTests {
 				""".formatted(PROJECT_ID, MANIFEST_SHA256);
 
 		this.mockMvc
-			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", "platform-local-init-0002")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(request))

@@ -80,10 +80,6 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: '/projects/:projectId/assets',
-            lazy: async () => ({ Component: (await import('@/views/AssetListView')).default }),
-          },
-          {
             path: '/projects/:projectId/assets/:id',
             lazy: async () => ({ Component: (await import('@/views/AssetDetailView')).default }),
           },
@@ -112,22 +108,18 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: '/projects/:projectId/folders',
-            lazy: async () => ({
-              Component: (await import('@/views/FolderManagementView')).default,
-            }),
-          },
-          {
             path: paths.uploads,
             lazy: async () => ({ Component: (await import('@/views/UploadProgressView')).default }),
           },
           {
-            path: paths.localUpload,
-            lazy: async () => ({ Component: (await import('@/views/LocalUploadView')).default }),
-          },
-          {
             Component: AdministratorBoundary,
             children: [
+              {
+                path: paths.localUpload,
+                lazy: async () => ({
+                  Component: (await import('@/views/LocalUploadView')).default,
+                }),
+              },
               {
                 path: '/projects/:projectId/members',
                 lazy: async () => ({

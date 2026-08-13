@@ -6,7 +6,6 @@ import type { DatasetExport, DatasetVersionDetail } from '@/api/catalog'
 import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
-import AssetListView from '@/views/AssetListView'
 import DatasetVersionDetailView from '@/views/DatasetVersionDetailView'
 import DatasetVersionListView from '@/views/DatasetVersionListView'
 import SessionDetailView from '@/views/SessionDetailView'
@@ -1836,42 +1835,6 @@ describe('catalog views', () => {
       ),
     ).toBe(false)
   })
-
-  it('loads project folders and renders the asset classification in the explicit project scope', async () => {
-    const folderId = 'a0000000-0000-4000-8000-000000000001'
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
-      Promise.resolve(
-        String(input).includes('/asset-folders')
-          ? jsonResponse({
-              items: [
-                {
-                  folder_id: folderId,
-                  project_id: projectId,
-                  display_name: '待标注',
-                  version: 0,
-                  created_at: '2026-07-15T01:03:03Z',
-                  updated_at: '2026-07-15T01:03:03Z',
-                },
-              ],
-            })
-          : jsonResponse({
-              items: [{ ...assetDetail('UPLOADED'), folder_id: folderId }],
-              next_cursor: null,
-            }),
-      ),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    renderAssetList()
-    expect(await screen.findByText('待标注')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(`/api/v1/projects/${projectId}/clip-assets`),
-      expect.any(Object),
-    )
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/asset-folders`,
-      expect.any(Object),
-    )
-  })
 })
 
 function renderSessionList() {
@@ -1903,12 +1866,6 @@ function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER
     route: `/projects/${projectId}/assets/${assetId}`,
     path: '/projects/:projectId/assets/:id',
     session,
-  })
-}
-function renderAssetList() {
-  return renderRoute(<AssetListView />, {
-    route: `/projects/${projectId}/assets`,
-    path: '/projects/:projectId/assets',
   })
 }
 function stubAsset(options: {

@@ -297,6 +297,18 @@ def _logical_json(row: FrameSlot) -> dict[str, object]:
     return value
 
 
+def _schema_validator() -> Draft202012Validator:
+    contract_path = (
+        Path(__file__).resolve().parents[3]
+        / "contracts"
+        / "schemas"
+        / "synchronized-frame-v1.schema.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(contract)
+    return Draft202012Validator(contract, format_checker=FormatChecker())
+
+
 def _replace_row(
     value: CanonicalArtifactInput,
     predicate: Callable[[FrameSlot], bool],
@@ -390,15 +402,7 @@ def test_writer_canonicalizes_rows_and_writes_stable_artifact_and_manifest(
 
 def test_schema_and_physical_types_are_explicit_and_compatible(tmp_path: Path) -> None:
     value = _input()
-    contract_path = (
-        Path(__file__).resolve().parents[3]
-        / "contracts"
-        / "schemas"
-        / ("synchronized-frame-v1.schema.json")
-    )
-    contract = json.loads(contract_path.read_text(encoding="utf-8"))
-    Draft202012Validator.check_schema(contract)
-    validator = Draft202012Validator(contract, format_checker=FormatChecker())
+    validator = _schema_validator()
     for row in value.rows:
         validator.validate(_logical_json(row))
 
@@ -412,6 +416,32 @@ def test_schema_and_physical_types_are_explicit_and_compatible(tmp_path: Path) -
     assert str(schema.field("profile_sha256").type) == "fixed_size_binary[32]"
     assert str(schema.field("artifact_created_at").type) == "timestamp[us, tz=UTC]"
     assert canonical_schema().names == list(LOGICAL_FIELDS)
+
+
+def test_schema_accepts_failed_with_ai_job_and_attempt_provenance() -> None:
+    failed = next(row for row in _input().rows if row.hand_detection_state == "FAILED")
+
+    _schema_validator().validate(_logical_json(failed))
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement"),
+    [
+        ("ai_job_id", None),
+        ("model_sha256", None),
+        ("profile_sha256", None),
+        ("candidate_count", 1),
+        ("candidate_artifact_ref", "candidate:unexpected-failure-output"),
+    ],
+)
+def test_schema_rejects_failed_without_required_provenance_or_empty_output(
+    field_name: str, replacement: object
+) -> None:
+    failed = next(row for row in _input().rows if row.hand_detection_state == "FAILED")
+    value = _logical_json(failed)
+    value[field_name] = replacement
+
+    assert list(_schema_validator().iter_errors(value))
 
 
 @pytest.mark.parametrize(
@@ -488,6 +518,45 @@ def test_writer_refuses_to_overwrite_existing_artifact(tmp_path: Path) -> None:
     CanonicalArtifactWriter().write(_input(), output)
     with pytest.raises(FileExistsError):
         CanonicalArtifactWriter().write(_input(), output)
+
+
+def test_writer_accepts_failed_only_with_matching_ai_attempt_provenance(tmp_path: Path) -> None:
+    value = _input()
+
+    artifact = CanonicalArtifactWriter().write(value, tmp_path / "failed-with-provenance.parquet")
+
+    assert artifact.row_count == len(value.rows)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda value: _replace_row(
+            value,
+            lambda row: row.hand_detection_state == "FAILED",
+            ai_job_id=None,
+            model_sha256=None,
+            profile_sha256=None,
+        ),
+        lambda value: replace(
+            value,
+            ai_provenance=tuple(
+                replace(item, attempt_id="") if item.ai_job_id == _uuid(503) else item
+                for item in value.ai_provenance
+            ),
+        ),
+        lambda value: _replace_row(
+            value,
+            lambda row: row.hand_detection_state == "FAILED",
+            ai_job_id=_uuid(999),
+        ),
+    ],
+)
+def test_writer_rejects_failed_without_matching_ai_attempt_provenance(
+    tmp_path: Path, mutate: Callable[[CanonicalArtifactInput], CanonicalArtifactInput]
+) -> None:
+    with pytest.raises(ArtifactValidationError):
+        CanonicalArtifactWriter().write(mutate(_input()), tmp_path / "invalid-failed.parquet")
 
 
 def test_writer_requires_distinct_parquet_and_manifest_paths(tmp_path: Path) -> None:

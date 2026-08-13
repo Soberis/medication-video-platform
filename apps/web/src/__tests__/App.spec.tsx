@@ -41,7 +41,7 @@ describe('App', () => {
 
     expect(await screen.findByText('合成测试项目')).toBeInTheDocument()
     expect(screen.getByText('配药视频数据管理平台')).toBeInTheDocument()
-    expect(screen.getByText('选择项目，继续管理配药操作、视频和文件夹。')).toBeInTheDocument()
+    expect(screen.getByText('选择项目，继续管理配药操作和视频。')).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('项目')
     expect(screen.getByText('跳到主要内容')).toHaveAttribute('href', '#main-content')
@@ -118,6 +118,7 @@ describe('App', () => {
     )
     expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
     expect(within(navigation).getByRole('link', { name: '多相机查看' })).toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: '文件夹' })).not.toBeInTheDocument()
     expect(
       within(navigation).queryByRole('link', { name: '数据集版本（后续）' }),
     ).not.toBeInTheDocument()
@@ -126,7 +127,9 @@ describe('App', () => {
     ).not.toBeInTheDocument()
     expect(within(navigation).queryByRole('link', { name: '采集事件日志' })).not.toBeInTheDocument()
     expect(within(navigation).queryByRole('link', { name: '上传排障' })).not.toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '本地上传（辅助）' })).toBeInTheDocument()
+    expect(
+      within(navigation).queryByRole('link', { name: '本地上传（辅助）' }),
+    ).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
   })
 

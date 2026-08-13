@@ -41,7 +41,7 @@ class UploadFileController {
 		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new UploadBatchAuthorizationException();
 		}
-		var access = this.authorizer.requireBatchMember(batchId, actor.actorId());
+		var access = this.authorizer.requireUploadOperator(batchId, actor.actorId());
 		var file = this.service.register(access.projectId(), batchId, clientFileId, idempotencyKey, request);
 		return ResponseEntity.status(HttpStatus.CREATED).body(UploadFileResponse.from(file));
 	}

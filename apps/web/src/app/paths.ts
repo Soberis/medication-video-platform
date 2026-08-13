@@ -4,7 +4,6 @@ export const paths = {
   sessions: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/sessions`,
   session: (projectId: string, sessionId: string) =>
     `/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}`,
-  assets: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/assets`,
   videos: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/videos`,
   asset: (projectId: string, assetId: string) =>
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
@@ -14,7 +13,6 @@ export const paths = {
   dataset: (projectId: string, datasetVersionId: string) =>
     `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetVersionId)}`,
   eventLogs: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/event-logs`,
-  folders: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/folders`,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
   accounts: '/admin/users',
   uploads: '/uploads',

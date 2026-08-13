@@ -36,6 +36,17 @@ class CaptureSyncEngineTests {
 	}
 
 	@Test
+	void streamMapKeyMustMatchTheStreamCameraNumberBeforeBuildingFrameSlots() {
+		var stream = stream(3, mapping(0, 0, null, true), List.of(frame(0, 0)));
+
+		var exception = assertThrows(IllegalArgumentException.class, () -> this.engine.buildFrameSlots(CAPTURE_ID,
+				REVISION_ID, Rational.whole(1_000_000_000L), List.of(1, 3), Map.of(1, stream), profile()));
+
+		assertTrue(exception.getMessage().contains("map camera number=1"));
+		assertTrue(exception.getMessage().contains("stream camera number=3"));
+	}
+
+	@Test
 	void oneAnchorIsOffsetOnlyAndTwoAnchorsCanMeasureDrift() {
 		var offsetOnly = StreamTimeMapping.fromAnchors(List.of(new SyncAnchor(10, 100)), "MANUAL", "G0");
 		assertNull(offsetOnly.driftPpm());
@@ -63,12 +74,12 @@ class CaptureSyncEngineTests {
 	@Test
 	void syncErrorIsSignedInCaptureDomain() {
 		var stream = stream(1, mapping(0, 80_000_000L, null, true), List.of(frame(0, 0)));
-		var positive = this.engine.mapStream(0, stream, 80_000_000L);
+		var positive = mapSingleFrame(0, stream, profile(80_000_000L));
 		assertEquals(FrameState.PRESENT, positive.frameState());
 		assertEquals(80_000_000L, positive.syncErrorNs());
 
 		var negativeStream = stream(1, mapping(0, -80_000_000L, null, true), List.of(frame(0, 0)));
-		var negative = this.engine.mapStream(0, negativeStream, 80_000_000L);
+		var negative = mapSingleFrame(0, negativeStream, profile(80_000_000L));
 		assertEquals(-80_000_000L, negative.syncErrorNs());
 	}
 
@@ -76,31 +87,31 @@ class CaptureSyncEngineTests {
 	void nearestTieBreakUsesEarlierPtsThenFrameIndexThenOrdinal() {
 		var stream = stream(1, mapping(0, 0, null, true),
 				List.of(frame(3, 120_000_000L), frame(2, 80_000_000L), frame(1, 80_000_000L)));
-		var result = this.engine.mapStream(100_000_000L, stream, 20_000_000L);
+		var result = mapSingleFrame(100_000_000L, stream, profile());
 
 		assertEquals(FrameState.PRESENT, result.frameState());
-		assertEquals(80_000_000L, result.selectedFrame().sourcePtsNs());
-		assertEquals(1L, result.selectedFrame().sourceFrameIndex());
+		assertEquals(80_000_000L, result.sourcePtsNs());
+		assertEquals(1L, result.sourceFrameIndex());
 		assertEquals(-20_000_000L, result.syncErrorNs());
 	}
 
 	@Test
 	void toleranceBoundaryIsInclusiveAndExcessIsMissing() {
 		var stream = stream(1, mapping(0, 0, null, true), List.of(frame(0, 80_000_000L)));
-		assertEquals(FrameState.PRESENT, this.engine.mapStream(100_000_000L, stream, 20_000_000L).frameState());
-		var missing = this.engine.mapStream(100_000_000L, stream, 19_999_999L);
+		assertEquals(FrameState.PRESENT, mapSingleFrame(100_000_000L, stream, profile()).frameState());
+		var missing = mapSingleFrame(100_000_000L, stream, profile(19_999_999L));
 		assertEquals(FrameState.MISSING, missing.frameState());
-		assertEquals("NO_FRAME_WITHIN_TOLERANCE", missing.reasonCode());
+		assertEquals("NO_FRAME_WITHIN_TOLERANCE", missing.frameReasonCode());
 	}
 
 	@Test
 	void invalidFrameIsNotMissing() {
 		var stream = stream(1, mapping(0, 0, null, true), List.of(invalidFrame(0, 0, "DECODE_VALIDATION_FAILED")));
-		var result = this.engine.mapStream(0, stream, 0);
+		var result = mapSingleFrame(0, stream, profile(0));
 
 		assertEquals(FrameState.INVALID, result.frameState());
-		assertEquals("DECODE_VALIDATION_FAILED", result.reasonCode());
-		assertEquals(0L, result.selectedFrame().sourcePtsNs());
+		assertEquals("DECODE_VALIDATION_FAILED", result.frameReasonCode());
+		assertEquals(0L, result.sourcePtsNs());
 	}
 
 	@Test
@@ -149,8 +160,12 @@ class CaptureSyncEngineTests {
 	}
 
 	private static SyncProfile profile() {
+		return profile(20_000_000L);
+	}
+
+	private static SyncProfile profile(long allowedToleranceNs) {
 		return SyncProfile.testOnly("TEST/G0", "v1", SHA, "CAPTURE_SYNC", "v1", Rational.of(30, 1),
-				Rational.of(1_000_000_000L, 30), 20_000_000L, "TRUSTED_STREAM_TO_CAPTURE_MAPPING",
+				Rational.of(1_000_000_000L, 30), allowedToleranceNs, "TRUSTED_STREAM_TO_CAPTURE_MAPPING",
 				"TRUSTED_ANCHOR_OFFSET_DRIFT");
 	}
 
@@ -165,6 +180,13 @@ class CaptureSyncEngineTests {
 				List.of(new ExpectedCamera(
 						UUID.nameUUIDFromBytes(("expected:" + camera).getBytes(StandardCharsets.UTF_8)), camera)),
 				streams);
+	}
+
+	private FrameSlot mapSingleFrame(long captureTimestampNs, SyncStream stream, SyncProfile profile) {
+		return this.engine
+			.buildFrameSlots(CAPTURE_ID, REVISION_ID, captureTimestampNs, Rational.whole(1),
+					List.of(stream.cameraNumber()), Map.of(stream.cameraNumber(), stream), profile)
+			.getFirst();
 	}
 
 	private static SyncStream stream(int cameraNumber, StreamTimeMapping mapping, List<SourceFrame> frames) {

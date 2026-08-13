@@ -242,6 +242,21 @@
           "profile_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
         }
       }
+    },
+    {
+      "if": {
+        "properties": {"hand_detection_state": {"const": "FAILED"}}
+      },
+      "then": {
+        "required": ["ai_job_id", "model_sha256", "profile_sha256"],
+        "properties": {
+          "ai_job_id": {"type": "string", "format": "uuid"},
+          "candidate_count": {"const": 0},
+          "candidate_artifact_ref": {"type": "null"},
+          "model_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "profile_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
     }
   ]
 }

@@ -92,7 +92,7 @@ export default function ProjectListView() {
     if (renamingProjectId) return
     const value = await prompt({
       title: '修改项目名称',
-      description: '仅修改项目显示名称，不会影响项目成员、文件夹或视频归属。',
+      description: '仅修改项目显示名称，不会影响项目成员或视频归属。',
       confirmText: '保存名称',
       initialValue: project.display_name,
       validate: (input) => {
@@ -146,7 +146,7 @@ export default function ProjectListView() {
       <section className="page-heading project-page-heading" aria-labelledby="projects-title">
         <div>
           <h1 id="projects-title">项目</h1>
-          <p>选择项目，继续管理配药操作、视频和文件夹。</p>
+          <p>选择项目，继续管理配药操作和视频。</p>
         </div>
         <div className="detail-actions">
           <Button loading={loadState === 'loading'} onClick={() => void loadProjects()}>
@@ -183,7 +183,7 @@ export default function ProjectListView() {
                       {project.current_role === 'ADMIN' ? '管理员' : '普通用户'}
                     </Tag>
                   </div>
-                  <p>在项目内统一管理配药操作、视频资产、配药动作标注和文件夹。</p>
+                  <p>在项目内统一管理配药操作、视频资产和配药动作标注。</p>
                 </div>
                 <div className="project-list-actions">
                   <Link

@@ -1,0 +1,33 @@
+{
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "redhat.java",
+    "vscjava.vscode-maven",
+    "vscjava.vscode-java-debug",
+    "vscjava.vscode-java-test",
+    "vscjava.vscode-java-dependency",
+    "vmware.vscode-spring-boot",
+    "ms-python.python",
+    "ms-python.debugpy",
+    "charliermarsh.ruff",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+    "formulahendry.auto-rename-tag",
+    "ms-azuretools.vscode-docker",
+    "redhat.vscode-yaml",
+    "42crunch.vscode-openapi",
+    "bruno-api-client.bruno",
+    "yzhang.markdown-all-in-one",
+    "bierner.markdown-mermaid",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "usernamehw.errorlens",
+    "wayou.vscode-todo-highlight",
+    "pkief.material-icon-theme",
+    "zhuangtongfa.material-theme",
+    "dracula-theme.theme-dracula",
+    "catppuccin.catppuccin-vsc",
+    "GitHub.github-vscode-theme"
+  ]
+}

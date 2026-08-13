@@ -40,10 +40,19 @@ class AssetCaptureProjectAuthorizer {
 		catch (ProjectAccessException ignored) {
 			throw new UploadBatchNotFoundException();
 		}
-		return new BatchAccess(batch.getProjectId(), role);
+		return new BatchAccess(batch.getProjectId(), role, batch.getUploadSourceType());
 	}
 
-	record BatchAccess(UUID projectId, ProjectRole role) {
+	BatchAccess requireUploadOperator(UUID batchId, String actorId) {
+		var access = requireBatchMember(batchId, actorId);
+		if (access.uploadSourceType() == UploadSourceType.PLATFORM_LOCAL && access.role() != ProjectRole.ADMIN) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED",
+					"Project administrator membership is required for platform-local uploads.", 403);
+		}
+		return access;
+	}
+
+	record BatchAccess(UUID projectId, ProjectRole role, UploadSourceType uploadSourceType) {
 	}
 
 }

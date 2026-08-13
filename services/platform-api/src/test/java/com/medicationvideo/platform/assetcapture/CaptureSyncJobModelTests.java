@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
@@ -47,8 +49,9 @@ class CaptureSyncJobModelTests {
 		when(attempts.save(any(CaptureSyncJobAttempt.class)))
 			.thenAnswer(invocation -> invocation.getArgument(0, CaptureSyncJobAttempt.class));
 
-		var retried = new CaptureSyncJobService(jobs, attempts, revisions, streamRevisions).retry(input.projectId(),
-				job.getCaptureSyncJobId(), "synthetic-admin");
+		var retried = new CaptureSyncJobService(jobs, mock(CaptureSyncJobWriter.class), attempts, revisions,
+				streamRevisions)
+			.retry(input.projectId(), job.getCaptureSyncJobId(), "synthetic-admin");
 
 		assertEquals(job.getCaptureSyncJobId(), retried.getCaptureSyncJobId());
 		assertEquals(2, retried.getAttempt());
@@ -88,7 +91,8 @@ class CaptureSyncJobModelTests {
 		when(attempts.saveAndFlush(any(CaptureSyncJobAttempt.class)))
 			.thenAnswer(invocation -> invocation.getArgument(0, CaptureSyncJobAttempt.class));
 
-		var leaseToken = new CaptureSyncJobService(jobs, attempts, revisions, streamRevisions)
+		var leaseToken = new CaptureSyncJobService(jobs, mock(CaptureSyncJobWriter.class), attempts, revisions,
+				streamRevisions)
 			.acquire(input.projectId(), job.getCaptureSyncJobId(), 1, "worker-1", Duration.ofSeconds(30));
 
 		assertEquals(CaptureSyncJobAttemptStatus.RUNNING, attempt.getStatus());
@@ -158,6 +162,39 @@ class CaptureSyncJobModelTests {
 	}
 
 	@Test
+	void mismatchedWorkerReferenceSourceIsRejectedBeforeRevisionMutation() {
+		var input = input();
+		var profile = profile();
+		var job = CaptureSyncJob.queue(input, profile, "CAPTURE_SYNC", "v1", "sync-model-reference-001", SHA,
+				"synthetic-admin", CREATED_AT);
+		var leaseToken = "reference-lease-token";
+		var queuedAttempt = attempt(job, 1, leaseToken);
+		var leaseStart = Instant.now();
+		job.start(leaseStart);
+		queuedAttempt.acquire("worker-1", leaseStart, Duration.ofMinutes(5));
+		var summary = new CaptureSyncRevisionSummary(1, "WORKER_REPORTED_CLOCK", "TEST_CAPTURE_TIME", null, null, 1, 1,
+				0, 0, 1, 0L, 0L, 1, SHA);
+		var stream = new CaptureSyncStreamRevisionInput(input.expectedCameras().getFirst(), input.streams().getFirst(),
+				CaptureSyncStreamPresenceState.PRESENT, 1, 0, 0, 0L, 0L);
+		var jobs = mock(CaptureSyncJobRepository.class);
+		var attempts = mock(CaptureSyncJobAttemptRepository.class);
+		var revisions = mock(CaptureSyncRevisionRepository.class);
+		var streamRevisions = mock(CaptureSyncStreamRevisionRepository.class);
+		when(jobs.findForUpdate(job.getCaptureSyncJobId())).thenReturn(Optional.of(job));
+		when(attempts.findForUpdate(job.getCaptureSyncJobId(), 1)).thenReturn(Optional.of(queuedAttempt));
+		var service = new CaptureSyncJobService(jobs, mock(CaptureSyncJobWriter.class), attempts, revisions,
+				streamRevisions);
+
+		assertThrows(IllegalArgumentException.class, () -> service.acceptRevision(input.projectId(),
+				job.getCaptureSyncJobId(), 1, leaseToken, profile, null, summary, List.of(stream), "synthetic-admin"));
+
+		assertEquals(CaptureSyncJobStatus.RUNNING, job.getStatus());
+		assertEquals(CaptureSyncJobAttemptStatus.RUNNING, queuedAttempt.getStatus());
+		verify(revisions, never()).saveAndFlush(any(CaptureSyncRevision.class));
+		verify(streamRevisions, never()).saveAllAndFlush(any());
+	}
+
+	@Test
 	void productionProfileCannotBeQueuedBeforeItIsApproved() {
 		var testProfile = profile();
 		var productionProfile = new SyncProfile(testProfile.profileKey(), testProfile.profileVersion(),
@@ -165,7 +202,7 @@ class CaptureSyncJobModelTests {
 				testProfile.timelineRate(), testProfile.timelineStepNs(), testProfile.roundingRule(),
 				testProfile.nearestTieBreak(), testProfile.allowedToleranceNs(), testProfile.referenceClockSource(),
 				testProfile.anchorDriftRule(), SyncProfileApproval.PRODUCTION_APPROVED);
-		var service = new CaptureSyncJobService(mock(CaptureSyncJobRepository.class),
+		var service = new CaptureSyncJobService(mock(CaptureSyncJobRepository.class), mock(CaptureSyncJobWriter.class),
 				mock(CaptureSyncJobAttemptRepository.class), mock(CaptureSyncRevisionRepository.class),
 				mock(CaptureSyncStreamRevisionRepository.class));
 

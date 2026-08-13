@@ -12,7 +12,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,16 +25,19 @@ class CaptureSyncJobService {
 
 	private final CaptureSyncJobRepository jobRepository;
 
+	private final CaptureSyncJobWriter jobWriter;
+
 	private final CaptureSyncJobAttemptRepository attemptRepository;
 
 	private final CaptureSyncRevisionRepository revisionRepository;
 
 	private final CaptureSyncStreamRevisionRepository streamRevisionRepository;
 
-	CaptureSyncJobService(CaptureSyncJobRepository jobRepository, CaptureSyncJobAttemptRepository attemptRepository,
-			CaptureSyncRevisionRepository revisionRepository,
+	CaptureSyncJobService(CaptureSyncJobRepository jobRepository, CaptureSyncJobWriter jobWriter,
+			CaptureSyncJobAttemptRepository attemptRepository, CaptureSyncRevisionRepository revisionRepository,
 			CaptureSyncStreamRevisionRepository streamRevisionRepository) {
 		this.jobRepository = jobRepository;
+		this.jobWriter = jobWriter;
 		this.attemptRepository = attemptRepository;
 		this.revisionRepository = revisionRepository;
 		this.streamRevisionRepository = streamRevisionRepository;
@@ -73,21 +75,23 @@ class CaptureSyncJobService {
 		var now = now();
 		var job = CaptureSyncJob.queue(input, profile, algorithmKey, algorithmVersion, idempotencyKey, fingerprint,
 				requestedBy, now);
-		try {
-			job = this.jobRepository.saveAndFlush(job);
+		if (this.jobWriter.insertIfAbsent(job)) {
 			this.attemptRepository.saveAndFlush(newAttempt(job, 1, now));
 			return job;
 		}
-		catch (DataIntegrityViolationException exception) {
-			var concurrent = this.jobRepository
-				.findByProjectIdAndCaptureSessionIdAndInputManifestSha256AndSyncProfileSha256AndAlgorithmKeyAndAlgorithmVersion(
-						input.projectId(), input.captureSessionId(), inputDigest, profile.profileSha256(), algorithmKey,
-						algorithmVersion);
-			if (concurrent.isPresent()) {
-				return concurrent.get();
-			}
-			throw exception;
+		var concurrentByIdempotency = this.jobRepository.findByProjectIdAndIdempotencyKey(input.projectId(),
+				idempotencyKey);
+		if (concurrentByIdempotency.isPresent()) {
+			return requireSameRequest(concurrentByIdempotency.get(), fingerprint);
 		}
+		var concurrentNatural = this.jobRepository
+			.findByProjectIdAndCaptureSessionIdAndInputManifestSha256AndSyncProfileSha256AndAlgorithmKeyAndAlgorithmVersion(
+					input.projectId(), input.captureSessionId(), inputDigest, profile.profileSha256(), algorithmKey,
+					algorithmVersion);
+		if (concurrentNatural.isPresent()) {
+			return concurrentNatural.get();
+		}
+		throw new IllegalStateException("A synchronization job insert conflicted without a resolvable existing job.");
 	}
 
 	@Transactional
@@ -140,6 +144,9 @@ class CaptureSyncJobService {
 				|| !job.getSyncProfileKey().equals(profile.profileKey())
 				|| !job.getSyncProfileVersion().equals(profile.profileVersion())) {
 			throw new IllegalStateException("The synchronization result profile does not match frozen input.");
+		}
+		if (!job.getFrozenReferenceClockSource().equals(profile.referenceClockSource())) {
+			throw new IllegalStateException("The selected profile reference clock does not match frozen input.");
 		}
 		attempt.requireActiveLease(now);
 		validateRevisionPayload(job, profile, summary, streams);
@@ -227,6 +234,9 @@ class CaptureSyncJobService {
 		validateErrorSummary(summary.maxSyncErrorNs(), summary.p95SyncErrorNs(), profile.allowedToleranceNs());
 		if (!Objects.equals(maximumStreamError, summary.maxSyncErrorNs())) {
 			throw new IllegalArgumentException("Revision maximum sync error must equal the per-stream maximum.");
+		}
+		if (!job.getFrozenReferenceClockSource().equals(summary.referenceClockSource())) {
+			throw new IllegalArgumentException("Revision reference clock source must match the frozen SyncProfile.");
 		}
 		if (summary.referenceCameraNumber() != null) {
 			var referenceCamera = summary.referenceCameraNumber();

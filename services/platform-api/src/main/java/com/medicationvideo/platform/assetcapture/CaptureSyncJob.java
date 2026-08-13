@@ -219,6 +219,16 @@ class CaptureSyncJob {
 		return this.syncProfileSha256;
 	}
 
+	String getFrozenReferenceClockSource() {
+		var rawProfile = this.inputManifest.get("profile");
+		if (!(rawProfile instanceof Map<?, ?> profile)
+				|| !(profile.get("reference_clock_source") instanceof String referenceClockSource)
+				|| referenceClockSource.isBlank()) {
+			throw new IllegalStateException("The frozen input manifest has no valid reference clock source.");
+		}
+		return referenceClockSource;
+	}
+
 	String getAlgorithmKey() {
 		return this.algorithmKey;
 	}

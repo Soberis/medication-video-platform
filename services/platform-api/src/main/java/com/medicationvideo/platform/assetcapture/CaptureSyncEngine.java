@@ -68,7 +68,14 @@ public final class CaptureSyncEngine {
 			throw new IllegalArgumentException("Unexpected camera numbers: " + unexpected);
 		}
 		for (var entry : streams.entrySet()) {
-			if (entry.getValue() == null || !entry.getValue().timeMapping().trusted()) {
+			if (entry.getValue() == null) {
+				throw new IllegalArgumentException("A SyncStream map entry must not be null.");
+			}
+			if (entry.getKey() == null || entry.getKey().intValue() != entry.getValue().cameraNumber()) {
+				throw new IllegalArgumentException("SyncStream camera identity mismatch: map camera number="
+						+ entry.getKey() + ", stream camera number=" + entry.getValue().cameraNumber());
+			}
+			if (!entry.getValue().timeMapping().trusted()) {
 				throw new SynchronizationUnavailableException(entry.getKey());
 			}
 		}
@@ -90,10 +97,6 @@ public final class CaptureSyncEngine {
 			}
 		}
 		return List.copyOf(result);
-	}
-
-	public FrameMappingResult mapStream(long captureTimestampNs, SyncStream stream, long allowedToleranceNs) {
-		return mapStream(captureTimestampNs, stream, allowedToleranceNs, 0);
 	}
 
 	private FrameMappingResult mapStream(long captureTimestampNs, SyncStream stream, long allowedToleranceNs,

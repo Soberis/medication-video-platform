@@ -1896,7 +1896,8 @@ paths:
         - Uploads
       summary: Initialize an upload batch
       description: >-
-        Requires an ACTIVE ADMIN or MEMBER membership in project_id. Creates a durable upload batch
+        Requires an ACTIVE ADMIN or MEMBER membership in project_id for HOSPITAL_REMOTE uploads;
+        PLATFORM_LOCAL uploads require an ACTIVE project ADMIN. Creates a durable upload batch
         identity without proxying file bytes or starting multipart upload. Reusing the same
         Idempotency-Key in the same project with an identical request returns the original result.
         Reusing it with different content returns a conflict.
@@ -1928,6 +1929,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An ACTIVE project ADMIN membership is required for PLATFORM_LOCAL uploads.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The project does not exist in the caller's ACTIVE membership scope.
           content:
@@ -1948,7 +1955,8 @@ paths:
       summary: Read upload batch progress
       description: >-
         Requires an ACTIVE membership in the batch's owning project and returns the current
-        project-scoped batch summary derived from persisted platform state.
+        project-scoped batch summary derived from persisted platform state. PLATFORM_LOCAL batches
+        require an ACTIVE project ADMIN membership.
         This safe read does not list or mutate object storage. Uploaded Part and byte totals may
         therefore lag a direct upload until the client explicitly confirms or reconciles Parts.
       parameters:
@@ -1983,6 +1991,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch does not exist in the authenticated project.
           content:
@@ -1997,7 +2011,8 @@ paths:
       summary: Terminate an incomplete upload batch and durably schedule storage cleanup
       description: >-
         Idempotently terminates an INITIATED or UPLOADING batch. Only the recorded batch initiator
-        with an ACTIVE membership or an ACTIVE project ADMIN may call this command. A local token's
+        with an ACTIVE membership or an ACTIVE project ADMIN may call this command; PLATFORM_LOCAL
+        batches require the project ADMIN path. A local token's
         global authority is not treated as project administration. If the server TTL has already
         elapsed, the command records EXPIRED rather than incorrectly recording a user abort.
         Batch and file terminal states, cleanup tasks and an append-only audit event commit in one
@@ -2047,7 +2062,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Caller is neither the batch initiator nor a project administrator.
+          description: Caller lacks the required batch role; PLATFORM_LOCAL batches require a project ADMIN.
           content:
             application/problem+json:
               schema:
@@ -2072,6 +2087,7 @@ paths:
         - Uploads
       summary: List file progress for an upload batch
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Returns deterministic file summaries with persisted Part counts, confirmed bytes, file
         lifecycle state and stable completion error codes. This read does not contact object
         storage; use the explicit Part reconciliation command after an interrupted direct upload.
@@ -2108,6 +2124,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch does not exist in the authenticated project.
           content:
@@ -2121,6 +2143,7 @@ paths:
         - Uploads
       summary: Complete a verified upload batch and bind raw video assets
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Called automatically by the edge uploader after every declared file has completed final
         object size and full-file SHA-256 verification. The command locks the batch, checks exact
         file count and total bytes, verifies the upload-file-manifest-v1 digest, and creates one
@@ -2161,6 +2184,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch does not exist in the authenticated project.
           content:
@@ -2182,6 +2211,7 @@ paths:
         - Uploads
       summary: Assemble one capture session from verified uploaded metadata
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         For HOSPITAL_REMOTE batches, this operation locates exactly one uploaded
         METADATA file with application/json content type, enforces a 1 MiB safety limit, reads it
         from object storage, verifies its already-recorded size and SHA-256 again, and parses the
@@ -2229,6 +2259,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The upload batch does not exist in the authenticated project.
           content:
@@ -2256,6 +2292,7 @@ paths:
         - Uploads
       summary: Register one immutable file manifest entry
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Registers control-plane metadata for one file in an initialized batch and calculates the
         expected number of parts. This operation does not proxy bytes, create an object-storage
         multipart session, issue a signed URL or move the batch to UPLOADING. Replaying the same
@@ -2301,6 +2338,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch does not exist in the authenticated project.
           content:
@@ -2322,6 +2365,7 @@ paths:
         - Uploads
       summary: Create the file's object-storage multipart session
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Creates at most one S3-compatible multipart session for a registered file. Every file and
         byte declared by the batch manifest must already be registered. This natural-resource PUT
         is replay-safe, does not expose the storage upload ID, does not issue upload credentials and
@@ -2358,6 +2402,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch or file does not exist in the authenticated project.
           content:
@@ -2383,6 +2433,7 @@ paths:
         - Uploads
       summary: Complete and verify one multipart file
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Acquires a bounded completion lease, reads the authoritative current Part list from object
         storage, requires continuous Part numbers and exact manifest size, and submits those current
         ETags to S3 CompleteMultipartUpload. It then inspects and streams the completed object to
@@ -2421,6 +2472,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch or file does not exist in the authenticated project.
           content:
@@ -2448,6 +2505,7 @@ paths:
         - Uploads
       summary: Authorize a direct upload of one immutable part
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Registers the expected SHA-256 for a part and returns a short-lived pre-signed PUT URL.
         Repeating the same part and hash reissues a fresh authorization; changing the hash returns
         a conflict. The response is a temporary credential, must not be logged or persisted by the
@@ -2505,6 +2563,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch or file does not exist in the authenticated project.
           content:
@@ -2530,6 +2594,7 @@ paths:
         - Uploads
       summary: Confirm one part from object-storage state
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Queries object storage for the authorized part and records it as UPLOADED only when the
         stored part number and byte length match the immutable manifest. The caller does not submit
         an ETag, so client-controlled metadata cannot confirm missing bytes. An identical replay is
@@ -2575,6 +2640,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch or file does not exist in the authenticated project.
           content:
@@ -2602,6 +2673,7 @@ paths:
         - Uploads
       summary: Read persisted multipart progress
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Returns the current platform record for authorized and confirmed parts without issuing
         credentials or changing upload state. After an interrupted client reconnects, it should
         reconcile storage state first and then use this representation to decide which parts still
@@ -2644,6 +2716,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: The batch or file does not exist in the authenticated project.
           content:
@@ -2663,6 +2741,7 @@ paths:
         - Uploads
       summary: Reconcile persisted progress with object storage
       description: >-
+        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
         Idempotently lists the multipart upload in object storage and confirms every tracked part
         whose stored byte length matches the immutable manifest. This explicit command recovers
         parts uploaded before a client interruption without giving a state-changing side effect to
@@ -2696,6 +2775,12 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "401":
           description: A valid bearer token was not provided.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:

@@ -110,7 +110,7 @@ class UploadMultipartController {
 	}
 
 	private UUID requireProject(UUID batchId, PlatformActor actor) {
-		return this.authorizer.requireBatchMember(batchId, actor.actorId()).projectId();
+		return this.authorizer.requireUploadOperator(batchId, actor.actorId()).projectId();
 	}
 
 }

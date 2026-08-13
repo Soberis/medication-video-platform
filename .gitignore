@@ -42,6 +42,9 @@ htmlcov/
 # IDE and OS
 .idea/
 .vscode/
+!.vscode/
+.vscode/*
+!.vscode/extensions.json
 *.iml
 .DS_Store
 Thumbs.db

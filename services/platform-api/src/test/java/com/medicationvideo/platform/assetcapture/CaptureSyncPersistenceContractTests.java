@@ -5,7 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,9 @@ class CaptureSyncPersistenceContractTests {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private CaptureSyncJobService jobService;
 
 	@AfterEach
 	void clearSyntheticFixtures() {
@@ -150,6 +157,35 @@ class CaptureSyncPersistenceContractTests {
 	}
 
 	@Test
+	void concurrentNaturalKeyRequestsUseIndependentPostgresTransactionsAndCreateOneJobAndAttempt() throws Exception {
+		var fixture = insertFixture(PROJECT_ID);
+		var input = syncInput(fixture);
+		var profile = SyncProfile.testOnly("TEST/G0", "v1", SHA256, "CAPTURE_SYNC", "v1", Rational.of(30, 1),
+				Rational.of(1_000_000_000L, 30), 20_000_000L, "TEST_CLOCK", "TEST_ANCHOR_DRIFT");
+		var ready = new CyclicBarrier(2);
+		var executor = Executors.newFixedThreadPool(2);
+		try {
+			var first = executor.submit(() -> concurrentCreate(ready, input, profile, "sync-concurrent-a-001"));
+			var second = executor.submit(() -> concurrentCreate(ready, input, profile, "sync-concurrent-b-001"));
+			var firstJob = first.get(30, TimeUnit.SECONDS);
+			var secondJob = second.get(30, TimeUnit.SECONDS);
+
+			assertEquals(firstJob.getCaptureSyncJobId(), secondJob.getCaptureSyncJobId());
+			assertEquals(1, this.jdbc.queryForObject("SELECT count(*) FROM capture_sync_job WHERE project_id = ?",
+					Integer.class, PROJECT_ID));
+			assertEquals(1, this.jdbc.queryForObject("""
+					SELECT count(*)
+					FROM capture_sync_job_attempt attempt
+					JOIN capture_sync_job job ON job.capture_sync_job_id = attempt.capture_sync_job_id
+					WHERE job.project_id = ?
+					""", Integer.class, PROJECT_ID));
+		}
+		finally {
+			executor.shutdownNow();
+		}
+	}
+
+	@Test
 	void streamRevisionKeepsStableCameraIdentityAndRejectsMismatchedMember() {
 		var fixture = insertFixture(PROJECT_ID);
 		var jobId = UUID.randomUUID();
@@ -255,6 +291,20 @@ class CaptureSyncPersistenceContractTests {
 		insertMediaReport(mediaJobId, mediaReportId, projectId, clipAssetId, time);
 		return new Fixture(projectId, captureSessionId, snapshotId, snapshotMemberId, cameraStreamId, clipAssetId,
 				mediaReportId);
+	}
+
+	private CaptureSyncJob concurrentCreate(CyclicBarrier ready, CaptureSyncInput input, SyncProfile profile,
+			String idempotencyKey) throws Exception {
+		ready.await(30, TimeUnit.SECONDS);
+		return this.jobService.create(input, profile, idempotencyKey, "synthetic-admin");
+	}
+
+	private CaptureSyncInput syncInput(Fixture fixture) {
+		var stream = new SyncStream(1, fixture.cameraStreamId(), fixture.clipAssetId(), SHA256, fixture.mediaReportId(),
+				SHA256, new StreamTimeMapping(0, 0, null, "TEST", "SYNTHETIC", 1, true),
+				List.of(SourceFrame.valid(0, 0, 0, 0)));
+		return new CaptureSyncInput(PROJECT_ID, fixture.captureSessionId(), fixture.snapshotId(), "sync-group", SHA256,
+				List.of(new ExpectedCamera(fixture.snapshotMemberId(), 1)), List.of(stream));
 	}
 
 	private void insertUploadedFile(UUID fileId, UUID batchId, UUID clientFileId, String kind, String objectKey) {
