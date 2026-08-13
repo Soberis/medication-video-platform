@@ -62,14 +62,17 @@ class CaptureSyncInputAssemblyService {
 				continue;
 			}
 			var cameraStream = stream.get();
-			var mediaReport = loadMediaReport(projectId, cameraStream.getClipAssetId());
-			var sourceFrames = synthesizeSourceFrames(mediaReport);
-			syncStreams
-				.add(new SyncStream(cameraNumber, cameraStream.getCameraStreamId(), cameraStream.getClipAssetId(),
-						mediaReport.inputDigest(), mediaReport.mediaReportId(), mediaReport.timeBaseDigest(),
-						StreamTimeMapping.offsetOnly(new SyncAnchor(sourceFrames.getFirst().sourcePtsNs(), 0),
-								"MEDIA_REPORT", "SYNTHETIC_TEST"),
-						sourceFrames));
+			/*
+			 * A media report only contains aggregate first/last PTS and frame count. It
+			 * does not prove a real per-frame PTS sequence or a trusted stream-to-Capture
+			 * clock mapping. Never turn those aggregates into synthetic source frames or
+			 * treat a stream's first frame as Capture time zero. Until an explicit frame
+			 * PTS/anchor input is persisted by the media pipeline, synchronization is not
+			 * ready (including for the TEST/G0 API path).
+			 */
+			loadMediaReport(projectId, cameraStream.getClipAssetId());
+			throw new AssetCatalogQueryException("CAPTURE_SYNC_INPUT_NOT_READY",
+					"A real per-frame PTS sequence and trusted stream-to-Capture mapping are required before synchronization.");
 		}
 		if (syncStreams.isEmpty()) {
 			throw new AssetCatalogQueryException("CAPTURE_SYNC_INPUT_NOT_READY",
@@ -99,22 +102,6 @@ class CaptureSyncInputAssemblyService {
 					"A media report is required before synchronization can start.");
 		}
 		return rows.getFirst();
-	}
-
-	private static List<SourceFrame> synthesizeSourceFrames(MediaReportFacts report) {
-		var firstPts = report.firstPts() == null ? 0L : report.firstPts();
-		var lastPts = report.lastPts() == null ? firstPts : report.lastPts();
-		var frameCount = report.frameCount() == null || report.frameCount() < 1 ? 1 : report.frameCount();
-		var step = frameCount == 1 ? 0L : Math.floorDiv(lastPts - firstPts, frameCount - 1);
-		var frames = new ArrayList<SourceFrame>();
-		for (long index = 0; index < frameCount; index++) {
-			var rawPts = firstPts + step * index;
-			var sourcePtsNs = Rational.of(rawPts * report.timeBaseNumerator(), report.timeBaseDenominator())
-				.multiply(Rational.whole(1_000_000_000L))
-				.roundHalfEvenLong();
-			frames.add(SourceFrame.valid(index, rawPts, sourcePtsNs, 0));
-		}
-		return List.copyOf(frames);
 	}
 
 	private static String snapshotDigest(UUID snapshotId, List<ExpectedCamera> expectedCameras) {

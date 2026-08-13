@@ -129,7 +129,7 @@ class CaptureSyncJobService {
 
 	@Transactional
 	CaptureSyncRevision acceptRevision(UUID projectId, UUID jobId, int attemptNumber, String leaseToken,
-			SyncProfile profile, UUID supersedesRevisionId, CaptureSyncRevisionSummary summary,
+			UUID revisionId, SyncProfile profile, UUID supersedesRevisionId, CaptureSyncRevisionSummary summary,
 			List<CaptureSyncStreamRevisionInput> streams, String createdBy) {
 		var now = now();
 		var job = this.jobRepository.findForUpdate(jobId)
@@ -159,7 +159,8 @@ class CaptureSyncJobService {
 		job.start(now);
 		attempt.succeed(now);
 		job.succeed(now);
-		var revision = CaptureSyncRevision.accept(job, attempt, supersedesRevisionId, profile, summary, createdBy, now);
+		var revision = CaptureSyncRevision.accept(revisionId, job, attempt, supersedesRevisionId, profile, summary,
+				createdBy, now);
 		this.revisionRepository.saveAndFlush(revision);
 		var streamRevisions = streams.stream()
 			.map(input -> CaptureSyncStreamRevision.accept(revision, input.expectedCamera(), input.stream(),

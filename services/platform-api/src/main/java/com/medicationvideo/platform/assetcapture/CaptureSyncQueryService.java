@@ -81,8 +81,9 @@ class CaptureSyncQueryService {
 					CaptureSyncArtifact.ARTIFACT_ROLE)
 			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_SYNC_ARTIFACT_NOT_FOUND",
 					"The synchronized-frame artifact was not found."));
-		var page = this.frameQueryPort.query(artifact, new SynchronizedFrameQueryPort.FrameQueryRequest(
-				revision.getCaptureSyncRevisionId(), fromSyncFrameIndex, cameraNumbers, cursor, limit));
+		var page = this.frameQueryPort.query(artifact,
+				new SynchronizedFrameQueryPort.FrameQueryRequest(captureSessionId, revision.getCaptureSyncRevisionId(),
+						fromSyncFrameIndex, cameraNumbers, cursor, limit));
 		return new CaptureSyncFramePageResponse(revision.getCaptureSyncRevisionId(), page.items(), page.nextCursor());
 	}
 

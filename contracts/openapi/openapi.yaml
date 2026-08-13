@@ -3328,7 +3328,7 @@ paths:
       operationId: listCaptureSynchronizationFrames
       tags:
         - Capture Synchronization
-      summary: List bounded synchronized frame slots from the accepted artifact query index
+      summary: List bounded synchronized frame slots by reading the accepted Parquet artifact
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - name: capture_session_id

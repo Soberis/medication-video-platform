@@ -16,6 +16,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 
+import org.junit.jupiter.api.AfterEach;
+
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -136,6 +138,14 @@ class CaptureSyncExecutionContractTests {
 
 	}
 
+	@AfterEach
+
+	void clearSyntheticFixtures() {
+
+		CaptureSyncTestSupport.clearSyntheticProjectFixtures(this.jdbc, PROJECT_ID);
+
+	}
+
 	@Test
 
 	void workerAcceptsSynchronizationResultWithWorkerToken() throws Exception {
@@ -159,6 +169,15 @@ class CaptureSyncExecutionContractTests {
 		var resultStartedAt = Instant.now().minusSeconds(30);
 
 		var resultCompletedAt = Instant.now().minusSeconds(5);
+		var revisionId = UUID.randomUUID();
+		var canonicalManifest = """
+				{"artifact_role":"SYNCHRONIZED_FRAME_PARQUET","artifact_sha256":"%s","artifact_size_bytes":13,"capture_id":"%s","logical_content_sha256":"%s","schema_version":"synchronized-frame.v1","sync_revision_id":"%s"}
+				"""
+			.formatted(parquetSha256, this.fixture.captureSessionId(), SHA256, revisionId)
+			.strip();
+		var manifestDigest = sha256(canonicalManifest);
+		var artifactManifest = canonicalManifest.substring(0, canonicalManifest.length() - 1)
+				+ ",\"artifact_manifest_sha256\":\"" + manifestDigest + "\"}";
 
 		var payload = """
 
@@ -254,7 +273,7 @@ class CaptureSyncExecutionContractTests {
 
 				      "artifact_manifest_sha256": "%s",
 
-				      "artifact_manifest": {"schema_version":"synchronized-frame.v1"}
+				      "artifact_manifest": %s
 
 				    }
 
@@ -268,7 +287,8 @@ class CaptureSyncExecutionContractTests {
 
 				this.fixture.snapshotMemberId(), this.fixture.cameraStreamId(), this.fixture.clipAssetId(), SHA256,
 
-				this.fixture.mediaReportId(), SHA256, this.jobId, parquetSha256, SHA256, SHA256);
+				this.fixture.mediaReportId(), SHA256, this.jobId, parquetSha256, SHA256, manifestDigest,
+				artifactManifest);
 
 		this.mockMvc
 
@@ -286,7 +306,7 @@ class CaptureSyncExecutionContractTests {
 
 			.andExpect(jsonPath("$.status").value("SUCCEEDED"))
 
-			.andExpect(jsonPath("$.capture_sync_revision_id").isNotEmpty());
+			.andExpect(jsonPath("$.capture_sync_revision_id").value(revisionId.toString()));
 
 	}
 

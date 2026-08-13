@@ -121,8 +121,9 @@ class CaptureSyncRevision {
 	protected CaptureSyncRevision() {
 	}
 
-	private CaptureSyncRevision(CaptureSyncJob job, CaptureSyncJobAttempt attempt, UUID supersedesRevisionId,
-			SyncProfile profile, CaptureSyncRevisionSummary summary, String createdBy, Instant createdAt) {
+	private CaptureSyncRevision(UUID revisionId, CaptureSyncJob job, CaptureSyncJobAttempt attempt,
+			UUID supersedesRevisionId, SyncProfile profile, CaptureSyncRevisionSummary summary, String createdBy,
+			Instant createdAt) {
 		if (!job.getCaptureSyncJobId().equals(attempt.getCaptureSyncJobId())) {
 			throw new IllegalArgumentException("A revision attempt must belong to its synchronization job.");
 		}
@@ -136,7 +137,7 @@ class CaptureSyncRevision {
 				|| !job.getSyncProfileSha256().equals(profile.profileSha256())) {
 			throw new IllegalArgumentException("A revision profile must match the job's frozen synchronization input.");
 		}
-		this.captureSyncRevisionId = UUID.randomUUID();
+		this.captureSyncRevisionId = java.util.Objects.requireNonNull(revisionId, "revisionId");
 		this.captureSyncJobId = job.getCaptureSyncJobId();
 		this.captureSyncJobAttemptId = attempt.getCaptureSyncJobAttemptId();
 		this.projectId = job.getProjectId();
@@ -173,9 +174,11 @@ class CaptureSyncRevision {
 		this.createdAt = createdAt;
 	}
 
-	static CaptureSyncRevision accept(CaptureSyncJob job, CaptureSyncJobAttempt attempt, UUID supersedesRevisionId,
-			SyncProfile profile, CaptureSyncRevisionSummary summary, String createdBy, Instant createdAt) {
-		return new CaptureSyncRevision(job, attempt, supersedesRevisionId, profile, summary, createdBy, createdAt);
+	static CaptureSyncRevision accept(UUID revisionId, CaptureSyncJob job, CaptureSyncJobAttempt attempt,
+			UUID supersedesRevisionId, SyncProfile profile, CaptureSyncRevisionSummary summary, String createdBy,
+			Instant createdAt) {
+		return new CaptureSyncRevision(revisionId, job, attempt, supersedesRevisionId, profile, summary, createdBy,
+				createdAt);
 	}
 
 	UUID getCaptureSyncRevisionId() {

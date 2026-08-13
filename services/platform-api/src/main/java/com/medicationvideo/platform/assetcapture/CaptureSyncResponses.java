@@ -68,6 +68,6 @@ record CaptureSyncStartRequest(@jakarta.validation.constraints.NotBlank @jakarta
 }
 
 record CaptureSyncProvenanceResponse(UUID captureSessionId, UUID syncRevisionId, long syncFrameIndex, int cameraNumber,
-		String originalMp4Sha256, UUID cameraStreamId, UUID videoId, UUID sourceMediaReportId,
-		Map<String, Object> revisionRefs) {
+		Long sourceFrameIndex, Long sourcePtsNs, Integer sourcePtsOrdinal, Long syncErrorNs, String originalMp4Sha256,
+		UUID cameraStreamId, UUID videoId, UUID sourceMediaReportId, Map<String, Object> revisionRefs) {
 }

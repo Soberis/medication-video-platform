@@ -13,12 +13,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 class CaptureSyncExecutionService {
+
+	private static final ObjectMapper CANONICAL_JSON = new ObjectMapper().rebuild()
+		.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+		.configure(SerializationFeature.INDENT_OUTPUT, false)
+		.build();
 
 	private final CaptureSyncJobRepository jobRepository;
 
@@ -123,9 +132,10 @@ class CaptureSyncExecutionService {
 	private CaptureSyncRevision acceptSucceededResult(CaptureSyncJob job, CaptureSyncJobAttempt attempt,
 			SyncProfile profile, CaptureSyncResultRequest request, Instant now) {
 		var success = request.success();
+		var revisionId = manifestUuid(success.artifact().artifactManifest(), "sync_revision_id");
 		var streams = toStreamRevisionInputs(job, success.streams());
 		var revision = this.jobService.acceptRevision(job.getProjectId(), job.getCaptureSyncJobId(),
-				attempt.getAttempt(), request.leaseToken(), profile, request.supersedesSyncRevisionId(),
+				attempt.getAttempt(), request.leaseToken(), revisionId, profile, request.supersedesSyncRevisionId(),
 				success.summary(), streams, "synthetic-worker");
 		registerArtifact(revision, success.artifact(), now);
 		updateCaptureReadModel(job, revision, now);
@@ -140,9 +150,35 @@ class CaptureSyncExecutionService {
 		var object = new CaptureSyncStoragePort.ObjectReference(artifact.storageBucket(), artifact.objectKey());
 		this.storage.verify(object, artifact.sizeBytes(), artifact.sha256(), CaptureSyncArtifact.MEDIA_TYPE);
 		var manifest = new LinkedHashMap<>(artifact.artifactManifest());
+		validateManifestDigest(manifest, artifact.artifactManifestSha256());
+		validateManifestIdentity(revision, artifact, manifest);
 		this.artifactRepository.saveAndFlush(CaptureSyncArtifact.register(revision.getCaptureSyncRevisionId(),
 				artifact.sizeBytes(), artifact.sha256(), artifact.logicalContentSha256(), object, manifest,
 				artifact.artifactManifestSha256(), now));
+	}
+
+	private static void validateManifestIdentity(CaptureSyncRevision revision, CaptureSyncArtifactPayload artifact,
+			Map<String, Object> manifest) {
+		if (!CaptureSyncArtifact.ARTIFACT_ROLE.equals(manifest.get("artifact_role"))
+				|| !revision.getCaptureSessionId().toString().equals(manifest.get("capture_id"))
+				|| !revision.getCaptureSyncRevisionId().toString().equals(manifest.get("sync_revision_id"))
+				|| !artifact.sha256().equals(manifest.get("artifact_sha256"))
+				|| !artifact.logicalContentSha256().equals(manifest.get("logical_content_sha256"))
+				|| !(manifest.get("artifact_size_bytes") instanceof Number size)
+				|| size.longValue() != artifact.sizeBytes()) {
+			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_IDENTITY_MISMATCH",
+					"The artifact manifest identity does not match the accepted synchronization result.", false);
+		}
+	}
+
+	private static UUID manifestUuid(Map<String, Object> manifest, String field) {
+		try {
+			return UUID.fromString(String.valueOf(manifest.get(field)));
+		}
+		catch (RuntimeException exception) {
+			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_INVALID",
+					"The artifact manifest is missing a valid " + field + ".", false);
+		}
 	}
 
 	private void updateCaptureReadModel(CaptureSyncJob job, CaptureSyncRevision revision, Instant now) {
@@ -152,17 +188,42 @@ class CaptureSyncExecutionService {
 		this.sessionRepository.saveAndFlush(session);
 	}
 
-	private static void validateManifestDigest(Map<String, Object> manifest, String expectedDigest) {
-		// Manifest digest canonicalization is owned by the Worker writer; Core API stores
-		// the
-		// verified digest supplied with the immutable artifact registration request.
+	static void validateManifestDigest(Map<String, Object> manifest, String expectedDigest) {
 		if (expectedDigest == null || !expectedDigest.matches("[a-f0-9]{64}")) {
 			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_DIGEST_MISMATCH",
 					"The artifact manifest digest is invalid.", false);
 		}
-		if (!manifest.containsKey("schema_version")) {
+		if (!CaptureSyncArtifact.SCHEMA_VERSION.equals(manifest.get("schema_version"))
+				|| !(manifest.get("artifact_manifest_sha256") instanceof String embeddedDigest)
+				|| !MessageDigest.isEqual(expectedDigest.getBytes(StandardCharsets.US_ASCII),
+						embeddedDigest.getBytes(StandardCharsets.US_ASCII))) {
 			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_INVALID",
-					"The artifact manifest is missing required metadata.", false);
+					"The artifact manifest is missing required metadata or its embedded digest does not match.", false);
+		}
+		var canonicalManifest = new LinkedHashMap<>(manifest);
+		canonicalManifest.remove("artifact_manifest_sha256");
+		final byte[] canonicalBytes;
+		try {
+			canonicalBytes = CANONICAL_JSON.writeValueAsBytes(canonicalManifest);
+		}
+		catch (JacksonException exception) {
+			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_INVALID",
+					"The artifact manifest cannot be canonicalized.", false);
+		}
+		var actualDigest = sha256(canonicalBytes);
+		if (!MessageDigest.isEqual(actualDigest.getBytes(StandardCharsets.US_ASCII),
+				expectedDigest.getBytes(StandardCharsets.US_ASCII))) {
+			throw new CaptureSyncExecutionException("CAPTURE_SYNC_MANIFEST_DIGEST_MISMATCH",
+					"The canonical artifact manifest digest does not match the Worker result.", false);
+		}
+	}
+
+	private static String sha256(byte[] value) {
+		try {
+			return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));
+		}
+		catch (java.security.NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable in the Java runtime.", exception);
 		}
 	}
 

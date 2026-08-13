@@ -110,14 +110,16 @@ class CaptureSyncJobModelTests {
 		var summary = new CaptureSyncRevisionSummary(1, "TEST_CLOCK", "TEST_CAPTURE_TIME", null, null, 1, 1, 0, 0, 1,
 				0L, 0L, 1, SHA);
 
-		assertThrows(IllegalArgumentException.class, () -> CaptureSyncRevision.accept(job, queuedAttempt, null, profile,
-				summary, "synthetic-admin", CREATED_AT));
+		assertThrows(IllegalArgumentException.class, () -> CaptureSyncRevision.accept(UUID.randomUUID(), job,
+				queuedAttempt, null, profile, summary, "synthetic-admin", CREATED_AT));
 
 		queuedAttempt.acquire("worker-1", CREATED_AT, Duration.ofSeconds(30));
 		queuedAttempt.succeed(CREATED_AT.plusSeconds(1));
-		var revision = CaptureSyncRevision.accept(job, queuedAttempt, null, profile, summary, "synthetic-admin",
-				CREATED_AT.plusSeconds(1));
+		var revisionId = UUID.randomUUID();
+		var revision = CaptureSyncRevision.accept(revisionId, job, queuedAttempt, null, profile, summary,
+				"synthetic-admin", CREATED_AT.plusSeconds(1));
 
+		assertEquals(revisionId, revision.getCaptureSyncRevisionId());
 		assertEquals(job.getCaptureSyncJobId(), revision.getCaptureSyncJobId());
 		assertEquals(queuedAttempt.getCaptureSyncJobAttemptId(), revision.getCaptureSyncJobAttemptId());
 		assertEquals(SHA, revision.getLogicalContentSha256());
@@ -185,8 +187,9 @@ class CaptureSyncJobModelTests {
 		var service = new CaptureSyncJobService(jobs, mock(CaptureSyncJobWriter.class), attempts, revisions,
 				streamRevisions);
 
-		assertThrows(IllegalArgumentException.class, () -> service.acceptRevision(input.projectId(),
-				job.getCaptureSyncJobId(), 1, leaseToken, profile, null, summary, List.of(stream), "synthetic-admin"));
+		assertThrows(IllegalArgumentException.class,
+				() -> service.acceptRevision(input.projectId(), job.getCaptureSyncJobId(), 1, leaseToken,
+						UUID.randomUUID(), profile, null, summary, List.of(stream), "synthetic-admin"));
 
 		assertEquals(CaptureSyncJobStatus.RUNNING, job.getStatus());
 		assertEquals(CaptureSyncJobAttemptStatus.RUNNING, queuedAttempt.getStatus());

@@ -19,14 +19,17 @@ class CaptureSyncProvenanceQueryService {
 
 	private final CaptureSyncArtifactRepository artifactRepository;
 
+	private final SynchronizedFrameQueryPort frameQueryPort;
+
 	CaptureSyncProvenanceQueryService(CaptureSessionRepository sessionRepository,
 			CaptureSyncRevisionRepository revisionRepository,
 			CaptureSyncStreamRevisionRepository streamRevisionRepository,
-			CaptureSyncArtifactRepository artifactRepository) {
+			CaptureSyncArtifactRepository artifactRepository, SynchronizedFrameQueryPort frameQueryPort) {
 		this.sessionRepository = sessionRepository;
 		this.revisionRepository = revisionRepository;
 		this.streamRevisionRepository = streamRevisionRepository;
 		this.artifactRepository = artifactRepository;
+		this.frameQueryPort = frameQueryPort;
 	}
 
 	@Transactional(readOnly = true)
@@ -49,6 +52,25 @@ class CaptureSyncProvenanceQueryService {
 			.findByCaptureSyncRevisionIdAndArtifactRole(syncRevisionId, CaptureSyncArtifact.ARTIFACT_ROLE)
 			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_SYNC_ARTIFACT_NOT_FOUND",
 					"The synchronized-frame artifact was not found."));
+		var page = this.frameQueryPort.query(artifact, new SynchronizedFrameQueryPort.FrameQueryRequest(
+				captureSessionId, syncRevisionId, syncFrameIndex, List.of(cameraNumber), null, 1));
+		var slot = page.items()
+			.stream()
+			.filter(item -> item.syncFrameIndex() == syncFrameIndex && item.cameraNumber() == cameraNumber)
+			.findFirst()
+			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_SYNC_FRAME_NOT_FOUND",
+					"The requested synchronized frame slot was not found."));
+		if ("PRESENT".equals(slot.frameState()) && (slot.cameraStreamId() == null || slot.videoId() == null
+				|| slot.sourceFrameIndex() == null || slot.sourcePtsNs() == null || slot.sourcePtsOrdinal() == null
+				|| slot.syncErrorNs() == null)) {
+			throw new AssetCatalogQueryException("CAPTURE_SYNC_PROVENANCE_INVALID",
+					"The synchronized frame slot is missing required source provenance.");
+		}
+		if ("PRESENT".equals(slot.frameState()) && (!slot.cameraStreamId().equals(streamRevision.getCameraStreamId())
+				|| !slot.videoId().equals(streamRevision.getClipAssetId()))) {
+			throw new AssetCatalogQueryException("CAPTURE_SYNC_PROVENANCE_INVALID",
+					"The synchronized frame slot source identity does not match the frozen camera stream.");
+		}
 		var mp4Sha256 = provenanceMp4Sha256(artifact.getArtifactManifest(), cameraNumber);
 		if (mp4Sha256 == null && streamRevision.getStreamPresenceState() != CaptureSyncStreamPresenceState.MISSING) {
 			mp4Sha256 = streamRevision.getSourceInputSha256();
@@ -59,8 +81,9 @@ class CaptureSyncProvenanceQueryService {
 		revisionRefs.put("capture_sync_job_id", revision.getCaptureSyncJobId());
 		revisionRefs.put("sync_frame_index", syncFrameIndex);
 		return new CaptureSyncProvenanceResponse(captureSessionId, syncRevisionId, syncFrameIndex, cameraNumber,
-				mp4Sha256, streamRevision.getCameraStreamId(), streamRevision.getClipAssetId(),
-				streamRevision.getSourceMediaReportId(), Map.copyOf(revisionRefs));
+				slot.sourceFrameIndex(), slot.sourcePtsNs(), slot.sourcePtsOrdinal(), slot.syncErrorNs(), mp4Sha256,
+				slot.cameraStreamId(), slot.videoId(), streamRevision.getSourceMediaReportId(),
+				Map.copyOf(revisionRefs));
 	}
 
 	private static String provenanceMp4Sha256(Map<String, Object> manifest, int cameraNumber) {

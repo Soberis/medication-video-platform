@@ -2,10 +2,15 @@ package com.medicationvideo.platform.assetcapture;
 
 import java.util.Objects;
 
+import org.apache.parquet.io.InputFile;
+
 public interface CaptureSyncStoragePort {
 
 	VerifiedArtifact verify(ObjectReference object, long expectedSizeBytes, String expectedSha256,
 			String expectedMediaType);
+
+	/** Opens the immutable artifact for bounded Parquet row-group reads. */
+	InputFile open(ObjectReference object);
 
 	record ObjectReference(String bucket, String objectKey) {
 

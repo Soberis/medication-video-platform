@@ -34,7 +34,7 @@ class CaptureSyncArtifactPersistenceContractTests {
 
 	@AfterEach
 	void clearArtifacts() {
-		CaptureSyncTestSupport.clearCaptureSyncTables(this.jdbc);
+		CaptureSyncTestSupport.clearSyntheticProjectFixtures(this.jdbc, PROJECT_ID);
 	}
 
 	@Test

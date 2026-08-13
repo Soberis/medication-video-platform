@@ -10,8 +10,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.medicationvideo.platform.mediaprivacy.LocalMediaWorkerAuthenticationFilter;
-
 @Configuration(proxyBeanMethods = false)
 @Profile({ "local", "test" })
 class CaptureSyncWorkerSecurityConfiguration {
@@ -20,7 +18,7 @@ class CaptureSyncWorkerSecurityConfiguration {
 	@Order(1)
 	SecurityFilterChain captureSyncWorkerSecurityFilterChain(HttpSecurity http,
 			@Value("${platform.security.local-worker-bearer-token:}") String bearerToken) throws Exception {
-		var workerFilter = new LocalMediaWorkerAuthenticationFilter(bearerToken);
+		var workerFilter = new CaptureSyncWorkerAuthenticationFilter(bearerToken);
 		return http.securityMatcher("/api/v1/internal/capture-sync-jobs/**")
 			.csrf(csrf -> csrf.disable())
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

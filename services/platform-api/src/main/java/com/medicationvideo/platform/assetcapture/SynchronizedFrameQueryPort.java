@@ -8,8 +8,8 @@ public interface SynchronizedFrameQueryPort {
 
 	FrameQueryPage query(CaptureSyncArtifact artifact, FrameQueryRequest request);
 
-	record FrameQueryRequest(UUID syncRevisionId, Long fromSyncFrameIndex, List<Integer> cameraNumbers, String cursor,
-			int limit) {
+	record FrameQueryRequest(UUID captureSessionId, UUID syncRevisionId, Long fromSyncFrameIndex,
+			List<Integer> cameraNumbers, String cursor, int limit) {
 	}
 
 	record FrameQueryPage(List<SynchronizedFrameSlotResponse> items, String nextCursor) {
