@@ -19,6 +19,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.medicationvideo.platform.support.CaptureSyncTestSupport;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
@@ -43,8 +44,7 @@ class CaptureSyncPersistenceContractTests {
 
 	@AfterEach
 	void clearSyntheticFixtures() {
-		this.jdbc.execute(
-				"TRUNCATE capture_sync_stream_revision, capture_sync_revision, capture_sync_job_attempt, capture_sync_job");
+		CaptureSyncTestSupport.clearCaptureSyncTables(this.jdbc);
 		this.jdbc.update("DELETE FROM media_report WHERE project_id IN (?, ?)", PROJECT_ID, OTHER_PROJECT_ID);
 		this.jdbc.update("DELETE FROM media_job WHERE project_id IN (?, ?)", PROJECT_ID, OTHER_PROJECT_ID);
 		this.jdbc.update("""

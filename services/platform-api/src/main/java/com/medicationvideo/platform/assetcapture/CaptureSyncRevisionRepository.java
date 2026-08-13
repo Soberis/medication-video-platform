@@ -14,4 +14,6 @@ interface CaptureSyncRevisionRepository extends JpaRepository<CaptureSyncRevisio
 	Optional<CaptureSyncRevision> findTopByCaptureSessionIdOrderByCreatedAtDescCaptureSyncRevisionIdDesc(
 			UUID captureSessionId);
 
+	Optional<CaptureSyncRevision> findByCaptureSyncJobId(UUID captureSyncJobId);
+
 }

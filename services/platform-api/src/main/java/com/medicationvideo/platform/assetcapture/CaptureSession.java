@@ -73,6 +73,9 @@ class CaptureSession {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
+	@Column(name = "current_sync_revision_id")
+	private UUID currentSyncRevisionId;
+
 	@Version
 	@Column(name = "version", nullable = false)
 	private long version;
@@ -196,6 +199,18 @@ class CaptureSession {
 
 	Instant getCreatedAt() {
 		return this.createdAt;
+	}
+
+	UUID getCurrentSyncRevisionId() {
+		return this.currentSyncRevisionId;
+	}
+
+	void acceptSyncRevision(UUID revisionId, Instant changedAt) {
+		if (revisionId == null) {
+			throw new IllegalArgumentException("A sync revision id is required.");
+		}
+		this.currentSyncRevisionId = revisionId;
+		this.updatedAt = changedAt;
 	}
 
 	void refreshMediaProjection(List<CameraStream> streams, Instant changedAt) {

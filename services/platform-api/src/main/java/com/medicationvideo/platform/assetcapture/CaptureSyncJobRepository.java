@@ -22,4 +22,7 @@ interface CaptureSyncJobRepository extends JpaRepository<CaptureSyncJob, UUID> {
 			UUID projectId, UUID captureSessionId, String inputManifestSha256, String syncProfileSha256,
 			String algorithmKey, String algorithmVersion);
 
+	Optional<CaptureSyncJob> findTopByProjectIdAndCaptureSessionIdOrderByCreatedAtDescCaptureSyncJobIdDesc(
+			UUID projectId, UUID captureSessionId);
+
 }

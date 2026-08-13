@@ -38,6 +38,8 @@ class ExternalVideoIngestManifestContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
+	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
+
 	private static final long PART_SIZE = 8_388_608L;
 
 	private static final String VIDEO_SHA = "a".repeat(64);
@@ -319,7 +321,7 @@ class ExternalVideoIngestManifestContractTests {
 		var manifestId = manifestId(key, PROJECT_ID);
 
 		this.mockMvc
-			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", "batch-no-ghost-bound-" + UUID.randomUUID())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(batchRequest(PROJECT_ID, manifestId).replace("\"HOSPITAL_REMOTE\"", "\"PLATFORM_LOCAL\"")

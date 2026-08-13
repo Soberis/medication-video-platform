@@ -306,6 +306,10 @@ class CaptureSyncRevision {
 		return this.createdAt;
 	}
 
+	Instant getCaptureOriginUtc() {
+		return this.captureOriginUtc;
+	}
+
 	String getCreatedBy() {
 		return this.createdBy;
 	}

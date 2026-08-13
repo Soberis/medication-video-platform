@@ -207,6 +207,23 @@ class CaptureSyncJob {
 		return Map.copyOf(streams);
 	}
 
+	SyncStream frozenSyncStream(int cameraNumber) {
+		var frozen = getFrozenStreams().get(cameraNumber);
+		if (frozen == null) {
+			throw new IllegalArgumentException("The frozen input manifest has no stream for camera " + cameraNumber);
+		}
+		Rational drift = null;
+		if (!"null".equals(frozen.driftPpm())) {
+			var parts = frozen.driftPpm().split("/");
+			drift = Rational.of(Long.parseLong(parts[0]), Long.parseLong(parts[1]));
+		}
+		return new SyncStream(frozen.cameraNumber(), frozen.cameraStreamId(), frozen.clipAssetId(),
+				frozen.rawVideoSha256(), frozen.mediaReportId(), frozen.timeBaseDigest(),
+				new StreamTimeMapping(frozen.anchorSourceNs(), frozen.anchorCaptureNs(), drift, frozen.method(),
+						frozen.source(), frozen.anchorCount(), frozen.trusted()),
+				List.of(SourceFrame.valid(0, frozen.anchorSourceNs(), frozen.anchorSourceNs(), 0)));
+	}
+
 	String getSyncProfileKey() {
 		return this.syncProfileKey;
 	}
