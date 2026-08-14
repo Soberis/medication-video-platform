@@ -25,6 +25,18 @@ public class ProjectAccessService {
 		return requireActiveMembership(projectId, actorId).getRole();
 	}
 
+	@Transactional(readOnly = true)
+	public ProjectRole requireAdministrator(UUID projectId, String actorId) {
+		requireEnabledPlatformAdministrator();
+		requireActiveProject(projectId);
+		var membership = requireActiveMembership(projectId, actorId);
+		if (membership.getRole() != ProjectRole.ADMIN) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
+					403);
+		}
+		return membership.getRole();
+	}
+
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
 		var project = this.projectRepository.findForUpdate(projectId)

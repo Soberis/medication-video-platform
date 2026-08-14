@@ -9,7 +9,6 @@ export const paths = {
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
   annotationTasks: (projectId: string) =>
     `/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
-  datasets: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/datasets`,
   dataset: (projectId: string, datasetVersionId: string) =>
     `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetVersionId)}`,
   eventLogs: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/event-logs`,

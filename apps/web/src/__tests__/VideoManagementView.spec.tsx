@@ -56,8 +56,17 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByRole('heading', { name: '视频管理' })).toBeInTheDocument()
     expect(await screen.findByText('synthetic-no-hand.mp4')).toBeInTheDocument()
-    expect(screen.getByText('待标注')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'synthetic-no-hand.mp4' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+    expect(screen.queryByText('V1.18 P0 · 单视频闭环')).not.toBeInTheDocument()
+    expect(screen.getByText('标注链路待办')).toBeInTheDocument()
+    expect(screen.getByText(/待办：标注 1/)).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '下一步' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '相机' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '留存' })).not.toBeInTheDocument()
+    expect(screen.getByText('更多筛选').closest('details')).not.toHaveAttribute('open')
     expect(screen.getByText('未发现手部')).toBeInTheDocument()
     expect(screen.getByText('可检测')).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
@@ -82,9 +91,31 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
-    expect(screen.getByText('继续人工标注')).toBeInTheDocument()
     expect(screen.getByText('不可重试')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
+  })
+
+  it('keeps manual annotation available before optional hand detection is requested', async () => {
+    const row = videoRow({ hand_status: 'NOT_REQUESTED', annotation_status: 'NOT_STARTED' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '检测手部' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
   })
 
@@ -184,7 +215,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('重试手部检测')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '重试检测' }))
 
     await waitFor(() =>

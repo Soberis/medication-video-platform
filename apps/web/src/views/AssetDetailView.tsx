@@ -2,7 +2,12 @@ import { Alert, App as AntdApp, Button, Card, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
-import { AnnotationTaskApiError, createAnnotationTask, type AnnotationTask } from '@/api/annotation'
+import {
+  AnnotationTaskApiError,
+  createAnnotationTask,
+  listAnnotationTasks,
+  type AnnotationTask,
+} from '@/api/annotation'
 import {
   authorizeClipAssetPlayback,
   CatalogApiError,
@@ -29,6 +34,7 @@ import {
   getQualityReview,
   QualityReviewApiError,
   recordQualityReview,
+  qualityDecisionLabels,
   type QualityReview,
   type QualityReviewCommandDecision,
   type QualityReviewReasonCode,
@@ -46,6 +52,37 @@ import {
   QualityReviewCard,
 } from '@/components/AssetDetailSections'
 import { usePromptDialog } from '@/components/PromptDialog'
+
+type WorkflowStepState = 'complete' | 'current' | 'waiting' | 'blocked'
+
+interface WorkflowStep {
+  label: string
+  state: WorkflowStepState
+  status: string
+  detail: string
+}
+
+interface DetailNextStep {
+  title: string
+  description: string
+  buttonLabel: string
+  kind: 'hand-pose' | 'media-recovery' | 'scroll' | 'navigate' | 'none'
+  interactive: boolean
+}
+
+const workflowStateLabels: Record<WorkflowStepState, string> = {
+  complete: '已完成',
+  current: '当前',
+  waiting: '待处理',
+  blocked: '受阻',
+}
+
+const workflowTagColors: Record<WorkflowStepState, string> = {
+  complete: 'success',
+  current: 'processing',
+  waiting: 'default',
+  blocked: 'error',
+}
 
 export default function AssetDetailView() {
   const { projectId = '', id: assetId = '' } = useParams()
@@ -86,7 +123,10 @@ export default function AssetDetailView() {
   const [isSavingQuality, setIsSavingQuality] = useState(false)
   const [annotationAssignees, setAnnotationAssignees] = useState<ProjectMembership[]>([])
   const [selectedAnnotationAssignee, setSelectedAnnotationAssignee] = useState('')
-  const [createdAnnotationTask, setCreatedAnnotationTask] = useState<AnnotationTask | null>(null)
+  const [annotationTask, setAnnotationTask] = useState<AnnotationTask | null>(null)
+  const [annotationTaskLoadState, setAnnotationTaskLoadState] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle')
   const [isCreatingAnnotationTask, setIsCreatingAnnotationTask] = useState(false)
   const [handPoseJob, setHandPoseJob] = useState<HandPoseJob | null>(null)
   const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(
@@ -97,6 +137,7 @@ export default function AssetDetailView() {
   const roleRequest = useRef<AbortController | null>(null)
   const qualityRequest = useRef<AbortController | null>(null)
   const mediaReportRequest = useRef<AbortController | null>(null)
+  const annotationTaskRequest = useRef<AbortController | null>(null)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mediaProbeRecoveryIntent = useRef<{
     changeReference: string
@@ -111,13 +152,348 @@ export default function AssetDetailView() {
     projectRole === 'ADMIN' &&
     detail?.status === 'INGESTED' &&
     qualityReview?.decision === 'QUALIFIED' &&
-    annotationAssignees.length > 0
+    annotationAssignees.length > 0 &&
+    annotationTaskLoadState === 'success' &&
+    annotationTask === null
+  const canShowAnnotationTaskCard =
+    projectRole === 'ADMIN' &&
+    detail?.status === 'INGESTED' &&
+    qualityReview?.decision === 'QUALIFIED' &&
+    annotationTaskLoadState === 'success' &&
+    (annotationTask !== null || annotationAssignees.length > 0)
   const canRequestHandPose =
     projectRole !== null &&
     detail?.status === 'INGESTED' &&
     detail.session_binding?.enabled_for_hand_detection !== false &&
     (handPoseJob === null ||
       (handPoseJob.status === 'FAILED' && handPoseJob.run_summary?.retryable === true))
+  const workflowSteps = useMemo<WorkflowStep[]>(() => {
+    if (!detail) return []
+
+    const mediaStep: WorkflowStep =
+      detail.status === 'INGESTED'
+        ? {
+            label: '媒体',
+            state: 'complete',
+            status: '已完成',
+            detail: '视频可播放并可进入后续人工流程',
+          }
+        : detail.status === 'INGEST_FAILED'
+          ? {
+              label: '媒体',
+              state: 'blocked',
+              status: '检测失败',
+              detail: '需先处理媒体检测问题',
+            }
+          : {
+              label: '媒体',
+              state: 'current',
+              status: detail.status === 'INGESTING' ? '检测中' : '待检测',
+              detail: '完成后才能记录质量结论',
+            }
+
+    const handStep: WorkflowStep =
+      detail.status !== 'INGESTED'
+        ? {
+            label: '手部检测',
+            state: 'waiting',
+            status: '等待媒体',
+            detail: '媒体准备好后可生成候选',
+          }
+        : handPoseJob === null
+          ? {
+              label: '手部检测',
+              state: 'waiting',
+              status: '可选',
+              detail: 'MediaPipe 预标注不阻断人工流程',
+            }
+          : handPoseJob.status === 'SUCCEEDED'
+            ? {
+                label: '手部检测',
+                state: 'complete',
+                status: '已完成',
+                detail:
+                  handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                    ? '未发现手部候选'
+                    : `${handPoseCandidates?.candidates.length ?? 0} 条候选可供查看`,
+              }
+            : handPoseJob.status === 'FAILED'
+              ? {
+                  label: '手部检测',
+                  state: 'waiting',
+                  status: handPoseJob.run_summary?.retryable === true ? '可重试' : '失败',
+                  detail: '候选失败不阻断人工标注，也不会进入正式标注',
+                }
+              : {
+                  label: '手部检测',
+                  state: 'current',
+                  status: '检测中',
+                  detail: '页面会自动更新状态',
+                }
+
+    const annotationStep: WorkflowStep =
+      qualityReview?.decision === 'REJECTED'
+        ? {
+            label: '人工标注',
+            state: 'blocked',
+            status: '不进入',
+            detail: '当前质量结论不允许进入标注',
+          }
+        : qualityReview?.decision !== 'QUALIFIED'
+          ? {
+              label: '人工标注',
+              state: 'current',
+              status: '待质量判断',
+              detail: '先完成人工质量判断',
+            }
+          : annotationTaskLoadState === 'loading' || annotationTaskLoadState === 'idle'
+            ? {
+                label: '人工标注',
+                state: 'waiting',
+                status: '读取中',
+                detail: '正在读取服务端标注任务状态',
+              }
+            : annotationTaskLoadState === 'error'
+              ? {
+                  label: '人工标注',
+                  state: 'waiting',
+                  status: '状态未读取',
+                  detail: '请刷新后确认，不使用前端推断结果',
+                }
+              : annotationTask === null
+                ? {
+                    label: '人工标注',
+                    state: projectRole === 'ADMIN' ? 'current' : 'waiting',
+                    status: projectRole === 'ADMIN' ? '待创建' : '待分配',
+                    detail:
+                      projectRole === 'ADMIN'
+                        ? '质量合格后由管理员分配任务'
+                        : '等待管理员分配标注任务',
+                  }
+                : annotationTask.annotation_revision?.review?.decision === 'REJECTED'
+                  ? {
+                      label: '人工标注',
+                      state: 'current',
+                      status: '待修改',
+                      detail: '人工复核未通过，等待执行人修订',
+                    }
+                  : annotationTask.status === 'ASSIGNED'
+                    ? {
+                        label: '人工标注',
+                        state: 'current',
+                        status: '待提交',
+                        detail: '等待执行人提交配药动作时间段和动作标签',
+                      }
+                    : {
+                        label: '人工标注',
+                        state: 'complete',
+                        status: annotationTask.status === 'SUBMITTED' ? '已提交' : '已完成',
+                        detail:
+                          annotationTask.status === 'SUBMITTED'
+                            ? '正式动作标签已提交，等待人工复核'
+                            : '正式动作标签已经人工复核',
+                      }
+
+    const annotationReview = annotationTask?.annotation_revision?.review
+    const reviewStep: WorkflowStep =
+      annotationReview?.decision === 'REJECTED'
+        ? {
+            label: '人工复核',
+            state: 'blocked',
+            status: '未通过',
+            detail: '已退回执行人修改，不会自动通过',
+          }
+        : annotationTask?.status === 'SUBMITTED'
+          ? {
+              label: '人工复核',
+              state: 'current',
+              status: '待复核',
+              detail: '等待项目管理员人工复核，AI 不会自动通过',
+            }
+          : annotationReview?.decision === 'APPROVED'
+            ? {
+                label: '人工复核',
+                state: 'complete',
+                status: '已通过',
+                detail: '正式动作标签已经人工确认',
+              }
+            : {
+                label: '人工复核',
+                state: 'waiting',
+                status: annotationTask ? '待提交' : '待标注',
+                detail: annotationTask ? '等待正式标注提交' : '等待人工标注任务',
+              }
+
+    const cleaningResult = annotationTask?.annotation_revision?.post_cleaning_result
+    const cleaningStep: WorkflowStep =
+      cleaningResult?.outcome === 'PASS'
+        ? {
+            label: '清洗',
+            state: 'complete',
+            status: '可用数据',
+            detail: '人工复核与清洗均已通过',
+          }
+        : cleaningResult?.outcome === 'WARNING' || cleaningResult?.outcome === 'REJECT'
+          ? {
+              label: '清洗',
+              state: 'blocked',
+              status: cleaningResult.outcome === 'WARNING' ? '需处理' : '未通过',
+              detail: '未通过 Cleaning 的数据不会进入训练导出',
+            }
+          : annotationReview?.decision === 'APPROVED'
+            ? {
+                label: '清洗',
+                state: 'current',
+                status: '等待结果',
+                detail: '人工复核已通过，等待服务端清洗结果',
+              }
+            : {
+                label: '清洗',
+                state: 'waiting',
+                status: '待复核',
+                detail: '只有人工复核通过后才会产生清洗结果',
+              }
+
+    return [mediaStep, handStep, annotationStep, reviewStep, cleaningStep]
+  }, [
+    annotationTask,
+    annotationTaskLoadState,
+    detail,
+    handPoseCandidates,
+    handPoseJob,
+    projectRole,
+    qualityReview,
+  ])
+
+  const currentWorkflowStep =
+    workflowSteps.find((step) => step.state === 'current' && step.label !== '手部检测') ??
+    workflowSteps.find((step) => step.state === 'blocked' && step.label !== '手部检测') ??
+    workflowSteps.find((step) => step.state === 'current') ??
+    workflowSteps.find((step) => step.state === 'blocked') ??
+    [...workflowSteps].reverse().find((step) => step.state === 'complete') ??
+    workflowSteps[0]
+
+  const nextStep = useMemo<DetailNextStep>(() => {
+    if (!detail) {
+      return {
+        title: '读取视频状态',
+        description: '正在读取当前视频的处理状态。',
+        buttonLabel: '读取状态',
+        kind: 'none',
+        interactive: false,
+      }
+    }
+    if (detail.status === 'UPLOADED') {
+      return canRecoverMissingMediaProbe
+        ? {
+            title: '恢复媒体检测',
+            description: '检测任务缺失时由管理员发起一次受审计恢复。',
+            buttonLabel: '恢复媒体检测',
+            kind: 'media-recovery',
+            interactive: true,
+          }
+        : {
+            title: '等待媒体检测',
+            description: '视频已上传，平台会补充媒体技术事实。',
+            buttonLabel: '等待媒体检测',
+            kind: 'none',
+            interactive: false,
+          }
+    }
+    if (detail.status !== 'INGESTED') {
+      return {
+        title: detail.status === 'INGESTING' ? '等待媒体检测完成' : '先处理媒体检测',
+        description: '媒体准备好后才能记录质量结论和进入人工标注。',
+        buttonLabel: '查看处理流程',
+        kind: 'scroll',
+        interactive: true,
+      }
+    }
+    if (annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS') {
+      return {
+        title: '已通过清洗，可用于训练',
+        description: '人工动作标签已经复核，当前数据已满足训练导出条件。',
+        buttonLabel: '已可用于训练',
+        kind: 'none',
+        interactive: false,
+      }
+    }
+    if (canRequestHandPose) {
+      return {
+        title: handPoseJob?.status === 'FAILED' ? '重试手部检测' : '检测手部姿态',
+        description: '生成手框、21 个关键点和骨架候选，结果仍需人工确认。',
+        buttonLabel: handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态',
+        kind: 'hand-pose',
+        interactive: true,
+      }
+    }
+    if (qualityLoadState === 'success' && qualityReview?.decision === 'UNREVIEWED') {
+      return {
+        title: '进行人工质量判断',
+        description: '确认视频是否适合进入配药动作标注。',
+        buttonLabel: '进入质量判断',
+        kind: 'scroll',
+        interactive: true,
+      }
+    }
+    if (
+      qualityReview?.decision === 'QUALIFIED' &&
+      canCreateAnnotationTask &&
+      annotationTask === null
+    ) {
+      return {
+        title: '创建配药动作标注',
+        description: '选择项目成员并创建正式人工标注任务。',
+        buttonLabel: '创建动作标注',
+        kind: 'scroll',
+        interactive: true,
+      }
+    }
+    if (annotationTask) {
+      return {
+        title:
+          annotationTask.status === 'ASSIGNED'
+            ? '提交人工动作标注'
+            : annotationTask.status === 'SUBMITTED'
+              ? '进行人工复核'
+              : '查看复核与清洗结果',
+        description:
+          annotationTask.status === 'ASSIGNED'
+            ? '进入任务列表完成时间段和动作标签填写。'
+            : annotationTask.status === 'SUBMITTED'
+              ? '正式动作标签已提交，等待项目管理员人工复核。'
+              : '标注已经完成，请确认服务端清洗结果。',
+        buttonLabel: '查看标注任务',
+        kind: 'navigate',
+        interactive: true,
+      }
+    }
+    if (qualityReview?.decision === 'REJECTED') {
+      return {
+        title: '视频不进入标注流程',
+        description: `当前质量结论：${qualityDecisionLabels[qualityReview.decision]}。`,
+        buttonLabel: '查看质量结论',
+        kind: 'scroll',
+        interactive: true,
+      }
+    }
+    return {
+      title: '查看处理流程',
+      description: '按右侧流程继续处理当前视频。',
+      buttonLabel: '查看处理流程',
+      kind: 'scroll',
+      interactive: true,
+    }
+  }, [
+    canCreateAnnotationTask,
+    canRecoverMissingMediaProbe,
+    canRequestHandPose,
+    annotationTask,
+    detail,
+    handPoseJob,
+    qualityLoadState,
+    qualityReview,
+  ])
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
     if (canPlay)
@@ -266,9 +642,28 @@ export default function AssetDetailView() {
       if (qualityRequest.current === request) qualityRequest.current = null
     }
   }, [assetId, projectId])
+  const loadAnnotationTask = useCallback(async () => {
+    annotationTaskRequest.current?.abort()
+    const request = new AbortController()
+    annotationTaskRequest.current = request
+    setAnnotationTaskLoadState('loading')
+    try {
+      const result = await listAnnotationTasks(projectId, request.signal)
+      if (annotationTaskRequest.current !== request) return
+      setAnnotationTask(result.items.find((task) => task.clip_asset_id === assetId) ?? null)
+      setAnnotationTaskLoadState('success')
+    } catch {
+      if (request.signal.aborted || annotationTaskRequest.current !== request) return
+      setAnnotationTask(null)
+      setAnnotationTaskLoadState('error')
+    } finally {
+      if (annotationTaskRequest.current === request) annotationTaskRequest.current = null
+    }
+  }, [assetId, projectId])
   const loadDetail = useCallback(async () => {
     detailRequest.current?.abort()
     qualityRequest.current?.abort()
+    annotationTaskRequest.current?.abort()
     const request = new AbortController()
     detailRequest.current = request
     setLoadState('loading')
@@ -277,12 +672,14 @@ export default function AssetDetailView() {
       if (detailRequest.current !== request) return
       setDetail(response)
       resetPlayback()
-      setCreatedAnnotationTask(null)
+      setAnnotationTask(null)
+      setAnnotationTaskLoadState(response.status === 'INGESTED' ? 'loading' : 'idle')
       setHandPoseJob(null)
       setHandPoseCandidates(null)
       setLoadState('success')
       if (response.status === 'INGESTED') {
         void loadQualityReview()
+        void loadAnnotationTask()
         void loadMediaReport()
         void loadHandPoseCandidates()
       } else {
@@ -313,6 +710,7 @@ export default function AssetDetailView() {
   }, [
     assetId,
     loadHandPoseCandidates,
+    loadAnnotationTask,
     loadMediaReport,
     loadQualityReview,
     projectId,
@@ -360,6 +758,7 @@ export default function AssetDetailView() {
       roleRequest.current?.abort()
       qualityRequest.current?.abort()
       mediaReportRequest.current?.abort()
+      annotationTaskRequest.current?.abort()
       clearPlaybackExpiryTimer()
     }
   }, [clearPlaybackExpiryTimer, loadDetail, loadProjectRole])
@@ -500,9 +899,7 @@ export default function AssetDetailView() {
     setActionErrorCode('')
     setActionErrorMessage('')
     try {
-      setCreatedAnnotationTask(
-        await createAnnotationTask(projectId, assetId, selectedAnnotationAssignee),
-      )
+      setAnnotationTask(await createAnnotationTask(projectId, assetId, selectedAnnotationAssignee))
       void message.success('配药动作标注已创建并分配。')
     } catch (error) {
       setActionErrorCode(
@@ -558,6 +955,25 @@ export default function AssetDetailView() {
     }
   }
 
+  function handleNextStep() {
+    if (nextStep.kind === 'hand-pose') {
+      void requestHandPose()
+      return
+    }
+    if (nextStep.kind === 'media-recovery') {
+      void recoverMissingMediaProbe()
+      return
+    }
+    if (nextStep.kind === 'navigate') {
+      navigate(paths.annotationTasks(projectId))
+      return
+    }
+    document.getElementById('detail-next-step')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑">
@@ -579,21 +995,21 @@ export default function AssetDetailView() {
       ) : null}
       {loadState === 'success' && detail ? (
         <>
-          <section className="page-heading detail-heading" aria-labelledby="asset-detail-title">
-            <div>
-              <p className="app-eyebrow">单路相机视频资产</p>
-              <h1 id="asset-detail-title">视频详情</h1>
-              <p className="asset-identifiers">
-                <span>
-                  客户端文件标识 <code>{detail.client_file_id}</code>
-                </span>
-                <span>
-                  资产 ID <code>{detail.clip_asset_id}</code>
-                </span>
+          <section
+            className="page-heading detail-heading workbench-heading"
+            aria-labelledby="asset-detail-title"
+          >
+            <div className="workbench-heading-copy">
+              <div className="workbench-title-row">
+                <h1 id="asset-detail-title">视频详情</h1>
+                <Tag color={statusTone(detail.status)}>{assetStatusLabels[detail.status]}</Tag>
+              </div>
+              <p className="workbench-video-name">
+                <span>当前视频</span>
+                <code title={detail.client_file_id}>{detail.client_file_id}</code>
               </p>
             </div>
             <div className="detail-actions">
-              <Tag color={statusTone(detail.status)}>{assetStatusLabels[detail.status]}</Tag>
               <Button
                 onClick={() => {
                   void loadDetail()
@@ -601,6 +1017,11 @@ export default function AssetDetailView() {
               >
                 刷新状态
               </Button>
+              {nextStep.interactive ? (
+                <Button type="primary" onClick={handleNextStep}>
+                  {nextStep.buttonLabel}
+                </Button>
+              ) : null}
             </div>
           </section>
           {actionErrorMessage ? (
@@ -612,129 +1033,205 @@ export default function AssetDetailView() {
               showIcon
             />
           ) : null}
-          <PlaybackCard
-            availability={playbackAvailability}
-            candidateOverlay={handPoseCandidates?.candidates ?? []}
-            canPlay={canPlay}
-            canRecoverMissingMediaProbe={canRecoverMissingMediaProbe}
-            grant={playbackGrant}
-            isRecoveringMediaProbe={isRecoveringMediaProbe}
-            isRequestingPlayback={isRequestingPlayback}
-            mediaProbeMessage={mediaProbeMessage}
-            playbackMessage={playbackMessage}
-            playbackState={playbackState}
-            onClose={resetPlayback}
-            onLoadedMetadata={() => {
-              setPlaybackState('ready')
-              setPlaybackMessage('')
-            }}
-            onPlaybackError={handlePlaybackError}
-            onRecoverMissingMediaProbe={() => void recoverMissingMediaProbe()}
-            onStartPlayback={() => void startPlayback()}
-          />
-          <MediaReportCard
-            detail={detail}
-            report={mediaReport}
-            loadState={mediaReportLoadState}
-            errorCode={mediaReportErrorCode}
-            errorMessage={mediaReportErrorMessage}
-          />
-          {detail.status === 'INGESTED' ? (
-            <Card
-              className="detail-card"
-              title={<strong id="hand-pose-title">手部姿态检测</strong>}
-              variant="outlined"
-              aria-labelledby="hand-pose-title"
-            >
-              <p className="app-eyebrow">舱内相机 · 二维候选</p>
-              <p>
-                检测到手时，会在播放视频上叠加手框、21 个关键点和骨架；Left / Right
-                只作为辅助方向信息。结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
-              </p>
-              {canRequestHandPose ? (
-                <Button
-                  type="primary"
-                  loading={isRequestingHandPose}
-                  onClick={() => void requestHandPose()}
-                >
-                  {handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态'}
-                </Button>
-              ) : null}
-              {handPoseJob ? (
-                <Alert
-                  className="playback-feedback"
-                  type={
-                    handPoseJob.status === 'FAILED'
-                      ? 'error'
-                      : handPoseJob.status === 'SUCCEEDED'
-                        ? 'success'
-                        : 'info'
-                  }
-                  title={
-                    handPoseJob.status === 'FAILED'
-                      ? '手部检测失败'
-                      : handPoseJob.status !== 'SUCCEEDED'
-                        ? '正在检测手部姿态'
-                        : handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                          ? '检测完成：未发现手部'
-                          : handPoseJob.hand_result === 'HAND_DETECTED'
-                            ? '检测完成：发现手部'
-                            : '手部姿态检测完成'
-                  }
-                  description={
-                    handPoseJob.status === 'FAILED'
-                      ? (handPoseJob.run_summary?.failure_reason ??
-                        (handPoseJob.run_summary?.retryable === true
-                          ? '本次手部检测未完成，请稍后重试。'
-                          : '本次手部检测未完成，当前错误不支持自动重试。'))
-                      : handPoseJob.status === 'SUCCEEDED'
-                        ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                          ? '本次视频已完整分析，但没有发现可用手部候选。原视频仍可直接播放。'
-                          : `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
-                        : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
-                  }
-                  showIcon
+          <div className="video-workbench">
+            <div className="workbench-grid">
+              <section className="workbench-primary" aria-label="视频与人工处理">
+                <PlaybackCard
+                  availability={playbackAvailability}
+                  candidateOverlay={handPoseCandidates?.candidates ?? []}
+                  canPlay={canPlay}
+                  canRecoverMissingMediaProbe={canRecoverMissingMediaProbe}
+                  grant={playbackGrant}
+                  isRecoveringMediaProbe={isRecoveringMediaProbe}
+                  isRequestingPlayback={isRequestingPlayback}
+                  mediaProbeMessage={mediaProbeMessage}
+                  playbackMessage={playbackMessage}
+                  playbackState={playbackState}
+                  onClose={resetPlayback}
+                  onLoadedMetadata={() => {
+                    setPlaybackState('ready')
+                    setPlaybackMessage('')
+                  }}
+                  onPlaybackError={handlePlaybackError}
+                  onRecoverMissingMediaProbe={() => void recoverMissingMediaProbe()}
+                  onStartPlayback={() => void startPlayback()}
                 />
-              ) : null}
-              {handPoseCandidates?.candidates?.[0] ? (
-                <p className="form-hint playback-feedback">
-                  已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
-                </p>
-              ) : null}
-            </Card>
-          ) : null}
-          <QualityReviewCard
-            assetStatus={detail.status}
-            canReview={canReviewQuality}
-            errorCode={qualityErrorCode}
-            errorMessage={qualityErrorMessage}
-            isSaving={isSavingQuality}
-            loadState={qualityLoadState}
-            review={qualityReview}
-            selectedDecision={selectedQualityDecision}
-            selectedReason={selectedQualityReason}
-            onSave={() => void saveQualityReview()}
-            onSelectionChange={(decision, reason) => {
-              setSelectedQualityDecision(decision)
-              setSelectedQualityReason(reason)
-            }}
-          />
-          {canCreateAnnotationTask ? (
-            <AnnotationTaskCard
-              assignees={annotationAssignees}
-              createdTask={createdAnnotationTask}
-              isCreating={isCreatingAnnotationTask}
-              projectId={projectId}
-              selectedAssignee={selectedAnnotationAssignee}
-              onCreate={() => void createTask()}
-              onSelectedAssigneeChange={setSelectedAnnotationAssignee}
-            />
-          ) : null}
-          <AssetFacts detail={detail} />
-          <AssetActivityCard key={assetId} assetId={assetId} projectId={projectId} />
-          {canDelete ? (
-            <DangerZoneCard isDeleting={isDeleting} onDelete={() => void confirmDelete()} />
-          ) : null}
+                <section
+                  className="workbench-under-player"
+                  id="detail-next-step"
+                  aria-labelledby="detail-next-step-title"
+                >
+                  <div className="workbench-section-heading">
+                    <div>
+                      <p className="app-eyebrow">必要操作</p>
+                      <h2 id="detail-next-step-title">人工处理</h2>
+                    </div>
+                    <span className="workbench-section-context">
+                      {currentWorkflowStep?.detail ?? '按右侧流程继续处理'}
+                    </span>
+                  </div>
+                  <QualityReviewCard
+                    assetStatus={detail.status}
+                    canReview={canReviewQuality}
+                    errorCode={qualityErrorCode}
+                    errorMessage={qualityErrorMessage}
+                    isSaving={isSavingQuality}
+                    loadState={qualityLoadState}
+                    review={qualityReview}
+                    selectedDecision={selectedQualityDecision}
+                    selectedReason={selectedQualityReason}
+                    onSave={() => void saveQualityReview()}
+                    onSelectionChange={(decision, reason) => {
+                      setSelectedQualityDecision(decision)
+                      setSelectedQualityReason(reason)
+                    }}
+                  />
+                  {canShowAnnotationTaskCard ? (
+                    <AnnotationTaskCard
+                      assignees={annotationAssignees}
+                      createdTask={annotationTask}
+                      isCreating={isCreatingAnnotationTask}
+                      projectId={projectId}
+                      selectedAssignee={selectedAnnotationAssignee}
+                      onCreate={() => void createTask()}
+                      onSelectedAssigneeChange={setSelectedAnnotationAssignee}
+                    />
+                  ) : null}
+                </section>
+              </section>
+              <aside className="workbench-sidebar" aria-label="视频处理流程">
+                <Card
+                  className="detail-card workflow-rail"
+                  title={<strong>处理流程</strong>}
+                  variant="outlined"
+                >
+                  <div className="workflow-current">
+                    <span className="app-eyebrow">当前阶段</span>
+                    <strong>{currentWorkflowStep?.label ?? '读取中'}</strong>
+                    <span>{currentWorkflowStep?.status ?? '读取状态…'}</span>
+                  </div>
+                  <ol className="workflow-steps">
+                    {workflowSteps.map((step) => (
+                      <li className={`workflow-step workflow-step-${step.state}`} key={step.label}>
+                        <span className="workflow-step-marker" aria-hidden="true" />
+                        <div className="workflow-step-content">
+                          <div className="workflow-step-heading">
+                            <strong>{step.label}</strong>
+                            <Tag color={workflowTagColors[step.state]}>
+                              {workflowStateLabels[step.state]}
+                            </Tag>
+                          </div>
+                          <span>{step.status}</span>
+                          <small>{step.detail}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="workflow-next-step">
+                    <span className="app-eyebrow">
+                      {annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS'
+                        ? '当前结果'
+                        : '下一步'}
+                    </span>
+                    <strong>{nextStep.title}</strong>
+                    <p>{nextStep.description}</p>
+                  </div>
+                  {detail.status === 'INGESTED' ? (
+                    <section className="hand-pose-panel" aria-labelledby="hand-pose-title">
+                      <div className="hand-pose-panel-heading">
+                        <div>
+                          <span className="app-eyebrow">二维候选</span>
+                          <strong id="hand-pose-title">手部姿态检测</strong>
+                        </div>
+                        <Tag>MediaPipe</Tag>
+                      </div>
+                      <p className="form-hint">
+                        结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
+                      </p>
+                      {canRequestHandPose && nextStep.kind !== 'hand-pose' ? (
+                        <Button
+                          type="primary"
+                          loading={isRequestingHandPose}
+                          onClick={() => void requestHandPose()}
+                        >
+                          {handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态'}
+                        </Button>
+                      ) : null}
+                      {handPoseJob ? (
+                        <Alert
+                          className="workbench-status-alert"
+                          type={
+                            handPoseJob.status === 'FAILED'
+                              ? 'error'
+                              : handPoseJob.status === 'SUCCEEDED'
+                                ? 'success'
+                                : 'info'
+                          }
+                          title={
+                            handPoseJob.status === 'FAILED'
+                              ? '手部检测失败'
+                              : handPoseJob.status !== 'SUCCEEDED'
+                                ? '正在检测手部姿态'
+                                : handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                                  ? '检测完成：未发现手部'
+                                  : handPoseJob.hand_result === 'HAND_DETECTED'
+                                    ? '检测完成：发现手部'
+                                    : '手部姿态检测完成'
+                          }
+                          description={
+                            handPoseJob.status === 'FAILED'
+                              ? (handPoseJob.run_summary?.failure_reason ??
+                                (handPoseJob.run_summary?.retryable === true
+                                  ? '本次手部检测未完成，请稍后重试。'
+                                  : '本次手部检测未完成，当前错误不支持自动重试。'))
+                              : handPoseJob.status === 'SUCCEEDED'
+                                ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                                  ? '本次视频已完整分析，但没有发现可用手部候选。原视频仍可直接播放。'
+                                  : `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
+                                : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
+                          }
+                          showIcon
+                        />
+                      ) : null}
+                      {handPoseCandidates?.candidates?.[0] ? (
+                        <p className="form-hint hand-pose-candidate-note">
+                          已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
+                        </p>
+                      ) : null}
+                    </section>
+                  ) : null}
+                </Card>
+              </aside>
+            </div>
+            <details className="detail-disclosure">
+              <summary>
+                <strong>更多信息</strong>
+                <span>媒体检测、文件技术信息、相机绑定与操作记录</span>
+              </summary>
+              <div className="detail-disclosure-content">
+                <MediaReportCard
+                  detail={detail}
+                  report={mediaReport}
+                  loadState={mediaReportLoadState}
+                  errorCode={mediaReportErrorCode}
+                  errorMessage={mediaReportErrorMessage}
+                />
+                <AssetFacts detail={detail} />
+                <AssetActivityCard key={assetId} assetId={assetId} projectId={projectId} />
+              </div>
+            </details>
+            {canDelete ? (
+              <details className="detail-disclosure detail-more-actions">
+                <summary>
+                  <strong>更多操作</strong>
+                  <span>删除视频等低频高风险操作</span>
+                </summary>
+                <div className="detail-disclosure-content">
+                  <DangerZoneCard isDeleting={isDeleting} onDelete={() => void confirmDelete()} />
+                </div>
+              </details>
+            ) : null}
+          </div>
         </>
       ) : null}
     </>

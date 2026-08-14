@@ -36,7 +36,7 @@ flowchart LR
 | `aicandidate` | AIJob、候选隔离、回传校验和候选查询 | 否，经过 API |
 | `annotationreview` | 配药动作标注任务、revision、提交、复核与退回 | 否，经过 API |
 | `qualitycleaning` | 清洗规则、运行、质量结论和可用数据投影 | 否，经过 API |
-| `tools/minimal-export` | 只读一致性快照，将 Cleaning PASS + 人工标签 + Candidate 几何写入 Parquet | 管理员显式运行 |
+| `tools/minimal-export` | 只读一致性快照，将 Cleaning PASS + 人工标签 + Candidate 几何写入 Parquet；与项目级导出 API 共用资格投影 | 管理员显式运行 |
 | PostgreSQL / S3 | 业务真值 / 原视频与派生工件 | 否 |
 | RabbitMQ / Media Worker / AI Worker | 耗时媒体检查与预标注的投递、执行、恢复 | 否 |
 
@@ -95,6 +95,8 @@ POST /api/v1/projects/{projectId}/annotation-work-items/{taskId}/revisions
 POST /api/v1/projects/{projectId}/annotation-work-items/{taskId}/reviews
 GET  /api/v1/projects/{projectId}/cleaning-work-items
 POST /api/v1/projects/{projectId}/cleaning-work-items/{workItemId}/recheck
+GET  /api/v1/projects/{projectId}/training-data/preview
+GET  /api/v1/projects/{projectId}/training-data/download
 ```
 
 `video_id` 是现有 `clip_asset_id` 的产品别名，数据库不新增第二个视频 ID。新增 API 必须同步更新 OpenAPI、契约测试和 Web client。列表固定使用 `ORDER BY received_at DESC, clip_asset_id DESC`，cursor 编码这两个字段；默认 50、最大 100 条。筛选条件放入 URL，以便恢复和分享。对象键、内部 UUID、队列、Worker、模型位置和预签名 URL 不返回普通页面。
@@ -148,7 +150,7 @@ sequenceDiagram
 
 规则运行保存输入摘要、规则版本、结果和阻断码。人工例外、复核或重跑必须审计。通过清洗的数据进入可用数据投影。
 
-V1.21 的最小导出由 `tools/minimal-export` 显式执行，不新建表、API、Worker 或 Queue。它在数据库强制只读的 `REPEATABLE READ` 快照中读取当前 `INGESTED + QUALIFIED + APPROVED + Cleaning PASS/SUCCEEDED` 事实，将人工 `AnnotationRevision` 的 `[start_ms, end_ms)` 动作标签与范围内的 MediaPipe 21 点 Candidate 对齐为 `training_data.parquet`。默认不包含 MP4；元数据明确 Candidate/handedness 不是 Ground Truth。现有复杂 `datasetexport` 能力继续保留并冻结。
+V1.21 的最小导出由 `tools/minimal-export` 与项目级 API 共同提供；两者只读取数据库权威 `training_data_eligibility` 和 `training_data_candidate_observations` 视图，不复制两套资格 SQL。API 是显式、同步、只读的 `preview/download`，要求全局 `ROLE_ADMIN` 与 ACTIVE 项目 ADMIN membership；非合成 profile 在当前没有正式授权模型时 fail closed。它们在数据库强制只读的 `REPEATABLE READ` 快照中读取当前 `INGESTED + QUALIFIED + APPROVED + Cleaning PASS/SUCCEEDED` 事实，将人工 `AnnotationRevision` 的 `[start_ms, end_ms)` 动作标签与范围内的 MediaPipe 21 点 Candidate 对齐为 `training_data.parquet`。每行必须保留 Candidate 的 `algorithm_key`、`algorithm_version`、`model_sha256` 和 `profile_sha256` provenance；元数据固定 `hand_geometry_is_ground_truth=false` 和坐标系 `normalized_image_xy_and_mediapipe_relative_z`；`confidence` 若复用 `handedness_score`，元数据必须明确来源为 `candidate_annotation.handedness_score`，不表示动作标签置信度。Preview 的 `training_row_count` 是 Parquet 行数，不是视频数；下载固定 `training_data.parquet`、`no-store` 且不包含 MP4。默认元数据明确 Candidate/handedness 不是 Ground Truth，hand mask 当前不可用时不补造 landmark。当前不新建 DatasetVersion、Export Job、Worker、Queue 或业务表；现有复杂 `datasetexport` 能力继续保留并冻结。
 
 ## 7. 算法评估与容量门禁
 

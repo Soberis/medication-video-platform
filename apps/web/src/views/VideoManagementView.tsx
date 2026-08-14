@@ -70,6 +70,13 @@ export default function VideoManagementView() {
     () => parseVideoFilters(new URLSearchParams(location.search)),
     [location.search],
   )
+  const advancedFilterCount = [
+    filters.source,
+    filters.cameraNumber,
+    filters.capturedFrom,
+    filters.capturedBefore,
+    filters.handResult,
+  ].filter((value) => value !== undefined && value !== '').length
   const [items, setItems] = useState<VideoSummary[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -78,7 +85,11 @@ export default function VideoManagementView() {
   const [summaryError, setSummaryError] = useState(false)
   const [actionVideoId, setActionVideoId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState('')
+  const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(advancedFilterCount > 0)
   const activeRequest = useRef<AbortController | null>(null)
+  const pendingWorkCount = summary
+    ? summary.pending_annotation + summary.pending_review + summary.pending_cleaning
+    : 0
 
   const loadPage = useCallback(
     async (append = false, nextFilters: VideoSummaryFilters = {}, cursor: string | null = null) => {
@@ -196,9 +207,8 @@ export default function VideoManagementView() {
     <>
       <section className="page-heading" aria-labelledby="video-management-title">
         <div>
-          <p className="app-eyebrow">V1.18 P0 · 单视频闭环</p>
           <h1 id="video-management-title">视频管理</h1>
-          <p>按状态处理单路固定机位视频；统计和列表使用相同的筛选条件。</p>
+          <p>处理视频状态，并完成下一步操作。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
           刷新
@@ -216,16 +226,8 @@ export default function VideoManagementView() {
               <strong>{summary.total_videos}</strong>
             </div>
             <div>
-              <span className="cell-secondary">待标注</span>
-              <strong>{summary.pending_annotation}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">待复核</span>
-              <strong>{summary.pending_review}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">待清洗</span>
-              <strong>{summary.pending_cleaning}</strong>
+              <span className="cell-secondary">标注链路待办</span>
+              <strong>{pendingWorkCount}</strong>
             </div>
             <div>
               <span className="cell-secondary">可用数据</span>
@@ -235,9 +237,10 @@ export default function VideoManagementView() {
           <div className="video-summary-meta">
             <span>总时长 {formatDuration(summary.total_duration)}</span>
             <span>存储 {formatBytes(summary.storage_bytes)}</span>
-            <span>来源：{formatCountMap(summary.counts_by_source, sourceCountLabel)}</span>
-            <span>相机：{formatCountMap(summary.counts_by_camera, cameraCountLabel)}</span>
-            <span>媒体：{formatCountMap(summary.counts_by_status, mediaCountLabel)}</span>
+            <span>
+              待办：标注 {summary.pending_annotation} · 复核 {summary.pending_review} · 清洗{' '}
+              {summary.pending_cleaning}
+            </span>
           </div>
         </Card>
       ) : null}
@@ -249,57 +252,14 @@ export default function VideoManagementView() {
       <Card className="filter-card video-management-filter-card" variant="outlined">
         <div className="filter-card-heading">
           <div>
-            <strong>筛选视频</strong>
-            <span>筛选会同时更新统计和列表</span>
+            <strong>状态筛选</strong>
+            <span>统计和列表使用相同条件</span>
           </div>
           <Button type="link" onClick={() => applyFilters({})}>
             清除筛选
           </Button>
         </div>
         <div className="catalog-filters video-management-filters">
-          <label>
-            来源
-            <Select
-              allowClear
-              value={filters.source}
-              placeholder="全部"
-              options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
-              onChange={(value) =>
-                applyFilters({ ...filters, source: value as VideoSummarySource | undefined })
-              }
-            />
-          </label>
-          <label>
-            相机编号
-            <InputNumber
-              min={1}
-              value={filters.cameraNumber}
-              placeholder="全部"
-              onChange={(value) =>
-                applyFilters({ ...filters, cameraNumber: value === null ? undefined : value })
-              }
-            />
-          </label>
-          <label>
-            拍摄开始
-            <input
-              type="datetime-local"
-              value={toLocalDateTimeInput(filters.capturedFrom)}
-              onChange={(event) =>
-                applyFilters({ ...filters, capturedFrom: toInstant(event.currentTarget.value) })
-              }
-            />
-          </label>
-          <label>
-            拍摄截止
-            <input
-              type="datetime-local"
-              value={toLocalDateTimeInput(filters.capturedBefore)}
-              onChange={(event) =>
-                applyFilters({ ...filters, capturedBefore: toInstant(event.currentTarget.value) })
-              }
-            />
-          </label>
           <label>
             媒体状态
             <Select
@@ -329,21 +289,6 @@ export default function VideoManagementView() {
                 applyFilters({
                   ...filters,
                   handStatus: value as VideoSummaryHandStatus | undefined,
-                })
-              }
-            />
-          </label>
-          <label>
-            手部结果
-            <Select
-              allowClear
-              value={filters.handResult}
-              placeholder="全部"
-              options={Object.entries(handResultLabels).map(([value, label]) => ({ value, label }))}
-              onChange={(value) =>
-                applyFilters({
-                  ...filters,
-                  handResult: value as VideoSummaryHandResult | undefined,
                 })
               }
             />
@@ -385,6 +330,81 @@ export default function VideoManagementView() {
             />
           </label>
         </div>
+        <details
+          className="video-management-advanced-filters"
+          open={isAdvancedFiltersOpen}
+          onToggle={(event) => setIsAdvancedFiltersOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <strong>更多筛选</strong>
+            <span>
+              {advancedFilterCount > 0 ? `${advancedFilterCount} 项已应用` : '来源、相机和拍摄时间'}
+            </span>
+          </summary>
+          <div className="catalog-filters video-management-filters video-management-secondary-filters">
+            <label>
+              来源
+              <Select
+                allowClear
+                value={filters.source}
+                placeholder="全部"
+                options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
+                onChange={(value) =>
+                  applyFilters({ ...filters, source: value as VideoSummarySource | undefined })
+                }
+              />
+            </label>
+            <label>
+              相机编号
+              <InputNumber
+                min={1}
+                value={filters.cameraNumber}
+                placeholder="全部"
+                onChange={(value) =>
+                  applyFilters({ ...filters, cameraNumber: value === null ? undefined : value })
+                }
+              />
+            </label>
+            <label>
+              拍摄开始
+              <input
+                type="datetime-local"
+                value={toLocalDateTimeInput(filters.capturedFrom)}
+                onChange={(event) =>
+                  applyFilters({ ...filters, capturedFrom: toInstant(event.currentTarget.value) })
+                }
+              />
+            </label>
+            <label>
+              拍摄截止
+              <input
+                type="datetime-local"
+                value={toLocalDateTimeInput(filters.capturedBefore)}
+                onChange={(event) =>
+                  applyFilters({ ...filters, capturedBefore: toInstant(event.currentTarget.value) })
+                }
+              />
+            </label>
+            <label>
+              手部结果
+              <Select
+                allowClear
+                value={filters.handResult}
+                placeholder="全部"
+                options={Object.entries(handResultLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  applyFilters({
+                    ...filters,
+                    handResult: value as VideoSummaryHandResult | undefined,
+                  })
+                }
+              />
+            </label>
+          </div>
+        </details>
       </Card>
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
@@ -413,29 +433,35 @@ export default function VideoManagementView() {
             rowKey="video_id"
             pagination={false}
             size="small"
-            scroll={{ x: 1250 }}
+            tableLayout="fixed"
             columns={[
               {
                 title: '视频',
-                width: 220,
+                width: 200,
                 render: (_, row) => (
                   <>
-                    <strong className="mono-wrap">{row.display_name}</strong>
+                    <strong className="mono-wrap">
+                      <Link
+                        className="video-name-link"
+                        to={{
+                          pathname: paths.asset(projectId, row.video_id),
+                          search: location.search,
+                        }}
+                      >
+                        {row.display_name}
+                      </Link>
+                    </strong>
                     <span className="cell-secondary">
                       来源 {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
+                      {' · '}
+                      {row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}
                     </span>
                   </>
                 ),
               },
               {
-                title: '相机',
-                dataIndex: 'camera_number',
-                width: 80,
-                render: (value) => value ?? '—',
-              },
-              {
                 title: '拍摄 / 接收时间',
-                width: 210,
+                width: 175,
                 render: (_, row) => (
                   <>
                     <span>{formatDateTime(row.captured_at)}</span>
@@ -445,7 +471,7 @@ export default function VideoManagementView() {
               },
               {
                 title: '媒体',
-                width: 110,
+                width: 90,
                 render: (_, row) => (
                   <Tag color={statusTone(row.media_status)}>
                     {mediaStatusLabels[row.media_status]}
@@ -454,7 +480,7 @@ export default function VideoManagementView() {
               },
               {
                 title: '手部检测',
-                width: 150,
+                width: 125,
                 render: (_, row) => (
                   <>
                     <Tag color={statusTone(row.hand_status)}>
@@ -467,37 +493,22 @@ export default function VideoManagementView() {
               {
                 title: '配药动作标注',
                 dataIndex: 'annotation_status',
-                width: 150,
+                width: 130,
                 render: (value: VideoSummaryAnnotationStatus) => annotationStatusLabels[value],
               },
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
-                width: 110,
+                width: 90,
                 render: (value: VideoSummaryCleaningStatus) => cleaningStatusLabels[value],
               },
               {
-                title: '留存',
-                dataIndex: 'retention_status',
-                width: 170,
-                render: (value: string) => retentionStatusLabel(value),
-              },
-              {
                 title: '下一步',
-                width: 220,
+                width: 180,
                 render: (_, row) => (
                   <div className="video-next-step">
                     <strong>{nextStepLabel(row)}</strong>
                     <span className="table-actions">
-                      <Link
-                        className="text-link"
-                        to={{
-                          pathname: paths.asset(projectId, row.video_id),
-                          search: location.search,
-                        }}
-                      >
-                        {row.hand_status === 'SUCCEEDED' ? '播放 / 查看结果' : '播放'}
-                      </Link>
                       {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
                         <Button size="small" disabled>
                           检测中
@@ -565,46 +576,13 @@ function toLocalDateTimeInput(value?: string) {
   return local.toISOString().slice(0, 16)
 }
 
-function retentionStatusLabel(value: string) {
-  const labels: Record<string, string> = {
-    NOT_ASSESSED: '未评估',
-    RELEASE_REVIEW_REQUIRED: '待放行复核',
-    QUARANTINE_REQUIRED: '需隔离',
-    DEIDENTIFICATION_REQUIRED: '需去标识化',
-  }
-  return labels[value] ?? '需人工确认'
-}
-
-function formatCountMap(values: Record<string, number>, label: (key: string) => string) {
-  const entries = Object.entries(values)
-  if (entries.length === 0) return '暂无'
-  return entries.map(([key, count]) => `${label(key)} ${count}`).join(' · ')
-}
-
-function sourceCountLabel(value: string) {
-  return sourceLabels[value as VideoSummarySource] ?? '其他来源'
-}
-
-function cameraCountLabel(value: string) {
-  return /^\d+$/.test(value) ? `相机 ${value}` : '未绑定相机'
-}
-
-function mediaCountLabel(value: string) {
-  return mediaStatusLabels[value as VideoSummaryMediaStatus] ?? '其他状态'
-}
-
 function nextStepLabel(row: VideoSummary) {
   if (row.media_status !== 'INGESTED') {
     return row.media_status === 'INGEST_FAILED' ? '先处理媒体失败' : '等待媒体入库'
   }
-  if (row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING') return '等待手部检测'
-  if (row.hand_status === 'FAILED') {
-    if (row.hand_retryable) return '重试手部检测'
-    return row.annotation_status === 'COMPLETED' ? '查看检测失败原因' : '继续人工标注'
-  }
-  if (row.hand_status !== 'SUCCEEDED') return '发起手部检测'
   if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
-  if (row.annotation_status !== 'COMPLETED') return '进入配药动作标注'
+  if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
+  if (row.annotation_status === 'NOT_STARTED') return '进入配药动作标注'
   if (row.cleaning_status === 'NOT_STARTED') return '等待清洗结果'
   if (row.cleaning_status === 'PASS') return '可用数据'
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') return '查看清洗问题'

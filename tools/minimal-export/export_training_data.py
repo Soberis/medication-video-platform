@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -21,6 +22,7 @@ from uuid import UUID
 EXPORT_SCHEMA_VERSION = "training-data.v1"
 LANDMARK_COUNT = 21
 LANDMARK_AXES = ("x", "y", "z")
+SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
 
 class ExportError(RuntimeError):
@@ -66,110 +68,22 @@ def build_database_url() -> str:
 
 
 def query_eligible_assets(connection: Any, project_id: UUID) -> list[dict[str, Any]]:
-    """Read only the current asset/revision evidence that passed all gates."""
+    """Read the authoritative project-level eligibility projection."""
 
     sql = """
-        WITH latest_revision AS (
-            SELECT DISTINCT ON (revision.clip_asset_id)
-                   revision.annotation_revision_id,
-                   revision.project_id,
-                   revision.annotation_task_id,
-                   revision.clip_asset_id,
-                   revision.annotation_document,
-                   revision.document_sha256,
-                   revision.label_schema_digest,
-                   revision.revision_number
-            FROM annotation_revision revision
-            WHERE revision.project_id = %s
-            ORDER BY revision.clip_asset_id,
-                     revision.revision_number DESC,
-                     revision.submitted_at DESC,
-                     revision.annotation_revision_id DESC
-        ), latest_cleaning AS (
-            SELECT DISTINCT ON (result.annotation_revision_id)
-                   result.cleaning_result_id,
-                   result.cleaning_run_id,
-                   result.project_id,
-                   result.annotation_revision_id,
-                   result.outcome AS cleaning_outcome,
-                   run.clip_asset_id,
-                   run.annotation_review_id,
-                   run.quality_review_version,
-                   run.asset_sha256,
-                   run.document_sha256,
-                   run.label_schema_digest,
-                   run.run_status AS cleaning_run_status
-            FROM cleaning_result result
-            JOIN cleaning_run run
-              ON run.project_id = result.project_id
-             AND run.cleaning_run_id = result.cleaning_run_id
-             AND run.annotation_revision_id = result.annotation_revision_id
-            JOIN cleaning_rule_set rule_set
-              ON rule_set.cleaning_rule_set_id = run.cleaning_rule_set_id
-             AND rule_set.rule_set_digest = run.rule_set_digest
-            WHERE result.project_id = %s
-            ORDER BY result.annotation_revision_id,
-                     result.evaluated_at DESC,
-                     result.cleaning_result_id DESC
-        )
-        SELECT asset.clip_asset_id AS video_id,
-               asset.project_id,
-               asset.asset_status,
-               asset.sha256 AS asset_sha256,
-               quality.decision AS quality_decision,
-               quality.version AS quality_review_version,
-               task.task_status,
-               revision.annotation_revision_id,
-               revision.annotation_task_id,
-               revision.annotation_document,
-               revision.document_sha256,
-               revision.label_schema_digest,
-               revision.revision_number,
-               review.annotation_review_id,
-               review.decision AS annotation_review_decision,
-               pass.cleaning_result_id,
-               pass.cleaning_run_id,
-               pass.cleaning_outcome,
-               pass.cleaning_run_status
-        FROM clip_asset asset
-        JOIN camera_stream stream
-          ON stream.clip_asset_id = asset.clip_asset_id
-         AND stream.stream_status = 'INGESTED'
-        JOIN quality_review quality
-          ON quality.project_id = asset.project_id
-         AND quality.clip_asset_id = asset.clip_asset_id
-         AND quality.decision = 'QUALIFIED'
-        JOIN annotation_task task
-          ON task.project_id = asset.project_id
-         AND task.clip_asset_id = asset.clip_asset_id
-         AND task.task_status = 'COMPLETED'
-        JOIN latest_revision revision
-          ON revision.project_id = asset.project_id
-         AND revision.clip_asset_id = asset.clip_asset_id
-         AND revision.annotation_task_id = task.annotation_task_id
-        JOIN annotation_review review
-          ON review.project_id = revision.project_id
-         AND review.annotation_revision_id = revision.annotation_revision_id
-         AND review.decision = 'APPROVED'
-        JOIN latest_cleaning pass
-          ON pass.project_id = asset.project_id
-         AND pass.clip_asset_id = asset.clip_asset_id
-         AND pass.annotation_revision_id = revision.annotation_revision_id
-         AND pass.annotation_review_id = review.annotation_review_id
-         AND pass.quality_review_version = quality.version
-         AND pass.asset_sha256 = asset.sha256
-         AND pass.document_sha256 = revision.document_sha256
-         AND pass.label_schema_digest = revision.label_schema_digest
-         AND pass.cleaning_outcome = 'PASS'
-         AND pass.cleaning_run_status = 'SUCCEEDED'
-        WHERE asset.project_id = %s
-          AND asset.asset_status = 'INGESTED'
-          AND asset.deleted_at IS NULL
-          AND lower(asset.content_type) = 'video/mp4'
-        ORDER BY asset.clip_asset_id
+        SELECT video_id, project_id, content_type, asset_status, asset_deleted,
+               asset_sha256, quality_decision, quality_review_version, task_status,
+               annotation_revision_id, annotation_task_id, annotation_document,
+               document_sha256, label_schema_id, label_schema_digest,
+               annotation_review_id, annotation_review_decision, cleaning_result_id,
+               cleaning_run_id, cleaning_outcome, cleaning_run_status,
+               cleaning_rule_set_id, rule_set_digest
+        FROM training_data_eligibility
+        WHERE project_id = %s
+        ORDER BY video_id
     """
     with connection.cursor() as cursor:
-        cursor.execute(sql, (project_id, project_id, project_id))
+        cursor.execute(sql, (project_id,))
         return list(cursor.fetchall())
 
 
@@ -179,37 +93,24 @@ def query_candidates(connection: Any, project_id: UUID, video_ids: Iterable[UUID
         return []
     placeholders = ", ".join(["%s"] * len(ids))
     sql = f"""
-        WITH latest_job AS (
-            SELECT DISTINCT ON (job.clip_asset_id)
-                   job.ai_job_id,
-                   job.project_id,
-                   job.clip_asset_id,
-                   job.status AS ai_job_status
-            FROM ai_job job
-            WHERE job.project_id = %s
-              AND job.clip_asset_id IN ({placeholders})
-              AND job.algorithm_key = 'MEDIAPIPE_HAND_LANDMARKER'
-              AND job.status = 'SUCCEEDED'
-            ORDER BY job.clip_asset_id, job.created_at DESC, job.ai_job_id DESC
-        )
-        SELECT candidate.candidate_annotation_id,
-               candidate.project_id,
-               candidate.clip_asset_id,
-               candidate.frame_timestamp_ms,
-               candidate.hand_index,
-               candidate.handedness,
-               candidate.handedness_score,
-               candidate.landmarks,
-               job.ai_job_id,
-               job.ai_job_status
-        FROM latest_job job
-        JOIN candidate_annotation candidate
-          ON candidate.project_id = job.project_id
-         AND candidate.ai_job_id = job.ai_job_id
-         AND candidate.clip_asset_id = job.clip_asset_id
-        ORDER BY candidate.clip_asset_id,
-                 candidate.frame_timestamp_ms,
-                 candidate.hand_index
+        SELECT candidate_annotation_id,
+               project_id,
+               video_id AS clip_asset_id,
+               annotation_revision_id,
+               algorithm_key,
+               algorithm_version,
+               frame_timestamp_ms,
+               hand_index,
+               handedness,
+               handedness_score,
+               landmarks,
+               model_sha256,
+               profile_sha256,
+               valid_landmark_count
+        FROM training_data_candidate_observations
+        WHERE project_id = %s
+          AND video_id IN ({placeholders})
+        ORDER BY video_id, frame_timestamp_ms, hand_index, candidate_annotation_id
     """
     with connection.cursor() as cursor:
         cursor.execute(sql, (project_id, *ids))
@@ -219,6 +120,7 @@ def query_candidates(connection: Any, project_id: UUID, video_ids: Iterable[UUID
 def validate_eligibility(asset: dict[str, Any]) -> None:
     expected = {
         "asset_status": "INGESTED",
+        "asset_deleted": False,
         "quality_decision": "QUALIFIED",
         "task_status": "COMPLETED",
         "annotation_review_decision": "APPROVED",
@@ -230,16 +132,32 @@ def validate_eligibility(asset: dict[str, Any]) -> None:
             raise ExportError(
                 f"视频 {asset.get('video_id')} 不满足训练数据准入：{field}={asset.get(field)!r}。"
             )
+    if str(asset.get("content_type", "")).lower() != "video/mp4":
+        raise ExportError(f"视频 {asset.get('video_id')} 不是 MP4。")
     for field in (
         "video_id",
         "annotation_revision_id",
+        "annotation_task_id",
+        "label_schema_id",
+        "annotation_review_id",
         "cleaning_result_id",
+        "cleaning_run_id",
+        "cleaning_rule_set_id",
         "asset_sha256",
         "document_sha256",
         "label_schema_digest",
+        "rule_set_digest",
     ):
         if asset.get(field) is None:
             raise ExportError(f"视频 {asset.get('video_id')} 缺少 Cleaning PASS 证据字段 {field}。")
+    for field in (
+        "asset_sha256",
+        "document_sha256",
+        "label_schema_digest",
+        "rule_set_digest",
+    ):
+        if not isinstance(asset.get(field), str) or not SHA256_PATTERN.fullmatch(asset[field]):
+            raise ExportError(f"视频 {asset.get('video_id')} 的证据字段 {field} 不是有效 SHA-256。")
 
 
 def parse_segments(document: Any) -> list[dict[str, Any]]:
@@ -290,6 +208,18 @@ def landmark_columns() -> list[str]:
     return [f"landmark_{index:02d}_{axis}" for index in range(LANDMARK_COUNT) for axis in LANDMARK_AXES]
 
 
+def coerce_unit_interval(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric_value) or not 0 <= numeric_value <= 1:
+        return None
+    return numeric_value
+
+
 def flatten_landmarks(value: Any) -> dict[str, float]:
     landmarks = parse_jsonb(value)
     if not isinstance(landmarks, list) or len(landmarks) != LANDMARK_COUNT:
@@ -335,21 +265,60 @@ def build_training_rows(
         if action_label is None:
             unlabeled_candidates += 1
             continue
+        if candidate.get("annotation_revision_id") != matched["annotation_revision_id"]:
+            raise ExportError(
+                f"CandidateAnnotation {candidate.get('candidate_annotation_id')} "
+                "未绑定当前人工 AnnotationRevision。"
+            )
+        hand_index = candidate.get("hand_index")
+        handedness = candidate.get("handedness")
+        handedness_score = coerce_unit_interval(candidate.get("handedness_score"))
+        if (
+            isinstance(hand_index, bool)
+            or not isinstance(hand_index, int)
+            or hand_index not in (0, 1)
+            or handedness not in {"LEFT", "RIGHT", "UNKNOWN"}
+            or handedness_score is None
+        ):
+            raise ExportError(
+                f"CandidateAnnotation {candidate.get('candidate_annotation_id')} 的手部元数据无效。"
+            )
+        for field in ("model_sha256", "profile_sha256"):
+            if not isinstance(candidate.get(field), str) or not SHA256_PATTERN.fullmatch(candidate[field]):
+                raise ExportError(
+                    f"CandidateAnnotation {candidate.get('candidate_annotation_id')} 缺少有效 {field}。"
+                )
+        if (
+            candidate.get("algorithm_key") != "MEDIAPIPE_HAND_LANDMARKER"
+            or not isinstance(candidate.get("algorithm_version"), str)
+            or not candidate["algorithm_version"]
+            or len(candidate["algorithm_version"]) > 32
+        ):
+            raise ExportError(
+                f"CandidateAnnotation {candidate.get('candidate_annotation_id')} 缺少有效算法 provenance。"
+            )
+        if candidate.get("valid_landmark_count") != LANDMARK_COUNT:
+            raise ExportError(
+                f"CandidateAnnotation {candidate.get('candidate_annotation_id')} 不是完整的 21 点结果。"
+            )
         rows.append(
             {
                 "video_id": video_id,
                 "timestamp_ms": timestamp_ms,
                 "action_label": action_label,
-                "hand_index": int(candidate["hand_index"]),
+                "hand_index": hand_index,
+                "hand_presence": True,
+                "hand_mask_available": False,
                 "annotation_revision_id": str(matched["annotation_revision_id"]),
                 "candidate_annotation_id": str(candidate["candidate_annotation_id"]),
-                "handedness": candidate.get("handedness"),
-                "handedness_score": (
-                    float(candidate["handedness_score"])
-                    if candidate.get("handedness_score") is not None
-                    else None
-                ),
+                "handedness": handedness,
+                "handedness_score": float(handedness_score),
+                "confidence": float(handedness_score),
                 "handedness_is_ground_truth": False,
+                "algorithm_key": candidate["algorithm_key"],
+                "algorithm_version": candidate["algorithm_version"],
+                "model_sha256": candidate["model_sha256"],
+                "profile_sha256": candidate["profile_sha256"],
                 **flatten_landmarks(candidate["landmarks"]),
             }
         )
@@ -371,12 +340,19 @@ def parquet_schema() -> Any:
         pa.field("video_id", pa.string(), nullable=False),
         pa.field("timestamp_ms", pa.int64(), nullable=False),
         pa.field("action_label", pa.string(), nullable=False),
-        pa.field("hand_index", pa.int32(), nullable=False),
         pa.field("annotation_revision_id", pa.string(), nullable=False),
+        pa.field("hand_index", pa.int32(), nullable=False),
+        pa.field("hand_presence", pa.bool_(), nullable=False),
+        pa.field("hand_mask_available", pa.bool_(), nullable=False),
         pa.field("candidate_annotation_id", pa.string(), nullable=False),
-        pa.field("handedness", pa.string()),
-        pa.field("handedness_score", pa.float32()),
+        pa.field("handedness", pa.string(), nullable=False),
+        pa.field("handedness_score", pa.float32(), nullable=False),
+        pa.field("confidence", pa.float32(), nullable=False),
         pa.field("handedness_is_ground_truth", pa.bool_(), nullable=False),
+        pa.field("algorithm_key", pa.string(), nullable=False),
+        pa.field("algorithm_version", pa.string(), nullable=False),
+        pa.field("model_sha256", pa.string(), nullable=False),
+        pa.field("profile_sha256", pa.string(), nullable=False),
     ]
     fields.extend(pa.field(name, pa.float32(), nullable=False) for name in landmark_columns())
     metadata = {
@@ -384,7 +360,13 @@ def parquet_schema() -> Any:
         "cleaning_gate": "PASS",
         "action_label_source": "human_annotation_revision",
         "hand_geometry_source": "candidate_annotation",
+        "hand_geometry_is_ground_truth": "false",
         "handedness_is_ground_truth": "false",
+        "confidence_source": "candidate_annotation.handedness_score",
+        "candidate_algorithm_source": "ai_job.algorithm_key+algorithm_version",
+        "hand_mask_policy": "not_available",
+        "eligibility_projection": "training_data_eligibility",
+        "candidate_projection": "training_data_candidate_observations",
         "coordinate_system": "normalized_image_xy_and_mediapipe_relative_z",
         "video_policy": "video_id_only_no_mp4",
     }
@@ -422,20 +404,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--env-file", type=Path, default=Path(".env"), help="本地环境文件，默认 .env")
     parser.add_argument("--force", action="store_true", help="允许覆盖明确指定的已有输出文件")
-    parser.add_argument(
-        "--allow-non-synthetic",
-        action="store_true",
-        help="允许 DATA_PROFILE 不是 synthetic；仅在有明确授权的隔离环境使用",
-    )
     return parser.parse_args(argv)
+
+
+def require_synthetic_profile() -> None:
+    profile = os.getenv("DATA_PROFILE")
+    if profile is None or profile.strip().lower() != "synthetic":
+        raise ExportError(
+            "当前没有正式的非合成数据授权模型；必须显式设置 DATA_PROFILE=synthetic，"
+            "工具拒绝缺省或空 profile。"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     load_dotenv(args.env_file)
-    profile = os.getenv("DATA_PROFILE", "synthetic").strip().lower()
-    if profile != "synthetic" and not args.allow_non_synthetic:
-        raise ExportError("默认只允许 DATA_PROFILE=synthetic；非合成数据必须显式传 --allow-non-synthetic。")
+    require_synthetic_profile()
     try:
         import psycopg
         from psycopg.rows import dict_row

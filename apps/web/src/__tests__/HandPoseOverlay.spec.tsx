@@ -243,12 +243,16 @@ describe('HandPoseOverlay', () => {
     const video = screen.getByLabelText('视频预览')
     Object.defineProperties(video, {
       currentTime: { configurable: true, value: 1 },
-      videoWidth: { configurable: true, value: 1920 },
-      videoHeight: { configurable: true, value: 1080 },
+      videoWidth: { configurable: true, value: 1080 },
+      videoHeight: { configurable: true, value: 1920 },
     })
 
     fireEvent.loadedMetadata(video)
-    expect(container.querySelector('.video-stage')).toHaveStyle('aspect-ratio: 1920 / 1080')
+    const stage = container.querySelector('.video-stage') as HTMLDivElement
+    expect(stage).toHaveStyle('aspect-ratio: 1080 / 1920')
+    expect(Number.parseInt(stage.style.getPropertyValue('--video-stage-width'), 10)).toBeLessThan(
+      Number.parseInt(stage.style.getPropertyValue('--video-stage-height'), 10),
+    )
     fireEvent.play(video)
     fireEvent.pause(video)
     fireEvent.timeUpdate(video)

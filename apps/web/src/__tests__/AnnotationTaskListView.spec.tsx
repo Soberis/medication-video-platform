@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,10 +93,15 @@ describe('annotation task list view', () => {
     )
     expect(screen.getByText('已分配')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: assetId })).toHaveAttribute(
       'href',
       `/projects/${projectId}/assets/${assetId}`,
     )
+    expect(screen.getByRole('table').closest('.ant-table-wrapper')).toHaveClass(
+      'annotation-task-table',
+    )
+    expect(screen.getByRole('columnheader', { name: '标注 / 复核 / 清洗' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -176,11 +181,11 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    expect(screen.getByText(/尚未进入训练数据集/)).toBeInTheDocument()
-    expect(screen.getByText(/不会自动准入数据集/)).toBeInTheDocument()
+    expect(screen.getByText('当前数据已通过清洗，可用于训练')).toBeInTheDocument()
+    expect(screen.getByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已验证的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
-    expect(screen.getByText(/当前版本默认不准入数据集/)).toBeInTheDocument()
+    expect(screen.getByText(/当前数据未通过清洗，暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/主流程时间片段存在重叠/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
@@ -240,6 +245,127 @@ describe('annotation task list view', () => {
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
   })
 
+  it('loads a project export preview only after the administrator requests it', async () => {
+    const preview = trainingDataPreview(12)
+    const fetchMock = stubTrainingData([assignedTask], labelSchema, preview)
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/training-data/preview`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+    expect(dialog).toHaveTextContent('12 条（Parquet 训练行）')
+    expect(dialog).toHaveTextContent('格式Parquet')
+    expect(dialog).toHaveTextContent('包含手部关键点 + 人工动作标签')
+    expect(dialog).toHaveTextContent('原始视频不包含')
+    expect(dialog).toHaveTextContent(
+      'MediaPipe Candidate 仅作为手部候选观测，不是 Ground Truth；动作标签来自人工 AnnotationRevision。',
+    )
+  })
+
+  it('cancels the preview without requesting a download', async () => {
+    const fetchMock = stubTrainingData([assignedTask], labelSchema, trainingDataPreview(3))
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /取消/ }))
+
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/training-data/download')),
+    ).toHaveLength(0)
+  })
+
+  it('downloads the confirmed Parquet blob with a fixed filename and revokes its object URL', async () => {
+    const fetchMock = stubTrainingData([assignedTask], labelSchema, trainingDataPreview(3))
+    const createObjectUrl = vi.fn(() => 'blob:training-data')
+    const revokeObjectUrl = vi.fn()
+    const NativeURL = globalThis.URL
+    class TestURL extends NativeURL {}
+    Object.assign(TestURL, { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl })
+    vi.stubGlobal('URL', TestURL)
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '导出' }))
+
+    await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
+    const link = anchorClick.mock.instances[0] as HTMLAnchorElement
+    expect(link.download).toBe('training_data.parquet')
+    expect(link.href).toBe('blob:training-data')
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:training-data')
+    expect(document.body.contains(link)).toBe(false)
+    expect(await screen.findByText('training_data.parquet 已开始下载。')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/training-data/download`,
+      expect.objectContaining({
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/vnd.apache.parquet' },
+      }),
+    )
+    anchorClick.mockRestore()
+  })
+
+  it('disables export confirmation and explains when no training rows are eligible', async () => {
+    stubTrainingData([assignedTask], labelSchema, trainingDataPreview(0))
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('0 条（Parquet 训练行）')
+    expect(dialog).toHaveTextContent('当前没有合格训练行，暂时无法导出。')
+    expect(within(dialog).getByRole('button', { name: /导出/ })).toBeDisabled()
+  })
+
+  it('does not show the export action for an assignee-scoped member queue', async () => {
+    stubTasks([assignedTask], labelSchema, 'ASSIGNEE')
+    renderView()
+
+    expect(await screen.findByText('我的任务')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
+  })
+
+  it('shows safe Chinese feedback when the preview request is rejected', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/annotation-label-schema'))
+        return Promise.resolve(jsonResponse(labelSchema))
+      if (url.endsWith('/training-data/preview')) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code: 'TRAINING_DATA_EXPORT_EVIDENCE_INVALID',
+              error_message: 'java.lang.IllegalStateException https://internal.invalid/stack',
+            },
+            { status: 422 },
+          ),
+        )
+      }
+      return Promise.resolve(jsonResponse(taskList([assignedTask])))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
+    expect(await screen.findByText('当前可用数据证据不完整，暂时无法导出。')).toBeInTheDocument()
+    expect(screen.queryByText(/java\.lang|internal\.invalid/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
     vi.stubGlobal(
       'fetch',
@@ -265,20 +391,44 @@ function renderView() {
     path: '/projects/:projectId/annotation-tasks',
   })
 }
-function stubTasks(tasks: object[], schema: object) {
+function stubTasks(tasks: object[], schema: object, scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
   const fetchMock = vi
     .fn()
     .mockImplementation((input: RequestInfo | URL) =>
       Promise.resolve(
         String(input).endsWith('/annotation-label-schema')
           ? jsonResponse(schema)
-          : jsonResponse(taskList(tasks)),
+          : jsonResponse(taskList(tasks, scope)),
       ),
     )
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-function taskList(tasks: object[]) {
+function stubTrainingData(
+  tasks: object[],
+  schema: object,
+  preview: object,
+  downloadBody = 'PAR1 synthetic parquet',
+) {
+  const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/annotation-label-schema')) return Promise.resolve(jsonResponse(schema))
+    if (url.endsWith('/training-data/preview')) return Promise.resolve(jsonResponse(preview))
+    if (url.endsWith('/training-data/download')) {
+      return Promise.resolve({
+        ok: true,
+        blob: () => Promise.resolve(new Blob([downloadBody])),
+      } as Response)
+    }
+    if (url.endsWith('/annotation-tasks') && init?.method === 'GET') {
+      return Promise.resolve(jsonResponse(taskList(tasks)))
+    }
+    return Promise.reject(new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+function taskList(tasks: object[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
   const queue = tasks as Array<{
     status?: string
     annotation_revision?: { review?: { decision?: string } | null } | null
@@ -290,7 +440,7 @@ function taskList(tasks: object[]) {
   return {
     items: tasks,
     progress: {
-      scope: 'PROJECT',
+      scope,
       total: tasks.length,
       awaiting_submission: queue.filter(
         (task) =>
@@ -300,6 +450,20 @@ function taskList(tasks: object[]) {
       awaiting_review: queue.filter((task) => task.status === 'SUBMITTED').length,
       completed: queue.filter((task) => task.status === 'COMPLETED').length,
     },
+  }
+}
+function trainingDataPreview(trainingRowCount: number) {
+  return {
+    schema_version: 'training-data.v1',
+    eligible_video_count: 2,
+    candidate_observation_count: 14,
+    training_row_count: trainingRowCount,
+    unlabeled_candidate_observation_count: 2,
+    training_row_definition:
+      'one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)',
+    file_name: 'training_data.parquet',
+    content_type: 'application/vnd.apache.parquet',
+    includes_mp4: false,
   }
 }
 function jsonResponse(body: object, init?: ResponseInit) {

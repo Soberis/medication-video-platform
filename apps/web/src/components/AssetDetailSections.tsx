@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Descriptions, Select, Tag } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
@@ -77,8 +77,32 @@ export function PlaybackCard({
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(
     null,
   )
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === 'undefined' ? 1440 : window.innerWidth,
+    height: typeof window === 'undefined' ? 900 : window.innerHeight,
+  }))
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState('')
+
+  const stageSize = useMemo(() => {
+    const aspectRatio =
+      videoDimensions && videoDimensions.width > 0 && videoDimensions.height > 0
+        ? videoDimensions.width / videoDimensions.height
+        : 16 / 9
+    const maxWidth = Math.min(960, Math.max(320, viewportSize.width - 80))
+    const maxHeight = Math.min(600, Math.max(280, viewportSize.height - 240))
+    let width = maxWidth
+    let height = width / aspectRatio
+    if (height > maxHeight) {
+      height = maxHeight
+      width = height * aspectRatio
+    }
+    return {
+      aspectRatio,
+      height: Math.round(height),
+      width: Math.round(width),
+    }
+  }, [videoDimensions, viewportSize])
 
   useEffect(() => {
     const video = videoRef.current
@@ -116,6 +140,14 @@ export function PlaybackCard({
     }
     document.addEventListener('fullscreenchange', onFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  useEffect(() => {
+    const onResize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   async function toggleFullscreen() {
@@ -180,9 +212,14 @@ export function PlaybackCard({
               ref={videoStageRef}
               className="video-stage"
               style={
-                videoDimensions
-                  ? { aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}` }
-                  : undefined
+                {
+                  '--video-stage-height': `${stageSize.height}px`,
+                  '--video-stage-ratio': stageSize.aspectRatio,
+                  '--video-stage-width': `${stageSize.width}px`,
+                  aspectRatio: videoDimensions
+                    ? `${videoDimensions.width} / ${videoDimensions.height}`
+                    : undefined,
+                } as CSSProperties
               }
             >
               <video
@@ -580,6 +617,11 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
         <Descriptions
           column={{ xs: 1, md: 2 }}
           items={[
+            {
+              key: 'asset',
+              label: '资产 ID',
+              children: <code>{detail.clip_asset_id}</code>,
+            },
             { key: 'content', label: '内容类型', children: detail.content_type },
             { key: 'size', label: '文件大小', children: formatBytes(detail.size_bytes) },
             {
@@ -588,15 +630,15 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
               children: <code>{detail.batch_id}</code>,
             },
             {
-              key: 'source',
-              label: '源上传文件 ID',
-              children: <code>{detail.source_upload_file_id}</code>,
-            },
-            {
               key: 'sha',
               label: 'SHA-256',
               span: { xs: 1, md: 2 },
               children: <code className="mono-wrap">{detail.sha256}</code>,
+            },
+            {
+              key: 'source',
+              label: '源上传文件 ID',
+              children: <code>{detail.source_upload_file_id}</code>,
             },
             { key: 'created', label: '创建时间', children: formatDateTime(detail.created_at) },
             { key: 'updated', label: '更新时间', children: formatDateTime(detail.updated_at) },
@@ -666,20 +708,19 @@ export function DangerZoneCard({
   onDelete: () => void
 }) {
   return (
-    <Card
-      className="detail-card"
-      title={<strong>删除视频</strong>}
-      extra={
-        <Button danger loading={isDeleting} onClick={onDelete}>
-          删除视频
-        </Button>
-      }
-      variant="outlined"
-    >
-      <p className="form-hint">
-        从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session 的其他视频。
-      </p>
-    </Card>
+    <section className="danger-zone-inline" aria-labelledby="danger-zone-title">
+      <div>
+        <span className="app-eyebrow">低频高风险操作</span>
+        <strong id="danger-zone-title">删除视频</strong>
+        <p className="form-hint">
+          从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session
+          的其他视频。
+        </p>
+      </div>
+      <Button danger loading={isDeleting} onClick={onDelete}>
+        删除视频
+      </Button>
+    </section>
   )
 }
 

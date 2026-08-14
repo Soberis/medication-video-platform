@@ -16,7 +16,6 @@ import {
   getDataManagementSummary,
   listClipAssetActivity,
   listCaptureEventLogs,
-  listDatasetVersions,
   listVideoSummaries,
   requestDatasetExport,
   requestHandPoseCandidates,
@@ -695,62 +694,36 @@ describe('catalog API', () => {
 
   it('reads dataset-draft metadata and its immutable evidence snapshot without caching', async () => {
     const datasetVersionId = '90000000-0000-4000-8000-000000000001'
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) =>
-      Promise.resolve(
-        String(input).includes(`/${datasetVersionId}`)
-          ? new Response(
-              JSON.stringify({
-                dataset_version_id: datasetVersionId,
-                project_id: projectId,
-                display_name: '配药操作训练候选',
-                status: 'DRAFT',
-                created_by: 'local-admin',
-                created_at: '2026-07-28T03:00:00Z',
-                members: [
-                  {
-                    capture_session_id: captureSessionId,
-                    candidate_index: 0,
-                    expected_camera_count: 1,
-                    received_camera_count: 1,
-                    assembly_status: 'COMPLETE',
-                    quality_status: 'PASS',
-                    streams: [],
-                  },
-                ],
-              }),
-              { status: 200, headers: { 'Content-Type': 'application/json' } },
-            )
-          : new Response(
-              JSON.stringify({
-                items: [
-                  {
-                    dataset_version_id: datasetVersionId,
-                    project_id: projectId,
-                    display_name: '配药操作训练候选',
-                    status: 'DRAFT',
-                    created_by: 'local-admin',
-                    created_at: '2026-07-28T03:00:00Z',
-                  },
-                ],
-                next_cursor: null,
-              }),
-              { status: 200, headers: { 'Content-Type': 'application/json' } },
-            ),
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          dataset_version_id: datasetVersionId,
+          project_id: projectId,
+          display_name: '配药操作训练候选',
+          status: 'DRAFT',
+          created_by: 'local-admin',
+          created_at: '2026-07-28T03:00:00Z',
+          members: [
+            {
+              capture_session_id: captureSessionId,
+              candidate_index: 0,
+              expected_camera_count: 1,
+              received_camera_count: 1,
+              assembly_status: 'COMPLETE',
+              quality_status: 'PASS',
+              streams: [],
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(listDatasetVersions(projectId, null)).resolves.toMatchObject({
-      items: [{ dataset_version_id: datasetVersionId }],
-    })
     await expect(getDatasetVersion(projectId, datasetVersionId)).resolves.toMatchObject({
       members: [{ capture_session_id: captureSessionId }],
     })
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/dataset-versions?limit=20`,
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
-    )
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/dataset-versions/${datasetVersionId}`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),

@@ -832,19 +832,6 @@ export async function createDatasetVersionDraft(
   throw await toCatalogError(response)
 }
 
-export function listDatasetVersions(
-  projectId: string,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '20' })
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<DatasetVersionSummary>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/dataset-versions?${query.toString()}`,
-    signal,
-  )
-}
-
 export function getDatasetVersion(
   projectId: string,
   datasetVersionId: string,

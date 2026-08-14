@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -177,6 +177,38 @@ describe('App', () => {
     expect(within(navigation).getByText('上传排障').closest('a')).not.toHaveAttribute(
       'aria-current',
     )
+  })
+
+  it('closes the management menu when clicked outside or Escape is pressed', async () => {
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [{ path: 'projects', element: <div>项目页面</div> }],
+        },
+      ],
+      ['/projects'],
+      { username: 'platform-admin', role: 'ADMIN' },
+    )
+
+    const user = userEvent.setup()
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    const trigger = within(navigation).getByText('管理')
+    const menu = trigger.closest('details')
+
+    expect(menu).not.toBeNull()
+    await user.click(trigger)
+    expect(menu).toHaveAttribute('open', '')
+
+    fireEvent.pointerDown(document.body)
+    expect(menu).not.toHaveAttribute('open')
+
+    await user.click(trigger)
+    expect(menu).toHaveAttribute('open', '')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(menu).not.toHaveAttribute('open')
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('only exposes project rename and archive commands to project administrators', async () => {

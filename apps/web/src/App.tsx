@@ -1,4 +1,5 @@
 import { App as AntdApp, Button, Tag } from 'antd'
+import { useEffect, useRef } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
@@ -19,9 +20,38 @@ export default function AppShell() {
   const location = useLocation()
   const { projectId = '' } = useParams()
   const isAdministrator = auth.session?.role === 'ADMIN'
+  const managementMenuRef = useRef<HTMLDetailsElement>(null)
   const isManagementRoute = managementRoutePatterns.some(
     (path) => matchPath({ path, end: true }, location.pathname) !== null,
   )
+
+  useEffect(() => {
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const menu = managementMenuRef.current
+      if (menu && menu.open && !menu.contains(event.target as Node)) {
+        menu.removeAttribute('open')
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      const menu = managementMenuRef.current
+      if (!menu) return
+      if (event.key !== 'Escape' || !menu.open) return
+      menu.removeAttribute('open')
+      menu.querySelector<HTMLElement>('summary')?.focus()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [])
+
+  useEffect(() => {
+    managementMenuRef.current?.removeAttribute('open')
+  }, [location.pathname])
 
   async function handleLogout() {
     try {
@@ -32,8 +62,8 @@ export default function AppShell() {
     }
   }
 
-  function closeManagementMenu(event: React.MouseEvent<HTMLAnchorElement>) {
-    event.currentTarget.closest('details')?.removeAttribute('open')
+  function closeManagementMenu() {
+    managementMenuRef.current?.removeAttribute('open')
   }
 
   return (
@@ -51,7 +81,10 @@ export default function AppShell() {
           </NavLink>
           {projectId ? <NavLink to={paths.videos(projectId)}>视频管理</NavLink> : null}
           {projectId ? <NavLink to={paths.annotationTasks(projectId)}>配药动作标注</NavLink> : null}
-          <details className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}>
+          <details
+            ref={managementMenuRef}
+            className={`nav-more${isManagementRoute ? ' nav-more-active' : ''}`}
+          >
             <summary>管理</summary>
             <div className="nav-more-menu">
               {isAdministrator ? (

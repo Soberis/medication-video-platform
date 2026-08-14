@@ -101,6 +101,12 @@ tags:
       no-store approval-readiness check; that administrator may then atomically approve
       and queue v2. AVAILABLE means the Core API verified the package before an administrator can
       request a short-lived audited download grant.
+  - name: Training Data Export
+    description: >-
+      Explicit, synchronous, read-only P0 export of Cleaning PASS hand observations. The API uses
+      the authoritative training_data_eligibility projection and requires a global ROLE_ADMIN with
+      an ACTIVE project ADMIN membership. Preview training_row_count is the number of Parquet rows,
+      not the number of videos; the download contains no MP4 bytes.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -117,6 +123,84 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
+  /projects/{project_id}/training-data/preview:
+    get:
+      operationId: getTrainingDataExportPreview
+      tags:
+        - Training Data Export
+      summary: Preview the project-level minimal training-data export
+      description: >-
+        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership in the project. The preview is
+        computed from the same read-only training_data_eligibility and
+        training_data_candidate_observations projections used by the download and tools/minimal-export.
+        training_row_count is the number of output rows: one MediaPipe Candidate hand observation inside
+        one current APPROVED human action interval [start_ms, end_ms). It is not a video count. Candidate
+        handedness is metadata only and does not act as a gate. Each row carries required Candidate
+        provenance algorithm_key, algorithm_version, model_sha256 and profile_sha256; confidence is sourced
+        from candidate_annotation.handedness_score and is not action-label confidence.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Current project-level training-data export preview.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingDataExportPreview"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Current evidence cannot be serialized safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/training-data/download:
+    get:
+      operationId: downloadTrainingData
+      tags:
+        - Training Data Export
+      summary: Download the project-level minimal training-data Parquet
+      description: >-
+        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership in the project. This synchronous
+        read-only response includes only Parquet training rows and never proxies or packages MP4 bytes.
+        Action labels come from the current human AnnotationRevision after APPROVED Review; candidate
+        geometry is admitted only when the current asset, quality, review and Cleaning evidence passes
+        the authoritative eligibility projection. Required row provenance includes algorithm_key,
+        algorithm_version, model_sha256 and profile_sha256; confidence is explicitly sourced from
+        candidate_annotation.handedness_score and is not action-label confidence. Parquet metadata fixes
+        hand_geometry_is_ground_truth=false and coordinate_system=normalized_image_xy_and_mediapipe_relative_z.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Minimal hand-observation training data.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              description: Fixed attachment name for the generated Parquet.
+              schema:
+                type: string
+                const: 'attachment; filename="training_data.parquet"'
+          content:
+            application/vnd.apache.parquet:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: Current evidence cannot be serialized safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/dataset-versions:
     get:
       operationId: listDatasetVersions
@@ -10435,6 +10519,54 @@ components:
     CameraSetMember:
       allOf:
         - $ref: "#/components/schemas/CameraSetMemberRequest"
+    TrainingDataExportPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - eligible_video_count
+        - candidate_observation_count
+        - training_row_count
+        - unlabeled_candidate_observation_count
+        - training_row_definition
+        - file_name
+        - content_type
+        - includes_mp4
+      properties:
+        schema_version:
+          type: string
+          const: training-data.v1
+        eligible_video_count:
+          type: integer
+          format: int64
+          minimum: 0
+        candidate_observation_count:
+          type: integer
+          format: int64
+          minimum: 0
+        training_row_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Number of Parquet rows, not the number of videos.
+        unlabeled_candidate_observation_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Candidate observations outside every current human action interval.
+        training_row_definition:
+          type: string
+          const: one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)
+          description: Each row also includes algorithm_key, algorithm_version, model_sha256 and profile_sha256; confidence is candidate_annotation.handedness_score metadata, not action-label confidence.
+        file_name:
+          type: string
+          const: training_data.parquet
+        content_type:
+          type: string
+          const: application/vnd.apache.parquet
+        includes_mp4:
+          type: boolean
+          const: false
     ApiError:
       type: object
       additionalProperties: false

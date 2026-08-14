@@ -26,6 +26,12 @@ import {
   type AnnotationTask,
   type AnnotationTaskProgress,
 } from '@/api/annotation'
+import {
+  downloadTrainingData,
+  getTrainingDataExportPreview,
+  TrainingDataExportApiError,
+  type TrainingDataExportPreview,
+} from '@/api/training-data'
 import { paths } from '@/app/paths'
 import { formatDateTime } from '@/catalog-presentation'
 
@@ -80,27 +86,27 @@ function postCleaningPresentation(task: AnnotationTask) {
     return {
       label: '当前规则检查通过',
       color: 'success',
-      description: '尚未进入训练数据集。',
+      description: '当前数据已通过清洗，可用于训练',
       reasons,
     }
   if (result?.outcome === 'WARNING')
     return {
       label: '后置清洗待确认',
       color: 'warning',
-      description: '不会自动准入数据集，需补充事实或按后续准入流程确认。',
+      description: '当前数据暂不可用于训练，需补充事实后重新核对清洗。',
       reasons,
     }
   if (result?.outcome === 'REJECT')
     return {
       label: '后置清洗不通过',
       color: 'error',
-      description: '当前版本默认不准入数据集；视频资产未被删除。',
+      description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
       reasons,
     }
   return {
     label: '后置清洗未执行',
     color: 'default',
-    description: '尚未形成可用于后续准入判断的结果。',
+    description: '尚未形成可用于训练的清洗结论。',
     reasons,
   }
 }
@@ -128,7 +134,13 @@ export default function AnnotationTaskListView() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reviewingRevisionId, setReviewingRevisionId] = useState<string | null>(null)
   const [recheckingRevisionId, setRecheckingRevisionId] = useState<string | null>(null)
+  const [trainingExportPreview, setTrainingExportPreview] =
+    useState<TrainingDataExportPreview | null>(null)
+  const [isTrainingExportOpen, setIsTrainingExportOpen] = useState(false)
+  const [isTrainingPreviewLoading, setIsTrainingPreviewLoading] = useState(false)
+  const [isTrainingDownloadLoading, setIsTrainingDownloadLoading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
+  const trainingExportRequest = useRef<AbortController | null>(null)
 
   const loadTasks = useCallback(async () => {
     activeRequest.current?.abort()
@@ -171,8 +183,83 @@ export default function AnnotationTaskListView() {
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
+      trainingExportRequest.current?.abort()
     }
   }, [loadTasks])
+
+  const openTrainingExport = useCallback(async () => {
+    if (progress?.scope !== 'PROJECT' || isTrainingPreviewLoading || isTrainingDownloadLoading)
+      return
+    trainingExportRequest.current?.abort()
+    const request = new AbortController()
+    trainingExportRequest.current = request
+    setIsTrainingPreviewLoading(true)
+    try {
+      const preview = await getTrainingDataExportPreview(projectId, request.signal)
+      if (request.signal.aborted || trainingExportRequest.current !== request) return
+      setTrainingExportPreview(preview)
+      setIsTrainingExportOpen(true)
+    } catch (error) {
+      if (request.signal.aborted || trainingExportRequest.current !== request) return
+      void message.error(
+        error instanceof TrainingDataExportApiError
+          ? error.message
+          : '暂时无法读取训练数据导出信息，请稍后重试。',
+      )
+    } finally {
+      if (trainingExportRequest.current === request) {
+        trainingExportRequest.current = null
+        setIsTrainingPreviewLoading(false)
+      }
+    }
+  }, [isTrainingDownloadLoading, isTrainingPreviewLoading, message, progress?.scope, projectId])
+
+  const closeTrainingExport = useCallback(() => {
+    if (isTrainingDownloadLoading) return
+    setIsTrainingExportOpen(false)
+    setTrainingExportPreview(null)
+  }, [isTrainingDownloadLoading])
+
+  const downloadTrainingDataFile = useCallback(async () => {
+    if (
+      !trainingExportPreview ||
+      trainingExportPreview.training_row_count <= 0 ||
+      isTrainingDownloadLoading
+    )
+      return
+    const request = new AbortController()
+    trainingExportRequest.current = request
+    setIsTrainingDownloadLoading(true)
+    try {
+      const blob = await downloadTrainingData(projectId, request.signal)
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = 'training_data.parquet'
+      link.rel = 'noopener'
+      link.hidden = true
+      document.body.append(link)
+      try {
+        link.click()
+      } finally {
+        URL.revokeObjectURL(objectUrl)
+        link.remove()
+      }
+      setIsTrainingExportOpen(false)
+      setTrainingExportPreview(null)
+      void message.success('training_data.parquet 已开始下载。')
+    } catch (error) {
+      if (request.signal.aborted) return
+      void message.error(
+        error instanceof TrainingDataExportApiError
+          ? error.message
+          : '训练数据暂未导出，请稍后重试。',
+      )
+    } finally {
+      if (trainingExportRequest.current === request) trainingExportRequest.current = null
+      setIsTrainingDownloadLoading(false)
+    }
+  }, [isTrainingDownloadLoading, message, projectId, trainingExportPreview])
 
   function openSubmission(task: AnnotationTask) {
     if (!task.can_submit || task.status !== 'ASSIGNED') return
@@ -304,9 +391,21 @@ export default function AnnotationTaskListView() {
           <h1 id="annotation-task-title">配药动作标注</h1>
           <p>在配药舱固定机位视频上记录动作时间段；提交后由当前项目管理员复核。</p>
         </div>
-        <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-          刷新
-        </Button>
+        <div className="detail-actions">
+          {loadState === 'success' && progress?.scope === 'PROJECT' ? (
+            <Button
+              type="primary"
+              loading={isTrainingPreviewLoading}
+              disabled={isTrainingDownloadLoading}
+              onClick={() => void openTrainingExport()}
+            >
+              导出训练数据
+            </Button>
+          ) : null}
+          <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+            刷新
+          </Button>
+        </div>
       </section>
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
@@ -350,16 +449,17 @@ export default function AnnotationTaskListView() {
         </dl>
       ) : null}
       {loadState === 'success' && items.length ? (
-        <Card className="table-card" variant="outlined">
+        <Card className="table-card annotation-task-table-card" variant="outlined">
           <Table<AnnotationTask>
+            className="annotation-task-table"
             dataSource={items}
             rowKey="annotation_task_id"
             pagination={false}
-            scroll={{ x: 1250 }}
+            tableLayout="fixed"
             columns={[
               {
                 title: '视频资产',
-                width: 270,
+                width: 160,
                 render: (_, row) => (
                   <Link
                     className="text-link mono-wrap"
@@ -371,12 +471,12 @@ export default function AnnotationTaskListView() {
               },
               {
                 title: '状态',
-                width: 130,
+                width: 85,
                 render: (_, row) => <Tag color={taskStatusColor(row)}>{taskStatusLabel(row)}</Tag>,
               },
               {
-                title: '动作标注、复核与清洗',
-                width: 310,
+                title: '标注 / 复核 / 清洗',
+                width: 250,
                 render: (_, row) => {
                   const revision = row.annotation_revision
                   const presentation = postCleaningPresentation(row)
@@ -414,13 +514,12 @@ export default function AnnotationTaskListView() {
                   )
                 },
               },
-              { title: '执行人', dataIndex: 'assignee_actor_id', width: 180 },
-              { title: '创建人', dataIndex: 'created_by', width: 180 },
-              { title: '创建时间', width: 190, render: (_, row) => formatDateTime(row.created_at) },
+              { title: '执行人', dataIndex: 'assignee_actor_id', width: 105 },
+              { title: '创建人', dataIndex: 'created_by', width: 105 },
+              { title: '创建时间', width: 135, render: (_, row) => formatDateTime(row.created_at) },
               {
                 title: '操作',
-                width: 170,
-                fixed: 'right',
+                width: 140,
                 render: (_, row) => (
                   <div className="table-actions">
                     {row.can_submit && row.status === 'ASSIGNED' ? (
@@ -477,6 +576,55 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && !items.length ? (
         <Empty description="当前没有可处理的配药动作标注。管理员可在已判定合格的视频详情中创建并分配任务。" />
       ) : null}
+      <Modal
+        open={isTrainingExportOpen}
+        title="训练数据导出"
+        okText="导出"
+        cancelText="取消"
+        confirmLoading={isTrainingDownloadLoading}
+        okButtonProps={{
+          disabled: !trainingExportPreview?.training_row_count,
+          'aria-label': '导出',
+        }}
+        cancelButtonProps={{ disabled: isTrainingDownloadLoading, 'aria-label': '取消' }}
+        mask={{ closable: !isTrainingDownloadLoading }}
+        keyboard={!isTrainingDownloadLoading}
+        onCancel={closeTrainingExport}
+        onOk={() => void downloadTrainingDataFile()}
+        destroyOnHidden
+      >
+        {trainingExportPreview ? (
+          <>
+            <dl className="training-data-export-summary">
+              <div>
+                <dt>可导出数量</dt>
+                <dd>{trainingExportPreview.training_row_count} 条（Parquet 训练行）</dd>
+              </div>
+              <div>
+                <dt>格式</dt>
+                <dd>Parquet</dd>
+              </div>
+              <div>
+                <dt>包含</dt>
+                <dd>手部关键点 + 人工动作标签</dd>
+              </div>
+              <div>
+                <dt>原始视频</dt>
+                <dd>{trainingExportPreview.includes_mp4 ? '包含' : '不包含'}</dd>
+              </div>
+            </dl>
+            {trainingExportPreview.training_row_count === 0 ? (
+              <p className="training-data-export-empty" role="status">
+                当前没有合格训练行，暂时无法导出。
+              </p>
+            ) : null}
+            <p className="form-hint">
+              MediaPipe Candidate 仅作为手部候选观测，不是 Ground Truth；动作标签来自人工
+              AnnotationRevision。
+            </p>
+          </>
+        ) : null}
+      </Modal>
       <Modal
         open={isSubmissionOpen}
         title="提交配药动作时间段"

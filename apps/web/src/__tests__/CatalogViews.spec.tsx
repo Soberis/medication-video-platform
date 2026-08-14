@@ -7,7 +7,6 @@ import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-dr
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
 import DatasetVersionDetailView from '@/views/DatasetVersionDetailView'
-import DatasetVersionListView from '@/views/DatasetVersionListView'
 import SessionDetailView from '@/views/SessionDetailView'
 import SessionListView from '@/views/SessionListView'
 
@@ -395,40 +394,6 @@ describe('catalog views', () => {
 
     expect(await screen.findByRole('button', { name: '创建数据集草稿' })).toBeInTheDocument()
     expect(screen.queryByText('PROJECT_ROLE_UNAVAILABLE')).not.toBeInTheDocument()
-  })
-
-  it('lists dataset drafts without presenting them as frozen training data', async () => {
-    const datasetVersionId = '91000000-0000-4000-8000-000000000001'
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        items: [
-          {
-            dataset_version_id: datasetVersionId,
-            project_id: projectId,
-            display_name: '配药操作训练候选',
-            status: 'DRAFT',
-            created_by: 'local-admin',
-            created_at: '2026-07-28T03:00:00Z',
-          },
-        ],
-        next_cursor: null,
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderDatasetList()
-
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('数据集版本')
-    expect(screen.getByText(/只有完成校验和冻结后/)).toBeInTheDocument()
-    expect(await screen.findByText('配药操作训练候选')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /查看数据集版本：配药操作训练候选/ })).toHaveAttribute(
-      'href',
-      `/projects/${projectId}/datasets/${datasetVersionId}`,
-    )
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/dataset-versions?limit=20`,
-      expect.any(Object),
-    )
   })
 
   it('shows the persisted draft evidence rather than current media URLs', async () => {
@@ -1570,11 +1535,16 @@ describe('catalog views', () => {
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     renderAssetDetail()
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('视频详情')
+    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(heading).toHaveTextContent('视频详情')
+    const headingCopy = heading.parentElement?.parentElement
+    expect(headingCopy).not.toHaveTextContent('相机')
+    expect(headingCopy).not.toHaveTextContent('资产 ID')
     expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/videos`,
     )
+    expect(screen.getByText('资产 ID')).toBeInTheDocument()
     expect(screen.getByText('可以直接查看视频')).toBeInTheDocument()
     expect(screen.getByText(/视频已完成上传完整性校验/)).toBeInTheDocument()
     expect(screen.getAllByText('90000000-0000-4000-8000-000000000001').length).toBeGreaterThan(0)
@@ -1756,6 +1726,32 @@ describe('catalog views', () => {
     expect(await screen.findByText('配药动作标注已创建并分配')).toBeInTheDocument()
   })
 
+  it('renders persisted annotation, human review and cleaning facts after a detail refresh', async () => {
+    stubAsset({
+      role: 'ADMIN',
+      status: 'INGESTED',
+      quality: {
+        ...unreviewedQuality(),
+        decision: 'QUALIFIED',
+        reason_code: 'MEETS_REQUIREMENTS',
+      },
+      existingAnnotationTask: completedAnnotationTask(),
+    })
+
+    renderAssetDetail()
+
+    const workflow = await screen.findByRole('complementary', { name: '视频处理流程' })
+    expect(within(workflow).getByText('人工复核')).toBeInTheDocument()
+    expect(within(workflow).getAllByText('可用数据')).toHaveLength(2)
+    expect(within(workflow).getByText('人工复核与清洗均已通过')).toBeInTheDocument()
+    expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
+    expect(within(workflow).getByText('已通过清洗，可用于训练')).toBeInTheDocument()
+    expect(within(workflow).queryByText('查看复核与清洗结果')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '创建配药动作标注' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看配药动作标注' })).toBeInTheDocument()
+    expect(document.querySelector('.workbench-primary')?.tagName).toBe('SECTION')
+  })
+
   it('lets a project member queue hand pose candidates without presenting them as formal annotations', async () => {
     const fetchMock = stubAsset({ role: 'MEMBER', status: 'INGESTED', handPose: true })
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('hand-pose-ui-0001') })
@@ -1834,12 +1830,6 @@ function renderSessionDetail() {
     path: '/projects/:projectId/sessions/:id',
   })
 }
-function renderDatasetList() {
-  return renderRoute(<DatasetVersionListView />, {
-    route: `/projects/${projectId}/datasets`,
-    path: '/projects/:projectId/datasets',
-  })
-}
 function renderDatasetDetail(datasetVersionId: string) {
   return renderRoute(<DatasetVersionDetailView />, {
     route: `/projects/${projectId}/datasets/${datasetVersionId}`,
@@ -1865,6 +1855,7 @@ function stubAsset(options: {
   handPoseState?: object
   deliveryRecovery?: boolean
   annotationTask?: boolean
+  existingAnnotationTask?: object
   activity?: boolean
 }) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
@@ -2003,6 +1994,20 @@ function stubAsset(options: {
           201,
         ),
       )
+    if (url.endsWith(`/api/v1/projects/${projectId}/annotation-tasks`) && init?.method === 'GET')
+      return Promise.resolve(
+        jsonResponse({
+          items: options.existingAnnotationTask ? [options.existingAnnotationTask] : [],
+          progress: {
+            scope: options.role === 'ADMIN' ? 'PROJECT' : 'ASSIGNEE',
+            total: options.existingAnnotationTask ? 1 : 0,
+            awaiting_submission: 0,
+            rework_required: 0,
+            awaiting_review: 0,
+            completed: options.existingAnnotationTask ? 1 : 0,
+          },
+        }),
+      )
     return Promise.resolve(jsonResponse(assetDetail(options.status)))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -2058,6 +2063,57 @@ function failedHandPoseJob(retryable: boolean) {
     requested_by: 'local-synthetic-admin',
     created_at: '2026-08-11T02:00:00Z',
     updated_at: '2026-08-11T02:00:01Z',
+  }
+}
+
+function completedAnnotationTask() {
+  return {
+    annotation_task_id: 'e0000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    clip_asset_id: assetId,
+    label_schema_id: 'e1000000-0000-4000-8000-000000000001',
+    label_schema_digest: 'a'.repeat(64),
+    assignee_actor_id: 'local-synthetic-uploader',
+    created_by: 'local-synthetic-admin',
+    status: 'COMPLETED',
+    can_submit: false,
+    can_review: false,
+    can_recheck_post_cleaning: false,
+    annotation_revision: {
+      annotation_revision_id: 'e2000000-0000-4000-8000-000000000001',
+      label_schema_id: 'e1000000-0000-4000-8000-000000000001',
+      label_schema_digest: 'a'.repeat(64),
+      revision_number: 1,
+      annotation_document: {
+        schema_version: 'annotation-document.v1',
+        segments: [{ start_ms: 0, end_ms: 1_000, label: 'PREPARE' }],
+      },
+      submitted_by: 'local-synthetic-uploader',
+      submitted_at: '2026-08-10T01:01:00Z',
+      review: {
+        annotation_review_id: 'e3000000-0000-4000-8000-000000000001',
+        project_id: projectId,
+        annotation_revision_id: 'e2000000-0000-4000-8000-000000000001',
+        decision: 'APPROVED',
+        review_note: null,
+        reviewed_by: 'local-synthetic-admin',
+        reviewed_at: '2026-08-10T01:02:00Z',
+      },
+      post_cleaning_result: {
+        cleaning_result_id: 'e4000000-0000-4000-8000-000000000001',
+        cleaning_run_id: 'e5000000-0000-4000-8000-000000000001',
+        rule_set_key: 'p0-post-annotation',
+        rule_set_version: 'v1',
+        rule_set_digest: 'b'.repeat(64),
+        outcome: 'PASS',
+        reason_codes: [],
+        executed_checks: ['REVIEW_APPROVED'],
+        evaluated_at: '2026-08-10T01:02:01Z',
+      },
+    },
+    created_at: '2026-08-10T01:00:00Z',
+    updated_at: '2026-08-10T01:02:01Z',
+    version: 2,
   }
 }
 function jsonResponse(body: object, status = 200) {

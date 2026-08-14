@@ -620,7 +620,7 @@ function DatasetVersionDetailContent() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑">
-        <Link to={paths.datasets(projectId)}>数据集版本</Link>
+        <Link to={paths.videos(projectId)}>视频管理</Link>
         <span aria-hidden="true">/</span>
         <span>证据详情</span>
       </nav>
