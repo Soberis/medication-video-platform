@@ -73,6 +73,8 @@ def test_cleaning_pass_rows_write_and_read_parquet(tmp_path: Path) -> None:
     expected_schema_names = [
         "video_id",
         "timestamp_ms",
+        "action_start_ms",
+        "action_end_ms",
         "action_label",
         "annotation_revision_id",
         "hand_index",
@@ -81,7 +83,6 @@ def test_cleaning_pass_rows_write_and_read_parquet(tmp_path: Path) -> None:
         "candidate_annotation_id",
         "handedness",
         "handedness_score",
-        "confidence",
         "handedness_is_ground_truth",
         "algorithm_key",
         "algorithm_version",
@@ -91,11 +92,15 @@ def test_cleaning_pass_rows_write_and_read_parquet(tmp_path: Path) -> None:
     ]
     assert table.schema.names == expected_schema_names
     assert table.column("video_id").to_pylist() == ["50000000-0000-4000-8000-000000000001"]
+    assert table.column("timestamp_ms").to_pylist() == [120]
+    assert table.column("action_start_ms").to_pylist() == [100]
+    assert table.column("action_end_ms").to_pylist() == [500]
+    assert 100 <= table.column("timestamp_ms")[0].as_py() < 500
     assert table.column("action_label").to_pylist() == ["retrieve_medicine"]
     assert table.column("landmark_20_z").to_pylist() == pytest.approx([-0.01])
     assert table.column("hand_presence").to_pylist() == [True]
     assert table.column("hand_mask_available").to_pylist() == [False]
-    assert table.column("confidence").to_pylist() == pytest.approx([0.75])
+    assert "confidence" not in table.schema.names
     assert table.column("algorithm_key").to_pylist() == ["MEDIAPIPE_HAND_LANDMARKER"]
     assert table.column("algorithm_version").to_pylist() == ["mediapipe-hand-landmarker.v1"]
     assert table.column("model_sha256").to_pylist() == ["e" * 64]
@@ -104,7 +109,11 @@ def test_cleaning_pass_rows_write_and_read_parquet(tmp_path: Path) -> None:
     assert table.schema.metadata[b"action_label_source"] == b"human_annotation_revision"
     assert table.schema.metadata[b"coordinate_system"] == b"normalized_image_xy_and_mediapipe_relative_z"
     assert table.schema.metadata[b"hand_geometry_is_ground_truth"] == b"false"
-    assert table.schema.metadata[b"confidence_source"] == b"candidate_annotation.handedness_score"
+    assert table.schema.metadata[b"action_interval_source"] == (
+        b"human_annotation_revision.annotation_document.segments"
+    )
+    assert table.schema.metadata[b"handedness_score_source"] == b"candidate_annotation.handedness_score"
+    assert b"confidence_source" not in table.schema.metadata
     assert table.schema.field("handedness").nullable is False
 
 
@@ -117,6 +126,12 @@ def test_non_pass_cleaning_data_is_rejected() -> None:
 
 def test_candidate_outside_human_segment_is_not_training_row() -> None:
     rows, counts = exporter.build_training_rows([eligible_asset()], [candidate(timestamp_ms=600)])
+    assert rows == []
+    assert counts["unlabeled_candidate_rows"] == 1
+
+
+def test_candidate_at_human_segment_end_is_not_training_row() -> None:
+    rows, counts = exporter.build_training_rows([eligible_asset()], [candidate(timestamp_ms=500)])
     assert rows == []
     assert counts["unlabeled_candidate_rows"] == 1
 

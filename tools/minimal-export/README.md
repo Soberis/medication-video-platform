@@ -16,6 +16,9 @@ GET /api/v1/projects/{project_id}/training-data/download
 `attachment; filename="training_data.parquet"`，并带 `Cache-Control: no-store`。preview 的
 `training_row_count` 定义为 Parquet 行数：每一行是一个 Candidate 手部观测落在一个人工 APPROVED
 动作区间 `[start_ms, end_ms)` 内，而不是视频数。默认不含 MP4。
+当前 Parquet schema 为 `training-data.v2`；`action_start_ms`、`action_end_ms` 直接复制当前人工
+`AnnotationRevision.annotation_document.segments` 的区间边界，且每行满足
+`action_start_ms <= timestamp_ms < action_end_ms`。
 
 ## 运行环境
 
@@ -40,15 +43,16 @@ uv run --project tools/minimal-export `
 ```text
 video_id
 timestamp_ms
+action_start_ms
+action_end_ms
 action_label
-hand_index
 annotation_revision_id
+hand_index
+hand_presence
+hand_mask_available
 candidate_annotation_id
 handedness
 handedness_score
-confidence
-hand_presence
-hand_mask_available
 handedness_is_ground_truth
 algorithm_key
 algorithm_version
@@ -59,8 +63,16 @@ landmark_00_x / landmark_00_y / landmark_00_z
 landmark_20_x / landmark_20_y / landmark_20_z
 ```
 
-`action_label` 只从 APPROVED 的人工 `AnnotationRevision.annotation_document.segments` 按 `[start_ms, end_ms)` 对齐；手部几何来自 `CandidateAnnotation`。`hand_presence=true` 表示该行有一个候选手，`hand_mask_available=false` 表示当前没有像素 mask，不能补造第二只手或假的 landmark。`confidence` 当前同源于 `handedness_score`，仅为 Candidate 置信度元数据；`handedness` 和 `handedness_score` 不是正式标签，文件元数据明确 `handedness_is_ground_truth=false`。
-`algorithm_key`、`algorithm_version`、`model_sha256` 和 `profile_sha256` 是每行必需的 Candidate provenance；文件元数据同时固定 `hand_geometry_is_ground_truth=false` 和坐标系 `normalized_image_xy_and_mediapipe_relative_z`；`confidence` 的来源固定记录为 `candidate_annotation.handedness_score`，不表示动作标签置信度。
+`action_start_ms`、`action_end_ms` 和 `action_label` 只从当前 APPROVED 的人工
+`AnnotationRevision.annotation_document.segments` 按 `[start_ms, end_ms)` 直接复制和对齐；因此
+`timestamp_ms` 始终属于该人工动作区间。手部几何来自 `CandidateAnnotation`。`hand_presence=true`
+表示该行有一个候选手，`hand_mask_available=false` 表示当前没有像素 mask，不能补造第二只手或假的
+landmark。`handedness` 和 `handedness_score` 仅为 Candidate 手部元数据，不是正式动作标签，文件元数据
+明确 `handedness_is_ground_truth=false`。
+`algorithm_key`、`algorithm_version`、`model_sha256` 和 `profile_sha256` 是每行必需的 Candidate
+provenance；文件元数据同时固定 `hand_geometry_is_ground_truth=false`、
+`handedness_score_source=candidate_annotation.handedness_score` 和坐标系
+`normalized_image_xy_and_mediapipe_relative_z`，不提供 generic `confidence` 字段。
 
 导出前同时校验视频 `INGESTED`、质量 `QUALIFIED`、人工复核 `APPROVED`、Cleaning `PASS + SUCCEEDED`，并绑定当前 asset/revision/quality 的摘要。未通过 Cleaning 的记录不会进入 Parquet。视频原文件只通过 `video_id` 回查，不写入输出。
 

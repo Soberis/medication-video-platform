@@ -86,7 +86,7 @@ function postCleaningPresentation(task: AnnotationTask) {
     return {
       label: '当前规则检查通过',
       color: 'success',
-      description: '当前数据已通过清洗，可用于训练',
+      description: '已通过清洗，可参与训练数据导出',
       reasons,
     }
   if (result?.outcome === 'WARNING')

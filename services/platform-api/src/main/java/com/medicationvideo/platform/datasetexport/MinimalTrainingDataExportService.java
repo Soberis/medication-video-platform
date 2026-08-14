@@ -42,7 +42,7 @@ class MinimalTrainingDataExportService {
 
 	static final String FILE_NAME = "training_data.parquet";
 
-	static final String SCHEMA_VERSION = "training-data.v1";
+	static final String SCHEMA_VERSION = "training-data.v2";
 
 	private static final int LANDMARK_COUNT = 21;
 
@@ -53,11 +53,12 @@ class MinimalTrainingDataExportService {
 
 	static final Map<String, String> PARQUET_METADATA = Map.ofEntries(Map.entry("schema_version", SCHEMA_VERSION),
 			Map.entry("cleaning_gate", "PASS"), Map.entry("action_label_source", "human_annotation_revision"),
+			Map.entry("action_interval_source", "human_annotation_revision.annotation_document.segments"),
 			Map.entry("hand_geometry_source", "candidate_annotation"),
 			Map.entry("hand_geometry_is_ground_truth", "false"),
 			Map.entry("candidate_algorithm_source", "ai_job.algorithm_key+algorithm_version"),
 			Map.entry("handedness_is_ground_truth", "false"),
-			Map.entry("confidence_source", "candidate_annotation.handedness_score"),
+			Map.entry("handedness_score_source", "candidate_annotation.handedness_score"),
 			Map.entry("hand_mask_policy", "not_available"),
 			Map.entry("eligibility_projection", "training_data_eligibility"),
 			Map.entry("candidate_projection", "training_data_candidate_observations"),
@@ -140,12 +141,12 @@ class MinimalTrainingDataExportService {
 				throw invalidEvidence("CandidateAnnotation " + candidate.candidateAnnotationId()
 						+ " is not bound to the current AnnotationRevision.");
 			}
-			var actionLabel = actionLabelAt(segmentsByVideo.get(candidate.videoId()), candidate.timestampMs());
-			if (actionLabel == null) {
+			var actionSegment = actionSegmentAt(segmentsByVideo.get(candidate.videoId()), candidate.timestampMs());
+			if (actionSegment == null) {
 				unlabeledCandidates++;
 				continue;
 			}
-			rows.add(toTrainingRow(eligibleVideo, candidate, actionLabel));
+			rows.add(toTrainingRow(eligibleVideo, candidate, actionSegment));
 		}
 		rows.sort(Comparator.comparing(TrainingDataRow::videoId)
 			.thenComparingLong(TrainingDataRow::timestampMs)
@@ -221,7 +222,7 @@ class MinimalTrainingDataExportService {
 	}
 
 	private TrainingDataRow toTrainingRow(EligibleVideo eligibleVideo, CandidateObservation candidate,
-			String actionLabel) {
+			ActionSegment actionSegment) {
 		if (!"MEDIAPIPE_HAND_LANDMARKER".equals(candidate.algorithmKey()) || candidate.algorithmVersion() == null
 				|| candidate.algorithmVersion().isBlank() || candidate.algorithmVersion().length() > 32
 				|| candidate.timestampMs() < 0 || candidate.handIndex() < 0 || candidate.handIndex() > 1
@@ -234,10 +235,11 @@ class MinimalTrainingDataExportService {
 					+ " does not contain valid export provenance.");
 		}
 		var landmarks = flattenLandmarks(candidate.landmarks(), candidate.candidateAnnotationId());
-		return new TrainingDataRow(eligibleVideo.videoId(), candidate.timestampMs(), actionLabel,
-				eligibleVideo.annotationRevisionId(), candidate.handIndex(), candidate.candidateAnnotationId(),
-				candidate.handedness(), (float) candidate.handednessScore(), candidate.algorithmKey(),
-				candidate.algorithmVersion(), candidate.modelSha256(), candidate.profileSha256(), landmarks);
+		return new TrainingDataRow(eligibleVideo.videoId(), candidate.timestampMs(), actionSegment.startMs(),
+				actionSegment.endMs(), actionSegment.label(), eligibleVideo.annotationRevisionId(),
+				candidate.handIndex(), candidate.candidateAnnotationId(), candidate.handedness(),
+				(float) candidate.handednessScore(), candidate.algorithmKey(), candidate.algorithmVersion(),
+				candidate.modelSha256(), candidate.profileSha256(), landmarks);
 	}
 
 	private static List<Float> flattenLandmarks(JsonNode landmarks, UUID candidateId) {
@@ -300,13 +302,13 @@ class MinimalTrainingDataExportService {
 		return value == null || !value.isTextual() ? null : value.asText();
 	}
 
-	private static String actionLabelAt(List<ActionSegment> segments, long timestampMs) {
+	private static ActionSegment actionSegmentAt(List<ActionSegment> segments, long timestampMs) {
 		for (var segment : segments) {
 			if (segment.startMs() <= timestampMs && timestampMs < segment.endMs()) {
-				return segment.label();
+				return segment;
 			}
 			if (timestampMs < segment.startMs()) {
-				return null;
+				break;
 			}
 		}
 		return null;
@@ -323,6 +325,8 @@ class MinimalTrainingDataExportService {
 				var group = factory.newGroup();
 				group.add("video_id", trainingRow.videoId().toString());
 				group.add("timestamp_ms", trainingRow.timestampMs());
+				group.add("action_start_ms", trainingRow.actionStartMs());
+				group.add("action_end_ms", trainingRow.actionEndMs());
 				group.add("action_label", trainingRow.actionLabel());
 				group.add("annotation_revision_id", trainingRow.annotationRevisionId().toString());
 				group.add("hand_index", trainingRow.handIndex());
@@ -331,7 +335,6 @@ class MinimalTrainingDataExportService {
 				group.add("candidate_annotation_id", trainingRow.candidateAnnotationId().toString());
 				group.add("handedness", trainingRow.handedness());
 				group.add("handedness_score", trainingRow.handednessScore());
-				group.add("confidence", trainingRow.handednessScore());
 				group.add("handedness_is_ground_truth", false);
 				group.add("algorithm_key", trainingRow.algorithmKey());
 				group.add("algorithm_version", trainingRow.algorithmVersion());
@@ -358,6 +361,8 @@ class MinimalTrainingDataExportService {
 				message training_data {
 					required binary video_id (UTF8);
 					required int64 timestamp_ms;
+					required int64 action_start_ms;
+					required int64 action_end_ms;
 					required binary action_label (UTF8);
 					required binary annotation_revision_id (UTF8);
 					required int32 hand_index;
@@ -366,7 +371,6 @@ class MinimalTrainingDataExportService {
 					required binary candidate_annotation_id (UTF8);
 					required binary handedness (UTF8);
 					required float handedness_score;
-					required float confidence;
 					required boolean handedness_is_ground_truth;
 					required binary algorithm_key (UTF8);
 					required binary algorithm_version (UTF8);
@@ -398,9 +402,10 @@ class MinimalTrainingDataExportService {
 			JsonNode landmarks, String modelSha256, String profileSha256, int validLandmarkCount) {
 	}
 
-	record TrainingDataRow(UUID videoId, long timestampMs, String actionLabel, UUID annotationRevisionId, int handIndex,
-			UUID candidateAnnotationId, String handedness, float handednessScore, String algorithmKey,
-			String algorithmVersion, String modelSha256, String profileSha256, List<Float> landmarks) {
+	record TrainingDataRow(UUID videoId, long timestampMs, long actionStartMs, long actionEndMs, String actionLabel,
+			UUID annotationRevisionId, int handIndex, UUID candidateAnnotationId, String handedness,
+			float handednessScore, String algorithmKey, String algorithmVersion, String modelSha256,
+			String profileSha256, List<Float> landmarks) {
 	}
 
 	record ActionSegment(long startMs, long endMs, String label) {

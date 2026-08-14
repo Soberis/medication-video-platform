@@ -1745,7 +1745,7 @@ describe('catalog views', () => {
     expect(within(workflow).getAllByText('可用数据')).toHaveLength(2)
     expect(within(workflow).getByText('人工复核与清洗均已通过')).toBeInTheDocument()
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
-    expect(within(workflow).getByText('已通过清洗，可用于训练')).toBeInTheDocument()
+    expect(within(workflow).getByText('已通过清洗，可参与训练数据导出')).toBeInTheDocument()
     expect(within(workflow).queryByText('查看复核与清洗结果')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '创建配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看配药动作标注' })).toBeInTheDocument()

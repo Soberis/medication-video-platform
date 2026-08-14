@@ -74,6 +74,7 @@ class TrainingDataExportControllerTests {
 				.principal(authentication("ROLE_ADMIN", ADMIN_ACTOR)))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.schema_version").value("training-data.v2"))
 			.andExpect(jsonPath("$.training_row_count").value(3))
 			.andExpect(jsonPath("$.eligible_video_count").value(2))
 			.andExpect(jsonPath("$.includes_mp4").value(false));

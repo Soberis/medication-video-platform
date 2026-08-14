@@ -181,7 +181,7 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    expect(screen.getByText('当前数据已通过清洗，可用于训练')).toBeInTheDocument()
+    expect(screen.getByText('已通过清洗，可参与训练数据导出')).toBeInTheDocument()
     expect(screen.getByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已验证的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
@@ -454,7 +454,7 @@ function taskList(tasks: object[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
 }
 function trainingDataPreview(trainingRowCount: number) {
   return {
-    schema_version: 'training-data.v1',
+    schema_version: 'training-data.v2',
     eligible_video_count: 2,
     candidate_observation_count: 14,
     training_row_count: trainingRowCount,

@@ -1,5 +1,5 @@
 export interface TrainingDataExportPreview {
-  schema_version: 'training-data.v1'
+  schema_version: 'training-data.v2'
   eligible_video_count: number
   candidate_observation_count: number
   training_row_count: number

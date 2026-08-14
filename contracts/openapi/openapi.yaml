@@ -135,9 +135,11 @@ paths:
         training_data_candidate_observations projections used by the download and tools/minimal-export.
         training_row_count is the number of output rows: one MediaPipe Candidate hand observation inside
         one current APPROVED human action interval [start_ms, end_ms). It is not a video count. Candidate
-        handedness is metadata only and does not act as a gate. Each row carries required Candidate
-        provenance algorithm_key, algorithm_version, model_sha256 and profile_sha256; confidence is sourced
-        from candidate_annotation.handedness_score and is not action-label confidence.
+        handedness and handedness_score are metadata only and do not act as a gate. Each row carries
+        action_start_ms and action_end_ms copied from the current human AnnotationRevision segment, with
+        timestamp_ms in [action_start_ms, action_end_ms), plus required Candidate provenance
+        algorithm_key, algorithm_version, model_sha256 and profile_sha256. There is no generic confidence
+        field; handedness_score remains Candidate metadata only.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
@@ -168,12 +170,14 @@ paths:
       description: >-
         Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership in the project. This synchronous
         read-only response includes only Parquet training rows and never proxies or packages MP4 bytes.
-        Action labels come from the current human AnnotationRevision after APPROVED Review; candidate
-        geometry is admitted only when the current asset, quality, review and Cleaning evidence passes
-        the authoritative eligibility projection. Required row provenance includes algorithm_key,
-        algorithm_version, model_sha256 and profile_sha256; confidence is explicitly sourced from
-        candidate_annotation.handedness_score and is not action-label confidence. Parquet metadata fixes
-        hand_geometry_is_ground_truth=false and coordinate_system=normalized_image_xy_and_mediapipe_relative_z.
+        Action labels and action_start_ms/action_end_ms come from the current human AnnotationRevision
+        after APPROVED Review; each timestamp_ms satisfies the half-open interval
+        [action_start_ms, action_end_ms). Candidate geometry is admitted only when the current asset,
+        quality, review and Cleaning evidence passes the authoritative eligibility projection. Required
+        row provenance includes algorithm_key, algorithm_version, model_sha256 and profile_sha256;
+        handedness and handedness_score are Candidate metadata only and there is no generic confidence
+        field. Parquet metadata fixes hand_geometry_is_ground_truth=false and
+        coordinate_system=normalized_image_xy_and_mediapipe_relative_z.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
@@ -10535,7 +10539,7 @@ components:
       properties:
         schema_version:
           type: string
-          const: training-data.v1
+          const: training-data.v2
         eligible_video_count:
           type: integer
           format: int64
@@ -10557,7 +10561,7 @@ components:
         training_row_definition:
           type: string
           const: one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)
-          description: Each row also includes algorithm_key, algorithm_version, model_sha256 and profile_sha256; confidence is candidate_annotation.handedness_score metadata, not action-label confidence.
+          description: Each row includes action_start_ms and action_end_ms copied from the current human AnnotationRevision segment; timestamp_ms is in the half-open interval [action_start_ms, action_end_ms). It also includes Candidate provenance algorithm_key, algorithm_version, model_sha256 and profile_sha256, handedness and handedness_score metadata, and no generic confidence field.
         file_name:
           type: string
           const: training_data.parquet

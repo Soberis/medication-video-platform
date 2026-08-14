@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-EXPORT_SCHEMA_VERSION = "training-data.v1"
+EXPORT_SCHEMA_VERSION = "training-data.v2"
 LANDMARK_COUNT = 21
 LANDMARK_AXES = ("x", "y", "z")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
@@ -195,10 +195,10 @@ def parse_segments(document: Any) -> list[dict[str, Any]]:
     return segments
 
 
-def action_label_at(segments: list[dict[str, Any]], timestamp_ms: int) -> str | None:
+def action_segment_at(segments: list[dict[str, Any]], timestamp_ms: int) -> dict[str, Any] | None:
     for segment in segments:
         if segment["start_ms"] <= timestamp_ms < segment["end_ms"]:
-            return segment["label"]
+            return segment
         if timestamp_ms < segment["start_ms"]:
             break
     return None
@@ -261,8 +261,8 @@ def build_training_rows(
         timestamp_ms = candidate.get("frame_timestamp_ms")
         if isinstance(timestamp_ms, bool) or not isinstance(timestamp_ms, int) or timestamp_ms < 0:
             raise ExportError("CandidateAnnotation 的 frame_timestamp_ms 无效。")
-        action_label = action_label_at(segments_by_video[video_id], timestamp_ms)
-        if action_label is None:
+        action_segment = action_segment_at(segments_by_video[video_id], timestamp_ms)
+        if action_segment is None:
             unlabeled_candidates += 1
             continue
         if candidate.get("annotation_revision_id") != matched["annotation_revision_id"]:
@@ -305,7 +305,9 @@ def build_training_rows(
             {
                 "video_id": video_id,
                 "timestamp_ms": timestamp_ms,
-                "action_label": action_label,
+                "action_start_ms": action_segment["start_ms"],
+                "action_end_ms": action_segment["end_ms"],
+                "action_label": action_segment["label"],
                 "hand_index": hand_index,
                 "hand_presence": True,
                 "hand_mask_available": False,
@@ -313,7 +315,6 @@ def build_training_rows(
                 "candidate_annotation_id": str(candidate["candidate_annotation_id"]),
                 "handedness": handedness,
                 "handedness_score": float(handedness_score),
-                "confidence": float(handedness_score),
                 "handedness_is_ground_truth": False,
                 "algorithm_key": candidate["algorithm_key"],
                 "algorithm_version": candidate["algorithm_version"],
@@ -339,6 +340,8 @@ def parquet_schema() -> Any:
     fields = [
         pa.field("video_id", pa.string(), nullable=False),
         pa.field("timestamp_ms", pa.int64(), nullable=False),
+        pa.field("action_start_ms", pa.int64(), nullable=False),
+        pa.field("action_end_ms", pa.int64(), nullable=False),
         pa.field("action_label", pa.string(), nullable=False),
         pa.field("annotation_revision_id", pa.string(), nullable=False),
         pa.field("hand_index", pa.int32(), nullable=False),
@@ -347,7 +350,6 @@ def parquet_schema() -> Any:
         pa.field("candidate_annotation_id", pa.string(), nullable=False),
         pa.field("handedness", pa.string(), nullable=False),
         pa.field("handedness_score", pa.float32(), nullable=False),
-        pa.field("confidence", pa.float32(), nullable=False),
         pa.field("handedness_is_ground_truth", pa.bool_(), nullable=False),
         pa.field("algorithm_key", pa.string(), nullable=False),
         pa.field("algorithm_version", pa.string(), nullable=False),
@@ -359,10 +361,11 @@ def parquet_schema() -> Any:
         "schema_version": EXPORT_SCHEMA_VERSION,
         "cleaning_gate": "PASS",
         "action_label_source": "human_annotation_revision",
+        "action_interval_source": "human_annotation_revision.annotation_document.segments",
         "hand_geometry_source": "candidate_annotation",
         "hand_geometry_is_ground_truth": "false",
         "handedness_is_ground_truth": "false",
-        "confidence_source": "candidate_annotation.handedness_score",
+        "handedness_score_source": "candidate_annotation.handedness_score",
         "candidate_algorithm_source": "ai_job.algorithm_key+algorithm_version",
         "hand_mask_policy": "not_available",
         "eligibility_projection": "training_data_eligibility",

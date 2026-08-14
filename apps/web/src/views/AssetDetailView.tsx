@@ -411,9 +411,9 @@ export default function AssetDetailView() {
     }
     if (annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS') {
       return {
-        title: '已通过清洗，可用于训练',
-        description: '人工动作标签已经复核，当前数据已满足训练导出条件。',
-        buttonLabel: '已可用于训练',
+        title: '已通过清洗，可参与训练数据导出',
+        description: '实际可导出的训练行数以训练数据导出预览为准。',
+        buttonLabel: '以训练数据导出预览为准',
         kind: 'none',
         interactive: false,
       }

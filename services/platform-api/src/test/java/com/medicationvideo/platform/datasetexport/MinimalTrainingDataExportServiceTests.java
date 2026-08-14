@@ -38,6 +38,10 @@ class MinimalTrainingDataExportServiceTests {
 		assertEquals(1, built.rows().size());
 		assertEquals(0, built.unlabeledCandidateObservationCount());
 		var row = built.rows().getFirst();
+		assertEquals(100, row.actionStartMs());
+		assertEquals(400, row.actionEndMs());
+		assertTrue(row.actionStartMs() <= row.timestampMs());
+		assertTrue(row.timestampMs() < row.actionEndMs());
 		assertEquals("prepare_dose", row.actionLabel());
 		assertEquals("RIGHT", row.handedness());
 		assertEquals("MEDIAPIPE_HAND_LANDMARKER", row.algorithmKey());
@@ -54,8 +58,11 @@ class MinimalTrainingDataExportServiceTests {
 		assertEquals("false", MinimalTrainingDataExportService.PARQUET_METADATA.get("hand_geometry_is_ground_truth"));
 		assertEquals("human_annotation_revision",
 				MinimalTrainingDataExportService.PARQUET_METADATA.get("action_label_source"));
+		assertEquals("human_annotation_revision.annotation_document.segments",
+				MinimalTrainingDataExportService.PARQUET_METADATA.get("action_interval_source"));
 		assertEquals("candidate_annotation.handedness_score",
-				MinimalTrainingDataExportService.PARQUET_METADATA.get("confidence_source"));
+				MinimalTrainingDataExportService.PARQUET_METADATA.get("handedness_score_source"));
+		assertTrue(!MinimalTrainingDataExportService.PARQUET_METADATA.containsKey("confidence_source"));
 	}
 
 	@Test
@@ -64,6 +71,17 @@ class MinimalTrainingDataExportServiceTests {
 
 		assertTrue(built.rows().isEmpty());
 		assertEquals(1, built.unlabeledCandidateObservationCount());
+	}
+
+	@Test
+	void includesCandidateAtHumanIntervalStartAndExcludesEnd() {
+		var atStart = this.service.buildTrainingRows(List.of(eligibleVideo()), List.of(candidate(100, "LEFT")));
+		var atEnd = this.service.buildTrainingRows(List.of(eligibleVideo()), List.of(candidate(400, "LEFT")));
+
+		assertEquals(1, atStart.rows().size());
+		assertEquals(0, atStart.unlabeledCandidateObservationCount());
+		assertTrue(atEnd.rows().isEmpty());
+		assertEquals(1, atEnd.unlabeledCandidateObservationCount());
 	}
 
 	@Test
