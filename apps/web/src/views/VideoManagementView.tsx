@@ -198,49 +198,46 @@ export default function VideoManagementView() {
         <div>
           <p className="app-eyebrow">V1.18 P0 · 单视频闭环</p>
           <h1 id="video-management-title">视频管理</h1>
-          <p>从媒体入库到手部候选和人工配药动作标注，按单个固定机位视频查看当前状态。</p>
+          <p>按状态处理单路固定机位视频；统计和列表使用相同的筛选条件。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
           刷新
         </Button>
       </section>
       {summary ? (
-        <Card className="summary-card" variant="outlined" aria-label="数据管理汇总">
-          <div className="summary-grid">
+        <Card
+          className="summary-card video-management-summary"
+          variant="outlined"
+          aria-label="数据管理汇总"
+        >
+          <div className="video-summary-headline">
             <div>
-              <span className="cell-secondary">视频总数</span>
+              <span className="cell-secondary">视频</span>
               <strong>{summary.total_videos}</strong>
             </div>
             <div>
-              <span className="cell-secondary">总时长</span>
-              <strong>{formatDuration(summary.total_duration)}</strong>
+              <span className="cell-secondary">待标注</span>
+              <strong>{summary.pending_annotation}</strong>
             </div>
             <div>
-              <span className="cell-secondary">存储量</span>
-              <strong>{formatBytes(summary.storage_bytes)}</strong>
+              <span className="cell-secondary">待复核</span>
+              <strong>{summary.pending_review}</strong>
+            </div>
+            <div>
+              <span className="cell-secondary">待清洗</span>
+              <strong>{summary.pending_cleaning}</strong>
             </div>
             <div>
               <span className="cell-secondary">可用数据</span>
               <strong>{summary.usable_count}</strong>
             </div>
-            <div>
-              <span className="cell-secondary">来源分布</span>
-              <strong>{formatCountMap(summary.counts_by_source, sourceCountLabel)}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">相机分布</span>
-              <strong>{formatCountMap(summary.counts_by_camera, cameraCountLabel)}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">媒体状态分布</span>
-              <strong>{formatCountMap(summary.counts_by_status, mediaCountLabel)}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">待配药动作标注 / 待复核 / 待清洗</span>
-              <strong>
-                {summary.pending_annotation} / {summary.pending_review} / {summary.pending_cleaning}
-              </strong>
-            </div>
+          </div>
+          <div className="video-summary-meta">
+            <span>总时长 {formatDuration(summary.total_duration)}</span>
+            <span>存储 {formatBytes(summary.storage_bytes)}</span>
+            <span>来源：{formatCountMap(summary.counts_by_source, sourceCountLabel)}</span>
+            <span>相机：{formatCountMap(summary.counts_by_camera, cameraCountLabel)}</span>
+            <span>媒体：{formatCountMap(summary.counts_by_status, mediaCountLabel)}</span>
           </div>
         </Card>
       ) : null}
@@ -249,7 +246,16 @@ export default function VideoManagementView() {
           数据管理汇总暂不可用，视频列表仍可使用。
         </div>
       ) : null}
-      <Card className="filter-card" variant="outlined">
+      <Card className="filter-card video-management-filter-card" variant="outlined">
+        <div className="filter-card-heading">
+          <div>
+            <strong>筛选视频</strong>
+            <span>筛选会同时更新统计和列表</span>
+          </div>
+          <Button type="link" onClick={() => applyFilters({})}>
+            清除筛选
+          </Button>
+        </div>
         <div className="catalog-filters video-management-filters">
           <label>
             来源
@@ -378,7 +384,6 @@ export default function VideoManagementView() {
               }
             />
           </label>
-          <Button onClick={() => applyFilters({})}>清除筛选</Button>
         </div>
       </Card>
       {loadState === 'loading' ? (
@@ -401,11 +406,13 @@ export default function VideoManagementView() {
         <Empty description="当前没有符合条件的视频。" />
       ) : null}
       {items.length > 0 ? (
-        <Card className="table-card" variant="outlined">
+        <Card className="table-card video-management-table-card" variant="outlined">
           <Table<VideoSummary>
+            className="video-management-table"
             dataSource={items}
             rowKey="video_id"
             pagination={false}
+            size="small"
             scroll={{ x: 1250 }}
             columns={[
               {
@@ -476,50 +483,57 @@ export default function VideoManagementView() {
                 render: (value: string) => retentionStatusLabel(value),
               },
               {
-                title: '操作',
+                title: '下一步',
                 width: 220,
                 render: (_, row) => (
-                  <span className="table-actions">
-                    <Link
-                      className="text-link"
-                      to={{
-                        pathname: paths.asset(projectId, row.video_id),
-                        search: location.search,
-                      }}
-                    >
-                      {row.hand_status === 'SUCCEEDED' ? '播放 / 查看结果' : '播放'}
-                    </Link>
-                    {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
-                      <Button size="small" disabled>
-                        检测中
-                      </Button>
-                    ) : row.hand_status === 'FAILED' &&
-                      row.hand_retryable &&
-                      row.media_status === 'INGESTED' ? (
-                      <Button
-                        size="small"
-                        loading={actionVideoId === row.video_id}
-                        onClick={() => void startHandPose(row)}
+                  <div className="video-next-step">
+                    <strong>{nextStepLabel(row)}</strong>
+                    <span className="table-actions">
+                      <Link
+                        className="text-link"
+                        to={{
+                          pathname: paths.asset(projectId, row.video_id),
+                          search: location.search,
+                        }}
                       >
-                        重试检测
-                      </Button>
-                    ) : row.hand_status === 'FAILED' ? (
-                      <span className="cell-secondary">不可重试</span>
-                    ) : row.hand_status !== 'SUCCEEDED' && row.media_status === 'INGESTED' ? (
-                      <Button
-                        size="small"
-                        loading={actionVideoId === row.video_id}
-                        onClick={() => void startHandPose(row)}
-                      >
-                        检测手部
-                      </Button>
-                    ) : row.hand_status !== 'SUCCEEDED' ? (
-                      <span className="cell-secondary">媒体尚未入库，不能检测</span>
-                    ) : null}
-                    <Link className="text-link" to={paths.annotationTasks(projectId)}>
-                      进入配药动作标注
-                    </Link>
-                  </span>
+                        {row.hand_status === 'SUCCEEDED' ? '播放 / 查看结果' : '播放'}
+                      </Link>
+                      {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
+                        <Button size="small" disabled>
+                          检测中
+                        </Button>
+                      ) : row.hand_status === 'FAILED' &&
+                        row.hand_retryable &&
+                        row.media_status === 'INGESTED' ? (
+                        <Button
+                          size="small"
+                          loading={actionVideoId === row.video_id}
+                          onClick={() => void startHandPose(row)}
+                        >
+                          重试检测
+                        </Button>
+                      ) : row.hand_status === 'FAILED' ? (
+                        <span className="cell-secondary">不可重试</span>
+                      ) : row.hand_status !== 'SUCCEEDED' && row.media_status === 'INGESTED' ? (
+                        <Button
+                          size="small"
+                          loading={actionVideoId === row.video_id}
+                          onClick={() => void startHandPose(row)}
+                        >
+                          检测手部
+                        </Button>
+                      ) : row.hand_status !== 'SUCCEEDED' ? (
+                        <span className="cell-secondary">媒体尚未入库，不能检测</span>
+                      ) : null}
+                      {row.media_status === 'INGESTED' && row.annotation_status !== 'COMPLETED' ? (
+                        <Link className="text-link" to={paths.annotationTasks(projectId)}>
+                          {row.annotation_status === 'SUBMITTED'
+                            ? '查看标注 / 复核'
+                            : '进入配药动作标注'}
+                        </Link>
+                      ) : null}
+                    </span>
+                  </div>
                 ),
               },
             ]}
@@ -577,6 +591,24 @@ function cameraCountLabel(value: string) {
 
 function mediaCountLabel(value: string) {
   return mediaStatusLabels[value as VideoSummaryMediaStatus] ?? '其他状态'
+}
+
+function nextStepLabel(row: VideoSummary) {
+  if (row.media_status !== 'INGESTED') {
+    return row.media_status === 'INGEST_FAILED' ? '先处理媒体失败' : '等待媒体入库'
+  }
+  if (row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING') return '等待手部检测'
+  if (row.hand_status === 'FAILED') {
+    if (row.hand_retryable) return '重试手部检测'
+    return row.annotation_status === 'COMPLETED' ? '查看检测失败原因' : '继续人工标注'
+  }
+  if (row.hand_status !== 'SUCCEEDED') return '发起手部检测'
+  if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
+  if (row.annotation_status !== 'COMPLETED') return '进入配药动作标注'
+  if (row.cleaning_status === 'NOT_STARTED') return '等待清洗结果'
+  if (row.cleaning_status === 'PASS') return '可用数据'
+  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') return '查看清洗问题'
+  return '查看处理结果'
 }
 
 function formatBytes(bytes: number) {

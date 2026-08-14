@@ -1,15 +1,15 @@
 # 配药视频数据管理平台：手部预标注优先技术设计
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：对应 V1.20 LEAN-P0 当前实施设计<br>
+> 状态：对应 V1.21 FLOW-FIRST LEAN-P0 当前实施设计<br>
 > 日期：2026-08-10<br>
-> 对齐需求：[V1.20 配药视频数据管理平台需求文档](../requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md)
+> 对齐需求：[V1.21 配药视频数据管理平台需求文档](../requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)
 
-V1.20 继承本文的单视频数据闭环设计。CaptureSession 仅保留为隐藏的接入事实；V1.19 多相机同步、DatasetVersion/Export 与 AI Evaluation 平台化均为 DEFERRED，不属于本文当前实施范围。
+V1.21 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后增加独立、只读的最小 `training_data.parquet` 导出。CaptureSession 仅保留为隐藏的接入事实；V1.19 多相机同步、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED。
 
 ## 1. 设计目标与系统边界
 
-平台负责云端视频数据闭环：接收、管理、MediaPipe 手部预标注、配药动作标注、清洗复核和可用数据查询。手部预标注是当前优先交付能力，不是独立替代品，也不替代人工标注。
+平台负责云端视频数据闭环：接收、管理、MediaPipe 手部预标注、配药动作标注、清洗复核、可用数据查询和最小训练数据导出。手部预标注是辅助能力，不替代人工标注；当前先保证流程与数据边界，模型准确率优化后移。
 
 医院侧边端设备或既有采集系统负责固定相机采集医护人员配药动作、本地缓存、分段和上传策略。平台是接收端：提供安全上传协议、接收回执和云端处理状态；不控制相机、不下发采集/停止命令、不决定边端何时上传，也不直接删除边端文件。
 
@@ -20,7 +20,8 @@ flowchart LR
     V --> H["MediaPipe 手部候选"]
     H --> A["配药动作标注与复核"]
     A --> C["数据清洗与可用数据"]
-    C --> D["后续数据集候选"]
+    C --> X["training_data.parquet"]
+    X --> D["后续训练/数据集候选"]
 ```
 
 相机是舱内固定相机，数量按一次采集动态决定。`camera_number` 仅是展示号 1…N；禁止使用相机数量或编号驱动分支业务逻辑。
@@ -35,6 +36,7 @@ flowchart LR
 | `aicandidate` | AIJob、候选隔离、回传校验和候选查询 | 否，经过 API |
 | `annotationreview` | 配药动作标注任务、revision、提交、复核与退回 | 否，经过 API |
 | `qualitycleaning` | 清洗规则、运行、质量结论和可用数据投影 | 否，经过 API |
+| `tools/minimal-export` | 只读一致性快照，将 Cleaning PASS + 人工标签 + Candidate 几何写入 Parquet | 管理员显式运行 |
 | PostgreSQL / S3 | 业务真值 / 原视频与派生工件 | 否 |
 | RabbitMQ / Media Worker / AI Worker | 耗时媒体检查与预标注的投递、执行、恢复 | 否 |
 
@@ -120,7 +122,7 @@ sequenceDiagram
     Web->>API: 查询视频/任务读模型
 ```
 
-基线为 MediaPipe Hand Landmarker `VIDEO`：每路独立、10 FPS、最多两只手，检测/存在/跟踪阈值暂为 0.5。结果包含 bbox、21 点、左右手、置信度和时间基准。原视频不被改写；Overlay 在播放器按当前时间渲染。
+基线为 MediaPipe Hand Landmarker `VIDEO`：每路独立、10 FPS、最多两只手，检测/存在/跟踪阈值暂为 0.5。结果包含 bbox、21 点、handedness、置信度和时间基准。handedness 只允许 `LEFT/RIGHT/UNKNOWN`，是 Candidate 辅助元数据；无法判断方向时保留结构有效的几何，不把方向正确性作为流程 Gate。原视频不被改写；Overlay 在播放器按当前时间渲染。
 
 状态不混用：Asset 使用 `UPLOADED/INGESTING/INGESTED/INGEST_FAILED`；Hand job 使用 `NOT_REQUESTED/QUEUED/RUNNING/SUCCEEDED/FAILED`；Hand result 使用 `UNKNOWN/HAND_DETECTED/NO_HAND_DETECTED`。只有 `SUCCEEDED` 的 job 才有后两种终态结果，`NO_HAND_DETECTED` 不是失败。
 
@@ -134,7 +136,7 @@ sequenceDiagram
 
 标注界面在同一播放器中展示原视频、可选 Overlay 和候选。标注员可保存草稿、提交 revision；复核员通过或退回。退回后创建新 revision，旧 revision 不覆盖。没有手部候选或候选质量差时，人工仍可标注。
 
-## 6. 数据清洗与可用数据
+## 6. 数据清洗、可用数据与最小导出
 
 清洗是独立的质量流程，不是物理删除流程。它至少检查媒体完整性/可读性、重复或近重复、必填元数据、标注完整性、时间范围、标签 schema 一致性与人工质量结论。
 
@@ -144,11 +146,13 @@ sequenceDiagram
        └→ 拒绝（保留原因和审计，不自动物理删除）
 ```
 
-规则运行保存输入摘要、规则版本、结果和阻断码。人工例外、复核或重跑必须审计。通过清洗的数据进入可用数据投影，可作为未来数据集构建候选；现有 `datasetexport` 能力保留但不抢占当前“接收—预标注—标注—清洗”闭环的优先级。
+规则运行保存输入摘要、规则版本、结果和阻断码。人工例外、复核或重跑必须审计。通过清洗的数据进入可用数据投影。
+
+V1.21 的最小导出由 `tools/minimal-export` 显式执行，不新建表、API、Worker 或 Queue。它在数据库强制只读的 `REPEATABLE READ` 快照中读取当前 `INGESTED + QUALIFIED + APPROVED + Cleaning PASS/SUCCEEDED` 事实，将人工 `AnnotationRevision` 的 `[start_ms, end_ms)` 动作标签与范围内的 MediaPipe 21 点 Candidate 对齐为 `training_data.parquet`。默认不包含 MP4；元数据明确 Candidate/handedness 不是 Ground Truth。现有复杂 `datasetexport` 能力继续保留并冻结。
 
 ## 7. 算法评估与容量门禁
 
-授权、隔离的评估样本必须记录有手帧召回率、无手帧误检率、21 点有效率、左右手正确率、快速运动/遮挡可用率、Overlay 时间误差和每分钟处理耗时。没有证据的阈值写为 `PENDING`。Worker 中断恢复、原视频不改写、AI 候选不自动转正式标签必须通过。评估记录绑定样本、模型和 profile 摘要及参数调整说明；它支持调节 ROI、采样率和阈值，不构成合成视频检测或 Overlay 的额外启用门禁。
+授权、隔离的后续评估样本可记录有手帧召回率、无手帧误检率、21 点有效率、左右手正确率、快速运动/遮挡可用率、Overlay 时间误差和每分钟处理耗时。没有证据的阈值写为 `PENDING`；这些准确率指标当前不作为 P0 流程 Gate。Worker 中断恢复、原视频不改写、AI 候选不自动转正式标签必须通过。评估记录绑定样本、模型和 profile 摘要及参数调整说明。
 
 以 10 FPS、两只手估算，理论上限为每分钟 1,200 条 candidate；1,000 个 10 分钟视频可能达到约 12,000,000 条。P0 单视频结果继续使用 PostgreSQL `candidate_annotation`。P1 批量或自动策略前必须按视频时长、相机数、日量、候选密度、保留期和查询模式完成容量评审，明确选择“经过分区/索引/保留验证的 PostgreSQL dense store”或“PostgreSQL 存 job/summary/index，S3 JSONL/Parquet 存密集帧级结果”。
 
@@ -165,7 +169,7 @@ UploadIntegrationView     外部上传批次状态与本地测试上传
 SettingsView              接入、模型、相机与权限配置
 ```
 
-简化要求是：从视频详情可以直接进入预标注或标注；从数据概览可跳转到对应视频/任务；用户不必进入 Session、AIJob 或队列页面。高级排障信息仅管理员可见且默认折叠。
+简化要求是：从视频详情可以直接进入预标注或标注，AI 失败或没有 Candidate 也不能阻断人工标注；从数据概览可跳转到对应视频/任务；用户不必进入 Session、AIJob 或队列页面。播放器在普通笔记本限制为约 `60–65vh`，共同容器全屏时同时包含视频与 Overlay。高级排障信息仅管理员可见且默认折叠。
 
 ## 9. 交付切片与验证
 
@@ -178,6 +182,7 @@ SettingsView              接入、模型、相机与权限配置
 | S3c | P1/P2 自动策略 | 模型/相机策略和资源评审后才实现 |
 | S4 | 配药动作标注与复核 | 候选辅助、revision、退回与审计闭环 |
 | S5 | 数据清洗 | 规则证据、人工结论、可用数据投影与修正回路 |
-| S6 | 数据集演进与算法评估 | 清洗通过候选可追溯；授权样本效果与参数调整记录 |
+| S6 | 最小训练数据导出 | 仅当前 Cleaning PASS 数据进入可回读 Parquet；动作标签来自人工 revision；默认无 MP4 |
+| S7 | 后续数据集演进与算法评估 | 复杂平台继续冻结；授权样本效果与参数调整记录不阻断当前流程 |
 
-验证至少覆盖：外部协议上传、重复/损坏媒体、动态 N 路相机、1,000 条分页筛选、含手/无手预标注、候选与正式标注隔离、revision 不覆盖、清洗阻断码、真实/未分类数据清理拒绝，以及合成端到端回归。开发、测试和 CI 只使用合成或明确授权并隔离的数据。
+验证至少覆盖：外部协议上传、重复/损坏媒体、动态 N 路相机、1,000 条分页筛选、含手/无手预标注、候选与正式标注隔离、revision 不覆盖、清洗阻断码、未通过 Cleaning 的数据不导出、Parquet 回读、默认无视频，以及合成端到端回归。开发、测试和 CI 只使用合成或明确授权并隔离的数据。

@@ -644,7 +644,7 @@ else {
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/](hand-pose-poc|golden-capture-g0))[\\/]' }
+    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/](hand-pose-poc|golden-capture-g0|minimal-export))[\\/]' }
 
 if ($Changed) {
     $pythonProjects = @($pythonProjects | Where-Object {

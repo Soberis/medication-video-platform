@@ -648,8 +648,8 @@ export default function AssetDetailView() {
             >
               <p className="app-eyebrow">舱内相机 · 二维候选</p>
               <p>
-                检测到手时，会在播放视频上叠加手框、21
-                个关键点、骨架和左右手标识。结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
+                检测到手时，会在播放视频上叠加手框、21 个关键点和骨架；Left / Right
+                只作为辅助方向信息。结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
               </p>
               {canRequestHandPose ? (
                 <Button

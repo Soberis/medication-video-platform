@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import { PlaybackCard } from '@/components/AssetDetailSections'
@@ -53,7 +53,7 @@ describe('HandPoseOverlay', () => {
     expect(container.querySelector('.hand-pose-bounding-box')).toHaveAttribute('y', '144')
     expect(container.querySelector('.hand-pose-bounding-box')).toHaveAttribute('width', '384')
     expect(container.querySelector('.hand-pose-bounding-box')).toHaveAttribute('height', '288')
-    expect(screen.getByText('LEFT 0.91')).toBeInTheDocument()
+    expect(screen.getByText('手部 · Left 0.91')).toBeInTheDocument()
   })
 
   it('renders both hands from the nearest sampled timestamp', () => {
@@ -100,9 +100,9 @@ describe('HandPoseOverlay', () => {
 
     expect(container.querySelectorAll('.hand-pose-bounding-box')).toHaveLength(2)
     expect(container.querySelectorAll('.hand-pose-landmark')).toHaveLength(42)
-    expect(screen.getByText('LEFT 0.91')).toBeInTheDocument()
-    expect(screen.getByText('RIGHT 0.88')).toBeInTheDocument()
-    expect(screen.queryByText('RIGHT 0.77')).toBeNull()
+    expect(screen.getByText('手部 · Left 0.91')).toBeInTheDocument()
+    expect(screen.getByText('手部 · Right 0.88')).toBeInTheDocument()
+    expect(screen.queryByText('手部 · Right 0.77')).toBeNull()
   })
 
   it('uses milliseconds and clears a sampled frame beyond the 90 ms window', () => {
@@ -147,6 +147,59 @@ describe('HandPoseOverlay', () => {
     )
 
     expect(container.firstChild).toBeNull()
+  })
+
+  it('uses the shared video stage for fullscreen so the overlay stays with the video', () => {
+    const { container } = render(
+      <PlaybackCard
+        availability={null}
+        candidateOverlay={[
+          {
+            frame_timestamp_ms: 0,
+            image_width: 1280,
+            image_height: 720,
+            hand_index: 0,
+            handedness: 'LEFT',
+            handedness_score: 0.91,
+            bounding_box: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+            landmarks,
+            valid_landmark_count: 21,
+          },
+        ]}
+        canPlay
+        canRecoverMissingMediaProbe={false}
+        grant={{
+          grant_id: 'grant-fullscreen',
+          purpose: 'DATA_REVIEW',
+          media_url: '/synthetic/authorized-hand.mp4',
+          expires_at: '2026-08-12T10:00:00Z',
+          content_type: 'video/mp4',
+        }}
+        isRecoveringMediaProbe={false}
+        isRequestingPlayback={false}
+        mediaProbeMessage=""
+        playbackMessage=""
+        playbackState="ready"
+        onClose={() => undefined}
+        onLoadedMetadata={() => undefined}
+        onPlaybackError={() => undefined}
+        onRecoverMissingMediaProbe={() => undefined}
+        onStartPlayback={() => undefined}
+      />,
+    )
+    const stage = container.querySelector('.video-stage') as HTMLDivElement
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(stage, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '全屏查看视频和骨架' }))
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1)
+    expect(stage.querySelector('video')).toBe(screen.getByLabelText('视频预览'))
+    expect(stage.querySelector('.hand-pose-overlay')).toBeInTheDocument()
+    expect(screen.getByLabelText('视频预览')).toHaveAttribute('controlslist', 'nofullscreen')
   })
 
   it('keeps the sampled timestamp through playback events and follows video dimensions', () => {

@@ -451,7 +451,7 @@ def test_nonfinite_landmark_coordinate_invalidates_the_whole_frame(
     assert candidates == []
 
 
-def test_unrecognized_handedness_is_invalid_not_unknown(
+def test_unrecognized_handedness_keeps_the_candidate_with_unknown_side(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     landmarks = [SimpleNamespace(x=0.1, y=0.2, z=0.0) for _ in range(21)]
@@ -479,12 +479,14 @@ def test_unrecognized_handedness_is_invalid_not_unknown(
     summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
 
     assert summary.inference_frame_count == 1
-    assert summary.invalid_hand_frame_count == 1
-    assert summary.frames_with_hand == 0
+    assert summary.invalid_hand_frame_count == 0
+    assert summary.invalid_landmark_count == 0
+    assert summary.frames_with_hand == 1
     assert summary.frames_without_hand == 0
     assert summary.left_hand_detection_count == 0
     assert summary.right_hand_detection_count == 0
-    assert candidates == []
+    assert len(candidates) == 1
+    assert candidates[0]["handedness"] == "UNKNOWN"
 
 
 class _FakeContainer:

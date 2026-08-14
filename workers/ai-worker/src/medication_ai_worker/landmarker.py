@@ -266,6 +266,9 @@ def _handedness(value: str | None) -> str | None:
     if value is None:
         return "UNKNOWN"
     if not isinstance(value, str):
-        return None
-    normalized = value.lower()
-    return {"left": "LEFT", "right": "RIGHT", "unknown": "UNKNOWN"}.get(normalized)
+        return "UNKNOWN"
+    normalized = value.strip().lower()
+    # Handedness is auxiliary metadata. Keep a valid hand geometry candidate
+    # when MediaPipe emits an unexpected or otherwise unusable side label; the
+    # human annotation path remains the source of truth for the action label.
+    return {"left": "LEFT", "right": "RIGHT", "unknown": "UNKNOWN"}.get(normalized, "UNKNOWN")

@@ -11,7 +11,7 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md`：当前业务需求基线（LEAN-P0）；未变更条款继承 V1.18 及其历史继承基线。V1.19 多相机同步方向为 DEFERRED，不属于当前交付目标。
+2. `docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md`：当前业务需求基线（FLOW-FIRST LEAN-P0）；未变更条款继承 V1.20、V1.18 及其历史继承基线。V1.19 多相机同步方向为 DEFERRED，不属于当前交付目标。
 3. `docs/architecture/video-hand-pose-mvp-technical-design.md`：当前云端数据闭环、手部预标注、状态、容量和实施顺序设计。
 4. `docs/adr/`：已经冻结的技术决策。
 5. `docs/architecture/` 中标记为“当前规范”的专题详细设计。
@@ -49,12 +49,13 @@
 → P0 单视频 MediaPipe 手部预标注
 → 配药动作标注与复核
 → 数据清洗与可用数据
+→ P0 最小 training_data.parquet 导出
 → P0 集成测试与授权样本算法评估
 → P1 显式批量预标注和项目自动策略
 → 后续数据集构建、导出与模型演进
 ```
 
-MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只能产生 `CandidateAnnotation`，不得绕过人工确认、复核和清洗进入正式数据。
+MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只能产生 `CandidateAnnotation`，不得绕过人工确认、复核和清洗进入正式数据。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
 
 ## MVP Simplicity
 

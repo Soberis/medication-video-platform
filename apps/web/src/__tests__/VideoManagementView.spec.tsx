@@ -56,6 +56,8 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByRole('heading', { name: '视频管理' })).toBeInTheDocument()
     expect(await screen.findByText('synthetic-no-hand.mp4')).toBeInTheDocument()
+    expect(screen.getByText('待标注')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '下一步' })).toBeInTheDocument()
     expect(screen.getByText('未发现手部')).toBeInTheDocument()
     expect(screen.getByText('可检测')).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
@@ -80,8 +82,36 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    expect(screen.getByText('继续人工标注')).toBeInTheDocument()
     expect(screen.getByText('不可重试')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
+  })
+
+  it('presents submitted formal annotations as waiting for human review', async () => {
+    const row = videoRow({
+      hand_status: 'SUCCEEDED',
+      hand_result: 'HAND_DETECTED',
+      annotation_status: 'SUBMITTED',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('等待人工复核')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看标注 / 复核' })).toBeInTheDocument()
   })
 
   it('keeps the video list usable when the auxiliary summary request fails', async () => {
@@ -154,6 +184,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
+    expect(await screen.findByText('重试手部检测')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '重试检测' }))
 
     await waitFor(() =>
@@ -180,6 +211,8 @@ function videoRow(
     hand_status: 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
     hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
     hand_retryable: boolean
+    annotation_status: 'NOT_STARTED' | 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
+    cleaning_status: 'NOT_STARTED' | 'PASS' | 'WARNING' | 'REJECT'
   }> = {},
 ) {
   return {

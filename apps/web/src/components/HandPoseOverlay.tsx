@@ -60,8 +60,14 @@ function currentFrame(candidates: HandPoseCandidate[], playbackTimeMs: number) {
     : []
 }
 
-function overlayColor(candidate: HandPoseCandidate) {
-  return candidate.handedness === 'RIGHT' ? '#d4388d' : '#0f9f95'
+function overlayColor() {
+  return '#8aa9d9'
+}
+
+function handednessLabel(candidate: HandPoseCandidate) {
+  if (candidate.handedness === 'LEFT') return 'Left'
+  if (candidate.handedness === 'RIGHT') return 'Right'
+  return '辅助方向未判定'
 }
 
 export function HandPoseOverlay({ candidates, playbackTimeMs }: HandPoseOverlayProps) {
@@ -84,9 +90,9 @@ export function HandPoseOverlay({ candidates, playbackTimeMs }: HandPoseOverlayP
     >
       <title>当前视频帧的手部姿态候选</title>
       {frame.map((candidate) => {
-        const color = overlayColor(candidate)
+        const color = overlayColor()
         const box = candidate.bounding_box
-        const label = `${candidate.handedness === 'UNKNOWN' ? 'HAND' : candidate.handedness} ${candidate.handedness_score.toFixed(2)}`
+        const label = `手部 · ${handednessLabel(candidate)} ${candidate.handedness_score.toFixed(2)}`
         const labelX = Math.max(0, box.x * dimensions.width)
         const labelY = Math.max(18, box.y * dimensions.height - 8)
         return (

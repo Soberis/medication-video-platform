@@ -72,10 +72,13 @@ export function PlaybackCard({
 }: PlaybackCardProps) {
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const videoStageRef = useRef<HTMLDivElement | null>(null)
   const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(
     null,
   )
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenError, setFullscreenError] = useState('')
 
   useEffect(() => {
     const video = videoRef.current
@@ -106,6 +109,33 @@ export function PlaybackCard({
       if (animationFrame !== undefined) window.cancelAnimationFrame(animationFrame)
     }
   }, [grant?.grant_id])
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === videoStageRef.current)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  async function toggleFullscreen() {
+    const stage = videoStageRef.current
+    if (!stage) return
+    setFullscreenError('')
+    try {
+      if (document.fullscreenElement === stage) {
+        if (typeof document.exitFullscreen === 'function') await document.exitFullscreen()
+        return
+      }
+      if (typeof stage.requestFullscreen !== 'function') {
+        setFullscreenError('当前浏览器不支持整合视频与骨架叠加的全屏查看。')
+        return
+      }
+      await stage.requestFullscreen()
+    } catch {
+      setFullscreenError('全屏查看未启动，请检查浏览器权限后重试。')
+    }
+  }
 
   return (
     <Card
@@ -147,6 +177,7 @@ export function PlaybackCard({
           ) : null}
           {!playbackFailed ? (
             <div
+              ref={videoStageRef}
               className="video-stage"
               style={
                 videoDimensions
@@ -158,6 +189,7 @@ export function PlaybackCard({
                 ref={videoRef}
                 className="review-video"
                 controls
+                controlsList="nofullscreen"
                 preload="none"
                 playsInline
                 aria-label="视频预览"
@@ -176,7 +208,31 @@ export function PlaybackCard({
                 当前浏览器不支持视频播放。
               </video>
               <HandPoseOverlay candidates={candidateOverlay} playbackTimeMs={playbackTimeMs} />
+              <div className="video-stage-actions">
+                <Button
+                  className="video-stage-fullscreen-button"
+                  size="small"
+                  aria-label={isFullscreen ? '退出全屏查看' : '全屏查看视频和骨架'}
+                  aria-pressed={isFullscreen}
+                  onClick={() => void toggleFullscreen()}
+                >
+                  {isFullscreen ? '退出全屏' : '全屏查看'}
+                </Button>
+              </div>
             </div>
+          ) : null}
+          {candidateOverlay.length > 0 ? (
+            <div className="playback-supporting-note" aria-label="Skeleton Overlay 说明">
+              <span>
+                <strong>Skeleton Overlay</strong> · 21 点与连接线
+              </span>
+              <span>Left / Right 仅作方向辅助</span>
+            </div>
+          ) : null}
+          {fullscreenError ? (
+            <p className="form-hint playback-feedback" role="status">
+              {fullscreenError}
+            </p>
           ) : null}
           <div className="playback-toolbar">
             {playbackFailed ? (
@@ -534,7 +590,6 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
             {
               key: 'source',
               label: '源上传文件 ID',
-              span: { xs: 1, md: 2 },
               children: <code>{detail.source_upload_file_id}</code>,
             },
             {
