@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,10 @@ import VideoManagementView from '@/views/VideoManagementView'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('VideoManagementView', () => {
   it('renders the server summary with one bounded request and explicit no-hand result', async () => {
@@ -74,7 +77,7 @@ describe('VideoManagementView', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('/clip-assets')
   })
 
-  it('does not expose retry for a terminal failed hand pose run that the server marked non-retryable', async () => {
+  it('keeps the primary annotation step available when hand pose is terminally failed', async () => {
     const row = videoRow({ hand_status: 'FAILED', hand_result: 'UNKNOWN', hand_retryable: false })
     const fetchMock = vi
       .fn()
@@ -91,12 +94,12 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
-    expect(screen.getByText('不可重试')).toBeInTheDocument()
+    expect(screen.getByText('下一步：进入人工标注')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
   })
 
-  it('keeps manual annotation available before optional hand detection is requested', async () => {
+  it('does not make optional hand detection a list-level action', async () => {
     const row = videoRow({ hand_status: 'NOT_REQUESTED', annotation_status: 'NOT_STARTED' })
     vi.stubGlobal(
       'fetch',
@@ -115,8 +118,8 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '检测手部' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '检测手部' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
   })
 
   it('presents submitted formal annotations as waiting for human review', async () => {
@@ -142,7 +145,7 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('等待人工复核')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看标注 / 复核' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：人工复核' })).toBeInTheDocument()
   })
 
   it('keeps the video list usable when the auxiliary summary request fails', async () => {
@@ -191,43 +194,22 @@ describe('VideoManagementView', () => {
     expect(screen.queryByLabelText('数据管理汇总')).not.toBeInTheDocument()
   })
 
-  it('uses the retry endpoint for a retryable failed row', async () => {
+  it('does not expose a hand-pose retry action in the video list', async () => {
     const row = videoRow({ hand_status: 'FAILED', hand_result: 'UNKNOWN', hand_retryable: true })
-    const queuedJob = {
-      ai_job_id: 'b1000000-0000-4000-8000-000000000001',
-      status: 'QUEUED',
-      hand_result: 'UNKNOWN',
-    }
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/video-data/summary')) return Promise.resolve(jsonResponse(summaryBody()))
-      if (init?.method === 'POST' && url.endsWith('/hand-pose-detections/retry')) {
-        return Promise.resolve(jsonResponse(queuedJob, 202))
-      }
       return Promise.resolve(jsonResponse({ items: [row], next_cursor: null }))
     })
     vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('video-retry-ui-0001') })
-    const user = userEvent.setup()
 
     renderRoute(<VideoManagementView />, {
       route: `/projects/${projectId}/videos`,
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByRole('link', { name: '进入配药动作标注' })).toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '重试检测' }))
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/videos/50000000-0000-4000-8000-000000000001/hand-pose-detections/retry`,
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({ 'Idempotency-Key': 'video-retry-ui-0001' }),
-        }),
-      ),
-    )
-    expect(await screen.findByText('已重新排队手部检测。')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -235,10 +217,53 @@ describe('VideoManagementView', () => {
       ),
     ).toBe(false)
   })
+
+  it('polls transient media state and announces the terminal transition once', async () => {
+    vi.useFakeTimers()
+    let listRequests = 0
+    const transientRow = videoRow({ media_status: 'INGESTING' })
+    const ingestedRow = { ...transientRow, media_status: 'INGESTED' as const }
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/video-data/summary')) return Promise.resolve(jsonResponse(summaryBody()))
+      listRequests += 1
+      return Promise.resolve(
+        jsonResponse({
+          items: [listRequests === 1 ? transientRow : ingestedRow],
+          next_cursor: null,
+        }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText('视频检测中')).toBeInTheDocument()
+    expect(listRequests).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500)
+    })
+    expect(screen.getByText('可检测')).toBeInTheDocument()
+    expect(screen.getByText('视频检测完成')).toBeInTheDocument()
+    expect(listRequests).toBe(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(listRequests).toBe(2)
+  })
 })
 
 function videoRow(
   overrides: Partial<{
+    media_status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
     hand_status: 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
     hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
     hand_retryable: boolean

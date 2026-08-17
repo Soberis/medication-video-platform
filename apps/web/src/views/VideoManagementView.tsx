@@ -1,4 +1,4 @@
-import { Button, Card, Empty, InputNumber, Select, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Card, Empty, InputNumber, Select, Table, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -6,8 +6,6 @@ import {
   CatalogApiError,
   getDataManagementSummary,
   listVideoSummaries,
-  requestHandPoseCandidates,
-  retryHandPoseCandidates,
   type DataManagementSummary,
   type VideoSummary,
   type VideoSummaryAnnotationStatus,
@@ -66,6 +64,7 @@ export default function VideoManagementView() {
   const { projectId = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const { message } = AntdApp.useApp()
   const filters = useMemo(
     () => parseVideoFilters(new URLSearchParams(location.search)),
     [location.search],
@@ -83,45 +82,55 @@ export default function VideoManagementView() {
   const [errorMessage, setErrorMessage] = useState('')
   const [summary, setSummary] = useState<DataManagementSummary | null>(null)
   const [summaryError, setSummaryError] = useState(false)
-  const [actionVideoId, setActionVideoId] = useState<string | null>(null)
-  const [actionMessage, setActionMessage] = useState('')
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(advancedFilterCount > 0)
   const activeRequest = useRef<AbortController | null>(null)
+  const itemsRef = useRef<VideoSummary[]>([])
   const pendingWorkCount = summary
     ? summary.pending_annotation + summary.pending_review + summary.pending_cleaning
     : 0
 
   const loadPage = useCallback(
-    async (append = false, nextFilters: VideoSummaryFilters = {}, cursor: string | null = null) => {
+    async (
+      append = false,
+      nextFilters: VideoSummaryFilters = {},
+      cursor: string | null = null,
+      background = false,
+    ) => {
       activeRequest.current?.abort()
       const request = new AbortController()
       activeRequest.current = request
-      if (!append) {
+      if (!append && !background) {
         setLoadState('loading')
         setSummary(null)
         setSummaryError(false)
       }
-      setErrorMessage('')
+      if (!background) setErrorMessage('')
       try {
         const [pageResult, summaryResult] = await Promise.allSettled([
           listVideoSummaries(projectId, nextFilters, append ? cursor : null, request.signal),
           getDataManagementSummary(projectId, nextFilters, request.signal),
         ])
         if (activeRequest.current !== request) return
-        if (pageResult.status === 'rejected') throw pageResult.reason
+        if (pageResult.status === 'rejected') {
+          if (background) return
+          throw pageResult.reason
+        }
         if (summaryResult.status === 'fulfilled') {
           setSummary(summaryResult.value)
           setSummaryError(false)
-        } else {
+        } else if (!background) {
           setSummary(null)
           setSummaryError(true)
         }
         const page = pageResult.value
-        setItems((current) => (append ? [...current, ...page.items] : page.items))
+        const nextItems = append ? [...itemsRef.current, ...page.items] : page.items
+        if (background) notifyVideoTransitions(itemsRef.current, nextItems, message)
+        itemsRef.current = nextItems
+        setItems(nextItems)
         setNextCursor(page.next_cursor)
         setLoadState('success')
       } catch (error) {
-        if (request.signal.aborted || activeRequest.current !== request) return
+        if (background || request.signal.aborted || activeRequest.current !== request) return
         setLoadState('error')
         setErrorMessage(
           error instanceof CatalogApiError
@@ -132,11 +141,12 @@ export default function VideoManagementView() {
         if (activeRequest.current === request) activeRequest.current = null
       }
     },
-    [projectId],
+    [message, projectId],
   )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      itemsRef.current = []
       setItems([])
       setNextCursor(null)
       void loadPage(false, filters)
@@ -146,6 +156,57 @@ export default function VideoManagementView() {
       activeRequest.current?.abort()
     }
   }, [filters, loadPage, projectId])
+
+  const shouldPoll =
+    nextCursor === null &&
+    items.some(
+      (row) =>
+        row.media_status === 'UPLOADED' ||
+        row.media_status === 'INGESTING' ||
+        row.hand_status === 'QUEUED' ||
+        row.hand_status === 'RUNNING',
+    )
+
+  useEffect(() => {
+    if (!shouldPoll) return undefined
+    let disposed = false
+    let inFlight = false
+    let timer: number | null = null
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+    }
+    const schedule = () => {
+      if (disposed || document.visibilityState !== 'visible' || timer !== null) return
+      timer = window.setTimeout(() => {
+        timer = null
+        if (disposed || document.visibilityState !== 'visible' || inFlight) {
+          schedule()
+          return
+        }
+        inFlight = true
+        void loadPage(false, filters, null, true).finally(() => {
+          inFlight = false
+          schedule()
+        })
+      }, 2_500)
+    }
+    const handleVisibilityChange = () => {
+      clearTimer()
+      if (document.visibilityState === 'visible') schedule()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    schedule()
+    return () => {
+      disposed = true
+      clearTimer()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [filters, loadPage, shouldPoll])
 
   function applyFilters(nextFilters: VideoSummaryFilters) {
     const nextSearchParams = replaceVideoFiltersInSearchParams(
@@ -162,45 +223,6 @@ export default function VideoManagementView() {
       search: nextSearch ? `?${nextSearch}` : '',
       hash: location.hash,
     })
-  }
-
-  async function startHandPose(row: VideoSummary) {
-    if (
-      actionVideoId !== null ||
-      row.media_status !== 'INGESTED' ||
-      row.hand_status === 'QUEUED' ||
-      row.hand_status === 'RUNNING' ||
-      row.hand_status === 'SUCCEEDED' ||
-      (row.hand_status === 'FAILED' && !row.hand_retryable)
-    )
-      return
-    setActionVideoId(row.video_id)
-    setActionMessage('')
-    try {
-      const job =
-        row.hand_status === 'FAILED' && row.hand_retryable
-          ? await retryHandPoseCandidates(projectId, row.video_id)
-          : await requestHandPoseCandidates(projectId, row.video_id)
-      setItems((current) =>
-        current.map((item) =>
-          item.video_id === row.video_id
-            ? {
-                ...item,
-                hand_status: job.status,
-                hand_result: job.hand_result,
-                hand_retryable: false,
-              }
-            : item,
-        ),
-      )
-      setActionMessage(row.hand_status === 'FAILED' ? '已重新排队手部检测。' : '已排队手部检测。')
-    } catch (error) {
-      setActionMessage(
-        error instanceof CatalogApiError ? error.message : '手部检测请求失败，请稍后重试。',
-      )
-    } finally {
-      setActionVideoId(null)
-    }
   }
 
   return (
@@ -417,11 +439,6 @@ export default function VideoManagementView() {
           <Button onClick={() => void loadPage(false, filters)}>重试</Button>
         </div>
       ) : null}
-      {actionMessage ? (
-        <div className="catalog-notice" role="status">
-          {actionMessage}
-        </div>
-      ) : null}
       {loadState === 'success' && items.length === 0 ? (
         <Empty description="当前没有符合条件的视频。" />
       ) : null}
@@ -505,47 +522,26 @@ export default function VideoManagementView() {
               {
                 title: '下一步',
                 width: 180,
-                render: (_, row) => (
-                  <div className="video-next-step">
-                    <strong>{nextStepLabel(row)}</strong>
-                    <span className="table-actions">
-                      {row.hand_status === 'QUEUED' || row.hand_status === 'RUNNING' ? (
-                        <Button size="small" disabled>
-                          检测中
-                        </Button>
-                      ) : row.hand_status === 'FAILED' &&
-                        row.hand_retryable &&
-                        row.media_status === 'INGESTED' ? (
-                        <Button
-                          size="small"
-                          loading={actionVideoId === row.video_id}
-                          onClick={() => void startHandPose(row)}
+                render: (_, row) => {
+                  const action = nextStepAction(row)
+                  return (
+                    <div className="video-next-step">
+                      <strong>{nextStepLabel(row)}</strong>
+                      {action ? (
+                        <Link
+                          className="text-link"
+                          to={
+                            row.media_status === 'INGEST_FAILED'
+                              ? paths.asset(projectId, row.video_id)
+                              : paths.annotationTasks(projectId)
+                          }
                         >
-                          重试检测
-                        </Button>
-                      ) : row.hand_status === 'FAILED' ? (
-                        <span className="cell-secondary">不可重试</span>
-                      ) : row.hand_status !== 'SUCCEEDED' && row.media_status === 'INGESTED' ? (
-                        <Button
-                          size="small"
-                          loading={actionVideoId === row.video_id}
-                          onClick={() => void startHandPose(row)}
-                        >
-                          检测手部
-                        </Button>
-                      ) : row.hand_status !== 'SUCCEEDED' ? (
-                        <span className="cell-secondary">媒体尚未入库，不能检测</span>
-                      ) : null}
-                      {row.media_status === 'INGESTED' && row.annotation_status !== 'COMPLETED' ? (
-                        <Link className="text-link" to={paths.annotationTasks(projectId)}>
-                          {row.annotation_status === 'SUBMITTED'
-                            ? '查看标注 / 复核'
-                            : '进入配药动作标注'}
+                          {action}
                         </Link>
                       ) : null}
-                    </span>
-                  </div>
-                ),
+                    </div>
+                  )
+                },
               },
             ]}
           />
@@ -578,15 +574,50 @@ function toLocalDateTimeInput(value?: string) {
 
 function nextStepLabel(row: VideoSummary) {
   if (row.media_status !== 'INGESTED') {
-    return row.media_status === 'INGEST_FAILED' ? '先处理媒体失败' : '等待媒体入库'
+    return row.media_status === 'INGEST_FAILED' ? '视频检测失败' : '视频检测中'
   }
   if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
   if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
-  if (row.annotation_status === 'NOT_STARTED') return '进入配药动作标注'
-  if (row.cleaning_status === 'NOT_STARTED') return '等待清洗结果'
-  if (row.cleaning_status === 'PASS') return '可用数据'
-  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') return '查看清洗问题'
+  if (row.annotation_status === 'NOT_STARTED') return '进入人工标注'
+  if (row.cleaning_status === 'NOT_STARTED') return '等待数据清洗'
+  if (row.cleaning_status === 'PASS') return '已通过清洗，可参与训练数据导出'
+  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT')
+    return '需要重新核对清洗'
   return '查看处理结果'
+}
+
+function nextStepAction(row: VideoSummary) {
+  if (row.media_status === 'INGEST_FAILED') return '查看失败原因'
+  if (row.media_status !== 'INGESTED') return null
+  if (row.annotation_status === 'SUBMITTED') return '下一步：人工复核'
+  if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
+  if (row.annotation_status === 'NOT_STARTED') return '下一步：进入人工标注'
+  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') return '重新核对清洗'
+  return null
+}
+
+function notifyVideoTransitions(
+  previousItems: VideoSummary[],
+  nextItems: VideoSummary[],
+  message: ReturnType<typeof AntdApp.useApp>['message'],
+) {
+  const previousById = new Map(previousItems.map((item) => [item.video_id, item]))
+  for (const nextItem of nextItems) {
+    const previousItem = previousById.get(nextItem.video_id)
+    if (!previousItem) continue
+    if (
+      (previousItem.media_status === 'UPLOADED' || previousItem.media_status === 'INGESTING') &&
+      nextItem.media_status === 'INGESTED'
+    ) {
+      void message.success('视频检测完成')
+    }
+    if (
+      (previousItem.hand_status === 'QUEUED' || previousItem.hand_status === 'RUNNING') &&
+      nextItem.hand_status === 'SUCCEEDED'
+    ) {
+      void message.success('手部检测完成')
+    }
+  }
 }
 
 function formatBytes(bytes: number) {

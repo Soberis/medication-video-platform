@@ -1281,10 +1281,14 @@ export async function retryHandPoseCandidates(projectId: string, videoId: string
   throw await toCatalogError(response)
 }
 
-export async function getLatestHandPoseCandidates(projectId: string, videoId: string) {
+export async function getLatestHandPoseCandidates(
+  projectId: string,
+  videoId: string,
+  signal?: AbortSignal,
+) {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-candidates`,
-    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+    { headers: { Accept: 'application/json' }, cache: 'no-store', signal },
   )
   if (response.ok) return (await response.json()) as HandPoseCandidateResponse
   throw await toCatalogError(response)

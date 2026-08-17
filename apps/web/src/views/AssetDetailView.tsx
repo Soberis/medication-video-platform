@@ -133,11 +133,15 @@ export default function AssetDetailView() {
     null,
   )
   const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
+  const detailRef = useRef<ClipAssetRead | null>(null)
+  const handPoseJobRef = useRef<HandPoseJob | null>(null)
   const detailRequest = useRef<AbortController | null>(null)
   const roleRequest = useRef<AbortController | null>(null)
   const qualityRequest = useRef<AbortController | null>(null)
   const mediaReportRequest = useRef<AbortController | null>(null)
   const annotationTaskRequest = useRef<AbortController | null>(null)
+  const handPoseRequest = useRef<AbortController | null>(null)
+  const transientStateRequest = useRef<AbortController | null>(null)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mediaProbeRecoveryIntent = useRef<{
     changeReference: string
@@ -165,8 +169,16 @@ export default function AssetDetailView() {
     projectRole !== null &&
     detail?.status === 'INGESTED' &&
     detail.session_binding?.enabled_for_hand_detection !== false &&
-    (handPoseJob === null ||
-      (handPoseJob.status === 'FAILED' && handPoseJob.run_summary?.retryable === true))
+    handPoseJob?.status === 'FAILED' &&
+    handPoseJob.run_summary?.retryable === true
+
+  useEffect(() => {
+    detailRef.current = detail
+  }, [detail])
+
+  useEffect(() => {
+    handPoseJobRef.current = handPoseJob
+  }, [handPoseJob])
   const workflowSteps = useMemo<WorkflowStep[]>(() => {
     if (!detail) return []
 
@@ -204,7 +216,7 @@ export default function AssetDetailView() {
           ? {
               label: '手部检测',
               state: 'waiting',
-              status: '可选',
+              status: '等待自动检测',
               detail: 'MediaPipe 预标注不阻断人工流程',
             }
           : handPoseJob.status === 'SUCCEEDED'
@@ -222,7 +234,10 @@ export default function AssetDetailView() {
                   label: '手部检测',
                   state: 'waiting',
                   status: handPoseJob.run_summary?.retryable === true ? '可重试' : '失败',
-                  detail: '候选失败不阻断人工标注，也不会进入正式标注',
+                  detail:
+                    handPoseJob.run_summary?.retryable === true
+                      ? '检测失败，可重新检测；不会阻断人工标注'
+                      : '当前失败不可重试，可继续人工处理',
                 }
               : {
                   label: '手部检测',
@@ -330,8 +345,8 @@ export default function AssetDetailView() {
         ? {
             label: '清洗',
             state: 'complete',
-            status: '可用数据',
-            detail: '人工复核与清洗均已通过',
+            status: '已通过清洗',
+            detail: '已通过清洗，可参与训练数据导出',
           }
         : cleaningResult?.outcome === 'WARNING' || cleaningResult?.outcome === 'REJECT'
           ? {
@@ -383,55 +398,41 @@ export default function AssetDetailView() {
         interactive: false,
       }
     }
-    if (detail.status === 'UPLOADED') {
-      return canRecoverMissingMediaProbe
-        ? {
-            title: '恢复媒体检测',
-            description: '检测任务缺失时由管理员发起一次受审计恢复。',
-            buttonLabel: '恢复媒体检测',
-            kind: 'media-recovery',
-            interactive: true,
-          }
-        : {
-            title: '等待媒体检测',
-            description: '视频已上传，平台会补充媒体技术事实。',
-            buttonLabel: '等待媒体检测',
-            kind: 'none',
-            interactive: false,
-          }
-    }
-    if (detail.status !== 'INGESTED') {
+    if (detail.status === 'UPLOADED' || detail.status === 'INGESTING') {
       return {
-        title: detail.status === 'INGESTING' ? '等待媒体检测完成' : '先处理媒体检测',
-        description: '媒体准备好后才能记录质量结论和进入人工标注。',
-        buttonLabel: '查看处理流程',
-        kind: 'scroll',
-        interactive: true,
+        title: '视频检测中',
+        description: '媒体检测完成后，页面会自动更新；当前不需要手动操作。',
+        buttonLabel: '视频检测中',
+        kind: 'none',
+        interactive: false,
+      }
+    }
+    if (detail.status === 'INGEST_FAILED') {
+      return {
+        title: '视频检测失败',
+        description: '视频不能进入质量判断或人工标注，请查看下方媒体检测信息。',
+        buttonLabel: '视频检测失败',
+        kind: 'none',
+        interactive: false,
       }
     }
     if (annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS') {
       return {
         title: '已通过清洗，可参与训练数据导出',
         description: '实际可导出的训练行数以训练数据导出预览为准。',
-        buttonLabel: '以训练数据导出预览为准',
-        kind: 'none',
-        interactive: false,
+        buttonLabel: '导出训练数据',
+        kind: 'navigate',
+        interactive: projectRole === 'ADMIN',
       }
     }
-    if (canRequestHandPose) {
-      return {
-        title: handPoseJob?.status === 'FAILED' ? '重试手部检测' : '检测手部姿态',
-        description: '生成手框、21 个关键点和骨架候选，结果仍需人工确认。',
-        buttonLabel: handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态',
-        kind: 'hand-pose',
-        interactive: true,
-      }
-    }
-    if (qualityLoadState === 'success' && qualityReview?.decision === 'UNREVIEWED') {
+    if (
+      qualityLoadState === 'success' &&
+      (qualityReview?.decision === 'UNREVIEWED' || qualityReview?.decision === 'NEEDS_REVIEW')
+    ) {
       return {
         title: '进行人工质量判断',
         description: '确认视频是否适合进入配药动作标注。',
-        buttonLabel: '进入质量判断',
+        buttonLabel: '下一步：人工质量判断',
         kind: 'scroll',
         interactive: true,
       }
@@ -442,27 +443,80 @@ export default function AssetDetailView() {
       annotationTask === null
     ) {
       return {
-        title: '创建配药动作标注',
+        title: '进入人工标注',
         description: '选择项目成员并创建正式人工标注任务。',
-        buttonLabel: '创建动作标注',
+        buttonLabel: '下一步：进入人工标注',
         kind: 'scroll',
         interactive: true,
       }
     }
-    if (annotationTask) {
+    if (qualityReview?.decision === 'QUALIFIED' && annotationTask === null) {
       return {
-        title:
-          annotationTask.status === 'ASSIGNED'
-            ? '提交人工动作标注'
-            : annotationTask.status === 'SUBMITTED'
-              ? '进行人工复核'
-              : '查看复核与清洗结果',
-        description:
-          annotationTask.status === 'ASSIGNED'
-            ? '进入任务列表完成时间段和动作标签填写。'
-            : annotationTask.status === 'SUBMITTED'
-              ? '正式动作标签已提交，等待项目管理员人工复核。'
-              : '标注已经完成，请确认服务端清洗结果。',
+        title: '等待进入人工标注',
+        description: '当前视频已合格，等待项目管理员创建并分配正式人工标注任务。',
+        buttonLabel: '等待人工标注',
+        kind: 'none',
+        interactive: false,
+      }
+    }
+    if (annotationTask) {
+      const reviewDecision = annotationTask.annotation_revision?.review?.decision
+      const cleaningOutcome = annotationTask.annotation_revision?.post_cleaning_result?.outcome
+      if (reviewDecision === 'REJECTED' || annotationTask.status === 'ASSIGNED') {
+        return {
+          title: '继续人工标注',
+          description: '进入任务列表完成或修改配药动作时间段和动作标签。',
+          buttonLabel: '继续人工标注',
+          kind: 'navigate',
+          interactive: true,
+        }
+      }
+      if (annotationTask.status === 'SUBMITTED') {
+        return annotationTask.can_review
+          ? {
+              title: '等待人工复核',
+              description: '正式动作标签已提交，当前账号可以进入现有复核入口。',
+              buttonLabel: '下一步：人工复核',
+              kind: 'navigate',
+              interactive: true,
+            }
+          : {
+              title: '等待人工复核',
+              description: '正式动作标签已提交，等待项目管理员人工复核。',
+              buttonLabel: '等待人工复核',
+              kind: 'none',
+              interactive: false,
+            }
+      }
+      if (reviewDecision === 'APPROVED') {
+        if (cleaningOutcome === 'WARNING' || cleaningOutcome === 'REJECT') {
+          return annotationTask.can_recheck_post_cleaning
+            ? {
+                title: '需要重新核对清洗',
+                description: '清洗结论需要通过现有清洗复核入口重新核对。',
+                buttonLabel: '重新核对清洗',
+                kind: 'navigate',
+                interactive: true,
+              }
+            : {
+                title: '等待数据清洗',
+                description: '人工复核已通过，等待具备权限的用户处理清洗结论。',
+                buttonLabel: '等待数据清洗',
+                kind: 'none',
+                interactive: false,
+              }
+        }
+        return {
+          title: '等待数据清洗',
+          description: '人工复核已通过，等待服务端完成数据清洗。',
+          buttonLabel: '等待数据清洗',
+          kind: 'none',
+          interactive: false,
+        }
+      }
+      return {
+        title: '查看标注处理结果',
+        description: '请进入现有标注任务页面查看服务端状态。',
         buttonLabel: '查看标注任务',
         kind: 'navigate',
         interactive: true,
@@ -470,7 +524,7 @@ export default function AssetDetailView() {
     }
     if (qualityReview?.decision === 'REJECTED') {
       return {
-        title: '视频不进入标注流程',
+        title: '质量判断未通过',
         description: `当前质量结论：${qualityDecisionLabels[qualityReview.decision]}。`,
         buttonLabel: '查看质量结论',
         kind: 'scroll',
@@ -486,13 +540,11 @@ export default function AssetDetailView() {
     }
   }, [
     canCreateAnnotationTask,
-    canRecoverMissingMediaProbe,
-    canRequestHandPose,
     annotationTask,
     detail,
-    handPoseJob,
     qualityLoadState,
     qualityReview,
+    projectRole,
   ])
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
@@ -551,35 +603,41 @@ export default function AssetDetailView() {
     setMediaReportErrorMessage('')
   }, [])
   const loadHandPoseCandidates = useCallback(async () => {
+    handPoseRequest.current?.abort()
+    const request = new AbortController()
+    handPoseRequest.current = request
     try {
-      const response = await getLatestHandPoseCandidates(projectId, assetId)
+      const response = await getLatestHandPoseCandidates(projectId, assetId, request.signal)
+      if (handPoseRequest.current !== request) return
       if (!response.job || !Array.isArray(response.candidates)) {
+        handPoseJobRef.current = null
         setHandPoseJob(null)
         setHandPoseCandidates(null)
         return
       }
+      const previousStatus = handPoseJobRef.current?.status
+      if (
+        (previousStatus === 'QUEUED' || previousStatus === 'RUNNING') &&
+        response.job.status === 'SUCCEEDED'
+      ) {
+        void message.success('手部检测完成')
+      }
+      handPoseJobRef.current = response.job
       setHandPoseJob(response.job)
       setHandPoseCandidates(response)
     } catch (error) {
+      if (request.signal.aborted || handPoseRequest.current !== request) return
       if (error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND') {
+        handPoseJobRef.current = null
         setHandPoseJob(null)
         setHandPoseCandidates(null)
         return
       }
       setHandPoseCandidates(null)
+    } finally {
+      if (handPoseRequest.current === request) handPoseRequest.current = null
     }
-  }, [assetId, projectId])
-
-  useEffect(() => {
-    if (!handPoseJob || handPoseJob.status === 'SUCCEEDED' || handPoseJob.status === 'FAILED') {
-      return undefined
-    }
-    const refresh = () => {
-      if (document.visibilityState === 'visible') void loadHandPoseCandidates()
-    }
-    const timer = window.setInterval(refresh, 3_000)
-    return () => window.clearInterval(timer)
-  }, [handPoseJob, loadHandPoseCandidates])
+  }, [assetId, message, projectId])
 
   const loadMediaReport = useCallback(async () => {
     mediaReportRequest.current?.abort()
@@ -664,16 +722,19 @@ export default function AssetDetailView() {
     detailRequest.current?.abort()
     qualityRequest.current?.abort()
     annotationTaskRequest.current?.abort()
+    handPoseRequest.current?.abort()
     const request = new AbortController()
     detailRequest.current = request
     setLoadState('loading')
     try {
       const response = await getClipAsset(projectId, assetId, request.signal)
       if (detailRequest.current !== request) return
+      detailRef.current = response
       setDetail(response)
       resetPlayback()
       setAnnotationTask(null)
       setAnnotationTaskLoadState(response.status === 'INGESTED' ? 'loading' : 'idle')
+      handPoseJobRef.current = null
       setHandPoseJob(null)
       setHandPoseCandidates(null)
       setLoadState('success')
@@ -717,6 +778,43 @@ export default function AssetDetailView() {
     resetMediaReport,
     resetPlayback,
   ])
+
+  const refreshTransientState = useCallback(async () => {
+    if (transientStateRequest.current) return
+    const request = new AbortController()
+    transientStateRequest.current = request
+    try {
+      const response = await getClipAsset(projectId, assetId, request.signal)
+      if (transientStateRequest.current !== request) return
+      const previousStatus = detailRef.current?.status
+      detailRef.current = response
+      setDetail(response)
+      if (
+        (previousStatus === 'UPLOADED' || previousStatus === 'INGESTING') &&
+        response.status === 'INGESTED'
+      ) {
+        void message.success('视频检测完成')
+        void loadQualityReview()
+        void loadAnnotationTask()
+        void loadMediaReport()
+        void loadHandPoseCandidates()
+      } else if (response.status === 'INGESTED' && handPoseJobRef.current) {
+        void loadHandPoseCandidates()
+      }
+    } catch {
+      // Background refresh is best effort; the existing manual refresh remains available.
+    } finally {
+      if (transientStateRequest.current === request) transientStateRequest.current = null
+    }
+  }, [
+    assetId,
+    loadAnnotationTask,
+    loadHandPoseCandidates,
+    loadMediaReport,
+    loadQualityReview,
+    message,
+    projectId,
+  ])
   const loadProjectRole = useCallback(async () => {
     roleRequest.current?.abort()
     const request = new AbortController()
@@ -759,9 +857,58 @@ export default function AssetDetailView() {
       qualityRequest.current?.abort()
       mediaReportRequest.current?.abort()
       annotationTaskRequest.current?.abort()
+      handPoseRequest.current?.abort()
+      transientStateRequest.current?.abort()
       clearPlaybackExpiryTimer()
     }
   }, [clearPlaybackExpiryTimer, loadDetail, loadProjectRole])
+
+  const shouldPollTransientState =
+    detail?.status === 'UPLOADED' ||
+    detail?.status === 'INGESTING' ||
+    handPoseJob?.status === 'QUEUED' ||
+    handPoseJob?.status === 'RUNNING'
+
+  useEffect(() => {
+    if (!shouldPollTransientState) return undefined
+    let disposed = false
+    let inFlight = false
+    let timer: number | null = null
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+    }
+    const schedule = () => {
+      if (disposed || document.visibilityState !== 'visible' || timer !== null) return
+      timer = window.setTimeout(() => {
+        timer = null
+        if (disposed || document.visibilityState !== 'visible' || inFlight) {
+          schedule()
+          return
+        }
+        inFlight = true
+        void refreshTransientState().finally(() => {
+          inFlight = false
+          schedule()
+        })
+      }, 2_500)
+    }
+    const handleVisibilityChange = () => {
+      clearTimer()
+      if (document.visibilityState === 'visible') schedule()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    schedule()
+    return () => {
+      disposed = true
+      clearTimer()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [refreshTransientState, shouldPollTransientState])
 
   async function confirmDelete() {
     if (!detail || isDeleting) return
@@ -926,6 +1073,7 @@ export default function AssetDetailView() {
         handPoseJob?.status === 'FAILED' && handPoseJob.run_summary?.retryable === true
           ? await retryHandPoseCandidates(projectId, assetId)
           : await requestHandPoseCandidates(projectId, assetId)
+      handPoseJobRef.current = job
       setHandPoseJob(job)
       setHandPoseCandidates({ job, candidates: [] })
       void message.success(
@@ -1148,13 +1296,13 @@ export default function AssetDetailView() {
                       <p className="form-hint">
                         结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
                       </p>
-                      {canRequestHandPose && nextStep.kind !== 'hand-pose' ? (
+                      {canRequestHandPose ? (
                         <Button
                           type="primary"
                           loading={isRequestingHandPose}
                           onClick={() => void requestHandPose()}
                         >
-                          {handPoseJob?.status === 'FAILED' ? '重试检测' : '检测手部姿态'}
+                          重新检测
                         </Button>
                       ) : null}
                       {handPoseJob ? (
@@ -1171,28 +1319,40 @@ export default function AssetDetailView() {
                             handPoseJob.status === 'FAILED'
                               ? '手部检测失败'
                               : handPoseJob.status !== 'SUCCEEDED'
-                                ? '正在检测手部姿态'
+                                ? '手部检测中'
                                 : handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                                  ? '检测完成：未发现手部'
+                                  ? '未发现手部，可继续人工查看和标注'
                                   : handPoseJob.hand_result === 'HAND_DETECTED'
-                                    ? '检测完成：发现手部'
+                                    ? '已发现手部'
                                     : '手部姿态检测完成'
                           }
                           description={
                             handPoseJob.status === 'FAILED'
-                              ? (handPoseJob.run_summary?.failure_reason ??
-                                (handPoseJob.run_summary?.retryable === true
-                                  ? '本次手部检测未完成，请稍后重试。'
-                                  : '本次手部检测未完成，当前错误不支持自动重试。'))
+                              ? [
+                                  handPoseJob.run_summary?.failure_reason,
+                                  handPoseJob.run_summary?.retryable === true
+                                    ? '可以重新检测。'
+                                    : '当前失败不可重试，可继续人工处理。',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')
                               : handPoseJob.status === 'SUCCEEDED'
                                 ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                                  ? '本次视频已完整分析，但没有发现可用手部候选。原视频仍可直接播放。'
+                                  ? '本次视频已完整分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。'
                                   : `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
                                 : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
                           }
                           showIcon
                         />
-                      ) : null}
+                      ) : (
+                        <Alert
+                          className="workbench-status-alert"
+                          type="info"
+                          title="等待自动手部检测"
+                          description="MediaPipe 只提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。"
+                          showIcon
+                        />
+                      )}
                       {handPoseCandidates?.candidates?.[0] ? (
                         <p className="form-hint hand-pose-candidate-note">
                           已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。

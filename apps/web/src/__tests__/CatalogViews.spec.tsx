@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -15,6 +15,7 @@ const sessionId = '40000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 
 afterEach(() => {
+  vi.useRealTimers()
   sessionStorage.clear()
   vi.unstubAllGlobals()
 })
@@ -1742,38 +1743,31 @@ describe('catalog views', () => {
 
     const workflow = await screen.findByRole('complementary', { name: '视频处理流程' })
     expect(within(workflow).getByText('人工复核')).toBeInTheDocument()
-    expect(within(workflow).getAllByText('可用数据')).toHaveLength(2)
-    expect(within(workflow).getByText('人工复核与清洗均已通过')).toBeInTheDocument()
+    expect(within(workflow).getAllByText('已通过清洗')).toHaveLength(2)
+    expect(within(workflow).getAllByText('已通过清洗，可参与训练数据导出')).toHaveLength(2)
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
-    expect(within(workflow).getByText('已通过清洗，可参与训练数据导出')).toBeInTheDocument()
     expect(within(workflow).queryByText('查看复核与清洗结果')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '创建配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看配药动作标注' })).toBeInTheDocument()
     expect(document.querySelector('.workbench-primary')?.tagName).toBe('SECTION')
   })
 
-  it('lets a project member queue hand pose candidates without presenting them as formal annotations', async () => {
+  it('keeps automatic hand-pose detection auxiliary and does not add a manual start action', async () => {
     const fetchMock = stubAsset({ role: 'MEMBER', status: 'INGESTED', handPose: true })
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('hand-pose-ui-0001') })
-    const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
     expect(await screen.findByText('手部姿态检测')).toBeInTheDocument()
     expect(screen.getByText(/结果只是手部预标注候选，仍须人工确认/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '检测手部姿态' }))
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections`,
-        expect.objectContaining({
-          method: 'POST',
-          cache: 'no-store',
-          headers: expect.objectContaining({ 'Idempotency-Key': 'hand-pose-ui-0001' }),
-        }),
-      ),
-    )
-    expect(await screen.findByText('正在检测手部姿态')).toBeInTheDocument()
-    expect(screen.getByText(/页面会自动刷新状态/)).toBeInTheDocument()
+    expect(await screen.findByText('等待自动手部检测')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新检测' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/hand-pose-detections') && init?.method === 'POST',
+      ),
+    ).toBe(false)
   })
 
   it('does not offer an AssetDetail retry when the failed run is not retryable', async () => {
@@ -1786,7 +1780,8 @@ describe('catalog views', () => {
 
     expect(await screen.findByText('手部检测失败')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
-    expect(screen.getByText('AI_HAND_POSE_INFERENCE_FAILED')).toBeInTheDocument()
+    expect(screen.getByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
+    expect(screen.getAllByText(/当前失败不可重试，可继续人工处理/)).toHaveLength(2)
   })
 
   it('uses the AssetDetail retry endpoint only for a retryable failed run', async () => {
@@ -1799,7 +1794,9 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    await user.click(await screen.findByRole('button', { name: '重试检测' }))
+    expect(await screen.findByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
+    expect(screen.getByText(/可以重新检测/)).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '重新检测' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections/retry`,
@@ -1815,6 +1812,111 @@ describe('catalog views', () => {
           String(input).endsWith('/hand-pose-detections') && init?.method === 'POST',
       ),
     ).toBe(false)
+  })
+
+  it('polls media ingest until it becomes stable, then stops', async () => {
+    vi.useFakeTimers()
+    let detailReads = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`)
+        return Promise.resolve(jsonResponse(project('MEMBER')))
+      if (url === `/api/v1/projects/${projectId}/clip-assets/${assetId}`) {
+        detailReads += 1
+        return Promise.resolve(
+          jsonResponse(assetDetail(detailReads === 1 ? 'INGESTING' : 'INGESTED')),
+        )
+      }
+      if (url.endsWith('/media-report')) return Promise.resolve(jsonResponse(verifiedMediaReport()))
+      if (url.endsWith('/quality-review')) return Promise.resolve(jsonResponse(unreviewedQuality()))
+      if (url.endsWith('/annotation-tasks'))
+        return Promise.resolve(jsonResponse(emptyAnnotationTaskList()))
+      if (url.endsWith('/hand-pose-candidates'))
+        return Promise.resolve(jsonResponse({ error_code: 'AI_HAND_POSE_JOB_NOT_FOUND' }, 404))
+      return Promise.resolve(jsonResponse(assetDetail('INGESTING')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText('视频检测中')).toBeInTheDocument()
+    expect(detailReads).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500)
+    })
+    expect(screen.getByText('媒体检测完成')).toBeInTheDocument()
+    expect(screen.getByText('视频检测完成')).toBeInTheDocument()
+    expect(detailReads).toBe(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(detailReads).toBe(2)
+  })
+
+  it('polls a running hand-pose job and keeps the human quality action available', async () => {
+    vi.useFakeTimers()
+    let handPoseReads = 0
+    let detailReads = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`)
+        return Promise.resolve(jsonResponse(project('MEMBER')))
+      if (url === `/api/v1/projects/${projectId}/clip-assets/${assetId}`) {
+        detailReads += 1
+        return Promise.resolve(jsonResponse(assetDetail('INGESTED')))
+      }
+      if (url.endsWith('/media-report')) return Promise.resolve(jsonResponse(verifiedMediaReport()))
+      if (url.endsWith('/quality-review')) return Promise.resolve(jsonResponse(unreviewedQuality()))
+      if (url.endsWith('/annotation-tasks'))
+        return Promise.resolve(jsonResponse(emptyAnnotationTaskList()))
+      if (url.endsWith('/hand-pose-candidates')) {
+        handPoseReads += 1
+        return Promise.resolve(
+          jsonResponse({
+            job: handPoseReads === 1 ? runningHandPoseJob() : succeededHandPoseJob('HAND_DETECTED'),
+            candidates: [],
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(assetDetail('INGESTED')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText('手部检测中')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500)
+    })
+    expect(screen.getByText('已发现手部')).toBeInTheDocument()
+    expect(screen.getByText('手部检测完成')).toBeInTheDocument()
+    expect(handPoseReads).toBe(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(handPoseReads).toBe(2)
+    expect(detailReads).toBe(2)
+  })
+
+  it('keeps the human quality step when MediaPipe finds no hand', async () => {
+    stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      handPoseState: succeededHandPoseJob('NO_HAND_DETECTED'),
+    })
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    expect(await screen.findByText('未发现手部，可继续人工查看和标注')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 })
 
@@ -1845,7 +1947,7 @@ function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER
 }
 function stubAsset(options: {
   role: 'ADMIN' | 'MEMBER'
-  status: 'UPLOADED' | 'INGESTED'
+  status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
   memberships?: object[]
   mediaReport?: object
   quality?: object
@@ -2013,7 +2115,7 @@ function stubAsset(options: {
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-function assetDetail(status: 'UPLOADED' | 'INGESTED') {
+function assetDetail(status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED') {
   return {
     clip_asset_id: assetId,
     batch_id: '60000000-0000-4000-8000-000000000001',
@@ -2027,6 +2129,50 @@ function assetDetail(status: 'UPLOADED' | 'INGESTED') {
     session_binding: null,
     created_at: '2026-07-15T01:03:03Z',
     updated_at: '2026-07-15T01:03:03Z',
+  }
+}
+
+function runningHandPoseJob() {
+  return {
+    ...succeededHandPoseJob('UNKNOWN'),
+    status: 'RUNNING',
+    run_summary: null,
+  }
+}
+
+function succeededHandPoseJob(handResult: 'HAND_DETECTED' | 'NO_HAND_DETECTED' | 'UNKNOWN') {
+  return {
+    ai_job_id: 'b1000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    clip_asset_id: assetId,
+    algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
+    algorithm_version: 'v1',
+    model_sha256: 'a'.repeat(64),
+    input_sha256: 'b'.repeat(64),
+    input_size_bytes: 8_388_608,
+    sampling_fps: 10,
+    profile_sha256: 'c'.repeat(64),
+    status: 'SUCCEEDED',
+    hand_result: handResult,
+    run_summary: {
+      analysis_complete: true,
+      hand_result: handResult,
+      total_video_frames: 10,
+      inference_frame_count: 10,
+      frames_with_hand: handResult === 'HAND_DETECTED' ? 10 : 0,
+      frames_without_hand: handResult === 'NO_HAND_DETECTED' ? 10 : 0,
+      left_hand_detection_count: handResult === 'HAND_DETECTED' ? 5 : 0,
+      right_hand_detection_count: handResult === 'HAND_DETECTED' ? 5 : 0,
+      invalid_landmark_count: 0,
+      processing_duration_ms: 100,
+      started_at: '2026-08-11T02:00:00Z',
+      completed_at: '2026-08-11T02:00:01Z',
+      failure_reason: null,
+      retryable: false,
+    },
+    requested_by: 'local-synthetic-admin',
+    created_at: '2026-08-11T02:00:00Z',
+    updated_at: '2026-08-11T02:00:01Z',
   }
 }
 
@@ -2121,6 +2267,20 @@ function jsonResponse(body: object, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function emptyAnnotationTaskList() {
+  return {
+    items: [],
+    progress: {
+      scope: 'ASSIGNEE',
+      total: 0,
+      awaiting_submission: 0,
+      rework_required: 0,
+      awaiting_review: 0,
+      completed: 0,
+    },
+  }
 }
 function unreviewedQuality() {
   return {
