@@ -57,8 +57,9 @@ public class VideoSummaryQueryService {
 									       stream.record_start_utc AS captured_at,
 									       asset.created_at AS received_at,
 									       batch.upload_source_type AS source_name,
-									       asset.asset_status AS media_status,
-									       COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
+						      asset.asset_status AS media_status,
+						      COALESCE(quality_fact.quality_decision, 'UNREVIEWED') AS quality_decision,
+						      COALESCE(hand.status, 'NOT_REQUESTED') AS hand_status,
 									       COALESCE(hand.hand_result, 'UNKNOWN') AS hand_result,
 									       COALESCE(hand.hand_retryable, FALSE) AS hand_retryable,
 									      COALESCE(annotation.task_status, 'NOT_STARTED') AS annotation_status,
@@ -205,9 +206,10 @@ public class VideoSummaryQueryService {
 				(resultSet.getObject("camera_number") instanceof Number number) ? number.intValue() : null,
 				instant(resultSet, "captured_at"), instant(resultSet, "received_at"),
 				resultSet.getString("source_name"), resultSet.getString("media_status"),
-				resultSet.getString("hand_status"), resultSet.getString("hand_result"),
-				resultSet.getBoolean("hand_retryable"), resultSet.getString("annotation_status"),
-				resultSet.getString("cleaning_status"), resultSet.getString("retention_status"));
+				resultSet.getString("quality_decision"), resultSet.getString("hand_status"),
+				resultSet.getString("hand_result"), resultSet.getBoolean("hand_retryable"),
+				resultSet.getString("annotation_status"), resultSet.getString("cleaning_status"),
+				resultSet.getString("retention_status"));
 	}
 
 	private static Instant instant(ResultSet resultSet, String column) throws SQLException {

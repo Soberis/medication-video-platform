@@ -24,6 +24,7 @@ describe('VideoManagementView', () => {
           captured_at: '2026-08-11T02:00:00Z',
           received_at: '2026-08-11T02:00:03Z',
           media_status: 'INGESTED',
+          quality_decision: 'UNREVIEWED',
           hand_status: 'SUCCEEDED',
           hand_result: 'NO_HAND_DETECTED',
           hand_retryable: false,
@@ -71,6 +72,11 @@ describe('VideoManagementView', () => {
     expect(screen.queryByRole('columnheader', { name: '留存' })).not.toBeInTheDocument()
     expect(screen.getByText('更多筛选').closest('details')).not.toHaveAttribute('open')
     expect(screen.getByText('未发现手部')).toBeInTheDocument()
+    expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
     expect(screen.getByText('可检测')).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`/projects/${projectId}/videos?limit=50`)
@@ -94,9 +100,9 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
-    expect(screen.getByText('下一步：进入人工标注')).toBeInTheDocument()
+    expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 
   it('does not make optional hand detection a list-level action', async () => {
@@ -119,11 +125,12 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 
   it('presents submitted formal annotations as waiting for human review', async () => {
     const row = videoRow({
+      quality_decision: 'QUALIFIED',
       hand_status: 'SUCCEEDED',
       hand_result: 'HAND_DETECTED',
       annotation_status: 'SUBMITTED',
@@ -195,7 +202,12 @@ describe('VideoManagementView', () => {
   })
 
   it('does not expose a hand-pose retry action in the video list', async () => {
-    const row = videoRow({ hand_status: 'FAILED', hand_result: 'UNKNOWN', hand_retryable: true })
+    const row = videoRow({
+      quality_decision: 'QUALIFIED',
+      hand_status: 'FAILED',
+      hand_result: 'UNKNOWN',
+      hand_retryable: true,
+    })
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
       if (url.includes('/video-data/summary')) return Promise.resolve(jsonResponse(summaryBody()))
@@ -221,7 +233,7 @@ describe('VideoManagementView', () => {
   it('polls transient media state and announces the terminal transition once', async () => {
     vi.useFakeTimers()
     let listRequests = 0
-    const transientRow = videoRow({ media_status: 'INGESTING' })
+    const transientRow = videoRow({ media_status: 'INGESTING', quality_decision: 'QUALIFIED' })
     const ingestedRow = { ...transientRow, media_status: 'INGESTED' as const }
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input)
@@ -259,11 +271,142 @@ describe('VideoManagementView', () => {
     })
     expect(listRequests).toBe(2)
   })
+
+  it('keeps NEEDS_REVIEW on the quality gate before annotation', async () => {
+    const row = videoRow({ quality_decision: 'NEEDS_REVIEW' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('需重新人工质量判断')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+  })
+
+  it('does not offer annotation when quality is rejected', async () => {
+    const row = videoRow({ quality_decision: 'REJECTED' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('质量判断未通过')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看质量结论' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+    expect(screen.queryByText('下一步：进入人工标注')).not.toBeInTheDocument()
+  })
+
+  it('routes a qualified unassigned video to its detail gate', async () => {
+    const row = videoRow({ quality_decision: 'QUALIFIED' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('待进入人工标注')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+  })
+
+  it('keeps an assigned qualified video on the annotation task page', async () => {
+    const row = videoRow({ quality_decision: 'QUALIFIED', annotation_status: 'ASSIGNED' })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByRole('link', { name: '继续人工标注' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '继续人工标注' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/annotation-tasks`),
+    )
+  })
+
+  it('keeps manual annotation available when no hand is detected after qualification', async () => {
+    const row = videoRow({
+      quality_decision: 'QUALIFIED',
+      hand_status: 'SUCCEEDED',
+      hand_result: 'NO_HAND_DETECTED',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('未发现手部')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
+      'href',
+      expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+  })
 })
 
 function videoRow(
   overrides: Partial<{
     media_status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
+    quality_decision: 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
     hand_status: 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
     hand_result: 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
     hand_retryable: boolean
@@ -279,6 +422,7 @@ function videoRow(
     captured_at: '2026-08-11T02:00:00Z',
     received_at: '2026-08-11T02:00:03Z',
     media_status: 'INGESTED' as const,
+    quality_decision: 'UNREVIEWED' as const,
     hand_status: 'NOT_REQUESTED' as const,
     hand_result: 'UNKNOWN' as const,
     hand_retryable: false,

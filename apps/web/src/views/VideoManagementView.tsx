@@ -531,12 +531,12 @@ export default function VideoManagementView() {
                         <Link
                           className="text-link"
                           to={
-                            row.media_status === 'INGEST_FAILED'
+                            action.target === 'detail'
                               ? paths.asset(projectId, row.video_id)
                               : paths.annotationTasks(projectId)
                           }
                         >
-                          {action}
+                          {action.label}
                         </Link>
                       ) : null}
                     </div>
@@ -576,9 +576,13 @@ function nextStepLabel(row: VideoSummary) {
   if (row.media_status !== 'INGESTED') {
     return row.media_status === 'INGEST_FAILED' ? '视频检测失败' : '视频检测中'
   }
+  if (row.quality_decision === 'UNREVIEWED') return '待人工质量判断'
+  if (row.quality_decision === 'NEEDS_REVIEW') return '需重新人工质量判断'
+  if (row.quality_decision === 'REJECTED') return '质量判断未通过'
+  if (row.quality_decision !== 'QUALIFIED') return '待人工质量判断'
   if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
   if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
-  if (row.annotation_status === 'NOT_STARTED') return '进入人工标注'
+  if (row.annotation_status === 'NOT_STARTED') return '待进入人工标注'
   if (row.cleaning_status === 'NOT_STARTED') return '等待数据清洗'
   if (row.cleaning_status === 'PASS') return '已通过清洗，可参与训练数据导出'
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT')
@@ -587,12 +591,28 @@ function nextStepLabel(row: VideoSummary) {
 }
 
 function nextStepAction(row: VideoSummary) {
-  if (row.media_status === 'INGEST_FAILED') return '查看失败原因'
+  if (row.media_status === 'INGEST_FAILED')
+    return { label: '查看失败原因', target: 'detail' as const }
   if (row.media_status !== 'INGESTED') return null
-  if (row.annotation_status === 'SUBMITTED') return '下一步：人工复核'
-  if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
-  if (row.annotation_status === 'NOT_STARTED') return '下一步：进入人工标注'
-  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') return '重新核对清洗'
+  if (row.quality_decision === 'UNREVIEWED' || row.quality_decision === 'NEEDS_REVIEW') {
+    return { label: '下一步：人工质量判断', target: 'detail' as const }
+  }
+  if (row.quality_decision === 'REJECTED') {
+    return { label: '查看质量结论', target: 'detail' as const }
+  }
+  if (row.quality_decision !== 'QUALIFIED') return null
+  if (row.annotation_status === 'SUBMITTED') {
+    return { label: '下一步：人工复核', target: 'annotation' as const }
+  }
+  if (row.annotation_status === 'ASSIGNED') {
+    return { label: '继续人工标注', target: 'annotation' as const }
+  }
+  if (row.annotation_status === 'NOT_STARTED') {
+    return { label: '下一步：进入人工标注', target: 'detail' as const }
+  }
+  if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') {
+    return { label: '重新核对清洗', target: 'annotation' as const }
+  }
   return null
 }
 

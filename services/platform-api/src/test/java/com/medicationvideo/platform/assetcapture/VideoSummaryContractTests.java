@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,39 @@ class VideoSummaryContractTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items").isArray())
 			.andExpect(jsonPath("$.next_cursor").value(nullValue()));
+	}
+
+	@Test
+	void exposesQualityDecisionFromTheExistingBoundedReadModel() throws Exception {
+		var baseTime = Instant.parse("2026-08-13T02:00:00Z");
+		var fixtures = List.of(new QualityFixture(insertVideoSummaryFixture(baseTime, null), "UNREVIEWED"),
+				new QualityFixture(insertVideoSummaryFixture(baseTime.plusSeconds(10), "QUALIFIED"), "QUALIFIED"),
+				new QualityFixture(insertVideoSummaryFixture(baseTime.plusSeconds(20), "REJECTED"), "REJECTED"),
+				new QualityFixture(insertVideoSummaryFixture(baseTime.plusSeconds(30), "NEEDS_REVIEW"),
+						"NEEDS_REVIEW"));
+		try {
+			for (var fixture : fixtures) {
+				var video = fixture.video();
+				this.mockMvc
+					.perform(get("/api/v1/projects/{projectId}/videos", PROJECT_ID)
+						.param("received_from", video.createdAt().minusSeconds(1).toString())
+						.param("received_before", video.createdAt().plusSeconds(1).toString())
+						.header("Authorization", "Bearer " + TOKEN))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.items.length()").value(1))
+					.andExpect(jsonPath("$.items[0].video_id").value(video.clipAssetId().toString()))
+					.andExpect(jsonPath("$.items[0].quality_decision").value(fixture.expectedDecision()));
+			}
+		}
+		finally {
+			for (var fixture : fixtures) {
+				var video = fixture.video();
+				this.jdbcTemplate.update("DELETE FROM quality_review WHERE clip_asset_id = ?", video.clipAssetId());
+				this.jdbcTemplate.update("DELETE FROM clip_asset WHERE clip_asset_id = ?", video.clipAssetId());
+				this.jdbcTemplate.update("DELETE FROM upload_file WHERE upload_file_id = ?", video.uploadFileId());
+				this.jdbcTemplate.update("DELETE FROM upload_batch WHERE batch_id = ?", video.batchId());
+			}
+		}
 	}
 
 	@Test
@@ -223,6 +257,68 @@ class VideoSummaryContractTests {
 			this.jdbcTemplate.update("DELETE FROM upload_file WHERE upload_file_id = ?", uploadFileId);
 			this.jdbcTemplate.update("DELETE FROM upload_batch WHERE batch_id = ?", batchId);
 		}
+	}
+
+	private VideoFixture insertVideoSummaryFixture(Instant createdAt, String qualityDecision) {
+		var batchId = UUID.randomUUID();
+		var uploadFileId = UUID.randomUUID();
+		var clientFileId = UUID.randomUUID();
+		var clipAssetId = UUID.randomUUID();
+		var sha256 = "d".repeat(64);
+		this.jdbcTemplate.update("""
+				INSERT INTO upload_batch (
+				    batch_id, project_id, idempotency_key, request_fingerprint, device_id,
+				    initiated_by_actor_id, file_count, total_size_bytes, manifest_sha256,
+				    status, expires_at, created_at, updated_at, verified_manifest_sha256, completed_at)
+				VALUES (?, ?, ?, ?, 'synthetic-video-quality-device', 'local-synthetic-admin', 1, 1234, ?,
+				        'COMPLETED', ?, ?, ?, ?, ?)
+				""", batchId, PROJECT_ID, "video-summary-quality-batch-" + batchId, sha256, sha256,
+				Timestamp.from(createdAt.plusSeconds(3600)), Timestamp.from(createdAt), Timestamp.from(createdAt),
+				sha256, Timestamp.from(createdAt));
+		this.jdbcTemplate.update("""
+				INSERT INTO upload_file (
+				    upload_file_id, batch_id, client_file_id, idempotency_key, request_fingerprint,
+				    file_kind, content_type, size_bytes, sha256, part_size_bytes, total_parts,
+				    status, created_at, updated_at, storage_bucket, object_key, storage_upload_id,
+				    multipart_created_at, completion_started_at, completion_finished_at,
+				    verified_sha256, completed_storage_etag)
+				VALUES (?, ?, ?, ?, ?, 'VIDEO', 'video/mp4', 1234, ?, 8388608, 1, 'UPLOADED',
+				        ?, ?, 'synthetic-bucket', ?, ?, ?, ?, ?, ?, 'synthetic-etag')
+				""", uploadFileId, batchId, clientFileId, "video-summary-quality-file-" + uploadFileId, sha256, sha256,
+				Timestamp.from(createdAt), Timestamp.from(createdAt), "objects/" + uploadFileId,
+				"multipart-" + uploadFileId, Timestamp.from(createdAt), Timestamp.from(createdAt),
+				Timestamp.from(createdAt), sha256);
+		this.jdbcTemplate.update("""
+				INSERT INTO clip_asset (
+				    clip_asset_id, project_id, batch_id, source_upload_file_id, client_file_id,
+				    content_type, size_bytes, sha256, storage_bucket, object_key, storage_etag,
+				    asset_status, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, 'video/mp4', 1234, ?, 'synthetic-bucket', ?,
+				        'synthetic-etag', 'INGESTED', ?, ?)
+				""", clipAssetId, PROJECT_ID, batchId, uploadFileId, clientFileId, sha256, "objects/" + clipAssetId,
+				Timestamp.from(createdAt), Timestamp.from(createdAt));
+		if (qualityDecision != null) {
+			var reasonCode = switch (qualityDecision) {
+				case "QUALIFIED" -> "MEETS_REQUIREMENTS";
+				case "REJECTED" -> "OTHER_QUALITY_FAILURE";
+				case "NEEDS_REVIEW" -> "UNCERTAIN_QUALITY";
+				default -> throw new IllegalArgumentException("Unsupported quality decision: " + qualityDecision);
+			};
+			this.jdbcTemplate.update("""
+					INSERT INTO quality_review (
+					    quality_review_id, project_id, clip_asset_id, decision, reason_code,
+					    reviewed_by, reviewed_at, version)
+					VALUES (?, ?, ?, ?, ?, 'summary-quality-reviewer', ?, 0)
+					""", UUID.randomUUID(), PROJECT_ID, clipAssetId, qualityDecision, reasonCode,
+					Timestamp.from(createdAt));
+		}
+		return new VideoFixture(batchId, uploadFileId, clipAssetId, createdAt);
+	}
+
+	private record QualityFixture(VideoFixture video, String expectedDecision) {
+	}
+
+	private record VideoFixture(UUID batchId, UUID uploadFileId, UUID clipAssetId, Instant createdAt) {
 	}
 
 }

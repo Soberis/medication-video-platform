@@ -549,6 +549,7 @@ export type VideoSummaryMediaStatus = ClipAssetStatus
 export type VideoSummaryHandStatus = 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
 export type VideoSummaryHandResult = 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
 export type VideoSummarySource = 'HOSPITAL_REMOTE' | 'PLATFORM_LOCAL'
+export type VideoSummaryQualityDecision = 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
 export type VideoSummaryAnnotationStatus = 'NOT_STARTED' | 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
 export type VideoSummaryCleaningStatus = 'NOT_STARTED' | 'PASS' | 'WARNING' | 'REJECT'
 
@@ -560,6 +561,7 @@ export interface VideoSummary {
   captured_at: string | null
   received_at: string
   media_status: VideoSummaryMediaStatus
+  quality_decision: VideoSummaryQualityDecision
   hand_status: VideoSummaryHandStatus
   hand_result: VideoSummaryHandResult
   hand_retryable: boolean
