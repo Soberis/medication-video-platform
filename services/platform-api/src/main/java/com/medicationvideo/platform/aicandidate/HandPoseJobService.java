@@ -24,6 +24,8 @@ import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 @Service
 class HandPoseJobService {
 
+	private static final String AUTO_AFTER_MEDIA_INGESTED_ACTOR = "AUTO_AFTER_MEDIA_INGESTED";
+
 	private final ProjectAccessService projectAccessService;
 
 	private final AssetCatalogQueryService assetCatalog;
@@ -70,19 +72,38 @@ class HandPoseJobService {
 			String traceId) {
 		ensureEnabled();
 		var projectRole = this.projectAccessService.lockAndRequireMember(projectId, actorId);
+		return queueInternal(projectId, clipAssetId, new QueueContext(actorId, idempotencyKey, requestId, traceId,
+				AuditActorType.USER, "ROLE_" + projectRole.name(), "AI_HAND_POSE_JOB_QUEUED"));
+	}
+
+	/**
+	 * System path used after a successful media ingest. It deliberately shares the same
+	 * eligibility, capacity, natural-key and idempotency logic as the user path but does
+	 * not impersonate a project member.
+	 */
+	@Transactional
+	HandPoseJobResponse queueAfterMediaIngested(UUID projectId, UUID clipAssetId) {
+		ensureEnabled();
+		var idempotencyKey = "auto-after-media-ingested-" + clipAssetId;
+		return queueInternal(projectId, clipAssetId,
+				new QueueContext(AUTO_AFTER_MEDIA_INGESTED_ACTOR, idempotencyKey, idempotencyKey, null,
+						AuditActorType.SYSTEM, "SYSTEM/AUTO_AFTER_MEDIA_INGESTED", "AI_HAND_POSE_JOB_AUTO_QUEUED"));
+	}
+
+	private HandPoseJobResponse queueInternal(UUID projectId, UUID clipAssetId, QueueContext context) {
 		validateModel();
 		var fingerprint = fingerprint(projectId, clipAssetId);
-		var receiptKey = commandKey("queue", idempotencyKey);
+		var receiptKey = commandKey("queue", context.idempotencyKey());
 		var receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, receiptKey);
 		if (receipt.isEmpty()) {
 			// Receipts written before command namespaces were introduced remain
 			// replayable, but all new receipts are isolated by command type.
-			receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
+			receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, context.idempotencyKey());
 		}
 		if (receipt.isPresent()) {
 			return response(requireSameRequest(receipt.get(), fingerprint));
 		}
-		var legacyReplay = this.repository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
+		var legacyReplay = this.repository.findByProjectIdAndIdempotencyKey(projectId, context.idempotencyKey());
 		if (legacyReplay.isPresent()) {
 			var job = requireSameRequest(legacyReplay.get(), fingerprint);
 			this.recordReceipt(job, receiptKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
@@ -102,14 +123,14 @@ class HandPoseJobService {
 			this.recordReceipt(job, receiptKey, fingerprint, Instant.now().truncatedTo(ChronoUnit.MICROS));
 			return response(job);
 		}
-		var job = this.repository
-			.save(AiCandidateJob.queue(projectId, clipAssetId, this.modelSha256, input.inputDigest(),
-					input.inputSizeBytes(), input.contentType(), idempotencyKey, fingerprint, actorId, now));
+		var job = this.repository.save(AiCandidateJob.queue(projectId, clipAssetId, this.modelSha256,
+				input.inputDigest(), input.inputSizeBytes(), input.contentType(), context.idempotencyKey(), fingerprint,
+				context.actorId(), now));
 		this.recordReceipt(job, receiptKey, fingerprint, now);
 		this.attemptQueue.enqueue(job, 1, now);
-		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
-				"AI_HAND_POSE_JOB_QUEUED", "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
-				"MEDIAPIPE_HAND_LANDMARKER", requestId, traceId, "ROLE_" + projectRole.name(),
+		this.auditRecorder.record(new AuditEventCommand(now, context.actorType(), context.actorId(), projectId,
+				context.auditAction(), "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
+				"MEDIAPIPE_HAND_LANDMARKER", context.requestId(), context.traceId(), context.authorizationReference(),
 				java.util.Map.of("clip_asset_id", clipAssetId.toString(), "model_sha256", this.modelSha256,
 						"sampling_fps", Integer.toString(HandPoseProfile.SAMPLING_FPS))));
 		return response(job);
@@ -264,6 +285,10 @@ class HandPoseJobService {
 	private String fingerprint(UUID projectId, UUID clipAssetId) {
 		return HandPoseProfile.sha256(String.join("\n", projectId.toString(), clipAssetId.toString(), this.modelSha256,
 				HandPoseProfile.PROFILE_SHA256));
+	}
+
+	private record QueueContext(String actorId, String idempotencyKey, String requestId, String traceId,
+			AuditActorType actorType, String authorizationReference, String auditAction) {
 	}
 
 }

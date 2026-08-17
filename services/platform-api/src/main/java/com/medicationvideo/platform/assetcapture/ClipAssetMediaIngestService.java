@@ -18,12 +18,16 @@ public class ClipAssetMediaIngestService {
 
 	private final CaptureSessionMediaProjectionService sessionProjection;
 
+	private final HandPoseSchedulingPort handPoseScheduling;
+
 	public ClipAssetMediaIngestService(ClipAssetRepository assetRepository, CameraStreamRepository streamRepository,
-			MultipartObjectStorage objectStorage, CaptureSessionMediaProjectionService sessionProjection) {
+			MultipartObjectStorage objectStorage, CaptureSessionMediaProjectionService sessionProjection,
+			HandPoseSchedulingPort handPoseScheduling) {
 		this.assetRepository = assetRepository;
 		this.streamRepository = streamRepository;
 		this.objectStorage = objectStorage;
 		this.sessionProjection = sessionProjection;
+		this.handPoseScheduling = handPoseScheduling;
 	}
 
 	@Transactional
@@ -49,6 +53,9 @@ public class ClipAssetMediaIngestService {
 			stream.completeMediaIngest(succeeded, changedAt);
 			this.sessionProjection.refresh(projectId, stream.getCaptureSessionId(), changedAt);
 		});
+		if (succeeded) {
+			this.handPoseScheduling.scheduleAfterMediaIngested(projectId, clipAssetId);
+		}
 	}
 
 	private ClipAsset lock(UUID projectId, UUID clipAssetId) {
