@@ -195,7 +195,7 @@ class AssetFolderContractTests {
 	}
 
 	@Test
-	void administratorSoftDeletesAnAssetIdempotentlyAndCatalogHidesIt() throws Exception {
+	void administratorSoftDeletesAnAssetIdempotentlyAndHidesItFromDetail() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID);
 
 		deleteClipAsset(clipAssetId, ADMIN_TOKEN, "clip-delete-idem-0001", "Uploaded by mistake")
@@ -216,12 +216,6 @@ class AssetFolderContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/clip-assets", PROJECT_ID).header("Authorization",
-					"Bearer " + MEMBER_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(0));
-
 		deleteClipAsset(clipAssetId, ADMIN_TOKEN, "clip-delete-idem-0002", "A different retry reason")
 			.andExpect(status().isNoContent());
 		assertEquals(1, count("SELECT count(*) FROM audit_event WHERE project_id = ? AND action = ?", PROJECT_ID,

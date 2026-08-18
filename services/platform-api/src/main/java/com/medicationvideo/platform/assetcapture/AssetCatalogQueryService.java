@@ -19,8 +19,6 @@ public class AssetCatalogQueryService {
 
 	private static final String SESSION_CURSOR_KIND = "capture-session";
 
-	private static final String ASSET_CURSOR_KIND = "clip-asset";
-
 	private static final String EVENT_LOG_CURSOR_KIND = "capture-event-log";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
@@ -141,108 +139,6 @@ public class AssetCatalogQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	ClipAssetListResponse listClipAssets(UUID projectId, UUID captureSessionId, UUID batchId, String deviceId,
-			String cameraRole, ClipAssetStatus status, UUID folderId, boolean unclassified, Instant recordedFrom,
-			Instant recordedBefore, String cursor, int limit) {
-		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
-		if (folderId != null && unclassified) {
-			throw new AssetCatalogQueryException("INVALID_FOLDER_FILTER",
-					"folder_id and unclassified=true cannot be combined.");
-		}
-		var decodedCursor = decodeCursor(ASSET_CURSOR_KIND, cursor);
-		var recordedAtExpression = "COALESCE(stream.record_start_utc, asset.created_at)";
-		var sql = new StringBuilder("""
-				SELECT asset.clip_asset_id,
-				       asset.batch_id,
-				       asset.source_upload_file_id,
-				       asset.client_file_id,
-				       asset.content_type,
-				       asset.size_bytes,
-				       asset.sha256,
-				       asset.asset_status,
-				       asset.folder_id,
-				       asset.created_at,
-				       asset.updated_at,
-				       stream.capture_session_id,
-				       stream.camera_stream_id,
-				       stream.camera_channel_id,
-				       stream.camera_index,
-				      member.camera_role,
-				      member.mount_position,
-				      member.enabled_for_hand_detection,
-				     stream.record_start_utc,
-				       stream.time_offset_ms,
-				       stream.declared_sync_status,
-				       stream.stream_status,
-				       stream.quality_status AS stream_quality_status,
-				       COALESCE(stream.record_start_utc, asset.created_at) AS recorded_at
-				FROM clip_asset asset
-				LEFT JOIN camera_stream stream ON stream.clip_asset_id = asset.clip_asset_id
-				LEFT JOIN capture_session session ON session.capture_session_id = stream.capture_session_id
-				LEFT JOIN camera_set_snapshot_member member
-				  ON member.camera_set_snapshot_member_id = stream.camera_set_snapshot_member_id
-				WHERE asset.project_id = :projectId
-				  AND asset.deleted_at IS NULL
-				""");
-		var parameters = new MapSqlParameterSource("projectId", projectId);
-		if (captureSessionId != null) {
-			sql.append(" AND stream.capture_session_id = :captureSessionId\n");
-			parameters.addValue("captureSessionId", captureSessionId);
-		}
-		if (batchId != null) {
-			sql.append(" AND asset.batch_id = :batchId\n");
-			parameters.addValue("batchId", batchId);
-		}
-		if (deviceId != null) {
-			sql.append(" AND session.device_id = :deviceId\n");
-			parameters.addValue("deviceId", deviceId);
-		}
-		if (cameraRole != null) {
-			sql.append(" AND member.camera_role = :cameraRole\n");
-			parameters.addValue("cameraRole", cameraRole);
-		}
-		if (status != null) {
-			sql.append(" AND asset.asset_status = :assetStatus\n");
-			parameters.addValue("assetStatus", status.name());
-		}
-		if (folderId != null) {
-			sql.append(" AND asset.folder_id = :folderId\n");
-			parameters.addValue("folderId", folderId);
-		}
-		else if (unclassified) {
-			sql.append(" AND asset.folder_id IS NULL\n");
-		}
-		if (recordedFrom != null) {
-			sql.append(" AND ").append(recordedAtExpression).append(" >= :recordedFrom\n");
-			parameters.addValue("recordedFrom", Timestamp.from(recordedFrom));
-		}
-		if (recordedBefore != null) {
-			sql.append(" AND ").append(recordedAtExpression).append(" < :recordedBefore\n");
-			parameters.addValue("recordedBefore", Timestamp.from(recordedBefore));
-		}
-		if (decodedCursor != null) {
-			sql.append(" AND (")
-				.append(recordedAtExpression)
-				.append(" < :cursorRecordedAt OR (")
-				.append(recordedAtExpression)
-				.append(" = :cursorRecordedAt AND asset.clip_asset_id < :cursorId))\n");
-			parameters.addValue("cursorRecordedAt", Timestamp.from(decodedCursor.recordedAt()));
-			parameters.addValue("cursorId", decodedCursor.id());
-		}
-		sql.append(" ORDER BY ")
-			.append(recordedAtExpression)
-			.append(" DESC, asset.clip_asset_id DESC LIMIT :fetchLimit");
-		parameters.addValue("fetchLimit", limit + 1);
-
-		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapClipAsset);
-		var page = boundedPage(rows, limit);
-		var items = page.stream().map(ClipAssetRow::response).toList();
-		var nextCursor = rows.size() > limit ? AssetCatalogCursor.encode(ASSET_CURSOR_KIND, page.getLast().recordedAt(),
-				page.getLast().response().clipAssetId()) : null;
-		return new ClipAssetListResponse(items, nextCursor);
-	}
-
-	@Transactional(readOnly = true)
 	ClipAssetReadResponse getClipAsset(UUID projectId, UUID clipAssetId) {
 		var asset = this.clipAssetRepository.findByClipAssetIdAndProjectId(clipAssetId, projectId)
 			.filter(existing -> !existing.isDeleted())
@@ -354,30 +250,6 @@ public class AssetCatalogQueryService {
 				CaptureQualityStatus.valueOf(resultSet.getString("quality_status")), instant(resultSet, "created_at"));
 	}
 
-	private ClipAssetRow mapClipAsset(ResultSet resultSet, int rowNumber) throws SQLException {
-		ClipAssetSessionBindingResponse binding = null;
-		var cameraStreamId = resultSet.getObject("camera_stream_id", UUID.class);
-		if (cameraStreamId != null) {
-			binding = new ClipAssetSessionBindingResponse(resultSet.getObject("capture_session_id", UUID.class),
-					cameraStreamId, resultSet.getObject("camera_channel_id", UUID.class),
-					resultSet.getInt("camera_index"), resultSet.getString("camera_role"),
-					resultSet.getString("mount_position"), instant(resultSet, "record_start_utc"),
-					resultSet.getLong("time_offset_ms"),
-					DeclaredSyncStatus.valueOf(resultSet.getString("declared_sync_status")),
-					CameraStreamStatus.valueOf(resultSet.getString("stream_status")),
-					CaptureQualityStatus.valueOf(resultSet.getString("stream_quality_status")),
-					resultSet.getBoolean("enabled_for_hand_detection"));
-		}
-		var response = new ClipAssetReadResponse(resultSet.getObject("clip_asset_id", UUID.class),
-				resultSet.getObject("batch_id", UUID.class), resultSet.getObject("source_upload_file_id", UUID.class),
-				resultSet.getObject("client_file_id", UUID.class), resultSet.getString("content_type"),
-				resultSet.getLong("size_bytes"), resultSet.getString("sha256"),
-				ClipAssetStatus.valueOf(resultSet.getString("asset_status")),
-				resultSet.getObject("folder_id", UUID.class), binding, instant(resultSet, "created_at"),
-				instant(resultSet, "updated_at"));
-		return new ClipAssetRow(response, instant(resultSet, "recorded_at"));
-	}
-
 	private CaptureEventLogReadResponse mapCaptureEventLog(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new CaptureEventLogReadResponse(resultSet.getObject("capture_event_log_id", UUID.class),
 				resultSet.getObject("batch_id", UUID.class), resultSet.getObject("source_upload_file_id", UUID.class),
@@ -414,9 +286,6 @@ public class AssetCatalogQueryService {
 			return List.copyOf(rows);
 		}
 		return List.copyOf(new ArrayList<>(rows.subList(0, limit)));
-	}
-
-	private record ClipAssetRow(ClipAssetReadResponse response, Instant recordedAt) {
 	}
 
 }

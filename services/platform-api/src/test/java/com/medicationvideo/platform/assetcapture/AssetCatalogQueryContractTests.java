@@ -119,46 +119,21 @@ class AssetCatalogQueryContractTests {
 	}
 
 	@Test
-	void listsAndReadsClipAssetsWithoutExposingStorageOrPreviewCredentials() throws Exception {
-		var own = insertSessionGraph(PROJECT_ID, "device-own", "HANDS", Instant.parse("2026-07-15T02:00:00Z"));
+	void readsClipAssetsWithoutExposingStorageOrPreviewCredentials() throws Exception {
 		var unbound = insertUnboundAsset(PROJECT_ID, Instant.parse("2026-07-15T01:00:00Z"));
 		var hidden = insertSessionGraph(OTHER_PROJECT_ID, "device-hidden", "HANDS",
 				Instant.parse("2026-07-15T03:00:00Z"));
-		var folderId = insertFolder(PROJECT_ID, "Ready for review");
-		this.jdbcTemplate.update("UPDATE clip_asset SET folder_id = ? WHERE clip_asset_id = ?", folderId,
-				own.clipAssetId());
-
-		authorizedProjectGet("/clip-assets?camera_role=HANDS").andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].clip_asset_id").value(own.clipAssetId().toString()))
-			.andExpect(
-					jsonPath("$.items[0].session_binding.capture_session_id").value(own.captureSessionId().toString()))
-			.andExpect(jsonPath("$.items[0].session_binding.declared_sync_status").value("WARNING"))
-			.andExpect(jsonPath("$.items[0].folder_id").value(folderId.toString()))
-			.andExpect(jsonPath("$.items[0].storage_bucket").doesNotExist())
-			.andExpect(jsonPath("$.items[0].object_key").doesNotExist())
-			.andExpect(jsonPath("$.items[0].storage_etag").doesNotExist())
-			.andExpect(jsonPath("$.items[0].preview_url").doesNotExist());
 
 		authorizedProjectGet("/clip-assets/" + unbound).andExpect(status().isOk())
 			.andExpect(jsonPath("$.clip_asset_id").value(unbound.toString()))
+			.andExpect(jsonPath("$.storage_bucket").doesNotExist())
+			.andExpect(jsonPath("$.object_key").doesNotExist())
+			.andExpect(jsonPath("$.storage_etag").doesNotExist())
+			.andExpect(jsonPath("$.preview_url").doesNotExist())
 			.andExpect(jsonPath("$.session_binding").doesNotExist());
 
 		authorizedProjectGet("/clip-assets/" + hidden.clipAssetId()).andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
-
-		authorizedProjectGet("/clip-assets?folder_id=" + folderId).andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].clip_asset_id").value(own.clipAssetId().toString()));
-
-		authorizedProjectGet("/clip-assets?unclassified=true").andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].clip_asset_id").value(unbound.toString()))
-			.andExpect(jsonPath("$.items[0].folder_id").doesNotExist());
-
-		authorizedProjectGet("/clip-assets?folder_id=" + folderId + "&unclassified=true")
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error_code").value("INVALID_FOLDER_FILTER"));
 	}
 
 	@Test
@@ -212,7 +187,7 @@ class AssetCatalogQueryContractTests {
 			.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
 
 		authorizedProjectGet(
-				"/clip-assets?recorded_from=2026-07-16T00:00:00Z" + "&recorded_before=2026-07-15T00:00:00Z")
+				"/capture-sessions?recorded_from=2026-07-16T00:00:00Z" + "&recorded_before=2026-07-15T00:00:00Z")
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error_code").value("INVALID_TIME_RANGE"));
 
@@ -337,17 +312,6 @@ class AssetCatalogQueryContractTests {
 				""", clipAssetId, projectId, batchId, uploadFileId, clientFileId, SHA256, "objects/" + clipAssetId,
 				Timestamp.from(createdAt), Timestamp.from(createdAt));
 		return clipAssetId;
-	}
-
-	private UUID insertFolder(UUID projectId, String displayName) {
-		var folderId = UUID.randomUUID();
-		this.jdbcTemplate.update("""
-				INSERT INTO asset_folder (
-				    folder_id, project_id, display_name, created_by, created_at,
-				    updated_by, updated_at, row_version)
-				VALUES (?, ?, ?, 'local-synthetic-admin', now(), 'local-synthetic-admin', now(), 0)
-				""", folderId, projectId, displayName);
-		return folderId;
 	}
 
 	private EventLogObject insertEventLogObject(UUID projectId, String deviceId, Instant indexedAt) {

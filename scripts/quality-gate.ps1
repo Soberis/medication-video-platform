@@ -432,7 +432,6 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru',
         'api-tests/bruno/medication-platform/Asset Catalog/01 List Capture Sessions.bru',
-        'api-tests/bruno/medication-platform/Asset Catalog/02 List Clip Assets.bru',
         'api-tests/bruno/medication-platform/Asset Catalog/03 List Capture Event Logs.bru',
         'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru',
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',

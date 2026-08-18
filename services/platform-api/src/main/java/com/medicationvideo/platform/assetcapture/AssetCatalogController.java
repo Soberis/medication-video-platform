@@ -85,30 +85,6 @@ class AssetCatalogController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
-	@GetMapping("/clip-assets")
-	ResponseEntity<ClipAssetListResponse> listClipAssets(@PathVariable UUID projectId,
-			@RequestParam(name = "capture_session_id", required = false) UUID captureSessionId,
-			@RequestParam(name = "batch_id", required = false) UUID batchId,
-			@RequestParam(name = "device_id",
-					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "camera_role",
-					required = false) @Pattern(regexp = "^[A-Z][A-Z0-9_]{0,63}$") String cameraRole,
-			@RequestParam(required = false) ClipAssetStatus status,
-			@RequestParam(name = "folder_id", required = false) UUID folderId,
-			@RequestParam(defaultValue = "false") boolean unclassified,
-			@RequestParam(name = "recorded_from",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
-			@RequestParam(name = "recorded_before",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
-			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listClipAssets(projectId, captureSessionId, batchId, deviceId, cameraRole, status,
-				folderId, unclassified, recordedFrom, recordedBefore, cursor, limit);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
 	@GetMapping("/videos")
 	ResponseEntity<VideoSummaryPage> listVideos(@PathVariable UUID projectId,
 			@RequestParam(required = false) UploadSourceType source,
