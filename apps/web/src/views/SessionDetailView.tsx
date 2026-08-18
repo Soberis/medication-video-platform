@@ -1,18 +1,13 @@
-import { Button, Card, Descriptions, message, Modal, Table, Tag } from 'antd'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Button, Card, Descriptions, Table, Tag } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router'
 
 import {
   CatalogApiError,
-  createDatasetVersionDraft,
   getCaptureSession,
-  getCaptureSessionDatasetAdmissionPreview,
   type CameraStream,
   type CaptureSessionDetail,
-  type DatasetAdmissionPreview,
 } from '@/api/catalog'
-import { getProject, type ProjectRole } from '@/api/projects'
-import { clearDatasetDraftIntent, getDatasetDraftIntent } from '@/app/dataset-draft-intent'
 import { paths } from '@/app/paths'
 import { SessionCameraPlayback } from '@/components/SessionCameraPlayback'
 import {
@@ -25,23 +20,6 @@ import {
   streamStatusLabels,
 } from '@/catalog-presentation'
 
-const admissionReasonLabels: Record<string, string> = {
-  SESSION_ASSEMBLY_INCOMPLETE: '本次配药操作的视频流尚未组装完整',
-  SESSION_STREAM_COUNT_MISMATCH: '已接收的视频流数量与相机配置不一致',
-  SESSION_QUALITY_NOT_PASS: '本次配药操作的技术检测尚未通过',
-  STREAM_NOT_INGESTED: '有相机视频尚未完成媒体入库',
-  STREAM_QUALITY_REJECTED: '有相机视频未通过技术检测',
-  CLIP_ASSET_NOT_INGESTED: '有视频资产尚未完成媒体检测',
-  CLIP_ASSET_DELETED: '有视频已经删除',
-  QUALITY_REVIEW_NOT_QUALIFIED: '有视频尚未通过人工质量判断',
-  QUALITY_REVIEW_CHANGED_AFTER_POST_CLEANING: '人工质量结论已变更，需要重新完成清洗检查',
-  ANNOTATION_REVISION_MISSING: '有视频尚未提交人工配药动作标注',
-  ANNOTATION_REVIEW_NOT_APPROVED: '有标注尚未通过管理员复核',
-  POST_CLEANING_MISSING: '有已复核标注尚未完成清洗检查',
-  POST_CLEANING_WARNING: '有标注清洗结果需要人工确认',
-  POST_CLEANING_REJECT: '有标注未通过清洗检查',
-}
-
 export default function SessionDetailView() {
   const { projectId = '', id: sessionId = '' } = useParams()
   return <SessionDetailContent key={`${projectId}:${sessionId}`} />
@@ -49,63 +27,11 @@ export default function SessionDetailView() {
 
 function SessionDetailContent() {
   const { projectId = '', id: sessionId = '' } = useParams()
-  const navigate = useNavigate()
   const [detail, setDetail] = useState<CaptureSessionDetail | null>(null)
-  const [admissionPreview, setAdmissionPreview] = useState<DatasetAdmissionPreview | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
-  const [admissionLoadState, setAdmissionLoadState] = useState<'loading' | 'success' | 'error'>(
-    'loading',
-  )
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [admissionErrorCode, setAdmissionErrorCode] = useState('')
-  const [admissionErrorMessage, setAdmissionErrorMessage] = useState('')
-  const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
-  const [roleLoadState, setRoleLoadState] = useState<'loading' | 'success' | 'error'>('loading')
-  const [roleErrorCode, setRoleErrorCode] = useState('')
-  const [creatingDatasetDraft, setCreatingDatasetDraft] = useState(false)
   const detailRequest = useRef<AbortController | null>(null)
-  const admissionRequest = useRef<AbortController | null>(null)
-  const roleRequest = useRef<AbortController | null>(null)
-  const draftRequest = useRef<AbortController | null>(null)
-
-  useLayoutEffect(() => {
-    return () => {
-      // Do not abort a user command during navigation; its persisted idempotency key makes a later
-      // retry safe, while clearing this reference prevents a stale response from navigating back.
-      draftRequest.current = null
-    }
-  }, [projectId, sessionId])
-
-  const admissionReasonSummary = useMemo(() => {
-    if (!admissionPreview) return []
-    const affectedStreams = new Map<string, Set<string>>()
-    for (const reason of admissionPreview.blocking_reasons) affectedStreams.set(reason, new Set())
-    for (const stream of admissionPreview.streams)
-      for (const reason of stream.blocking_reasons) {
-        const streams = affectedStreams.get(reason) ?? new Set<string>()
-        streams.add(stream.camera_stream_id)
-        affectedStreams.set(reason, streams)
-      }
-    return [...affectedStreams.entries()].map(([code, streams]) => ({
-      code,
-      affectedStreamCount: streams.size,
-      label: admissionReasonLabels[code] ?? `存在尚未识别的准入条件（${code}）`,
-    }))
-  }, [admissionPreview])
-  const ingestedStreamCount =
-    admissionPreview?.streams.filter(
-      (stream) => stream.stream_status === 'INGESTED' && stream.asset_status === 'INGESTED',
-    ).length ?? 0
-  const qualifiedStreamCount =
-    admissionPreview?.streams.filter((stream) => stream.quality_review_decision === 'QUALIFIED')
-      .length ?? 0
-  const approvedAnnotationCount =
-    admissionPreview?.streams.filter(
-      (stream) =>
-        stream.annotation_review_decision === 'APPROVED' &&
-        stream.post_cleaning_decision === 'PASS',
-    ).length ?? 0
 
   const loadDetail = useCallback(async () => {
     detailRequest.current?.abort()
@@ -129,121 +55,13 @@ function SessionDetailContent() {
       if (detailRequest.current === request) detailRequest.current = null
     }
   }, [projectId, sessionId])
-  const loadAdmissionPreview = useCallback(async () => {
-    admissionRequest.current?.abort()
-    const request = new AbortController()
-    admissionRequest.current = request
-    setAdmissionLoadState('loading')
-    setAdmissionErrorCode('')
-    setAdmissionErrorMessage('')
-    try {
-      const response = await getCaptureSessionDatasetAdmissionPreview(
-        projectId,
-        sessionId,
-        request.signal,
-      )
-      if (admissionRequest.current !== request) return
-      setAdmissionPreview(response)
-      setAdmissionLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || admissionRequest.current !== request) return
-      setAdmissionPreview(null)
-      setAdmissionLoadState('error')
-      setAdmissionErrorCode(
-        error instanceof CatalogApiError ? error.errorCode : 'DATASET_ADMISSION_PREVIEW_FAILED',
-      )
-      setAdmissionErrorMessage(
-        error instanceof CatalogApiError
-          ? error.message
-          : '暂时无法核对训练数据准入条件，请稍后重试。',
-      )
-    } finally {
-      if (admissionRequest.current === request) admissionRequest.current = null
-    }
-  }, [projectId, sessionId])
-  const loadProjectRole = useCallback(async () => {
-    roleRequest.current?.abort()
-    const request = new AbortController()
-    roleRequest.current = request
-    setProjectRole(null)
-    setRoleLoadState('loading')
-    setRoleErrorCode('')
-    try {
-      const project = await getProject(projectId, request.signal)
-      if (roleRequest.current !== request) return
-      setProjectRole(project.current_role)
-      setRoleLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || roleRequest.current !== request) return
-      setProjectRole(null)
-      setRoleLoadState('error')
-      setRoleErrorCode(
-        error instanceof CatalogApiError ? error.errorCode : 'PROJECT_ROLE_REQUEST_FAILED',
-      )
-    } finally {
-      if (roleRequest.current === request) roleRequest.current = null
-    }
-  }, [projectId])
-  const createDraft = useCallback(async () => {
-    if (projectRole !== 'ADMIN') {
-      void message.error('只有当前项目管理员可以创建数据集草稿。')
-      return
-    }
-    if (draftRequest.current) return
-    const intent = getDatasetDraftIntent(projectId, '配药操作训练候选', [sessionId])
-    const request = new AbortController()
-    draftRequest.current = request
-    setCreatingDatasetDraft(true)
-    try {
-      const draft = await createDatasetVersionDraft(
-        projectId,
-        '配药操作训练候选',
-        [sessionId],
-        intent.idempotencyKey,
-        request.signal,
-      )
-      if (draftRequest.current !== request) return
-      clearDatasetDraftIntent(intent)
-      void message.success(`已创建数据集草稿 ${draft.dataset_version_id.slice(0, 8)}。`)
-      void navigate(paths.dataset(projectId, draft.dataset_version_id))
-    } catch (error) {
-      if (draftRequest.current !== request) return
-      const outcomeIsUncertain = !(error instanceof CatalogApiError) || error.retryable
-      if (!outcomeIsUncertain) clearDatasetDraftIntent(intent)
-      void message.error(
-        outcomeIsUncertain
-          ? '暂时无法确认数据集草稿是否已创建，请再次点击创建安全重试。'
-          : error.message,
-      )
-    } finally {
-      if (draftRequest.current === request) {
-        draftRequest.current = null
-        setCreatingDatasetDraft(false)
-      }
-    }
-  }, [navigate, projectId, projectRole, sessionId])
-  const confirmCreateDraft = useCallback(() => {
-    void Modal.confirm({
-      title: '创建训练数据草稿',
-      content: '将再次核对当前准入条件，并保存本次配药操作的证据快照。不会冻结、拆分或导出数据。',
-      okText: '创建草稿',
-      cancelText: '取消',
-      onOk: createDraft,
-    })
-  }, [createDraft])
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => void Promise.all([loadDetail(), loadAdmissionPreview(), loadProjectRole()]),
-      0,
-    )
+    const timer = window.setTimeout(() => void loadDetail(), 0)
     return () => {
       window.clearTimeout(timer)
       detailRequest.current?.abort()
-      admissionRequest.current?.abort()
-      roleRequest.current?.abort()
-      draftRequest.current = null
     }
-  }, [loadAdmissionPreview, loadDetail, loadProjectRole])
+  }, [loadDetail])
 
   return (
     <>
@@ -289,118 +107,6 @@ function SessionDetailContent() {
             projectId={projectId}
             streams={detail.streams}
           />
-          <Card
-            className="detail-card"
-            variant="outlined"
-            title={
-              <div className="card-header-row">
-                <div>
-                  <strong>训练数据准备度</strong>
-                  <span className="card-header-note">当前事实预览，不会自动创建或冻结数据集</span>
-                </div>
-                {admissionLoadState === 'success' && admissionPreview ? (
-                  <Tag color={admissionPreview.eligible ? 'success' : 'warning'}>
-                    {admissionPreview.eligible ? '可以进入数据集' : '尚未准备完成'}
-                  </Tag>
-                ) : null}
-              </div>
-            }
-          >
-            {admissionLoadState === 'loading' ? (
-              <div className="readiness-loading" role="status">
-                正在核对采集、技术检测、人工质量和标注证据…
-              </div>
-            ) : null}
-            {admissionLoadState === 'error' ? (
-              <div className="catalog-error readiness-error" role="alert">
-                <span>{admissionErrorMessage}</span>
-                <strong>{admissionErrorCode}</strong>
-                <Button onClick={() => void loadAdmissionPreview()}>重试</Button>
-              </div>
-            ) : null}
-            {admissionLoadState === 'success' && admissionPreview ? (
-              <>
-                <div className="readiness-evidence" data-ready={admissionPreview.eligible}>
-                  <div>
-                    <span>已入库视频</span>
-                    <strong>
-                      {admissionPreview.received_camera_count} /{' '}
-                      {admissionPreview.expected_camera_count} 路
-                    </strong>
-                    <small>{assemblyStatusLabels[admissionPreview.assembly_status]}</small>
-                  </div>
-                  <div>
-                    <span>技术检测</span>
-                    <strong>
-                      {ingestedStreamCount} / {admissionPreview.streams.length} 路
-                    </strong>
-                    <small>{qualityStatusLabels[admissionPreview.quality_status]}</small>
-                  </div>
-                  <div>
-                    <span>人工质量</span>
-                    <strong>
-                      {qualifiedStreamCount} / {admissionPreview.streams.length} 路
-                    </strong>
-                    <small>人工判断合格</small>
-                  </div>
-                  <div>
-                    <span>标注与清洗</span>
-                    <strong>
-                      {approvedAnnotationCount} / {admissionPreview.streams.length} 路
-                    </strong>
-                    <small>管理员复核及清洗通过</small>
-                  </div>
-                </div>
-                {admissionPreview.eligible ? (
-                  <>
-                    <div className="readiness-result readiness-result-ready">
-                      <div>
-                        <strong>当前证据满足训练数据准入条件</strong>
-                        <span>
-                          {projectRole === 'ADMIN'
-                            ? '创建草稿时仍会重新校验，避免使用已变化的数据。'
-                            : projectRole === 'MEMBER'
-                              ? '当前项目管理员可据此创建候选草稿。'
-                              : roleLoadState === 'error'
-                                ? '项目权限暂时无法核对，暂不提供创建草稿操作。'
-                                : '正在核对当前项目权限。'}
-                        </span>
-                      </div>
-                      {projectRole === 'ADMIN' ? (
-                        <Button
-                          type="primary"
-                          loading={creatingDatasetDraft}
-                          onClick={confirmCreateDraft}
-                        >
-                          创建数据集草稿
-                        </Button>
-                      ) : null}
-                    </div>
-                    {roleLoadState === 'error' ? (
-                      <div className="permission-check-error" role="alert">
-                        <strong>{roleErrorCode}</strong>
-                        <Button onClick={() => void loadProjectRole()}>重试权限核对</Button>
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="readiness-result">
-                    <strong>还需完成 {admissionReasonSummary.length} 项条件</strong>
-                    <ul>
-                      {admissionReasonSummary.map((reason) => (
-                        <li key={reason.code} title={reason.code}>
-                          <span>{reason.label}</span>
-                          {reason.affectedStreamCount > 0 ? (
-                            <small>影响 {reason.affectedStreamCount} 路视频</small>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
-            ) : null}
-          </Card>
           <Card className="detail-card" title={<strong>采集概况</strong>} variant="outlined">
             <Descriptions
               column={{ xs: 1, sm: 2, lg: 3 }}

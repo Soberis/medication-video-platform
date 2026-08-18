@@ -103,12 +103,6 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: '/projects/:projectId/datasets/:id',
-            lazy: async () => ({
-              Component: (await import('@/views/DatasetVersionDetailView')).default,
-            }),
-          },
-          {
             path: '/projects/:projectId/event-logs',
             lazy: async () => ({
               Component: (await import('@/views/CaptureEventLogListView')).default,
