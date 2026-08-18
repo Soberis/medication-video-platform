@@ -152,17 +152,19 @@ export default function AssetDetailView() {
   const canPlay = projectRole !== null && detail?.content_type === 'video/mp4'
   const canRecoverMissingMediaProbe = projectRole === 'ADMIN' && detail?.status === 'UPLOADED'
   const canReviewQuality = projectRole !== null && detail?.status === 'INGESTED'
+  const hasCurrentQualifiedQuality =
+    qualityLoadState === 'success' && qualityReview?.decision === 'QUALIFIED'
   const canCreateAnnotationTask =
     projectRole === 'ADMIN' &&
     detail?.status === 'INGESTED' &&
-    qualityReview?.decision === 'QUALIFIED' &&
+    hasCurrentQualifiedQuality &&
     annotationAssignees.length > 0 &&
     annotationTaskLoadState === 'success' &&
     annotationTask === null
   const canShowAnnotationTaskCard =
     projectRole === 'ADMIN' &&
     detail?.status === 'INGESTED' &&
-    qualityReview?.decision === 'QUALIFIED' &&
+    hasCurrentQualifiedQuality &&
     annotationTaskLoadState === 'success' &&
     (annotationTask !== null || annotationAssignees.length > 0)
   const canRequestHandPose =
@@ -346,7 +348,9 @@ export default function AssetDetailView() {
             label: '清洗',
             state: 'complete',
             status: '已通过清洗',
-            detail: '已通过清洗，可参与训练数据导出',
+            detail: hasCurrentQualifiedQuality
+              ? '已通过清洗，可参与训练数据导出'
+              : '历史清洗已通过；当前质量结论未确认或未通过，暂不能参与训练数据导出',
           }
         : cleaningResult?.outcome === 'WARNING' || cleaningResult?.outcome === 'REJECT'
           ? {
@@ -376,6 +380,7 @@ export default function AssetDetailView() {
     detail,
     handPoseCandidates,
     handPoseJob,
+    hasCurrentQualifiedQuality,
     projectRole,
     qualityReview,
   ])
@@ -387,6 +392,11 @@ export default function AssetDetailView() {
     workflowSteps.find((step) => step.state === 'blocked') ??
     [...workflowSteps].reverse().find((step) => step.state === 'complete') ??
     workflowSteps[0]
+
+  const canParticipateInTrainingDataExport =
+    hasCurrentQualifiedQuality &&
+    annotationTaskLoadState === 'success' &&
+    annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS'
 
   const nextStep = useMemo<DetailNextStep>(() => {
     if (!detail) {
@@ -416,25 +426,40 @@ export default function AssetDetailView() {
         interactive: false,
       }
     }
-    if (annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS') {
+    if (qualityLoadState !== 'success') {
       return {
-        title: '已通过清洗，可参与训练数据导出',
-        description: '实际可导出的训练行数以训练数据导出预览为准。',
-        buttonLabel: '导出训练数据',
-        kind: 'navigate',
-        interactive: projectRole === 'ADMIN',
+        title: qualityLoadState === 'error' ? '暂时无法读取质量结论' : '读取人工质量判断',
+        description: '需先确认当前人工质量结论，不使用前端缓存状态推进流程。',
+        buttonLabel: '读取质量结论',
+        kind: 'none',
+        interactive: false,
       }
     }
-    if (
-      qualityLoadState === 'success' &&
-      (qualityReview?.decision === 'UNREVIEWED' || qualityReview?.decision === 'NEEDS_REVIEW')
-    ) {
+    if (qualityReview?.decision === 'REJECTED') {
+      return {
+        title: '质量判断未通过',
+        description: `当前质量结论：${qualityDecisionLabels[qualityReview.decision]}。`,
+        buttonLabel: '查看质量结论',
+        kind: 'scroll',
+        interactive: true,
+      }
+    }
+    if (qualityReview?.decision === 'UNREVIEWED' || qualityReview?.decision === 'NEEDS_REVIEW') {
       return {
         title: '进行人工质量判断',
         description: '确认视频是否适合进入配药动作标注。',
         buttonLabel: '下一步：人工质量判断',
         kind: 'scroll',
         interactive: true,
+      }
+    }
+    if (canParticipateInTrainingDataExport) {
+      return {
+        title: '已通过清洗，可参与训练数据导出',
+        description: '实际可导出的训练行数以训练数据导出预览为准。',
+        buttonLabel: '导出训练数据',
+        kind: 'navigate',
+        interactive: projectRole === 'ADMIN',
       }
     }
     if (
@@ -522,15 +547,6 @@ export default function AssetDetailView() {
         interactive: true,
       }
     }
-    if (qualityReview?.decision === 'REJECTED') {
-      return {
-        title: '质量判断未通过',
-        description: `当前质量结论：${qualityDecisionLabels[qualityReview.decision]}。`,
-        buttonLabel: '查看质量结论',
-        kind: 'scroll',
-        interactive: true,
-      }
-    }
     return {
       title: '查看处理流程',
       description: '按右侧流程继续处理当前视频。',
@@ -540,6 +556,7 @@ export default function AssetDetailView() {
     }
   }, [
     canCreateAnnotationTask,
+    canParticipateInTrainingDataExport,
     annotationTask,
     detail,
     qualityLoadState,
@@ -1277,9 +1294,7 @@ export default function AssetDetailView() {
                   </ol>
                   <div className="workflow-next-step">
                     <span className="app-eyebrow">
-                      {annotationTask?.annotation_revision?.post_cleaning_result?.outcome === 'PASS'
-                        ? '当前结果'
-                        : '下一步'}
+                      {canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
                     </span>
                     <strong>{nextStep.title}</strong>
                     <p>{nextStep.description}</p>

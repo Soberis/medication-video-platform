@@ -1752,6 +1752,31 @@ describe('catalog views', () => {
     expect(document.querySelector('.workbench-primary')?.tagName).toBe('SECTION')
   })
 
+  it('keeps a historical Cleaning PASS behind a current rejected quality decision', async () => {
+    stubAsset({
+      role: 'ADMIN',
+      status: 'INGESTED',
+      quality: {
+        ...unreviewedQuality(),
+        quality_review_id: 'c0000000-0000-4000-8000-000000000002',
+        decision: 'REJECTED',
+        reason_code: 'OTHER_QUALITY_FAILURE',
+        reviewed_by: 'local-synthetic-admin',
+        reviewed_at: '2026-08-11T01:00:00Z',
+        version: 1,
+      },
+      existingAnnotationTask: completedAnnotationTask(),
+    })
+
+    renderAssetDetail()
+
+    expect(await screen.findByRole('button', { name: '查看质量结论' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
+    expect(
+      screen.getByText('历史清洗已通过；当前质量结论未确认或未通过，暂不能参与训练数据导出'),
+    ).toBeInTheDocument()
+  })
+
   it('keeps automatic hand-pose detection auxiliary and does not add a manual start action', async () => {
     const fetchMock = stubAsset({ role: 'MEMBER', status: 'INGESTED', handPose: true })
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
