@@ -644,18 +644,6 @@ export interface CaptureSessionFilters {
   recordedBefore?: string
 }
 
-export interface ClipAssetFilters {
-  captureSessionId?: string
-  batchId?: string
-  deviceId?: string
-  cameraRole?: string
-  status?: ClipAssetStatus
-  folderId?: string
-  unclassified?: boolean
-  recordedFrom?: string
-  recordedBefore?: string
-}
-
 export interface CaptureEventLogFilters {
   batchId?: string
   deviceId?: string
@@ -1076,29 +1064,6 @@ export async function authorizeDatasetExportDownload(
   )
   if (response.ok) return (await response.json()) as DatasetExportDownloadAuthorization
   throw await toCatalogError(response)
-}
-
-export function listClipAssets(
-  projectId: string,
-  filters: ClipAssetFilters,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '20' })
-  add(query, 'capture_session_id', filters.captureSessionId)
-  add(query, 'batch_id', filters.batchId)
-  add(query, 'device_id', filters.deviceId)
-  add(query, 'camera_role', filters.cameraRole)
-  add(query, 'status', filters.status)
-  add(query, 'folder_id', filters.folderId)
-  if (filters.unclassified) query.set('unclassified', 'true')
-  add(query, 'recorded_from', filters.recordedFrom)
-  add(query, 'recorded_before', filters.recordedBefore)
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<ClipAssetRead>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets?${query.toString()}`,
-    signal,
-  )
 }
 
 export function listVideoSummaries(
