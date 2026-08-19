@@ -22,6 +22,14 @@ export default defineConfig(({ mode }) => {
   ) {
     throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
   }
+  const configuredApiPort = Number(environmentValue('PLATFORM_API_PORT') || '8080')
+  if (
+    !Number.isInteger(configuredApiPort) ||
+    configuredApiPort < 1024 ||
+    configuredApiPort > 65535
+  ) {
+    throw new Error('PLATFORM_API_PORT must be an integer between 1024 and 65535.')
+  }
 
   return {
     envDir: workspaceRoot,
@@ -36,7 +44,7 @@ export default defineConfig(({ mode }) => {
       port: configuredWebPort,
       proxy: {
         '/api': {
-          target: 'http://localhost:8080',
+          target: `http://127.0.0.1:${configuredApiPort}`,
           changeOrigin: true,
         },
       },
