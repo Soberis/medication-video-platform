@@ -11,7 +11,7 @@
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |
-| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | 历史同步约束参考；V1.20 不交付同步产品能力 |
+| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | CaptureSync 战略保留的同步约束参考；V1.21 不交付同步产品能力 |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [Web 前端与用户体验设计规范](./web-ux-and-frontend-guidelines.md) | 信息架构、页面状态、组件与状态管理启用门槛、可访问性和前端验收 |
@@ -22,10 +22,10 @@
 | 文档 | 历史用途 |
 | --- | --- |
 | [历史需求追踪矩阵](./requirements-traceability-history.md) | V1.17 及以前的实施记录、证据和历史结论 |
-| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.20 为准 |
+| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.21 当前规范为准 |
 | [Hand Pose PoC](./history/hand-pose-poc.md) | 历史本地推理参考；不定义当前产品语言 |
 | [Hand Pose Candidate Phase B](./history/hand-pose-candidate-phase-b.md) | 历史候选机制设计；不定义当前范围 |
-| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；单路/批量范围以 V1.20 为准 |
+| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；单路/批量范围以 V1.21 为准 |
 
 ## 维护规则
 

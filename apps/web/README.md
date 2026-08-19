@@ -1,6 +1,6 @@
 # Web
 
-React 管理端。当前激活的纵向功能包括上传排障、视频管理、单路视频资产详情、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、Cleaning，以及 `training-data.v2` 预览和 Parquet 下载。V1.11 下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
+React 管理端。当前激活的纵向功能包括上传排障、视频管理、单路视频资产详情、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、Cleaning，以及 `training-data.v2` 预览和 Parquet 下载。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
 
 ## Commands
 
