@@ -17,8 +17,11 @@ import {
   type VideoSummarySource,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
-import { formatDateTime, statusTone } from '@/catalog-presentation'
-import { parseVideoFilters, replaceVideoFiltersInSearchParams } from '@/catalog-video-filters'
+import { formatDateTime, shortId, statusTone } from '@/features/catalog/catalog-presentation'
+import {
+  parseVideoFilters,
+  replaceVideoFiltersInSearchParams,
+} from '@/features/catalog/catalog-video-filters'
 
 const mediaStatusLabels: Record<VideoSummaryMediaStatus, string> = {
   UPLOADED: '待处理',
@@ -229,19 +232,18 @@ export default function VideoManagementView() {
     <>
       <section className="page-heading" aria-labelledby="video-management-title">
         <div>
+          <p className="app-eyebrow">
+            {projectId ? `当前项目 · ${shortId(projectId)}` : '当前项目'}
+          </p>
           <h1 id="video-management-title">视频管理</h1>
-          <p>处理视频状态，并完成下一步操作。</p>
+          <p>根据当前状态处理视频，并推进人工流程。</p>
         </div>
         <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
           刷新
         </Button>
       </section>
       {summary ? (
-        <Card
-          className="summary-card video-management-summary"
-          variant="outlined"
-          aria-label="数据管理汇总"
-        >
+        <section className="video-management-summary" aria-label="数据管理汇总">
           <div className="video-summary-headline">
             <div>
               <span className="cell-secondary">视频</span>
@@ -264,17 +266,20 @@ export default function VideoManagementView() {
               {summary.pending_cleaning}
             </span>
           </div>
-        </Card>
+        </section>
       ) : null}
       {summaryError ? (
         <div className="catalog-notice" role="status">
           数据管理汇总暂不可用，视频列表仍可使用。
         </div>
       ) : null}
-      <Card className="filter-card video-management-filter-card" variant="outlined">
+      <section
+        className="video-management-filter-panel"
+        aria-labelledby="video-management-filters-title"
+      >
         <div className="filter-card-heading">
           <div>
-            <strong>状态筛选</strong>
+            <h2 id="video-management-filters-title">状态筛选</h2>
             <span>统计和列表使用相同条件</span>
           </div>
           <Button type="link" onClick={() => applyFilters({})}>
@@ -427,7 +432,7 @@ export default function VideoManagementView() {
             </label>
           </div>
         </details>
-      </Card>
+      </section>
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
           正在读取视频管理列表…
@@ -490,7 +495,10 @@ export default function VideoManagementView() {
                 title: '媒体',
                 width: 90,
                 render: (_, row) => (
-                  <Tag color={statusTone(row.media_status)}>
+                  <Tag
+                    bordered={false}
+                    className={`status-tag status-tag-${statusTone(row.media_status)}`}
+                  >
                     {mediaStatusLabels[row.media_status]}
                   </Tag>
                 ),
@@ -500,7 +508,10 @@ export default function VideoManagementView() {
                 width: 125,
                 render: (_, row) => (
                   <>
-                    <Tag color={statusTone(row.hand_status)}>
+                    <Tag
+                      bordered={false}
+                      className={`status-tag status-tag-${statusTone(row.hand_status)}`}
+                    >
                       {handStatusLabels[row.hand_status]}
                     </Tag>
                     <span className="cell-secondary">{handResultLabels[row.hand_result]}</span>
@@ -511,13 +522,21 @@ export default function VideoManagementView() {
                 title: '配药动作标注',
                 dataIndex: 'annotation_status',
                 width: 130,
-                render: (value: VideoSummaryAnnotationStatus) => annotationStatusLabels[value],
+                render: (value: VideoSummaryAnnotationStatus) => (
+                  <Tag bordered={false} className={`status-tag status-tag-${statusTone(value)}`}>
+                    {annotationStatusLabels[value]}
+                  </Tag>
+                ),
               },
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
                 width: 90,
-                render: (value: VideoSummaryCleaningStatus) => cleaningStatusLabels[value],
+                render: (value: VideoSummaryCleaningStatus) => (
+                  <Tag bordered={false} className={`status-tag status-tag-${statusTone(value)}`}>
+                    {cleaningStatusLabels[value]}
+                  </Tag>
+                ),
               },
               {
                 title: '下一步',

@@ -25,7 +25,7 @@ import {
   formatDateTime,
   qualityStatusLabels,
   streamStatusLabels,
-} from '@/catalog-presentation'
+} from '@/features/catalog/catalog-presentation'
 
 export type PlaybackState = 'idle' | 'waiting' | 'ready' | 'error' | 'expired'
 

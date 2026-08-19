@@ -40,7 +40,7 @@ import {
   type QualityReviewReasonCode,
 } from '@/api/quality'
 import { paths } from '@/app/paths'
-import { assetStatusLabels, statusTone } from '@/catalog-presentation'
+import { assetStatusLabels, statusTone } from '@/features/catalog/catalog-presentation'
 import { AssetActivityCard } from '@/components/AssetActivityCard'
 import {
   AnnotationTaskCard,

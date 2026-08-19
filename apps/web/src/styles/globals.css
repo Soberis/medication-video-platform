@@ -1,0 +1,40 @@
+/* Global defaults and the CSS bridge values installed from theme/tokens.ts. */
+:root {
+  color: var(--app-color-text-primary);
+  background: var(--app-color-page);
+  font-family: var(--app-font-family);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--app-color-page);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  min-height: 44px;
+}
+
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 3px solid var(--app-color-focus);
+  outline-offset: 3px;
+}
+
+code {
+  overflow-wrap: anywhere;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}

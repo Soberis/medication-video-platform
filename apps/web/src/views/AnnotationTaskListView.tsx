@@ -33,7 +33,7 @@ import {
   type TrainingDataExportPreview,
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
-import { formatDateTime } from '@/catalog-presentation'
+import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number

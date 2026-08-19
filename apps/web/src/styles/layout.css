@@ -1,0 +1,212 @@
+/* Application frame, navigation and viewport-specific layout. */
+.app-shell {
+  width: min(1440px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: var(--app-space-24) 0 56px;
+}
+
+@media (min-width: 2200px) {
+  .app-shell {
+    width: min(1760px, calc(100% - 80px));
+  }
+}
+
+@media (min-width: 3200px) {
+  .app-shell {
+    width: min(2400px, calc(100% - 120px));
+  }
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 10px;
+  left: 10px;
+  padding: 10px 14px;
+  border-radius: var(--app-radius-default);
+  color: var(--app-color-surface);
+  background: var(--app-color-brand-hover);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.65fr) auto;
+  align-items: center;
+  gap: var(--app-space-16) var(--app-space-24);
+  margin-bottom: var(--app-space-16);
+  padding: var(--app-space-4) 0 14px;
+}
+
+.app-brand {
+  min-width: 0;
+  color: var(--app-color-text-primary);
+  font-size: clamp(20px, 1.8vw, 24px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-brand:hover {
+  color: var(--app-color-brand-hover);
+}
+
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  color: var(--app-color-text-regular);
+  font-size: var(--app-font-size-base);
+  white-space: nowrap;
+}
+
+.primary-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.primary-nav a,
+.nav-more summary {
+  padding: 10px 14px;
+  border-radius: var(--app-radius-default);
+  color: var(--app-color-text-regular);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.primary-nav a:hover,
+.nav-more summary:hover {
+  color: var(--app-color-brand-hover);
+  background: var(--app-color-brand-subtle);
+}
+
+.primary-nav a[aria-current='page'] {
+  color: var(--app-color-brand-hover);
+  background: var(--app-color-brand-subtle);
+}
+
+.nav-more {
+  position: relative;
+}
+
+.nav-more summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+}
+
+.nav-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-more summary::after {
+  margin-left: 5px;
+  color: var(--app-color-text-secondary);
+  content: '⌄';
+}
+
+.nav-more[open] summary,
+.nav-more-active summary {
+  color: var(--app-color-brand-hover);
+  background: var(--app-color-brand-subtle);
+}
+
+.nav-more[open] summary::after {
+  display: inline-block;
+  transform: rotate(180deg);
+}
+
+.nav-more-menu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--app-space-8));
+  right: 0;
+  display: grid;
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-large);
+  background: var(--app-color-surface);
+  box-shadow: var(--app-shadow-floating);
+}
+
+.nav-more-menu a {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--app-radius-default);
+}
+
+@media (max-width: 1080px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .app-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .account-summary {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .primary-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: min(100% - 24px, 1440px);
+    padding-top: var(--app-space-32);
+  }
+
+  .app-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .app-brand {
+    font-size: clamp(20px, 7vw, 24px);
+  }
+
+  .account-summary {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .primary-nav {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .primary-nav a,
+  .nav-more {
+    flex: 0 0 auto;
+  }
+
+  .primary-nav .nav-unavailable {
+    display: none;
+  }
+}

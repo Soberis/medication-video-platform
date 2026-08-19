@@ -2,7 +2,7 @@ import { Button, Card, Empty, Table, Tag } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 
 import { CatalogApiError, listClipAssetActivity, type ClipAssetActivityItem } from '@/api/catalog'
-import { formatDateTime, shortId } from '@/catalog-presentation'
+import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 const actionLabels: Record<string, string> = {
   CLIP_ASSET_PLAYBACK_GRANTED: '获取视频播放授权',

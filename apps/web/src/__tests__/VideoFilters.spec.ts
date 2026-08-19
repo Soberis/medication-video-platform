@@ -4,7 +4,7 @@ import {
   parseVideoFilters,
   replaceVideoFiltersInSearchParams,
   serializeVideoFilters,
-} from '@/catalog-video-filters'
+} from '@/features/catalog/catalog-video-filters'
 
 describe('video filter URL state', () => {
   it('round-trips supported enums, positive camera numbers, and ISO instants', () => {

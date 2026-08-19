@@ -11,7 +11,7 @@ import {
 } from '@/api/local-upload'
 import { listProjects, type DataProject } from '@/api/projects'
 import { paths } from '@/app/paths'
-import { formatBytes } from '@/catalog-presentation'
+import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 type TaskStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
 interface UploadTask {
