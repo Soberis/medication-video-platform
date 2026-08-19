@@ -35,50 +35,14 @@ class HandPoseJobController {
 		this.candidateQueryService = candidateQueryService;
 	}
 
-	@GetMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-candidates")
-	ResponseEntity<HandPoseCandidateResponse> getLatestCandidates(@PathVariable UUID projectId,
-			@PathVariable UUID clipAssetId, Authentication authentication) {
-		var actor = requireActor(authentication);
-		return ResponseEntity.ok()
-			.cacheControl(CacheControl.noStore())
-			.body(this.candidateQueryService.getLatest(projectId, clipAssetId, actor.actorId()));
-	}
-
-	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-jobs")
-	ResponseEntity<HandPoseJobResponse> queue(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
-			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
-					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
-		var actor = requireActor(authentication);
-		var resolvedRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
-		var body = this.service.queue(projectId, clipAssetId, actor.actorId(), idempotencyKey, resolvedRequestId,
-				MDC.get("traceId"));
-		return ResponseEntity.status(HttpStatus.ACCEPTED)
-			.location(URI.create("/api/v1/ai-jobs/" + body.aiJobId()))
-			.cacheControl(CacheControl.noStore())
-			.body(body);
-	}
-
-	/**
-	 * V1.18 canonical video-facing name. A video id is the existing clip asset id; the
-	 * legacy clip-assets route remains a compatibility alias.
-	 */
 	@PostMapping("/projects/{projectId}/videos/{videoId}/hand-pose-detections")
 	ResponseEntity<HandPoseJobResponse> queueVideo(@PathVariable UUID projectId, @PathVariable UUID videoId,
 			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
 					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
 			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
-		return queue(projectId, videoId, idempotencyKey, requestId, authentication);
-	}
-
-	@PostMapping("/projects/{projectId}/clip-assets/{clipAssetId}/hand-pose-jobs/retry")
-	ResponseEntity<HandPoseJobResponse> retry(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
-			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
-					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
 		var actor = requireActor(authentication);
 		var resolvedRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
-		var body = this.service.retry(projectId, clipAssetId, actor.actorId(), idempotencyKey, resolvedRequestId,
+		var body = this.service.queue(projectId, videoId, actor.actorId(), idempotencyKey, resolvedRequestId,
 				MDC.get("traceId"));
 		return ResponseEntity.status(HttpStatus.ACCEPTED)
 			.location(URI.create("/api/v1/ai-jobs/" + body.aiJobId()))
@@ -91,7 +55,14 @@ class HandPoseJobController {
 			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
 					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
 			@RequestHeader(name = "X-Request-Id", required = false) String requestId, Authentication authentication) {
-		return retry(projectId, videoId, idempotencyKey, requestId, authentication);
+		var actor = requireActor(authentication);
+		var resolvedRequestId = requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
+		var body = this.service.retry(projectId, videoId, actor.actorId(), idempotencyKey, resolvedRequestId,
+				MDC.get("traceId"));
+		return ResponseEntity.status(HttpStatus.ACCEPTED)
+			.location(URI.create("/api/v1/ai-jobs/" + body.aiJobId()))
+			.cacheControl(CacheControl.noStore())
+			.body(body);
 	}
 
 	@GetMapping("/ai-jobs/{aiJobId}")
@@ -104,11 +75,13 @@ class HandPoseJobController {
 	}
 
 	@GetMapping({ "/projects/{projectId}/videos/{videoId}/hand-pose-detections",
-			"/projects/{projectId}/videos/{videoId}/hand-pose-detections/status",
 			"/projects/{projectId}/videos/{videoId}/hand-pose-candidates" })
 	ResponseEntity<HandPoseCandidateResponse> getLatestVideoCandidates(@PathVariable UUID projectId,
 			@PathVariable UUID videoId, Authentication authentication) {
-		return getLatestCandidates(projectId, videoId, authentication);
+		var actor = requireActor(authentication);
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.candidateQueryService.getLatest(projectId, videoId, actor.actorId()));
 	}
 
 	private static PlatformActor requireActor(Authentication authentication) {

@@ -32,7 +32,7 @@ class HandPoseJobControllerTests {
 					"a".repeat(64), "b".repeat(64), 1L, 5, "c".repeat(64), "QUEUED", "reviewer", Instant.EPOCH,
 					Instant.EPOCH));
 
-		controller.queue(projectId, clipAssetId, "idempotency-key-0001", null, authentication);
+		controller.queueVideo(projectId, clipAssetId, "idempotency-key-0001", null, authentication);
 
 		var requestId = ArgumentCaptor.forClass(String.class);
 		org.mockito.Mockito.verify(service)
@@ -55,7 +55,7 @@ class HandPoseJobControllerTests {
 					"v1", "a".repeat(64), "b".repeat(64), 1L, 10, "c".repeat(64), "QUEUED", "reviewer", Instant.EPOCH,
 					Instant.EPOCH));
 
-		controller.retry(projectId, clipAssetId, "retry-idempotency-key-0001", "request-0001", authentication);
+		controller.retryVideo(projectId, clipAssetId, "retry-idempotency-key-0001", "request-0001", authentication);
 
 		org.mockito.Mockito.verify(service)
 			.retry(eq(projectId), eq(clipAssetId), eq("reviewer"), eq("retry-idempotency-key-0001"), eq("request-0001"),

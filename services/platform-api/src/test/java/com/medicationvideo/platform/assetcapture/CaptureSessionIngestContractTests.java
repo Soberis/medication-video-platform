@@ -256,8 +256,8 @@ class CaptureSessionIngestContractTests {
 	void rejectsIngestBeforeBatchCompletionWithoutReadingStorage() throws Exception {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(PROJECT_ID, "capture-incomplete-" + UUID.randomUUID(), VIDEO_SHA_ONE,
-				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor", 1, 12,
-				VIDEO_SHA_ONE, now.plusSeconds(3600), now);
+				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", 1, 12, VIDEO_SHA_ONE,
+				now.plusSeconds(3600), now);
 		this.batchRepository.saveAndFlush(batch);
 
 		ingest(batch.getBatchId()).andExpect(status().isConflict())
@@ -404,9 +404,9 @@ class CaptureSessionIngestContractTests {
 		var manifestEntries = List.copyOf(entries);
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(projectId, "capture-complete-" + UUID.randomUUID(), VIDEO_SHA_ONE,
-				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor",
-				manifestEntries.size(), manifestEntries.stream().mapToLong(ManifestEntry::sizeBytes).sum(),
-				manifestSha256(manifestEntries), externalManifestId, now.plusSeconds(3600), now);
+				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", manifestEntries.size(),
+				manifestEntries.stream().mapToLong(ManifestEntry::sizeBytes).sum(), manifestSha256(manifestEntries),
+				externalManifestId, now.plusSeconds(3600), now);
 		batch.markUploading(now);
 		this.batchRepository.saveAndFlush(batch);
 

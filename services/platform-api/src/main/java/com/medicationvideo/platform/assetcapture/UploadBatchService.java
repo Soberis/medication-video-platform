@@ -20,22 +20,19 @@ class UploadBatchService {
 
 	private final UploadBatchRepository repository;
 
-	private final AssetFolderRepository folderRepository;
-
 	private final ExternalVideoIngestManifestRepository externalManifestRepository;
 
 	private final JdbcTemplate jdbcTemplate;
 
 	private final Duration batchTtl;
 
-	UploadBatchService(UploadBatchRepository repository, AssetFolderRepository folderRepository,
+	UploadBatchService(UploadBatchRepository repository,
 			ExternalVideoIngestManifestRepository externalManifestRepository,
 			@Value("${platform.upload.batch-ttl:PT24H}") Duration batchTtl, JdbcTemplate jdbcTemplate) {
 		if (batchTtl.isZero() || batchTtl.isNegative()) {
 			throw new IllegalArgumentException("Upload batch TTL must be positive.");
 		}
 		this.repository = repository;
-		this.folderRepository = folderRepository;
 		this.externalManifestRepository = externalManifestRepository;
 		this.jdbcTemplate = jdbcTemplate;
 		this.batchTtl = batchTtl;
@@ -62,8 +59,8 @@ class UploadBatchService {
 
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(request.projectId(), idempotencyKey, fingerprint, request.deviceId(),
-				sourceType, request.assetFolderId(), actor.actorId(), request.fileCount(), request.totalSizeBytes(),
-				request.manifestSha256(), request.externalManifestId(), now.plus(this.batchTtl), now);
+				sourceType, actor.actorId(), request.fileCount(), request.totalSizeBytes(), request.manifestSha256(),
+				request.externalManifestId(), now.plus(this.batchTtl), now);
 
 		var saved = this.repository.saveAndFlush(batch);
 		if (externalManifest != null) {
@@ -91,10 +88,6 @@ class UploadBatchService {
 			throw new UploadBatchInputException("PLATFORM_LOCAL_DEVICE_INVALID",
 					"Platform-local uploads use the server-defined PLATFORM_LOCAL source identifier.");
 		}
-		if (sourceType != UploadSourceType.PLATFORM_LOCAL && request.assetFolderId() != null) {
-			throw new UploadBatchInputException("UPLOAD_SOURCE_FOLDER_UNSUPPORTED",
-					"An asset folder can only be selected for a platform-local upload.");
-		}
 		ExternalVideoIngestManifest externalManifest = null;
 		if (request.externalManifestId() != null) {
 			if (sourceType != UploadSourceType.HOSPITAL_REMOTE) {
@@ -116,12 +109,6 @@ class UploadBatchService {
 						"The external ingest manifest is already bound to an upload batch.");
 			}
 		}
-		if (request.assetFolderId() != null
-				&& this.folderRepository.findByFolderIdAndProjectId(request.assetFolderId(), request.projectId())
-					.isEmpty()) {
-			throw new UploadBatchInputException("ASSET_FOLDER_NOT_FOUND",
-					"The selected asset folder was not found in the current project.");
-		}
 		return externalManifest;
 	}
 
@@ -137,7 +124,6 @@ class UploadBatchService {
 
 	private static String fingerprint(UploadBatchInitRequest request, UploadSourceType sourceType) {
 		var canonical = String.join("\n", request.projectId().toString(), request.deviceId(), sourceType.name(),
-				request.assetFolderId() == null ? "" : request.assetFolderId().toString(),
 				Integer.toString(request.fileCount()), Long.toString(request.totalSizeBytes()),
 				request.manifestSha256(),
 				request.externalManifestId() == null ? "" : request.externalManifestId().toString());

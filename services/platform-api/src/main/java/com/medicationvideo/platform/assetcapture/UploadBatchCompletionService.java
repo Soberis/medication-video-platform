@@ -21,13 +21,10 @@ class UploadBatchCompletionService {
 
 	private final ExternalVideoIngestManifestRepository externalManifestRepository;
 
-	private final CaptureEventLogRepository captureEventLogRepository;
-
 	private final MediaProbeSchedulingPort mediaProbeSchedulingPort;
 
 	UploadBatchCompletionService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
-			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository,
-			MediaProbeSchedulingPort mediaProbeSchedulingPort,
+			ClipAssetRepository clipAssetRepository, MediaProbeSchedulingPort mediaProbeSchedulingPort,
 			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository,
 			ExternalVideoIngestManifestRepository externalManifestRepository) {
 		this.batchRepository = batchRepository;
@@ -35,7 +32,6 @@ class UploadBatchCompletionService {
 		this.clipAssetRepository = clipAssetRepository;
 		this.externalManifestVideoRepository = externalManifestVideoRepository;
 		this.externalManifestRepository = externalManifestRepository;
-		this.captureEventLogRepository = captureEventLogRepository;
 		this.mediaProbeSchedulingPort = mediaProbeSchedulingPort;
 	}
 
@@ -68,12 +64,7 @@ class UploadBatchCompletionService {
 		if (assets.isEmpty()) {
 			throw failure("UPLOAD_BATCH_VIDEO_REQUIRED", "The upload batch contains no video file.");
 		}
-		var eventLogs = files.stream()
-			.filter(file -> file.getFileKind() == UploadFileKind.EVENT_LOG)
-			.map(file -> CaptureEventLog.fromUploadedFile(batch, file, now))
-			.toList();
 		this.clipAssetRepository.saveAllAndFlush(assets);
-		this.captureEventLogRepository.saveAllAndFlush(eventLogs);
 		for (var asset : assets) {
 			this.mediaProbeSchedulingPort.ensureForUploadedClip(projectId, asset.getClipAssetId());
 		}

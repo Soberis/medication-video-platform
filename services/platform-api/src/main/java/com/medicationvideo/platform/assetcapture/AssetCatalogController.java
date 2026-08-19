@@ -89,11 +89,7 @@ class AssetCatalogController {
 
 	@GetMapping("/video-data/summary")
 	ResponseEntity<DataManagementSummary> getVideoDataSummary(@PathVariable UUID projectId,
-			@RequestParam(name = "from",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-			@RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
 			@RequestParam(required = false) UploadSourceType source,
-			@RequestParam(name = "cameraNumber", required = false) @Min(1) @Max(64) Integer legacyCameraNumber,
 			@RequestParam(name = "camera_number", required = false) @Min(1) @Max(64) Integer cameraNumber,
 			@RequestParam(name = "media_status", required = false) ClipAssetStatus mediaStatus,
 			@RequestParam(name = "hand_status", required = false) @Pattern(regexp = "^[A-Z_]{1,32}$") String handStatus,
@@ -114,14 +110,11 @@ class AssetCatalogController {
 		var actor = requireActor(authentication);
 		this.authorizer.requireMember(projectId, actor.actorId());
 		validateVideoWorkflowFilters(handStatus, handResult, annotationStatus, cleaningStatus);
-		var effectiveCameraNumber = cameraNumber != null ? cameraNumber : legacyCameraNumber;
-		var effectiveCapturedFrom = capturedFrom != null ? capturedFrom : from;
-		var effectiveCapturedBefore = capturedBefore != null ? capturedBefore : to;
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
 			.body(this.dataManagementSummaryQueryService.get(projectId, source, mediaStatus, handStatus, handResult,
-					annotationStatus, cleaningStatus, effectiveCameraNumber, effectiveCapturedFrom,
-					effectiveCapturedBefore, receivedFrom, receivedBefore));
+					annotationStatus, cleaningStatus, cameraNumber, capturedFrom, capturedBefore, receivedFrom,
+					receivedBefore));
 	}
 
 	private static void validateVideoWorkflowFilters(String handStatus, String handResult, String annotationStatus,

@@ -350,7 +350,7 @@ class UploadBatchTerminationContractTests {
 	private UploadBatch directBatch(String actorId, Instant expiresAt) {
 		var createdAt = expiresAt.minusSeconds(3600);
 		var batch = UploadBatch.initiate(PROJECT_ID, "termination-direct-" + UUID.randomUUID(), SHA256,
-				"synthetic-edge-termination", UploadSourceType.HOSPITAL_REMOTE, null, actorId, 1, PART_SIZE, SHA256,
+				"synthetic-edge-termination", UploadSourceType.HOSPITAL_REMOTE, actorId, 1, PART_SIZE, SHA256,
 				expiresAt, createdAt);
 		this.batchRepository.saveAndFlush(batch);
 		this.createdBatchIds.add(batch.getBatchId());

@@ -184,8 +184,8 @@ class DataManagementSummaryContractTests {
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/video-data/summary", this.projectId)
-				.param("from", "2026-08-10T00:00:00Z")
-				.param("to", "2026-08-11T00:00:00Z")
+				.param("captured_from", "2026-08-10T00:00:00Z")
+				.param("captured_before", "2026-08-11T00:00:00Z")
 				.header("Authorization", "Bearer " + TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.total_videos").value(3))
@@ -222,7 +222,7 @@ class DataManagementSummaryContractTests {
 			.andExpect(jsonPath("$.usable_count").value(0));
 
 		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/video-data/summary", this.projectId).param("cameraNumber", "3")
+			.perform(get("/api/v1/projects/{projectId}/video-data/summary", this.projectId).param("camera_number", "3")
 				.header("Authorization", "Bearer " + TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.total_videos").value(1))

@@ -128,8 +128,8 @@ flowchart LR
 | CameraSet | camera_set、camera_set_member | 可生效的相机组配置 |
 | CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
 | ClipAsset | clip_asset、asset_tag | 不可变媒体对象身份、摘要、存储引用和业务标签 |
-| CaptureEventLog | capture_event_log | 上传完成时保留的边端事件日志对象索引及时间基准，不解析硬件控制逻辑；当前不提供产品查询 API |
-| AssetFolder | asset_folder、clip_asset.folder_id | 历史项目内分类和上传兼容字段；不承载权限、不映射对象存储目录，当前不提供管理 API |
+| CaptureEventLog | capture_event_log | 历史边端事件日志对象索引表；当前应用不写入、不读取，也不属于 Governance Audit |
+| AssetFolder | asset_folder、clip_asset.folder_id | 历史分类和上传字段；当前应用不建模、不校验、不投影，不承载权限或对象存储目录 |
 
 ### 5.2 UploadBatch 不变量
 
@@ -142,7 +142,7 @@ flowchart LR
 - 批次/文件终态、逐文件清理任务和追加式审计必须原子提交；对象存储 Abort/Delete 不占用该数据库事务。
 - `upload_cleanup_task` 对每个 UploadFile 唯一，使用 claim lease 和有限重试；终态 `FAILED` 必须告警，不得假定对象已清理。
 - 清理任务保留服务端对象引用能力但任何查询响应、日志和指标不得暴露对象 key、upload ID 或预签名 URL。
-- Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset，并为每个已验证 EVENT_LOG UploadFile 创建唯一的不可变 CaptureEventLog 对象索引；METADATA 和 EVENT_LOG 均不伪装成视频资产。
+- Complete Batch 为每个已验证 VIDEO UploadFile 创建唯一的最小 RAW ClipAsset；METADATA 和 EVENT_LOG 仍作为原始上传对象保留，均不伪装成视频资产。
 - `CameraSetSnapshot` 与 `CaptureSession` 同事务创建，只能由服务器现行 CameraSet 冻结；RK3588 只上报稳定标识和观测元数据，不能覆盖服务器相机配置真值。
 - UploadBatch 创建时冻结 project 和 `upload_source_type`；第一版只有 `HOSPITAL_REMOTE` 和 `PLATFORM_LOCAL`，不单独建来源表。
 - Complete Batch 后不允许直接修改资产或 session 的 project；错误归属在完成前中止，完成后删除错误视频并重新上传。
@@ -176,23 +176,18 @@ flowchart LR
 - 对象路径只使用内部 ID，不包含姓名、病历号、处方号、工号或科室明文。
 - 逻辑不可变不等于永久保留；批准销毁通过治理流程创建 tombstone 和销毁证明，不通过 update 改写媒体内容。
 
-### 5.6 CaptureEventLog 不变量
+### 5.6 CaptureEventLog 历史表边界
 
-- 每个已完成批次中的 EVENT_LOG UploadFile 至多形成一个索引，以 `source_upload_file_id` 和 `(batch_id, client_file_id)` 双重唯一约束防止重复绑定。
-- 索引只保存项目、批次、设备、对象摘要、媒体类型、大小和服务端索引时间；内部存储引用不得通过目录 API、日志或指标暴露。
-- `indexed_at` 是平台完成批次时的索引时间，不是边端事件发生时间，也不能替代设备时间基准。
-- 当前切片不解析日志负载、不推断相机或工控机动作，也不把边端声明直接升级为平台事实；事件 Schema、逐事件索引和时间基准校验必须通过后续版本化契约引入。
-- 历史查询契约已退出；底层索引只由上传完成流程写入并保留，跨项目读取不再通过产品 API 暴露。
+- `capture_event_log` 表及其历史唯一约束、索引和 Flyway 迁移继续保留，但当前应用不再创建对应 Entity、Repository 或 Complete Batch 写入。
+- 当前应用不读取该表；它不属于 Governance Audit，也不作为 CaptureSession、Media、Candidate、Annotation、Review、Cleaning 或 training-data.v2 的事实来源。
+- 若未来重新启用事件日志索引，必须通过新的版本化契约单独评审，不回溯修改历史 migration。
 
-### 5.7 AssetFolder 不变量
+### 5.7 AssetFolder 历史字段边界
 
-- AssetFolder 与 ClipAsset 必须属于同一 project；禁止嵌套和跨项目归类。
-- `clip_asset.folder_id` 可空；一个 ClipAsset 当前最多属于一个文件夹，不需要单独的归类历史表。
-- “未分类”是查询投影，不创建可删除的系统文件夹记录。
-- 移动视频只更新 `folder_id`，不移动对象、不改 project、不复制媒体，也不修改入库、隐私、标注、清洗或数据集事实。
-- 删除文件夹时将其中视频改为“未分类”，不得级联删除视频。
+- `asset_folder`、`upload_batch.asset_folder_id` 和 `clip_asset.folder_id` 以及其历史约束继续保留，但当前应用不再创建、校验、绑定、读取或暴露这些字段。
+- 当前视频主链、项目权限、CaptureSession、Media、Candidate、Annotation、Review、Cleaning 和 training-data.v2 均不依赖文件夹事实。
 
-当前实现：Flyway V23 使用 `(project_id, folder_id)` 复合外键固定历史 AssetFolder 与 ClipAsset 的同项目关系，表结构不含父文件夹字段；当前代码仅保留历史实体/读取校验以兼容上传批次，管理、分类命令和相关审计 API 已退出。历史表与字段留待独立 DB Reduction 决策。
+当前实现：Flyway V23/V24 的历史表、字段和约束保持不动；应用层 AssetFolder entity/repository、上传校验、绑定和响应投影已退出。历史表与字段留待独立 DB Reduction 决策。
 
 ### 5.8 视频删除不变量
 

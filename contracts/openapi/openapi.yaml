@@ -998,9 +998,9 @@ paths:
         Called automatically by the edge uploader after every declared file has completed final
         object size and full-file SHA-256 verification. The command locks the batch, checks exact
         file count and total bytes, verifies the upload-file-manifest-v1 digest, and creates one
-        immutable minimal RAW ClipAsset binding for each VIDEO file and one immutable CaptureEventLog
-        object index for each EVENT_LOG file. METADATA remains an uploaded source object for session
-        ingestion. EVENT_LOG payloads are not interpreted and do not become ClipAssets.
+        immutable minimal RAW ClipAsset binding for each VIDEO file. METADATA and EVENT_LOG remain
+        uploaded source objects for session or edge ingestion; their payloads are not interpreted and
+        do not become ClipAssets.
         The natural-resource PUT is idempotent: a replay returns the persisted completion and never
         creates duplicate assets. It does not perform media probing or create a CaptureSession.
       parameters:
@@ -2158,21 +2158,6 @@ paths:
         project-scoped, non-deleted video population used by the video-management read model.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
-        - name: from
-          in: query
-          deprecated: true
-          description: Legacy alias for captured_from; captured_from takes precedence when both are supplied.
-          schema: { type: string, format: date-time }
-        - name: to
-          in: query
-          deprecated: true
-          description: Legacy alias for captured_before; captured_before takes precedence when both are supplied.
-          schema: { type: string, format: date-time }
-        - name: cameraNumber
-          in: query
-          deprecated: true
-          description: Legacy alias for camera_number; camera_number takes precedence when both are supplied.
-          schema: { type: integer, minimum: 1, maximum: 64 }
         - name: source
           in: query
           schema: { $ref: "#/components/schemas/UploadSourceType" }
@@ -2576,32 +2561,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
-  /projects/{project_id}/videos/{video_id}/hand-pose-detections/status:
-    get:
-      operationId: getVideoHandPoseDetectionStatus
-      tags: [AI Candidates]
-      summary: Get the latest hand pose detection state through the status alias
-      description: >-
-        Compatibility alias for reading the latest video hand-pose candidate run. It returns the
-        same candidate-only representation as the base hand-pose-detections GET operation.
-      security: [{ sessionCookie: [] }]
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: video_id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: The latest job and its immutable candidate keypoints.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /ai-jobs/{ai_job_id}:
     get:
       operationId: getHandPoseJob
@@ -2666,105 +2625,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-candidates:
-    get:
-      operationId: getLatestHandPoseCandidatesLegacy
-      deprecated: true
-      tags: [AI Candidates]
-      summary: Get the latest hand pose candidates through the legacy clip-asset route
-      description: >-
-        Deprecated compatibility route. New product clients use the corresponding video resource.
-        The response remains candidate-only and cannot bypass human annotation and review.
-      security: [{ sessionCookie: [] }]
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: The latest job and its immutable candidate keypoints.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HandPoseCandidateResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs:
-    post:
-      operationId: requestHandPoseCandidatesLegacy
-      deprecated: true
-      tags: [AI Candidates]
-      summary: Queue a hand pose candidate job through the legacy clip-asset route
-      description: >-
-        Deprecated compatibility route. It queues the same bounded, candidate-only MediaPipe job
-        as the canonical video hand-pose-detections operation.
-      security: [{ sessionCookie: [] }]
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - name: X-Request-Id
-          in: header
-          required: false
-          schema: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
-      responses:
-        "202":
-          description: The immutable job is queued, or the same idempotent request is returned.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-            Location:
-              schema: { type: string, format: uri-reference }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HandPoseJobResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
-  /projects/{project_id}/clip-assets/{clip_asset_id}/hand-pose-jobs/retry:
-    post:
-      operationId: retryHandPoseCandidatesLegacy
-      deprecated: true
-      tags: [AI Candidates]
-      summary: Retry a hand pose candidate job through the legacy clip-asset route
-      description: >-
-        Deprecated compatibility route. It creates the same bounded next attempt as the canonical
-        video hand-pose-detections retry operation.
-      security: [{ sessionCookie: [] }]
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: clip_asset_id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - name: X-Request-Id
-          in: header
-          required: false
-          schema: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:-]+$" }
-      responses:
-        "202":
-          description: The next AI job attempt was queued.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-            Location:
-              schema: { type: string, format: uri-reference }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/HandPoseJobResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/clip-assets/{clip_asset_id}/media-probe-delivery-recoveries:
     post:
       operationId: recoverCurrentClipAssetMediaProbeDelivery
@@ -4515,10 +4375,6 @@ components:
           $ref: "#/components/schemas/UploadSourceType"
           default: HOSPITAL_REMOTE
           description: Immutable upload-entry provenance. Omitted requests remain HOSPITAL_REMOTE for compatibility.
-        asset_folder_id:
-          type: [string, "null"]
-          format: uuid
-          description: Legacy optional folder identifier for a PLATFORM_LOCAL upload; no current folder management API exists, and it is never an object-storage path or permission boundary.
         file_count:
           type: integer
           format: int32
@@ -4566,10 +4422,6 @@ components:
           type: string
         upload_source_type:
           $ref: "#/components/schemas/UploadSourceType"
-        asset_folder_id:
-          type: [string, "null"]
-          format: uuid
-          description: Historical upload classification identifier retained for compatibility.
         external_manifest_id:
           type: [string, "null"]
           format: uuid
@@ -4778,10 +4630,6 @@ components:
           type: string
         upload_source_type:
           $ref: "#/components/schemas/UploadSourceType"
-        asset_folder_id:
-          type: [string, "null"]
-          format: uuid
-          description: Historical upload classification identifier retained for compatibility.
         external_manifest_id:
           type: [string, "null"]
           format: uuid
@@ -5738,10 +5586,6 @@ components:
           pattern: ^[a-f0-9]{64}$
         status:
           $ref: "#/components/schemas/ClipAssetStatus"
-        folder_id:
-          type: string
-          format: uuid
-          description: Historical folder identifier; current video management does not offer folder classification or filtering.
         session_binding:
           anyOf:
             - $ref: "#/components/schemas/ClipAssetSessionBinding"

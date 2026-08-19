@@ -70,9 +70,6 @@ class UploadBatchCompletionContractTests {
 	private ClipAssetRepository clipAssetRepository;
 
 	@Autowired
-	private CaptureEventLogRepository captureEventLogRepository;
-
-	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
@@ -81,7 +78,7 @@ class UploadBatchCompletionContractTests {
 		this.jdbcTemplate.update("DELETE FROM outbox_event WHERE aggregate_type = 'MediaJob'");
 		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM media_job");
-		this.captureEventLogRepository.deleteAll();
+		this.jdbcTemplate.update("DELETE FROM capture_event_log");
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();
 		this.fileRepository.deleteAll();
@@ -130,13 +127,8 @@ class UploadBatchCompletionContractTests {
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1, this.clipAssetRepository.count());
-		assertEquals(1, this.captureEventLogRepository.count());
 		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job", Integer.class));
 		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job_attempt", Integer.class));
-		var eventLog = this.captureEventLogRepository.findAll().getFirst();
-		assertEquals(EVENT_LOG_CLIENT_FILE_ID, eventLog.getClientFileId());
-		assertEquals("synthetic-edge-01", eventLog.getDeviceId());
-		assertEquals("application/x-ndjson", eventLog.getContentType());
 		assertEquals(UploadBatchStatus.COMPLETED,
 				this.batchRepository.findById(batch.getBatchId()).orElseThrow().getStatus());
 	}
@@ -153,7 +145,6 @@ class UploadBatchCompletionContractTests {
 			.andExpect(jsonPath("$.retryable").value(false));
 
 		assertEquals(0, this.clipAssetRepository.count());
-		assertEquals(0, this.captureEventLogRepository.count());
 		assertEquals(UploadBatchStatus.UPLOADING,
 				this.batchRepository.findById(batch.getBatchId()).orElseThrow().getStatus());
 	}
@@ -213,7 +204,7 @@ class UploadBatchCompletionContractTests {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var totalSize = entries.stream().mapToLong(ManifestEntry::sizeBytes).sum();
 		var batch = UploadBatch.initiate(projectId, "batch-complete-key-" + UUID.randomUUID(), SHA256_A,
-				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor", entries.size(),
+				"synthetic-edge-01", UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", entries.size(),
 				totalSize, declaredManifestSha256, now.plusSeconds(3600), now);
 		batch.markUploading(now);
 		this.batchRepository.saveAndFlush(batch);

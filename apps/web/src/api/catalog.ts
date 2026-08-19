@@ -64,7 +64,6 @@ export interface ClipAssetRead {
   size_bytes: number
   sha256: string
   status: ClipAssetStatus
-  folder_id: string | null
   session_binding: ClipAssetSessionBinding | null
   created_at: string
   updated_at: string

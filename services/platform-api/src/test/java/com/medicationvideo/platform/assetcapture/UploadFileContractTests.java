@@ -177,7 +177,7 @@ class UploadFileContractTests {
 	void hidesBatchesOwnedByAnotherProject() throws Exception {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var otherBatch = UploadBatch.initiate(OTHER_PROJECT_ID, "other-project-key-0001", SHA256_A,
-				"synthetic-device-02", UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor", 1, 10L, SHA256_A,
+				"synthetic-device-02", UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", 1, 10L, SHA256_A,
 				now.plusSeconds(3600), now);
 		this.batchRepository.saveAndFlush(otherBatch);
 

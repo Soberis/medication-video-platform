@@ -35,7 +35,7 @@ public class AssetCatalogQueryService {
 		}).orElse(null);
 		return new ClipAssetReadResponse(asset.getClipAssetId(), asset.getBatchId(), asset.getSourceUploadFileId(),
 				asset.getClientFileId(), asset.getContentType(), asset.getSizeBytes(), asset.getSha256(),
-				asset.getStatus(), asset.getFolderId(), binding, asset.getCreatedAt(), asset.getUpdatedAt());
+				asset.getStatus(), binding, asset.getCreatedAt(), asset.getUpdatedAt());
 	}
 
 	/**

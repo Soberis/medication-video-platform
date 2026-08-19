@@ -121,8 +121,8 @@ class UploadProgressQueryContractTests {
 	void returnsAnEmptyFileListBeforeManifestRegistration() throws Exception {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(PROJECT_ID, "progress-empty-batch-0001", SHA256_A, "synthetic-device-01",
-				UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor", 1, PART_SIZE, SHA256_A,
-				now.plusSeconds(3600), now);
+				UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", 1, PART_SIZE, SHA256_A, now.plusSeconds(3600),
+				now);
 		this.batchRepository.saveAndFlush(batch);
 
 		this.mockMvc
@@ -154,7 +154,7 @@ class UploadProgressQueryContractTests {
 	private Fixture persistProgressFixture(UUID projectId) {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var batch = UploadBatch.initiate(projectId, "progress-batch-key-0001", SHA256_A, "synthetic-device-01",
-				UploadSourceType.HOSPITAL_REMOTE, null, "synthetic-test-actor", 2, PART_SIZE * 3, SHA256_A,
+				UploadSourceType.HOSPITAL_REMOTE, "synthetic-test-actor", 2, PART_SIZE * 3, SHA256_A,
 				now.plusSeconds(3600), now);
 		batch.markUploading(now.plus(1, ChronoUnit.MICROS));
 		this.batchRepository.saveAndFlush(batch);

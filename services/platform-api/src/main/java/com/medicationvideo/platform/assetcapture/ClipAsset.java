@@ -49,9 +49,6 @@ class ClipAsset {
 	@Column(name = "storage_etag", nullable = false, length = 2048, updatable = false)
 	private String storageEtag;
 
-	@Column(name = "folder_id")
-	private UUID folderId;
-
 	@Column(name = "deleted_at")
 	private Instant deletedAt;
 
@@ -90,7 +87,6 @@ class ClipAsset {
 		this.storageBucket = file.getStorageBucket();
 		this.objectKey = file.getObjectKey();
 		this.storageEtag = file.getCompletedStorageEtag();
-		this.folderId = batch.getAssetFolderId();
 		this.status = ClipAssetStatus.UPLOADED;
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
@@ -133,10 +129,6 @@ class ClipAsset {
 
 	String getSha256() {
 		return this.sha256;
-	}
-
-	UUID getFolderId() {
-		return this.folderId;
 	}
 
 	ClipAssetStatus getStatus() {

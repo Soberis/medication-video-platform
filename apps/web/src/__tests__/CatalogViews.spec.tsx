@@ -610,7 +610,6 @@ function assetDetail(status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAI
     size_bytes: 8_388_608,
     sha256: 'a'.repeat(64),
     status,
-    folder_id: null,
     session_binding: null,
     created_at: '2026-07-15T01:03:03Z',
     updated_at: '2026-07-15T01:03:03Z',
