@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=local-common.sh
 source "$SCRIPT_DIR/local-common.sh"
 
-start_worker=false
 start_ai_worker=false
 infrastructure_only=false
 restart_api=false
@@ -17,7 +16,6 @@ usage() {
 Usage: ./scripts/start-local.sh [options]
 
 Options:
-  --worker                                      Legacy compatibility flag; Workers start by default.
   --ai-worker                                   Start only the AI Worker after Core API.
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
@@ -28,10 +26,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --worker)
-            start_worker=true
-            shift
-            ;;
         --ai-worker)
             start_ai_worker=true
             shift
@@ -61,13 +55,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Default local startup is detection-ready. The AI Worker is started below when the approved
-# AI configuration is enabled, while --infrastructure-only remains the explicit opt-out.
-if ! $infrastructure_only; then
-    start_worker=true
-fi
-
-if $infrastructure_only && { $start_worker || $start_ai_worker || $restart_api; }; then
+if $infrastructure_only && { $start_ai_worker || $restart_api; }; then
     echo "Infrastructure-only startup cannot start or restart applications." >&2
     exit 2
 fi
@@ -161,7 +149,7 @@ else
     wait_for_core_api
 fi
 
-if $start_worker; then
+if ! $infrastructure_only; then
     for command_name in uv ffmpeg ffprobe; do
         require_command "$command_name" \
             "Worker startup requires $command_name for media processing." || exit 1
@@ -186,7 +174,7 @@ if $start_ai_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" != "true" ]]; then
     echo "AI Worker startup requires AI_HAND_POSE_ENABLED=true." >&2
     exit 1
 fi
-if $start_ai_worker || { $start_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" == "true" ]]; }; then
+if $start_ai_worker || { ! $infrastructure_only && [[ "${AI_HAND_POSE_ENABLED:-false}" == "true" ]]; }; then
     for required_variable in AI_HAND_POSE_MODEL_PATH AI_HAND_POSE_MODEL_SHA256; do
         if [[ -z "${!required_variable:-}" ]]; then
             echo "AI Worker startup requires ${required_variable} when AI_HAND_POSE_ENABLED=true." >&2

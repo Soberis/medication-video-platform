@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [switch]$Worker,
     [switch]$AiWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
@@ -191,13 +190,7 @@ $apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
 
-# Local startup is intentionally detection-ready: media ingestion needs the Media Worker,
-# and the AI Worker starts automatically below whenever the approved AI configuration is enabled.
-if (-not $InfrastructureOnly) {
-    $Worker = $true
-}
-
-if ($InfrastructureOnly -and ($Worker -or $AiWorker -or $RestartApi)) {
+if ($InfrastructureOnly -and ($AiWorker -or $RestartApi)) {
     throw 'Infrastructure-only startup cannot start or restart applications.'
 }
 if ($RestartApi) {
@@ -223,7 +216,7 @@ else {
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 
-if ($Worker) {
+if (-not $InfrastructureOnly) {
     foreach ($requiredCommand in @('uv', 'ffmpeg', 'ffprobe')) {
         if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
             throw "Worker startup requires $requiredCommand for media processing."
@@ -240,7 +233,7 @@ if ($Worker) {
 if ($AiWorker -and $env:AI_HAND_POSE_ENABLED -ne 'true') {
     throw 'AI Worker startup requires AI_HAND_POSE_ENABLED=true.'
 }
-if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
+if ($AiWorker -or ((-not $InfrastructureOnly) -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
     foreach ($requiredVariable in @('AI_HAND_POSE_MODEL_PATH', 'AI_HAND_POSE_MODEL_SHA256')) {
         if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($requiredVariable, 'Process'))) {
             throw "AI Worker startup requires $requiredVariable when AI_HAND_POSE_ENABLED=true."
