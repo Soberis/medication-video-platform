@@ -69,56 +69,6 @@ class AssetCatalogQueryContractTests {
 	}
 
 	@Test
-	void listsProjectScopedSessionsWithStableCursorAndCurrentStateSemantics() throws Exception {
-		var earlier = insertSessionGraph(PROJECT_ID, "device-earlier", "OVERVIEW",
-				Instant.parse("2026-07-15T01:00:00Z"));
-		var later = insertSessionGraph(PROJECT_ID, "device-later", "HANDS", Instant.parse("2026-07-15T02:00:00Z"));
-		insertSessionGraph(OTHER_PROJECT_ID, "device-hidden", "OVERVIEW", Instant.parse("2026-07-15T03:00:00Z"));
-
-		var firstPage = authorizedProjectGet("/capture-sessions?limit=1").andExpect(status().isOk())
-			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-			.andExpect(header().string("Cache-Control", "no-store"))
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].capture_session_id").value(later.captureSessionId().toString()))
-			.andExpect(jsonPath("$.items[0].bound_stream_count").value(1))
-			.andExpect(jsonPath("$.items[0].received_camera_count").value(0))
-			.andExpect(jsonPath("$.items[0].assembly_status").value("ASSEMBLING"))
-			.andExpect(jsonPath("$.items[0].quality_status").value("PENDING"))
-			.andExpect(jsonPath("$.items[0].project_id").doesNotExist())
-			.andReturn();
-		var cursor = this.objectMapper.readTree(firstPage.getResponse().getContentAsString())
-			.get("next_cursor")
-			.asText();
-
-		authorizedProjectGet("/capture-sessions?limit=1&cursor=" + cursor).andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].capture_session_id").value(earlier.captureSessionId().toString()))
-			.andExpect(jsonPath("$.next_cursor").doesNotExist());
-
-		authorizedProjectGet("/capture-sessions?device_id=device-earlier").andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
-			.andExpect(jsonPath("$.items[0].capture_session_id").value(earlier.captureSessionId().toString()));
-	}
-
-	@Test
-	void readsSessionDetailAndHidesOtherProjects() throws Exception {
-		var own = insertSessionGraph(PROJECT_ID, "device-own", "HANDS", Instant.parse("2026-07-15T02:00:00Z"));
-		var hidden = insertSessionGraph(OTHER_PROJECT_ID, "device-hidden", "OVERVIEW",
-				Instant.parse("2026-07-15T03:00:00Z"));
-
-		authorizedProjectGet("/capture-sessions/" + own.captureSessionId()).andExpect(status().isOk())
-			.andExpect(jsonPath("$.capture_session_id").value(own.captureSessionId().toString()))
-			.andExpect(jsonPath("$.camera_set_snapshot.layout_version").value("layout-v1"))
-			.andExpect(jsonPath("$.streams.length()").value(1))
-			.andExpect(jsonPath("$.streams[0].clip_asset_id").value(own.clipAssetId().toString()))
-			.andExpect(jsonPath("$.streams[0].camera_role").value("HANDS"))
-			.andExpect(jsonPath("$.streams[0].sync_status").value("WARNING"));
-
-		authorizedProjectGet("/capture-sessions/" + hidden.captureSessionId()).andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.error_code").value("CAPTURE_SESSION_NOT_FOUND"));
-	}
-
-	@Test
 	void readsClipAssetsWithoutExposingStorageOrPreviewCredentials() throws Exception {
 		var unbound = insertUnboundAsset(PROJECT_ID, Instant.parse("2026-07-15T01:00:00Z"));
 		var hidden = insertSessionGraph(OTHER_PROJECT_ID, "device-hidden", "HANDS",
@@ -134,12 +84,6 @@ class AssetCatalogQueryContractTests {
 
 		authorizedProjectGet("/clip-assets/" + hidden.clipAssetId()).andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
-	}
-
-	@Test
-	void requiresAnActiveMembershipForEveryExplicitProjectCatalog() throws Exception {
-		authorizedGet("/api/v1/projects/" + OTHER_PROJECT_ID + "/capture-sessions").andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
 	}
 
 	@Test
@@ -179,20 +123,6 @@ class AssetCatalogQueryContractTests {
 
 		authorizedProjectGet("/capture-event-logs/" + hidden.captureEventLogId()).andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CAPTURE_EVENT_LOG_NOT_FOUND"));
-	}
-
-	@Test
-	void rejectsInvalidCursorTimeRangeAndEnumWithStableErrors() throws Exception {
-		authorizedProjectGet("/capture-sessions?cursor=not-a-cursor").andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error_code").value("INVALID_CURSOR"));
-
-		authorizedProjectGet(
-				"/capture-sessions?recorded_from=2026-07-16T00:00:00Z" + "&recorded_before=2026-07-15T00:00:00Z")
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error_code").value("INVALID_TIME_RANGE"));
-
-		authorizedProjectGet("/capture-sessions?assembly_status=finished").andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.error_code").value("INVALID_REQUEST"));
 	}
 
 	@Test

@@ -1,1 +1,0 @@
-{"manifest_streams_required":true,"profile_key":"p0-dataset-export-v1","required_artifacts":["README.md","label_schema.json","manifest.jsonl","action_segments.jsonl","objects_coco.json","splits/","videos/clean/","SHA256SUMS"],"schema_version":"dataset-export-profile.v1","split_unit":"CAPTURE_SESSION"}

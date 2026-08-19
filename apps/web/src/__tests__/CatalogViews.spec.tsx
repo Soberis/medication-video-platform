@@ -4,11 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRoute } from '@/test/render'
 import AssetDetailView from '@/views/AssetDetailView'
-import SessionDetailView from '@/views/SessionDetailView'
-import SessionListView from '@/views/SessionListView'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
-const sessionId = '40000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 
 afterEach(() => {
@@ -17,97 +14,6 @@ afterEach(() => {
 })
 
 describe('catalog views', () => {
-  it('distinguishes bound, ingested and pending quality facts in the session list', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation((input: RequestInfo | URL) =>
-        Promise.resolve(
-          String(input) === `/api/v1/projects/${projectId}`
-            ? jsonResponse(project('ADMIN'))
-            : jsonResponse({
-                items: [
-                  {
-                    ...captureSessionListItem(sessionId),
-                    expected_camera_count: 2,
-                    bound_stream_count: 1,
-                    received_camera_count: 0,
-                    assembly_status: 'ASSEMBLING',
-                    quality_status: 'PENDING',
-                  },
-                ],
-                next_cursor: null,
-              }),
-        ),
-      ),
-    )
-    renderSessionList()
-    expect(await screen.findByText('已绑定 1 / 2')).toBeInTheDocument()
-    expect(screen.getByText('已入库 0')).toBeInTheDocument()
-    expect(screen.getByText('待检测')).toBeInTheDocument()
-    expect(screen.getByText('组装中')).toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining(`/api/v1/projects/${projectId}/capture-sessions`),
-      expect.any(Object),
-    )
-  }, 15_000)
-
-  it('lets a member start hand-pose detection from the selected session camera', async () => {
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url.endsWith('/hand-pose-candidates')) {
-        return Promise.resolve(
-          jsonResponse(
-            {
-              error_code: 'AI_HAND_POSE_JOB_NOT_FOUND',
-              error_message: 'No hand-pose job exists yet.',
-            },
-            404,
-          ),
-        )
-      }
-      if (url.endsWith('/hand-pose-detections') && init?.method === 'POST') {
-        return Promise.resolve(
-          jsonResponse(
-            {
-              ai_job_id: 'b1000000-0000-4000-8000-000000000001',
-              project_id: projectId,
-              clip_asset_id: assetId,
-              algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
-              algorithm_version: 'v1',
-              model_sha256: 'a'.repeat(64),
-              input_sha256: 'b'.repeat(64),
-              input_size_bytes: 8_388_608,
-              sampling_fps: 10,
-              status: 'QUEUED',
-              requested_by: 'local-synthetic-admin',
-              created_at: '2026-08-10T01:00:00Z',
-              updated_at: '2026-08-10T01:00:00Z',
-            },
-            202,
-          ),
-        )
-      }
-      return Promise.resolve(jsonResponse(captureSessionDetail()))
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('session-hand-pose-ui-0001') })
-    const user = userEvent.setup()
-
-    renderSessionDetail()
-
-    await user.click(await screen.findByRole('button', { name: '检测相机 1 的手部姿态' }))
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/videos/${assetId}/hand-pose-detections`,
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({ 'Idempotency-Key': 'session-hand-pose-ui-0001' }),
-        }),
-      ),
-    )
-    expect(await screen.findByText(/手部检测：正在检测，页面会自动更新。/)).toBeInTheDocument()
-  })
-
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     renderAssetDetail()
@@ -520,18 +426,6 @@ describe('catalog views', () => {
   })
 })
 
-function renderSessionList() {
-  return renderRoute(<SessionListView />, {
-    route: `/projects/${projectId}/sessions`,
-    path: '/projects/:projectId/sessions',
-  })
-}
-function renderSessionDetail() {
-  return renderRoute(<SessionDetailView />, {
-    route: `/projects/${projectId}/sessions/${sessionId}`,
-    path: '/projects/:projectId/sessions/:id',
-  })
-}
 function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER' }) {
   return renderRoute(<AssetDetailView />, {
     route: `/projects/${projectId}/assets/${assetId}`,
@@ -911,82 +805,6 @@ function verifiedMediaReport() {
     input_digest_verified: true,
     warning_codes: ['AUDIO_PRESENT'],
     created_at: '2026-07-22T01:02:03Z',
-  }
-}
-
-function captureSessionListItem(captureSessionId: string, deviceId = 'synthetic-edge-01') {
-  return {
-    capture_session_id: captureSessionId,
-    batch_id: '60000000-0000-4000-8000-000000000001',
-    device_id: deviceId,
-    camera_set_id: '70000000-0000-4000-8000-000000000001',
-    camera_set_key: 'dispensing-cabin-a',
-    camera_set_configuration_version: 1,
-    camera_layout_version: 'layout-v1',
-    expected_camera_count: 1,
-    bound_stream_count: 1,
-    received_camera_count: 1,
-    ingest_failed_stream_count: 0,
-    sync_group_id: 'sync-group-01',
-    device_time_utc: '2026-07-15T01:02:03Z',
-    server_receive_time: '2026-07-15T01:03:03Z',
-    assembly_status: 'COMPLETE',
-    quality_status: 'PASS',
-    created_at: '2026-07-15T01:03:03Z',
-  }
-}
-
-function captureSessionDetail() {
-  return {
-    capture_session_id: sessionId,
-    project_id: projectId,
-    batch_id: '60000000-0000-4000-8000-000000000001',
-    device_id: 'synthetic-edge-01',
-    metadata_upload_file_id: null,
-    metadata_schema_version: '1.0',
-    metadata_sha256: null,
-    expected_camera_count: 1,
-    received_camera_count: 1,
-    sync_group_id: 'sync-group-01',
-    device_time_utc: '2026-07-15T01:02:03Z',
-    device_timezone: 'Asia/Shanghai',
-    server_receive_time: '2026-07-15T01:03:03Z',
-    assembly_status: 'COMPLETE',
-    quality_status: 'PENDING',
-    camera_set_snapshot: {
-      camera_set_snapshot_id: '70000000-0000-4000-8000-000000000001',
-      source_camera_set_id: '71000000-0000-4000-8000-000000000001',
-      camera_set_key: 'dispensing-cabin-a',
-      configuration_version: 1,
-      layout_version: 'layout-v1',
-      expected_camera_count: 1,
-      members: [
-        {
-          camera_channel_id: '72000000-0000-4000-8000-000000000001',
-          camera_index: 0,
-          camera_role: 'overview',
-          mount_position: 'top',
-          enabled: true,
-        },
-      ],
-    },
-    streams: [
-      {
-        camera_stream_id: '41000000-0000-4000-8000-000000000001',
-        clip_asset_id: assetId,
-        client_file_id: '90000000-0000-4000-8000-000000000001',
-        camera_channel_id: '72000000-0000-4000-8000-000000000001',
-        camera_index: 0,
-        camera_role: 'overview',
-        mount_position: 'top',
-        record_start_utc: '2026-07-15T01:02:03Z',
-        time_offset_ms: 0,
-        sync_status: 'PASS',
-        stream_status: 'INGESTED',
-        quality_status: 'PENDING',
-      },
-    ],
-    created_at: '2026-07-15T01:03:03Z',
   }
 }
 

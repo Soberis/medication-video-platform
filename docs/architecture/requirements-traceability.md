@@ -7,7 +7,7 @@
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.21 继承下列 V1.18 FR 标识作为既有事实链，将 handedness 降为辅助元数据，并在 Cleaning PASS 后增加独立最小 Parquet 导出。V1.19 同步、DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；已有后端、契约、迁移和测试保留，不代表当前产品入口。
+V1.21 继承下列 V1.18 FR 标识作为既有事实链，将 handedness 降为辅助元数据，并在 Cleaning PASS 后增加独立最小 Parquet 导出。V1.19 同步、DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关运行代码、公开 API、Worker 和契约已从当前 active surface 退役，历史数据库结构和版本化文档只作为保留事实，不代表当前产品入口。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |

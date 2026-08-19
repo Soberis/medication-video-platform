@@ -57,34 +57,6 @@ class AssetCatalogController {
 		this.dataManagementSummaryQueryService = dataManagementSummaryQueryService;
 	}
 
-	@GetMapping("/capture-sessions")
-	ResponseEntity<CaptureSessionListResponse> listCaptureSessions(@PathVariable UUID projectId,
-			@RequestParam(name = "device_id",
-					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "assembly_status", required = false) CaptureSessionAssemblyStatus assemblyStatus,
-			@RequestParam(name = "quality_status", required = false) CaptureQualityStatus qualityStatus,
-			@RequestParam(name = "recorded_from",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedFrom,
-			@RequestParam(name = "recorded_before",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant recordedBefore,
-			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listCaptureSessions(projectId, deviceId, assemblyStatus, qualityStatus,
-				recordedFrom, recordedBefore, cursor, limit);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
-	@GetMapping("/capture-sessions/{captureSessionId}")
-	ResponseEntity<CaptureSessionResponse> getCaptureSession(@PathVariable UUID projectId,
-			@PathVariable UUID captureSessionId, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.getCaptureSession(projectId, captureSessionId);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
 	@GetMapping("/videos")
 	ResponseEntity<VideoSummaryPage> listVideos(@PathVariable UUID projectId,
 			@RequestParam(required = false) UploadSourceType source,

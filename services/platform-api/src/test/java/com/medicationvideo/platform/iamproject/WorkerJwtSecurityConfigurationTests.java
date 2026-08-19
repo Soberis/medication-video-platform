@@ -19,7 +19,7 @@ class WorkerJwtSecurityConfigurationTests {
 
 	private static final String MEDIA_AUDIENCE = "medication-platform-media-worker";
 
-	private static final String EXPORT_AUDIENCE = "medication-platform-export-worker";
+	private static final String UNEXPECTED_AUDIENCE = "unexpected-worker-audience";
 
 	@Test
 	void acceptsOnlyTheExpectedIssuerAudienceSubjectAndValidityWindow() {
@@ -28,8 +28,8 @@ class WorkerJwtSecurityConfigurationTests {
 		assertFalse(validator.validate(jwt(ISSUER, MEDIA_AUDIENCE, "media-worker-1", 120)).hasErrors());
 		assertTrue(validator.validate(jwt("https://other.example.test", MEDIA_AUDIENCE, "media-worker-1", 120))
 			.hasErrors());
-		assertTrue(validator.validate(jwt(ISSUER, EXPORT_AUDIENCE, "media-worker-1", 120)).hasErrors());
-		assertTrue(validator.validate(jwt(ISSUER, List.of(MEDIA_AUDIENCE, EXPORT_AUDIENCE), "media-worker-1", 120))
+		assertTrue(validator.validate(jwt(ISSUER, UNEXPECTED_AUDIENCE, "media-worker-1", 120)).hasErrors());
+		assertTrue(validator.validate(jwt(ISSUER, List.of(MEDIA_AUDIENCE, UNEXPECTED_AUDIENCE), "media-worker-1", 120))
 			.hasErrors());
 		assertTrue(validator.validate(jwt(ISSUER, MEDIA_AUDIENCE, null, 120)).hasErrors());
 		assertTrue(validator.validate(jwt(ISSUER, MEDIA_AUDIENCE, "media-worker-1", -120)).hasErrors());
@@ -44,7 +44,6 @@ class WorkerJwtSecurityConfigurationTests {
 		assertEquals("media-worker-1", authentication.getName());
 		var authorities = authentication.getAuthorities().stream().map(authority -> authority.getAuthority()).toList();
 		assertTrue(authorities.contains("ROLE_MEDIA_WORKER"));
-		assertFalse(authorities.contains("ROLE_EXPORT_WORKER"));
 	}
 
 	@Test
@@ -56,12 +55,6 @@ class WorkerJwtSecurityConfigurationTests {
 		assertThrows(IllegalArgumentException.class, () -> WorkerJwtSecurityConfiguration.decoder(ISSUER,
 				"https://identity.example.test/jwks", MEDIA_AUDIENCE, Duration.ofMinutes(6)));
 
-		var configuration = new WorkerJwtSecurityConfiguration();
-		assertThrows(IllegalArgumentException.class, () -> configuration.exportWorkerJwtDecoder(ISSUER,
-				"https://identity.example.test/jwks", MEDIA_AUDIENCE, MEDIA_AUDIENCE, Duration.ofMinutes(1)));
-		assertThrows(IllegalArgumentException.class,
-				() -> configuration.exportWorkerJwtDecoder(ISSUER, "https://identity.example.test/jwks",
-						" " + MEDIA_AUDIENCE, MEDIA_AUDIENCE + " ", Duration.ofMinutes(1)));
 	}
 
 	private static Jwt jwt(String issuer, String audience, String subject, long expiresInSeconds) {

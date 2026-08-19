@@ -31,7 +31,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Production machine-identity boundary for Media and Export Workers.
+ * Production machine-identity boundary for Media and AI Workers.
  *
  * <p>
  * Local and test profiles keep their isolated synthetic bearer filters. Every other
@@ -43,8 +43,6 @@ import jakarta.servlet.http.HttpServletResponse;
 class WorkerJwtSecurityConfiguration {
 
 	private static final String MEDIA_WORKER_ROLE = "ROLE_MEDIA_WORKER";
-
-	private static final String EXPORT_WORKER_ROLE = "ROLE_EXPORT_WORKER";
 
 	private static final String AI_WORKER_ROLE = "ROLE_AI_WORKER";
 
@@ -64,31 +62,15 @@ class WorkerJwtSecurityConfiguration {
 		return decoder(issuerUri, jwkSetUri, audience, clockSkew);
 	}
 
-	@Bean("exportWorkerJwtDecoder")
-	JwtDecoder exportWorkerJwtDecoder(@Value("${platform.security.worker-jwt.issuer-uri:}") String issuerUri,
-			@Value("${platform.security.worker-jwt.jwk-set-uri:}") String jwkSetUri,
-			@Value("${platform.security.worker-jwt.media-audience:}") String mediaAudience,
-			@Value("${platform.security.worker-jwt.export-audience:}") String exportAudience,
-			@Value("${platform.security.worker-jwt.clock-skew:PT1M}") Duration clockSkew) {
-		var requiredMediaAudience = requireText(mediaAudience, "Media Worker JWT audience");
-		var requiredExportAudience = requireText(exportAudience, "Export Worker JWT audience");
-		if (requiredMediaAudience.equals(requiredExportAudience)) {
-			throw new IllegalArgumentException("Media and Export Worker JWT audiences must differ.");
-		}
-		return decoder(issuerUri, jwkSetUri, requiredExportAudience, clockSkew);
-	}
-
 	@Bean("aiWorkerJwtDecoder")
 	JwtDecoder aiWorkerJwtDecoder(@Value("${platform.security.worker-jwt.issuer-uri:}") String issuerUri,
 			@Value("${platform.security.worker-jwt.jwk-set-uri:}") String jwkSetUri,
 			@Value("${platform.security.worker-jwt.media-audience:}") String mediaAudience,
-			@Value("${platform.security.worker-jwt.export-audience:}") String exportAudience,
 			@Value("${platform.security.worker-jwt.ai-audience:}") String aiAudience,
 			@Value("${platform.security.worker-jwt.clock-skew:PT1M}") Duration clockSkew) {
 		var requiredAiAudience = requireText(aiAudience, "AI Worker JWT audience");
-		if (requiredAiAudience.equals(requireText(mediaAudience, "Media Worker JWT audience"))
-				|| requiredAiAudience.equals(requireText(exportAudience, "Export Worker JWT audience"))) {
-			throw new IllegalArgumentException("AI Worker JWT audience must differ from Media and Export Workers.");
+		if (requiredAiAudience.equals(requireText(mediaAudience, "Media Worker JWT audience"))) {
+			throw new IllegalArgumentException("AI Worker JWT audience must differ from the Media Worker.");
 		}
 		return decoder(issuerUri, jwkSetUri, requiredAiAudience, clockSkew);
 	}
@@ -105,13 +87,6 @@ class WorkerJwtSecurityConfiguration {
 	SecurityFilterChain mediaWorkerJwtSecurityFilterChain(HttpSecurity http,
 			@Qualifier("mediaWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
 		return workerChain(http, "/api/v1/internal/media-jobs/**", decoder, MEDIA_WORKER_ROLE);
-	}
-
-	@Bean
-	@Order(1)
-	SecurityFilterChain exportWorkerJwtSecurityFilterChain(HttpSecurity http,
-			@Qualifier("exportWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
-		return workerChain(http, "/api/v1/internal/dataset-exports/**", decoder, EXPORT_WORKER_ROLE);
 	}
 
 	@Bean

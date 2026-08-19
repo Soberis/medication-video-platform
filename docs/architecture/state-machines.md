@@ -231,33 +231,53 @@ APPROVED revision
 
 - 结果绑定 CleaningRun、输入指纹、输入摘要、所选 MediaReport 证据和 rule set digest。
 - run/result 创建后不可原地改写；相同输入指纹幂等复用，规则或输入变化时允许创建新 run。
-  当前切片只在首次 `APPROVED` 时触发，不暴露人工重跑入口。WARNING 进入数据集前必须有
-  AdmissionOverride。
+  当前切片只在首次 `APPROVED` 时触发，不暴露人工重跑入口。P0 不提供独立 AdmissionOverride；WARNING
+  仍不能直接进入 `training-data.v2`。
 - REJECT 表示默认不准入，不表示删除。
 - 当前主 Step 纵向切片不建立通用异步清洗入口：`APPROVED` review 在 Core API 的同一数据库事务中把任务推进为 `COMPLETED`，并创建一个版本化、不可变的 post-clean run/result；不新增 Worker、队列或调度状态。
 - 当前规则从持久化文档重新计算 revision 文档摘要，重验 LabelSchema 摘要、标签集合、主 Step
   左闭右开时间范围、互斥关系，以及按 `created_at + media_report_id` 稳定选出的最新已验证媒体
   时长和输入摘要。缺少可用于边界复核的已验证媒体时长时结果为 `WARNING`；已经持久化的标签、
   摘要或时间事实非法时结果为 `REJECT`；全部规则通过时结果为 `PASS`。
-- post-clean `PASS` 只证明该 revision 通过当前规则版本，不自动创建 DatasetVersion 或数据集成员；正式准入仍须在 `datasetexport` 按 CaptureSession、stream、当前资产/质量事实和摘要一致性单独验证。
+- post-clean `PASS` 只证明该 revision 通过当前规则版本，不自动创建 DatasetVersion 或数据集成员；`training-data.v2`
+  preview/download 通过只读 `training_data_eligibility` 和 `training_data_candidate_observations` 投影验证当前资产、质量、Review、Cleaning 和摘要事实。
 
 ### 7.2 Quarantine（P0 后置）
 
 V1.6 不暴露隔离命令或查询。历史 `quarantine_record` 仅为不可改写的迁移记录；当前不合格数据使用质量结论控制标注和数据集准入，删除仍采用可审计软删除。
 
-### 7.3 AdmissionOverride
+### 7.3 当前训练数据准入
+
+V1.21 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
+旧代码和公开 API 已退役，历史表结构由 Flyway 保留，数据库物理清理由后续 forward migration 单独决策。
+
+Cleaning PASS 后，`MinimalTrainingDataExportService` 与 `tools/minimal-export` 在只读事务中读取
+`training_data_eligibility` 和 `training_data_candidate_observations`。准入事实必须同时满足：视频仍为
+`INGESTED`、人工质量为 `QUALIFIED`、正式 `AnnotationRevision` 已被 `Review` 批准、Cleaning 结果为
+`PASS/SUCCEEDED`，并且 Candidate 的输入摘要和 provenance 与当前事实一致。Candidate 只能提供手部几何
+和辅助 handedness，不能替代人工标签、Review 或 Cleaning。
+
+## 8. 训练数据导出
+
+### 8.1 Minimal training-data.v2
 
 ```text
-REQUESTED → APPROVED
-          → REJECTED
-APPROVED → EXPIRED/REVOKED
+eligible facts → preview/download → training_data.parquet
 ```
 
-批准只适用于明确的 DatasetVersion 构建、对象集合和规则结论，不能作为永久全局 PASS。
+- API 和本地工具都是显式、同步、只读的 preview/download；不创建 DatasetVersion、ExportJob、Worker
+  或队列，不代理 MP4，也不写入新的业务事实。
+- 输出固定为 `training-data.v2`，每行保留人工动作区间、Candidate 的 `algorithm_key`、
+  `algorithm_version`、`model_sha256`、`profile_sha256`、`handedness` 和 `handedness_score`。
+- 生成过程在数据库 `REPEATABLE READ` 快照中完成；权限、项目隔离、审计、对象摘要和下载 `no-store`
+  约束继续由现有 Core API 负责。
 
-## 8. 数据集与导出
+### 8.2 已退役 DatasetVersion/legacy Export（仅历史记录）
 
-### 8.1 DatasetVersion
+以下旧状态机仅用于解释历史数据库记录和版本化文档，不属于当前 active API、Worker 或产品流程。
+历史表结构继续由 Flyway 保留；数据库物理清理必须另行设计新的 forward migration。
+
+#### 8.2.1 DatasetVersion（历史）
 
 ```text
 DRAFT → BUILDING → VALIDATING → FROZEN → RETIRED
@@ -331,7 +351,7 @@ DatasetExport 与最新 attempt 后再次确认；旧 attempt 原子进入 `LOST
 
 FROZEN 没有返回 DRAFT/BUILDING 的迁移。修正只能创建新 DatasetVersion。
 
-### 8.2 DatasetExport
+#### 8.2.2 DatasetExport（历史）
 
 ```text
 REQUESTED → QUEUED → RUNNING → AVAILABLE
@@ -430,8 +450,7 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |
 | 复核 revision | 项目 ADMIN 且不等于提交者；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；每 revision 只有一次决定 |
 | 后置清洗 | 当前 revision review `APPROVED`；文档、LabelSchema、ClipAsset 输入摘要和规则版本被当前 run/result 冻结；缺媒体时长为 WARNING，非法事实为 REJECT |
-| 数据集冻结 | 以 CaptureSession 为成员单位；session/stream 准入、人工质量 `QUALIFIED`、annotation review APPROVED、post-clean PASS 或批准 override，且所有冻结摘要仍匹配 |
-| 数据集导出 | DatasetVersion FROZEN；导出审批有效；purpose 和 expiry 有效 |
+| training-data.v2 preview/download | 视频仍为 `INGESTED`；人工质量为 `QUALIFIED`；AnnotationRevision 已被 Review 批准；Cleaning 为 `PASS/SUCCEEDED`；Candidate provenance 与当前事实一致；项目权限和审计守卫通过 |
 | AI 作业 | P1 已启用；DEIDENTIFIED variant；privacy ALLOWED_ANNOTATION；quarantine NONE；算法版本已批准 |
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |
 | 移动项目内文件夹 | folder 与 asset 同 project；只更新 `folder_id` |
@@ -451,7 +470,8 @@ DatasetFrozenV1
 DatasetExportAvailableV1
 ```
 
-事件名称只是设计候选，只有进入 `contracts/events/` 并通过兼容性测试后才是正式契约。
+事件名称只是设计候选，只有进入 `contracts/events/` 并通过兼容性测试后才是正式契约。当前 P0 的最小训练数据
+preview/download 是同步只读操作，不新增 DatasetFrozen 或 DatasetExportAvailable 事件。
 
 每个状态机至少测试：
 

@@ -1,13 +1,13 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.20 LEAN-P0 为准：平台对接边端接收，在云端完成视频管理、单视频手部预标注、配药动作标注复核和数据清洗。手部预标注优先建设，但不替代人工标注和清洗；V1.19 多相机同步与数据集产品能力为 DEFERRED。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.21 FLOW-FIRST LEAN-P0 为准：平台对接边端接收，在云端完成视频管理、单视频手部预标注、配药动作标注复核、数据清洗和最小 `training-data.v2` preview/download。手部预标注优先建设，但不替代人工标注和清洗；CaptureSync 属于战略保留；DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，历史数据库结构仍由 Flyway 保留。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
 | [配药视频数据管理平台：手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md) | 当前边端对接边界、云端主链、状态、容量和验收 |
-| [当前需求追踪矩阵](./requirements-traceability.md) | V1.20 当前 FR 到模块、契约、测试和状态 |
+| [当前需求追踪矩阵](./requirements-traceability.md) | V1.21 当前 FR 到模块、契约、测试和状态 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |

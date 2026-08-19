@@ -4,9 +4,6 @@ param(
     [switch]$AiWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
-    [switch]$RestartExportWorker,
-    [switch]$ExportWorkerSyntheticFailFirstAttempt,
-    [switch]$ExportWorkerSyntheticLeaseLossFirstAttempt,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
@@ -139,23 +136,6 @@ function Restart-ManagedApi {
     Save-ManagedProcesses
 }
 
-function Restart-ManagedExportWorker {
-    if (-not $managedProcesses.Contains('export-worker')) {
-        return
-    }
-
-    $processId = [int]$managedProcesses['export-worker'].processId
-    if ($null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
-        & taskkill.exe /PID $processId /T /F | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not stop the managed Export Worker process (PID $processId)."
-        }
-        Write-Host "Stopped managed Export Worker (PID $processId)." -ForegroundColor Yellow
-    }
-    $managedProcesses.Remove('export-worker')
-    Save-ManagedProcesses
-}
-
 Import-LocalEnvironment $exampleEnvFile
 if (Test-Path -LiteralPath $localEnvFile) {
     Import-LocalEnvironment $localEnvFile
@@ -217,65 +197,12 @@ if (-not $InfrastructureOnly) {
     $Worker = $true
 }
 
-if ($RestartExportWorker -and -not $Worker) {
-    throw 'Restarting the Export Worker requires workers to be enabled.'
-}
-if ($ExportWorkerSyntheticFailFirstAttempt -and -not $Worker) {
-    throw 'Synthetic Export Worker failure injection requires workers to be enabled.'
-}
-if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $Worker) {
-    throw 'Synthetic Export Worker lease-loss injection requires workers to be enabled.'
-}
-if ($InfrastructureOnly -and ($Worker -or $AiWorker -or $RestartApi -or $RestartExportWorker -or $ExportWorkerSyntheticFailFirstAttempt -or $ExportWorkerSyntheticLeaseLossFirstAttempt)) {
+if ($InfrastructureOnly -and ($Worker -or $AiWorker -or $RestartApi)) {
     throw 'Infrastructure-only startup cannot start or restart applications.'
 }
-if ($ExportWorkerSyntheticFailFirstAttempt -and -not $RestartExportWorker) {
-    throw 'Synthetic Export Worker failure injection requires -RestartExportWorker.'
-}
-if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $RestartExportWorker) {
-    throw 'Synthetic Export Worker lease-loss injection requires -RestartExportWorker.'
-}
-if ($ExportWorkerSyntheticFailFirstAttempt -and $ExportWorkerSyntheticLeaseLossFirstAttempt) {
-    throw 'Synthetic Export Worker failure and lease-loss injections are mutually exclusive.'
-}
-if ($ExportWorkerSyntheticFailFirstAttempt -and $env:DATA_PROFILE -ne 'synthetic') {
-    throw 'Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic.'
-}
-if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and $env:DATA_PROFILE -ne 'synthetic') {
-    throw 'Synthetic Export Worker lease-loss injection requires DATA_PROFILE=synthetic.'
-}
-if ($ExportWorkerSyntheticLeaseLossFirstAttempt -and -not $RestartApi) {
-    throw 'Synthetic Export Worker lease-loss injection requires -RestartApi so local lease timings can be shortened.'
-}
-
-$env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'false'
-$env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'false'
-$env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE = 'false'
-$env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT = 'false'
-if ($ExportWorkerSyntheticFailFirstAttempt) {
-    $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
-    $env:RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE = 'true'
-    $env:EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT = 'true'
-    Write-Host 'Export Worker will inject one synthetic first-attempt failure for recovery acceptance.' -ForegroundColor Yellow
-}
-if ($ExportWorkerSyntheticLeaseLossFirstAttempt) {
-    $env:RUN_DATASET_EXPORT_ACCEPTANCE = 'true'
-    $env:RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE = 'true'
-    $env:EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT = 'true'
-    $env:DATASET_EXPORT_LEASE_DURATION = 'PT10S'
-    $env:DATASET_EXPORT_HEARTBEAT_INTERVAL = 'PT2S'
-    $env:DATASET_EXPORT_LEASE_GRACE = 'PT2S'
-    $env:DATASET_EXPORT_RECOVERY_POLL_DELAY = 'PT1S'
-    Write-Host 'Export Worker will inject one synthetic lease loss with short local recovery timings.' -ForegroundColor Yellow
-}
-
 if ($RestartApi) {
     Restart-ManagedApi
 }
-if ($RestartExportWorker) {
-    Restart-ManagedExportWorker
-}
-
 if ($InfrastructureOnly) {
     Write-Host "Infrastructure is ready. Run .\scripts\status-local.ps1 to inspect it." -ForegroundColor Cyan
     return
@@ -307,11 +234,6 @@ if ($Worker) {
     }
     else {
         Start-LocalProcess 'worker' 'Media Worker' 'cmd.exe' "/c uv run --directory workers/media-worker media-worker" (Join-Path $logDirectory 'worker.log')
-    }
-    # Export Worker is FROZEN under LEAN-P0 and no longer part of the default startup chain.
-    # Keep the existing explicit recovery path without starting it during ordinary P0 startup.
-    if ($RestartExportWorker) {
-        Start-LocalProcess 'export-worker' 'Export Worker' 'cmd.exe' "/c uv run --directory workers/export-worker export-worker" (Join-Path $logDirectory 'export-worker.log')
     }
 }
 
@@ -354,6 +276,6 @@ if ($AiWorker -or ($Worker -and $env:AI_HAND_POSE_ENABLED -eq 'true')) {
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
-Write-Host 'Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true. Export Worker is FROZEN and not started by default.' -ForegroundColor Cyan
+Write-Host 'Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true.' -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

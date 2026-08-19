@@ -31,12 +31,10 @@ class AiWorkerTokenFileTests {
 	}
 
 	@Test
-	void rejectsBearerTokenReuseAcrossWorkerRoles() {
+	void rejectsBearerTokenReuseAcrossAiAndMediaWorkers() {
 		assertThrows(IllegalStateException.class,
-				() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("shared", "shared", "export"));
-		assertThrows(IllegalStateException.class,
-				() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("ai", "media", "ai"));
-		assertDoesNotThrow(() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("ai", "media", "export"));
+				() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("shared", "shared"));
+		assertDoesNotThrow(() -> AiWorkerSecurityConfiguration.requireDistinctWorkerTokens("ai", "media"));
 	}
 
 }

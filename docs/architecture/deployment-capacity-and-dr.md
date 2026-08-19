@@ -10,6 +10,8 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
+- V1.21 当前不部署 Dataset Export Worker；最小 `training-data.v2` preview/download 在 Core API 内以只读事务完成。
+  历史 Export Worker 与 DatasetVersion 数据库结构只作为保留记录，不能作为当前容量或运行拓扑依据。
 
 ## 2. 工作负载
 
@@ -22,7 +24,7 @@
 | Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
-| Export Worker | 数据集文件生成和校验 | 否，只写临时对象并回传结果 |
+| Training Data Export | `training-data.v2` preview/download | 否，只读投影并返回受控 Parquet |
 | PostgreSQL | 关系业务真值、Outbox/Inbox 和审计索引 | 是 |
 | S3 兼容存储 | raw、variant、frames、reports、exports | 保存字节事实，不保存关系状态 |
 | RabbitMQ | 作业和事件传递 | 否 |
@@ -39,7 +41,7 @@
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
 | 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
-| 数据集与导出 | Export Worker | 无证据的 Redis |
+| training-data.v2 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
 | 手部预标注 | AI Worker、RabbitMQ、获批准的本地模型 | 批量与自动预标注策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。

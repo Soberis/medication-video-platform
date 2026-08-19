@@ -125,13 +125,8 @@ $requiredFiles = @(
     'contracts/events/ai-hand-pose-job-v1.schema.json',
     'contracts/events/ai-hand-pose-result-v2.schema.json',
     'contracts/events/ai-hand-pose-dead-letter-v1.schema.json',
-    'contracts/events/dataset-export-job-v1.schema.json',
-    'contracts/events/dataset-export-result-v1.schema.json',
-    'contracts/events/dataset-export-dead-letter-v1.schema.json',
     'contracts/profiles/media-probe-baseline-v1.json',
     'contracts/profiles/p0-post-annotation-cleaning-v1.json',
-    'contracts/profiles/p0-dataset-export-v1.json',
-    'contracts/profiles/p0-dataset-export-v2.json',
     'tools/synthetic-upload-client/index.mjs',
     'tools/synthetic-upload-client/upload-client.mjs',
     'tools/synthetic-upload-client/synthetic-video.mjs',
@@ -139,10 +134,6 @@ $requiredFiles = @(
     'tools/synthetic-upload-client/large-upload-acceptance.mjs',
     'tools/synthetic-upload-client/large-upload-acceptance.test.mjs',
     'tools/synthetic-upload-client/README.md',
-    'tools/dataset-export-acceptance/index.mjs',
-    'tools/dataset-export-acceptance/index.test.mjs',
-    'tools/web-preflight/index.mjs',
-    'tools/web-preflight/index.test.mjs',
     'scripts/check-environment.ps1',
     'scripts/check-environment.sh',
     'scripts/quality-gate.ps1',
@@ -161,12 +152,6 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/__main__.py',
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
-    'workers/export-worker/pyproject.toml',
-    'workers/export-worker/uv.lock',
-    'workers/export-worker/README.md',
-    'workers/export-worker/src/medication_export_worker/__main__.py',
-    'workers/export-worker/src/medication_export_worker/processor.py',
-    'workers/export-worker/src/medication_export_worker/package_builder.py',
     'tools/hand-pose-poc/pyproject.toml',
     'tools/hand-pose-poc/uv.lock',
     'tools/hand-pose-poc/README.md',
@@ -193,8 +178,7 @@ $requiredFiles = @(
     'docs/architecture/security-privacy-retention.md',
     'docs/architecture/deployment-capacity-and-dr.md',
     'docs/architecture/web-ux-and-frontend-guidelines.md',
-    'docs/runbooks/large-upload-resume-acceptance.md',
-    'docs/runbooks/dataset-export-cross-process-acceptance.md'
+    'docs/runbooks/large-upload-resume-acceptance.md'
 )
 
 foreach ($relativePath in $requiredFiles) {
@@ -251,21 +235,6 @@ catch {
     Add-Failure "Media dead-letter JSON Schema is invalid: $($_.Exception.Message)"
 }
 
-foreach ($datasetExportEventContract in @(
-    'dataset-export-job-v1.schema.json',
-    'dataset-export-result-v1.schema.json',
-    'dataset-export-dead-letter-v1.schema.json'
-)) {
-    try {
-        Get-Content -LiteralPath (Join-Path $root "contracts/events/$datasetExportEventContract") -Raw |
-            ConvertFrom-Json | Out-Null
-        Add-Pass "Dataset export event JSON Schema is valid JSON: $datasetExportEventContract"
-    }
-    catch {
-        Add-Failure "Dataset export event JSON Schema is invalid ($datasetExportEventContract): $($_.Exception.Message)"
-    }
-}
-
 foreach ($aiEventContract in @(
     'ai-hand-pose-job-v1.schema.json',
     'ai-hand-pose-result-v2.schema.json',
@@ -315,37 +284,6 @@ try {
 }
 catch {
     Add-Failure "P0 post-annotation cleaning profile is invalid: $($_.Exception.Message)"
-}
-
-foreach ($datasetExportProfile in @(
-    @{
-        Name = 'v1'
-        Path = 'contracts/profiles/p0-dataset-export-v1.json'
-        Digest = '3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888'
-    },
-    @{
-        Name = 'v2'
-        Path = 'contracts/profiles/p0-dataset-export-v2.json'
-        Digest = '5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96'
-    }
-)) {
-    try {
-        $datasetExportProfileContent = (Get-Content -LiteralPath (Join-Path $root $datasetExportProfile.Path) -Raw).TrimEnd("`r", "`n")
-        $datasetExportProfileContent | ConvertFrom-Json | Out-Null
-        Add-Pass "P0 dataset export profile $($datasetExportProfile.Name) is valid JSON"
-
-        $datasetExportProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($datasetExportProfileContent)
-        $datasetExportProfileDigest = Get-Sha256Hex $datasetExportProfileBytes
-        if ($datasetExportProfileDigest -eq $datasetExportProfile.Digest) {
-            Add-Pass "P0 dataset export profile $($datasetExportProfile.Name) digest matches the server contract"
-        }
-        else {
-            Add-Failure "P0 dataset export profile $($datasetExportProfile.Name) digest changed unexpectedly: $datasetExportProfileDigest"
-        }
-    }
-    catch {
-        Add-Failure "P0 dataset export profile $($datasetExportProfile.Name) is invalid: $($_.Exception.Message)"
-    }
 }
 
 function Get-ProjectConfigFiles {
@@ -431,15 +369,12 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru',
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru',
-        'api-tests/bruno/medication-platform/Asset Catalog/01 List Capture Sessions.bru',
         'api-tests/bruno/medication-platform/Asset Catalog/03 List Capture Event Logs.bru',
         'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru',
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',
         'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru',
         'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru',
-        'api-tests/bruno/medication-platform/Dataset Exports/01 Reject Missing Export Worker Identity.bru',
-        'api-tests/bruno/medication-platform/Dataset Exports/02 Reject Web Identity As Export Worker.bru'
+        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
     )
     foreach ($relativePath in $requiredBrunoRequests) {
         if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {
@@ -583,46 +518,6 @@ else {
     Add-Skip 'Synthetic upload client has not been generated yet'
 }
 
-$datasetExportAcceptance = Join-Path $root 'tools/dataset-export-acceptance/index.mjs'
-if (-not (Test-ChangedPath 'tools/dataset-export-acceptance')) {
-    Add-Skip 'Dataset export acceptance guard unit tests: no related changes'
-}
-elseif ($Changed) {
-    Add-Skip 'Dataset export acceptance guard unit tests: deferred to full verification'
-}
-elseif (Test-Path -LiteralPath $datasetExportAcceptance -PathType Leaf) {
-    & pnpm --dir $root run dataset-export:acceptance:test
-    if ($LASTEXITCODE -eq 0) {
-        Add-Pass 'Dataset export acceptance guard unit tests'
-    }
-    else {
-        Add-Failure "Dataset export acceptance guard unit tests exited with code $LASTEXITCODE"
-    }
-}
-else {
-    Add-Skip 'Dataset export acceptance tool has not been generated yet'
-}
-
-$webPreflight = Join-Path $root 'tools/web-preflight/index.mjs'
-if (-not (Test-ChangedPath 'tools/web-preflight')) {
-    Add-Skip 'P0 Web preflight guard unit tests: no related changes'
-}
-elseif ($Changed) {
-    Add-Skip 'P0 Web preflight guard unit tests: deferred to full verification'
-}
-elseif (Test-Path -LiteralPath $webPreflight -PathType Leaf) {
-    & pnpm --dir $root run p0-web:preflight:test
-    if ($LASTEXITCODE -eq 0) {
-        Add-Pass 'P0 Web preflight guard unit tests'
-    }
-    else {
-        Add-Failure "P0 Web preflight guard unit tests exited with code $LASTEXITCODE"
-    }
-}
-else {
-    Add-Skip 'P0 Web preflight tool has not been generated yet'
-}
-
 if (-not (Test-ChangedPath 'scripts')) {
     Add-Skip 'macOS/Linux local script tests: no script changes'
 }
@@ -691,32 +586,6 @@ else {
                 if ($LASTEXITCODE -ne 0) {
                     $projectFailed = $true
                     Add-Failure "pytest failed: $projectDir"
-                }
-            }
-            if ((Split-Path -Leaf $projectDir) -eq 'export-worker') {
-                $digestOutput = @(& uv run python -c "from pathlib import Path; from medication_export_worker.config import calculate_software_digest; print(calculate_software_digest(Path('.').resolve()))")
-                if ($LASTEXITCODE -ne 0 -or $digestOutput.Count -eq 0) {
-                    $projectFailed = $true
-                    Add-Failure 'Export Worker software digest could not be calculated'
-                }
-                else {
-                    $computedDigest = $digestOutput[-1].Trim()
-                    $environmentExample = Get-Content -LiteralPath (Join-Path $root '.env.example') -Raw
-                    $runtimeDigest = [regex]::Match(
-                        $environmentExample,
-                        '(?m)^EXPORT_WORKER_SOFTWARE_DIGEST=(sha256:[a-f0-9]{64})\r?$'
-                    ).Groups[1].Value
-                    $approvedDigest = [regex]::Match(
-                        $environmentExample,
-                        '(?m)^EXPORT_WORKER_APPROVED_SOFTWARE_DIGEST=(sha256:[a-f0-9]{64})\r?$'
-                    ).Groups[1].Value
-                    if ($computedDigest -eq $runtimeDigest -and $computedDigest -eq $approvedDigest) {
-                        Add-Pass 'Export Worker runtime and approved software digests match source'
-                    }
-                    else {
-                        $projectFailed = $true
-                        Add-Failure 'Export Worker software digests in .env.example are stale'
-                    }
                 }
             }
             if (-not $projectFailed) { Add-Pass "Python gates: $projectDir" }

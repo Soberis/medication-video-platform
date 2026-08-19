@@ -75,14 +75,6 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/views/ProjectListView')).default }),
           },
           {
-            path: '/projects/:projectId/sessions',
-            lazy: async () => ({ Component: (await import('@/views/SessionListView')).default }),
-          },
-          {
-            path: '/projects/:projectId/sessions/:id',
-            lazy: async () => ({ Component: (await import('@/views/SessionDetailView')).default }),
-          },
-          {
             path: '/projects/:projectId/videos',
             lazy: async () => ({
               Component: (await import('@/views/VideoManagementView')).default,
@@ -139,7 +131,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '/sessions', element: <Navigate replace to={paths.projects} /> },
   { path: '/assets', element: <Navigate replace to={paths.projects} /> },
   { path: '*', element: <Navigate replace to={paths.projects} /> },
 ])

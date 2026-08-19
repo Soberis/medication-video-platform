@@ -26,11 +26,9 @@ class AiWorkerSecurityConfiguration {
 			@Value("${platform.security.local-ai-worker-bearer-token:}") String bearerToken,
 			@Value("${platform.security.local-ai-worker-bearer-token-file:}") String bearerTokenFile,
 			@Value("${platform.security.local-ai-worker-id:local-ai-worker}") String workerId,
-			@Value("${platform.security.local-worker-bearer-token:}") String mediaBearerToken,
-			@Value("${platform.security.local-export-worker-bearer-token:}") String exportBearerToken)
-			throws Exception {
+			@Value("${platform.security.local-worker-bearer-token:}") String mediaBearerToken) throws Exception {
 		var resolvedBearerToken = resolveBearerToken(bearerToken, bearerTokenFile);
-		requireDistinctWorkerTokens(resolvedBearerToken, mediaBearerToken, exportBearerToken);
+		requireDistinctWorkerTokens(resolvedBearerToken, mediaBearerToken);
 		var workerFilter = new LocalMediaWorkerAuthenticationFilter(resolvedBearerToken, validateWorkerId(workerId),
 				"ROLE_AI_WORKER");
 		return http.securityMatcher("/api/v1/internal/ai-jobs/**")
@@ -49,18 +47,11 @@ class AiWorkerSecurityConfiguration {
 		return value;
 	}
 
-	static void requireDistinctWorkerTokens(String aiToken, String mediaToken, String exportToken) {
+	static void requireDistinctWorkerTokens(String aiToken, String mediaToken) {
 		var ai = aiToken == null ? "" : aiToken.trim();
 		var media = mediaToken == null ? "" : mediaToken.trim();
-		var export = exportToken == null ? "" : exportToken.trim();
 		if (!ai.isEmpty() && ai.equals(media)) {
 			throw new IllegalStateException("AI and media Worker bearer tokens must be different.");
-		}
-		if (!ai.isEmpty() && ai.equals(export)) {
-			throw new IllegalStateException("AI and export Worker bearer tokens must be different.");
-		}
-		if (!media.isEmpty() && media.equals(export)) {
-			throw new IllegalStateException("Media and export Worker bearer tokens must be different.");
 		}
 	}
 

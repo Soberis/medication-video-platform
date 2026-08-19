@@ -76,24 +76,22 @@ V1.6 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
 ### 4.3 职责分离
 
-V1.11 只把下列 P0 人工工作流改为受限单管理员审批：已提交 AnnotationRevision 的管理员复核、
-DatasetVersion freeze，以及已冻结版本的 `MODEL_TRAINING` 导出申请与批准。只有 `ROLE_ADMIN` 且拥有
-目标项目 ACTIVE `ADMIN` Membership 时才能执行；申请人与批准人相同时，审批事实、审计和 UI 必须照实记录
-`SELF_ADMIN_APPROVAL`。`ROLE_MEMBER` 不得执行这些管理员命令，项目、状态、证据、摘要、幂等、Worker 身份和
-追加式审计守卫不变。
+V1.21 P0 的管理员边界覆盖人工 Review、质量判断、Cleaning 以及 `training-data.v2` preview/download。
+Training-data preview/download 是同步只读能力，不创建 DatasetVersion、导出审批、Worker attempt 或导出表；
+调用仍必须同时满足全局 `ROLE_ADMIN`、目标项目 ACTIVE `ADMIN` Membership、项目/资产可见性和审计要求。
+`ROLE_MEMBER` 不得执行这些管理员命令，项目、状态、Candidate provenance 和追加式审计守卫不变。
 
-以下未被 V1.11 放宽的操作仍要求申请人与审批人分离：
+以下操作仍要求申请人与审批人分离：
 
-- S4 raw/身份映射访问、隔离或隐私放行，以及不属于上述 P0 训练导出的外部共享授权；
+- S4 raw/身份映射访问、隔离或隐私放行，以及不属于上述 P0 training-data preview/download 的外部共享授权；
 - 保留期例外、legal hold 变更和物理销毁；
 - 权限提升和密钥管理。
 
 紧急访问必须限时、明确原因、增强审计并事后复核。
 
-当前 V44 的冻结前 `PASS` 会建立待审批请求；同一合格管理员可批准自己发起的请求。批准命令仍重新核对
-全部技术证据，并在同一事务写唯一审批决定、`SELF_ADMIN_APPROVAL` 审计和冻结状态。该决定仅绑定当前
-DatasetVersion validation，不授权导出、下载或其他版本。V47 的导出批准同样允许该管理员自批，但首次
-attempt、Outbox、审批决定和审计仍须原子创建；Export Worker 继续使用独立机器身份。
+历史 DatasetVersion freeze、legacy export approval 和 Export Worker 的权限描述只用于解释既有 Flyway
+记录；相关代码和公开 API 已退役，不属于当前 V1.21 授权面。未来数据库清理或外部共享能力必须另行评审，
+不能从历史表结构推导当前产品入口。
 
 ## 5. 隐私处理流程（P0 后置）
 

@@ -68,6 +68,6 @@ Worker 提交的 retryable 失败由 Core API 使用 Outbox 延迟创建新 atte
 Worker 失败退出，交由监督器退避重启。Core API 已提供管理员受控重放：只读取脱敏诊断身份，
 校验当前 job/attempt 后创建新 capability 和消息并写追加式审计；仍禁止直接重投 DLQ body。
 
-非 `local` / `test` 的 Core API 必须配置 `WORKER_JWT_ISSUER_URI`、`WORKER_JWT_JWK_SET_URI`、
-`MEDIA_WORKER_JWT_AUDIENCE` 和 `EXPORT_WORKER_JWT_AUDIENCE`；两个 audience 必须不同。可用
+非 `local` / `test` 的 Core API 必须配置 `WORKER_JWT_ISSUER_URI`、`WORKER_JWT_JWK_SET_URI` 和
+`MEDIA_WORKER_JWT_AUDIENCE`。可用
 `WORKER_JWT_CLOCK_SKEW` 配置 0～5 分钟偏差（默认 `PT1M`）。缺项或非 HTTPS 配置会阻止服务启动。

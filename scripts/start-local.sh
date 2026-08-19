@@ -10,9 +10,6 @@ start_worker=false
 start_ai_worker=false
 infrastructure_only=false
 restart_api=false
-restart_export_worker=false
-export_worker_synthetic_fail_first_attempt=false
-export_worker_synthetic_lease_loss_first_attempt=false
 api_startup_timeout_seconds=180
 
 usage() {
@@ -24,10 +21,6 @@ Options:
   --ai-worker                                   Start only the AI Worker after Core API.
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
-  --restart-export-worker                       Restart the Export Worker managed by this script.
-  --export-worker-synthetic-fail-first-attempt  Inject one retryable first-attempt export failure.
-  --export-worker-synthetic-lease-loss-first-attempt
-                                               Stop renewing the first attempt after its package upload.
   --api-timeout SECONDS                         Core API health timeout, from 30 to 600 (default: 180).
   -h, --help                                    Show this help.
 EOF
@@ -49,18 +42,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --restart-api)
             restart_api=true
-            shift
-            ;;
-        --restart-export-worker)
-            restart_export_worker=true
-            shift
-            ;;
-        --export-worker-synthetic-fail-first-attempt)
-            export_worker_synthetic_fail_first_attempt=true
-            shift
-            ;;
-        --export-worker-synthetic-lease-loss-first-attempt)
-            export_worker_synthetic_lease_loss_first_attempt=true
             shift
             ;;
         --api-timeout)
@@ -86,39 +67,10 @@ if ! $infrastructure_only; then
     start_worker=true
 fi
 
-if $restart_export_worker && ! $start_worker; then
-    echo "Restarting the Export Worker requires --worker." >&2
-    exit 2
-fi
-if $export_worker_synthetic_fail_first_attempt && ! $start_worker; then
-    echo "Synthetic Export Worker failure injection requires --worker." >&2
-    exit 2
-fi
-if $export_worker_synthetic_lease_loss_first_attempt && ! $start_worker; then
-    echo "Synthetic Export Worker lease-loss injection requires --worker." >&2
-    exit 2
-fi
-if $infrastructure_only && { $start_worker || $start_ai_worker || $restart_api || $restart_export_worker || $export_worker_synthetic_fail_first_attempt || $export_worker_synthetic_lease_loss_first_attempt; }; then
+if $infrastructure_only && { $start_worker || $start_ai_worker || $restart_api; }; then
     echo "Infrastructure-only startup cannot start or restart applications." >&2
     exit 2
 fi
-if $export_worker_synthetic_fail_first_attempt && ! $restart_export_worker; then
-    echo "Synthetic Export Worker failure injection requires --restart-export-worker." >&2
-    exit 2
-fi
-if $export_worker_synthetic_lease_loss_first_attempt && ! $restart_export_worker; then
-    echo "Synthetic Export Worker lease-loss injection requires --restart-export-worker." >&2
-    exit 2
-fi
-if $export_worker_synthetic_fail_first_attempt && $export_worker_synthetic_lease_loss_first_attempt; then
-    echo "Synthetic Export Worker failure and lease-loss injections are mutually exclusive." >&2
-    exit 2
-fi
-if $export_worker_synthetic_lease_loss_first_attempt && ! $restart_api; then
-    echo "Synthetic Export Worker lease-loss injection requires --restart-api so local lease timings can be shortened." >&2
-    exit 2
-fi
-
 if [[ ! "$api_startup_timeout_seconds" =~ ^[0-9]+$ ]] ||
    ((api_startup_timeout_seconds < 30 || api_startup_timeout_seconds > 600)); then
     echo "--api-timeout must be an integer from 30 to 600." >&2
@@ -132,36 +84,6 @@ done
 load_local_environment
 build_compose_environment_arguments
 cd "$PROJECT_ROOT"
-
-if $export_worker_synthetic_fail_first_attempt && [[ "${DATA_PROFILE:-}" != "synthetic" ]]; then
-    echo "Synthetic Export Worker failure injection requires DATA_PROFILE=synthetic." >&2
-    exit 2
-fi
-if $export_worker_synthetic_lease_loss_first_attempt && [[ "${DATA_PROFILE:-}" != "synthetic" ]]; then
-    echo "Synthetic Export Worker lease-loss injection requires DATA_PROFILE=synthetic." >&2
-    exit 2
-fi
-
-export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=false
-export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=false
-export RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=false
-export EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT=false
-if $export_worker_synthetic_fail_first_attempt; then
-    export RUN_DATASET_EXPORT_ACCEPTANCE=true
-    export RUN_DATASET_EXPORT_RECOVERY_ACCEPTANCE=true
-    export EXPORT_WORKER_SYNTHETIC_FAIL_FIRST_ATTEMPT=true
-    echo "Export Worker will inject one synthetic first-attempt failure for recovery acceptance."
-fi
-if $export_worker_synthetic_lease_loss_first_attempt; then
-    export RUN_DATASET_EXPORT_ACCEPTANCE=true
-    export RUN_DATASET_EXPORT_LEASE_LOSS_ACCEPTANCE=true
-    export EXPORT_WORKER_SYNTHETIC_LEASE_LOSS_FIRST_ATTEMPT=true
-    export DATASET_EXPORT_LEASE_DURATION=PT10S
-    export DATASET_EXPORT_HEARTBEAT_INTERVAL=PT2S
-    export DATASET_EXPORT_LEASE_GRACE=PT2S
-    export DATASET_EXPORT_RECOVERY_POLL_DELAY=PT1S
-    echo "Export Worker will inject one synthetic lease loss with short local recovery timings."
-fi
 
 if ! docker version --format '{{.Server.Version}}' >/dev/null 2>&1; then
     echo "Docker Desktop is not running or unreachable. Start Docker Desktop, then run this script again." >&2
@@ -192,28 +114,9 @@ restart_managed_api() {
     stop_managed_process api "managed Core API"
 }
 
-restart_managed_export_worker_process() {
-    if ! managed_process_pid export-worker >/dev/null 2>&1; then
-        if $export_worker_synthetic_fail_first_attempt; then
-            echo "Synthetic failure injection requires a running Export Worker managed by this script." >&2
-            return 1
-        fi
-        return 0
-    fi
-    if $export_worker_synthetic_fail_first_attempt && ! managed_process_running export-worker; then
-        echo "Synthetic failure injection refuses a stale Export Worker process record." >&2
-        return 1
-    fi
-    stop_managed_process export-worker "managed Export Worker"
-}
-
 if $restart_api; then
     restart_managed_api
 fi
-if $restart_export_worker; then
-    restart_managed_export_worker_process
-fi
-
 if $infrastructure_only; then
     echo "Infrastructure is ready. Run ./scripts/status-local.sh to inspect it."
     exit 0
@@ -277,19 +180,6 @@ if $start_worker; then
         fi
     fi
 
-    # Export Worker is FROZEN under LEAN-P0 and no longer part of the default startup chain.
-    # Keep the existing explicit recovery path without starting it during ordinary P0 startup.
-    if $restart_export_worker; then
-        start_managed_process \
-            export-worker "Export Worker" "$LOG_DIRECTORY/export-worker.log" \
-            uv run --directory "$PROJECT_ROOT/workers/export-worker" export-worker
-        sleep 1
-        if ! managed_process_running export-worker; then
-            echo "Export Worker exited during startup. Inspect: $LOG_DIRECTORY/export-worker.log and $LOG_DIRECTORY/export-worker.log.error.log" >&2
-            exit 1
-        fi
-    fi
-
 fi
 
 if $start_ai_worker && [[ "${AI_HAND_POSE_ENABLED:-false}" != "true" ]]; then
@@ -340,6 +230,6 @@ echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
 echo "Start Web separately: pnpm run web:dev"
-echo "Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true. Export Worker is FROZEN and not started by default."
+echo "Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true."
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

@@ -1,9 +1,6 @@
 export const paths = {
   login: '/login',
   projects: '/projects',
-  sessions: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/sessions`,
-  session: (projectId: string, sessionId: string) =>
-    `/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}`,
   videos: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/videos`,
   asset: (projectId: string, assetId: string) =>
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,

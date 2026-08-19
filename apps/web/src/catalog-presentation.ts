@@ -1,18 +1,9 @@
 import type {
   CameraStreamStatus,
   CaptureQualityStatus,
-  CaptureSessionAssemblyStatus,
   ClipAssetStatus,
   DeclaredSyncStatus,
 } from '@/api/catalog'
-
-export const assemblyStatusLabels: Record<CaptureSessionAssemblyStatus, string> = {
-  OPEN: '待组装',
-  ASSEMBLING: '组装中',
-  COMPLETE: '流已齐全',
-  INCOMPLETE: '流不完整',
-  CLOSED: '已关闭',
-}
 
 export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
   PENDING: '待检测',

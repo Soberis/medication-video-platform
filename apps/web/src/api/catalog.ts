@@ -1,36 +1,9 @@
 import { csrfHeaders } from '@/api/http'
 
-export type CaptureSessionAssemblyStatus =
-  | 'OPEN'
-  | 'ASSEMBLING'
-  | 'COMPLETE'
-  | 'INCOMPLETE'
-  | 'CLOSED'
-
 export type CaptureQualityStatus = 'PENDING' | 'PASS' | 'WARNING' | 'REJECT'
 export type CameraStreamStatus = 'BOUND' | 'INGESTED' | 'INGEST_FAILED' | 'UNAVAILABLE'
 export type DeclaredSyncStatus = 'UNKNOWN' | 'PASS' | 'WARNING' | 'REJECT'
 export type ClipAssetStatus = 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
-
-export interface CaptureSessionListItem {
-  capture_session_id: string
-  batch_id: string
-  device_id: string
-  camera_set_id: string
-  camera_set_key: string
-  camera_set_configuration_version: number
-  camera_layout_version: string
-  expected_camera_count: number
-  bound_stream_count: number
-  received_camera_count: number
-  ingest_failed_stream_count: number
-  sync_group_id: string | null
-  device_time_utc: string | null
-  server_receive_time: string
-  assembly_status: CaptureSessionAssemblyStatus
-  quality_status: CaptureQualityStatus
-  created_at: string
-}
 
 export interface CameraSetSnapshotMember {
   camera_channel_id: string
@@ -65,27 +38,6 @@ export interface CameraStream {
   stream_status: CameraStreamStatus
   quality_status: CaptureQualityStatus
   enabled_for_hand_detection?: boolean
-}
-
-export interface CaptureSessionDetail {
-  capture_session_id: string
-  project_id: string
-  batch_id: string
-  device_id: string
-  metadata_upload_file_id: string | null
-  metadata_schema_version: string
-  metadata_sha256: string | null
-  expected_camera_count: number
-  received_camera_count: number
-  sync_group_id: string | null
-  device_time_utc: string | null
-  device_timezone: string | null
-  server_receive_time: string
-  assembly_status: CaptureSessionAssemblyStatus
-  quality_status: CaptureQualityStatus
-  camera_set_snapshot: CameraSetSnapshot
-  streams: CameraStream[]
-  created_at: string
 }
 
 export interface ClipAssetSessionBinding {
@@ -304,14 +256,6 @@ export interface CatalogPage<T> {
   next_cursor: string | null
 }
 
-export interface CaptureSessionFilters {
-  deviceId?: string
-  assemblyStatus?: CaptureSessionAssemblyStatus
-  qualityStatus?: CaptureQualityStatus
-  recordedFrom?: string
-  recordedBefore?: string
-}
-
 export interface CaptureEventLogFilters {
   batchId?: string
   deviceId?: string
@@ -380,36 +324,6 @@ export class CatalogApiError extends Error {
     this.requestId = requestId
     this.status = status
   }
-}
-
-export function listCaptureSessions(
-  projectId: string,
-  filters: CaptureSessionFilters,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '20' })
-  add(query, 'device_id', filters.deviceId)
-  add(query, 'assembly_status', filters.assemblyStatus)
-  add(query, 'quality_status', filters.qualityStatus)
-  add(query, 'recorded_from', filters.recordedFrom)
-  add(query, 'recorded_before', filters.recordedBefore)
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<CaptureSessionListItem>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions?${query.toString()}`,
-    signal,
-  )
-}
-
-export function getCaptureSession(
-  projectId: string,
-  captureSessionId: string,
-  signal?: AbortSignal,
-) {
-  return readJson<CaptureSessionDetail>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-sessions/${encodeURIComponent(captureSessionId)}`,
-    signal,
-  )
 }
 
 export function listVideoSummaries(

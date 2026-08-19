@@ -60,7 +60,6 @@ class PlatformSecurityConfiguration {
 			var requestUri = request.getRequestURI();
 			return !requestUri.startsWith("/api/v1/internal/media-jobs/")
 					&& !requestUri.startsWith("/api/v1/internal/capture-sync-jobs/")
-					&& !requestUri.startsWith("/api/v1/internal/dataset-exports/")
 					&& !requestUri.startsWith("/api/v1/internal/ai-jobs/");
 		})
 			.securityContext(

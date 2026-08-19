@@ -8,7 +8,7 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.11；未变更条款按需求基线继承 V1.10 至 V1.1.13。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界。
+当前业务事实来源是 V1.21；未变更条款按需求基线继承历史版本。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、项目内文件夹、两级角色和视频标注的已批准领域边界；DatasetVersion/legacy Export 仅作为历史数据库记录保留。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -78,8 +78,8 @@ flowchart LR
     ASSET --> MEDIA["mediaprivacy"]
     MEDIA --> ANNO["annotationreview"]
     ANNO --> CLEAN["qualitycleaning"]
-    CLEAN --> DATASET["datasetexport"]
-    MEDIA --> AI["aicandidate (P1)"]
+    CLEAN --> DATASET["datasetexport (training-data.v2 read-only)"]
+    MEDIA --> AI["aicandidate (P0)"]
     AI --> ANNO
     GOV["governance"] -. "审批/审计门禁" .-> ASSET
     GOV -. "审批/审计门禁" .-> MEDIA

@@ -191,13 +191,8 @@ required_files=(
     'contracts/events/ai-hand-pose-job-v1.schema.json'
     'contracts/events/ai-hand-pose-result-v2.schema.json'
     'contracts/events/ai-hand-pose-dead-letter-v1.schema.json'
-    'contracts/events/dataset-export-job-v1.schema.json'
-    'contracts/events/dataset-export-result-v1.schema.json'
-    'contracts/events/dataset-export-dead-letter-v1.schema.json'
     'contracts/profiles/media-probe-baseline-v1.json'
     'contracts/profiles/p0-post-annotation-cleaning-v1.json'
-    'contracts/profiles/p0-dataset-export-v1.json'
-    'contracts/profiles/p0-dataset-export-v2.json'
     'tools/synthetic-upload-client/index.mjs'
     'tools/synthetic-upload-client/upload-client.mjs'
     'tools/synthetic-upload-client/synthetic-video.mjs'
@@ -205,10 +200,6 @@ required_files=(
     'tools/synthetic-upload-client/large-upload-acceptance.mjs'
     'tools/synthetic-upload-client/large-upload-acceptance.test.mjs'
     'tools/synthetic-upload-client/README.md'
-    'tools/dataset-export-acceptance/index.mjs'
-    'tools/dataset-export-acceptance/index.test.mjs'
-    'tools/web-preflight/index.mjs'
-    'tools/web-preflight/index.test.mjs'
     'scripts/check-environment.ps1'
     'scripts/check-environment.sh'
     'scripts/quality-gate.ps1'
@@ -227,12 +218,6 @@ required_files=(
     'workers/media-worker/src/medication_media_worker/__main__.py'
     'workers/media-worker/src/medication_media_worker/processor.py'
     'workers/media-worker/src/medication_media_worker/probe.py'
-    'workers/export-worker/pyproject.toml'
-    'workers/export-worker/uv.lock'
-    'workers/export-worker/README.md'
-    'workers/export-worker/src/medication_export_worker/__main__.py'
-    'workers/export-worker/src/medication_export_worker/processor.py'
-    'workers/export-worker/src/medication_export_worker/package_builder.py'
     'tools/hand-pose-poc/pyproject.toml'
     'tools/hand-pose-poc/uv.lock'
     'tools/hand-pose-poc/README.md'
@@ -260,7 +245,6 @@ required_files=(
     'docs/architecture/deployment-capacity-and-dr.md'
     'docs/architecture/web-ux-and-frontend-guidelines.md'
     'docs/runbooks/large-upload-resume-acceptance.md'
-    'docs/runbooks/dataset-export-cross-process-acceptance.md'
 )
 
 for relative_path in "${required_files[@]}"; do
@@ -292,18 +276,6 @@ validate_json \
     'Media dead-letter JSON Schema is valid JSON' \
     'Media dead-letter JSON Schema is invalid'
 
-dataset_export_event_contracts=(
-    'dataset-export-job-v1.schema.json'
-    'dataset-export-result-v1.schema.json'
-    'dataset-export-dead-letter-v1.schema.json'
-)
-for contract_name in "${dataset_export_event_contracts[@]}"; do
-    validate_json \
-        "contracts/events/$contract_name" \
-        "Dataset export event JSON Schema is valid JSON: $contract_name" \
-        "Dataset export event JSON Schema is invalid ($contract_name)"
-done
-
 ai_event_contracts=(
     'ai-hand-pose-job-v1.schema.json'
     'ai-hand-pose-result-v2.schema.json'
@@ -328,19 +300,6 @@ validate_profile \
     '7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a' \
     'P0 post-annotation cleaning profile digest matches the server contract' \
     'P0 post-annotation cleaning profile digest changed unexpectedly'
-validate_profile \
-    'contracts/profiles/p0-dataset-export-v1.json' \
-    'P0 dataset export profile v1' \
-    '3fac783efda31ad2b68ec4bc18ca7b46c7f6636aeae7bb61c070f4ac1d6da888' \
-    'P0 dataset export profile v1 digest matches the server contract' \
-    'P0 dataset export profile v1 digest changed unexpectedly'
-validate_profile \
-    'contracts/profiles/p0-dataset-export-v2.json' \
-    'P0 dataset export profile v2' \
-    '5f86b48ccd02ef8ea0a05c967b85017bb9cd5de59b8f466b7bb93dd552fdcb96' \
-    'P0 dataset export profile v2 digest matches the server contract' \
-    'P0 dataset export profile v2 digest changed unexpectedly'
-
 latest_matches=0
 while IFS= read -r -d '' config_file; do
     while IFS= read -r match; do
@@ -418,15 +377,12 @@ if [[ -f "$bruno_collection" ]]; then
         'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru'
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru'
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru'
-        'api-tests/bruno/medication-platform/Asset Catalog/01 List Capture Sessions.bru'
         'api-tests/bruno/medication-platform/Asset Catalog/03 List Capture Event Logs.bru'
         'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru'
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru'
         'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru'
         'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru'
         'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
-        'api-tests/bruno/medication-platform/Dataset Exports/01 Reject Missing Export Worker Identity.bru'
-        'api-tests/bruno/medication-platform/Dataset Exports/02 Reject Web Identity As Export Worker.bru'
     )
     for relative_path in "${required_bruno_requests[@]}"; do
         if [[ -f "$PROJECT_ROOT/$relative_path" ]]; then
@@ -570,40 +526,6 @@ else
     add_skip 'Synthetic upload client has not been generated yet'
 fi
 
-dataset_export_acceptance="$PROJECT_ROOT/tools/dataset-export-acceptance/index.mjs"
-if ! has_changed_path 'tools/dataset-export-acceptance'; then
-    add_skip 'Dataset export acceptance guard unit tests: no related changes'
-elif $changed_only; then
-    add_skip 'Dataset export acceptance guard unit tests: deferred to full verification'
-elif [[ -f "$dataset_export_acceptance" ]]; then
-    pnpm --dir "$PROJECT_ROOT" run dataset-export:acceptance:test
-    exit_code=$?
-    if ((exit_code == 0)); then
-        add_pass 'Dataset export acceptance guard unit tests'
-    else
-        add_failure "Dataset export acceptance guard unit tests exited with code $exit_code"
-    fi
-else
-    add_skip 'Dataset export acceptance tool has not been generated yet'
-fi
-
-web_preflight="$PROJECT_ROOT/tools/web-preflight/index.mjs"
-if ! has_changed_path 'tools/web-preflight'; then
-    add_skip 'P0 Web preflight guard unit tests: no related changes'
-elif $changed_only; then
-    add_skip 'P0 Web preflight guard unit tests: deferred to full verification'
-elif [[ -f "$web_preflight" ]]; then
-    pnpm --dir "$PROJECT_ROOT" run p0-web:preflight:test
-    exit_code=$?
-    if ((exit_code == 0)); then
-        add_pass 'P0 Web preflight guard unit tests'
-    else
-        add_failure "P0 Web preflight guard unit tests exited with code $exit_code"
-    fi
-else
-    add_skip 'P0 Web preflight tool has not been generated yet'
-fi
-
 if ! has_changed_path 'scripts'; then
     add_skip 'macOS/Linux local script tests: no script changes'
 elif ! command -v bash >/dev/null 2>&1; then
@@ -694,41 +616,6 @@ else
             fi
         fi
 
-        if [[ "$(basename "$project_dir")" == 'export-worker' ]]; then
-            digest_output="$(
-                uv run python -c \
-                    "from pathlib import Path; from medication_export_worker.config import calculate_software_digest; print(calculate_software_digest(Path('.').resolve()))" \
-                    2>&1
-            )"
-            exit_code=$?
-            computed_digest="$(
-                printf '%s\n' "$digest_output" |
-                    awk 'NF { line=$0 } END { sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line); print line }'
-            )"
-            if ((exit_code != 0)) || [[ -z "$computed_digest" ]]; then
-                project_failed=true
-                add_failure 'Export Worker software digest could not be calculated'
-            else
-                runtime_digest="$(
-                    tr -d '\r' < "$PROJECT_ROOT/.env.example" |
-                        LC_ALL=C grep -E '^EXPORT_WORKER_SOFTWARE_DIGEST=sha256:[a-f0-9]{64}$' |
-                        tail -n 1 |
-                        cut -d= -f2-
-                )"
-                approved_digest="$(
-                    tr -d '\r' < "$PROJECT_ROOT/.env.example" |
-                        LC_ALL=C grep -E '^EXPORT_WORKER_APPROVED_SOFTWARE_DIGEST=sha256:[a-f0-9]{64}$' |
-                        tail -n 1 |
-                        cut -d= -f2-
-                )"
-                if [[ "$computed_digest" == "$runtime_digest" && "$computed_digest" == "$approved_digest" ]]; then
-                    add_pass 'Export Worker runtime and approved software digests match source'
-                else
-                    project_failed=true
-                    add_failure 'Export Worker software digests in .env.example are stale'
-                fi
-            fi
-        fi
 
         if ! $project_failed; then
             add_pass "Python gates: $project_dir"

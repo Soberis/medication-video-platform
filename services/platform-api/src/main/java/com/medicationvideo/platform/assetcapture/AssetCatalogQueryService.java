@@ -17,15 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AssetCatalogQueryService {
 
-	private static final String SESSION_CURSOR_KIND = "capture-session";
-
 	private static final String EVENT_LOG_CURSOR_KIND = "capture-event-log";
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
-
-	private final CaptureSessionRepository sessionRepository;
-
-	private final CameraSetSnapshotRepository snapshotRepository;
 
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
 
@@ -35,107 +29,14 @@ public class AssetCatalogQueryService {
 
 	private final CaptureEventLogRepository captureEventLogRepository;
 
-	public AssetCatalogQueryService(NamedParameterJdbcTemplate jdbcTemplate, CaptureSessionRepository sessionRepository,
-			CameraSetSnapshotRepository snapshotRepository, CameraSetSnapshotMemberRepository snapshotMemberRepository,
-			CameraStreamRepository streamRepository, ClipAssetRepository clipAssetRepository,
-			CaptureEventLogRepository captureEventLogRepository) {
+	public AssetCatalogQueryService(NamedParameterJdbcTemplate jdbcTemplate,
+			CameraSetSnapshotMemberRepository snapshotMemberRepository, CameraStreamRepository streamRepository,
+			ClipAssetRepository clipAssetRepository, CaptureEventLogRepository captureEventLogRepository) {
 		this.jdbcTemplate = jdbcTemplate;
-		this.sessionRepository = sessionRepository;
-		this.snapshotRepository = snapshotRepository;
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.captureEventLogRepository = captureEventLogRepository;
-	}
-
-	@Transactional(readOnly = true)
-	CaptureSessionListResponse listCaptureSessions(UUID projectId, String deviceId,
-			CaptureSessionAssemblyStatus assemblyStatus, CaptureQualityStatus qualityStatus, Instant recordedFrom,
-			Instant recordedBefore, String cursor, int limit) {
-		validateTimeRange(recordedFrom, recordedBefore, "recorded_from", "recorded_before");
-		var decodedCursor = decodeCursor(SESSION_CURSOR_KIND, cursor);
-		var sql = new StringBuilder("""
-				SELECT session.capture_session_id,
-				       session.batch_id,
-				       session.device_id,
-				       session.camera_set_id,
-				       snapshot.camera_set_key,
-				       snapshot.configuration_version,
-				       snapshot.layout_version,
-				       session.expected_camera_count,
-				       (SELECT count(*) FROM camera_stream stream
-				         WHERE stream.capture_session_id = session.capture_session_id) AS bound_stream_count,
-				       session.received_camera_count,
-				       (SELECT count(*) FROM camera_stream stream
-				         WHERE stream.capture_session_id = session.capture_session_id
-				           AND stream.stream_status = 'INGEST_FAILED') AS ingest_failed_stream_count,
-				       session.sync_group_id,
-				       session.device_time_utc,
-				       session.server_receive_time,
-				       session.assembly_status,
-				       session.quality_status,
-					   session.created_at
-				FROM capture_session session
-				JOIN camera_set_snapshot snapshot
-				  ON snapshot.capture_session_id = session.capture_session_id
-				WHERE session.project_id = :projectId
-				""");
-		var parameters = new MapSqlParameterSource("projectId", projectId);
-		if (deviceId != null) {
-			sql.append(" AND session.device_id = :deviceId\n");
-			parameters.addValue("deviceId", deviceId);
-		}
-		if (assemblyStatus != null) {
-			sql.append(" AND session.assembly_status = :assemblyStatus\n");
-			parameters.addValue("assemblyStatus", assemblyStatus.name());
-		}
-		if (qualityStatus != null) {
-			sql.append(" AND session.quality_status = :qualityStatus\n");
-			parameters.addValue("qualityStatus", qualityStatus.name());
-		}
-		if (recordedFrom != null) {
-			sql.append(" AND session.device_time_utc >= :recordedFrom\n");
-			parameters.addValue("recordedFrom", Timestamp.from(recordedFrom));
-		}
-		if (recordedBefore != null) {
-			sql.append(" AND session.device_time_utc < :recordedBefore\n");
-			parameters.addValue("recordedBefore", Timestamp.from(recordedBefore));
-		}
-		if (decodedCursor != null) {
-			sql.append("""
-					 AND (COALESCE(session.device_time_utc, session.server_receive_time) < :cursorRecordedAt
-					      OR (COALESCE(session.device_time_utc, session.server_receive_time) = :cursorRecordedAt
-					          AND session.capture_session_id < :cursorId))
-					""");
-			parameters.addValue("cursorRecordedAt", Timestamp.from(decodedCursor.recordedAt()));
-			parameters.addValue("cursorId", decodedCursor.id());
-		}
-		sql.append(
-				" ORDER BY COALESCE(session.device_time_utc, session.server_receive_time) DESC, session.capture_session_id DESC LIMIT :fetchLimit");
-		parameters.addValue("fetchLimit", limit + 1);
-
-		var rows = this.jdbcTemplate.query(sql.toString(), parameters, this::mapCaptureSession);
-		var page = boundedPage(rows, limit);
-		var nextCursor = rows.size() > limit ? AssetCatalogCursor.encode(SESSION_CURSOR_KIND,
-				catalogSortTime(page.getLast()), page.getLast().captureSessionId()) : null;
-		return new CaptureSessionListResponse(page, nextCursor);
-	}
-
-	private static Instant catalogSortTime(CaptureSessionListItemResponse session) {
-		return session.deviceTimeUtc() == null ? session.serverReceiveTime() : session.deviceTimeUtc();
-	}
-
-	@Transactional(readOnly = true)
-	CaptureSessionResponse getCaptureSession(UUID projectId, UUID captureSessionId) {
-		var session = this.sessionRepository.findByCaptureSessionIdAndProjectId(captureSessionId, projectId)
-			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_SESSION_NOT_FOUND",
-					"The capture session was not found in the current project."));
-		var snapshot = this.snapshotRepository.findByCaptureSessionId(captureSessionId)
-			.orElseThrow(() -> new IllegalStateException("A capture session has no camera set snapshot."));
-		var members = this.snapshotMemberRepository
-			.findAllByCameraSetSnapshotIdOrderByCameraIndexAsc(snapshot.getCameraSetSnapshotId());
-		var streams = this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId);
-		return CaptureSessionResponse.from(session, snapshot, members, streams);
 	}
 
 	@Transactional(readOnly = true)
@@ -235,19 +136,6 @@ public class AssetCatalogQueryService {
 		return new ClipAssetInputSummary(asset.getClipAssetId(), asset.getProjectId(), asset.getContentType(),
 				asset.getSizeBytes(), asset.getSha256(), asset.getStatus(), cameraRole, enabledForHandDetection,
 				asset.getCreatedAt(), asset.getUpdatedAt());
-	}
-
-	private CaptureSessionListItemResponse mapCaptureSession(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new CaptureSessionListItemResponse(resultSet.getObject("capture_session_id", UUID.class),
-				resultSet.getObject("batch_id", UUID.class), resultSet.getString("device_id"),
-				resultSet.getObject("camera_set_id", UUID.class), resultSet.getString("camera_set_key"),
-				resultSet.getInt("configuration_version"), resultSet.getString("layout_version"),
-				resultSet.getInt("expected_camera_count"), resultSet.getInt("bound_stream_count"),
-				resultSet.getInt("received_camera_count"), resultSet.getInt("ingest_failed_stream_count"),
-				resultSet.getString("sync_group_id"), instant(resultSet, "device_time_utc"),
-				instant(resultSet, "server_receive_time"),
-				CaptureSessionAssemblyStatus.valueOf(resultSet.getString("assembly_status")),
-				CaptureQualityStatus.valueOf(resultSet.getString("quality_status")), instant(resultSet, "created_at"));
 	}
 
 	private CaptureEventLogReadResponse mapCaptureEventLog(ResultSet resultSet, int rowNumber) throws SQLException {

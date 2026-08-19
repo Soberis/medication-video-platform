@@ -23,8 +23,6 @@ class AiWorkerSecurityContractTests {
 
 	private static final String MEDIA_TOKEN = "synthetic-media-worker-bearer-token-do-not-reuse";
 
-	private static final String EXPORT_TOKEN = "synthetic-export-worker-bearer-token-do-not-reuse";
-
 	@Autowired
 	private MockMvc mockMvc;
 
@@ -57,14 +55,12 @@ class AiWorkerSecurityContractTests {
 
 	@Test
 	void rejectsOtherWorkerIdentitiesFromTheAiEndpoint() throws Exception {
-		for (var token : new String[] { MEDIA_TOKEN, EXPORT_TOKEN }) {
-			this.mockMvc
-				.perform(put(resultPath()).header("Authorization", "Bearer " + token)
-					.header("X-AI-Lease-Token", "A".repeat(43))
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(validFailureResult()))
-				.andExpect(status().isUnauthorized());
-		}
+		this.mockMvc
+			.perform(put(resultPath()).header("Authorization", "Bearer " + MEDIA_TOKEN)
+				.header("X-AI-Lease-Token", "A".repeat(43))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(validFailureResult()))
+			.andExpect(status().isUnauthorized());
 	}
 
 	private static String resultPath() {

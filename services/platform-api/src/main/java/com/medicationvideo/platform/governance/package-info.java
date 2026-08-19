@@ -1,5 +1,5 @@
 /**
- * Audit, approval, retention and controlled deletion boundary.
+ * Audit, retention and controlled deletion boundary.
  */
 @ApplicationModule(displayName = "Governance")
 package com.medicationvideo.platform.governance;
