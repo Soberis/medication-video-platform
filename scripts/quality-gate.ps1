@@ -437,13 +437,13 @@ else {
 
 $platformPom = Join-Path $root 'services/core-api/pom.xml'
 if (-not (Test-ChangedPath 'services/core-api')) {
-    Add-Skip 'Java verify: no platform-api changes'
+    Add-Skip 'Java verify: no core-api changes'
 }
 elseif (Test-Path -LiteralPath $platformPom) {
     $mavenWrapperName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'mvnw.cmd' } else { 'mvnw' }
     $mavenWrapper = Join-Path $root "services/core-api/$mavenWrapperName"
     if (-not (Test-Path -LiteralPath $mavenWrapper)) {
-        Add-Failure 'platform-api has pom.xml but Maven Wrapper is missing'
+        Add-Failure 'core-api has pom.xml but Maven Wrapper is missing'
     }
     else {
         if ($Changed) {
@@ -461,7 +461,7 @@ elseif (Test-Path -LiteralPath $platformPom) {
     }
 }
 else {
-    Add-Skip 'Java verify: platform-api skeleton has not been generated yet'
+    Add-Skip 'Java verify: core-api skeleton has not been generated yet'
 }
 
 $webPackage = Join-Path $root 'apps/web/package.json'

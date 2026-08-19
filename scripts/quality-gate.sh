@@ -446,11 +446,11 @@ fi
 
 platform_pom="$PROJECT_ROOT/services/core-api/pom.xml"
 if ! has_changed_path 'services/core-api'; then
-    add_skip 'Java verify: no platform-api changes'
+    add_skip 'Java verify: no core-api changes'
 elif [[ -f "$platform_pom" ]]; then
     maven_wrapper="$PROJECT_ROOT/services/core-api/mvnw"
     if [[ ! -f "$maven_wrapper" ]]; then
-        add_failure 'platform-api has pom.xml but Maven Wrapper is missing'
+        add_failure 'core-api has pom.xml but Maven Wrapper is missing'
     else
         if $changed_only; then
             "$maven_wrapper" -f "$platform_pom" spring-javaformat:validate compiler:compile -DskipTests
@@ -469,7 +469,7 @@ elif [[ -f "$platform_pom" ]]; then
         fi
     fi
 else
-    add_skip 'Java verify: platform-api skeleton has not been generated yet'
+    add_skip 'Java verify: core-api skeleton has not been generated yet'
 fi
 
 web_package="$PROJECT_ROOT/apps/web/package.json"
