@@ -79,18 +79,6 @@ class AssetCatalogQueryContractTests {
 	}
 
 	@Test
-	void appliesCaptureEventLogObjectIndexMigration() {
-		var migrationCount = this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version = '18' AND success = true", Integer.class);
-		var indexCount = this.jdbcTemplate.queryForObject("SELECT count(*) FROM pg_indexes WHERE indexname IN "
-				+ "('ix_capture_event_log_project_indexed', " + "'ix_capture_event_log_project_batch_indexed', "
-				+ "'ix_capture_event_log_project_device_indexed')", Integer.class);
-
-		assertEquals(1, migrationCount);
-		assertEquals(3, indexCount);
-	}
-
-	@Test
 	void appliesCatalogQueryIndexes() {
 		var migrationCount = this.jdbcTemplate.queryForObject(
 				"SELECT count(*) FROM flyway_schema_history WHERE version = '9' AND success = true", Integer.class);
@@ -241,7 +229,6 @@ class AssetCatalogQueryContractTests {
 		this.jdbcTemplate.update("DELETE FROM camera_set_snapshot");
 		this.jdbcTemplate.update("DELETE FROM capture_session");
 		this.jdbcTemplate.update("DELETE FROM clip_asset");
-		this.jdbcTemplate.update("DELETE FROM capture_event_log");
 		this.jdbcTemplate.update("DELETE FROM upload_part");
 		this.jdbcTemplate.update("DELETE FROM upload_file");
 		this.jdbcTemplate.update("DELETE FROM upload_batch");

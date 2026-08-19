@@ -78,7 +78,6 @@ class UploadBatchCompletionContractTests {
 		this.jdbcTemplate.update("DELETE FROM outbox_event WHERE aggregate_type = 'MediaJob'");
 		this.jdbcTemplate.update("DELETE FROM media_job_attempt");
 		this.jdbcTemplate.update("DELETE FROM media_job");
-		this.jdbcTemplate.update("DELETE FROM capture_event_log");
 		this.clipAssetRepository.deleteAll();
 		this.partRepository.deleteAll();
 		this.fileRepository.deleteAll();

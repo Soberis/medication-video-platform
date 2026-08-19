@@ -274,10 +274,10 @@ class DataManagementSummaryContractTests {
 		this.jdbcTemplate.update("""
 				INSERT INTO upload_batch (
 				    batch_id, project_id, idempotency_key, request_fingerprint, device_id, upload_source_type,
-				    asset_folder_id, external_manifest_id, initiated_by_actor_id, file_count, total_size_bytes,
+				    external_manifest_id, initiated_by_actor_id, file_count, total_size_bytes,
 				    manifest_sha256, status, expires_at, created_at, updated_at, version,
 				    verified_manifest_sha256, completed_at, terminated_at, termination_reason_code)
-				VALUES (?, ?, ?, ?, 'summary-device', ?, NULL, NULL, 'summary-test', 1, ?, ?, 'COMPLETED',
+				VALUES (?, ?, ?, ?, 'summary-device', ?, NULL, 'summary-test', 1, ?, ?, 'COMPLETED',
 				        ?, ?, ?, 0, ?, ?, NULL, NULL)
 				""", batchId, projectId, "summary-batch-" + UUID.randomUUID(), video.sha256(), video.source(),
 				video.sizeBytes(), video.sha256(), timestamp(now.plusSeconds(3600)), timestamp(now), timestamp(now),
@@ -299,9 +299,9 @@ class DataManagementSummaryContractTests {
 				INSERT INTO clip_asset (
 				    clip_asset_id, project_id, batch_id, source_upload_file_id, client_file_id, content_type,
 				    size_bytes, sha256, storage_bucket, object_key, storage_etag, asset_status, created_at,
-				    updated_at, version, folder_id, deleted_at, deleted_by, delete_reason)
+				    updated_at, version, deleted_at, deleted_by, delete_reason)
 				VALUES (?, ?, ?, ?, ?, 'video/mp4', ?, ?, 'summary-bucket', ?, 'summary-etag', ?, ?, ?, 0,
-				        NULL, NULL, NULL, NULL)
+				        NULL, NULL, NULL)
 				""", clipAssetId, projectId, batchId, uploadFileId, clientFileId, video.sizeBytes(), video.sha256(),
 				"summary/" + clipAssetId, video.status(), timestamp(now), timestamp(now));
 		this.jdbcTemplate.update(
