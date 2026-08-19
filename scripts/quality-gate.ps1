@@ -152,10 +152,6 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/__main__.py',
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
-    'tools/hand-pose-poc/pyproject.toml',
-    'tools/hand-pose-poc/uv.lock',
-    'tools/hand-pose-poc/README.md',
-    'tools/hand-pose-poc/src/hand_pose_poc/cli.py',
     'tools/golden-capture-g0/pyproject.toml',
     'tools/golden-capture-g0/uv.lock',
     'tools/golden-capture-g0/README.md',
@@ -536,7 +532,7 @@ else {
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/](hand-pose-poc|golden-capture-g0|minimal-export))[\\/]' }
+    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/](golden-capture-g0|minimal-export))[\\/]' }
 
 if ($Changed) {
     $pythonProjects = @($pythonProjects | Where-Object {

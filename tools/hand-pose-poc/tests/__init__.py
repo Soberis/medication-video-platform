@@ -1,1 +1,0 @@
-"""Hand pose PoC tests."""
