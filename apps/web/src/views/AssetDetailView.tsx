@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Card, Tag } from 'antd'
+import { Alert, App as AntdApp, Button, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -40,7 +40,11 @@ import {
   type QualityReviewReasonCode,
 } from '@/api/quality'
 import { paths } from '@/app/paths'
-import { assetStatusLabels, statusTone } from '@/features/catalog/catalog-presentation'
+import {
+  assetStatusLabels,
+  formatDateTime,
+  statusTone,
+} from '@/features/catalog/catalog-presentation'
 import { AssetActivityCard } from '@/components/AssetActivityCard'
 import {
   AnnotationTaskCard,
@@ -75,13 +79,6 @@ const workflowStateLabels: Record<WorkflowStepState, string> = {
   current: '当前',
   waiting: '待处理',
   blocked: '受阻',
-}
-
-const workflowTagColors: Record<WorkflowStepState, string> = {
-  complete: 'success',
-  current: 'processing',
-  waiting: 'default',
-  blocked: 'error',
 }
 
 export default function AssetDetailView() {
@@ -563,6 +560,48 @@ export default function AssetDetailView() {
     qualityReview,
     projectRole,
   ])
+  const handPoseStatus = useMemo(() => {
+    if (!handPoseJob) {
+      return {
+        tone: 'idle' as const,
+        title: '等待自动手部检测',
+        description: 'MediaPipe 只提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。',
+      }
+    }
+    if (handPoseJob.status === 'FAILED') {
+      return {
+        tone: 'failed' as const,
+        title: '手部检测失败',
+        description: [
+          handPoseJob.run_summary?.failure_reason,
+          handPoseJob.run_summary?.retryable === true
+            ? '可以重新检测。'
+            : '当前失败不可重试，可继续人工处理。',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      }
+    }
+    if (handPoseJob.status === 'SUCCEEDED') {
+      if (handPoseJob.hand_result === 'NO_HAND_DETECTED') {
+        return {
+          tone: 'succeeded' as const,
+          title: '未发现手部，可继续人工查看和标注',
+          description: '本次视频已完整分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。',
+        }
+      }
+      return {
+        tone: 'succeeded' as const,
+        title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已发现手部' : '手部姿态检测完成',
+        description: `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`,
+      }
+    }
+    return {
+      tone: 'running' as const,
+      title: '手部检测中',
+      description: '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。',
+    }
+  }, [handPoseCandidates, handPoseJob])
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
     if (canPlay)
@@ -1173,6 +1212,17 @@ export default function AssetDetailView() {
                 <span>当前视频</span>
                 <code title={detail.client_file_id}>{detail.client_file_id}</code>
               </p>
+              {detail.session_binding ? (
+                <p className="workbench-video-meta">
+                  <span>
+                    相机 {detail.session_binding.camera_role} #{detail.session_binding.camera_index}
+                    {detail.session_binding.mount_position
+                      ? ` · ${detail.session_binding.mount_position}`
+                      : ''}
+                  </span>
+                  <span>拍摄开始 {formatDateTime(detail.session_binding.record_start_utc)}</span>
+                </p>
+              ) : null}
             </div>
             <div className="detail-actions">
               <Button
@@ -1182,11 +1232,6 @@ export default function AssetDetailView() {
               >
                 刷新状态
               </Button>
-              {nextStep.interactive ? (
-                <Button type="primary" onClick={handleNextStep}>
-                  {nextStep.buttonLabel}
-                </Button>
-              ) : null}
             </div>
           </section>
           {actionErrorMessage ? (
@@ -1226,15 +1271,7 @@ export default function AssetDetailView() {
                   id="detail-next-step"
                   aria-labelledby="detail-next-step-title"
                 >
-                  <div className="workbench-section-heading">
-                    <div>
-                      <p className="app-eyebrow">必要操作</p>
-                      <h2 id="detail-next-step-title">人工处理</h2>
-                    </div>
-                    <span className="workbench-section-context">
-                      {currentWorkflowStep?.detail ?? '按右侧流程继续处理'}
-                    </span>
-                  </div>
+                  <h2 id="detail-next-step-title">人工处理</h2>
                   <QualityReviewCard
                     assetStatus={detail.status}
                     canReview={canReviewQuality}
@@ -1265,11 +1302,19 @@ export default function AssetDetailView() {
                 </section>
               </section>
               <aside className="workbench-sidebar" aria-label="视频处理流程">
-                <Card
-                  className="detail-card workflow-rail"
-                  title={<strong>处理流程</strong>}
-                  variant="outlined"
-                >
+                <section className="workflow-next-step" aria-labelledby="workflow-next-step-title">
+                  <span className="app-eyebrow">
+                    {canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
+                  </span>
+                  <strong id="workflow-next-step-title">{nextStep.title}</strong>
+                  <p>{nextStep.description}</p>
+                  {nextStep.interactive ? (
+                    <Button type="primary" onClick={handleNextStep}>
+                      {nextStep.buttonLabel}
+                    </Button>
+                  ) : null}
+                </section>
+                <div className="workflow-rail">
                   <div className="workflow-current">
                     <span className="app-eyebrow">当前阶段</span>
                     <strong>{currentWorkflowStep?.label ?? '读取中'}</strong>
@@ -1282,9 +1327,11 @@ export default function AssetDetailView() {
                         <div className="workflow-step-content">
                           <div className="workflow-step-heading">
                             <strong>{step.label}</strong>
-                            <Tag color={workflowTagColors[step.state]}>
+                            <span
+                              className={`workflow-step-badge workflow-step-badge-${step.state}`}
+                            >
                               {workflowStateLabels[step.state]}
-                            </Tag>
+                            </span>
                           </div>
                           <span>{step.status}</span>
                           <small>{step.detail}</small>
@@ -1292,82 +1339,30 @@ export default function AssetDetailView() {
                       </li>
                     ))}
                   </ol>
-                  <div className="workflow-next-step">
-                    <span className="app-eyebrow">
-                      {canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
-                    </span>
-                    <strong>{nextStep.title}</strong>
-                    <p>{nextStep.description}</p>
-                  </div>
                   {detail.status === 'INGESTED' ? (
                     <section className="hand-pose-panel" aria-labelledby="hand-pose-title">
                       <div className="hand-pose-panel-heading">
                         <div>
-                          <span className="app-eyebrow">二维候选</span>
+                          <span className="app-eyebrow">辅助信息</span>
                           <strong id="hand-pose-title">手部姿态检测</strong>
                         </div>
-                        <Tag>MediaPipe</Tag>
+                        <span className="hand-pose-algorithm">MediaPipe</span>
                       </div>
                       <p className="form-hint">
                         结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
                       </p>
+                      <div className={`hand-pose-status hand-pose-status-${handPoseStatus.tone}`}>
+                        <strong>{handPoseStatus.title}</strong>
+                        <span>{handPoseStatus.description}</span>
+                      </div>
                       {canRequestHandPose ? (
                         <Button
-                          type="primary"
                           loading={isRequestingHandPose}
                           onClick={() => void requestHandPose()}
                         >
                           重新检测
                         </Button>
                       ) : null}
-                      {handPoseJob ? (
-                        <Alert
-                          className="workbench-status-alert"
-                          type={
-                            handPoseJob.status === 'FAILED'
-                              ? 'error'
-                              : handPoseJob.status === 'SUCCEEDED'
-                                ? 'success'
-                                : 'info'
-                          }
-                          title={
-                            handPoseJob.status === 'FAILED'
-                              ? '手部检测失败'
-                              : handPoseJob.status !== 'SUCCEEDED'
-                                ? '手部检测中'
-                                : handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                                  ? '未发现手部，可继续人工查看和标注'
-                                  : handPoseJob.hand_result === 'HAND_DETECTED'
-                                    ? '已发现手部'
-                                    : '手部姿态检测完成'
-                          }
-                          description={
-                            handPoseJob.status === 'FAILED'
-                              ? [
-                                  handPoseJob.run_summary?.failure_reason,
-                                  handPoseJob.run_summary?.retryable === true
-                                    ? '可以重新检测。'
-                                    : '当前失败不可重试，可继续人工处理。',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')
-                              : handPoseJob.status === 'SUCCEEDED'
-                                ? handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                                  ? '本次视频已完整分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。'
-                                  : `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`
-                                : '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。'
-                          }
-                          showIcon
-                        />
-                      ) : (
-                        <Alert
-                          className="workbench-status-alert"
-                          type="info"
-                          title="等待自动手部检测"
-                          description="MediaPipe 只提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。"
-                          showIcon
-                        />
-                      )}
                       {handPoseCandidates?.candidates?.[0] ? (
                         <p className="form-hint hand-pose-candidate-note">
                           已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
@@ -1375,7 +1370,7 @@ export default function AssetDetailView() {
                       ) : null}
                     </section>
                   ) : null}
-                </Card>
+                </div>
               </aside>
             </div>
             <details className="detail-disclosure">

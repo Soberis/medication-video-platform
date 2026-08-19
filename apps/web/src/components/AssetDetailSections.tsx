@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Descriptions, Select, Tag } from 'antd'
+import { Alert, Button, Descriptions, Select, Tag } from 'antd'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 
@@ -170,18 +170,15 @@ export function PlaybackCard({
   }
 
   return (
-    <Card
-      className="detail-card playback-card"
-      title={<strong>视频查看</strong>}
-      variant="outlined"
-    >
+    <section className="playback-panel" aria-label="视频查看">
       {!grant && availability ? (
-        <Alert
-          title={availability.title}
-          description={availability.description}
-          type={availability.type}
-          showIcon
-        />
+        <div
+          className={`playback-availability playback-availability-${availability.type}`}
+          role="status"
+        >
+          <strong>{availability.title}</strong>
+          <span>{availability.description}</span>
+        </div>
       ) : null}
       {canPlay && !grant ? (
         <Button
@@ -197,7 +194,7 @@ export function PlaybackCard({
         <>
           <div className="playback-meta">
             <span>授权有效至 {formatDateTime(grant.expires_at)}</span>
-            <Tag color="success">人工查看</Tag>
+            <span className="playback-purpose">人工查看</span>
           </div>
           {playbackMessage ? (
             <Alert
@@ -292,7 +289,7 @@ export function PlaybackCard({
           <p className="form-hint">仅在已确认原任务消息不存在时使用；会创建新的受审计尝试。</p>
         </div>
       ) : null}
-    </Card>
+    </section>
   )
 }
 
@@ -401,19 +398,18 @@ export function MediaReportCard({
     )
   } else {
     content = (
-      <Alert
-        type="info"
-        title={detail.status === 'INGESTING' ? '媒体检测进行中' : '媒体检测尚未开始'}
-        description="检测完成后将在这里显示时长、分辨率、编码和完整解码结果。"
-        showIcon
-      />
+      <p className="form-hint">
+        {detail.status === 'INGESTING' ? '媒体检测进行中' : '媒体检测尚未开始'}
+        。检测完成后将在这里显示时长、分辨率、编码和完整解码结果。
+      </p>
     )
   }
 
   return (
-    <Card className="detail-card" title={<strong>媒体检测报告</strong>} variant="outlined">
+    <section className="workbench-panel" aria-labelledby="media-report-title">
+      <h3 id="media-report-title">媒体检测报告</h3>
       {content}
-    </Card>
+    </section>
   )
 }
 
@@ -473,7 +469,8 @@ export function QualityReviewCard({
           : 'default'
 
   return (
-    <Card className="detail-card" title={<strong>人工质量判断</strong>} variant="outlined">
+    <section className="workbench-panel" aria-labelledby="quality-review-title">
+      <h3 id="quality-review-title">人工质量判断</h3>
       <p className="form-hint">
         根据实际画面判断该视频是否适合进入配药动作标注。播放本身不会自动产生质量结论。
       </p>
@@ -506,12 +503,9 @@ export function QualityReviewCard({
             ) : null}
           </div>
           {assetStatus !== 'INGESTED' ? (
-            <Alert
-              title="技术检测完成后才能记录质量结论"
-              description="当前视频仍可直接播放并供人工预览；检测只补充时长、编码和完整解码等技术事实。"
-              type="info"
-              showIcon
-            />
+            <p className="form-hint">
+              技术检测完成后才能记录质量结论；当前视频仍可直接播放并供人工预览。
+            </p>
           ) : (
             <div className="quality-review-actions">
               <Select
@@ -545,7 +539,7 @@ export function QualityReviewCard({
           )}
         </>
       ) : null}
-    </Card>
+    </section>
   )
 }
 
@@ -569,15 +563,17 @@ export function AnnotationTaskCard({
   onSelectedAssigneeChange,
 }: AnnotationTaskCardProps) {
   return (
-    <Card className="detail-card" title={<strong>配药动作标注</strong>} variant="outlined">
+    <section className="workbench-panel" aria-labelledby="annotation-task-title">
+      <h3 id="annotation-task-title">配药动作标注</h3>
       {createdTask ? (
         <>
-          <Alert
-            title="配药动作标注已创建并分配"
-            description={`执行人：${createdTask.assignee_actor_id}。请在配药动作标注页提交时间段；当前项目管理员可对提交结果进行复核。`}
-            type="success"
-            showIcon
-          />
+          <p className="annotation-task-created">
+            <strong>配药动作标注已创建并分配</strong>
+            <span className="form-hint">
+              执行人：{createdTask.assignee_actor_id}
+              。请在配药动作标注页提交时间段；当前项目管理员可对提交结果进行复核。
+            </span>
+          </p>
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
             查看配药动作标注
           </Link>
@@ -606,97 +602,96 @@ export function AnnotationTaskCard({
           </div>
         </>
       )}
-    </Card>
+    </section>
   )
 }
 
 export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
   return (
-    <>
-      <Card className="detail-card" title={<strong>文件信息</strong>} variant="outlined">
+    <section className="workbench-panel" aria-labelledby="asset-facts-title">
+      <h3 id="asset-facts-title">视频信息</h3>
+      <h4>文件信息</h4>
+      <Descriptions
+        column={{ xs: 1, md: 2 }}
+        items={[
+          {
+            key: 'asset',
+            label: '资产 ID',
+            children: <code>{detail.clip_asset_id}</code>,
+          },
+          { key: 'content', label: '内容类型', children: detail.content_type },
+          { key: 'size', label: '文件大小', children: formatBytes(detail.size_bytes) },
+          {
+            key: 'batch',
+            label: '批次 ID',
+            children: <code>{detail.batch_id}</code>,
+          },
+          {
+            key: 'sha',
+            label: 'SHA-256',
+            span: { xs: 1, md: 2 },
+            children: <code className="mono-wrap">{detail.sha256}</code>,
+          },
+          {
+            key: 'source',
+            label: '源上传文件 ID',
+            children: <code>{detail.source_upload_file_id}</code>,
+          },
+          { key: 'created', label: '创建时间', children: formatDateTime(detail.created_at) },
+          { key: 'updated', label: '更新时间', children: formatDateTime(detail.updated_at) },
+        ]}
+      />
+      <h4>相机绑定</h4>
+      {detail.session_binding ? (
         <Descriptions
           column={{ xs: 1, md: 2 }}
           items={[
             {
-              key: 'asset',
-              label: '资产 ID',
-              children: <code>{detail.clip_asset_id}</code>,
-            },
-            { key: 'content', label: '内容类型', children: detail.content_type },
-            { key: 'size', label: '文件大小', children: formatBytes(detail.size_bytes) },
-            {
-              key: 'batch',
-              label: '批次 ID',
-              children: <code>{detail.batch_id}</code>,
+              key: 'session',
+              label: '所属 Session',
+              children: <code>{detail.session_binding.capture_session_id}</code>,
             },
             {
-              key: 'sha',
-              label: 'SHA-256',
-              span: { xs: 1, md: 2 },
-              children: <code className="mono-wrap">{detail.sha256}</code>,
+              key: 'camera',
+              label: '相机角色',
+              children: `${detail.session_binding.camera_role} · #${detail.session_binding.camera_index}`,
             },
             {
-              key: 'source',
-              label: '源上传文件 ID',
-              children: <code>{detail.source_upload_file_id}</code>,
+              key: 'mount',
+              label: '安装位置',
+              children: detail.session_binding.mount_position,
             },
-            { key: 'created', label: '创建时间', children: formatDateTime(detail.created_at) },
-            { key: 'updated', label: '更新时间', children: formatDateTime(detail.updated_at) },
+            {
+              key: 'recorded',
+              label: '拍摄开始',
+              children: formatDateTime(detail.session_binding.record_start_utc),
+            },
+            {
+              key: 'stream',
+              label: '流状态',
+              children: streamStatusLabels[detail.session_binding.stream_status],
+            },
+            {
+              key: 'quality',
+              label: '流技术检测',
+              children: qualityStatusLabels[detail.session_binding.quality_status],
+            },
+            {
+              key: 'sync',
+              label: '边端同步声明',
+              children: declaredSyncStatusLabels[detail.session_binding.declared_sync_status],
+            },
+            {
+              key: 'offset',
+              label: '边端声明偏移',
+              children: `${detail.session_binding.time_offset_ms} ms`,
+            },
           ]}
         />
-      </Card>
-      <Card className="detail-card" title={<strong>相机绑定</strong>} variant="outlined">
-        {detail.session_binding ? (
-          <Descriptions
-            column={{ xs: 1, md: 2 }}
-            items={[
-              {
-                key: 'session',
-                label: '所属 Session',
-                children: <code>{detail.session_binding.capture_session_id}</code>,
-              },
-              {
-                key: 'camera',
-                label: '相机角色',
-                children: `${detail.session_binding.camera_role} · #${detail.session_binding.camera_index}`,
-              },
-              {
-                key: 'mount',
-                label: '安装位置',
-                children: detail.session_binding.mount_position,
-              },
-              {
-                key: 'recorded',
-                label: '拍摄开始',
-                children: formatDateTime(detail.session_binding.record_start_utc),
-              },
-              {
-                key: 'stream',
-                label: '流状态',
-                children: streamStatusLabels[detail.session_binding.stream_status],
-              },
-              {
-                key: 'quality',
-                label: '流技术检测',
-                children: qualityStatusLabels[detail.session_binding.quality_status],
-              },
-              {
-                key: 'sync',
-                label: '边端同步声明',
-                children: declaredSyncStatusLabels[detail.session_binding.declared_sync_status],
-              },
-              {
-                key: 'offset',
-                label: '边端声明偏移',
-                children: `${detail.session_binding.time_offset_ms} ms`,
-              },
-            ]}
-          />
-        ) : (
-          <p className="empty-state">该资产已校验上传，但尚未绑定到 CaptureSession。</p>
-        )}
-      </Card>
-    </>
+      ) : (
+        <p className="empty-state">该资产已校验上传，但尚未绑定到 CaptureSession。</p>
+      )}
+    </section>
   )
 }
 
