@@ -1,5 +1,4 @@
 import type {
-  VideoSummary,
   VideoSummaryAnnotationStatus,
   VideoSummaryCleaningStatus,
   VideoSummaryFilters,
@@ -189,9 +188,3 @@ function daysInMonth(year: number, month: number) {
   }
   return [4, 6, 9, 11].includes(month) ? 30 : 31
 }
-
-export type VideoFilterSearchParam = (typeof videoFilterSearchParamNames)[number]
-
-// Keep this type import in the helper's public module so type-only consumers can discover the
-// supported URL state without coupling to the API implementation details.
-export type VideoFilterVideoSummary = VideoSummary

@@ -6,7 +6,6 @@ import { formatDateTime, shortId } from '@/catalog-presentation'
 
 const actionLabels: Record<string, string> = {
   CLIP_ASSET_PLAYBACK_GRANTED: '获取视频播放授权',
-  CLIP_ASSET_FOLDER_CHANGED: '更新视频分类',
   CLIP_ASSET_DELETED: '删除视频',
   CLIP_ASSET_QUALITY_REVIEWED: '记录人工质量结论',
   ANNOTATION_TASK_CREATED: '创建配药动作标注',

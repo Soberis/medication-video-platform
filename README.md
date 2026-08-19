@@ -12,7 +12,7 @@
 
 当前规范：
 
-- [V1.20 LEAN-P0 需求基线](./docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md)
+- [V1.21 FLOW-FIRST LEAN-P0 需求基线](./docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)
 - [当前技术设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
@@ -60,7 +60,7 @@ macOS / Linux：
 ```text
 apps/web/                    React 管理端
 services/platform-api/       Java Core API
-workers/                     Media、AI 与导出 Worker
+workers/                     Media 与 AI Worker
 contracts/                   OpenAPI、事件、JSON Schema 和 profiles
 api-tests/bruno/             服务核心场景
 infra/docker-compose/        本地基础设施
