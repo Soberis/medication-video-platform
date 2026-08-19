@@ -78,9 +78,7 @@ flowchart TB
     API --> ACCOUNT["平台账号 / 会话"]
     API --> CVAT["CVAT"]
     MQ --> MW["Media Worker"]
-    MQ --> EW["Export Worker"]
     MW --> S3
-    EW --> S3
     API --> OBS["Logs / Metrics / Traces"]
     MW --> OBS
     EW --> OBS
@@ -250,7 +248,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 | --- | --- | --- | --- | --- |
 | 上传接收 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
 | 标注/复核 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
-| 数据集冻结/导出 | 待确认 | 待确认 | 待确认 | 重建和摘要校验 |
+| training-data.v2 preview/download | 待确认 | 待确认 | 待确认 | 投影重建和摘要校验 |
 | 权限/审计 | 待确认 | 待确认 | 待确认 | PITR 和审计链校验 |
 
 冻结数值后反推 WAL、快照、对象备份频率、异地副本、HA 和值班要求。
@@ -266,7 +264,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 → Core API
 → OIDC 连接
 → RabbitMQ / Outbox relay
-→ Media/Export Worker
+→ Media Worker
 → CVAT
 → Web
 → 监控和告警核验
@@ -277,7 +275,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 1. 数据库 schema/Flyway 版本检查；
 2. 对象引用、version、size 和 SHA-256 抽样/全量分层核验；
 3. Outbox/Inbox 和作业 attempt 去重检查；
-4. AnnotationRevision、CleaningRun 和 DatasetVersion 引用完整性；
+4. AnnotationRevision、CleaningRun、training-data 投影和 Candidate provenance 完整性；
 5. 权限、审批、撤销和过期状态检查；
 6. 审计链连续性；
 7. 端到端合成 session 验证；

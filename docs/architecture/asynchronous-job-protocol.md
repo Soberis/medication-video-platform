@@ -245,7 +245,7 @@ attempt `FAILED`、job `RETRY_WAIT`、新 attempt/新 capability 和 Outbox 写�
 消息，不在消费者进程中 sleep 或重复执行旧 attempt。不可重试错误或第 3 次 attempt 失败时，
 job 与资产入库状态才进入终态失败。
 
-数据集 v2 导出使用同一原则，但使用独立的
+历史数据集 v2 导出协议曾使用同一原则，但使用独立的
 `dataset-export-job.v1`、`dataset-export-result.v1`、`dataset-export-dead-letter.v1` 契约、
 RabbitMQ 路由和 Worker 身份。批准命令原子创建首次 attempt 与 Outbox；Worker 领取后通过
 attempt-scoped 租约换取短期输入和 multipart 输出能力，不能读取对象 key 或业务数据库。成功结果必须
@@ -361,7 +361,8 @@ UUIDv5 校验能够发现抄录错误并绑定稳定诊断身份，但不是签�
 为失败并原子创建新的 attempt、capability、message ID、Outbox、恢复记录和审计。它不扫描队列、
 不重发旧 capability、不能用于 RUNNING/终态 attempt，并受既有最大 attempt 上限约束。
 
-数据集导出沿用同一人工边界，当前接口为 `POST /api/v1/dataset-exports/{dataset_export_id}/replays`。
+历史数据集导出曾沿用同一人工边界；以下接口和字段仅用于解释历史 Flyway/运行记录，当前不存在
+`POST /api/v1/dataset-exports/{dataset_export_id}/replays` 这类 active endpoint。
 V49 只持久化人工复制的安全字段和不可变 replay 记录，不新增 DLQ inbox、不自动消费 RabbitMQ，
 也不接受原始 body、lease token、签名 URL 或对象存储字段。可重放原因是
 `DATASET_EXPORT_JOB_PROFILE_UNSUPPORTED`、`DATASET_EXPORT_JOB_ACQUIRE_REJECTED`、

@@ -186,11 +186,6 @@ class ClipAsset {
 		this.updatedAt = changedAt;
 	}
 
-	void classify(UUID newFolderId, Instant changedAt) {
-		this.folderId = newFolderId;
-		this.updatedAt = changedAt;
-	}
-
 	void markDeleted(String actorId, String reason, Instant changedAt) {
 		if (isDeleted()) {
 			return;

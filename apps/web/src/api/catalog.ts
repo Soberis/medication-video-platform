@@ -84,18 +84,6 @@ export interface ClipAssetActivityItem {
   request_id: string
 }
 
-export interface CaptureEventLogRead {
-  capture_event_log_id: string
-  batch_id: string
-  source_upload_file_id: string
-  client_file_id: string
-  device_id: string
-  content_type: string
-  size_bytes: number
-  sha256: string
-  indexed_at: string
-}
-
 export interface ClipAssetPlaybackGrant {
   grant_id: string
   purpose: 'DATA_REVIEW'
@@ -256,13 +244,6 @@ export interface CatalogPage<T> {
   next_cursor: string | null
 }
 
-export interface CaptureEventLogFilters {
-  batchId?: string
-  deviceId?: string
-  indexedFrom?: string
-  indexedBefore?: string
-}
-
 interface ApiErrorBody {
   error_code?: unknown
   error_message?: unknown
@@ -275,7 +256,6 @@ const errorMessages: Record<string, string> = {
   INVALID_TIME_RANGE: '时间范围无效，开始时间必须早于结束时间。',
   CAPTURE_SESSION_NOT_FOUND: '未找到该配药操作记录，或它不属于当前项目。',
   CLIP_ASSET_NOT_FOUND: '未找到该视频资产，或它不属于当前项目。',
-  CAPTURE_EVENT_LOG_NOT_FOUND: '未找到该采集事件日志索引，或它不属于当前项目。',
   PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前用户无权访问该项目中的数据。',
   PLAYBACK_ACCESS_DENIED: '当前账号无权播放该项目的视频。',
@@ -371,24 +351,6 @@ export function getDataManagementSummary(
   const suffix = query.size === 0 ? '' : `?${query.toString()}`
   return readJson<DataManagementSummary>(
     `/api/v1/projects/${encodeURIComponent(projectId)}/video-data/summary${suffix}`,
-    signal,
-  )
-}
-
-export function listCaptureEventLogs(
-  projectId: string,
-  filters: CaptureEventLogFilters,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '20' })
-  add(query, 'batch_id', filters.batchId)
-  add(query, 'device_id', filters.deviceId)
-  add(query, 'indexed_from', filters.indexedFrom)
-  add(query, 'indexed_before', filters.indexedBefore)
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<CaptureEventLogRead>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-event-logs?${query.toString()}`,
     signal,
   )
 }

@@ -128,8 +128,8 @@ flowchart LR
 | CameraSet | camera_set、camera_set_member | 可生效的相机组配置 |
 | CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
 | ClipAsset | clip_asset、asset_tag | 不可变媒体对象身份、摘要、存储引用和业务标签 |
-| CaptureEventLog | capture_event_log | 边端事件日志对象索引及时间基准，不解析硬件控制逻辑 |
-| AssetFolder | asset_folder、clip_asset.folder_id | 项目内一层视频分类；不承载权限、不映射对象存储目录 |
+| CaptureEventLog | capture_event_log | 上传完成时保留的边端事件日志对象索引及时间基准，不解析硬件控制逻辑；当前不提供产品查询 API |
+| AssetFolder | asset_folder、clip_asset.folder_id | 历史项目内分类和上传兼容字段；不承载权限、不映射对象存储目录，当前不提供管理 API |
 
 ### 5.2 UploadBatch 不变量
 
@@ -182,7 +182,7 @@ flowchart LR
 - 索引只保存项目、批次、设备、对象摘要、媒体类型、大小和服务端索引时间；内部存储引用不得通过目录 API、日志或指标暴露。
 - `indexed_at` 是平台完成批次时的索引时间，不是边端事件发生时间，也不能替代设备时间基准。
 - 当前切片不解析日志负载、不推断相机或工控机动作，也不把边端声明直接升级为平台事实；事件 Schema、逐事件索引和时间基准校验必须通过后续版本化契约引入。
-- 列表与详情只能使用认证身份中的 project 范围；跨项目详情按不存在处理。
+- 历史查询契约已退出；底层索引只由上传完成流程写入并保留，跨项目读取不再通过产品 API 暴露。
 
 ### 5.7 AssetFolder 不变量
 
@@ -192,7 +192,7 @@ flowchart LR
 - 移动视频只更新 `folder_id`，不移动对象、不改 project、不复制媒体，也不修改入库、隐私、标注、清洗或数据集事实。
 - 删除文件夹时将其中视频改为“未分类”，不得级联删除视频。
 
-当前实现：Flyway V23 使用 `(project_id, folder_id)` 复合外键固定 AssetFolder 与 ClipAsset 的同项目关系，表结构不含父文件夹字段；管理和视频分类命令通过 `iamproject` 公开 Membership 查询端口校验项目内 `ACTIVE ADMIN`。删除文件夹、批量取消分类、追加式审计和幂等命令证据在同一事务提交，故障注入测试证明审计失败不会留下部分取消分类。
+当前实现：Flyway V23 使用 `(project_id, folder_id)` 复合外键固定历史 AssetFolder 与 ClipAsset 的同项目关系，表结构不含父文件夹字段；当前代码仅保留历史实体/读取校验以兼容上传批次，管理、分类命令和相关审计 API 已退出。历史表与字段留待独立 DB Reduction 决策。
 
 ### 5.8 视频删除不变量
 
@@ -285,7 +285,9 @@ flowchart LR
 - 当前轻量 post-clean 与 APPROVED review 在 Core API 的同一数据库事务中完成，不创建 Worker、
   Outbox 事件、RabbitMQ 路由或通用清洗页面。PASS 只是后续准入前提，不写 `datasetexport` 表。
 
-## 9. `datasetexport`
+## 9. `datasetexport`（当前最小导出；历史 DatasetVersion/Export 仅保留记录）
+
+V1.21 当前实现只拥有 `training_data_eligibility`、`training_data_candidate_observations` 的只读投影和最小 `training-data.v2` preview/download。下表中的 DatasetVersion/Export 聚合只用于解释历史 Flyway 记录，不代表当前公开 API、Worker 或用户流程。
 
 ### 9.1 所有权
 
@@ -354,7 +356,6 @@ flowchart LR
 | AlgorithmRegistry | algorithm_registry | 算法、模型、镜像、输入/输出 schema 和审批状态 |
 | AIJob | ai_job、ai_job_attempt | 不可覆盖的推理运行 |
 | CandidateAnnotation | candidate_annotation、candidate_review_record | 候选几何、明确 score 语义和人工处置 |
-| AIEvaluation | ai_evaluation、ai_evaluation_metric | 对照试验设计和结果 |
 
 ### 10.2 不变量
 

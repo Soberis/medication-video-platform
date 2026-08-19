@@ -377,7 +377,6 @@ if [[ -f "$bruno_collection" ]]; then
         'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru'
         'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru'
         'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru'
-        'api-tests/bruno/medication-platform/Asset Catalog/03 List Capture Event Logs.bru'
         'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru'
         'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru'
         'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru'

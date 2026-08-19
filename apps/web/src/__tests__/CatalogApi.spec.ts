@@ -5,7 +5,6 @@ import {
   deleteClipAsset,
   getDataManagementSummary,
   listClipAssetActivity,
-  listCaptureEventLogs,
   listVideoSummaries,
   requestHandPoseCandidates,
   requestClipAssetMediaProbe,
@@ -170,60 +169,6 @@ describe('catalog API', () => {
         headers: expect.objectContaining({ 'Idempotency-Key': 'hand-pose-idempotency-0001' }),
       }),
     )
-  })
-
-  it('reads only project-scoped event-log object indexes with opaque pagination', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              capture_event_log_id: '71000000-0000-4000-8000-000000000001',
-              batch_id: '60000000-0000-4000-8000-000000000001',
-              source_upload_file_id: '50000000-0000-4000-8000-000000000001',
-              client_file_id: '40000000-0000-4000-8000-000000000001',
-              device_id: 'synthetic-edge-01',
-              content_type: 'application/json',
-              size_bytes: 2048,
-              sha256: 'a'.repeat(64),
-              indexed_at: '2026-07-28T04:00:00Z',
-            },
-          ],
-          next_cursor: 'opaque-next-cursor',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    const controller = new AbortController()
-
-    await expect(
-      listCaptureEventLogs(
-        projectId,
-        {
-          batchId: '60000000-0000-4000-8000-000000000001',
-          deviceId: 'synthetic-edge-01',
-          indexedFrom: '2026-07-28T00:00:00Z',
-          indexedBefore: '2026-07-29T00:00:00Z',
-        },
-        'opaque-previous-cursor',
-        controller.signal,
-      ),
-    ).resolves.toMatchObject({
-      items: [{ device_id: 'synthetic-edge-01' }],
-      next_cursor: 'opaque-next-cursor',
-    })
-
-    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
-    const requestUrl = new URL(url, 'http://localhost')
-    expect(requestUrl.pathname).toBe(`/api/v1/projects/${projectId}/capture-event-logs`)
-    expect(requestUrl.searchParams.get('limit')).toBe('20')
-    expect(requestUrl.searchParams.get('batch_id')).toBe('60000000-0000-4000-8000-000000000001')
-    expect(requestUrl.searchParams.get('device_id')).toBe('synthetic-edge-01')
-    expect(requestUrl.searchParams.get('indexed_from')).toBe('2026-07-28T00:00:00Z')
-    expect(requestUrl.searchParams.get('indexed_before')).toBe('2026-07-29T00:00:00Z')
-    expect(requestUrl.searchParams.get('cursor')).toBe('opaque-previous-cursor')
-    expect(options).toMatchObject({ method: 'GET', cache: 'no-store', signal: controller.signal })
   })
 
   it('reads minimized asset activity with an opaque cursor and no-store semantics', async () => {

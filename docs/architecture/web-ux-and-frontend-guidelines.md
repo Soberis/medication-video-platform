@@ -83,20 +83,19 @@ P0 非目标：
 
 | 路由 | 页面职责 | 启用条件 | 当前阶段 |
 | --- | --- | --- | --- |
-| `/projects` | 仅列出当前身份具有 ACTIVE Membership 的数据项目并显示角色；管理员可改名、归档项目和管理成员 | 项目/成员契约、权限与测试具备 | 已启用；归档不物理删除数据。AssetFolder 后端保留但不进入 LEAN-P0 产品面。 |
-| `/projects/:projectId/assets`、详情子路由 | 查看项目内单路视频安全元数据、自动媒体技术检查、播放、手部候选与人工质量结论 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 详情路由继续服务视频主链和旧链接兼容；不展示文件夹归类。单路 Skeleton Overlay 与状态刷新受 AI 功能开关和服务端准入保护。管理员诊断/恢复入口不放入普通用户主界面。 |
+| `/projects` | 仅列出当前身份具有 ACTIVE Membership 的数据项目并显示角色；管理员可改名、归档项目和管理成员 | 项目/成员契约、权限与测试具备 | 已启用；归档不物理删除数据。AssetFolder 仅保留历史字段和上传兼容读取，不进入当前产品面。 |
+| `/projects/:projectId/assets/:id` | 查看项目内单路视频安全元数据、自动媒体技术检查、播放、手部候选与人工质量结论 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 详情路由服务视频主链；不展示文件夹归类。单路 Skeleton Overlay 与状态刷新受 AI 功能开关和服务端准入保护。管理员诊断/恢复入口不放入普通用户主界面。 |
 | `/projects/:projectId/videos` | 按来源、时间、固定相机编号和媒体/手部/标注/清洗状态查询单路视频，播放并进入 P0 单视频闭环 | 稳定游标、同条件汇总、项目隔离、产品 `video_id` 路由与测试具备 | V1.18 默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
-| `/projects/:projectId/event-logs` | 按批次、设备和平台索引时间查询已验证事件日志对象索引 | 项目成员读取、游标分页、对象索引过滤和测试具备 | INTERNAL：底层与兼容路由保留，但不进入普通产品导航；只展示安全对象元数据。 |
 | `/projects/:projectId/annotation-tasks` | 查看当前用户可见的标注任务；管理员可由合格视频详情创建并直接分配任务，受理人从不可变 P0 主 Step Schema 中选择标签并提交时间片段，另一名管理员可作一次通过/不通过决定；不通过会退回任务并保留旧 revision，通过后显示任务完成及该 revision 的 post-clean 结果 | 任务创建、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，页面以无装饰的一行事实显示项目或个人范围。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注。管理员可对已完成且复核通过的任务按当前事实重新核对清洗，旧结果保留；不展示画框工具、AI、抽样复核或数据集准入操作 |
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
 | `/uploads/new` | 从平台页面上传本机视频并展示真实上传进度 | 后端具备角色、项目和文件规则守卫 | 已启用；仅合成数据开发验证，不展示文件夹选择 |
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
-| `/projects/:projectId/sessions`、详情子路由 | 历史多相机配药操作视图 | 兼容代码、权限与测试继续保留 | **DEFERRED / HIDDEN**：不进入产品导航，不继续开发；CaptureSession 后端仍是 REQUIRED 的接入事实。 |
+| `/projects/:projectId/sessions`、详情子路由 | 历史多相机配药操作视图 | CaptureSession 事实和后端契约继续保留 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；CaptureSession 后端仍是 REQUIRED 的接入事实。 |
 | `/annotation-projects` | 标注项目和标签/指南版本 | 待 AnnotationProject/Guideline 契约、权限与测试冻结 | 未启用 |
 | `/annotation-tasks/:id` | Step 时间轴、Object 工具跳转、草稿、提交与复核 | 标注与复核闭环 | 待启用 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 跨资产的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前单 revision post-clean 只随标注任务展示结果，不为它新建清洗页 |
-| `/projects/:projectId/datasets`、详情子路由 | 历史 DatasetVersion/Export 产品视图 | 兼容代码、权限与测试继续保留 | **DEFERRED / HIDDEN**：不进入产品导航，不继续开发；后端、契约和迁移保留且不 DROP。 |
+| `/projects/:projectId/datasets`、详情子路由 | 历史 DatasetVersion/Export 产品视图 | 历史后端/数据库记录继续保留 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；历史契约和迁移不在本轮删除且不 DROP。 |
 
 新页面只能在对应纵向能力已有 OpenAPI、权限边界、状态语义和可执行测试后启用。
 
@@ -105,8 +104,8 @@ P0 非目标：
 - `/projects/:projectId/videos` 是当前默认业务入口；列表按稳定服务端游标分页，不自动播放或预加载视频；
 - `/projects/:projectId/sessions` 与详情仅保留历史兼容路由和测试，不进入当前导航；不得继续增加同步、批量检测或 Dataset 草稿动作；
 - V1.21 手部姿态检测只从单个已入库视频显式发起，不提供一键批量或自动检测；Candidate/handedness 不得阻断人工标注；
-- AssetFolder 后端事实和兼容 API 保留，LEAN-P0 页面不展示文件夹选择、归类、标签或筛选；
-- `/assets` 详情用于单路视频主链和旧链接兼容，不以 Session 组织作为用户前置步骤；
+- AssetFolder 管理 API 和页面已退出；历史 folder ID、`clip_asset.folder_id` 与上传兼容字段保留，不进入 LEAN-P0 页面；
+- `/assets/:id` 详情用于单路视频主链，不以 Session 组织作为用户前置步骤；
 - `/assets/:id` 只展示当前已持久化且获准返回的元数据。播放器、缩略图、下载和对象存储定位在授权契约完成前不得出现；
 - 工作台所需的异常数、待办数和状态汇总必须来自专用服务端查询，不得通过浏览器拉取多页列表后自行汇总。
 

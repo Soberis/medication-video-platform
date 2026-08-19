@@ -66,10 +66,6 @@ tags:
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
       It is for human review, not download, annotation or a privacy-release decision.
-  - name: Asset Folders
-    description: >-
-      One-level project-scoped ClipAsset classification owned by assetcapture. Folders never grant
-      access, map to object storage paths or change a ClipAsset project.
   - name: Media Jobs
     description: >-
       Project-scoped media probe job lifecycle owned by the mediaprivacy module. Creation freezes
@@ -740,325 +736,6 @@ paths:
           description: >-
             The idempotency key conflicts with another command, or the command would remove the
             final ACTIVE administrator.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/asset-folders:
-    get:
-      operationId: listAssetFolders
-      tags:
-        - Asset Folders
-      summary: List one-level folders in an authorized project
-      description: Requires an ACTIVE project membership. The list contains no nested folders.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      responses:
-        "200":
-          description: Project folders ordered by display name and folder identity.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AssetFolderList"
-        "400":
-          description: The project identifier is invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project does not exist or is not visible to the authenticated actor.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-    post:
-      operationId: createAssetFolder
-      tags:
-        - Asset Folders
-      summary: Create a one-level project folder
-      description: >-
-        Requires an ACTIVE ADMIN membership. Folder names are unique case-insensitively within the
-        project. Replaying the same command returns its original result.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AssetFolderRequest"
-      responses:
-        "201":
-          description: Folder created, or the original folder returned for an idempotent replay.
-          headers:
-            Location:
-              description: Canonical asset-folder resource path.
-              schema:
-                type: string
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AssetFolder"
-        "400":
-          description: Request, request ID or idempotency key validation failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project does not exist or is not visible to the authenticated actor.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The folder name exists or the idempotency key conflicts with another command.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/asset-folders/{folder_id}:
-    put:
-      operationId: renameAssetFolder
-      tags:
-        - Asset Folders
-      summary: Rename a project folder
-      description: Requires an ACTIVE ADMIN membership and preserves the stable folder identity.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/FolderId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AssetFolderRequest"
-      responses:
-        "200":
-          description: Folder state after rename, including an idempotent replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AssetFolder"
-        "400":
-          description: Request or path validation failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project or folder does not exist in the authorized scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The folder name exists or the idempotency key conflicts with another command.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-    delete:
-      operationId: deleteAssetFolder
-      tags:
-        - Asset Folders
-      summary: Delete a project folder and unclassify its ClipAssets
-      description: >-
-        Requires an ACTIVE ADMIN membership. The transaction clears folder_id on every classified
-        ClipAsset before deleting the folder; it never deletes or moves a media object.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/FolderId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      responses:
-        "204":
-          description: Folder deleted and its ClipAssets made unclassified, including a replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-        "400":
-          description: Path, request ID or idempotency key validation failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project or folder does not exist in the authorized scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The idempotency key conflicts with another command.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/folder:
-    put:
-      operationId: assignClipAssetFolder
-      tags:
-        - Asset Folders
-      summary: Move a ClipAsset into a folder in its project
-      description: >-
-        Requires an ACTIVE ADMIN membership. The target folder and ClipAsset must belong to the path
-        project. Only folder_id changes; project, media object and downstream facts are unchanged.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ClipAssetId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ClipAssetFolderRequest"
-      responses:
-        "200":
-          description: ClipAsset classification after the move, including an idempotent replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ClipAssetFolder"
-        "400":
-          description: Request or path validation failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project, ClipAsset or target folder does not exist in the authorized scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The idempotency key conflicts with another command.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-    delete:
-      operationId: unclassifyClipAsset
-      tags:
-        - Asset Folders
-      summary: Move a ClipAsset to the unclassified project view
-      description: >-
-        Requires an ACTIVE ADMIN membership. Unclassified is represented by a null folder_id and is
-        not a deletable system folder.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ClipAssetId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      responses:
-        "200":
-          description: Unclassified ClipAsset state, including an idempotent replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ClipAssetFolder"
-        "400":
-          description: Path, request ID or idempotency key validation failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: A valid bearer token was not provided.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project or ClipAsset does not exist in the authorized scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The idempotency key conflicts with another command.
           content:
             application/problem+json:
               schema:
@@ -3747,141 +3424,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/capture-event-logs:
-    get:
-      operationId: listCaptureEventLogs
-      tags:
-        - Asset Catalog
-      summary: List immutable edge event-log object indexes in one authorized project
-      description: >-
-        Returns a bounded keyset page ordered by indexed_at and capture_event_log_id descending.
-        Each item identifies one verified EVENT_LOG upload object. The service does not parse event
-        records, infer hardware actions, expose object-storage locations or return download URLs.
-        The authenticated actor must hold an ACTIVE Membership in the explicit project path.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: batch_id
-          in: query
-          schema:
-            type: string
-            format: uuid
-        - name: device_id
-          in: query
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-            pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
-        - name: indexed_from
-          in: query
-          description: Inclusive lower bound on server-side indexed_at.
-          schema:
-            type: string
-            format: date-time
-        - name: indexed_before
-          in: query
-          description: Exclusive upper bound on server-side indexed_at.
-          schema:
-            type: string
-            format: date-time
-        - name: cursor
-          in: query
-          description: Opaque cursor returned by the preceding CaptureEventLog page.
-          schema:
-            type: string
-            maxLength: 512
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            format: int32
-            minimum: 1
-            maximum: 100
-            default: 20
-      responses:
-        "200":
-          description: Project-scoped page of immutable event-log object indexes.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CaptureEventLogList"
-        "400":
-          description: Invalid filter, time range, limit or cursor.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The authenticated principal cannot be used for project-scoped reads.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The requested project does not exist, is inactive or is not visible to the actor.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/capture-event-logs/{capture_event_log_id}:
-    get:
-      operationId: getCaptureEventLog
-      tags:
-        - Asset Catalog
-      summary: Get one immutable event-log object index
-      description: >-
-        Returns only persisted object metadata when the index belongs to the requested authorized project.
-        An index in another project is hidden as not found. Event payload records and storage
-        addresses are intentionally excluded.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: capture_event_log_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: CaptureEventLog object index detail.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CaptureEventLogRead"
-        "401":
-          description: Authentication is missing or invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: The authenticated principal cannot be used for project-scoped reads.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: Requested project or event-log index not found in the actor's visible scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /media-jobs:
     post:
       operationId: createMediaJob
@@ -4565,13 +4107,6 @@ components:
         minLength: 1
         maxLength: 128
         pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
-    FolderId:
-      name: folder_id
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
     ClipAssetId:
       name: clip_asset_id
       in: path
@@ -4954,93 +4489,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProjectMembership"
-    AssetFolderRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - display_name
-      properties:
-        display_name:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[^\x00-\x1F\x7F]+$
-    AssetFolder:
-      type: object
-      additionalProperties: false
-      required:
-        - folder_id
-        - project_id
-        - display_name
-        - version
-        - created_at
-        - updated_at
-      properties:
-        folder_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        display_name:
-          type: string
-          minLength: 1
-          maxLength: 128
-        version:
-          type: integer
-          format: int64
-          minimum: 0
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    AssetFolderList:
-      type: object
-      additionalProperties: false
-      required:
-        - items
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AssetFolder"
-    ClipAssetFolderRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - folder_id
-      properties:
-        folder_id:
-          type: string
-          format: uuid
-    ClipAssetFolder:
-      type: object
-      additionalProperties: false
-      required:
-        - clip_asset_id
-        - project_id
-        - version
-        - updated_at
-      properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-        project_id:
-          type: string
-          format: uuid
-        folder_id:
-          type: string
-          format: uuid
-          description: Omitted when the ClipAsset is in the unclassified project view.
-        version:
-          type: integer
-          format: int64
-          minimum: 0
-        updated_at:
-          type: string
-          format: date-time
     UploadBatchInitRequest:
       type: object
       additionalProperties: false
@@ -5070,7 +4518,7 @@ components:
         asset_folder_id:
           type: [string, "null"]
           format: uuid
-          description: Optional project folder for a PLATFORM_LOCAL video; never an object-storage path or permission boundary.
+          description: Legacy optional folder identifier for a PLATFORM_LOCAL upload; no current folder management API exists, and it is never an object-storage path or permission boundary.
         file_count:
           type: integer
           format: int32
@@ -5121,6 +4569,7 @@ components:
         asset_folder_id:
           type: [string, "null"]
           format: uuid
+          description: Historical upload classification identifier retained for compatibility.
         external_manifest_id:
           type: [string, "null"]
           format: uuid
@@ -5332,6 +4781,7 @@ components:
         asset_folder_id:
           type: [string, "null"]
           format: uuid
+          description: Historical upload classification identifier retained for compatibility.
         external_manifest_id:
           type: [string, "null"]
           format: uuid
@@ -6130,68 +5580,6 @@ components:
         - COMPLETE
         - INCOMPLETE
         - CLOSED
-    CaptureEventLogList:
-      type: object
-      additionalProperties: false
-      required:
-        - items
-        - next_cursor
-      properties:
-        items:
-          type: array
-          maxItems: 100
-          items:
-            $ref: "#/components/schemas/CaptureEventLogRead"
-        next_cursor:
-          anyOf:
-            - type: string
-              maxLength: 512
-            - type: "null"
-    CaptureEventLogRead:
-      type: object
-      additionalProperties: false
-      required:
-        - capture_event_log_id
-        - batch_id
-        - source_upload_file_id
-        - client_file_id
-        - device_id
-        - content_type
-        - size_bytes
-        - sha256
-        - indexed_at
-      properties:
-        capture_event_log_id:
-          type: string
-          format: uuid
-        batch_id:
-          type: string
-          format: uuid
-        source_upload_file_id:
-          type: string
-          format: uuid
-        client_file_id:
-          type: string
-          format: uuid
-        device_id:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
-        content_type:
-          type: string
-          minLength: 1
-          maxLength: 128
-        size_bytes:
-          type: integer
-          format: int64
-          minimum: 1
-        sha256:
-          type: string
-          pattern: ^[a-f0-9]{64}$
-        indexed_at:
-          type: string
-          format: date-time
     VideoSummaryPage:
       type: object
       additionalProperties: false
@@ -6353,7 +5741,7 @@ components:
         folder_id:
           type: string
           format: uuid
-          description: Omitted when the ClipAsset is in the unclassified project view.
+          description: Historical folder identifier; current video management does not offer folder classification or filtering.
         session_binding:
           anyOf:
             - $ref: "#/components/schemas/ClipAssetSessionBinding"

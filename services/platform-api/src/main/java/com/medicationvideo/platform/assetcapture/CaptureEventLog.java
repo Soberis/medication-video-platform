@@ -78,10 +78,6 @@ class CaptureEventLog {
 		return new CaptureEventLog(batch, file, indexedAt);
 	}
 
-	UUID getCaptureEventLogId() {
-		return this.captureEventLogId;
-	}
-
 	UUID getProjectId() {
 		return this.projectId;
 	}

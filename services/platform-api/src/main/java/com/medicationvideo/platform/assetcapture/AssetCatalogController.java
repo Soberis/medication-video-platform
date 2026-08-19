@@ -157,33 +157,6 @@ class AssetCatalogController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
-	@GetMapping("/capture-event-logs")
-	ResponseEntity<CaptureEventLogListResponse> listCaptureEventLogs(@PathVariable UUID projectId,
-			@RequestParam(name = "batch_id", required = false) UUID batchId,
-			@RequestParam(name = "device_id",
-					required = false) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String deviceId,
-			@RequestParam(name = "indexed_from",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedFrom,
-			@RequestParam(name = "indexed_before",
-					required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant indexedBefore,
-			@RequestParam(required = false) @Size(max = 512) String cursor,
-			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.listCaptureEventLogs(projectId, batchId, deviceId, indexedFrom, indexedBefore,
-				cursor, limit);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
-	@GetMapping("/capture-event-logs/{captureEventLogId}")
-	ResponseEntity<CaptureEventLogReadResponse> getCaptureEventLog(@PathVariable UUID projectId,
-			@PathVariable UUID captureEventLogId, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.authorizer.requireMember(projectId, actor.actorId());
-		var response = this.service.getCaptureEventLog(projectId, captureEventLogId);
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "An authenticated project actor is required.",

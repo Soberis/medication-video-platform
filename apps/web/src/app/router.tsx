@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import { Button } from 'antd'
-import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router'
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router'
 
 import AppShell from '@/App'
 import { useAuth } from '@/app/auth'
@@ -47,15 +47,6 @@ function AdministratorBoundary() {
   return auth.session?.role === 'ADMIN' ? <Outlet /> : <Navigate replace to={paths.projects} />
 }
 
-export function LegacyProjectAssetListRedirect() {
-  const { projectId } = useParams()
-  return projectId ? (
-    <Navigate replace to={paths.videos(projectId)} />
-  ) : (
-    <Navigate replace to={paths.projects} />
-  )
-}
-
 export const router = createBrowserRouter([
   {
     path: paths.login,
@@ -81,10 +72,6 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: '/projects/:projectId/assets',
-            element: <LegacyProjectAssetListRedirect />,
-          },
-          {
             path: '/projects/:projectId/assets/:id',
             lazy: async () => ({ Component: (await import('@/views/AssetDetailView')).default }),
           },
@@ -92,12 +79,6 @@ export const router = createBrowserRouter([
             path: '/projects/:projectId/annotation-tasks',
             lazy: async () => ({
               Component: (await import('@/views/AnnotationTaskListView')).default,
-            }),
-          },
-          {
-            path: '/projects/:projectId/event-logs',
-            lazy: async () => ({
-              Component: (await import('@/views/CaptureEventLogListView')).default,
             }),
           },
           {
@@ -131,6 +112,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '/assets', element: <Navigate replace to={paths.projects} /> },
   { path: '*', element: <Navigate replace to={paths.projects} /> },
 ])

@@ -21,11 +21,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = { AssetFolderController.class, ClipAssetDeletionController.class,
-		ClipAssetPlaybackController.class })
-class AssetFolderExceptionHandler {
+@RestControllerAdvice(assignableTypes = { ClipAssetDeletionController.class, ClipAssetPlaybackController.class })
+class AssetCaptureExceptionHandler {
 
-	private static final Logger log = LoggerFactory.getLogger(AssetFolderExceptionHandler.class);
+	private static final Logger log = LoggerFactory.getLogger(AssetCaptureExceptionHandler.class);
 
 	private static final String REQUEST_ID_ATTRIBUTE = "medication.requestId";
 
@@ -33,17 +32,11 @@ class AssetFolderExceptionHandler {
 			MissingRequestHeaderException.class, HttpMessageNotReadableException.class,
 			MethodArgumentTypeMismatchException.class, IllegalArgumentException.class })
 	ResponseEntity<ApiErrorResponse> invalidRequest(Exception exception) {
-		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The asset folder request is invalid.", false);
+		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The asset capture request is invalid.", false);
 	}
 
 	@ExceptionHandler(ProjectAccessException.class)
 	ResponseEntity<ApiErrorResponse> projectAccess(ProjectAccessException exception) {
-		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
-				false);
-	}
-
-	@ExceptionHandler(AssetFolderException.class)
-	ResponseEntity<ApiErrorResponse> assetFolder(AssetFolderException exception) {
 		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				false);
 	}

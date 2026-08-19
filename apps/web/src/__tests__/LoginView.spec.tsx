@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRouter } from '@/test/render'
-import { LegacyProjectAssetListRedirect } from '@/app/router'
 import LoginView from '@/views/LoginView'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -69,7 +68,7 @@ describe('LoginView', () => {
       vi.fn().mockResolvedValue(jsonResponse({ username: 'platform-admin', role: 'ADMIN' })),
     )
     const user = userEvent.setup()
-    const { router } = renderLogin('/login?redirect=%2Fprojects%2Fproject-1%2Fassets')
+    const { router } = renderLogin('/login?redirect=%2Fprojects%2Fproject-1%2Fvideos')
 
     await user.type(screen.getByLabelText('账号'), 'platform-admin')
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
@@ -85,10 +84,6 @@ function renderLogin(entry = '/login') {
     [
       { path: '/login', element: <LoginView /> },
       { path: '/projects', element: <div>Projects</div> },
-      {
-        path: '/projects/:projectId/assets',
-        element: <LegacyProjectAssetListRedirect />,
-      },
       { path: '/projects/:projectId/videos', element: <div>Videos</div> },
     ],
     [entry],

@@ -40,7 +40,7 @@ Codex、开发环境和 CI 只允许使用合成数据。未经明确授权和�
 - 使用平台内部管理账号；密码仅保存 BCrypt 哈希，浏览器使用 HttpOnly 会话 Cookie 与 CSRF 保护。医院边端使用独立服务凭据，不使用管理端账号。
 - 服务、Worker 和外部适配器使用独立机器身份，禁止共享个人账号。
 - token audience、issuer、signature、expiry 和 clock skew 必须验证。
-- `local` / `test` 之外的 Media Worker 与 Export Worker 内部接口只接受签名 JWT：issuer 与
+- `local` / `test` 之外的 Media Worker 内部接口只接受签名 JWT：issuer 与
   JWK Set 必须是 HTTPS，`sub` 必填，Media/Export 使用互不相同且唯一的 audience；同时携带
   多个 Worker audience 的 token 直接拒绝。允许时钟偏差为 0～5 分钟，默认 1 分钟。
 - 非合成数据环境禁止从进程环境变量读取长期 Worker bearer。部署身份代理应将短期 JWT 写入
@@ -68,7 +68,7 @@ allow =
 
 V1.6 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
-- `ADMIN` 可管理项目、成员、文件夹、标注任务和视频删除，并可在已加入项目内播放技术校验通过的视频；
+- `ADMIN` 可管理项目、成员、标注任务和视频删除，并可在已加入项目内播放技术校验通过的视频；历史文件夹字段不提供当前管理命令；
 - `MEMBER` 只能访问已加入的项目，可按项目权限本地上传、播放已完成上传完整性校验的 MP4、记录质量判断并编辑分配给自己的任务；媒体检测状态不阻断人工查看。
 - 平台本地上传必须同时满足角色、项目和上传规则；开发、测试和 CI 仍只使用合成数据；
 - AssetFolder 不参与授权计算，不能用“移动到文件夹”授予或撤销数据权限；
@@ -226,7 +226,7 @@ V1.7 的普通内部人工查看直接针对已完成上传完整性校验的原
 - 标注提交、退回、裁决和 schema 变更；
 - 清洗 override；
 - 数据集 freeze、export、download 和过期；
-- 项目/成员和 AssetFolder 创建、重命名、删除及视频移动；
+- 项目/成员变更；历史 AssetFolder 字段不再提供创建、重命名、删除或视频移动命令；
 - 视频删除；
 - retention、legal hold 和销毁；
 - 管理配置、密钥引用和安全策略变更。

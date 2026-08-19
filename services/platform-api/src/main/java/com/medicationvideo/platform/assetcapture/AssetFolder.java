@@ -42,48 +42,4 @@ class AssetFolder {
 	protected AssetFolder() {
 	}
 
-	private AssetFolder(UUID projectId, String displayName, String actorId, Instant occurredAt) {
-		this.folderId = UUID.randomUUID();
-		this.projectId = projectId;
-		this.displayName = displayName;
-		this.createdBy = actorId;
-		this.createdAt = occurredAt;
-		this.updatedBy = actorId;
-		this.updatedAt = occurredAt;
-	}
-
-	static AssetFolder create(UUID projectId, String displayName, String actorId, Instant occurredAt) {
-		return new AssetFolder(projectId, displayName, actorId, occurredAt);
-	}
-
-	void rename(String newDisplayName, String actorId, Instant occurredAt) {
-		this.displayName = newDisplayName;
-		this.updatedBy = actorId;
-		this.updatedAt = occurredAt;
-	}
-
-	UUID getFolderId() {
-		return this.folderId;
-	}
-
-	UUID getProjectId() {
-		return this.projectId;
-	}
-
-	String getDisplayName() {
-		return this.displayName;
-	}
-
-	Instant getCreatedAt() {
-		return this.createdAt;
-	}
-
-	Instant getUpdatedAt() {
-		return this.updatedAt;
-	}
-
-	long getRowVersion() {
-		return this.rowVersion;
-	}
-
 }

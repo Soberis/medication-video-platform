@@ -44,15 +44,12 @@ describe('catalog views', () => {
     expect(screen.queryByRole('button', { name: '删除视频' })).not.toBeInTheDocument()
   })
 
-  it('does not show the folder classification surface in LEAN-P0', async () => {
-    const fetchMock = stubAsset({ role: 'ADMIN', status: 'UPLOADED' })
+  it('does not show the legacy folder classification surface in LEAN-P0', async () => {
+    stubAsset({ role: 'ADMIN', status: 'UPLOADED' })
     renderAssetDetail()
     expect(await screen.findByText('视频详情')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '更新分类' })).not.toBeInTheDocument()
     expect(screen.queryByText('视频分类')).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/asset-folders'))).toBe(
-      false,
-    )
   })
 
   it('lets a project member request playback only after an explicit click', async () => {
