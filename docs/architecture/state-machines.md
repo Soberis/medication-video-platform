@@ -249,7 +249,7 @@ V1.6 不暴露隔离命令或查询。历史 `quarantine_record` 仅为不可改
 ### 7.3 当前训练数据准入
 
 V1.21 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
-旧代码和公开 API 已退役，历史表结构由 Flyway 保留，数据库物理清理由后续 forward migration 单独决策。
+旧代码和公开 API 已退役，未使用的旧表已由 V65/V66 forward migration 物理退役；旧状态机仅保留为历史设计说明。
 
 Cleaning PASS 后，`MinimalTrainingDataExportService` 与 `tools/minimal-export` 在只读事务中读取
 `training_data_eligibility` 和 `training_data_candidate_observations`。准入事实必须同时满足：视频仍为
@@ -275,7 +275,7 @@ eligible facts → preview/download → training_data.parquet
 ### 8.2 已退役 DatasetVersion/legacy Export（仅历史记录）
 
 以下旧状态机仅用于解释历史数据库记录和版本化文档，不属于当前 active API、Worker 或产品流程。
-历史表结构继续由 Flyway 保留；数据库物理清理必须另行设计新的 forward migration。
+V65/V66 已移除对应的未使用数据库对象；历史 Flyway 文件仍作为不可修改的演进记录保留。
 
 #### 8.2.1 DatasetVersion（历史）
 

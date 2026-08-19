@@ -10,7 +10,7 @@
 它用于验证截图风格的双手关键点、骨架和 `Left/Right + handedness_score`。它不连接平台、不写
 正式候选或标注，也不证明模型已经适合真实配药场景。完整边界见
 [V1.13 需求基线](../../docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md)
-和 [PoC 技术设计](../../docs/architecture/hand-pose-poc.md)。
+和 [PoC 技术设计](../../docs/architecture/history/hand-pose-poc.md)。
 
 ## 环境与模型
 

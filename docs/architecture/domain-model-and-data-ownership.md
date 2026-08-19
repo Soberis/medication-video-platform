@@ -8,7 +8,7 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.21；未变更条款按需求基线继承历史版本。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、历史文件夹字段兼容、两级角色和视频标注的已批准领域边界；DatasetVersion/legacy Export 仅作为历史数据库记录保留。
+当前业务事实来源是 V1.21；未变更条款按需求基线继承历史版本。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、两级角色和视频标注的已批准领域边界；AssetFolder、CaptureEventLog 和 DatasetVersion/legacy Export 的旧运行面已由 V65/V66 退役，历史设计只作为演进记录保留。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -128,8 +128,6 @@ flowchart LR
 | CameraSet | camera_set、camera_set_member | 可生效的相机组配置 |
 | CaptureSession | capture_session、camera_set_snapshot、camera_set_snapshot_member、camera_stream | 一次配药操作和创建时冻结的相机配置 |
 | ClipAsset | clip_asset、asset_tag | 不可变媒体对象身份、摘要、存储引用和业务标签 |
-| CaptureEventLog | capture_event_log | 历史边端事件日志对象索引表；当前应用不写入、不读取，也不属于 Governance Audit |
-| AssetFolder | asset_folder、clip_asset.folder_id | 历史分类和上传字段；当前应用不建模、不校验、不投影，不承载权限或对象存储目录 |
 
 ### 5.2 UploadBatch 不变量
 
@@ -178,16 +176,16 @@ flowchart LR
 
 ### 5.6 CaptureEventLog 历史表边界
 
-- `capture_event_log` 表及其历史唯一约束、索引和 Flyway 迁移继续保留，但当前应用不再创建对应 Entity、Repository 或 Complete Batch 写入。
-- 当前应用不读取该表；它不属于 Governance Audit，也不作为 CaptureSession、Media、Candidate、Annotation、Review、Cleaning 或 training-data.v2 的事实来源。
-- 若未来重新启用事件日志索引，必须通过新的版本化契约单独评审，不回溯修改历史 migration。
+- `capture_event_log` 表及其历史索引已由 V65 forward migration 退役；历史 V1--V64 migration 文件不可修改，仅用于解释演进过程。
+- 原始 `EVENT_LOG` 上传对象仍按 UploadFile 的对象保留规则处理，但它不再创建数据库事件索引，也不属于 Governance Audit。
+- CaptureSession、Media、Candidate、Annotation、Review、Cleaning 和 training-data.v2 均不依赖该旧表。
+- 若未来重新需要事件日志索引，必须通过新的版本化契约单独评审，不复活旧表或回溯修改历史 migration。
 
 ### 5.7 AssetFolder 历史字段边界
 
-- `asset_folder`、`upload_batch.asset_folder_id` 和 `clip_asset.folder_id` 以及其历史约束继续保留，但当前应用不再创建、校验、绑定、读取或暴露这些字段。
+- `asset_folder`、`upload_batch.asset_folder_id` 和 `clip_asset.folder_id` 以及其历史约束已由 V65 forward migration 退役；当前应用不创建、校验、绑定、读取或暴露这些字段。
 - 当前视频主链、项目权限、CaptureSession、Media、Candidate、Annotation、Review、Cleaning 和 training-data.v2 均不依赖文件夹事实。
-
-当前实现：Flyway V23/V24 的历史表、字段和约束保持不动；应用层 AssetFolder entity/repository、上传校验、绑定和响应投影已退出。历史表与字段留待独立 DB Reduction 决策。
+- V23/V24 等历史 migration 不修改；若未来重新引入分类能力，必须以新的领域契约单独评审，不能恢复旧兼容字段。
 
 ### 5.8 视频删除不变量
 
@@ -280,17 +278,17 @@ flowchart LR
 - 当前轻量 post-clean 与 APPROVED review 在 Core API 的同一数据库事务中完成，不创建 Worker、
   Outbox 事件、RabbitMQ 路由或通用清洗页面。PASS 只是后续准入前提，不写 `datasetexport` 表。
 
-## 9. `datasetexport`（当前最小导出；历史 DatasetVersion/Export 仅保留记录）
+## 9. `datasetexport`（当前最小导出；历史 DatasetVersion/Export 设计参考）
 
-V1.21 当前实现只拥有 `training_data_eligibility`、`training_data_candidate_observations` 的只读投影和最小 `training-data.v2` preview/download。下表中的 DatasetVersion/Export 聚合只用于解释历史 Flyway 记录，不代表当前公开 API、Worker 或用户流程。
+V1.21 当前实现只拥有 `training_data_eligibility`、`training_data_candidate_observations` 的只读投影和最小 `training-data.v2` preview/download。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
 
 ### 9.1 所有权
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| DatasetVersion | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
-| ExportProfile | export_profile | 格式、采样、目录和字段版本 |
-| DatasetExport | dataset_export、export_artifact | 后台导出、校验、发布、下载和过期 |
+| DatasetVersion（历史设计，V66 已退役） | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 历史上的选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
+| MinimalTrainingDataProfile | 当前 `training-data.v2` 导出契约中的固定 profile key/digest；不单独建表 | 最小导出格式、采样和字段版本 |
+| DatasetExport（历史设计，V66 已退役） | dataset_export、export_artifact | 历史上的后台导出、校验、发布、下载和过期 |
 
 ### 9.2 DatasetVersion 冻结内容
 
@@ -366,7 +364,6 @@ V1.21 当前实现只拥有 `training_data_eligibility`、`training_data_candida
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
-| ApprovalRequest | approval_request、approval_decision | 隔离解除、raw 访问、导出、冻结和删除审批 |
 | AuditEvent | audit_event | 追加式安全和业务审计 |
 | RetentionPolicy | retention_policy、legal_hold | 保留、到期、暂停销毁和适用范围 |
 | DestructionCase | destruction_case、destruction_certificate | 对象/备份处理和证明 |

@@ -1,6 +1,6 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.21 FLOW-FIRST LEAN-P0 为准：平台对接边端接收，在云端完成视频管理、单视频手部预标注、配药动作标注复核、数据清洗和最小 `training-data.v2` preview/download。手部预标注优先建设，但不替代人工标注和清洗；CaptureSync 属于战略保留；DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，历史数据库结构仍由 Flyway 保留。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.21 FLOW-FIRST LEAN-P0 为准：平台对接边端接收，在云端完成视频管理、单视频手部预标注、配药动作标注复核、数据清洗和最小 `training-data.v2` preview/download。手部预标注优先建设，但不替代人工标注和清洗；CaptureSync 属于战略保留；DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
 
 ## 当前规范
 

@@ -26,9 +26,6 @@ importers:
       antd:
         specifier: 6.5.3
         version: 6.5.3(patch_hash=3459076d91ee16bf005f3af1919acaa08d5a999cc533019f5f65f127210b0b1f)(moment@2.30.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      dayjs:
-        specifier: 1.11.21
-        version: 1.11.21
       react:
         specifier: 19.2.8
         version: 19.2.8
