@@ -59,7 +59,7 @@ macOS / Linux：
 
 ```text
 apps/web/                    React 管理端
-services/platform-api/       Java Core API
+services/core-api/           Java Core API
 workers/                     Media 与 AI Worker
 contracts/                   OpenAPI、事件、JSON Schema 和 profiles
 api-tests/bruno/             服务核心场景

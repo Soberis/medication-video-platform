@@ -444,11 +444,11 @@ else
     add_skip 'Docker Compose: PostgreSQL and S3 skeleton has not been generated yet'
 fi
 
-platform_pom="$PROJECT_ROOT/services/platform-api/pom.xml"
-if ! has_changed_path 'services/platform-api'; then
+platform_pom="$PROJECT_ROOT/services/core-api/pom.xml"
+if ! has_changed_path 'services/core-api'; then
     add_skip 'Java verify: no platform-api changes'
 elif [[ -f "$platform_pom" ]]; then
-    maven_wrapper="$PROJECT_ROOT/services/platform-api/mvnw"
+    maven_wrapper="$PROJECT_ROOT/services/core-api/mvnw"
     if [[ ! -f "$maven_wrapper" ]]; then
         add_failure 'platform-api has pom.xml but Maven Wrapper is missing'
     else

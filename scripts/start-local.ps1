@@ -212,7 +212,7 @@ elseif (Test-ManagedProcessRunning 'api') {
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 else {
-    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\platform-api\\mvnw.cmd -f services\\platform-api\\pom.xml -Dspring-boot.run.profiles=local spring-boot:run" $apiLogPath
+    Start-LocalProcess 'api' 'Core API' 'cmd.exe' "/c services\\core-api\\mvnw.cmd -f services\\core-api\\pom.xml -Dspring-boot.run.profiles=local spring-boot:run" $apiLogPath
     Wait-CoreApiHealthy $apiHealthUri $ApiStartupTimeoutSeconds $apiLogPath
 }
 

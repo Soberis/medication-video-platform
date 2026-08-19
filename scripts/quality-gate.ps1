@@ -435,13 +435,13 @@ else {
     Add-Skip 'Docker Compose: PostgreSQL and S3 skeleton has not been generated yet'
 }
 
-$platformPom = Join-Path $root 'services/platform-api/pom.xml'
-if (-not (Test-ChangedPath 'services/platform-api')) {
+$platformPom = Join-Path $root 'services/core-api/pom.xml'
+if (-not (Test-ChangedPath 'services/core-api')) {
     Add-Skip 'Java verify: no platform-api changes'
 }
 elseif (Test-Path -LiteralPath $platformPom) {
     $mavenWrapperName = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'mvnw.cmd' } else { 'mvnw' }
-    $mavenWrapper = Join-Path $root "services/platform-api/$mavenWrapperName"
+    $mavenWrapper = Join-Path $root "services/core-api/$mavenWrapperName"
     if (-not (Test-Path -LiteralPath $mavenWrapper)) {
         Add-Failure 'platform-api has pom.xml but Maven Wrapper is missing'
     }

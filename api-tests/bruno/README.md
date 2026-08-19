@@ -21,7 +21,7 @@ $repositoryRoot = git rev-parse --show-toplevel
 Set-Location $repositoryRoot
 docker compose --env-file .env.example -f infra/docker-compose/compose.yaml up -d --wait
 
-Set-Location (Join-Path $repositoryRoot 'services/platform-api')
+Set-Location (Join-Path $repositoryRoot 'services/core-api')
 $env:SPRING_PROFILES_ACTIVE = 'local'
 $env:DEV_BEARER_TOKEN = 'synthetic-local-bearer-token-do-not-reuse'
 $env:DEV_ADMIN_BEARER_TOKEN = 'synthetic-local-admin-bearer-token-do-not-reuse'

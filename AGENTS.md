@@ -37,7 +37,7 @@
 - 跨模块读取通过公开查询接口或明确的只读投影。
 - 每个 API 变更同步更新 OpenAPI 和契约测试。
 - 每个事件变更同步更新 JSON Schema 和兼容性测试。
-- Flyway SQL 只允许存放在 `services/platform-api/src/main/resources/db/migration/`。
+- Flyway SQL 只允许存放在 `services/core-api/src/main/resources/db/migration/`。
 
 ## Delivery Order
 

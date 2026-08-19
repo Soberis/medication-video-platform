@@ -34,7 +34,7 @@
 - `docs/design.md` 只定义视觉方向和信息表达；Web 实现、状态和验收规则由前端体验规范负责。
 - 已批准技术决策进入 `docs/adr/`；详细设计不得覆盖 ADR。
 - API、事件和结构化数据契约进入 `contracts/`，不能只保存在 Markdown 示例中。
-- 数据库结构只通过 `services/platform-api/src/main/resources/db/migration/` 维护。
+- 数据库结构只通过 `services/core-api/src/main/resources/db/migration/` 维护。
 - 架构变化同步更新需求追踪、ADR、契约、实现和测试。
 - 待确认值明确标记 `PENDING`，不得在代码中伪装成批准常量。
 - 不创建同名副本或 `final-final` 文档；当前版本由本 README 和根 README 指向。

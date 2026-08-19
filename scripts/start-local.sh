@@ -142,8 +142,8 @@ elif managed_process_running api; then
 else
     start_managed_process \
         api "Core API" "$api_log_path" \
-        "$PROJECT_ROOT/services/platform-api/mvnw" \
-        -f "$PROJECT_ROOT/services/platform-api/pom.xml" \
+        "$PROJECT_ROOT/services/core-api/mvnw" \
+        -f "$PROJECT_ROOT/services/core-api/pom.xml" \
         -Dspring-boot.run.profiles=local \
         spring-boot:run
     wait_for_core_api
