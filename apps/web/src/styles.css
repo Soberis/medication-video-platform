@@ -1399,34 +1399,6 @@ code {
   font-size: 14px;
 }
 
-.dataset-draft-selection-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 14px 18px;
-  background: #f4f7fc;
-}
-
-.dataset-draft-selection-toolbar strong,
-.dataset-draft-selection-toolbar span {
-  display: block;
-}
-
-.dataset-draft-selection-toolbar span {
-  margin-top: 4px;
-  color: #59677c;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.dataset-draft-selection-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-}
-
 .text-link,
 .breadcrumb a {
   color: #2f5ec4;
@@ -2339,11 +2311,6 @@ code {
   }
 
   .table-footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .dataset-draft-selection-toolbar {
     align-items: flex-start;
     flex-direction: column;
   }

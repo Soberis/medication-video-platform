@@ -329,7 +329,6 @@ interface ApiErrorBody {
 const errorMessages: Record<string, string> = {
   INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
   INVALID_TIME_RANGE: '时间范围无效，开始时间必须早于结束时间。',
-  INVALID_FOLDER_FILTER: '文件夹和未分类筛选不能同时使用。',
   CAPTURE_SESSION_NOT_FOUND: '未找到该配药操作记录，或它不属于当前项目。',
   CLIP_ASSET_NOT_FOUND: '未找到该视频资产，或它不属于当前项目。',
   CAPTURE_EVENT_LOG_NOT_FOUND: '未找到该采集事件日志索引，或它不属于当前项目。',
@@ -358,7 +357,6 @@ const errorMessages: Record<string, string> = {
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   MEDIA_REPORT_NOT_FOUND: '媒体检测报告尚未就绪，请在检测完成后刷新状态。',
   OBJECT_STORAGE_UNAVAILABLE: '对象存储暂时无法签发播放地址，请稍后重试。',
-  INVALID_DATASET_VERSION_REQUEST: '数据集草稿请求参数无效，请检查后重试。',
   INVALID_REQUEST: '筛选条件格式不正确，请检查后重试。',
 }
 
