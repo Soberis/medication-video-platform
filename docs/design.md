@@ -6,11 +6,11 @@
 
 用户是管理护士配药视频数据的项目管理员和项目成员。界面的核心任务是帮助用户快速确认：一次配药操作是否完整、当前处于什么状态、下一步能做什么。
 
-## 设计方向：克制的临床作业台
+## 设计方向：克制的临床作业台 / Clinical Evidence Workbench
 
-界面应像可靠、可追溯的操作记录，而不是监控大屏或消费视频站点。
+界面应像可靠、可追溯的操作记录，而不是监控大屏或消费视频站点。Clinical Evidence Workbench（克制的临床证据工作台）是对既有方向的准确命名，不是另起一套视觉风格。
 
-**状态比装饰重要，证据比印象重要，操作比页面效果重要。**
+**状态比装饰重要，证据比印象重要，下一步操作比视觉效果重要。**
 
 平台的识别性来自当前真实对象关系：`项目 → 视频资产 → 媒体/手部状态 → 配药动作标注 → 复核与清洗`。CaptureSession 和相机流继续作为隐藏的接入事实；只有存在真实顺序或归属时才使用编号、时间线和连线，不增加纯装饰结构。
 
@@ -37,6 +37,52 @@
 - 间距只使用 4 / 8 / 12 / 16 / 24 / 32 的基础刻度；例外必须由可读性或组件约束证明。
 - 圆角分为 small（4px）、default（8px）、large（12px）。表格、筛选和内容面优先使用细边框且不叠加卡片；阴影只用于浮层或确有层级需要的独立面，状态标签不用阴影。
 - 状态标签使用低饱和底色与文字共同表达，不以高饱和大色块抢占视频、状态和下一步操作的阅读顺序。
+
+## Clinical Evidence Workbench 页面骨架
+
+桌面页面优先以如下骨架组织：
+
+```text
+AppShell
+└── PageHeader
+    ├── Optional SummaryStrip
+    ├── Main Working Surface
+    └── Secondary / Technical / Danger Area
+```
+
+不是每页都必须出现全部层级；没有真实统计价值时不放 SummaryStrip，也不为了统一制造空区域。以 1440 × 900 为主要视觉参考，1366 × 768 必须保持可用，1920 × 1080 以上增加有效工作区而不无限拉长正文、放大控件或添加装饰。页面有效内容宜保持约 1360px 的可读上限，主要区域间优先使用现有 24px 间距刻度。
+
+页面只使用三种主要表面语义：
+
+- **Working Surface**：表格、筛选、表单和独立业务区域；白色内容面、细边框、小到中等圆角，默认不用装饰阴影。
+- **Plain Section**：标题、播放器周边和连续业务内容；通过标题、间距和分隔建立层级，不强制加外框。
+- **Semantic Panel**：下一步、真实阻断、高风险提示或须立即关注的结果；使用低饱和语义背景并始终提供文字。
+
+避免形成 `Card → Card → Alert → Tag` 的视觉嵌套。实现优先复用稳定 CSS 语义（如 `working-surface`、`plain-section`、`semantic-panel`、`form-surface`）；只有出现真实重复时才考虑少量 PageHeader、StatusBadge 或 SummaryStrip 的展示组件。Playback Surface、Next Action 和 Evidence Rail 保持领域化，不提前建立通用 UI 框架或 `atoms/`、`molecules/`、`organisms/` 目录。
+
+## 页面模板
+
+- **List Page**：PageHeader → 可选 SummaryStrip → 可选 Filter Surface → Data Table / List Surface。状态和下一步优先，列表行强调事实；Video Management 是当前参考页，不把每个对象做成浮动 Dashboard Card。
+- **Workbench Page**：PageHeader → 主工作台 → 次级技术事实 → 高风险区域。Video Detail 是当前参考页；桌面端主栏可约占 65–72%，侧栏约占 28–35%，但不冻结比例。主栏承载播放器和人工主流程，侧栏承载 Next Action 与 Evidence Rail；实现可在验证可用性后采用稳定侧栏，不作预设承诺。
+- **Form Page**：PageHeader → 有合理最大宽度、左对齐的 Form Surface → 单一提交动作。Local Upload 是当前参考页；760–840px 是可用视觉参考，文件、状态和错误应在同一工作区域表达，不用巨型空白 Card 填满桌面。
+
+## Evidence Rail / 证据轨迹
+
+Evidence Rail 是证据层，不是传统 Stepper：它不暗示所有节点严格串行、价值相同、百分比完成或“前一步完成才可继续”。它帮助用户确认已经成立的事实、辅助证据、人工流程位置、真实阻断与下一步。
+
+主人工链可表达为“接收 → 媒体检测 → 人工质量判断 → 动作标注 → 人工复核 → 清洗”，但节点状态只能来自当前服务端事实，未知时明确显示未知、尚未获取或暂无结果。MediaPipe Hand Candidate 是从媒体检测分出的辅助证据，不是人工质量、标注或训练准入 Gate：`NO_HAND_DETECTED` 是合法完成结果，AI `FAILED` 不得在正式人工流程仍可继续时表现为主链阻断。
+
+## Next Action / 下一步
+
+Next Action 是工作台的决策层，Evidence Rail 是证明该决策的证据层，两者不重复陈述同一状态。它应明确回答“现在最应该做什么”或“为什么当前无需操作”。按钮、可用性和文案必须来自当前权限与业务状态；前端不得为完整视觉制造假操作。
+
+StatusBadge 只用于离散、需快速扫描的业务状态，不用于用户名、时间、技术 ID 或普通说明。它必须有文字，成功状态保持安静，warning / danger 仅表达真实风险。SummaryStrip 只呈现少量、有决策价值的服务端真实汇总，不是 KPI Dashboard，不使用假趋势、完成百分比或浏览器跨页计算；其文案必须保留后端统计的实际语义。
+
+## 导航与负面约束
+
+当前继续采用顶部导航：一级入口有限，视频工作台需要横向空间，Sidebar 不增加真实信息价值。导航高亮反映业务上下文；`/projects/:projectId/assets/:id` 属于“视频管理”子上下文，而非“管理”。
+
+禁止 Glassmorphism、Neumorphism、渐变背景、赛博朋克、霓虹、装饰性 3D、等距 Dashboard、营销 Hero、超大 KPI 卡、假图表、假缩略图、过度阴影、过多彩色标签、嵌套卡片和无意义图标。平台不是消费视频站、实时监控室、营销 SaaS Dashboard 或 Dribbble 概念稿。
 
 ## 信息层级
 
