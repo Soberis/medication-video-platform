@@ -1,6 +1,6 @@
 # 时间基准与多相机同步
 
-> 文档状态：`STRATEGIC_HOLD` 设计参考；不属于 V1.23 P0 runtime 交付，V1.22 继续 DRAFT / DEFERRED
+> 文档状态：`STRATEGIC_HOLD` 设计参考；不属于 V1.24 P0 runtime 交付，V1.22 继续 DRAFT / DEFERRED
 > 适用数据：多相机 RGB 视频；深度、IR、点云和三维标定不属于 P0  
 > 最后更新：2026-08-12
 

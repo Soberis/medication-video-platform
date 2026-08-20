@@ -1,6 +1,6 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.24 FLOW-FIRST P0 自动任务衔接为准：平台对接边端接收，在云端完成视频管理、自动单视频手部预标注、人工质量判断、合格后自动任务分配、配药动作标注复核、数据清洗和管理员确认的最小 `training-data.v2` preview/download。手部预标注与自动任务创建都不替代人工标注、复核和清洗；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按 V1.23 退役，未来多视角同步仍由 V1.22 DRAFT / DEFERRED 和相关专题文档承载。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.24 FLOW-FIRST P0 自动任务衔接为准：平台对接边端接收，在云端完成视频管理、自动单视频手部预标注、人工质量判断、合格后自动任务分配、配药动作标注复核、数据清洗和管理员确认的最小 `training-data.v2` preview/download。手部预标注与自动任务创建都不替代人工标注、复核和清洗；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按独立 Physical Reduction 批次退役，未来多视角同步仍由 V1.22 DRAFT / DEFERRED 和相关专题文档承载。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
 
 ## 当前规范
 
@@ -22,10 +22,10 @@
 | 文档 | 历史用途 |
 | --- | --- |
 | [历史需求追踪矩阵](./requirements-traceability-history.md) | V1.17 及以前的实施记录、证据和历史结论 |
-| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.21 当前规范为准 |
+| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.24 当前规范为准 |
 | [Hand Pose PoC](./history/hand-pose-poc.md) | 历史本地推理参考；不定义当前产品语言 |
 | [Hand Pose Candidate Phase B](./history/hand-pose-candidate-phase-b.md) | 历史候选机制设计；不定义当前范围 |
-| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；单路/批量范围以 V1.21 为准 |
+| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；当前范围以 V1.24 为准 |
 
 ## 维护规则
 

@@ -1,11 +1,11 @@
 # 配药视频数据管理平台：手部预标注优先技术设计
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：对应 V1.23 FLOW-FIRST LEAN-P0 当前实施设计<br>
+> 状态：对应 V1.24 FLOW-FIRST P0 当前实施设计<br>
 > 日期：2026-08-20<br>
-> 对齐需求：[V1.23 配药视频数据管理平台需求文档](../requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)
+> 对齐需求：[V1.24 配药视频数据管理平台需求文档](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
 
-V1.23 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 不属于当前 P0，已按独立 Physical Reduction 批次退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来能力不进入当前单视频闭环。
+V1.24 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出；人工质量结论变为 `QUALIFIED` 时，同一事务自动创建并分配唯一 `AnnotationTask`。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 不属于当前 P0，已按独立 Physical Reduction 批次退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来能力不进入当前单视频闭环。
 
 ## 1. 设计目标与系统边界
 
@@ -152,7 +152,7 @@ sequenceDiagram
 
 规则运行保存输入摘要、规则版本、结果和阻断码。人工例外、复核或重跑必须审计。通过清洗的数据进入可用数据投影。
 
-V1.21 的最小导出由 `tools/minimal-export` 与项目级 API 共同提供；两者只读取数据库权威 `training_data_eligibility` 和 `training_data_candidate_observations` 视图，不复制两套资格 SQL。API 是显式、同步、只读的 `preview/download`，要求全局 `ROLE_ADMIN` 与 ACTIVE 项目 ADMIN membership；非合成 profile 在当前没有正式授权模型时 fail closed。它们在数据库强制只读的 `REPEATABLE READ` 快照中读取当前 `INGESTED + QUALIFIED + APPROVED + Cleaning PASS/SUCCEEDED` 事实，将人工 `AnnotationRevision` 的 `[start_ms, end_ms)` 动作标签与范围内的 MediaPipe 21 点 Candidate 对齐为 `training_data.parquet`。当前 schema 为 `training-data.v2`；每行的 `action_start_ms`、`action_end_ms` 和 `action_label` 直接来自当前人工 `AnnotationRevision.annotation_document.segments`，并满足 `action_start_ms <= timestamp_ms < action_end_ms`。每行必须保留 Candidate 的 `algorithm_key`、`algorithm_version`、`model_sha256` 和 `profile_sha256` provenance；元数据固定 `hand_geometry_is_ground_truth=false` 和坐标系 `normalized_image_xy_and_mediapipe_relative_z`；只保留 Candidate 的 `handedness` 与 `handedness_score`，不提供 generic `confidence` 字段。Preview 的 `training_row_count` 是 Parquet 行数，不是视频数；下载固定 `training_data.parquet`、`no-store` 且不包含 MP4。默认元数据明确 Candidate/handedness 不是 Ground Truth，hand mask 当前不可用时不补造 landmark。当前不新建 DatasetVersion、Export Job、Worker、Queue 或业务表；旧 DatasetVersion/legacy Export 运行面及其未使用数据库对象已由 V65/V66 退役，历史 Flyway 文件和设计文档仅保留演进记录，P0 只保留同步 `training-data.v2` preview/download。
+V1.24 的最小导出由 `tools/minimal-export` 与项目级 API 共同提供；两者只读取数据库权威 `training_data_eligibility` 和 `training_data_candidate_observations` 视图，不复制两套资格 SQL。API 是显式、同步、只读的 `preview/download`，要求全局 `ROLE_ADMIN` 与 ACTIVE 项目 ADMIN membership；非合成 profile 在当前没有正式授权模型时 fail closed。它们在数据库强制只读的 `REPEATABLE READ` 快照中读取当前 `INGESTED + QUALIFIED + APPROVED + Cleaning PASS/SUCCEEDED` 事实，将人工 `AnnotationRevision` 的 `[start_ms, end_ms)` 动作标签与范围内的 MediaPipe 21 点 Candidate 对齐为 `training_data.parquet`。当前 schema 为 `training-data.v2`；每行的 `action_start_ms`、`action_end_ms` 和 `action_label` 直接来自当前人工 `AnnotationRevision.annotation_document.segments`，并满足 `action_start_ms <= timestamp_ms < action_end_ms`。每行必须保留 Candidate 的 `algorithm_key`、`algorithm_version`、`model_sha256` 和 `profile_sha256` provenance；元数据固定 `hand_geometry_is_ground_truth=false` 和坐标系 `normalized_image_xy_and_mediapipe_relative_z`；只保留 Candidate 的 `handedness` 与 `handedness_score`，不提供 generic `confidence` 字段。Preview 的 `training_row_count` 是 Parquet 行数，不是视频数；下载固定 `training_data.parquet`、`no-store` 且不包含 MP4。默认元数据明确 Candidate/handedness 不是 Ground Truth，hand mask 当前不可用时不补造 landmark。当前不新建 DatasetVersion、Export Job、Worker、Queue 或业务表；旧 DatasetVersion/legacy Export 运行面及其未使用数据库对象已由 V65/V66 退役，历史 Flyway 文件和设计文档仅保留演进记录，P0 只保留同步 `training-data.v2` preview/download。
 
 ## 7. 算法评估与容量门禁
 

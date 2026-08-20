@@ -1,0 +1,159 @@
+{
+  "schema_version": "quality-gate-config-v1",
+  "requiredFiles": [
+    "AGENTS.md",
+    "README.md",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".env.example",
+    ".java-version",
+    ".node-version",
+    ".python-version",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "contracts/schemas/capture-session-metadata-v1.schema.json",
+    "contracts/events/media-probe-job-v1.schema.json",
+    "contracts/events/media-probe-result-v1.schema.json",
+    "contracts/events/media-dead-letter-v1.schema.json",
+    "contracts/events/ai-hand-pose-job-v1.schema.json",
+    "contracts/events/ai-hand-pose-result-v2.schema.json",
+    "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
+    "contracts/profiles/media-probe-baseline-v1.json",
+    "contracts/profiles/p0-post-annotation-cleaning-v1.json",
+    "tools/synthetic-upload-client/index.mjs",
+    "tools/synthetic-upload-client/upload-client.mjs",
+    "tools/synthetic-upload-client/synthetic-video.mjs",
+    "tools/synthetic-upload-client/upload-client.test.mjs",
+    "tools/synthetic-upload-client/large-upload-acceptance.mjs",
+    "tools/synthetic-upload-client/large-upload-acceptance.test.mjs",
+    "tools/synthetic-upload-client/README.md",
+    "scripts/check-environment.ps1",
+    "scripts/check-environment.sh",
+    "scripts/quality-gate.ps1",
+    "scripts/quality-gate.sh",
+    "scripts/quality-gate.config.json",
+    "scripts/local-common.sh",
+    "scripts/start-local.ps1",
+    "scripts/start-local.sh",
+    "scripts/start-local.test.mjs",
+    "scripts/status-local.ps1",
+    "scripts/status-local.sh",
+    "scripts/stop-local.ps1",
+    "scripts/stop-local.sh",
+    "workers/media-worker/pyproject.toml",
+    "workers/media-worker/uv.lock",
+    "workers/media-worker/README.md",
+    "workers/media-worker/src/medication_media_worker/__main__.py",
+    "workers/media-worker/src/medication_media_worker/processor.py",
+    "workers/media-worker/src/medication_media_worker/probe.py",
+    "docs/requirements/README.md",
+    "docs/requirements/requirements-manifest.json",
+    "docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md",
+    "docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md",
+    "docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md",
+    "docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md",
+    "docs/requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md",
+    "docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md",
+    "docs/architecture/README.md",
+    "docs/architecture/配药平台技术设计.md",
+    "docs/architecture/requirements-traceability.md",
+    "docs/architecture/domain-model-and-data-ownership.md",
+    "docs/architecture/state-machines.md",
+    "docs/architecture/asynchronous-job-protocol.md",
+    "docs/architecture/timebase-and-multicamera-sync.md",
+    "docs/architecture/security-privacy-retention.md",
+    "docs/architecture/deployment-capacity-and-dr.md",
+    "docs/architecture/web-ux-and-frontend-guidelines.md",
+    "docs/runbooks/large-upload-resume-acceptance.md"
+  ],
+  "jsonContracts": [
+    {
+      "path": "package.json",
+      "success": "package.json is valid JSON",
+      "failure": "package.json is invalid"
+    },
+    {
+      "path": "contracts/schemas/capture-session-metadata-v1.schema.json",
+      "success": "Capture session metadata JSON Schema is valid JSON",
+      "failure": "Capture session metadata JSON Schema is invalid"
+    },
+    {
+      "path": "contracts/events/media-probe-job-v1.schema.json",
+      "success": "Media probe job JSON Schema is valid JSON",
+      "failure": "Media probe job JSON Schema is invalid"
+    },
+    {
+      "path": "contracts/events/media-probe-result-v1.schema.json",
+      "success": "Media probe result JSON Schema is valid JSON",
+      "failure": "Media probe result JSON Schema is invalid"
+    },
+    {
+      "path": "contracts/events/media-dead-letter-v1.schema.json",
+      "success": "Media dead-letter JSON Schema is valid JSON",
+      "failure": "Media dead-letter JSON Schema is invalid"
+    },
+    {
+      "path": "contracts/events/ai-hand-pose-job-v1.schema.json",
+      "success": "AI hand-pose event JSON Schema is valid JSON: ai-hand-pose-job-v1.schema.json",
+      "failure": "AI hand-pose event JSON Schema is invalid (ai-hand-pose-job-v1.schema.json)"
+    },
+    {
+      "path": "contracts/events/ai-hand-pose-result-v2.schema.json",
+      "success": "AI hand-pose event JSON Schema is valid JSON: ai-hand-pose-result-v2.schema.json",
+      "failure": "AI hand-pose event JSON Schema is invalid (ai-hand-pose-result-v2.schema.json)"
+    },
+    {
+      "path": "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
+      "success": "AI hand-pose event JSON Schema is valid JSON: ai-hand-pose-dead-letter-v1.schema.json",
+      "failure": "AI hand-pose event JSON Schema is invalid (ai-hand-pose-dead-letter-v1.schema.json)"
+    }
+  ],
+  "brunoManifest": "api-tests/bruno/medication-platform/bruno.json",
+  "profiles": [
+    {
+      "path": "contracts/profiles/media-probe-baseline-v1.json",
+      "name": "Media probe baseline profile",
+      "expectedDigest": "8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765",
+      "digestSuccess": "Media probe baseline profile digest matches the server contract",
+      "digestFailure": "Media probe baseline profile digest changed unexpectedly"
+    },
+    {
+      "path": "contracts/profiles/p0-post-annotation-cleaning-v1.json",
+      "name": "P0 post-annotation cleaning profile",
+      "expectedDigest": "7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a",
+      "digestSuccess": "P0 post-annotation cleaning profile digest matches the server contract",
+      "digestFailure": "P0 post-annotation cleaning profile digest changed unexpectedly"
+    }
+  ],
+  "brunoRequests": [
+    "api-tests/bruno/medication-platform/System/Health Check.bru",
+    "api-tests/bruno/medication-platform/Uploads/01 Initialize Upload Batch.bru",
+    "api-tests/bruno/medication-platform/Uploads/02 Idempotent Replay.bru",
+    "api-tests/bruno/medication-platform/Uploads/03 Idempotency Conflict.bru",
+    "api-tests/bruno/medication-platform/Uploads/04 Register Upload File.bru",
+    "api-tests/bruno/medication-platform/Uploads/05 Create Multipart Session.bru",
+    "api-tests/bruno/medication-platform/Uploads/06 Authorize Upload Part.bru",
+    "api-tests/bruno/medication-platform/Uploads/07 Get Upload Part Progress.bru",
+    "api-tests/bruno/medication-platform/Uploads/08 Reject Missing Part Confirmation.bru",
+    "api-tests/bruno/medication-platform/Uploads/09 Reconcile Upload Parts.bru",
+    "api-tests/bruno/medication-platform/Uploads/10 Reject Incomplete File Completion.bru",
+    "api-tests/bruno/medication-platform/Uploads/11 Get Upload Batch Progress.bru",
+    "api-tests/bruno/medication-platform/Uploads/12 List Upload File Progress.bru",
+    "api-tests/bruno/medication-platform/Uploads/13 Reject Incomplete Batch Completion.bru",
+    "api-tests/bruno/medication-platform/Uploads/14 Reject Session Ingest Before Batch Completion.bru",
+    "api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru",
+    "api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru",
+    "api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru",
+    "api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru",
+    "api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru",
+    "api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru",
+    "api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru",
+    "api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru"
+  ],
+  "strictRequiredFiles": [
+    "contracts/openapi/openapi.yaml",
+    "api-tests/bruno/medication-platform/bruno.json",
+    "infra/docker-compose/compose.yaml"
+  ]
+}

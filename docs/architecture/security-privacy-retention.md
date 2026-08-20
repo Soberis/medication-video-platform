@@ -76,7 +76,7 @@ V1.6 只向用户展示 `ADMIN` 和 `MEMBER`，但角色只是权限模板：
 
 ### 4.3 职责分离
 
-V1.21 P0 的管理员边界覆盖人工 Review、质量判断、Cleaning 以及 `training-data.v2` preview/download。
+V1.24 P0 的管理员边界覆盖人工 Review、质量判断、Cleaning 以及 `training-data.v2` preview/download。
 Training-data preview/download 是同步只读能力，不创建 DatasetVersion、导出审批、Worker attempt 或导出表；
 调用仍必须同时满足全局 `ROLE_ADMIN`、目标项目 ACTIVE `ADMIN` Membership、项目/资产可见性和审计要求。
 `ROLE_MEMBER` 不得执行这些管理员命令，项目、状态、Candidate provenance 和追加式审计守卫不变。
@@ -90,7 +90,7 @@ Training-data preview/download 是同步只读能力，不创建 DatasetVersion�
 紧急访问必须限时、明确原因、增强审计并事后复核。
 
 历史 DatasetVersion freeze、legacy export approval 和 Export Worker 的权限描述只用于解释既有 Flyway
-记录；相关代码和公开 API 已退役，不属于当前 V1.21 授权面。未来数据库清理或外部共享能力必须另行评审，
+记录；相关代码和公开 API 已退役，不属于当前 V1.24 授权面。未来数据库清理或外部共享能力必须另行评审，
 不能从历史表结构推导当前产品入口。
 
 ## 5. 隐私处理流程（P0 后置）

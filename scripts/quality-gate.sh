@@ -92,6 +92,55 @@ has_changed_path() {
     return 1
 }
 
+quality_gate_config="$PROJECT_ROOT/scripts/quality-gate.config.json"
+if ! node -e '
+const fs = require("node:fs");
+const [file] = process.argv.slice(1);
+try {
+  const config = JSON.parse(fs.readFileSync(file, "utf8"));
+  for (const property of ["requiredFiles", "jsonContracts", "profiles", "brunoRequests", "strictRequiredFiles"]) {
+    if (!Array.isArray(config[property])) {
+      throw new Error(`${property} must be an array`);
+    }
+  }
+  if (typeof config.brunoManifest !== "string") {
+    throw new Error("brunoManifest must be a string");
+  }
+} catch (error) {
+  process.stderr.write(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+' "$quality_gate_config" 2>&1; then
+    add_failure "Quality gate config is invalid: $quality_gate_config"
+    exit 1
+fi
+
+read_config_array() {
+    local property="$1"
+    node -e '
+const fs = require("node:fs");
+const [file, property] = process.argv.slice(1);
+const config = JSON.parse(fs.readFileSync(file, "utf8"));
+const values = config[property];
+process.stdout.write(values.map(String).join("\0") + "\0");
+' "$quality_gate_config" "$property"
+}
+
+read_config_records() {
+    local property="$1"
+    shift
+    node -e '
+const fs = require("node:fs");
+const [file, property, ...fields] = process.argv.slice(1);
+const config = JSON.parse(fs.readFileSync(file, "utf8"));
+const records = config[property];
+const output = records
+  .map((record) => fields.map((field) => String(record[field] ?? "")).join("\t"))
+  .join("\n");
+process.stdout.write(output.length > 0 ? `${output}\n` : "");
+' "$quality_gate_config" "$property" "$@"
+}
+
 validate_json() {
     local relative_path="$1"
     local success_message="$2"
@@ -172,72 +221,10 @@ else
     add_failure "git ls-files failed while scanning repository paths"
 fi
 
-required_files=(
-    'AGENTS.md'
-    'README.md'
-    '.gitignore'
-    '.gitattributes'
-    '.editorconfig'
-    '.env.example'
-    '.java-version'
-    '.node-version'
-    '.python-version'
-    'package.json'
-    'pnpm-workspace.yaml'
-    'contracts/schemas/capture-session-metadata-v1.schema.json'
-    'contracts/events/media-probe-job-v1.schema.json'
-    'contracts/events/media-probe-result-v1.schema.json'
-    'contracts/events/media-dead-letter-v1.schema.json'
-    'contracts/events/ai-hand-pose-job-v1.schema.json'
-    'contracts/events/ai-hand-pose-result-v2.schema.json'
-    'contracts/events/ai-hand-pose-dead-letter-v1.schema.json'
-    'contracts/profiles/media-probe-baseline-v1.json'
-    'contracts/profiles/p0-post-annotation-cleaning-v1.json'
-    'tools/synthetic-upload-client/index.mjs'
-    'tools/synthetic-upload-client/upload-client.mjs'
-    'tools/synthetic-upload-client/synthetic-video.mjs'
-    'tools/synthetic-upload-client/upload-client.test.mjs'
-    'tools/synthetic-upload-client/large-upload-acceptance.mjs'
-    'tools/synthetic-upload-client/large-upload-acceptance.test.mjs'
-    'tools/synthetic-upload-client/README.md'
-    'scripts/check-environment.ps1'
-    'scripts/check-environment.sh'
-    'scripts/quality-gate.ps1'
-    'scripts/quality-gate.sh'
-    'scripts/local-common.sh'
-    'scripts/start-local.ps1'
-    'scripts/start-local.sh'
-    'scripts/start-local.test.mjs'
-    'scripts/status-local.ps1'
-    'scripts/status-local.sh'
-    'scripts/stop-local.ps1'
-    'scripts/stop-local.sh'
-    'workers/media-worker/pyproject.toml'
-    'workers/media-worker/uv.lock'
-    'workers/media-worker/README.md'
-    'workers/media-worker/src/medication_media_worker/__main__.py'
-    'workers/media-worker/src/medication_media_worker/processor.py'
-    'workers/media-worker/src/medication_media_worker/probe.py'
-    'docs/requirements/README.md'
-    'docs/requirements/requirements-manifest.json'
-    'docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md'
-    'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md'
-    'docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md'
-    'docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md'
-    'docs/requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md'
-    'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md'
-    'docs/architecture/README.md'
-    'docs/architecture/配药平台技术设计.md'
-    'docs/architecture/requirements-traceability.md'
-    'docs/architecture/domain-model-and-data-ownership.md'
-    'docs/architecture/state-machines.md'
-    'docs/architecture/asynchronous-job-protocol.md'
-    'docs/architecture/timebase-and-multicamera-sync.md'
-    'docs/architecture/security-privacy-retention.md'
-    'docs/architecture/deployment-capacity-and-dr.md'
-    'docs/architecture/web-ux-and-frontend-guidelines.md'
-    'docs/runbooks/large-upload-resume-acceptance.md'
-)
+required_files=()
+while IFS= read -r -d '' relative_path; do
+    required_files+=("$relative_path")
+done < <(read_config_array requiredFiles)
 
 for relative_path in "${required_files[@]}"; do
     if [[ -f "$PROJECT_ROOT/$relative_path" ]]; then
@@ -247,51 +234,20 @@ for relative_path in "${required_files[@]}"; do
     fi
 done
 
-validate_json \
-    'package.json' \
-    'package.json is valid JSON' \
-    'package.json is invalid'
-validate_json \
-    'contracts/schemas/capture-session-metadata-v1.schema.json' \
-    'Capture session metadata JSON Schema is valid JSON' \
-    'Capture session metadata JSON Schema is invalid'
-validate_json \
-    'contracts/events/media-probe-job-v1.schema.json' \
-    'Media probe job JSON Schema is valid JSON' \
-    'Media probe job JSON Schema is invalid'
-validate_json \
-    'contracts/events/media-probe-result-v1.schema.json' \
-    'Media probe result JSON Schema is valid JSON' \
-    'Media probe result JSON Schema is invalid'
-validate_json \
-    'contracts/events/media-dead-letter-v1.schema.json' \
-    'Media dead-letter JSON Schema is valid JSON' \
-    'Media dead-letter JSON Schema is invalid'
+while IFS=$'\t' read -r relative_path success_message failure_prefix; do
+    [[ -n "$relative_path" ]] || continue
+    validate_json "$relative_path" "$success_message" "$failure_prefix"
+done < <(read_config_records jsonContracts path success failure)
 
-ai_event_contracts=(
-    'ai-hand-pose-job-v1.schema.json'
-    'ai-hand-pose-result-v2.schema.json'
-    'ai-hand-pose-dead-letter-v1.schema.json'
-)
-for contract_name in "${ai_event_contracts[@]}"; do
-    validate_json \
-        "contracts/events/$contract_name" \
-        "AI hand-pose event JSON Schema is valid JSON: $contract_name" \
-        "AI hand-pose event JSON Schema is invalid ($contract_name)"
-done
-
-validate_profile \
-    'contracts/profiles/media-probe-baseline-v1.json' \
-    'Media probe baseline profile' \
-    '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765' \
-    'Media probe baseline profile digest matches the server contract' \
-    'Media probe baseline profile digest changed unexpectedly'
-validate_profile \
-    'contracts/profiles/p0-post-annotation-cleaning-v1.json' \
-    'P0 post-annotation cleaning profile' \
-    '7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a' \
-    'P0 post-annotation cleaning profile digest matches the server contract' \
-    'P0 post-annotation cleaning profile digest changed unexpectedly'
+while IFS=$'\t' read -r relative_path profile_name expected_digest digest_success_message digest_failure_prefix; do
+    [[ -n "$relative_path" ]] || continue
+    validate_profile \
+        "$relative_path" \
+        "$profile_name" \
+        "$expected_digest" \
+        "$digest_success_message" \
+        "$digest_failure_prefix"
+done < <(read_config_records profiles path name expectedDigest digestSuccess digestFailure)
 latest_matches=0
 while IFS= read -r -d '' config_file; do
     while IFS= read -r match; do
@@ -343,38 +299,22 @@ else
     add_skip 'OpenAPI lint: contract skeleton has not been generated yet'
 fi
 
-bruno_collection="$PROJECT_ROOT/api-tests/bruno/medication-platform/bruno.json"
+bruno_manifest="$(node -e '
+const fs = require("node:fs");
+const [file] = process.argv.slice(1);
+process.stdout.write(JSON.parse(fs.readFileSync(file, "utf8")).brunoManifest);
+' "$quality_gate_config")"
+bruno_collection="$PROJECT_ROOT/$bruno_manifest"
 if [[ -f "$bruno_collection" ]]; then
     validate_json \
-        'api-tests/bruno/medication-platform/bruno.json' \
+        "$bruno_manifest" \
         'Bruno collection manifest is valid JSON' \
         'Bruno collection manifest is invalid'
 
-    required_bruno_requests=(
-        'api-tests/bruno/medication-platform/System/Health Check.bru'
-        'api-tests/bruno/medication-platform/Uploads/01 Initialize Upload Batch.bru'
-        'api-tests/bruno/medication-platform/Uploads/02 Idempotent Replay.bru'
-        'api-tests/bruno/medication-platform/Uploads/03 Idempotency Conflict.bru'
-        'api-tests/bruno/medication-platform/Uploads/04 Register Upload File.bru'
-        'api-tests/bruno/medication-platform/Uploads/05 Create Multipart Session.bru'
-        'api-tests/bruno/medication-platform/Uploads/06 Authorize Upload Part.bru'
-        'api-tests/bruno/medication-platform/Uploads/07 Get Upload Part Progress.bru'
-        'api-tests/bruno/medication-platform/Uploads/08 Reject Missing Part Confirmation.bru'
-        'api-tests/bruno/medication-platform/Uploads/09 Reconcile Upload Parts.bru'
-        'api-tests/bruno/medication-platform/Uploads/10 Reject Incomplete File Completion.bru'
-        'api-tests/bruno/medication-platform/Uploads/11 Get Upload Batch Progress.bru'
-        'api-tests/bruno/medication-platform/Uploads/12 List Upload File Progress.bru'
-        'api-tests/bruno/medication-platform/Uploads/13 Reject Incomplete Batch Completion.bru'
-        'api-tests/bruno/medication-platform/Uploads/14 Reject Session Ingest Before Batch Completion.bru'
-        'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru'
-        'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru'
-        'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru'
-        'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru'
-        'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru'
-        'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru'
-        'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru'
-        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
-    )
+    required_bruno_requests=()
+    while IFS= read -r -d '' relative_path; do
+        required_bruno_requests+=("$relative_path")
+    done < <(read_config_array brunoRequests)
     for relative_path in "${required_bruno_requests[@]}"; do
         if [[ -f "$PROJECT_ROOT/$relative_path" ]]; then
             add_pass "Bruno request exists: $relative_path"
@@ -574,19 +514,19 @@ else
             add_failure "uv lock check failed: $project_dir"
         fi
 
-        uv run ruff format --check .
+        uv run --locked ruff format --check .
         if (($? != 0)); then
             project_failed=true
             add_failure "Ruff format check failed: $project_dir"
         fi
 
-        uv run ruff check .
+        uv run --locked ruff check .
         if (($? != 0)); then
             project_failed=true
             add_failure "Ruff failed: $project_dir"
         fi
 
-        uv run python -m mypy .
+        uv run --locked python -m mypy .
         if (($? != 0)); then
             project_failed=true
             add_failure "mypy failed: $project_dir"
@@ -600,7 +540,7 @@ else
             # junction whose session-finish cleanup can fail with access denied.
             pytest_basetemp="$PROJECT_ROOT/.runtime/pytest/${relative_project_dir//\//_}"
             mkdir -p "$pytest_basetemp"
-            uv run python -m pytest "--basetemp=$pytest_basetemp"
+            uv run --locked python -m pytest "--basetemp=$pytest_basetemp"
             if (($? != 0)); then
                 project_failed=true
                 add_failure "pytest failed: $project_dir"
@@ -616,11 +556,10 @@ else
 fi
 
 if $strict; then
-    strict_required_files=(
-        'contracts/openapi/openapi.yaml'
-        'api-tests/bruno/medication-platform/bruno.json'
-        'infra/docker-compose/compose.yaml'
-    )
+    strict_required_files=()
+    while IFS= read -r -d '' relative_path; do
+        strict_required_files+=("$relative_path")
+    done < <(read_config_array strictRequiredFiles)
     for relative_path in "${strict_required_files[@]}"; do
         if [[ -f "$PROJECT_ROOT/$relative_path" ]]; then
             add_pass "Strict required file exists: $relative_path"

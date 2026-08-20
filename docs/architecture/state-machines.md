@@ -248,7 +248,7 @@ V1.6 不暴露隔离命令或查询。历史 `quarantine_record` 仅为不可改
 
 ### 7.3 当前训练数据准入
 
-V1.21 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
+V1.24 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
 旧代码和公开 API 已退役，未使用的旧表已由 V65/V66 forward migration 物理退役；旧状态机仅保留为历史设计说明。
 
 Cleaning PASS 后，`MinimalTrainingDataExportService` 与 `tools/minimal-export` 在只读事务中读取

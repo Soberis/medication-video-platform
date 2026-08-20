@@ -94,6 +94,15 @@ function Test-ChangedPath {
     return @($changedFiles | Where-Object { $_ -eq $RelativePath -or $_.StartsWith($prefix) }).Count -gt 0
 }
 
+$qualityGateConfigPath = Join-Path $root 'scripts/quality-gate.config.json'
+try {
+    $qualityGateConfig = Get-Content -LiteralPath $qualityGateConfigPath -Raw | ConvertFrom-Json
+}
+catch {
+    Add-Failure "Quality gate config is invalid: $($_.Exception.Message)"
+    exit 1
+}
+
 $hardcodedWindowsPaths = @(
     Get-GitRepositoryPaths |
         Where-Object { [System.IO.Path]::GetExtension($_) -notin @('.lock', '.jar', '.class', '.docx') } |
@@ -106,72 +115,7 @@ foreach ($match in $hardcodedWindowsPaths) {
     Add-Failure "Hard-coded local Windows path: ${relativePath}:$($match.LineNumber)"
 }
 
-$requiredFiles = @(
-    'AGENTS.md',
-    'README.md',
-    '.gitignore',
-    '.gitattributes',
-    '.editorconfig',
-    '.env.example',
-    '.java-version',
-    '.node-version',
-    '.python-version',
-    'package.json',
-    'pnpm-workspace.yaml',
-    'contracts/schemas/capture-session-metadata-v1.schema.json',
-    'contracts/events/media-probe-job-v1.schema.json',
-    'contracts/events/media-probe-result-v1.schema.json',
-    'contracts/events/media-dead-letter-v1.schema.json',
-    'contracts/events/ai-hand-pose-job-v1.schema.json',
-    'contracts/events/ai-hand-pose-result-v2.schema.json',
-    'contracts/events/ai-hand-pose-dead-letter-v1.schema.json',
-    'contracts/profiles/media-probe-baseline-v1.json',
-    'contracts/profiles/p0-post-annotation-cleaning-v1.json',
-    'tools/synthetic-upload-client/index.mjs',
-    'tools/synthetic-upload-client/upload-client.mjs',
-    'tools/synthetic-upload-client/synthetic-video.mjs',
-    'tools/synthetic-upload-client/upload-client.test.mjs',
-    'tools/synthetic-upload-client/large-upload-acceptance.mjs',
-    'tools/synthetic-upload-client/large-upload-acceptance.test.mjs',
-    'tools/synthetic-upload-client/README.md',
-    'scripts/check-environment.ps1',
-    'scripts/check-environment.sh',
-    'scripts/quality-gate.ps1',
-    'scripts/quality-gate.sh',
-    'scripts/local-common.sh',
-    'scripts/start-local.ps1',
-    'scripts/start-local.sh',
-    'scripts/start-local.test.mjs',
-    'scripts/status-local.ps1',
-    'scripts/status-local.sh',
-    'scripts/stop-local.ps1',
-    'scripts/stop-local.sh',
-    'workers/media-worker/pyproject.toml',
-    'workers/media-worker/uv.lock',
-    'workers/media-worker/README.md',
-    'workers/media-worker/src/medication_media_worker/__main__.py',
-    'workers/media-worker/src/medication_media_worker/processor.py',
-    'workers/media-worker/src/medication_media_worker/probe.py',
-    'docs/requirements/README.md',
-    'docs/requirements/requirements-manifest.json',
-    'docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md',
-    'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md',
-    'docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md',
-    'docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md',
-    'docs/requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md',
-    'docs/requirements/baselines/V1.13/配药视频数据管理平台需求文档_V1.13.md',
-    'docs/architecture/README.md',
-    'docs/architecture/配药平台技术设计.md',
-    'docs/architecture/requirements-traceability.md',
-    'docs/architecture/domain-model-and-data-ownership.md',
-    'docs/architecture/state-machines.md',
-    'docs/architecture/asynchronous-job-protocol.md',
-    'docs/architecture/timebase-and-multicamera-sync.md',
-    'docs/architecture/security-privacy-retention.md',
-    'docs/architecture/deployment-capacity-and-dr.md',
-    'docs/architecture/web-ux-and-frontend-guidelines.md',
-    'docs/runbooks/large-upload-resume-acceptance.md'
-)
+$requiredFiles = @($qualityGateConfig.requiredFiles)
 
 foreach ($relativePath in $requiredFiles) {
     $path = Join-Path $root $relativePath
@@ -183,99 +127,35 @@ foreach ($relativePath in $requiredFiles) {
     }
 }
 
-try {
-    Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json | Out-Null
-    Add-Pass 'package.json is valid JSON'
-}
-catch {
-    Add-Failure "package.json is invalid: $($_.Exception.Message)"
-}
-
-try {
-    Get-Content -LiteralPath (Join-Path $root 'contracts/schemas/capture-session-metadata-v1.schema.json') -Raw |
-        ConvertFrom-Json | Out-Null
-    Add-Pass 'Capture session metadata JSON Schema is valid JSON'
-}
-catch {
-    Add-Failure "Capture session metadata JSON Schema is invalid: $($_.Exception.Message)"
-}
-
-try {
-    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-probe-job-v1.schema.json') -Raw |
-        ConvertFrom-Json | Out-Null
-    Add-Pass 'Media probe job JSON Schema is valid JSON'
-}
-catch {
-    Add-Failure "Media probe job JSON Schema is invalid: $($_.Exception.Message)"
-}
-
-try {
-    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-probe-result-v1.schema.json') -Raw |
-        ConvertFrom-Json | Out-Null
-    Add-Pass 'Media probe result JSON Schema is valid JSON'
-}
-catch {
-    Add-Failure "Media probe result JSON Schema is invalid: $($_.Exception.Message)"
-}
-
-try {
-    Get-Content -LiteralPath (Join-Path $root 'contracts/events/media-dead-letter-v1.schema.json') -Raw |
-        ConvertFrom-Json | Out-Null
-    Add-Pass 'Media dead-letter JSON Schema is valid JSON'
-}
-catch {
-    Add-Failure "Media dead-letter JSON Schema is invalid: $($_.Exception.Message)"
-}
-
-foreach ($aiEventContract in @(
-    'ai-hand-pose-job-v1.schema.json',
-    'ai-hand-pose-result-v2.schema.json',
-    'ai-hand-pose-dead-letter-v1.schema.json'
-)) {
+foreach ($jsonContract in @($qualityGateConfig.jsonContracts)) {
     try {
-        Get-Content -LiteralPath (Join-Path $root "contracts/events/$aiEventContract") -Raw |
+        Get-Content -LiteralPath (Join-Path $root $jsonContract.path) -Raw |
             ConvertFrom-Json | Out-Null
-        Add-Pass "AI hand-pose event JSON Schema is valid JSON: $aiEventContract"
+        Add-Pass $jsonContract.success
     }
     catch {
-        Add-Failure "AI hand-pose event JSON Schema is invalid ($aiEventContract): $($_.Exception.Message)"
+        Add-Failure "$($jsonContract.failure): $($_.Exception.Message)"
     }
 }
 
-try {
-    $mediaProbeProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/media-probe-baseline-v1.json') -Raw).TrimEnd("`r", "`n")
-    $mediaProbeProfileContent | ConvertFrom-Json | Out-Null
-    Add-Pass 'Media probe baseline profile is valid JSON'
+foreach ($profile in @($qualityGateConfig.profiles)) {
+    try {
+        $profileContent = (Get-Content -LiteralPath (Join-Path $root $profile.path) -Raw).TrimEnd("`r", "`n")
+        $profileContent | ConvertFrom-Json | Out-Null
+        Add-Pass "$($profile.name) is valid JSON"
 
-    $profileBytes = [System.Text.Encoding]::UTF8.GetBytes($mediaProbeProfileContent)
-    $profileDigest = Get-Sha256Hex $profileBytes
-    if ($profileDigest -eq '8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765') {
-        Add-Pass 'Media probe baseline profile digest matches the server contract'
+        $profileBytes = [System.Text.Encoding]::UTF8.GetBytes($profileContent)
+        $profileDigest = Get-Sha256Hex $profileBytes
+        if ($profileDigest -eq $profile.expectedDigest) {
+            Add-Pass $profile.digestSuccess
+        }
+        else {
+            Add-Failure "$($profile.digestFailure): $profileDigest"
+        }
     }
-    else {
-        Add-Failure "Media probe baseline profile digest changed unexpectedly: $profileDigest"
+    catch {
+        Add-Failure "$($profile.name) is invalid: $($_.Exception.Message)"
     }
-}
-catch {
-    Add-Failure "Media probe baseline profile is invalid: $($_.Exception.Message)"
-}
-
-try {
-    $postCleaningProfileContent = (Get-Content -LiteralPath (Join-Path $root 'contracts/profiles/p0-post-annotation-cleaning-v1.json') -Raw).TrimEnd("`r", "`n")
-    $postCleaningProfileContent | ConvertFrom-Json | Out-Null
-    Add-Pass 'P0 post-annotation cleaning profile is valid JSON'
-
-    $postCleaningProfileBytes = [System.Text.Encoding]::UTF8.GetBytes($postCleaningProfileContent)
-    $postCleaningProfileDigest = Get-Sha256Hex $postCleaningProfileBytes
-    if ($postCleaningProfileDigest -eq '7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a') {
-        Add-Pass 'P0 post-annotation cleaning profile digest matches the server contract'
-    }
-    else {
-        Add-Failure "P0 post-annotation cleaning profile digest changed unexpectedly: $postCleaningProfileDigest"
-    }
-}
-catch {
-    Add-Failure "P0 post-annotation cleaning profile is invalid: $($_.Exception.Message)"
 }
 
 function Get-ProjectConfigFiles {
@@ -332,7 +212,7 @@ else {
     Add-Skip 'OpenAPI lint: contract skeleton has not been generated yet'
 }
 
-$brunoCollection = Join-Path $root 'api-tests/bruno/medication-platform/bruno.json'
+$brunoCollection = Join-Path $root $qualityGateConfig.brunoManifest
 if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
     try {
         Get-Content -LiteralPath $brunoCollection -Raw | ConvertFrom-Json | Out-Null
@@ -342,31 +222,7 @@ if (Test-Path -LiteralPath $brunoCollection -PathType Leaf) {
         Add-Failure "Bruno collection manifest is invalid: $($_.Exception.Message)"
     }
 
-    $requiredBrunoRequests = @(
-        'api-tests/bruno/medication-platform/System/Health Check.bru',
-        'api-tests/bruno/medication-platform/Uploads/01 Initialize Upload Batch.bru',
-        'api-tests/bruno/medication-platform/Uploads/02 Idempotent Replay.bru',
-        'api-tests/bruno/medication-platform/Uploads/03 Idempotency Conflict.bru',
-        'api-tests/bruno/medication-platform/Uploads/04 Register Upload File.bru',
-        'api-tests/bruno/medication-platform/Uploads/05 Create Multipart Session.bru',
-        'api-tests/bruno/medication-platform/Uploads/06 Authorize Upload Part.bru',
-        'api-tests/bruno/medication-platform/Uploads/07 Get Upload Part Progress.bru',
-        'api-tests/bruno/medication-platform/Uploads/08 Reject Missing Part Confirmation.bru',
-        'api-tests/bruno/medication-platform/Uploads/09 Reconcile Upload Parts.bru',
-        'api-tests/bruno/medication-platform/Uploads/10 Reject Incomplete File Completion.bru',
-        'api-tests/bruno/medication-platform/Uploads/11 Get Upload Batch Progress.bru',
-        'api-tests/bruno/medication-platform/Uploads/12 List Upload File Progress.bru',
-        'api-tests/bruno/medication-platform/Uploads/13 Reject Incomplete Batch Completion.bru',
-        'api-tests/bruno/medication-platform/Uploads/14 Reject Session Ingest Before Batch Completion.bru',
-        'api-tests/bruno/medication-platform/Uploads/15 Abort Incomplete Batch.bru',
-        'api-tests/bruno/medication-platform/Camera Configuration/01 Provision Camera Channel.bru',
-        'api-tests/bruno/medication-platform/Camera Configuration/02 Configure Camera Set.bru',
-        'api-tests/bruno/medication-platform/Media Jobs/01 Create Media Probe Job (Missing Clip Asset).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/02 Create Media Probe Job (Missing Idempotency-Key).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/03 Get Media Probe Job (Unknown).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/04 Get Media Report (Unknown).bru',
-        'api-tests/bruno/medication-platform/Media Jobs/05 Reject Controlled Replay Without Admin Role.bru'
-    )
+    $requiredBrunoRequests = @($qualityGateConfig.brunoRequests)
     foreach ($relativePath in $requiredBrunoRequests) {
         if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {
             Add-Pass "Bruno request exists: $relativePath"
@@ -552,17 +408,17 @@ else {
                 $projectFailed = $true
                 Add-Failure "uv lock check failed: $projectDir"
             }
-            & uv run ruff format --check .
+            & uv run --locked ruff format --check .
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "Ruff format check failed: $projectDir"
             }
-            & uv run ruff check .
+            & uv run --locked ruff check .
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "Ruff failed: $projectDir"
             }
-            & uv run python -m mypy .
+            & uv run --locked python -m mypy .
             if ($LASTEXITCODE -ne 0) {
                 $projectFailed = $true
                 Add-Failure "mypy failed: $projectDir"
@@ -573,7 +429,7 @@ else {
             else {
                 $basetemp = Get-PythonBasetemp $projectDir
                 New-Item -ItemType Directory -Force -Path $basetemp | Out-Null
-                & uv run python -m pytest "--basetemp=$basetemp"
+                & uv run --locked python -m pytest "--basetemp=$basetemp"
                 if ($LASTEXITCODE -ne 0) {
                     $projectFailed = $true
                     Add-Failure "pytest failed: $projectDir"
@@ -588,11 +444,7 @@ else {
 }
 
 if ($Strict) {
-    foreach ($relativePath in @(
-        'contracts/openapi/openapi.yaml',
-        'api-tests/bruno/medication-platform/bruno.json',
-        'infra/docker-compose/compose.yaml'
-    )) {
+    foreach ($relativePath in @($qualityGateConfig.strictRequiredFiles)) {
         $path = Join-Path $root $relativePath
         if (Test-Path -LiteralPath $path -PathType Leaf) {
             Add-Pass "Strict required file exists: $relativePath"

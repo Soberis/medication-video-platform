@@ -257,7 +257,7 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
   `WARNING` 应说明仍需处理或批准例外且不会自动准入；`REJECT` 应说明当前 revision 不具备后续
   准入条件，但视频资产未被删除。
 - post-clean `PASS` 的界面文案只能是“当前规则检查通过”，不得写成“已进入训练集”或自动跳转
-  `/datasets`。V1.21 只允许管理员显式运行独立只读工具生成最小 Parquet；DatasetVersion UI、复杂 Export 和自动导出继续 DEFERRED。
+  `/datasets`。V1.24 只允许管理员显式运行独立只读工具生成最小 Parquet；DatasetVersion UI、复杂 Export 和自动导出继续 DEFERRED。
 - 管理员可对已完成且 `APPROVED` 的 revision 点击“重新核对清洗”。服务端按当前人工质量版本、视频事实和
   不可变标注文档决定是否产生新 run/result；输入未变化时返回既有结果，前端不得伪造新结果或把该操作写成
   “已进入训练集”。

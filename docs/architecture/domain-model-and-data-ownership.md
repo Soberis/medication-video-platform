@@ -8,7 +8,7 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前业务事实来源是 V1.21；未变更条款按需求基线继承历史版本。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、两级角色和视频标注的已批准领域边界；AssetFolder、CaptureEventLog 和 DatasetVersion/legacy Export 的旧运行面已由 V65/V66 退役，历史设计只作为演进记录保留。
+当前业务事实来源是 V1.24；未变更条款按需求基线继承历史版本。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、两级角色和视频标注的已批准领域边界；AssetFolder、CaptureEventLog 和 DatasetVersion/legacy Export 的旧运行面已由 V65/V66 退役，历史设计只作为演进记录保留。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
 
@@ -280,7 +280,7 @@ flowchart LR
 
 ## 9. `datasetexport`（当前最小导出；历史 DatasetVersion/Export 设计参考）
 
-V1.21 当前实现只拥有 `training_data_eligibility`、`training_data_candidate_observations` 的只读投影和最小 `training-data.v2` preview/download。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
+V1.24 当前实现只拥有 `training_data_eligibility`、`training_data_candidate_observations` 的只读投影和最小 `training-data.v2` preview/download。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
 
 ### 9.1 所有权
 
