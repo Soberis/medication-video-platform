@@ -2,12 +2,7 @@ import { Alert, App as AntdApp, Button } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
-import {
-  AnnotationTaskApiError,
-  createAnnotationTask,
-  listAnnotationTasks,
-  type AnnotationTask,
-} from '@/api/annotation'
+import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
 import {
   authorizeClipAssetPlayback,
   CatalogApiError,
@@ -24,12 +19,7 @@ import {
   type HandPoseJob,
   type HandPoseCandidateResponse,
 } from '@/api/catalog'
-import {
-  getProject,
-  listProjectMemberships,
-  type ProjectMembership,
-  type ProjectRole,
-} from '@/api/projects'
+import { getProject, type ProjectRole } from '@/api/projects'
 import {
   getQualityReview,
   QualityReviewApiError,
@@ -129,13 +119,10 @@ export default function AssetDetailView() {
   const [selectedQualityReason, setSelectedQualityReason] =
     useState<QualityReviewReasonCode>('MEETS_REQUIREMENTS')
   const [isSavingQuality, setIsSavingQuality] = useState(false)
-  const [annotationAssignees, setAnnotationAssignees] = useState<ProjectMembership[]>([])
-  const [selectedAnnotationAssignee, setSelectedAnnotationAssignee] = useState('')
   const [annotationTask, setAnnotationTask] = useState<AnnotationTask | null>(null)
   const [annotationTaskLoadState, setAnnotationTaskLoadState] = useState<
     'idle' | 'loading' | 'success' | 'error'
   >('idle')
-  const [isCreatingAnnotationTask, setIsCreatingAnnotationTask] = useState(false)
   const [handPoseJob, setHandPoseJob] = useState<HandPoseJob | null>(null)
   const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(
     null,
@@ -162,19 +149,10 @@ export default function AssetDetailView() {
   const canReviewQuality = projectRole !== null && detail?.status === 'INGESTED'
   const hasCurrentQualifiedQuality =
     qualityLoadState === 'success' && qualityReview?.decision === 'QUALIFIED'
-  const canCreateAnnotationTask =
-    projectRole === 'ADMIN' &&
-    detail?.status === 'INGESTED' &&
-    hasCurrentQualifiedQuality &&
-    annotationAssignees.length > 0 &&
-    annotationTaskLoadState === 'success' &&
-    annotationTask === null
   const canShowAnnotationTaskCard =
-    projectRole === 'ADMIN' &&
     detail?.status === 'INGESTED' &&
     hasCurrentQualifiedQuality &&
-    annotationTaskLoadState === 'success' &&
-    (annotationTask !== null || annotationAssignees.length > 0)
+    annotationTaskLoadState === 'success'
   const canRequestHandPose =
     projectRole !== null &&
     detail?.status === 'INGESTED' &&
@@ -246,12 +224,10 @@ export default function AssetDetailView() {
               : annotationTask === null
                 ? {
                     label: '人工标注',
-                    state: projectRole === 'ADMIN' ? 'current' : 'waiting',
-                    status: projectRole === 'ADMIN' ? '待创建' : '待分配',
+                    state: 'waiting',
+                    status: '已自动分配',
                     detail:
-                      projectRole === 'ADMIN'
-                        ? '质量合格后由管理员分配任务'
-                        : '等待管理员分配标注任务',
+                      '质量合格后系统自动分配给质量确认人；请在任务列表查看当前账号可见任务。',
                   }
                 : annotationTask.annotation_revision?.review?.decision === 'REJECTED'
                   ? {
@@ -418,26 +394,26 @@ export default function AssetDetailView() {
         interactive: projectRole === 'ADMIN',
       }
     }
-    if (
-      qualityReview?.decision === 'QUALIFIED' &&
-      canCreateAnnotationTask &&
-      annotationTask === null
-    ) {
+    if (qualityReview?.decision === 'QUALIFIED' && annotationTaskLoadState !== 'success') {
       return {
-        title: '进入人工标注',
-        description: '选择项目成员并创建正式人工标注任务。',
-        buttonLabel: '下一步：进入人工标注',
-        kind: 'scroll',
-        interactive: true,
+        title: annotationTaskLoadState === 'error' ? '暂时无法确认标注任务' : '正在确认标注任务',
+        description:
+          annotationTaskLoadState === 'error'
+            ? '质量结论已合格，请刷新状态后确认系统自动分配的标注任务。'
+            : '质量结论已合格，系统正在读取自动分配的标注任务。',
+        buttonLabel: '确认标注任务',
+        kind: 'none',
+        interactive: false,
       }
     }
     if (qualityReview?.decision === 'QUALIFIED' && annotationTask === null) {
       return {
-        title: '等待进入人工标注',
-        description: '当前视频已合格，等待项目管理员创建并分配正式人工标注任务。',
-        buttonLabel: '等待人工标注',
-        kind: 'none',
-        interactive: false,
+        title: '标注任务已自动分配',
+        description:
+          '质量合格后系统会自动分配任务给质量确认人；可进入任务列表查看当前账号可见的任务。',
+        buttonLabel: '查看标注任务',
+        kind: 'navigate',
+        interactive: true,
       }
     }
     if (annotationTask) {
@@ -511,9 +487,9 @@ export default function AssetDetailView() {
       interactive: true,
     }
   }, [
-    canCreateAnnotationTask,
     canParticipateInTrainingDataExport,
     annotationTask,
+    annotationTaskLoadState,
     detail,
     qualityLoadState,
     qualityReview,
@@ -636,6 +612,12 @@ export default function AssetDetailView() {
         response.job.status === 'SUCCEEDED'
       ) {
         void message.success('手部检测完成')
+      }
+      if (
+        (previousStatus === 'QUEUED' || previousStatus === 'RUNNING') &&
+        response.job.status === 'FAILED'
+      ) {
+        void message.error('手部检测失败，可继续人工处理。')
       }
       handPoseJobRef.current = response.job
       setHandPoseJob(response.job)
@@ -839,19 +821,6 @@ export default function AssetDetailView() {
       const project = await getProject(projectId, request.signal)
       if (roleRequest.current !== request) return
       setProjectRole(project.current_role)
-      if (project.current_role !== 'ADMIN') {
-        setAnnotationAssignees([])
-        setSelectedAnnotationAssignee('')
-        return
-      }
-      const memberships = await listProjectMemberships(projectId, request.signal)
-      if (request.signal.aborted || roleRequest.current !== request) return
-      setAnnotationAssignees(memberships)
-      setSelectedAnnotationAssignee((current) =>
-        memberships.some((membership) => membership.actor_id === current)
-          ? current
-          : (memberships[0]?.actor_id ?? ''),
-      )
     } catch {
       if (!request.signal.aborted && roleRequest.current === request) setProjectRole(null)
     } finally {
@@ -1036,14 +1005,18 @@ export default function AssetDetailView() {
     setQualityErrorCode('')
     setQualityErrorMessage('')
     try {
-      setQualityReview(
-        await recordQualityReview(projectId, assetId, {
-          decision: selectedQualityDecision,
-          reason_code: selectedQualityReason,
-          expected_version: qualityReview.version,
-        }),
-      )
-      void message.success('质量结论已保存。')
+      const saved = await recordQualityReview(projectId, assetId, {
+        decision: selectedQualityDecision,
+        reason_code: selectedQualityReason,
+        expected_version: qualityReview.version,
+      })
+      setQualityReview(saved)
+      if (saved.decision === 'QUALIFIED') {
+        await loadAnnotationTask()
+        void message.success('质量结论已保存，标注任务已自动创建并分配。')
+      } else {
+        void message.success('质量结论已保存。')
+      }
     } catch (error) {
       setQualityErrorCode(
         error instanceof QualityReviewApiError ? error.errorCode : 'QUALITY_REVIEW_FAILED',
@@ -1053,29 +1026,6 @@ export default function AssetDetailView() {
       )
     } finally {
       setIsSavingQuality(false)
-    }
-  }
-  async function createTask() {
-    if (!canCreateAnnotationTask || !selectedAnnotationAssignee || isCreatingAnnotationTask) return
-    setIsCreatingAnnotationTask(true)
-    setActionErrorCode('')
-    setActionErrorMessage('')
-    try {
-      setAnnotationTask(await createAnnotationTask(projectId, assetId, selectedAnnotationAssignee))
-      void message.success('配药动作标注已创建并分配。')
-    } catch (error) {
-      setActionErrorCode(
-        error instanceof AnnotationTaskApiError
-          ? error.errorCode
-          : 'ANNOTATION_TASK_REQUEST_FAILED',
-      )
-      setActionErrorMessage(
-        error instanceof AnnotationTaskApiError
-          ? error.message
-          : '配药动作标注暂未创建，请稍后重试。',
-      )
-    } finally {
-      setIsCreatingAnnotationTask(false)
     }
   }
   async function requestHandPose() {
@@ -1252,15 +1202,7 @@ export default function AssetDetailView() {
                     }}
                   />
                   {canShowAnnotationTaskCard ? (
-                    <AnnotationTaskCard
-                      assignees={annotationAssignees}
-                      createdTask={annotationTask}
-                      isCreating={isCreatingAnnotationTask}
-                      projectId={projectId}
-                      selectedAssignee={selectedAnnotationAssignee}
-                      onCreate={() => void createTask()}
-                      onSelectedAssigneeChange={setSelectedAnnotationAssignee}
-                    />
+                    <AnnotationTaskCard createdTask={annotationTask} projectId={projectId} />
                   ) : null}
                 </section>
               </section>

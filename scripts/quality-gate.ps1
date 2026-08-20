@@ -154,6 +154,7 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/probe.py',
     'docs/requirements/README.md',
     'docs/requirements/requirements-manifest.json',
+    'docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md',
     'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md',
     'docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md',
     'docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md',

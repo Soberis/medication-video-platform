@@ -2993,7 +2993,10 @@ paths:
         Requires an ACTIVE ADMIN or MEMBER membership. The asset must be undeleted and INGESTED.
         expected_version is 0 for an unreviewed asset and must match the current review version for
         a revision. Repeating the same conclusion returns the current fact without another audit
-        event. A changed conclusion is written atomically with an append-only audit event.
+        event. A changed conclusion is written atomically with an append-only audit event. A new or changed
+        QUALIFIED conclusion also atomically creates exactly one AnnotationTask assigned to the qualifying
+        member and appends its audit evidence. That task never creates an AnnotationRevision, Review,
+        Cleaning result or training-data eligibility; those remain separately guarded human/system facts.
       security:
         - sessionCookie: []
       parameters:

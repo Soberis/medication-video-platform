@@ -11,7 +11,7 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md`：当前正式业务需求基线（FLOW-FIRST LEAN-P0 Physical Reduction）；未覆盖条款继承 V1.21、V1.20、V1.18 及其历史继承基线。V1.22 多视角草案继续为 DRAFT / DEFERRED，不覆盖 V1.23。
+2. `docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md`：当前正式业务需求基线（FLOW-FIRST P0 自动任务衔接）；未覆盖条款继承 V1.23、V1.21、V1.20、V1.18 及其历史继承基线。V1.22 多视角草案继续为 DRAFT / DEFERRED，不覆盖 V1.24。
 3. `docs/architecture/video-hand-pose-mvp-technical-design.md`：当前云端数据闭环、手部预标注、状态、容量和实施顺序设计。
 4. `docs/adr/`：已经冻结的技术决策。
 5. `docs/architecture/` 中标记为“当前规范”的专题详细设计。

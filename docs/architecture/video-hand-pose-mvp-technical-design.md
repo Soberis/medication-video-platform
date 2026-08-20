@@ -101,7 +101,7 @@ GET  /api/v1/projects/{projectId}/training-data/download
 
 `video_id` 是现有 `clip_asset_id` 的产品别名，数据库不新增第二个视频 ID。新增 API 必须同步更新 OpenAPI、契约测试和 Web client。列表固定使用 `ORDER BY received_at DESC, clip_asset_id DESC`，cursor 编码这两个字段；默认 50、最大 100 条。筛选条件放入 URL，以便恢复和分享。对象键、内部 UUID、队列、Worker、模型位置和预签名 URL 不返回普通页面。
 
-P0 只定义单视频 `POST .../{videoId}/hand-pose-detections`。项目成员与管理员均可对有权访问、已入库、未删除且 `enabled_for_hand_detection=true` 的视频提交幂等请求；管理员另负责模型、相机启用设置和未来自动策略配置。P1 批量 API 必须在容量评审后另行冻结，届时明确最大 `video_id` 数、逐项结果、部分成功语义、权限拒绝行为和 batch/idempotency key 作用域；在此之前不创建半定义接口。
+P0 在每个视频成功进入 `INGESTED` 后自动提交一条以 `clip_asset_id` 为作用域的幂等 MediaPipe 请求；调度在入库事务提交后以独立事务执行，调度/容量/派发失败不得回写已成功的媒体状态。项目成员与管理员仍可对有权访问、已入库、未删除且 `enabled_for_hand_detection=true` 的视频提交同一单视频幂等请求，以便受控恢复；这不是批量接口或可配置策略。P1 批量 API 或自动策略配置必须在容量评审后另行冻结，届时明确最大 `video_id` 数、逐项结果、部分成功语义、权限拒绝行为和 batch/idempotency key 作用域；在此之前不创建半定义接口。
 
 ## 5. MediaPipe 预标注与人工标注
 
@@ -137,6 +137,8 @@ sequenceDiagram
 视频来自固定舱内相机。标签 schema 和标注指南版本化；动作类别、时间段与属性由获批准的 schema 定义，代码不写死医学/业务动作词表。
 
 标注界面在同一播放器中展示原视频、可选 Overlay 和候选。标注员可保存草稿、提交 revision；复核员通过或退回。退回后创建新 revision，旧 revision 不覆盖。没有手部候选或候选质量差时，人工仍可标注。
+
+当 ACTIVE 项目成员把已入库视频的人工质量结论新建或修订为 `QUALIFIED` 时，`qualitycleaning` 在同一数据库事务发布内部 `QualityReviewQualifiedEvent`。`annotationreview` 在提交前重新锁定视频和当前质量事实，并且仅在该版本仍为 `QUALIFIED`、视频不存在任务时，创建唯一的 P0 `AnnotationTask`，分配给作出该质量结论的成员。质量结论、任务和两项审计事实一起提交或回滚；同结论幂等重试、非合格结论和已有任务都不重复创建或改派。该内部事件不携带标注内容、不经过队列、不增加公开 API 或表；它只消除“质量合格后仍需手动补建任务”的空档，绝不替代人工 revision、独立 Review 或 Cleaning。
 
 ## 6. 数据清洗、可用数据与最小导出
 

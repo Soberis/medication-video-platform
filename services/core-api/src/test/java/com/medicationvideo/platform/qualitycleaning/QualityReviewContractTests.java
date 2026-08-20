@@ -35,6 +35,8 @@ class QualityReviewContractTests {
 
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
+	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
+
 	private static final String SHA256 = "a".repeat(64);
 
 	private static final Instant BASE_TIME = Instant.parse("2026-07-22T01:00:00Z");
@@ -84,11 +86,22 @@ class QualityReviewContractTests {
 			.andExpect(jsonPath("$.version").value(0));
 
 		assertEquals(1, count("SELECT count(*) FROM quality_review WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(1, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, this.jdbcTemplate.queryForObject("""
+				SELECT assignee_actor_id FROM annotation_task WHERE clip_asset_id = ?
+				""", String.class, clipAssetId));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE request_id = ?
 				  AND action = 'CLIP_ASSET_QUALITY_REVIEWED'
 				  AND reason_code = 'MEETS_REQUIREMENTS'
+				  AND authorization_reference = 'PROJECT_MEMBERSHIP_MEMBER'
+				""", requestId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE request_id = ?
+				  AND action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
+				  AND reason_code = 'AUTO_AFTER_QUALITY_QUALIFIED'
 				  AND authorization_reference = 'PROJECT_MEMBERSHIP_MEMBER'
 				""", requestId));
 	}
@@ -105,6 +118,7 @@ class QualityReviewContractTests {
 			.andExpect(jsonPath("$.error_code").value("QUALITY_REVIEW_NOT_READY"));
 
 		assertEquals(0, count("SELECT count(*) FROM quality_review WHERE project_id = ?", PROJECT_ID));
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE project_id = ?", PROJECT_ID));
 	}
 
 	@Test
@@ -125,6 +139,33 @@ class QualityReviewContractTests {
 				WHERE object_type = 'QualityReview'
 				  AND details_json ->> 'clip_asset_id' = ?
 				""", clipAssetId.toString()));
+		assertEquals(1, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
+				  AND details_json ->> 'clip_asset_id' = ?
+				""", clipAssetId.toString()));
+	}
+
+	@Test
+	void requalifyingDoesNotDuplicateOrReassignTheExistingAutomaticTask() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+
+		record(clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 0).andExpect(status().isOk());
+		record(clipAssetId, "REJECTED", "WRONG_SCENE", 0).andExpect(status().isOk())
+			.andExpect(jsonPath("$.version").value(1));
+		record(ADMIN_TOKEN, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 1).andExpect(status().isOk())
+			.andExpect(jsonPath("$.version").value(2));
+
+		assertEquals(1, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, this.jdbcTemplate.queryForObject("""
+				SELECT assignee_actor_id FROM annotation_task WHERE clip_asset_id = ?
+				""", String.class, clipAssetId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
+				  AND details_json ->> 'clip_asset_id' = ?
+				""", clipAssetId.toString()));
 	}
 
 	@Test
@@ -142,13 +183,17 @@ class QualityReviewContractTests {
 
 	private org.springframework.test.web.servlet.ResultActions record(UUID clipAssetId, String decision,
 			String reasonCode, long expectedVersion) throws Exception {
-		return this.mockMvc
-			.perform(put(path(), PROJECT_ID, clipAssetId).header("Authorization", "Bearer " + MEMBER_TOKEN)
-				.header("X-Request-Id", "quality-review-" + UUID.randomUUID())
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-						{"decision":"%s","reason_code":"%s","expected_version":%d}
-						""".formatted(decision, reasonCode, expectedVersion)));
+		return record(MEMBER_TOKEN, clipAssetId, decision, reasonCode, expectedVersion);
+	}
+
+	private org.springframework.test.web.servlet.ResultActions record(String token, UUID clipAssetId, String decision,
+			String reasonCode, long expectedVersion) throws Exception {
+		return this.mockMvc.perform(put(path(), PROJECT_ID, clipAssetId).header("Authorization", "Bearer " + token)
+			.header("X-Request-Id", "quality-review-" + UUID.randomUUID())
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+					{"decision":"%s","reason_code":"%s","expected_version":%d}
+					""".formatted(decision, reasonCode, expectedVersion)));
 	}
 
 	private UUID insertClipAsset(UUID projectId, String status, boolean deleted) {
@@ -199,6 +244,7 @@ class QualityReviewContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM quality_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM clip_asset WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update(

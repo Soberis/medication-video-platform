@@ -93,6 +93,8 @@ test('help documents controlled restart options', posixOnly, async () => {
 
   assert.equal(result.code, 0)
   assert.match(result.stdout, /--restart-api/)
+  assert.match(result.stdout, /--media-worker-concurrency/)
+  assert.match(result.stdout, /--ai-worker-concurrency/)
 })
 
 test('default startup keeps Media Worker enabled without a compatibility flag', async () => {
@@ -109,6 +111,24 @@ test('default startup keeps Media Worker enabled without a compatibility flag', 
   assert.match(powershellSource, /uv run --directory workers\/media-worker media-worker/)
 })
 
+test('local startup defaults to two bounded worker replicas', async () => {
+  const [source, powershellSource] = await Promise.all([
+    readFile(scriptPath, 'utf8'),
+    readFile(powershellScriptPath, 'utf8'),
+  ])
+
+  assert.match(source, /--media-worker-concurrency COUNT/)
+  assert.match(source, /--ai-worker-concurrency COUNT/)
+  assert.match(source, /media_worker_concurrency=2/)
+  assert.match(source, /ai_worker_concurrency=2/)
+  assert.match(source, /worker_index <= media_worker_concurrency/)
+  assert.match(source, /worker_index <= ai_worker_concurrency/)
+  assert.match(powershellSource, /\[int\]\$MediaWorkerConcurrency = 2/)
+  assert.match(powershellSource, /\[int\]\$AiWorkerConcurrency = 2/)
+  assert.match(powershellSource, /\$workerIndex -le \$MediaWorkerConcurrency/)
+  assert.match(powershellSource, /\$workerIndex -le \$AiWorkerConcurrency/)
+})
+
 test('infrastructure-only startup exits before Media Worker startup', async () => {
   const [source, powershellSource] = await Promise.all([
     readFile(scriptPath, 'utf8'),
@@ -117,7 +137,7 @@ test('infrastructure-only startup exits before Media Worker startup', async () =
   const infrastructureOnlyExit = source.indexOf('if $infrastructure_only; then')
   const mediaWorkerStartup = source.indexOf('uv run --directory "$PROJECT_ROOT/workers/media-worker" media-worker')
   const powershellInfrastructureOnlyExit = powershellSource.indexOf('if ($InfrastructureOnly) {')
-  const powershellMediaWorkerStartup = powershellSource.indexOf("Start-LocalProcess 'worker'")
+  const powershellMediaWorkerStartup = powershellSource.indexOf('Start-LocalProcess $workerKey')
 
   assert.notEqual(infrastructureOnlyExit, -1)
   assert.notEqual(mediaWorkerStartup, -1)
@@ -149,6 +169,13 @@ test('start-local rejects unknown arguments', posixOnly, async () => {
 
   assert.equal(result.code, 2)
   assert.match(result.stderr, /Unknown option: --unknown-option/)
+})
+
+test('start-local rejects invalid worker replica counts before startup', posixOnly, async () => {
+  const result = await runStartLocal('--media-worker-concurrency', '0')
+
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /--media-worker-concurrency must be an integer from 1 to 8/)
 })
 
 test('infrastructure-only mode rejects application restart options', posixOnly, async () => {

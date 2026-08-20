@@ -1,17 +1,17 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.23 FLOW-FIRST LEAN-P0 为准：平台对接边端接收，在云端完成视频管理、单视频手部预标注、配药动作标注复核、数据清洗和最小 `training-data.v2` preview/download。手部预标注优先建设，但不替代人工标注和清洗；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按 V1.23 退役，未来多视角同步仍由 V1.22 DRAFT / DEFERRED 和相关专题文档承载。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.24 FLOW-FIRST P0 自动任务衔接为准：平台对接边端接收，在云端完成视频管理、自动单视频手部预标注、人工质量判断、合格后自动任务分配、配药动作标注复核、数据清洗和管理员确认的最小 `training-data.v2` preview/download。手部预标注与自动任务创建都不替代人工标注、复核和清洗；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按 V1.23 退役，未来多视角同步仍由 V1.22 DRAFT / DEFERRED 和相关专题文档承载。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
 | [配药视频数据管理平台：手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md) | 当前边端对接边界、云端主链、状态、容量和验收 |
-| [当前需求追踪矩阵](./requirements-traceability.md) | V1.23 当前 FR 到模块、契约、测试和状态 |
+| [当前需求追踪矩阵](./requirements-traceability.md) | V1.24 当前 FR 到模块、契约、测试和状态 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |
-| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | 未来多视角同步约束参考；V1.23 不交付 CaptureSync runtime，V1.22 继续 DEFERRED |
+| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | 未来多视角同步约束参考；V1.24 不交付 CaptureSync runtime，V1.22 继续 DEFERRED |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |

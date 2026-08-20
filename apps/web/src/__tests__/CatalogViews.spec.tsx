@@ -169,48 +169,41 @@ describe('catalog views', () => {
     expect(await screen.findByText(/媒体检测已恢复为第 2 次尝试/)).toBeInTheDocument()
   })
 
-  it('lets an administrator create one task only after the video is human-qualified', async () => {
-    const membership = {
-      membership_id: 'd0000000-0000-4000-8000-000000000001',
-      project_id: projectId,
-      actor_id: 'local-synthetic-uploader',
-      role: 'MEMBER',
-      status: 'ACTIVE',
-      version: 0,
-      updated_at: '2026-07-23T01:00:00Z',
-    }
+  it('automatically creates and assigns one task when a member records a qualified conclusion', async () => {
     const fetchMock = stubAsset({
-      role: 'ADMIN',
+      role: 'MEMBER',
       status: 'INGESTED',
       mediaReport: verifiedMediaReport(),
-      quality: {
-        ...unreviewedQuality(),
-        quality_review_id: 'c0000000-0000-4000-8000-000000000001',
-        decision: 'QUALIFIED',
-        reason_code: 'MEETS_REQUIREMENTS',
-        reviewed_by: 'local-synthetic-uploader',
-        reviewed_at: '2026-07-23T01:00:00Z',
-      },
-      memberships: [membership],
-      annotationTask: true,
+      quality: unreviewedQuality(),
+      autoAssignedAfterQuality: true,
     })
     const user = userEvent.setup()
-    renderAssetDetail()
-    expect(
-      await screen.findByText('该视频已通过人工质量判断。请选择项目成员并创建配药动作标注。'),
-    ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '创建配药动作标注' }))
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    await user.click(await screen.findByRole('button', { name: '保存质量结论' }))
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/clip-assets/${assetId}/annotation-tasks`,
+        `/api/v1/projects/${projectId}/clip-assets/${assetId}/quality-review`,
         expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ assignee_actor_id: 'local-synthetic-uploader' }),
+          method: 'PUT',
+          body: JSON.stringify({
+            decision: 'QUALIFIED',
+            reason_code: 'MEETS_REQUIREMENTS',
+            expected_version: 0,
+          }),
         }),
       ),
     )
     expect(await screen.findByText('已创建并分配')).toBeInTheDocument()
-    expect(screen.getByText('执行人：local-synthetic-uploader')).toBeInTheDocument()
+    expect(screen.getByText('执行人：reviewer')).toBeInTheDocument()
+    expect(screen.getByText(/系统已自动分配/)).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith(`/api/v1/projects/${projectId}/annotation-tasks`) &&
+          init?.method === 'POST',
+      ),
+    ).toBe(false)
   })
 
   it('renders persisted annotation, human review and cleaning facts after a detail refresh', async () => {
@@ -434,6 +427,46 @@ describe('catalog views', () => {
     expect(detailReads).toBe(2)
   })
 
+  it('notifies when a running hand-pose job fails without blocking manual quality review', async () => {
+    vi.useFakeTimers()
+    let handPoseReads = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`)
+        return Promise.resolve(jsonResponse(project('MEMBER')))
+      if (url === `/api/v1/projects/${projectId}/clip-assets/${assetId}`)
+        return Promise.resolve(jsonResponse(assetDetail('INGESTED')))
+      if (url.endsWith('/media-report')) return Promise.resolve(jsonResponse(verifiedMediaReport()))
+      if (url.endsWith('/quality-review')) return Promise.resolve(jsonResponse(unreviewedQuality()))
+      if (url.endsWith('/annotation-tasks'))
+        return Promise.resolve(jsonResponse(emptyAnnotationTaskList()))
+      if (url.endsWith('/hand-pose-candidates')) {
+        handPoseReads += 1
+        return Promise.resolve(
+          jsonResponse({
+            job: handPoseReads === 1 ? runningHandPoseJob() : failedHandPoseJob(true),
+            candidates: [],
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse(assetDetail('INGESTED')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText('手部检测中')).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500)
+    })
+
+    expect(screen.getByText('手部检测失败')).toBeInTheDocument()
+    expect(screen.getByText('手部检测失败，可继续人工处理。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+  })
+
   it('keeps the human quality step when MediaPipe finds no hand', async () => {
     stubAsset({
       role: 'MEMBER',
@@ -457,7 +490,6 @@ function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER
 function stubAsset(options: {
   role: 'ADMIN' | 'MEMBER'
   status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
-  memberships?: object[]
   mediaReport?: object
   quality?: object
   playback?: boolean
@@ -465,10 +497,11 @@ function stubAsset(options: {
   handPose?: boolean
   handPoseState?: object
   deliveryRecovery?: boolean
-  annotationTask?: boolean
+  autoAssignedAfterQuality?: boolean
   existingAnnotationTask?: object
   activity?: boolean
 }) {
+  let qualitySaved = false
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith(`/api/v1/projects/${projectId}`))
@@ -481,8 +514,6 @@ function stubAsset(options: {
           created_at: '2026-07-15T01:03:03Z',
         }),
       )
-    if (url.endsWith('/memberships'))
-      return Promise.resolve(jsonResponse({ items: options.memberships ?? [] }))
     if (url.endsWith('/media-report'))
       return Promise.resolve(jsonResponse(options.mediaReport ?? verifiedMediaReport()))
     if (url.includes(`/clip-assets/${assetId}/activity`) && options.activity)
@@ -573,6 +604,7 @@ function stubAsset(options: {
       )
     if (url.endsWith('/quality-review')) {
       const current = options.quality ?? unreviewedQuality()
+      if (init?.method === 'PUT') qualitySaved = true
       return Promise.resolve(
         jsonResponse(
           init?.method === 'PUT'
@@ -588,37 +620,28 @@ function stubAsset(options: {
         ),
       )
     }
-    if (url.endsWith('/annotation-tasks') && init?.method === 'POST' && options.annotationTask)
-      return Promise.resolve(
-        jsonResponse(
-          {
-            annotation_task_id: 'e0000000-0000-4000-8000-000000000001',
-            project_id: projectId,
-            clip_asset_id: assetId,
-            assignee_actor_id: 'local-synthetic-uploader',
-            created_by: 'local-synthetic-admin',
-            status: 'ASSIGNED',
-            created_at: '2026-07-23T01:00:00Z',
-            updated_at: '2026-07-23T01:00:00Z',
-            version: 0,
-          },
-          201,
-        ),
-      )
-    if (url.endsWith(`/api/v1/projects/${projectId}/annotation-tasks`) && init?.method === 'GET')
+    if (url.endsWith(`/api/v1/projects/${projectId}/annotation-tasks`) && init?.method === 'GET') {
+      const automaticTask =
+        options.autoAssignedAfterQuality && qualitySaved ? assignedAnnotationTask() : null
+      const items = options.existingAnnotationTask
+        ? [options.existingAnnotationTask]
+        : automaticTask
+          ? [automaticTask]
+          : []
       return Promise.resolve(
         jsonResponse({
-          items: options.existingAnnotationTask ? [options.existingAnnotationTask] : [],
+          items,
           progress: {
             scope: options.role === 'ADMIN' ? 'PROJECT' : 'ASSIGNEE',
-            total: options.existingAnnotationTask ? 1 : 0,
-            awaiting_submission: 0,
+            total: items.length,
+            awaiting_submission: automaticTask ? 1 : 0,
             rework_required: 0,
             awaiting_review: 0,
             completed: options.existingAnnotationTask ? 1 : 0,
           },
         }),
       )
+    }
     return Promise.resolve(jsonResponse(assetDetail(options.status)))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -768,6 +791,25 @@ function completedAnnotationTask() {
     created_at: '2026-08-10T01:00:00Z',
     updated_at: '2026-08-10T01:02:01Z',
     version: 2,
+  }
+}
+function assignedAnnotationTask() {
+  return {
+    annotation_task_id: 'e0000000-0000-4000-8000-000000000002',
+    project_id: projectId,
+    clip_asset_id: assetId,
+    label_schema_id: 'e1000000-0000-4000-8000-000000000001',
+    label_schema_digest: 'a'.repeat(64),
+    assignee_actor_id: 'reviewer',
+    created_by: 'reviewer',
+    status: 'ASSIGNED',
+    can_submit: true,
+    can_review: false,
+    can_recheck_post_cleaning: false,
+    annotation_revision: null,
+    created_at: '2026-08-20T01:00:00Z',
+    updated_at: '2026-08-20T01:00:00Z',
+    version: 0,
   }
 }
 function jsonResponse(body: object, status = 200) {

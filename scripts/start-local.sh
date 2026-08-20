@@ -10,6 +10,8 @@ start_ai_worker=false
 infrastructure_only=false
 restart_api=false
 api_startup_timeout_seconds=180
+media_worker_concurrency=2
+ai_worker_concurrency=2
 
 usage() {
     cat <<'EOF'
@@ -20,6 +22,8 @@ Options:
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
   --api-timeout SECONDS                         Core API health timeout, from 30 to 600 (default: 180).
+  --media-worker-concurrency COUNT              Media Worker processes, from 1 to 8 (default: 2).
+  --ai-worker-concurrency COUNT                 AI Worker processes when enabled, from 1 to 8 (default: 2).
   -h, --help                                    Show this help.
 EOF
 }
@@ -43,6 +47,16 @@ while [[ $# -gt 0 ]]; do
             api_startup_timeout_seconds="$2"
             shift 2
             ;;
+        --media-worker-concurrency)
+            [[ $# -ge 2 ]] || { echo "--media-worker-concurrency requires a value." >&2; exit 2; }
+            media_worker_concurrency="$2"
+            shift 2
+            ;;
+        --ai-worker-concurrency)
+            [[ $# -ge 2 ]] || { echo "--ai-worker-concurrency requires a value." >&2; exit 2; }
+            ai_worker_concurrency="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -64,6 +78,14 @@ if [[ ! "$api_startup_timeout_seconds" =~ ^[0-9]+$ ]] ||
     echo "--api-timeout must be an integer from 30 to 600." >&2
     exit 2
 fi
+for worker_concurrency_option in media_worker_concurrency ai_worker_concurrency; do
+    worker_concurrency="${!worker_concurrency_option}"
+    if [[ ! "$worker_concurrency" =~ ^[0-9]+$ ]] ||
+       ((worker_concurrency < 1 || worker_concurrency > 8)); then
+        echo "--${worker_concurrency_option//_/-} must be an integer from 1 to 8." >&2
+        exit 2
+    fi
+done
 
 for command_name in docker nc curl; do
     require_command "$command_name" "Full local startup requires $command_name." || exit 1
@@ -155,18 +177,28 @@ if ! $infrastructure_only; then
             "Worker startup requires $command_name for media processing." || exit 1
     done
 
-    if managed_process_running worker; then
-        echo "Media Worker is already managed by this script (PID $(managed_process_pid worker))."
-    else
+    for ((worker_index = 1; worker_index <= media_worker_concurrency; worker_index++)); do
+        worker_key="worker"
+        worker_log_path="$LOG_DIRECTORY/worker.log"
+        if ((worker_index > 1)); then
+            worker_key="worker-$worker_index"
+            worker_log_path="$LOG_DIRECTORY/worker-$worker_index.log"
+        fi
+
+        if managed_process_running "$worker_key"; then
+            echo "Media Worker $worker_index is already managed by this script (PID $(managed_process_pid "$worker_key"))."
+            continue
+        fi
+
         start_managed_process \
-            worker "Media Worker" "$LOG_DIRECTORY/worker.log" \
+            "$worker_key" "Media Worker $worker_index" "$worker_log_path" \
             uv run --directory "$PROJECT_ROOT/workers/media-worker" media-worker
         sleep 1
-        if ! managed_process_running worker; then
-            echo "Media Worker exited during startup. Inspect: $LOG_DIRECTORY/worker.log and $LOG_DIRECTORY/worker.log.error.log" >&2
+        if ! managed_process_running "$worker_key"; then
+            echo "Media Worker $worker_index exited during startup. Inspect: $worker_log_path and $worker_log_path.error.log" >&2
             exit 1
         fi
-    fi
+    done
 
 fi
 
@@ -200,24 +232,34 @@ if $start_ai_worker || { ! $infrastructure_only && [[ "${AI_HAND_POSE_ENABLED:-f
         fi
     fi
     require_command uv "AI Worker startup requires uv." || exit 1
-    if managed_process_running ai-worker; then
-        echo "AI Worker is already managed by this script (PID $(managed_process_pid ai-worker))."
-    else
+    for ((worker_index = 1; worker_index <= ai_worker_concurrency; worker_index++)); do
+        worker_key="ai-worker"
+        worker_log_path="$LOG_DIRECTORY/ai-worker.log"
+        if ((worker_index > 1)); then
+            worker_key="ai-worker-$worker_index"
+            worker_log_path="$LOG_DIRECTORY/ai-worker-$worker_index.log"
+        fi
+
+        if managed_process_running "$worker_key"; then
+            echo "AI Worker $worker_index is already managed by this script (PID $(managed_process_pid "$worker_key"))."
+            continue
+        fi
+
         start_managed_process \
-            ai-worker "AI Worker" "$LOG_DIRECTORY/ai-worker.log" \
+            "$worker_key" "AI Worker $worker_index" "$worker_log_path" \
             uv run --directory "$PROJECT_ROOT/workers/ai-worker" ai-worker
         sleep 1
-        if ! managed_process_running ai-worker; then
-            echo "AI Worker exited during startup. Inspect: $LOG_DIRECTORY/ai-worker.log and $LOG_DIRECTORY/ai-worker.log.error.log" >&2
+        if ! managed_process_running "$worker_key"; then
+            echo "AI Worker $worker_index exited during startup. Inspect: $worker_log_path and $worker_log_path.error.log" >&2
             exit 1
         fi
-    fi
+    done
 fi
 
 echo
 echo "Infrastructure: PostgreSQL localhost:${POSTGRES_PORT:-15432} | S3 http://localhost:${S3_PORT:-9000} | RabbitMQ http://localhost:${RABBITMQ_MANAGEMENT_PORT:-15672}"
 echo "Core API: $api_health_uri"
 echo "Start Web separately: pnpm run web:dev"
-echo "Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true."
+echo "Workers: $media_worker_concurrency Media Worker replica(s); $ai_worker_concurrency AI Worker replica(s) when AI_HAND_POSE_ENABLED=true."
 echo "Follow API log: tail -f '$api_log_path'"
 echo "Status: ./scripts/status-local.sh | Stop: ./scripts/stop-local.sh"

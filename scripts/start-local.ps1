@@ -3,6 +3,10 @@ param(
     [switch]$AiWorker,
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
+    [ValidateRange(1, 8)]
+    [int]$MediaWorkerConcurrency = 2,
+    [ValidateRange(1, 8)]
+    [int]$AiWorkerConcurrency = 2,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
@@ -222,11 +226,23 @@ if (-not $InfrastructureOnly) {
             throw "Worker startup requires $requiredCommand for media processing."
         }
     }
-    if (Test-ManagedProcessRunning 'worker') {
-        Write-Host "Media Worker is already managed by this script (PID $($managedProcesses.worker.processId))." -ForegroundColor Yellow
-    }
-    else {
-        Start-LocalProcess 'worker' 'Media Worker' 'cmd.exe' "/c uv run --directory workers/media-worker media-worker" (Join-Path $logDirectory 'worker.log')
+
+    for ($workerIndex = 1; $workerIndex -le $MediaWorkerConcurrency; $workerIndex++) {
+        $workerKey = if ($workerIndex -eq 1) { 'worker' } else { "worker-$workerIndex" }
+        $workerName = "Media Worker $workerIndex"
+        $workerLogPath = if ($workerIndex -eq 1) {
+            Join-Path $logDirectory 'worker.log'
+        }
+        else {
+            Join-Path $logDirectory "worker-$workerIndex.log"
+        }
+
+        if (Test-ManagedProcessRunning $workerKey) {
+            Write-Host "$workerName is already managed by this script (PID $($managedProcesses[$workerKey].processId))." -ForegroundColor Yellow
+        }
+        else {
+            Start-LocalProcess $workerKey $workerName 'cmd.exe' "/c uv run --directory workers/media-worker media-worker" $workerLogPath
+        }
     }
 }
 
@@ -258,17 +274,28 @@ if ($AiWorker -or ((-not $InfrastructureOnly) -and $env:AI_HAND_POSE_ENABLED -eq
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         throw 'AI Worker startup requires uv.'
     }
-    if (Test-ManagedProcessRunning 'ai-worker') {
-        Write-Host "AI Worker is already managed by this script (PID $($managedProcesses['ai-worker'].processId))." -ForegroundColor Yellow
-    }
-    else {
-        Start-LocalProcess 'ai-worker' 'AI Worker' 'cmd.exe' "/c uv run --directory workers/ai-worker ai-worker" (Join-Path $logDirectory 'ai-worker.log')
+    for ($workerIndex = 1; $workerIndex -le $AiWorkerConcurrency; $workerIndex++) {
+        $workerKey = if ($workerIndex -eq 1) { 'ai-worker' } else { "ai-worker-$workerIndex" }
+        $workerName = "AI Worker $workerIndex"
+        $workerLogPath = if ($workerIndex -eq 1) {
+            Join-Path $logDirectory 'ai-worker.log'
+        }
+        else {
+            Join-Path $logDirectory "ai-worker-$workerIndex.log"
+        }
+
+        if (Test-ManagedProcessRunning $workerKey) {
+            Write-Host "$workerName is already managed by this script (PID $($managedProcesses[$workerKey].processId))." -ForegroundColor Yellow
+        }
+        else {
+            Start-LocalProcess $workerKey $workerName 'cmd.exe' "/c uv run --directory workers/ai-worker ai-worker" $workerLogPath
+        }
     }
 }
 
 Write-Host "`nInfrastructure: PostgreSQL localhost:$env:POSTGRES_PORT | S3 http://localhost:$env:S3_PORT | RabbitMQ http://localhost:$env:RABBITMQ_MANAGEMENT_PORT" -ForegroundColor Cyan
 Write-Host "Core API: $apiHealthUri" -ForegroundColor Cyan
 Write-Host 'Start Web separately: pnpm run web:dev' -ForegroundColor Cyan
-Write-Host 'Workers: Media Worker started by default; AI Worker starts when AI_HAND_POSE_ENABLED=true.' -ForegroundColor Cyan
+Write-Host "Workers: $MediaWorkerConcurrency Media Worker replica(s); $AiWorkerConcurrency AI Worker replica(s) when AI_HAND_POSE_ENABLED=true." -ForegroundColor Cyan
 Write-Host "Follow API log: Get-Content '$logDirectory/api.log' -Wait" -ForegroundColor DarkGray
 Write-Host "Status: .\scripts\status-local.ps1 | Stop: .\scripts\stop-local.ps1" -ForegroundColor DarkGray

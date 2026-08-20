@@ -1,13 +1,13 @@
 # 当前需求追踪矩阵
 
-> 当前需求基线：[V1.23 FLOW-FIRST LEAN-P0 Physical Reduction](../requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)<br>
+> 当前需求基线：[V1.24 FLOW-FIRST P0 自动任务衔接](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)<br>
 > 当前技术设计：[手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
 > 最后更新：2026-08-20
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.23 继承 V1.21 的 V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
+V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、Review、Cleaning 或管理员导出确认。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ V1.23 继承 V1.21 的 V1.18 FR 事实链，将 handedness 保持为辅助元数
 | V18-FR-008 自动预标注策略 | P1/P2 | `aicandidate`、`governance` | policy snapshot | 相机/模型/资源审批后才启用 | D1 |
 | V18-FR-009 测试数据彻底清理 | P1 | `assetcapture`、`governance` | purge request/audit | 仅 `SYNTHETIC_TEST` 经确认删除 | D1 |
 | V21-FR-001 最小训练数据导出 | P0 | `tools/minimal-export`（只读投影） | `training-data.v2` Parquet | 当前 Cleaning PASS + 人工标签/动作区间 + Candidate 21 点；非 PASS 拒绝；可回读；默认无 MP4 | I |
+| V24-FR-001 质量合格自动任务衔接 | P0 | `qualitycleaning`、`annotationreview` | `QualityReviewQualifiedEvent`、`AnnotationTask`、AuditEvent | 合格事务内唯一自动分配、同结论幂等、非合格不创建、人工 revision/Review/Cleaning 不可绕过 | I |
 
 实现、OpenAPI、事件、数据库或测试的每次变更必须更新本表相应行；被 V1.21 替代或明确 DEFERRED 的范围、历史证据和旧版本结论只记录在历史矩阵或对应草案，不能反向定义当前范围。
 

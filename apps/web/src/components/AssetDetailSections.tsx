@@ -9,7 +9,6 @@ import type {
   HandPoseCandidate,
   MediaReport,
 } from '@/api/catalog'
-import type { ProjectMembership } from '@/api/projects'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import {
@@ -566,24 +565,11 @@ export function QualityReviewCard({
 }
 
 interface AnnotationTaskCardProps {
-  assignees: ProjectMembership[]
   createdTask: AnnotationTask | null
-  isCreating: boolean
   projectId: string
-  selectedAssignee: string
-  onCreate: () => void
-  onSelectedAssigneeChange: (actorId: string) => void
 }
 
-export function AnnotationTaskCard({
-  assignees,
-  createdTask,
-  isCreating,
-  projectId,
-  selectedAssignee,
-  onCreate,
-  onSelectedAssigneeChange,
-}: AnnotationTaskCardProps) {
+export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCardProps) {
   return (
     <section className="workbench-panel" aria-labelledby="annotation-task-title">
       <h3 id="annotation-task-title">配药动作标注</h3>
@@ -593,33 +579,18 @@ export function AnnotationTaskCard({
             <StatusBadge tone="success">已创建并分配</StatusBadge>
             <span>执行人：{createdTask.assignee_actor_id}</span>
           </div>
-          <p className="form-hint">请在标注页提交时间段；项目管理员随后复核。</p>
+          <p className="form-hint">
+            质量合格后系统已自动分配；请在标注页提交时间段，项目管理员随后人工复核。
+          </p>
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
             查看配药动作标注
           </Link>
         </>
       ) : (
         <>
-          <p className="form-hint">该视频已通过人工质量判断。请选择项目成员并创建配药动作标注。</p>
-          <div className="annotation-task-actions">
-            <Select
-              value={selectedAssignee}
-              aria-label="配药动作标注执行人"
-              onChange={onSelectedAssigneeChange}
-              options={assignees.map((member) => ({
-                value: member.actor_id,
-                label: `${member.actor_id} · ${member.role === 'ADMIN' ? '管理员' : '普通用户'}`,
-              }))}
-            />
-            <Button
-              type="primary"
-              loading={isCreating}
-              disabled={!selectedAssignee}
-              onClick={onCreate}
-            >
-              创建配药动作标注
-            </Button>
-          </div>
+          <p className="form-hint">
+            质量结论保存为合格时，系统会自动创建唯一标注任务并分配给质量确认人。当前账号没有可见任务时，请刷新状态或在任务列表查看自己的受理任务。
+          </p>
         </>
       )}
     </section>

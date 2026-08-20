@@ -66,6 +66,32 @@ def consumer(processor: FakeProcessor) -> MediaJobConsumer:
     )
 
 
+def test_reconnects_after_broker_connection_interruption(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleep_calls: list[float] = []
+    worker = MediaJobConsumer(
+        "amqp://local.invalid",
+        "platform.media.probe.v1",
+        "platform.dead-letter.v1",
+        "media.dead-letter.v1",
+        cast(JobProcessor, FakeProcessor(ProcessingOutcome(DeliveryDisposition.ACK))),
+        sleep=sleep_calls.append,
+    )
+    outcomes: list[BaseException] = [
+        pika.exceptions.StreamLostError("synthetic connection loss"),
+        KeyboardInterrupt(),
+    ]
+
+    def consume_once() -> None:
+        raise outcomes.pop(0)
+
+    monkeypatch.setattr(worker, "_consume_once", consume_once)
+
+    with pytest.raises(KeyboardInterrupt):
+        worker.run()
+
+    assert sleep_calls == [2.0]
+
+
 def test_publishes_only_sanitized_diagnostic_before_ack(job_body: bytes) -> None:
     channel = FakeChannel()
 

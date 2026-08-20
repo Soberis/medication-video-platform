@@ -149,7 +149,7 @@ QUALIFIED / REJECTED / NEEDS_REVIEW → 任一新结论（版本并发保护）
 - 只允许 ACTIVE 项目成员判断已入库且未删除的视频；质量判断不改变媒体入库状态。
 - `QUALIFIED` 使用固定的 `MEETS_REQUIREMENTS`；`REJECTED` 与 `NEEDS_REVIEW` 必须使用与结论匹配的固定原因码。
 - 相同结论和原因是幂等重试，不新增历史；结论变化写入当前事实并追加审计事件。
-- 当前只有 `QUALIFIED` 可以进入正式标注；该守卫在标注切片实现时由服务端再次校验。
+- 当前只有 `QUALIFIED` 可以进入正式标注；该守卫在标注切片实现时由服务端再次校验。一次把结论新建或修订为 `QUALIFIED` 的成功事务会自动创建唯一标注任务，并分配给作出该结论的 ACTIVE 项目成员；这不产生正式标注或复核结论。
 
 ## 5. 隐私与脱敏状态
 
@@ -198,11 +198,11 @@ PENDING → ASSIGNED → IN_PROGRESS → SUBMITTED → COMPLETED
              └→ PENDING    （回收）
 ```
 
-当前 P0 切片启用 `ASSIGNED → SUBMITTED → COMPLETED` 和 `SUBMITTED → ASSIGNED` 返工分支：项目管理员仅能为 `INGESTED`、未删除且当前质量为 `QUALIFIED` 的视频创建一个直接分配任务；受分配人提交不可变 revision，独立管理员通过后任务完成，不通过则退回原受分配人。`PENDING`、`IN_PROGRESS`、`ABANDONED` 和重新分配仍未启用，不能由前端提前伪造。
+当前 P0 切片启用 `ASSIGNED → SUBMITTED → COMPLETED` 和 `SUBMITTED → ASSIGNED` 返工分支：当 ACTIVE 项目成员在同一事务把 `INGESTED`、未删除视频的当前质量结论变为 `QUALIFIED` 时，系统立即创建一个直接分配给该质量确认人的任务；受分配人提交不可变 revision，独立管理员通过后任务完成，不通过则退回原受分配人。已有任务不会被自动覆盖或改派。管理员手动创建接口仅保留为受控恢复入口，不是普通主路径。`PENDING`、`IN_PROGRESS`、`ABANDONED` 和重新分配仍未启用，不能由前端提前伪造。
 
 | 迁移 | 角色与守卫 |
 | --- | --- |
-| PENDING → ASSIGNED | 调度员/项目管理员；assignee 有项目权限；范围未被冲突任务锁定 |
+| PENDING → ASSIGNED | 系统与 `QUALIFIED` 质量结论在同一事务内完成；assignee 是当前质量确认人且具有 ACTIVE 项目权限；视频、质量事实和任务范围均被锁定。管理员恢复仅可在当前事实仍满足且尚无任务时创建。 |
 | ASSIGNED → SUBMITTED | 当前 assignee；创建不可变 revision；schema digest 与任务一致；基础校验通过 |
 | SUBMITTED → COMPLETED | 当前 revision 获独立 `APPROVED`；同一事务生成绑定该 revision 的不可变 post-clean run/result |
 | SUBMITTED → ASSIGNED | 当前 revision 获 `REJECTED`；保留决定和旧 revision，下一次提交递增 revision number |
@@ -398,7 +398,7 @@ ASSIGNED → SUBMITTED → COMPLETED
               └──────→ ASSIGNED → next revision
 ```
 
-- 仅 ACTIVE 项目成员中的任务受分配人可以提交；管理员创建任务不等于可以代替受分配人提交。
+- `QUALIFIED` 质量结论会在同一事务内自动创建唯一任务并分配给质量确认人；仅 ACTIVE 项目成员中的任务受分配人可以提交，自动创建不等于可以代替受分配人提交。
 - 提交前 ClipAsset 必须仍为 `INGESTED`、未软删除，且当前人工质量结论为 `QUALIFIED`。
 - P0 每轮提交创建一条不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或尚未退回的已提交任务拒绝。
 - P0 文档只包含一个或多个绑定不可变 P0 LabelSchema 的主 Step 时间段和可选说明。主 Step 可在边界相接但不得重叠；存在已验证 MediaReport 时，结束时间不得超过媒体时长。返工已启用，对象框仍在后续真实用例中启用。
@@ -438,13 +438,13 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | Hand job | `NOT_REQUESTED`、`QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED` | `NOT_REQUESTED` 是无 AIJob 的查询投影；其余值映射 AIJob。 |
 | Hand result | `UNKNOWN`、`HAND_DETECTED`、`NO_HAND_DETECTED` | 仅 `SUCCEEDED` job 可写终态结果；未发现手不等于失败。 |
 
-项目 `MEMBER` 或 `ADMIN` 对有权访问、未删除的 `INGESTED` 视频可提交幂等单视频请求。P0 不定义 batch job 或自动策略。Worker 回传只能写 `CandidateAnnotation` 与 run summary，不能推进正式标注、复核或清洗状态。
+每个有权访问、未删除的 `INGESTED` 视频会在媒体入库提交后自动提交一条幂等单视频 MediaPipe 请求；项目 `MEMBER` 或 `ADMIN` 仍可发起同一单视频受控恢复请求。P0 不定义 batch job 或可配置自动策略。Worker 回传只能写 `CandidateAnnotation` 与 run summary，不能推进正式标注、复核或清洗状态。
 
 ## 12. 关键兼容性守卫
 
 | 操作 | 必须满足 |
 | --- | --- |
-| 创建标注任务 | asset `INGESTED`、未删除；当前人工质量结论 `QUALIFIED`；项目与任务范围有效 |
+| 自动创建标注任务 | 质量结论在同一事务新建或变更为 `QUALIFIED`；asset `INGESTED`、未删除；当前质量版本与事件一致；项目与任务范围有效且尚无任务；受理人为作出该结论的 ACTIVE 项目成员 |
 | 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；已完成上传完整性校验的 MP4、`deleted_at IS NULL`；媒体检测状态不阻断人工查看；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
 | 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
 | 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |

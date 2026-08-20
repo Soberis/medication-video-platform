@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -17,6 +19,8 @@ from medication_media_worker.processor import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+RECONNECT_DELAY_SECONDS = 2.0
 
 SAFE_SUMMARIES = {
     DeadLetterReason.CONTRACT_INVALID: "Message failed media job contract validation",
@@ -38,14 +42,28 @@ class MediaJobConsumer:
         dead_letter_exchange: str,
         dead_letter_routing_key: str,
         processor: JobProcessor,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._rabbitmq_url = rabbitmq_url
         self._queue_name = queue_name
         self._dead_letter_exchange = dead_letter_exchange
         self._dead_letter_routing_key = dead_letter_routing_key
         self._processor = processor
+        self._sleep = sleep
 
     def run(self) -> None:
+        while True:
+            try:
+                self._consume_once()
+            except (DeadLetterPublishError, OSError, pika.exceptions.AMQPError) as exc:
+                LOGGER.warning(
+                    "Media Worker broker connection interrupted (%s); reconnecting in %.0f seconds",
+                    type(exc).__name__,
+                    RECONNECT_DELAY_SECONDS,
+                )
+                self._sleep(RECONNECT_DELAY_SECONDS)
+
+    def _consume_once(self) -> None:
         parameters = pika.URLParameters(self._rabbitmq_url)
         parameters.heartbeat = 60
         parameters.blocked_connection_timeout = 30

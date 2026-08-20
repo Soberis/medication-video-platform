@@ -50,6 +50,29 @@ def _consumer(outcome: ProcessingOutcome) -> AiConsumer:
     return AiConsumer("amqp://local.invalid", cast(Processor, _FakeProcessor(outcome)))
 
 
+def test_reconnects_after_broker_connection_interruption(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleep_calls: list[float] = []
+    consumer = AiConsumer(
+        "amqp://local.invalid",
+        cast(Processor, _FakeProcessor(ProcessingOutcome(Disposition.ACK))),
+        sleep=sleep_calls.append,
+    )
+    outcomes: list[BaseException] = [
+        pika.exceptions.StreamLostError("synthetic connection loss"),
+        KeyboardInterrupt(),
+    ]
+
+    def consume_once() -> None:
+        raise outcomes.pop(0)
+
+    monkeypatch.setattr(consumer, "_consume_once", consume_once)
+
+    with pytest.raises(KeyboardInterrupt):
+        consumer.run()
+
+    assert sleep_calls == [2.0]
+
+
 def test_publishes_only_sanitized_diagnostic_before_ack() -> None:
     message_id = UUID("10000000-0000-0000-0000-000000000001")
     job_id = UUID("20000000-0000-0000-0000-000000000002")
