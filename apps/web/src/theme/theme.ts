@@ -9,6 +9,11 @@ export const appTheme: ThemeConfig = {
   },
   token: {
     colorPrimary: appTokens.color.primary,
+    colorPrimaryHover: appTokens.color.primaryHover,
+    colorPrimaryActive: appTokens.color.primaryHover,
+    colorLink: appTokens.color.primary,
+    colorLinkHover: appTokens.color.primaryHover,
+    colorLinkActive: appTokens.color.primaryHover,
     colorInfo: appTokens.color.information,
     colorSuccess: appTokens.color.success,
     colorWarning: appTokens.color.warning,
@@ -30,6 +35,7 @@ export const appTheme: ThemeConfig = {
     controlHeight: appTokens.control.standard,
     controlHeightSM: appTokens.control.compact,
     controlHeightLG: appTokens.control.large,
+    controlOutline: appTokens.color.focusRing,
   },
 }
 
@@ -58,6 +64,13 @@ const cssTokenBridge = {
   '--app-color-information': appTokens.color.information,
   '--app-color-information-surface': appTokens.color.informationSurface,
   '--app-color-neutral-surface': appTokens.color.neutralSurface,
+  '--app-color-sidebar-background': appTokens.color.sidebarBackground,
+  '--app-color-sidebar-foreground': appTokens.color.sidebarForeground,
+  '--app-color-sidebar-muted': appTokens.color.sidebarMuted,
+  '--app-color-sidebar-border': appTokens.color.sidebarBorder,
+  '--app-color-sidebar-hover': appTokens.color.sidebarHover,
+  '--app-color-sidebar-selected': appTokens.color.sidebarSelected,
+  '--app-color-sidebar-accent': appTokens.color.sidebarAccent,
   // Compatibility aliases for existing business-page CSS during gradual migration.
   '--app-color-brand': appTokens.color.primary,
   '--app-color-brand-hover': appTokens.color.primaryHover,

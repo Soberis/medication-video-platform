@@ -28,8 +28,10 @@
 中文表达是“大道至简”。界面应像可靠的配药视频作业台，不像 AI 生成的管理后台、通用 SaaS
 模板、娱乐应用、社交产品、营销网站或视觉效果展示。
 
-唯一视觉方向是 **Linear-style professional workspace UI**。我们采用其安静层级、精确对齐、
-紧凑控件、克制色彩、渐进披露和可预测交互，不制作像素级复刻，也不混入其他产品的视觉身份。
+永久视觉方向是 **Graphite + Medical Blue Workspace（石墨灰 + 医疗蓝工作区）**：深石墨导航形成
+稳定锚点，中性浅灰承载长时间作业，白色内容面保持清晰，医疗蓝只表达交互、焦点与信息状态。
+实现继续采用 Linear-style 工作区的安静层级、精确对齐、紧凑控件、渐进披露和可预测交互，
+但不制作像素级复刻，也不混入其他产品的视觉身份。
 
 ## 2. Information hierarchy / 信息层级
 
@@ -51,21 +53,25 @@
 
 | 语义角色              | 基线值    | 用途                      |
 | --------------------- | --------- | ------------------------- |
-| `background`          | `#f7f8fa` | 应用工作区背景            |
-| `surface`             | `#ffffff` | 常规内容面与侧栏          |
-| `surfaceElevated`     | `#ffffff` | 浮层、弹窗和检查器        |
-| `foreground`          | `#202329` | 标题与主要事实            |
-| `foregroundSecondary` | `#505763` | 正文与次要操作            |
-| `foregroundMuted`     | `#737b89` | 元数据与辅助说明          |
-| `border`              | `#c8ced8` | 需要明确边界的控件        |
-| `borderSubtle`        | `#e2e6ec` | 分隔与低权重边界          |
-| `primary`             | `#315cba` | 主要动作与选中状态        |
-| `primaryForeground`   | `#ffffff` | 主色表面的文字            |
-| `focusRing`           | `#3e69c7` | 键盘焦点                  |
-| `success`             | `#12643b` | 已确认的成功语义          |
-| `warning`             | `#9a3412` | 需关注但未必阻断          |
-| `destructive`         | `#b42318` | 失败、删除与高风险操作    |
-| `information`         | `#315cba` | 确有必要的处理中/信息状态 |
+| `background`          | `#F6F7F9` | 应用工作区背景            |
+| `surface`             | `#FFFFFF` | 常规内容面                |
+| `surfaceElevated`     | `#FFFFFF` | 浮层、弹窗和检查器        |
+| `foreground`          | `#161B22` | 标题与主要事实            |
+| `foregroundSecondary` | `#4B5563` | 正文与次要操作            |
+| `foregroundMuted`     | `#8A94A6` | 元数据与辅助说明          |
+| `border`              | `#D1D5DB` | 需要明确边界的控件        |
+| `borderSubtle`        | `#E5E7EB` | 分隔与低权重边界          |
+| `primary`             | `#315E9B` | 主要动作与选中状态        |
+| `primaryForeground`   | `#FFFFFF` | 主色表面的文字            |
+| `focusRing`           | `#3B82F6` | 键盘焦点                  |
+| `success`             | `#12643B` | 已确认的成功语义          |
+| `warning`             | `#B45309` | 需关注但未必阻断          |
+| `destructive`         | `#B42318` | 失败、删除与高风险操作    |
+| `information`         | `#315E9B` | 确有必要的处理中/信息状态 |
+
+侧栏是应用唯一的大面积深色视觉锚点：背景 `#111827`，主要文字 `#F9FAFB`，次级文字
+`#9CA3AF`；选中项使用 `rgb(49 94 155 / 20%)` 的低饱和底色和 `#3B82F6` 的 2px 活动轨。
+侧栏之外不得复制深色导航主题，业务页面也不得使用它制造装饰区块。
 
 规则：
 
