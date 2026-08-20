@@ -89,19 +89,19 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(await screen.findByLabelText('项目配药动作标注进度')).toHaveTextContent(
-      '项目任务1待提交1待修改0待复核0已完成0',
+      '项目任务1待处理1待提交 1 · 待修改 0 · 待复核 0已完成0',
     )
     expect(screen.getByText('已分配')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: assetId })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
       'href',
       `/projects/${projectId}/assets/${assetId}`,
     )
     expect(screen.getByRole('table').closest('.ant-table-wrapper')).toHaveClass(
       'annotation-task-table',
     )
-    expect(screen.getByRole('columnheader', { name: '标注 / 复核 / 清洗' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '当前进度' })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -178,14 +178,20 @@ describe('annotation task list view', () => {
       },
     }))
     stubTasks(tasks, labelSchema)
+    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    expect(screen.getByText('已通过清洗，可参与训练数据导出')).toBeInTheDocument()
-    expect(screen.getByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
+    const evidenceDetails = screen.getAllByText('查看任务记录')
+    expect(evidenceDetails).toHaveLength(4)
+    await user.click(evidenceDetails[1]!)
+    expect(evidenceDetails[1]?.closest('details')).toHaveAttribute('open')
+    expect(screen.getAllByText(/创建人：local-synthetic-admin/)).toHaveLength(4)
+    expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已验证的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
-    expect(screen.getByText(/当前数据未通过清洗，暂不可用于训练/)).toBeInTheDocument()
+    await user.click(evidenceDetails[2]!)
+    expect(await screen.findByText(/当前数据未通过清洗，暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/主流程时间片段存在重叠/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
@@ -220,7 +226,7 @@ describe('annotation task list view', () => {
     ).toHaveLength(2)
   })
 
-  it('marks an administrator review of their own revision as SELF_ADMIN_APPROVAL', async () => {
+  it('marks an administrator review of their own revision as self-approved', async () => {
     stubTasks(
       [
         {
@@ -241,7 +247,7 @@ describe('annotation task list view', () => {
     renderView()
 
     expect(await screen.findByText('复核通过')).toBeInTheDocument()
-    expect(screen.getByText('管理员自审（SELF_ADMIN_APPROVAL）')).toBeInTheDocument()
+    expect(screen.getByText('管理员自审')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
   })
 

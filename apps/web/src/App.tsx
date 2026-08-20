@@ -1,9 +1,10 @@
-import { App as AntdApp, Button, Tag } from 'antd'
+import { App as AntdApp, Button } from 'antd'
 import { useEffect, useRef } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
+import { StatusBadge } from '@/components/StatusBadge'
 
 const managementRoutePatterns = [
   '/projects/:projectId/members',
@@ -124,9 +125,9 @@ export default function AppShell() {
         {auth.session ? (
           <div className="account-summary">
             <span>{auth.session.username}</span>
-            <Tag color={isAdministrator ? 'blue' : 'default'}>
+            <StatusBadge tone={isAdministrator ? 'processing' : 'default'}>
               {isAdministrator ? '管理员' : '普通用户'}
-            </Tag>
+            </StatusBadge>
             <Button type="link" loading={auth.loading} onClick={() => void handleLogout()}>
               退出登录
             </Button>

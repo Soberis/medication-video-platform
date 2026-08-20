@@ -22,9 +22,9 @@ import {
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { SummaryStrip } from '@/components/SummaryStrip'
-import { formatDateTime } from '@/features/catalog/catalog-presentation'
+import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
@@ -64,7 +64,12 @@ function taskStatusColor(task: AnnotationTask): 'success' | 'default' | 'warning
       ? 'default'
       : 'warning'
 }
-function postCleaningPresentation(task: AnnotationTask) {
+function postCleaningPresentation(task: AnnotationTask): {
+  label: string
+  color: StatusBadgeTone
+  description: string
+  reasons: string[]
+} | null {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
   const result = revision.post_cleaning_result
@@ -418,9 +423,12 @@ export default function AnnotationTaskListView() {
               label: progress.scope === 'PROJECT' ? '项目任务' : '我的任务',
               value: progress.total,
             },
-            { label: '待提交', value: progress.awaiting_submission },
-            { label: '待修改', value: progress.rework_required },
-            { label: '待复核', value: progress.awaiting_review },
+            {
+              label: '待处理',
+              value:
+                progress.awaiting_submission + progress.rework_required + progress.awaiting_review,
+              detail: `待提交 ${progress.awaiting_submission} · 待修改 ${progress.rework_required} · 待复核 ${progress.awaiting_review}`,
+            },
             { label: '已完成', value: progress.completed },
           ]}
         />
@@ -438,14 +446,15 @@ export default function AnnotationTaskListView() {
             tableLayout="fixed"
             columns={[
               {
-                title: '视频资产',
-                width: 160,
+                title: '视频',
+                width: 190,
                 render: (_, row) => (
                   <Link
                     className="text-link mono-wrap"
                     to={paths.asset(projectId, row.clip_asset_id)}
+                    title={row.clip_asset_id}
                   >
-                    {row.clip_asset_id}
+                    视频 {shortId(row.clip_asset_id)}
                   </Link>
                 ),
               },
@@ -457,11 +466,27 @@ export default function AnnotationTaskListView() {
                 ),
               },
               {
-                title: '标注 / 复核 / 清洗',
-                width: 250,
+                title: '当前进度',
+                width: 280,
                 render: (_, row) => {
                   const revision = row.annotation_revision
                   const presentation = postCleaningPresentation(row)
+                  const taskRecord = (
+                    <details className="task-record-details">
+                      <summary>查看任务记录</summary>
+                      <p>
+                        创建人：{row.created_by} · 创建时间：{formatDateTime(row.created_at)}
+                      </p>
+                      {presentation ? (
+                        <>
+                          <p>{presentation.description}</p>
+                          {presentation.reasons.length ? (
+                            <p>原因：{presentation.reasons.join('；')}</p>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </details>
+                  )
                   return revision ? (
                     <div className="task-evidence-summary">
                       <strong>
@@ -475,35 +500,29 @@ export default function AnnotationTaskListView() {
                         >
                           {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
                           {revision.review.reviewed_by === revision.submitted_by ? (
-                            <small>管理员自审（SELF_ADMIN_APPROVAL）</small>
+                            <small>管理员自审</small>
                           ) : null}
                         </span>
                       ) : (
                         <span className="muted-text">等待管理员复核</span>
                       )}
                       {presentation ? (
-                        <div
-                          className={`task-cleaning-fact task-cleaning-fact-${presentation.color}`}
-                        >
-                          <strong>{presentation.label}</strong>
-                          <span>{presentation.description}</span>
-                          {presentation.reasons.length ? (
-                            <small>原因：{presentation.reasons.join('；')}</small>
-                          ) : null}
-                        </div>
+                        <StatusBadge tone={presentation.color}>{presentation.label}</StatusBadge>
                       ) : null}
+                      {taskRecord}
                     </div>
                   ) : (
-                    <span className="muted-text">尚未提交</span>
+                    <div className="task-evidence-summary">
+                      <span className="muted-text">尚未提交</span>
+                      {taskRecord}
+                    </div>
                   )
                 },
               },
               { title: '执行人', dataIndex: 'assignee_actor_id', width: 105 },
-              { title: '创建人', dataIndex: 'created_by', width: 105 },
-              { title: '创建时间', width: 135, render: (_, row) => formatDateTime(row.created_at) },
               {
                 title: '操作',
-                width: 140,
+                width: 160,
                 render: (_, row) => (
                   <div className="table-actions">
                     {row.can_submit && row.status === 'ASSIGNED' ? (

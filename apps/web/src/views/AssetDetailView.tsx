@@ -43,6 +43,7 @@ import { paths } from '@/app/paths'
 import {
   assetStatusLabels,
   formatDateTime,
+  shortId,
   statusTone,
 } from '@/features/catalog/catalog-presentation'
 import { AssetActivityCard } from '@/components/AssetActivityCard'
@@ -56,7 +57,7 @@ import {
   QualityReviewCard,
 } from '@/components/AssetDetailSections'
 import { usePromptDialog } from '@/components/PromptDialog'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 
 type WorkflowStepState = 'complete' | 'current' | 'waiting' | 'blocked'
 
@@ -75,11 +76,20 @@ interface DetailNextStep {
   interactive: boolean
 }
 
-const workflowStateLabels: Record<WorkflowStepState, string> = {
-  complete: '已完成',
-  current: '当前',
-  waiting: '待处理',
-  blocked: '受阻',
+function workflowStepTone(state: WorkflowStepState): StatusBadgeTone {
+  if (state === 'complete') return 'success'
+  if (state === 'blocked') return 'error'
+  return state === 'current' ? 'warning' : 'default'
+}
+
+function handPoseStatusTone(tone: 'idle' | 'failed' | 'succeeded' | 'running'): StatusBadgeTone {
+  if (tone === 'failed') return 'error'
+  if (tone === 'succeeded') return 'success'
+  return tone === 'running' ? 'processing' : 'default'
+}
+
+function conciseAssetIdentifier(value: string): string {
+  return value.length > 24 ? shortId(value) : value
 }
 
 export default function AssetDetailView() {
@@ -1160,8 +1170,10 @@ export default function AssetDetailView() {
                 </StatusBadge>
               </div>
               <p className="workbench-video-name">
-                <span>当前视频</span>
-                <code title={detail.client_file_id}>{detail.client_file_id}</code>
+                <span>视频资产</span>
+                <code title={detail.client_file_id}>
+                  {conciseAssetIdentifier(detail.client_file_id)}
+                </code>
               </p>
               {detail.session_binding ? (
                 <p className="workbench-video-meta">
@@ -1268,67 +1280,64 @@ export default function AssetDetailView() {
                     </Button>
                   ) : null}
                 </section>
-                <section className="evidence-rail" aria-labelledby="evidence-rail-title">
-                  <div className="evidence-rail-heading">
+                <section className="workflow-facts" aria-labelledby="workflow-facts-title">
+                  <div className="workflow-facts-heading">
                     <span className="app-eyebrow">服务端事实</span>
-                    <h2 id="evidence-rail-title">证据轨迹</h2>
-                    <p>仅展示已确认事实、真实阻断和辅助候选；不表示百分比进度。</p>
+                    <h2 id="workflow-facts-title">流程状态</h2>
                   </div>
-                  <ol className="evidence-rail-list">
+                  <ol className="workflow-facts-list">
                     {workflowSteps.map((step) => (
                       <li
-                        className={`evidence-rail-item evidence-rail-item-${step.state}`}
+                        className={`workflow-facts-item workflow-facts-item-${step.state}`}
                         key={step.label}
                       >
-                        <span className="evidence-rail-marker" aria-hidden="true" />
-                        <div className="evidence-rail-item-content">
-                          <div className="evidence-rail-item-heading">
-                            <strong>{step.label}</strong>
-                            <span
-                              className={`evidence-rail-state evidence-rail-state-${step.state}`}
-                            >
-                              {workflowStateLabels[step.state]}
-                            </span>
-                          </div>
-                          <span>{step.status}</span>
-                          <small>{step.detail}</small>
-                        </div>
+                        <strong>{step.label}</strong>
+                        <StatusBadge tone={workflowStepTone(step.state)}>{step.status}</StatusBadge>
                       </li>
                     ))}
                   </ol>
+                  <details className="workflow-fact-details">
+                    <summary>查看流程依据</summary>
+                    <ul>
+                      {workflowSteps.map((step) => (
+                        <li key={step.label}>
+                          <strong>{step.label}</strong>
+                          <span>{step.detail}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                   {detail.status === 'INGESTED' ? (
-                    <section
-                      className="hand-pose-panel evidence-rail-candidate"
-                      aria-labelledby="hand-pose-title"
-                    >
-                      <div className="hand-pose-panel-heading">
-                        <div>
-                          <span className="app-eyebrow">辅助信息</span>
-                          <strong id="hand-pose-title">手部姿态检测</strong>
-                        </div>
-                        <span className="hand-pose-algorithm">MediaPipe</span>
-                      </div>
-                      <p className="form-hint">
-                        结果只是手部预标注候选，仍须人工确认，不会自动改变正式配药动作标注或训练数据。
-                      </p>
-                      <div className={`hand-pose-status hand-pose-status-${handPoseStatus.tone}`}>
-                        <strong>{handPoseStatus.title}</strong>
-                        <span>{handPoseStatus.description}</span>
-                      </div>
-                      {canRequestHandPose ? (
-                        <Button
-                          loading={isRequestingHandPose}
-                          onClick={() => void requestHandPose()}
-                        >
-                          重新检测
-                        </Button>
-                      ) : null}
-                      {handPoseCandidates?.candidates?.[0] ? (
-                        <p className="form-hint hand-pose-candidate-note">
-                          已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
+                    <details className="hand-pose-disclosure" aria-labelledby="hand-pose-title">
+                      <summary>
+                        <span className="hand-pose-disclosure-title">
+                          <strong id="hand-pose-title">手部候选</strong>
+                          <small>MediaPipe · 仅辅助候选</small>
+                        </span>
+                        <StatusBadge tone={handPoseStatusTone(handPoseStatus.tone)}>
+                          {handPoseStatus.title}
+                        </StatusBadge>
+                      </summary>
+                      <div className="hand-pose-disclosure-content">
+                        <p className="form-hint">
+                          {handPoseStatus.description} MediaPipe Candidate 不是 Ground
+                          Truth，不会自动改变正式动作标注或训练数据。
                         </p>
-                      ) : null}
-                    </section>
+                        {canRequestHandPose ? (
+                          <Button
+                            loading={isRequestingHandPose}
+                            onClick={() => void requestHandPose()}
+                          >
+                            重新检测
+                          </Button>
+                        ) : null}
+                        {handPoseCandidates?.candidates?.[0] ? (
+                          <p className="form-hint hand-pose-candidate-note">
+                            已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
+                          </p>
+                        ) : null}
+                      </div>
+                    </details>
                   ) : null}
                 </section>
               </aside>

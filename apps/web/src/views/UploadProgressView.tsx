@@ -10,6 +10,7 @@ import {
   type UploadFileProgress,
   type UploadFileStatus,
 } from '@/api/uploads'
+import { PageHeader } from '@/components/PageHeader'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -102,12 +103,13 @@ export default function UploadProgressView() {
 
   return (
     <>
-      <section className="query-card" aria-labelledby="progress-title">
-        <div>
-          <p className="status-label">上传状态查询</p>
-          <h1 id="progress-title">查看批次上传进度</h1>
-          <p className="section-description">只读取平台已确认的状态，不会上传文件或改变批次。</p>
-        </div>
+      <PageHeader
+        eyebrow="上传状态查询"
+        titleId="progress-title"
+        title="查看批次上传进度"
+        description="只读取平台已确认的状态，不会上传文件或改变批次。"
+      />
+      <section className="upload-progress-query working-surface" aria-labelledby="progress-title">
         <form
           className="batch-form"
           onSubmit={(event) => {

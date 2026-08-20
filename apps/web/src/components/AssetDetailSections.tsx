@@ -471,6 +471,36 @@ export function QualityReviewCard({
         : review?.decision === 'NEEDS_REVIEW'
           ? 'warning'
           : 'default'
+  const showEditorInline =
+    !review || review.decision === 'UNREVIEWED' || review.decision === 'NEEDS_REVIEW'
+  const reviewEditor = (
+    <div className="quality-review-actions">
+      <Select
+        value={selectedDecision}
+        aria-label="质量结论"
+        onChange={(decision) =>
+          onSelectionChange(decision, reasonsByDecision[decision][0] ?? 'MEETS_REQUIREMENTS')
+        }
+        options={[
+          { label: '合格', value: 'QUALIFIED' },
+          { label: '不合格', value: 'REJECTED' },
+          { label: '需复核', value: 'NEEDS_REVIEW' },
+        ]}
+      />
+      <Select
+        value={selectedReason}
+        aria-label="质量原因"
+        onChange={(reason) => onSelectionChange(selectedDecision, reason)}
+        options={reasonOptions.map((reason) => ({
+          value: reason,
+          label: qualityReasonLabels[reason],
+        }))}
+      />
+      <Button type="primary" loading={isSaving} disabled={!canReview} onClick={onSave}>
+        保存质量结论
+      </Button>
+    </div>
+  )
 
   return (
     <section className="workbench-panel" aria-labelledby="quality-review-title">
@@ -510,36 +540,17 @@ export function QualityReviewCard({
             <p className="form-hint">
               技术检测完成后才能记录质量结论；当前视频仍可直接播放并供人工预览。
             </p>
+          ) : canReview ? (
+            showEditorInline ? (
+              reviewEditor
+            ) : (
+              <details className="quality-review-editor">
+                <summary>修改质量结论</summary>
+                {reviewEditor}
+              </details>
+            )
           ) : (
-            <div className="quality-review-actions">
-              <Select
-                value={selectedDecision}
-                aria-label="质量结论"
-                onChange={(decision) =>
-                  onSelectionChange(
-                    decision,
-                    reasonsByDecision[decision][0] ?? 'MEETS_REQUIREMENTS',
-                  )
-                }
-                options={[
-                  { label: '合格', value: 'QUALIFIED' },
-                  { label: '不合格', value: 'REJECTED' },
-                  { label: '需复核', value: 'NEEDS_REVIEW' },
-                ]}
-              />
-              <Select
-                value={selectedReason}
-                aria-label="质量原因"
-                onChange={(reason) => onSelectionChange(selectedDecision, reason)}
-                options={reasonOptions.map((reason) => ({
-                  value: reason,
-                  label: qualityReasonLabels[reason],
-                }))}
-              />
-              <Button type="primary" loading={isSaving} disabled={!canReview} onClick={onSave}>
-                保存质量结论
-              </Button>
-            </div>
+            <p className="form-hint">当前账号没有记录质量结论的权限。</p>
           )}
         </>
       ) : null}
@@ -571,13 +582,11 @@ export function AnnotationTaskCard({
       <h3 id="annotation-task-title">配药动作标注</h3>
       {createdTask ? (
         <>
-          <p className="annotation-task-created">
-            <strong>配药动作标注已创建并分配</strong>
-            <span className="form-hint">
-              执行人：{createdTask.assignee_actor_id}
-              。请在配药动作标注页提交时间段；当前项目管理员可对提交结果进行复核。
-            </span>
-          </p>
+          <div className="annotation-task-created">
+            <StatusBadge tone="success">已创建并分配</StatusBadge>
+            <span>执行人：{createdTask.assignee_actor_id}</span>
+          </div>
+          <p className="form-hint">请在标注页提交时间段；项目管理员随后复核。</p>
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
             查看配药动作标注
           </Link>

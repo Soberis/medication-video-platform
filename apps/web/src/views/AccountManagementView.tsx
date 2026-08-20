@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Card, Form, Input, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Form, Input, Table } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -8,6 +8,8 @@ import {
   listPlatformAccounts,
   type PlatformAccount,
 } from '@/api/admin'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge } from '@/components/StatusBadge'
 
 interface AccountFields {
   username: string
@@ -110,17 +112,24 @@ export default function AccountManagementView() {
 
   return (
     <>
-      <section className="page-heading" aria-labelledby="accounts-title">
-        <div>
-          <p className="app-eyebrow">内部访问控制</p>
-          <h1 id="accounts-title">平台账号</h1>
-          <p>创建、启停内部账号；加入项目后才能访问项目数据。</p>
-        </div>
-        <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
-          刷新
-        </Button>
-      </section>
-      <Card className="detail-card" title="创建普通用户" variant="outlined">
+      <PageHeader
+        eyebrow="内部访问控制"
+        titleId="accounts-title"
+        title="平台账号"
+        description="创建、启停内部账号；加入项目后才能访问项目数据。"
+        actions={
+          <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
+            刷新
+          </Button>
+        }
+      />
+      <section
+        className="account-create-panel working-surface"
+        aria-labelledby="account-create-title"
+      >
+        <header className="surface-section-heading">
+          <h2 id="account-create-title">创建普通用户</h2>
+        </header>
         <Form<AccountFields>
           form={form}
           layout="vertical"
@@ -138,7 +147,7 @@ export default function AccountManagementView() {
             创建账号
           </Button>
         </Form>
-      </Card>
+      </section>
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
           正在读取平台账号…
@@ -151,7 +160,10 @@ export default function AccountManagementView() {
         </div>
       ) : null}
       {loadState === 'success' ? (
-        <Card className="table-card" variant="outlined">
+        <section
+          className="table-card account-table-card working-surface"
+          aria-label="平台账号列表"
+        >
           <Table<PlatformAccount>
             dataSource={accounts}
             rowKey="username"
@@ -162,18 +174,18 @@ export default function AccountManagementView() {
                 title: '全局角色',
                 width: 130,
                 render: (_, row) => (
-                  <Tag color={row.role === 'ADMIN' ? 'blue' : 'default'}>
+                  <StatusBadge tone={row.role === 'ADMIN' ? 'processing' : 'default'}>
                     {row.role === 'ADMIN' ? '管理员' : '普通用户'}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
               {
                 title: '登录状态',
                 width: 120,
                 render: (_, row) => (
-                  <Tag color={row.enabled ? 'success' : 'error'}>
+                  <StatusBadge tone={row.enabled ? 'success' : 'error'}>
                     {row.enabled ? '启用' : '停用'}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
               {
@@ -195,7 +207,7 @@ export default function AccountManagementView() {
               },
             ]}
           />
-        </Card>
+        </section>
       ) : null}
     </>
   )

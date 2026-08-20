@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 describe('VideoManagementView', () => {
-  it('renders the server summary with one bounded request and explicit no-hand result', async () => {
+  it('renders the server summary while keeping a no-hand candidate out of the default workflow view', async () => {
     const listResponse = jsonResponse({
       items: [
         {
@@ -53,6 +53,7 @@ describe('VideoManagementView', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
+    const user = userEvent.setup()
     renderRoute(<VideoManagementView />, {
       route: `/projects/${projectId}/videos`,
       path: '/projects/:projectId/videos',
@@ -65,13 +66,16 @@ describe('VideoManagementView', () => {
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
     expect(screen.queryByText('V1.18 P0 · 单视频闭环')).not.toBeInTheDocument()
-    expect(screen.getByText('标注链路待办')).toBeInTheDocument()
-    expect(screen.getByText(/待办：标注 1/)).toBeInTheDocument()
+    expect(screen.getByText('待处理')).toBeInTheDocument()
+    expect(screen.getByText(/标注 1 · 复核 0 · 清洗 0/)).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '下一步' })).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '相机' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '留存' })).not.toBeInTheDocument()
     expect(screen.getByText('更多筛选').closest('details')).not.toHaveAttribute('open')
-    expect(screen.getByText('未发现手部')).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '手部检测' })).not.toBeInTheDocument()
+    expect(screen.queryByText('未发现手部')).not.toBeInTheDocument()
+    await user.click(screen.getByText('更多筛选'))
+    expect(screen.getByText('手部候选状态')).toBeInTheDocument()
     expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toHaveAttribute(
       'href',
@@ -395,7 +399,8 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('未发现手部')).toBeInTheDocument()
+    expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    expect(screen.queryByText('未发现手部')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),

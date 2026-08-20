@@ -16,6 +16,7 @@ afterEach(() => {
 describe('catalog views', () => {
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
+    const user = userEvent.setup()
     renderAssetDetail()
     const heading = await screen.findByRole('heading', { level: 1 })
     expect(heading).toHaveTextContent('视频详情')
@@ -26,13 +27,19 @@ describe('catalog views', () => {
       'href',
       `/projects/${projectId}/videos`,
     )
-    expect(screen.getByText('资产 ID')).toBeInTheDocument()
     expect(screen.getByText('可以直接查看视频')).toBeInTheDocument()
     expect(screen.getByText(/视频已完成上传完整性校验/)).toBeInTheDocument()
-    expect(screen.getAllByText('90000000-0000-4000-8000-000000000001').length).toBeGreaterThan(0)
+    expect(screen.getByTitle('90000000-0000-4000-8000-000000000001')).toHaveTextContent(
+      '90000000…0001',
+    )
     expect(screen.getByText(/尚未绑定到 CaptureSession/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '播放视频' })).toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
+    const additionalDetails = screen.getByText('更多信息').closest('details')
+    expect(additionalDetails).not.toHaveAttribute('open')
+    await user.click(screen.getByText('更多信息'))
+    expect(additionalDetails).toHaveAttribute('open')
+    expect(screen.getByText('资产 ID')).toBeInTheDocument()
     expect(document.body.innerHTML).not.toContain('object_key')
     expect(document.body.innerHTML).not.toContain('storage_bucket')
   })
@@ -202,7 +209,8 @@ describe('catalog views', () => {
         }),
       ),
     )
-    expect(await screen.findByText('配药动作标注已创建并分配')).toBeInTheDocument()
+    expect(await screen.findByText('已创建并分配')).toBeInTheDocument()
+    expect(screen.getByText('执行人：local-synthetic-uploader')).toBeInTheDocument()
   })
 
   it('renders persisted annotation, human review and cleaning facts after a detail refresh', async () => {
@@ -217,15 +225,19 @@ describe('catalog views', () => {
       existingAnnotationTask: completedAnnotationTask(),
     })
 
+    const user = userEvent.setup()
     renderAssetDetail()
 
     const workflow = await screen.findByRole('complementary', { name: '视频处理流程' })
-    expect(within(workflow).getByRole('heading', { name: '证据轨迹' })).toBeInTheDocument()
-    expect(within(workflow).getByText('人工复核')).toBeInTheDocument()
+    expect(within(workflow).getByRole('heading', { name: '流程状态' })).toBeInTheDocument()
+    expect(within(workflow).getAllByText('人工复核')).toHaveLength(2)
     expect(within(workflow).getAllByText('已通过清洗')).toHaveLength(1)
-    expect(within(workflow).getAllByText('已通过清洗，可参与训练数据导出')).toHaveLength(2)
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
-    expect(within(workflow).queryByText('查看复核与清洗结果')).not.toBeInTheDocument()
+    const workflowDetails = within(workflow).getByText('查看流程依据').closest('details')
+    expect(workflowDetails).not.toHaveAttribute('open')
+    await user.click(within(workflow).getByText('查看流程依据'))
+    expect(workflowDetails).toHaveAttribute('open')
+    expect(within(workflow).getAllByText('已通过清洗，可参与训练数据导出')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: '创建配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看配药动作标注' })).toBeInTheDocument()
     expect(document.querySelector('.workbench-primary')?.tagName).toBe('SECTION')
@@ -247,10 +259,13 @@ describe('catalog views', () => {
       existingAnnotationTask: completedAnnotationTask(),
     })
 
+    const user = userEvent.setup()
     renderAssetDetail()
 
     expect(await screen.findByRole('button', { name: '查看质量结论' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
+    const workflow = screen.getByRole('complementary', { name: '视频处理流程' })
+    await user.click(within(workflow).getByText('查看流程依据'))
     expect(
       screen.getByText('历史清洗已通过；当前质量结论未确认或未通过，暂不能参与训练数据导出'),
     ).toBeInTheDocument()
@@ -258,13 +273,17 @@ describe('catalog views', () => {
 
   it('keeps automatic hand-pose detection auxiliary and does not add a manual start action', async () => {
     const fetchMock = stubAsset({ role: 'MEMBER', status: 'INGESTED', handPose: true })
+    const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    expect(await screen.findByText('手部姿态检测')).toBeInTheDocument()
-    expect(screen.getByText(/结果只是手部预标注候选，仍须人工确认/)).toBeInTheDocument()
+    const handPoseSummary = await screen.findByText('手部候选')
+    expect(handPoseSummary.closest('details')).not.toHaveAttribute('open')
     expect(await screen.findByText('等待自动手部检测')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新检测' })).not.toBeInTheDocument()
+    await user.click(handPoseSummary)
+    expect(handPoseSummary.closest('details')).toHaveAttribute('open')
+    expect(screen.getByText(/MediaPipe Candidate 不是 Ground Truth/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
@@ -280,10 +299,12 @@ describe('catalog views', () => {
       status: 'INGESTED',
       handPoseState: failedHandPoseJob(false),
     })
+    const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
     expect(await screen.findByText('手部检测失败')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
+    await user.click(screen.getByText('手部候选'))
     expect(screen.getByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
     expect(screen.getAllByText(/当前失败不可重试，可继续人工处理/)).toHaveLength(1)
     expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
@@ -299,6 +320,7 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
+    await user.click(await screen.findByText('手部候选'))
     expect(await screen.findByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
     expect(screen.getByText(/可以重新检测/)).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '重新检测' }))

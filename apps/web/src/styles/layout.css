@@ -1,19 +1,19 @@
 /* Application frame, navigation and viewport-specific layout. */
 .app-shell {
-  width: min(1440px, calc(100% - 40px));
+  width: min(1360px, calc(100% - 48px));
   margin: 0 auto;
-  padding: var(--app-space-24) 0 56px;
+  padding: var(--app-space-32) 0 56px;
 }
 
-@media (min-width: 2200px) {
+@media (min-width: 1680px) {
   .app-shell {
-    width: min(1760px, calc(100% - 80px));
+    width: min(1520px, calc(100% - 96px));
   }
 }
 
 @media (min-width: 3200px) {
   .app-shell {
-    width: min(2400px, calc(100% - 120px));
+    width: min(1680px, calc(100% - 160px));
   }
 }
 
@@ -37,11 +37,11 @@
 
 .app-header {
   display: grid;
-  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.65fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--app-space-16) var(--app-space-24);
-  margin-bottom: var(--app-space-16);
-  padding: var(--app-space-4) 0 14px;
+  margin-bottom: var(--app-space-24);
+  padding: var(--app-space-4) 0;
 }
 
 .app-brand {
@@ -72,7 +72,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--app-space-4);
   min-width: 0;
 }
 

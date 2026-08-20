@@ -80,6 +80,7 @@ export default function VideoManagementView() {
     filters.cameraNumber,
     filters.capturedFrom,
     filters.capturedBefore,
+    filters.handStatus,
     filters.handResult,
   ].filter((value) => value !== undefined && value !== '').length
   const [items, setItems] = useState<VideoSummary[]>([])
@@ -250,7 +251,7 @@ export default function VideoManagementView() {
           items={[
             { label: '视频', value: summary.total_videos },
             {
-              label: '标注链路待办',
+              label: '待处理',
               value: pendingWorkCount,
               detail: `标注 ${summary.pending_annotation} · 复核 ${summary.pending_review} · 清洗 ${summary.pending_cleaning}`,
             },
@@ -260,10 +261,6 @@ export default function VideoManagementView() {
             <>
               <span>总时长 {formatDuration(summary.total_duration)}</span>
               <span>存储 {formatBytes(summary.storage_bytes)}</span>
-              <span>
-                待办：标注 {summary.pending_annotation} · 复核 {summary.pending_review} · 清洗{' '}
-                {summary.pending_cleaning}
-              </span>
             </>
           }
         />
@@ -301,21 +298,6 @@ export default function VideoManagementView() {
                 applyFilters({
                   ...filters,
                   mediaStatus: value as VideoSummaryMediaStatus | undefined,
-                })
-              }
-            />
-          </label>
-          <label>
-            手部状态
-            <Select
-              allowClear
-              value={filters.handStatus}
-              placeholder="全部"
-              options={Object.entries(handStatusLabels).map(([value, label]) => ({ value, label }))}
-              onChange={(value) =>
-                applyFilters({
-                  ...filters,
-                  handStatus: value as VideoSummaryHandStatus | undefined,
                 })
               }
             />
@@ -378,6 +360,24 @@ export default function VideoManagementView() {
                 options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
                 onChange={(value) =>
                   applyFilters({ ...filters, source: value as VideoSummarySource | undefined })
+                }
+              />
+            </label>
+            <label>
+              手部候选状态
+              <Select
+                allowClear
+                value={filters.handStatus}
+                placeholder="全部"
+                options={Object.entries(handStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  applyFilters({
+                    ...filters,
+                    handStatus: value as VideoSummaryHandStatus | undefined,
+                  })
                 }
               />
             </label>
@@ -462,7 +462,7 @@ export default function VideoManagementView() {
             columns={[
               {
                 title: '视频',
-                width: 200,
+                width: 260,
                 render: (_, row) => (
                   <>
                     <strong className="mono-wrap">
@@ -480,23 +480,17 @@ export default function VideoManagementView() {
                       来源 {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
                       {' · '}
                       {row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}
+                      {' · '}
+                      {row.captured_at
+                        ? `拍摄 ${formatDateTime(row.captured_at)}`
+                        : `接收 ${formatDateTime(row.received_at)}`}
                     </span>
                   </>
                 ),
               },
               {
-                title: '拍摄 / 接收时间',
-                width: 175,
-                render: (_, row) => (
-                  <>
-                    <span>{formatDateTime(row.captured_at)}</span>
-                    <span className="cell-secondary">接收 {formatDateTime(row.received_at)}</span>
-                  </>
-                ),
-              },
-              {
                 title: '媒体',
-                width: 90,
+                width: 100,
                 render: (_, row) => (
                   <StatusBadge tone={statusTone(row.media_status)}>
                     {mediaStatusLabels[row.media_status]}
@@ -504,21 +498,9 @@ export default function VideoManagementView() {
                 ),
               },
               {
-                title: '手部检测',
-                width: 125,
-                render: (_, row) => (
-                  <>
-                    <StatusBadge tone={handStatusTone(row.hand_status)}>
-                      {handStatusLabels[row.hand_status]}
-                    </StatusBadge>
-                    <span className="cell-secondary">{handResultLabels[row.hand_result]}</span>
-                  </>
-                ),
-              },
-              {
                 title: '配药动作标注',
                 dataIndex: 'annotation_status',
-                width: 130,
+                width: 120,
                 render: (value: VideoSummaryAnnotationStatus) => (
                   <StatusBadge tone={annotationStatusTone(value)}>
                     {annotationStatusLabels[value]}
@@ -528,7 +510,7 @@ export default function VideoManagementView() {
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
-                width: 90,
+                width: 100,
                 render: (value: VideoSummaryCleaningStatus) => (
                   <StatusBadge tone={statusTone(value)}>{cleaningStatusLabels[value]}</StatusBadge>
                 ),
@@ -584,10 +566,6 @@ function toLocalDateTimeInput(value?: string) {
   const date = new Date(value)
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
-}
-
-function handStatusTone(status: VideoSummaryHandStatus) {
-  return status === 'FAILED' ? 'error' : statusTone(status)
 }
 
 function annotationStatusTone(status: VideoSummaryAnnotationStatus) {
