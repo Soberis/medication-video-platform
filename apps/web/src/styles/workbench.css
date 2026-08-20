@@ -67,15 +67,36 @@
   min-width: 0;
 }
 
+.workbench-primary {
+  display: grid;
+  gap: var(--app-space-24);
+}
+
 .workbench-primary > .playback-panel {
   margin-top: 0;
 }
 
-/* Player surface: no extra card chrome around the main visual anchor. */
+/* The player is a real work surface: the frame separates an inactive video area
+ * from the page without inventing a thumbnail or a loading state. */
 .playback-panel {
   display: grid;
   gap: var(--app-space-12);
+  width: min(100%, 960px);
+  padding: var(--app-space-16);
+  overflow: hidden;
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-large);
+  background: var(--app-color-surface);
   justify-items: start;
+}
+
+.playback-surface-heading {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 24px;
+  padding-bottom: var(--app-space-12);
+  border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
 .playback-idle-stage {
@@ -83,11 +104,11 @@
   align-content: center;
   justify-items: center;
   gap: var(--app-space-16);
-  width: min(100%, 960px);
+  width: 100%;
   min-height: 0;
   padding: var(--app-space-24);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-default);
+  border: 1px solid var(--app-color-border);
+  border-radius: var(--app-radius-small);
   background: var(--app-color-surface-muted);
   aspect-ratio: 16 / 9;
   text-align: center;
@@ -136,22 +157,38 @@
 /* Human workflow panels under the player. */
 .workbench-under-player {
   display: grid;
-  gap: var(--app-space-12);
-  margin-top: var(--app-space-24);
+  width: min(100%, 960px);
+  gap: 0;
   scroll-margin-top: var(--app-space-16);
+  overflow: hidden;
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-large);
+  background: var(--app-color-surface);
 }
 
 .workbench-under-player > h2 {
   margin: 0;
+  padding: var(--app-space-16) var(--app-space-16) var(--app-space-12);
+  border-bottom: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-3);
+}
+
+.workbench-under-player > .workbench-panel {
+  padding-right: var(--app-space-16);
+  padding-left: var(--app-space-16);
+  border-top: 0;
+}
+
+.workbench-under-player > .workbench-panel + .workbench-panel {
+  border-top: 1px solid var(--app-color-border-subtle);
 }
 
 .workbench-panel {
   display: grid;
   gap: var(--app-space-8);
   align-content: start;
-  padding: var(--app-space-16) 0 0;
+  padding: var(--app-space-16) 0;
   border: 0;
   border-top: 1px solid var(--app-color-border-subtle);
   border-radius: 0;
@@ -218,8 +255,10 @@
 .workflow-facts {
   display: grid;
   gap: var(--app-space-12);
-  padding: var(--app-space-16) 0 0;
-  border-top: 1px solid var(--app-color-border-subtle);
+  padding: var(--app-space-16);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-large);
+  background: var(--app-color-surface);
 }
 
 .workflow-facts-heading {
@@ -433,11 +472,6 @@
   gap: var(--app-space-8);
   margin: 0;
   color: var(--app-color-text-secondary);
-  font-size: var(--app-font-size-helper);
-}
-
-.playback-purpose {
-  color: var(--app-color-success);
   font-size: var(--app-font-size-helper);
 }
 

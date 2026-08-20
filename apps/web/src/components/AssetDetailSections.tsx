@@ -172,13 +172,15 @@ export function PlaybackCard({
 
   return (
     <section className="playback-panel" aria-label="视频查看">
+      <div className="playback-surface-heading">
+        <span className="app-eyebrow">人工查看</span>
+      </div>
       {!grant && availability ? (
         <div
           className={`playback-idle-stage playback-availability-${availability.type}`}
           role="status"
         >
           <div className="playback-idle-copy">
-            <span className="app-eyebrow">人工查看</span>
             <strong>{availability.title}</strong>
             <span>{availability.description}</span>
           </div>
@@ -198,7 +200,6 @@ export function PlaybackCard({
         <>
           <div className="playback-meta">
             <span>授权有效至 {formatDateTime(grant.expires_at)}</span>
-            <span className="playback-purpose">人工查看</span>
           </div>
           {playbackMessage ? (
             <Alert
