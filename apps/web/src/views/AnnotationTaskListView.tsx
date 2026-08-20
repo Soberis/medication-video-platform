@@ -1,16 +1,4 @@
-import {
-  App as AntdApp,
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Table,
-  Tag,
-} from 'antd'
+import { App as AntdApp, Button, Empty, Form, Input, InputNumber, Modal, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -33,6 +21,9 @@ import {
   type TrainingDataExportPreview,
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge } from '@/components/StatusBadge'
+import { SummaryStrip } from '@/components/SummaryStrip'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
@@ -66,7 +57,7 @@ function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'SUBMITTED') return '已提交'
   return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '已分配'
 }
-function taskStatusColor(task: AnnotationTask) {
+function taskStatusColor(task: AnnotationTask): 'success' | 'default' | 'warning' {
   return task.status === 'COMPLETED'
     ? 'success'
     : task.status === 'SUBMITTED'
@@ -385,28 +376,28 @@ export default function AnnotationTaskListView() {
 
   return (
     <>
-      <section className="page-heading" aria-labelledby="annotation-task-title">
-        <div>
-          <p className="app-eyebrow">固定机位视频 · 人工确认</p>
-          <h1 id="annotation-task-title">配药动作标注</h1>
-          <p>在配药舱固定机位视频上记录动作时间段；提交后由当前项目管理员复核。</p>
-        </div>
-        <div className="detail-actions">
-          {loadState === 'success' && progress?.scope === 'PROJECT' ? (
-            <Button
-              type="primary"
-              loading={isTrainingPreviewLoading}
-              disabled={isTrainingDownloadLoading}
-              onClick={() => void openTrainingExport()}
-            >
-              导出训练数据
+      <PageHeader
+        eyebrow="固定机位视频 · 人工确认"
+        titleId="annotation-task-title"
+        title="配药动作标注"
+        description="在配药舱固定机位视频上记录动作时间段；提交后由当前项目管理员复核。"
+        actions={
+          <>
+            {loadState === 'success' && progress?.scope === 'PROJECT' ? (
+              <Button
+                loading={isTrainingPreviewLoading}
+                disabled={isTrainingDownloadLoading}
+                onClick={() => void openTrainingExport()}
+              >
+                导出训练数据
+              </Button>
+            ) : null}
+            <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+              刷新
             </Button>
-          ) : null}
-          <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-            刷新
-          </Button>
-        </div>
-      </section>
+          </>
+        }
+      />
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
           正在读取配药动作标注…
@@ -420,36 +411,25 @@ export default function AnnotationTaskListView() {
         </div>
       ) : null}
       {loadState === 'success' && progress ? (
-        <dl
-          className="annotation-progress"
-          aria-label={
-            progress.scope === 'PROJECT' ? '项目配药动作标注进度' : '我的配药动作标注进度'
-          }
-        >
-          <div>
-            <dt>{progress.scope === 'PROJECT' ? '项目任务' : '我的任务'}</dt>
-            <dd>{progress.total}</dd>
-          </div>
-          <div>
-            <dt>待提交</dt>
-            <dd>{progress.awaiting_submission}</dd>
-          </div>
-          <div>
-            <dt>待修改</dt>
-            <dd>{progress.rework_required}</dd>
-          </div>
-          <div>
-            <dt>待复核</dt>
-            <dd>{progress.awaiting_review}</dd>
-          </div>
-          <div>
-            <dt>已完成</dt>
-            <dd>{progress.completed}</dd>
-          </div>
-        </dl>
+        <SummaryStrip
+          ariaLabel={progress.scope === 'PROJECT' ? '项目配药动作标注进度' : '我的配药动作标注进度'}
+          items={[
+            {
+              label: progress.scope === 'PROJECT' ? '项目任务' : '我的任务',
+              value: progress.total,
+            },
+            { label: '待提交', value: progress.awaiting_submission },
+            { label: '待修改', value: progress.rework_required },
+            { label: '待复核', value: progress.awaiting_review },
+            { label: '已完成', value: progress.completed },
+          ]}
+        />
       ) : null}
       {loadState === 'success' && items.length ? (
-        <Card className="table-card annotation-task-table-card" variant="outlined">
+        <section
+          className="table-card annotation-task-table-card working-surface"
+          aria-label="配药动作标注任务列表"
+        >
           <Table<AnnotationTask>
             className="annotation-task-table"
             dataSource={items}
@@ -472,7 +452,9 @@ export default function AnnotationTaskListView() {
               {
                 title: '状态',
                 width: 85,
-                render: (_, row) => <Tag color={taskStatusColor(row)}>{taskStatusLabel(row)}</Tag>,
+                render: (_, row) => (
+                  <StatusBadge tone={taskStatusColor(row)}>{taskStatusLabel(row)}</StatusBadge>
+                ),
               },
               {
                 title: '标注 / 复核 / 清洗',
@@ -481,34 +463,36 @@ export default function AnnotationTaskListView() {
                   const revision = row.annotation_revision
                   const presentation = postCleaningPresentation(row)
                   return revision ? (
-                    <>
-                      <div>已提交 · {revision.annotation_document.segments.length} 个时间段</div>
+                    <div className="task-evidence-summary">
+                      <strong>
+                        已提交 · {revision.annotation_document.segments.length} 个时间段
+                      </strong>
                       {revision.review ? (
-                        <>
-                          <Tag
-                            color={revision.review.decision === 'APPROVED' ? 'success' : 'error'}
-                          >
-                            {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
-                          </Tag>
+                        <span
+                          className={`task-evidence-review task-evidence-review-${
+                            revision.review.decision === 'APPROVED' ? 'approved' : 'rejected'
+                          }`}
+                        >
+                          {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
                           {revision.review.reviewed_by === revision.submitted_by ? (
-                            <Tag color="gold">管理员自审（SELF_ADMIN_APPROVAL）</Tag>
+                            <small>管理员自审（SELF_ADMIN_APPROVAL）</small>
                           ) : null}
-                        </>
+                        </span>
                       ) : (
                         <span className="muted-text">等待管理员复核</span>
                       )}
                       {presentation ? (
-                        <div>
-                          <Tag color={presentation.color}>{presentation.label}</Tag>
-                          <span className="cell-secondary">{presentation.description}</span>
+                        <div
+                          className={`task-cleaning-fact task-cleaning-fact-${presentation.color}`}
+                        >
+                          <strong>{presentation.label}</strong>
+                          <span>{presentation.description}</span>
                           {presentation.reasons.length ? (
-                            <span className="cell-secondary">
-                              原因：{presentation.reasons.join('；')}
-                            </span>
+                            <small>原因：{presentation.reasons.join('；')}</small>
                           ) : null}
                         </div>
                       ) : null}
-                    </>
+                    </div>
                   ) : (
                     <span className="muted-text">尚未提交</span>
                   )
@@ -571,7 +555,7 @@ export default function AnnotationTaskListView() {
               },
             ]}
           />
-        </Card>
+        </section>
       ) : null}
       {loadState === 'success' && !items.length ? (
         <Empty description="当前没有可处理的配药动作标注。管理员可在已判定合格的视频详情中创建并分配任务。" />

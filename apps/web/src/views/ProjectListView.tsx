@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Card, Dropdown, Empty, Tag } from 'antd'
+import { App as AntdApp, Button, Dropdown, Empty } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -11,7 +11,9 @@ import {
   type DataProject,
 } from '@/api/projects'
 import { paths } from '@/app/paths'
+import { PageHeader } from '@/components/PageHeader'
 import { usePromptDialog } from '@/components/PromptDialog'
+import { StatusBadge } from '@/components/StatusBadge'
 
 type LoadState = 'loading' | 'success' | 'error'
 
@@ -143,22 +145,24 @@ export default function ProjectListView() {
 
   return (
     <>
-      <section className="page-heading project-page-heading" aria-labelledby="projects-title">
-        <div>
-          <h1 id="projects-title">项目</h1>
-          <p>选择项目，继续管理配药操作和视频。</p>
-        </div>
-        <div className="detail-actions">
-          <Button loading={loadState === 'loading'} onClick={() => void loadProjects()}>
-            刷新
-          </Button>
-          {canCreateProjects ? (
-            <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
-              新建项目
+      <PageHeader
+        className="project-page-heading"
+        titleId="projects-title"
+        title="项目"
+        description="选择项目，继续管理配药操作和视频。"
+        actions={
+          <>
+            <Button loading={loadState === 'loading'} onClick={() => void loadProjects()}>
+              刷新
             </Button>
-          ) : null}
-        </div>
-      </section>
+            {canCreateProjects ? (
+              <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
+                新建项目
+              </Button>
+            ) : null}
+          </>
+        }
+      />
       {loadState === 'loading' ? (
         <div className="catalog-notice" role="status">
           正在读取授权项目…
@@ -172,16 +176,16 @@ export default function ProjectListView() {
         </div>
       ) : null}
       {projects.length > 0 ? (
-        <Card className="project-list-card" variant="outlined">
+        <section className="project-list-surface working-surface" aria-label="项目列表">
           <ul className="project-list" aria-label="已加入的项目">
             {projects.map((project) => (
               <li key={project.project_id} className="project-list-item">
                 <div className="project-list-name">
                   <div className="project-list-heading">
                     <strong>{project.display_name}</strong>
-                    <Tag color={project.current_role === 'ADMIN' ? 'blue' : 'default'}>
+                    <StatusBadge tone={project.current_role === 'ADMIN' ? 'info' : 'default'}>
                       {project.current_role === 'ADMIN' ? '管理员' : '普通用户'}
-                    </Tag>
+                    </StatusBadge>
                   </div>
                   <p>在项目内统一管理配药操作、视频资产和配药动作标注。</p>
                 </div>
@@ -225,7 +229,7 @@ export default function ProjectListView() {
               </li>
             ))}
           </ul>
-        </Card>
+        </section>
       ) : loadState === 'success' ? (
         <Empty description="当前账号尚未加入任何项目。管理员可新建首个项目；普通用户需要由项目管理员添加为成员。">
           {canCreateProjects ? (

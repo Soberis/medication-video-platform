@@ -1,4 +1,4 @@
-import { Alert, Button, Descriptions, Select, Tag } from 'antd'
+import { Alert, Button, Descriptions, Select } from 'antd'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 
@@ -11,6 +11,7 @@ import type {
 } from '@/api/catalog'
 import type { ProjectMembership } from '@/api/projects'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import {
   qualityDecisionLabels,
   qualityReasonLabels,
@@ -173,22 +174,25 @@ export function PlaybackCard({
     <section className="playback-panel" aria-label="视频查看">
       {!grant && availability ? (
         <div
-          className={`playback-availability playback-availability-${availability.type}`}
+          className={`playback-idle-stage playback-availability-${availability.type}`}
           role="status"
         >
-          <strong>{availability.title}</strong>
-          <span>{availability.description}</span>
+          <div className="playback-idle-copy">
+            <span className="app-eyebrow">人工查看</span>
+            <strong>{availability.title}</strong>
+            <span>{availability.description}</span>
+          </div>
+          {canPlay ? (
+            <Button
+              className="playback-primary-action"
+              type="primary"
+              loading={isRequestingPlayback}
+              onClick={onStartPlayback}
+            >
+              播放视频
+            </Button>
+          ) : null}
         </div>
-      ) : null}
-      {canPlay && !grant ? (
-        <Button
-          className="playback-primary-action"
-          type="primary"
-          loading={isRequestingPlayback}
-          onClick={onStartPlayback}
-        >
-          播放视频
-        </Button>
       ) : null}
       {grant ? (
         <>
@@ -338,7 +342,7 @@ export function MediaReportCard({
     content = (
       <>
         <div className="media-report-summary">
-          <Tag color="success">完整解码已验证</Tag>
+          <StatusBadge tone="success">完整解码已验证</StatusBadge>
           <span className="form-hint">检测完成于 {formatDateTime(report.created_at)}</span>
         </div>
         <Descriptions
@@ -459,7 +463,7 @@ export function QualityReviewCard({
   onSelectionChange,
 }: QualityReviewCardProps) {
   const reasonOptions = reasonsByDecision[selectedDecision]
-  const tagColor =
+  const tagTone: StatusBadgeTone =
     review?.decision === 'QUALIFIED'
       ? 'success'
       : review?.decision === 'REJECTED'
@@ -490,9 +494,9 @@ export function QualityReviewCard({
       {loadState === 'success' && review ? (
         <>
           <div className="quality-review-summary">
-            <Tag color={assetStatus === 'INGESTED' ? tagColor : 'default'}>
+            <StatusBadge tone={assetStatus === 'INGESTED' ? tagTone : 'default'}>
               {assetStatus === 'INGESTED' ? qualityDecisionLabels[review.decision] : '待技术检测'}
-            </Tag>
+            </StatusBadge>
             {assetStatus === 'INGESTED' && review.reason_code ? (
               <span>{qualityReasonLabels[review.reason_code]}</span>
             ) : null}

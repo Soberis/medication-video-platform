@@ -220,8 +220,9 @@ describe('catalog views', () => {
     renderAssetDetail()
 
     const workflow = await screen.findByRole('complementary', { name: '视频处理流程' })
+    expect(within(workflow).getByRole('heading', { name: '证据轨迹' })).toBeInTheDocument()
     expect(within(workflow).getByText('人工复核')).toBeInTheDocument()
-    expect(within(workflow).getAllByText('已通过清洗')).toHaveLength(2)
+    expect(within(workflow).getAllByText('已通过清洗')).toHaveLength(1)
     expect(within(workflow).getAllByText('已通过清洗，可参与训练数据导出')).toHaveLength(2)
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
     expect(within(workflow).queryByText('查看复核与清洗结果')).not.toBeInTheDocument()
@@ -284,7 +285,8 @@ describe('catalog views', () => {
     expect(await screen.findByText('手部检测失败')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
     expect(screen.getByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
-    expect(screen.getAllByText(/当前失败不可重试，可继续人工处理/)).toHaveLength(2)
+    expect(screen.getAllByText(/当前失败不可重试，可继续人工处理/)).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 
   it('uses the AssetDetail retry endpoint only for a retryable failed run', async () => {
@@ -399,7 +401,7 @@ describe('catalog views', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500)
     })
-    expect(screen.getByText('已发现手部')).toBeInTheDocument()
+    expect(screen.getByText('已发现手部候选')).toBeInTheDocument()
     expect(screen.getByText('手部检测完成')).toBeInTheDocument()
     expect(handPoseReads).toBe(2)
 

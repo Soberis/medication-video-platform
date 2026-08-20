@@ -107,6 +107,31 @@ describe('App', () => {
     expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
   })
 
+  it('keeps a video detail in the video-management navigation context', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    const assetId = '50000000-0000-4000-8000-000000000001'
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [{ path: 'projects/:projectId/assets/:id', element: <div>视频详情页面</div> }],
+        },
+      ],
+      [`/projects/${projectId}/assets/${assetId}`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByText('管理').closest('details')).not.toHaveClass(
+      'nav-more-active',
+    )
+  })
+
   it('only highlights local upload in the management menu on the local-upload page', () => {
     renderRouter(
       [

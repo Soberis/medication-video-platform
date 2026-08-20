@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Tag } from 'antd'
+import { Alert, App as AntdApp, Button } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -56,6 +56,7 @@ import {
   QualityReviewCard,
 } from '@/components/AssetDetailSections'
 import { usePromptDialog } from '@/components/PromptDialog'
+import { StatusBadge } from '@/components/StatusBadge'
 
 type WorkflowStepState = 'complete' | 'current' | 'waiting' | 'blocked'
 
@@ -203,48 +204,6 @@ export default function AssetDetailView() {
               detail: '完成后才能记录质量结论',
             }
 
-    const handStep: WorkflowStep =
-      detail.status !== 'INGESTED'
-        ? {
-            label: '手部检测',
-            state: 'waiting',
-            status: '等待媒体',
-            detail: '媒体准备好后可生成候选',
-          }
-        : handPoseJob === null
-          ? {
-              label: '手部检测',
-              state: 'waiting',
-              status: '等待自动检测',
-              detail: 'MediaPipe 预标注不阻断人工流程',
-            }
-          : handPoseJob.status === 'SUCCEEDED'
-            ? {
-                label: '手部检测',
-                state: 'complete',
-                status: '已完成',
-                detail:
-                  handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                    ? '未发现手部候选'
-                    : `${handPoseCandidates?.candidates.length ?? 0} 条候选可供查看`,
-              }
-            : handPoseJob.status === 'FAILED'
-              ? {
-                  label: '手部检测',
-                  state: 'waiting',
-                  status: handPoseJob.run_summary?.retryable === true ? '可重试' : '失败',
-                  detail:
-                    handPoseJob.run_summary?.retryable === true
-                      ? '检测失败，可重新检测；不会阻断人工标注'
-                      : '当前失败不可重试，可继续人工处理',
-                }
-              : {
-                  label: '手部检测',
-                  state: 'current',
-                  status: '检测中',
-                  detail: '页面会自动更新状态',
-                }
-
     const annotationStep: WorkflowStep =
       qualityReview?.decision === 'REJECTED'
         ? {
@@ -370,25 +329,15 @@ export default function AssetDetailView() {
                 detail: '只有人工复核通过后才会产生清洗结果',
               }
 
-    return [mediaStep, handStep, annotationStep, reviewStep, cleaningStep]
+    return [mediaStep, annotationStep, reviewStep, cleaningStep]
   }, [
     annotationTask,
     annotationTaskLoadState,
     detail,
-    handPoseCandidates,
-    handPoseJob,
     hasCurrentQualifiedQuality,
     projectRole,
     qualityReview,
   ])
-
-  const currentWorkflowStep =
-    workflowSteps.find((step) => step.state === 'current' && step.label !== '手部检测') ??
-    workflowSteps.find((step) => step.state === 'blocked' && step.label !== '手部检测') ??
-    workflowSteps.find((step) => step.state === 'current') ??
-    workflowSteps.find((step) => step.state === 'blocked') ??
-    [...workflowSteps].reverse().find((step) => step.state === 'complete') ??
-    workflowSteps[0]
 
   const canParticipateInTrainingDataExport =
     hasCurrentQualifiedQuality &&
@@ -592,7 +541,7 @@ export default function AssetDetailView() {
       }
       return {
         tone: 'succeeded' as const,
-        title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已发现手部' : '手部姿态检测完成',
+        title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已发现手部候选' : '手部姿态检测完成',
         description: `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`,
       }
     }
@@ -1206,7 +1155,9 @@ export default function AssetDetailView() {
             <div className="workbench-heading-copy">
               <div className="workbench-title-row">
                 <h1 id="asset-detail-title">视频详情</h1>
-                <Tag color={statusTone(detail.status)}>{assetStatusLabels[detail.status]}</Tag>
+                <StatusBadge tone={statusTone(detail.status)}>
+                  {assetStatusLabels[detail.status]}
+                </StatusBadge>
               </div>
               <p className="workbench-video-name">
                 <span>当前视频</span>
@@ -1302,11 +1253,14 @@ export default function AssetDetailView() {
                 </section>
               </section>
               <aside className="workbench-sidebar" aria-label="视频处理流程">
-                <section className="workflow-next-step" aria-labelledby="workflow-next-step-title">
+                <section
+                  className="next-action-panel semantic-panel"
+                  aria-labelledby="next-action-title"
+                >
                   <span className="app-eyebrow">
                     {canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
                   </span>
-                  <strong id="workflow-next-step-title">{nextStep.title}</strong>
+                  <strong id="next-action-title">{nextStep.title}</strong>
                   <p>{nextStep.description}</p>
                   {nextStep.interactive ? (
                     <Button type="primary" onClick={handleNextStep}>
@@ -1314,21 +1268,24 @@ export default function AssetDetailView() {
                     </Button>
                   ) : null}
                 </section>
-                <div className="workflow-rail">
-                  <div className="workflow-current">
-                    <span className="app-eyebrow">当前阶段</span>
-                    <strong>{currentWorkflowStep?.label ?? '读取中'}</strong>
-                    <span>{currentWorkflowStep?.status ?? '读取状态…'}</span>
+                <section className="evidence-rail" aria-labelledby="evidence-rail-title">
+                  <div className="evidence-rail-heading">
+                    <span className="app-eyebrow">服务端事实</span>
+                    <h2 id="evidence-rail-title">证据轨迹</h2>
+                    <p>仅展示已确认事实、真实阻断和辅助候选；不表示百分比进度。</p>
                   </div>
-                  <ol className="workflow-steps">
+                  <ol className="evidence-rail-list">
                     {workflowSteps.map((step) => (
-                      <li className={`workflow-step workflow-step-${step.state}`} key={step.label}>
-                        <span className="workflow-step-marker" aria-hidden="true" />
-                        <div className="workflow-step-content">
-                          <div className="workflow-step-heading">
+                      <li
+                        className={`evidence-rail-item evidence-rail-item-${step.state}`}
+                        key={step.label}
+                      >
+                        <span className="evidence-rail-marker" aria-hidden="true" />
+                        <div className="evidence-rail-item-content">
+                          <div className="evidence-rail-item-heading">
                             <strong>{step.label}</strong>
                             <span
-                              className={`workflow-step-badge workflow-step-badge-${step.state}`}
+                              className={`evidence-rail-state evidence-rail-state-${step.state}`}
                             >
                               {workflowStateLabels[step.state]}
                             </span>
@@ -1340,7 +1297,10 @@ export default function AssetDetailView() {
                     ))}
                   </ol>
                   {detail.status === 'INGESTED' ? (
-                    <section className="hand-pose-panel" aria-labelledby="hand-pose-title">
+                    <section
+                      className="hand-pose-panel evidence-rail-candidate"
+                      aria-labelledby="hand-pose-title"
+                    >
                       <div className="hand-pose-panel-heading">
                         <div>
                           <span className="app-eyebrow">辅助信息</span>
@@ -1370,7 +1330,7 @@ export default function AssetDetailView() {
                       ) : null}
                     </section>
                   ) : null}
-                </div>
+                </section>
               </aside>
             </div>
             <details className="detail-disclosure">

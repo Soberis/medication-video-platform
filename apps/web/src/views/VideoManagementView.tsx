@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Card, Empty, InputNumber, Select, Table, Tag } from 'antd'
+import { App as AntdApp, Button, Empty, InputNumber, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -17,6 +17,9 @@ import {
   type VideoSummarySource,
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge } from '@/components/StatusBadge'
+import { SummaryStrip } from '@/components/SummaryStrip'
 import { formatDateTime, shortId, statusTone } from '@/features/catalog/catalog-presentation'
 import {
   parseVideoFilters,
@@ -230,43 +233,40 @@ export default function VideoManagementView() {
 
   return (
     <>
-      <section className="page-heading" aria-labelledby="video-management-title">
-        <div>
-          <p className="app-eyebrow">
-            {projectId ? `当前项目 · ${shortId(projectId)}` : '当前项目'}
-          </p>
-          <h1 id="video-management-title">视频管理</h1>
-          <p>根据当前状态处理视频，并推进人工流程。</p>
-        </div>
-        <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
-          刷新
-        </Button>
-      </section>
+      <PageHeader
+        eyebrow={projectId ? `当前项目 · ${shortId(projectId)}` : '当前项目'}
+        titleId="video-management-title"
+        title="视频管理"
+        description="根据当前状态处理视频，并推进人工流程。"
+        actions={
+          <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
+            刷新
+          </Button>
+        }
+      />
       {summary ? (
-        <section className="video-management-summary" aria-label="数据管理汇总">
-          <div className="video-summary-headline">
-            <div>
-              <span className="cell-secondary">视频</span>
-              <strong>{summary.total_videos}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">标注链路待办</span>
-              <strong>{pendingWorkCount}</strong>
-            </div>
-            <div>
-              <span className="cell-secondary">可用数据</span>
-              <strong>{summary.usable_count}</strong>
-            </div>
-          </div>
-          <div className="video-summary-meta">
-            <span>总时长 {formatDuration(summary.total_duration)}</span>
-            <span>存储 {formatBytes(summary.storage_bytes)}</span>
-            <span>
-              待办：标注 {summary.pending_annotation} · 复核 {summary.pending_review} · 清洗{' '}
-              {summary.pending_cleaning}
-            </span>
-          </div>
-        </section>
+        <SummaryStrip
+          ariaLabel="数据管理汇总"
+          items={[
+            { label: '视频', value: summary.total_videos },
+            {
+              label: '标注链路待办',
+              value: pendingWorkCount,
+              detail: `标注 ${summary.pending_annotation} · 复核 ${summary.pending_review} · 清洗 ${summary.pending_cleaning}`,
+            },
+            { label: '可用数据', value: summary.usable_count },
+          ]}
+          footer={
+            <>
+              <span>总时长 {formatDuration(summary.total_duration)}</span>
+              <span>存储 {formatBytes(summary.storage_bytes)}</span>
+              <span>
+                待办：标注 {summary.pending_annotation} · 复核 {summary.pending_review} · 清洗{' '}
+                {summary.pending_cleaning}
+              </span>
+            </>
+          }
+        />
       ) : null}
       {summaryError ? (
         <div className="catalog-notice" role="status">
@@ -274,7 +274,7 @@ export default function VideoManagementView() {
         </div>
       ) : null}
       <section
-        className="video-management-filter-panel"
+        className="video-management-filter-panel working-surface"
         aria-labelledby="video-management-filters-title"
       >
         <div className="filter-card-heading">
@@ -448,7 +448,10 @@ export default function VideoManagementView() {
         <Empty description="当前没有符合条件的视频。" />
       ) : null}
       {items.length > 0 ? (
-        <Card className="table-card video-management-table-card" variant="outlined">
+        <section
+          className="table-card video-management-table-card working-surface"
+          aria-label="视频列表"
+        >
           <Table<VideoSummary>
             className="video-management-table"
             dataSource={items}
@@ -495,12 +498,9 @@ export default function VideoManagementView() {
                 title: '媒体',
                 width: 90,
                 render: (_, row) => (
-                  <Tag
-                    bordered={false}
-                    className={`status-tag status-tag-${statusTone(row.media_status)}`}
-                  >
+                  <StatusBadge tone={statusTone(row.media_status)}>
                     {mediaStatusLabels[row.media_status]}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
               {
@@ -508,12 +508,9 @@ export default function VideoManagementView() {
                 width: 125,
                 render: (_, row) => (
                   <>
-                    <Tag
-                      bordered={false}
-                      className={`status-tag status-tag-${statusTone(row.hand_status)}`}
-                    >
+                    <StatusBadge tone={handStatusTone(row.hand_status)}>
                       {handStatusLabels[row.hand_status]}
-                    </Tag>
+                    </StatusBadge>
                     <span className="cell-secondary">{handResultLabels[row.hand_result]}</span>
                   </>
                 ),
@@ -523,9 +520,9 @@ export default function VideoManagementView() {
                 dataIndex: 'annotation_status',
                 width: 130,
                 render: (value: VideoSummaryAnnotationStatus) => (
-                  <Tag bordered={false} className={`status-tag status-tag-${statusTone(value)}`}>
+                  <StatusBadge tone={annotationStatusTone(value)}>
                     {annotationStatusLabels[value]}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
               {
@@ -533,9 +530,7 @@ export default function VideoManagementView() {
                 dataIndex: 'cleaning_status',
                 width: 90,
                 render: (value: VideoSummaryCleaningStatus) => (
-                  <Tag bordered={false} className={`status-tag status-tag-${statusTone(value)}`}>
-                    {cleaningStatusLabels[value]}
-                  </Tag>
+                  <StatusBadge tone={statusTone(value)}>{cleaningStatusLabels[value]}</StatusBadge>
                 ),
               },
               {
@@ -574,7 +569,7 @@ export default function VideoManagementView() {
               </Button>
             </div>
           ) : null}
-        </Card>
+        </section>
       ) : null}
     </>
   )
@@ -589,6 +584,16 @@ function toLocalDateTimeInput(value?: string) {
   const date = new Date(value)
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
+}
+
+function handStatusTone(status: VideoSummaryHandStatus) {
+  return status === 'FAILED' ? 'error' : statusTone(status)
+}
+
+function annotationStatusTone(status: VideoSummaryAnnotationStatus) {
+  if (status === 'COMPLETED') return 'success'
+  if (status === 'SUBMITTED') return 'processing'
+  return status === 'ASSIGNED' ? 'warning' : 'default'
 }
 
 function nextStepLabel(row: VideoSummary) {

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Empty, Progress, Select, Tag } from 'antd'
+import { Alert, Button, Empty, Progress, Select } from 'antd'
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -11,6 +11,8 @@ import {
 } from '@/api/local-upload'
 import { listProjects, type DataProject } from '@/api/projects'
 import { paths } from '@/app/paths'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 type TaskStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
@@ -84,6 +86,11 @@ function taskDescription(task: UploadTask) {
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
 
+function uploadTaskTone(status: TaskStatus): 'error' | 'processing' | 'success' {
+  if (status === 'FAILED') return 'error'
+  return status === 'COMPLETED' ? 'success' : 'processing'
+}
+
 export default function LocalUploadView() {
   const [projects, setProjects] = useState<DataProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
@@ -106,7 +113,7 @@ export default function LocalUploadView() {
     selectedFiles.length > 0
   const completedTaskCount = tasks.filter((task) => task.status === 'COMPLETED').length
   const failedTaskCount = tasks.filter((task) => task.status === 'FAILED').length
-  const uploadSummary =
+  const uploadSummary: { color: StatusBadgeTone; label: string } =
     uploadState !== 'completed'
       ? { label: '上传中', color: 'processing' }
       : failedTaskCount === 0
@@ -212,22 +219,21 @@ export default function LocalUploadView() {
 
   return (
     <>
-      <section className="page-heading" aria-labelledby="local-upload-title">
-        <div>
-          <p className="app-eyebrow">平台本地上传</p>
-          <h1 id="local-upload-title">选择视频并上传</h1>
-          <p>
-            每个视频使用独立批次上传、校验并建立单视角配药操作记录；不会从文件名推断多相机关系。
-          </p>
-        </div>
-        <Button
-          loading={projectLoadState === 'loading'}
-          disabled={isUploading}
-          onClick={() => void loadProjects()}
-        >
-          刷新项目
-        </Button>
-      </section>
+      <PageHeader
+        eyebrow="平台本地上传"
+        titleId="local-upload-title"
+        title="选择视频并上传"
+        description="每个视频使用独立批次上传、校验并建立单视角配药操作记录；不会从文件名推断多相机关系。"
+        actions={
+          <Button
+            loading={projectLoadState === 'loading'}
+            disabled={isUploading}
+            onClick={() => void loadProjects()}
+          >
+            刷新项目
+          </Button>
+        }
+      />
       {errorMessage ? (
         <Alert
           className="catalog-alert"
@@ -238,7 +244,10 @@ export default function LocalUploadView() {
         />
       ) : null}
       {projectLoadState !== 'success' || projects.length > 0 ? (
-        <Card className="local-upload-card" variant="outlined">
+        <section
+          className="local-upload-card form-surface working-surface"
+          aria-label="本地视频上传"
+        >
           <form
             className="local-upload-form"
             onSubmit={(event) => {
@@ -304,7 +313,7 @@ export default function LocalUploadView() {
               ) : null}
             </div>
           </form>
-        </Card>
+        </section>
       ) : null}
       {tasks.length > 0 ? (
         <section
@@ -319,7 +328,7 @@ export default function LocalUploadView() {
                 已完成 {completedTaskCount} / {tasks.length} 个视频
               </h2>
             </div>
-            <Tag color={uploadSummary.color}>{uploadSummary.label}</Tag>
+            <StatusBadge tone={uploadSummary.color}>{uploadSummary.label}</StatusBadge>
           </div>
           {tasks.map((task) => (
             <article key={task.id} className="local-upload-task">
@@ -334,15 +343,7 @@ export default function LocalUploadView() {
                   </p>
                   <h3>{task.file.name}</h3>
                 </div>
-                <Tag
-                  color={
-                    task.status === 'FAILED'
-                      ? 'error'
-                      : task.status === 'COMPLETED'
-                        ? 'success'
-                        : 'processing'
-                  }
-                >
+                <StatusBadge tone={uploadTaskTone(task.status)}>
                   {task.status === 'QUEUED'
                     ? '等待中'
                     : task.status === 'RUNNING'
@@ -350,7 +351,7 @@ export default function LocalUploadView() {
                       : task.status === 'COMPLETED'
                         ? '完成'
                         : '失败'}
-                </Tag>
+                </StatusBadge>
               </div>
               <Progress
                 percent={taskPercent(task)}

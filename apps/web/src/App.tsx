@@ -6,7 +6,6 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 
 const managementRoutePatterns = [
-  '/projects/:projectId/assets/*',
   '/projects/:projectId/members',
   paths.uploads,
   paths.localUpload,
@@ -24,6 +23,11 @@ export default function AppShell() {
   const isManagementRoute = managementRoutePatterns.some(
     (path) => matchPath({ path, end: true }, location.pathname) !== null,
   )
+  const isVideoManagementContext =
+    Boolean(projectId) &&
+    [paths.videos(projectId), '/projects/:projectId/assets/:id'].some(
+      (path) => matchPath({ path, end: true }, location.pathname) !== null,
+    )
 
   useEffect(() => {
     function closeOnOutsidePointer(event: PointerEvent) {
@@ -79,7 +83,14 @@ export default function AppShell() {
           <NavLink end to={paths.projects}>
             项目
           </NavLink>
-          {projectId ? <NavLink to={paths.videos(projectId)}>视频管理</NavLink> : null}
+          {projectId ? (
+            <Link
+              to={paths.videos(projectId)}
+              aria-current={isVideoManagementContext ? 'page' : undefined}
+            >
+              视频管理
+            </Link>
+          ) : null}
           {projectId ? <NavLink to={paths.annotationTasks(projectId)}>配药动作标注</NavLink> : null}
           <details
             ref={managementMenuRef}
