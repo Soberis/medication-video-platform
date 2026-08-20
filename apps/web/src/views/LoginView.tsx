@@ -55,7 +55,7 @@ export default function LoginView() {
     <section className="login-page" aria-labelledby="login-title">
       <Card className="login-card" variant="borderless">
         <h1 id="login-title">登录数据管理平台</h1>
-        <p>仅供平台管理人员使用。医院侧采集设备通过独立凭据自动上传视频，不使用此页面。</p>
+        <p>仅限平台管理员使用。采集设备请使用独立上传凭据。</p>
         {errorMessage || auth.sessionError ? (
           <Alert
             className="login-error"

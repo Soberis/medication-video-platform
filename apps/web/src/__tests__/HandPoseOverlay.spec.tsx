@@ -202,7 +202,7 @@ describe('HandPoseOverlay', () => {
     expect(screen.getByLabelText('视频预览')).toHaveAttribute('controlslist', 'nofullscreen')
   })
 
-  it('keeps the sampled timestamp through playback events and follows video dimensions', () => {
+  it('keeps a landscape review stage for portrait video', () => {
     const { container } = render(
       <PlaybackCard
         availability={null}
@@ -249,10 +249,12 @@ describe('HandPoseOverlay', () => {
 
     fireEvent.loadedMetadata(video)
     const stage = container.querySelector('.video-stage') as HTMLDivElement
-    expect(stage).toHaveStyle('aspect-ratio: 1080 / 1920')
-    expect(Number.parseInt(stage.style.getPropertyValue('--video-stage-width'), 10)).toBeLessThan(
-      Number.parseInt(stage.style.getPropertyValue('--video-stage-height'), 10),
-    )
+    expect(stage).toHaveStyle('aspect-ratio: 16 / 9')
+    expect(
+      Number.parseInt(stage.style.getPropertyValue('--video-stage-width'), 10),
+    ).toBeGreaterThan(Number.parseInt(stage.style.getPropertyValue('--video-stage-height'), 10))
+    expect(screen.getByText('本次播放授权')).toBeInTheDocument()
+    expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-08-12T10:00:00Z')
     fireEvent.play(video)
     fireEvent.pause(video)
     fireEvent.timeUpdate(video)

@@ -36,6 +36,15 @@ export interface PlaybackAvailability {
   type: 'success' | 'warning' | 'error' | 'info'
 }
 
+function formatPlaybackExpiry(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return formatDateTime(value)
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 interface PlaybackCardProps {
   availability: PlaybackAvailability | null
   candidateOverlay: HandPoseCandidate[]
@@ -75,9 +84,6 @@ export function PlaybackCard({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const videoStageRef = useRef<HTMLDivElement | null>(null)
   const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(
-    null,
-  )
   const [viewportSize, setViewportSize] = useState(() => ({
     width: typeof window === 'undefined' ? 1440 : window.innerWidth,
     height: typeof window === 'undefined' ? 900 : window.innerHeight,
@@ -86,10 +92,10 @@ export function PlaybackCard({
   const [fullscreenError, setFullscreenError] = useState('')
 
   const stageSize = useMemo(() => {
-    const aspectRatio =
-      videoDimensions && videoDimensions.width > 0 && videoDimensions.height > 0
-        ? videoDimensions.width / videoDimensions.height
-        : 16 / 9
+    // Keep the review surface landscape even when the source video is portrait.
+    // The video and overlay both use `contain`, so the source stays proportional
+    // and is letterboxed inside the same coordinate system.
+    const aspectRatio = 16 / 9
     const maxWidth = Math.min(960, Math.max(320, viewportSize.width - 80))
     const maxHeight = Math.min(600, Math.max(280, viewportSize.height - 240))
     let width = maxWidth
@@ -103,7 +109,7 @@ export function PlaybackCard({
       height: Math.round(height),
       width: Math.round(width),
     }
-  }, [videoDimensions, viewportSize])
+  }, [viewportSize])
 
   useEffect(() => {
     const video = videoRef.current
@@ -198,8 +204,14 @@ export function PlaybackCard({
       ) : null}
       {grant ? (
         <>
-          <div className="playback-meta">
-            <span>授权有效至 {formatDateTime(grant.expires_at)}</span>
+          <div className="playback-meta" aria-label="本次播放授权">
+            <span className="playback-meta-label">本次播放授权</span>
+            <time
+              dateTime={grant.expires_at}
+              title={`完整到期时间：${formatDateTime(grant.expires_at)}`}
+            >
+              有效至 {formatPlaybackExpiry(grant.expires_at)}
+            </time>
           </div>
           {playbackMessage ? (
             <Alert
@@ -218,9 +230,7 @@ export function PlaybackCard({
                   '--video-stage-height': `${stageSize.height}px`,
                   '--video-stage-ratio': stageSize.aspectRatio,
                   '--video-stage-width': `${stageSize.width}px`,
-                  aspectRatio: videoDimensions
-                    ? `${videoDimensions.width} / ${videoDimensions.height}`
-                    : undefined,
+                  aspectRatio: '16 / 9',
                 } as CSSProperties
               }
             >
@@ -234,10 +244,6 @@ export function PlaybackCard({
                 aria-label="视频预览"
                 src={grant.media_url}
                 onLoadedMetadata={(event) => {
-                  setVideoDimensions({
-                    width: event.currentTarget.videoWidth,
-                    height: event.currentTarget.videoHeight,
-                  })
                   setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
                   onLoadedMetadata()
                 }}

@@ -367,7 +367,7 @@ export default function AssetDetailView() {
     if (detail.status === 'UPLOADED' || detail.status === 'INGESTING') {
       return {
         title: '视频检测中',
-        description: '媒体检测完成后，页面会自动更新；当前不需要手动操作。',
+        description: '后台检测中，不影响当前人工查看；检测完成后页面会自动更新。',
         buttonLabel: '视频检测中',
         kind: 'none',
         interactive: false,

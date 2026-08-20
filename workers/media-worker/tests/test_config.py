@@ -61,3 +61,20 @@ def test_rejects_an_environment_bearer_token_outside_synthetic_data(
 
     with pytest.raises(ValueError, match="synthetic-only"):
         Settings.from_environment(environment(DATA_PROFILE="controlled"))
+
+
+def test_default_local_approved_digest_matches_the_worker_source() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    example_environment = repository_root / ".env.example"
+    key = "MEDIA_WORKER_APPROVED_SOFTWARE_DIGEST"
+    value = next(
+        (
+            line.removeprefix(f"{key}=")
+            for line in example_environment.read_text(encoding="utf-8").splitlines()
+            if line.startswith(f"{key}=")
+        ),
+        None,
+    )
+
+    assert value is not None, f"{key} must be present in .env.example"
+    assert value == config.calculate_software_digest(repository_root / "workers" / "media-worker")

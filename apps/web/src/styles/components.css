@@ -942,9 +942,24 @@
 }
 
 .playback-meta {
-  margin-top: 16px;
-  color: #667085;
-  font-size: 14px;
+  justify-self: start;
+  margin-top: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: 999px;
+  background: var(--app-color-surface-muted);
+  color: var(--app-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.playback-meta-label {
+  color: var(--app-color-text-primary);
+  font-weight: 600;
+}
+
+.playback-meta time {
+  color: var(--app-color-text-secondary);
 }
 
 .video-stage {
