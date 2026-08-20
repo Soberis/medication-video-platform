@@ -247,6 +247,18 @@
   background: var(--app-color-surface);
 }
 
+@media (min-width: 2400px) {
+  .workspace-content {
+    width: min(100%, var(--app-workspace-max-width-wide));
+  }
+}
+
+@media (min-width: 3200px) {
+  .workspace-content {
+    width: min(100%, var(--app-workspace-max-width-ultra));
+  }
+}
+
 .app-frame[data-sidebar-collapsed='true'] {
   grid-template-columns: var(--app-sidebar-collapsed-width) minmax(0, 1fr);
 }

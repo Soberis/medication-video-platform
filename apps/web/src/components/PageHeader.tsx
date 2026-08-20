@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 interface PageHeaderProps {
   actions?: ReactNode
   className?: string
-  description: ReactNode
+  description?: ReactNode
   eyebrow?: ReactNode
   title: ReactNode
   titleId: string
@@ -26,7 +26,7 @@ export function PageHeader({
       <div>
         {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
         <h1 id={titleId}>{title}</h1>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       {actions ? <div className="page-heading-actions">{actions}</div> : null}
     </section>

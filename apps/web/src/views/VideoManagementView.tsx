@@ -1,4 +1,5 @@
-import { App as AntdApp, Button, Empty, InputNumber, Select, Table } from 'antd'
+import { App as AntdApp, Button, InputNumber, Select, Table } from 'antd'
+import { ArrowRight, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -18,9 +19,8 @@ import {
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
-import { StatusBadge } from '@/components/StatusBadge'
 import { SummaryStrip } from '@/components/SummaryStrip'
-import { formatDateTime, shortId, statusTone } from '@/features/catalog/catalog-presentation'
+import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import {
   parseVideoFilters,
   replaceVideoFiltersInSearchParams,
@@ -83,6 +83,11 @@ export default function VideoManagementView() {
     filters.handStatus,
     filters.handResult,
   ].filter((value) => value !== undefined && value !== '').length
+  const activeFilterCount =
+    advancedFilterCount +
+    [filters.mediaStatus, filters.annotationStatus, filters.cleaningStatus].filter(
+      (value) => value !== undefined,
+    ).length
   const [items, setItems] = useState<VideoSummary[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -235,12 +240,17 @@ export default function VideoManagementView() {
   return (
     <>
       <PageHeader
+        className="video-management-heading"
         eyebrow={projectId ? `当前项目 · ${shortId(projectId)}` : '当前项目'}
         titleId="video-management-title"
         title="视频管理"
-        description="根据当前状态处理视频，并推进人工流程。"
         actions={
-          <Button loading={loadState === 'loading'} onClick={() => void loadPage(false, filters)}>
+          <Button
+            size="small"
+            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+            loading={loadState === 'loading'}
+            onClick={() => void loadPage(false, filters)}
+          >
             刷新
           </Button>
         }
@@ -270,91 +280,109 @@ export default function VideoManagementView() {
           数据管理汇总暂不可用，视频列表仍可使用。
         </div>
       ) : null}
-      <section
-        className="video-management-filter-panel working-surface"
-        aria-labelledby="video-management-filters-title"
-      >
-        <div className="filter-card-heading">
-          <div>
-            <h2 id="video-management-filters-title">状态筛选</h2>
-            <span>统计和列表使用相同条件</span>
-          </div>
-          <Button type="link" onClick={() => applyFilters({})}>
-            清除筛选
-          </Button>
-        </div>
-        <div className="catalog-filters video-management-filters">
-          <label>
-            媒体状态
-            <Select
-              allowClear
-              value={filters.mediaStatus}
-              placeholder="全部"
-              options={Object.entries(mediaStatusLabels).map(([value, label]) => ({
-                value,
-                label,
-              }))}
-              onChange={(value) =>
-                applyFilters({
-                  ...filters,
-                  mediaStatus: value as VideoSummaryMediaStatus | undefined,
-                })
-              }
-            />
-          </label>
-          <label>
-            配药动作标注
-            <Select
-              allowClear
-              value={filters.annotationStatus}
-              placeholder="全部"
-              options={Object.entries(annotationStatusLabels).map(([value, label]) => ({
-                value,
-                label,
-              }))}
-              onChange={(value) =>
-                applyFilters({
-                  ...filters,
-                  annotationStatus: value as VideoSummaryAnnotationStatus | undefined,
-                })
-              }
-            />
-          </label>
-          <label>
-            清洗结论
-            <Select
-              allowClear
-              value={filters.cleaningStatus}
-              placeholder="全部"
-              options={Object.entries(cleaningStatusLabels).map(([value, label]) => ({
-                value,
-                label,
-              }))}
-              onChange={(value) =>
-                applyFilters({
-                  ...filters,
-                  cleaningStatus: value as VideoSummaryCleaningStatus | undefined,
-                })
-              }
-            />
-          </label>
-        </div>
-        <details
-          className="video-management-advanced-filters"
-          open={isAdvancedFiltersOpen}
-          onToggle={(event) => setIsAdvancedFiltersOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <strong>更多筛选</strong>
-            <span>
-              {advancedFilterCount > 0 ? `${advancedFilterCount} 项已应用` : '来源、相机和拍摄时间'}
-            </span>
-          </summary>
-          <div className="catalog-filters video-management-filters video-management-secondary-filters">
-            <label>
-              来源
+      <section className="video-filter-toolbar" aria-labelledby="video-management-filters-title">
+        <h2 id="video-management-filters-title" className="visually-hidden">
+          筛选视频
+        </h2>
+        <div className="video-filter-toolbar-main">
+          <div className="video-filter-primary">
+            <label className="video-filter-control">
+              <span>媒体</span>
               <Select
+                aria-label="媒体状态"
                 allowClear
+                size="small"
+                value={filters.mediaStatus}
+                placeholder="全部"
+                options={Object.entries(mediaStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  applyFilters({
+                    ...filters,
+                    mediaStatus: value as VideoSummaryMediaStatus | undefined,
+                  })
+                }
+              />
+            </label>
+            <label className="video-filter-control">
+              <span>标注</span>
+              <Select
+                aria-label="配药动作标注状态"
+                allowClear
+                size="small"
+                value={filters.annotationStatus}
+                placeholder="全部"
+                options={Object.entries(annotationStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  applyFilters({
+                    ...filters,
+                    annotationStatus: value as VideoSummaryAnnotationStatus | undefined,
+                  })
+                }
+              />
+            </label>
+            <label className="video-filter-control">
+              <span>清洗</span>
+              <Select
+                aria-label="清洗状态"
+                allowClear
+                size="small"
+                value={filters.cleaningStatus}
+                placeholder="全部"
+                options={Object.entries(cleaningStatusLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                onChange={(value) =>
+                  applyFilters({
+                    ...filters,
+                    cleaningStatus: value as VideoSummaryCleaningStatus | undefined,
+                  })
+                }
+              />
+            </label>
+          </div>
+          <div className="video-filter-actions">
+            <Button
+              type="text"
+              size="small"
+              aria-expanded={isAdvancedFiltersOpen}
+              aria-controls="video-secondary-filters"
+              icon={<SlidersHorizontal aria-hidden="true" size={14} strokeWidth={1.8} />}
+              onClick={() => setIsAdvancedFiltersOpen((open) => !open)}
+            >
+              更多筛选
+              {advancedFilterCount > 0 ? (
+                <span className="video-filter-count" aria-label={`${advancedFilterCount} 项已应用`}>
+                  {advancedFilterCount}
+                </span>
+              ) : null}
+            </Button>
+            {activeFilterCount > 0 ? (
+              <Button
+                type="text"
+                size="small"
+                icon={<RotateCcw aria-hidden="true" size={14} strokeWidth={1.8} />}
+                onClick={() => applyFilters({})}
+              >
+                清除筛选
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        {isAdvancedFiltersOpen ? (
+          <div id="video-secondary-filters" className="video-filter-secondary">
+            <label className="video-filter-control">
+              <span>来源</span>
+              <Select
+                aria-label="来源"
+                allowClear
+                size="small"
                 value={filters.source}
                 placeholder="全部"
                 options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
@@ -363,10 +391,12 @@ export default function VideoManagementView() {
                 }
               />
             </label>
-            <label>
-              手部候选状态
+            <label className="video-filter-control">
+              <span>手部候选</span>
               <Select
+                aria-label="手部候选状态"
                 allowClear
+                size="small"
                 value={filters.handStatus}
                 placeholder="全部"
                 options={Object.entries(handStatusLabels).map(([value, label]) => ({
@@ -381,9 +411,11 @@ export default function VideoManagementView() {
                 }
               />
             </label>
-            <label>
-              相机编号
+            <label className="video-filter-control">
+              <span>相机编号</span>
               <InputNumber
+                aria-label="相机编号"
+                size="small"
                 min={1}
                 value={filters.cameraNumber}
                 placeholder="全部"
@@ -392,9 +424,10 @@ export default function VideoManagementView() {
                 }
               />
             </label>
-            <label>
-              拍摄开始
+            <label className="video-filter-control">
+              <span>拍摄开始</span>
               <input
+                aria-label="拍摄开始"
                 type="datetime-local"
                 value={toLocalDateTimeInput(filters.capturedFrom)}
                 onChange={(event) =>
@@ -402,9 +435,10 @@ export default function VideoManagementView() {
                 }
               />
             </label>
-            <label>
-              拍摄截止
+            <label className="video-filter-control">
+              <span>拍摄截止</span>
               <input
+                aria-label="拍摄截止"
                 type="datetime-local"
                 value={toLocalDateTimeInput(filters.capturedBefore)}
                 onChange={(event) =>
@@ -412,10 +446,12 @@ export default function VideoManagementView() {
                 }
               />
             </label>
-            <label>
-              手部结果
+            <label className="video-filter-control">
+              <span>手部结果</span>
               <Select
+                aria-label="手部结果"
                 allowClear
+                size="small"
                 value={filters.handResult}
                 placeholder="全部"
                 options={Object.entries(handResultLabels).map(([value, label]) => ({
@@ -431,10 +467,10 @@ export default function VideoManagementView() {
               />
             </label>
           </div>
-        </details>
+        ) : null}
       </section>
       {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
+        <div className="video-list-state" role="status">
           正在读取视频管理列表…
         </div>
       ) : null}
@@ -445,13 +481,19 @@ export default function VideoManagementView() {
         </div>
       ) : null}
       {loadState === 'success' && items.length === 0 ? (
-        <Empty description="当前没有符合条件的视频。" />
+        <section className="video-list-state video-empty-state" aria-label="视频列表为空">
+          <strong>
+            {activeFilterCount > 0 ? '没有符合当前筛选条件的视频' : '当前项目还没有视频'}
+          </strong>
+          {activeFilterCount > 0 ? (
+            <Button type="link" size="small" onClick={() => applyFilters({})}>
+              清除筛选
+            </Button>
+          ) : null}
+        </section>
       ) : null}
       {items.length > 0 ? (
-        <section
-          className="table-card video-management-table-card working-surface"
-          aria-label="视频列表"
-        >
+        <section className="video-list-surface" aria-label="视频列表">
           <Table<VideoSummary>
             className="video-management-table"
             dataSource={items}
@@ -459,72 +501,76 @@ export default function VideoManagementView() {
             pagination={false}
             size="small"
             tableLayout="fixed"
+            scroll={{ x: 980 }}
             columns={[
               {
                 title: '视频',
-                width: 260,
+                width: 380,
                 render: (_, row) => (
-                  <>
-                    <div className="video-name-line">
-                      <strong className="mono-wrap">
-                        <Link
-                          className="video-name-link"
-                          aria-label={`视频 ${row.display_name}，资产 ID ${row.video_id}`}
-                          title={`唯一视频资产 ID：${row.video_id}`}
-                          to={{
-                            pathname: paths.asset(projectId, row.video_id),
-                            search: location.search,
-                          }}
-                        >
-                          {row.display_name}
-                        </Link>
-                      </strong>
-                      <span className="video-identity" title={`唯一视频资产 ID：${row.video_id}`}>
-                        ID {shortId(row.video_id)}
+                  <div className="video-identity-cell">
+                    <Link
+                      className="video-name-link"
+                      aria-label={`视频 ${row.display_name}，资产 ID ${row.video_id}`}
+                      title={`唯一视频资产 ID：${row.video_id}`}
+                      to={{
+                        pathname: paths.asset(projectId, row.video_id),
+                        search: location.search,
+                      }}
+                    >
+                      {row.display_name}
+                    </Link>
+                    <span className="video-metadata-line">
+                      <span>
+                        {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
                       </span>
-                    </div>
-                    <span className="cell-secondary">
-                      来源 {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
-                      {' · '}
-                      {row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}
-                      {' · '}
-                      {row.captured_at
-                        ? `拍摄 ${formatDateTime(row.captured_at)}`
-                        : `接收 ${formatDateTime(row.received_at)}`}
+                      <span>{row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}</span>
+                      <span>
+                        {row.captured_at
+                          ? `拍摄 ${formatDateTime(row.captured_at)}`
+                          : `接收 ${formatDateTime(row.received_at)}`}
+                      </span>
                     </span>
-                  </>
+                    <span className="video-identity" title={`唯一视频资产 ID：${row.video_id}`}>
+                      视频 ID {shortId(row.video_id)}
+                    </span>
+                  </div>
                 ),
               },
               {
                 title: '媒体',
-                width: 100,
+                width: 120,
                 render: (_, row) => (
-                  <StatusBadge tone={statusTone(row.media_status)}>
-                    {mediaStatusLabels[row.media_status]}
-                  </StatusBadge>
+                  <VideoStatusIndicator
+                    label={mediaStatusLabels[row.media_status]}
+                    tone={mediaStatusTone(row.media_status)}
+                  />
                 ),
               },
               {
                 title: '配药动作标注',
                 dataIndex: 'annotation_status',
-                width: 120,
+                width: 140,
                 render: (value: VideoSummaryAnnotationStatus) => (
-                  <StatusBadge tone={annotationStatusTone(value)}>
-                    {annotationStatusLabels[value]}
-                  </StatusBadge>
+                  <VideoStatusIndicator
+                    label={annotationStatusLabels[value]}
+                    tone={annotationStatusTone(value)}
+                  />
                 ),
               },
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
-                width: 100,
+                width: 110,
                 render: (value: VideoSummaryCleaningStatus) => (
-                  <StatusBadge tone={statusTone(value)}>{cleaningStatusLabels[value]}</StatusBadge>
+                  <VideoStatusIndicator
+                    label={cleaningStatusLabels[value]}
+                    tone={cleaningStatusTone(value)}
+                  />
                 ),
               },
               {
                 title: '下一步',
-                width: 180,
+                width: 230,
                 render: (_, row) => {
                   const action = nextStepAction(row)
                   return (
@@ -532,7 +578,7 @@ export default function VideoManagementView() {
                       <strong>{nextStepLabel(row)}</strong>
                       {action ? (
                         <Link
-                          className="text-link"
+                          className="video-next-step-action"
                           to={
                             action.target === 'detail'
                               ? {
@@ -543,6 +589,7 @@ export default function VideoManagementView() {
                           }
                         >
                           {action.label}
+                          <ArrowRight aria-hidden="true" size={13} strokeWidth={1.8} />
                         </Link>
                       ) : null}
                     </div>
@@ -567,6 +614,17 @@ export default function VideoManagementView() {
   )
 }
 
+type VideoStatusTone = 'neutral' | 'information' | 'success' | 'warning' | 'destructive'
+
+function VideoStatusIndicator({ label, tone }: { label: string; tone: VideoStatusTone }) {
+  return (
+    <span className="video-status-indicator" data-tone={tone}>
+      <span className="video-status-dot" aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
 function toInstant(value: string) {
   return value ? new Date(value).toISOString() : undefined
 }
@@ -578,10 +636,23 @@ function toLocalDateTimeInput(value?: string) {
   return local.toISOString().slice(0, 16)
 }
 
-function annotationStatusTone(status: VideoSummaryAnnotationStatus) {
+function mediaStatusTone(status: VideoSummaryMediaStatus): VideoStatusTone {
+  if (status === 'INGEST_FAILED') return 'destructive'
+  if (status === 'INGESTED') return 'success'
+  return 'information'
+}
+
+function annotationStatusTone(status: VideoSummaryAnnotationStatus): VideoStatusTone {
   if (status === 'COMPLETED') return 'success'
-  if (status === 'SUBMITTED') return 'processing'
-  return status === 'ASSIGNED' ? 'warning' : 'default'
+  if (status === 'SUBMITTED' || status === 'ASSIGNED') return 'information'
+  return 'neutral'
+}
+
+function cleaningStatusTone(status: VideoSummaryCleaningStatus): VideoStatusTone {
+  if (status === 'PASS') return 'success'
+  if (status === 'WARNING') return 'warning'
+  if (status === 'REJECT') return 'destructive'
+  return 'neutral'
 }
 
 function nextStepLabel(row: VideoSummary) {
@@ -594,7 +665,7 @@ function nextStepLabel(row: VideoSummary) {
   if (row.quality_decision !== 'QUALIFIED') return '待人工质量判断'
   if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
   if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
-  if (row.annotation_status === 'NOT_STARTED') return '待进入人工标注'
+  if (row.annotation_status === 'NOT_STARTED') return '正在确认自动分配'
   if (row.cleaning_status === 'NOT_STARTED') return '等待数据清洗'
   if (row.cleaning_status === 'PASS') return '已通过清洗，可参与训练数据导出'
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT')
@@ -607,21 +678,19 @@ function nextStepAction(row: VideoSummary) {
     return { label: '查看失败原因', target: 'detail' as const }
   if (row.media_status !== 'INGESTED') return null
   if (row.quality_decision === 'UNREVIEWED' || row.quality_decision === 'NEEDS_REVIEW') {
-    return { label: '下一步：人工质量判断', target: 'detail' as const }
+    return { label: '人工质量判断', target: 'detail' as const }
   }
   if (row.quality_decision === 'REJECTED') {
     return { label: '查看质量结论', target: 'detail' as const }
   }
   if (row.quality_decision !== 'QUALIFIED') return null
   if (row.annotation_status === 'SUBMITTED') {
-    return { label: '下一步：人工复核', target: 'annotation' as const }
+    return { label: '人工复核', target: 'annotation' as const }
   }
   if (row.annotation_status === 'ASSIGNED') {
     return { label: '继续人工标注', target: 'annotation' as const }
   }
-  if (row.annotation_status === 'NOT_STARTED') {
-    return { label: '下一步：进入人工标注', target: 'detail' as const }
-  }
+  if (row.annotation_status === 'NOT_STARTED') return null
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT') {
     return { label: '重新核对清洗', target: 'annotation' as const }
   }

@@ -71,13 +71,17 @@ describe('VideoManagementView', () => {
     expect(screen.getByRole('columnheader', { name: '下一步' })).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '相机' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '留存' })).not.toBeInTheDocument()
-    expect(screen.getByText('更多筛选').closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByRole('button', { name: '更多筛选' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByRole('button', { name: '清除筛选' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '手部检测' })).not.toBeInTheDocument()
     expect(screen.queryByText('未发现手部')).not.toBeInTheDocument()
-    await user.click(screen.getByText('更多筛选'))
-    expect(screen.getByText('手部候选状态')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '更多筛选' }))
+    expect(screen.getByRole('combobox', { name: '手部候选状态' })).toBeInTheDocument()
     expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '人工质量判断' })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
@@ -85,6 +89,63 @@ describe('VideoManagementView', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`/projects/${projectId}/videos?limit=50`)
     expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('/clip-assets')
+  })
+
+  it('restores URL-backed filters and clears only video filter parameters from an empty result', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string) =>
+        url.includes('/video-data/summary')
+          ? jsonResponse({ ...summaryBody(), total_videos: 0, pending_annotation: 0 })
+          : jsonResponse({ items: [], next_cursor: null }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    const { router } = renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos?view=compact&mediaStatus=INGESTED&source=PLATFORM_LOCAL&handStatus=FAILED`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('没有符合当前筛选条件的视频')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /更多筛选/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByLabelText('2 项已应用')).toHaveTextContent('2')
+    expect(screen.getByText('可检测')).toBeInTheDocument()
+    expect(screen.getByText('平台本地上传')).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: '清除筛选' })[0]!)
+
+    await waitFor(() => expect(router.state.location.search).toBe('?view=compact'))
+    expect(await screen.findByText('当前项目还没有视频')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '清除筛选' })).not.toBeInTheDocument()
+  })
+
+  it('writes a changed primary filter to the URL', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [videoRow()], next_cursor: null }),
+        ),
+    )
+    const user = userEvent.setup()
+    const { router } = renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    await screen.findByText('synthetic-hand-failed.mp4')
+    await user.click(screen.getByRole('combobox', { name: '媒体状态' }))
+    const processingOptions = await screen.findAllByText('处理中')
+    await user.click(processingOptions[processingOptions.length - 1]!)
+
+    await waitFor(() => expect(router.state.location.search).toBe('?mediaStatus=INGESTING'))
+    expect(screen.getByRole('button', { name: '清除筛选' })).toBeInTheDocument()
   })
 
   it('keeps the primary annotation step available when hand pose is terminally failed', async () => {
@@ -106,7 +167,7 @@ describe('VideoManagementView', () => {
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
     expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '人工质量判断' })).toBeInTheDocument()
   })
 
   it('does not make optional hand detection a list-level action', async () => {
@@ -129,7 +190,7 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '人工质量判断' })).toBeInTheDocument()
   })
 
   it('presents submitted formal annotations as waiting for human review', async () => {
@@ -156,7 +217,7 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('等待人工复核')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：人工复核' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '人工复核' })).toBeInTheDocument()
   })
 
   it('keeps the video list usable when the auxiliary summary request fails', async () => {
@@ -224,7 +285,8 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByRole('link', { name: '下一步：进入人工标注' })).toBeInTheDocument()
+    expect(await screen.findByText('正在确认自动分配')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '进入人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
@@ -295,7 +357,7 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('需重新人工质量判断')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：人工质量判断' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '人工质量判断' })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
@@ -327,7 +389,7 @@ describe('VideoManagementView', () => {
     expect(screen.queryByText('下一步：进入人工标注')).not.toBeInTheDocument()
   })
 
-  it('routes a qualified unassigned video to its detail gate', async () => {
+  it('waits for V1.24 automatic assignment instead of exposing a manual assignment route', async () => {
     const row = videoRow({ quality_decision: 'QUALIFIED' })
     vi.stubGlobal(
       'fetch',
@@ -341,19 +403,12 @@ describe('VideoManagementView', () => {
     )
 
     renderRoute(<VideoManagementView />, {
-      route: `/projects/${projectId}/videos?media_status=INGESTED`,
+      route: `/projects/${projectId}/videos?mediaStatus=INGESTED`,
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('待进入人工标注')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
-      'href',
-      expect.stringContaining(`/projects/${projectId}/assets/`),
-    )
-    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('?media_status=INGESTED'),
-    )
+    expect(await screen.findByText('正在确认自动分配')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '进入人工标注' })).not.toBeInTheDocument()
   })
 
   it('keeps an assigned qualified video on the annotation task page', async () => {
@@ -386,6 +441,7 @@ describe('VideoManagementView', () => {
       quality_decision: 'QUALIFIED',
       hand_status: 'SUCCEEDED',
       hand_result: 'NO_HAND_DETECTED',
+      annotation_status: 'ASSIGNED',
     })
     vi.stubGlobal(
       'fetch',
@@ -405,9 +461,9 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
     expect(screen.queryByText('未发现手部')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '继续人工标注' })).toHaveAttribute(
       'href',
-      expect.stringContaining(`/projects/${projectId}/assets/`),
+      expect.stringContaining(`/projects/${projectId}/annotation-tasks`),
     )
   })
 
@@ -446,8 +502,8 @@ describe('VideoManagementView', () => {
     expect(links[1]).toHaveAccessibleName(
       '视频 video-1.mp4，资产 ID 50000000-0000-4000-8000-000000000002',
     )
-    expect(screen.getByText('ID 50000000…0001')).toBeInTheDocument()
-    expect(screen.getByText('ID 50000000…0002')).toBeInTheDocument()
+    expect(screen.getByText('视频 ID 50000000…0001')).toBeInTheDocument()
+    expect(screen.getByText('视频 ID 50000000…0002')).toBeInTheDocument()
   })
 })
 
