@@ -7,7 +7,7 @@
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.23 继承 V1.21 的 V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API 运行闭包已按 V1.23 退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED，未来 worker、message、schema 和 tooling 不在本批次处理。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
+V1.23 继承 V1.21 的 V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |

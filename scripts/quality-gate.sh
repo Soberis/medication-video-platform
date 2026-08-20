@@ -218,11 +218,6 @@ required_files=(
     'workers/media-worker/src/medication_media_worker/__main__.py'
     'workers/media-worker/src/medication_media_worker/processor.py'
     'workers/media-worker/src/medication_media_worker/probe.py'
-    'tools/golden-capture-g0/pyproject.toml'
-    'tools/golden-capture-g0/uv.lock'
-    'tools/golden-capture-g0/README.md'
-    'tools/golden-capture-g0/fixtures/golden-captures.json'
-    'tools/golden-capture-g0/src/golden_capture_g0/experiment.py'
     'docs/requirements/README.md'
     'docs/requirements/requirements-manifest.json'
     'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md'
@@ -536,7 +531,7 @@ else
 fi
 
 python_projects=()
-for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/golden-capture-g0" "$PROJECT_ROOT/tools/minimal-export"; do
+for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/minimal-export"; do
     [[ -d "$python_search_root" ]] || continue
     while IFS= read -r -d '' python_project; do
         python_projects[${#python_projects[@]}]="$python_project"

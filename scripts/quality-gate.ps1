@@ -152,11 +152,6 @@ $requiredFiles = @(
     'workers/media-worker/src/medication_media_worker/__main__.py',
     'workers/media-worker/src/medication_media_worker/processor.py',
     'workers/media-worker/src/medication_media_worker/probe.py',
-    'tools/golden-capture-g0/pyproject.toml',
-    'tools/golden-capture-g0/uv.lock',
-    'tools/golden-capture-g0/README.md',
-    'tools/golden-capture-g0/fixtures/golden-captures.json',
-    'tools/golden-capture-g0/src/golden_capture_g0/experiment.py',
     'docs/requirements/README.md',
     'docs/requirements/requirements-manifest.json',
     'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md',
@@ -533,7 +528,7 @@ else {
 }
 
 $pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/](golden-capture-g0|minimal-export))[\\/]' }
+    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/]minimal-export)[\\/]' }
 
 if ($Changed) {
     $pythonProjects = @($pythonProjects | Where-Object {

@@ -5,7 +5,7 @@
 > 日期：2026-08-20<br>
 > 对齐需求：[V1.23 配药视频数据管理平台需求文档](../requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)
 
-V1.23 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 不属于当前 P0，已按 V1.23 退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来 worker、message、schema 和 tooling 不由本批次改变。
+V1.23 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 不属于当前 P0，已按独立 Physical Reduction 批次退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来能力不进入当前单视频闭环。
 
 ## 1. 设计目标与系统边界
 
