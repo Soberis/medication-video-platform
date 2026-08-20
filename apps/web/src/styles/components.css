@@ -18,7 +18,7 @@
 
 .upload-progress-query,
 .summary-card {
-  width: min(100%, 840px);
+  width: 100%;
   padding: var(--app-space-24);
   border-radius: var(--app-radius-large);
 }
@@ -111,7 +111,7 @@
 }
 
 .files-section {
-  width: min(100%, 840px);
+  width: 100%;
 }
 
 .summary-heading,
@@ -315,11 +315,10 @@
 }
 
 .form-surface {
-  max-width: 840px;
+  width: 100%;
 }
 
 .project-list-surface {
-  margin-top: var(--app-space-16);
   overflow: hidden;
 }
 
@@ -333,8 +332,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 32px;
-  min-height: 96px;
+  gap: var(--app-space-32);
   padding: var(--app-space-16) var(--app-space-24);
 }
 
@@ -1397,12 +1395,12 @@
 }
 
 .local-upload-card {
-  width: min(100%, 840px);
+  width: 100%;
   padding: var(--app-space-24);
 }
 
 .local-upload-results {
-  width: min(100%, 840px);
+  width: 100%;
 }
 
 .login-page {
@@ -1440,6 +1438,7 @@
 .account-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
   gap: 0;
   align-items: end;
 }
@@ -1463,7 +1462,7 @@
 }
 
 .account-create-panel {
-  width: min(100%, 760px);
+  width: 100%;
   padding: var(--app-space-24);
 }
 
