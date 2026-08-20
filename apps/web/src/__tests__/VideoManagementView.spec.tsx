@@ -148,6 +148,42 @@ describe('VideoManagementView', () => {
     expect(screen.getByRole('button', { name: '清除筛选' })).toBeInTheDocument()
   })
 
+  it('appends the next cursor page without replacing the current videos', async () => {
+    const first = videoRow()
+    const second = videoRow({
+      video_id: '50000000-0000-4000-8000-000000000002',
+      display_name: 'synthetic-second-page.mp4',
+    })
+    let videoPageRequests = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/video-data/summary')) return Promise.resolve(jsonResponse(summaryBody()))
+      videoPageRequests += 1
+      return Promise.resolve(
+        videoPageRequests === 1
+          ? jsonResponse({ items: [first], next_cursor: 'cursor-page-2' })
+          : jsonResponse({ items: [second], next_cursor: null }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    expect(await screen.findByText('synthetic-second-page.mp4')).toBeInTheDocument()
+    expect(screen.getByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).includes('cursor=cursor-page-2')),
+    ).toBe(true)
+  })
+
   it('keeps the primary annotation step available when hand pose is terminally failed', async () => {
     const row = videoRow({ hand_status: 'FAILED', hand_result: 'UNKNOWN', hand_retryable: false })
     const fetchMock = vi
@@ -264,6 +300,34 @@ describe('VideoManagementView', () => {
       '暂时无法读取视频管理列表，请稍后重试。',
     )
     expect(screen.queryByLabelText('数据管理汇总')).not.toBeInTheDocument()
+  })
+
+  it('recovers the video workspace after retrying a failed list request', async () => {
+    let videoPageRequests = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/video-data/summary')) return Promise.resolve(jsonResponse(summaryBody()))
+      videoPageRequests += 1
+      return videoPageRequests === 1
+        ? Promise.reject(new Error('synthetic initial outage'))
+        : Promise.resolve(jsonResponse({ items: [videoRow()], next_cursor: null }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '暂时无法读取视频管理列表，请稍后重试。',
+    )
+    await user.click(screen.getByRole('button', { name: /重\s*试/ }))
+
+    expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(videoPageRequests).toBe(2)
   })
 
   it('does not expose a hand-pose retry action in the video list', async () => {
