@@ -11,7 +11,7 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md`：当前业务需求基线（FLOW-FIRST LEAN-P0）；未变更条款继承 V1.20、V1.18 及其历史继承基线。V1.19 多相机同步方向为 DEFERRED，不属于当前交付目标。
+2. `docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md`：当前正式业务需求基线（FLOW-FIRST LEAN-P0 Physical Reduction）；未覆盖条款继承 V1.21、V1.20、V1.18 及其历史继承基线。V1.22 多视角草案继续为 DRAFT / DEFERRED，不覆盖 V1.23。
 3. `docs/architecture/video-hand-pose-mvp-technical-design.md`：当前云端数据闭环、手部预标注、状态、容量和实施顺序设计。
 4. `docs/adr/`：已经冻结的技术决策。
 5. `docs/architecture/` 中标记为“当前规范”的专题详细设计。
@@ -65,6 +65,7 @@ MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 每次优先交付一个可运行、可测试、可回退的纵向切片；完成后再选择下一项，不并行铺开多个未闭环模块。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
+- 当前 P0 不保留未接线的 CaptureSync runtime，仅为了未来 V1.22 Draft 预留；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
 
 ## Data And Safety
 

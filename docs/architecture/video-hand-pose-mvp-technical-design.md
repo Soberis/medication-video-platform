@@ -1,11 +1,11 @@
 # 配药视频数据管理平台：手部预标注优先技术设计
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：对应 V1.21 FLOW-FIRST LEAN-P0 当前实施设计<br>
-> 日期：2026-08-10<br>
-> 对齐需求：[V1.21 配药视频数据管理平台需求文档](../requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)
+> 状态：对应 V1.23 FLOW-FIRST LEAN-P0 当前实施设计<br>
+> 日期：2026-08-20<br>
+> 对齐需求：[V1.23 配药视频数据管理平台需求文档](../requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)
 
-V1.21 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后增加独立、只读的最小 `training_data.parquet` 导出。CaptureSession 仅保留为隐藏的接入事实；V1.19 多相机同步、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED。
+V1.23 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 不属于当前 P0，已按 V1.23 退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来 worker、message、schema 和 tooling 不由本批次改变。
 
 ## 1. 设计目标与系统边界
 

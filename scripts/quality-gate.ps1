@@ -159,6 +159,7 @@ $requiredFiles = @(
     'tools/golden-capture-g0/src/golden_capture_g0/experiment.py',
     'docs/requirements/README.md',
     'docs/requirements/requirements-manifest.json',
+    'docs/requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md',
     'docs/requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md',
     'docs/requirements/baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md',
     'docs/requirements/baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md',

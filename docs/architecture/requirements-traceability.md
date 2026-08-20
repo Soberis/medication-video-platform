@@ -1,13 +1,13 @@
 # 当前需求追踪矩阵
 
-> 当前需求基线：[V1.21 FLOW-FIRST LEAN-P0](../requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)<br>
+> 当前需求基线：[V1.23 FLOW-FIRST LEAN-P0 Physical Reduction](../requirements/baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)<br>
 > 当前技术设计：[手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-08-14
+> 最后更新：2026-08-20
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.21 继承下列 V1.18 FR 标识作为既有事实链，将 handedness 降为辅助元数据，并在 Cleaning PASS 后增加独立最小 Parquet 导出。V1.19 同步、DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关运行代码、公开 API、Worker 和契约已从当前 active surface 退役，未使用的数据库对象已由 V65/V66 前向迁移退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
+V1.23 继承 V1.21 的 V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API 运行闭包已按 V1.23 退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED，未来 worker、message、schema 和 tooling 不在本批次处理。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |

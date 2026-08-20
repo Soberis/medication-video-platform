@@ -77,13 +77,6 @@ class WorkerJwtSecurityConfiguration {
 
 	@Bean
 	@Order(1)
-	SecurityFilterChain captureSyncWorkerJwtSecurityFilterChain(HttpSecurity http,
-			@Qualifier("mediaWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
-		return workerChain(http, "/api/v1/internal/capture-sync-jobs/**", decoder, MEDIA_WORKER_ROLE);
-	}
-
-	@Bean
-	@Order(1)
 	SecurityFilterChain mediaWorkerJwtSecurityFilterChain(HttpSecurity http,
 			@Qualifier("mediaWorkerJwtDecoder") JwtDecoder decoder) throws Exception {
 		return workerChain(http, "/api/v1/internal/media-jobs/**", decoder, MEDIA_WORKER_ROLE);

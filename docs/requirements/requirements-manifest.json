@@ -1,13 +1,13 @@
 {
   "schema_version": "requirements-manifest-v1",
   "current": {
-    "version": "V1.21",
-    "path": "baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md",
-    "sha256": "8164B4A095A1625597B33FAA0635DBE421DD40305DA428140D980BE78B3D02BC"
+    "version": "V1.23",
+    "path": "baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md",
+    "sha256": "90DE46F7ABFD76742587E56546D0A268BB62C148F63561B372A7948C2CF84BA2"
   },
   "previous": {
-    "version": "V1.20",
-    "path": "baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md",
-    "sha256": "79B5E75471349693A62366943EC58DA0F24133D236AD826EFF5844341D7BDEFE"
+    "version": "V1.21",
+    "path": "baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md",
+    "sha256": "C9694C18C78EC217FE7424F933722FAADA4A59A02094A257AD43C98354A57A79"
   }
 }
