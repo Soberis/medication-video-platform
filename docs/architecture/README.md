@@ -14,8 +14,8 @@
 | [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | 未来多视角同步约束参考；V1.23 不交付 CaptureSync runtime，V1.22 继续 DEFERRED |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
+| [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |
 | [Web 前端与用户体验设计规范](./web-ux-and-frontend-guidelines.md) | 信息架构、页面状态、组件与状态管理启用门槛、可访问性和前端验收 |
-| [设计简报](../design.md) | 管理端视觉方向、信息层级、交互语言与视觉非目标 |
 
 ## 历史参考（不得覆盖当前规范）
 
@@ -31,7 +31,7 @@
 
 - 业务需求基线位于 `docs/requirements/`，本目录不复制需求正文。
 - 总体技术设计只保存跨领域决策；详细规则进入对应专题文档。
-- `docs/design.md` 只定义视觉方向和信息表达；Web 实现、状态和验收规则由前端体验规范负责。
+- `docs/DESIGN_SYSTEM.md` 是唯一前端视觉权威；Web 领域 UX、实现、状态和验收规则由前端体验规范补充，后者不得另建视觉语言。
 - 已批准技术决策进入 `docs/adr/`；详细设计不得覆盖 ADR。
 - API、事件和结构化数据契约进入 `contracts/`，不能只保存在 Markdown 示例中。
 - 数据库结构只通过 `services/core-api/src/main/resources/db/migration/` 维护。

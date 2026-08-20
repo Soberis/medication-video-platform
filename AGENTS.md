@@ -18,7 +18,9 @@
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
 7. 真实代码、数据库迁移和测试结果。
 
-发现冲突时按上述优先级处理并说明影响，不自行猜测或扩大范围。前端界面任务还应读取 `docs/design.md` 和 `docs/architecture/web-ux-and-frontend-guidelines.md`；它们只约束设计与实现方式，不覆盖业务需求和正式契约。
+发现冲突时按上述优先级处理并说明影响，不自行猜测或扩大范围。前端界面任务必须先读取 `docs/DESIGN_SYSTEM.md`，并同时读取 `docs/architecture/web-ux-and-frontend-guidelines.md`；前者是唯一视觉权威，后者只补充领域 UX、实现与验收规则，均不覆盖业务需求和正式契约。
+
+所有 UI 工作必须遵守 `docs/DESIGN_SYSTEM.md`。不得引入新的视觉语言、任意设计 Token 或一次性页面样式；确需改变时，应有意识地先修订设计系统。
 
 ## Architecture
 

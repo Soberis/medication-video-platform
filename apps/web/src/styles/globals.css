@@ -1,7 +1,7 @@
 /* Global defaults and the CSS bridge values installed from theme/tokens.ts. */
 :root {
-  color: var(--app-color-text-primary);
-  background: var(--app-color-page);
+  color: var(--app-color-foreground);
+  background: var(--app-color-background);
   font-family: var(--app-font-family);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,7 +15,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: var(--app-color-page);
+  background: var(--app-color-background);
 }
 
 button,
@@ -26,12 +26,23 @@ select {
 }
 
 button {
-  min-height: 44px;
+  min-height: var(--app-control-height);
 }
 
 :where(a, button, input, textarea, select, summary):focus-visible {
-  outline: 3px solid var(--app-color-focus);
-  outline-offset: 3px;
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 code {

@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -40,7 +40,7 @@ describe('App', () => {
     )
 
     expect(await screen.findByText('合成测试项目')).toBeInTheDocument()
-    expect(screen.getByText('配药视频数据管理平台')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '返回项目列表' })).toHaveTextContent('配药视频数据管理')
     expect(screen.getByText('选择项目，继续管理配药操作和视频。')).toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('项目')
@@ -127,8 +127,8 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('details')).not.toHaveClass(
-      'nav-more-active',
+    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).not.toHaveAttribute(
+      'data-active',
     )
   })
 
@@ -150,13 +150,16 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('details')).toHaveClass('nav-more-active')
+    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).toHaveAttribute(
+      'data-active',
+      'true',
+    )
     expect(within(navigation).getByText('上传排障').closest('a')).not.toHaveAttribute(
       'aria-current',
     )
   })
 
-  it('closes the management menu when clicked outside or Escape is pressed', async () => {
+  it('lets users collapse and expand the canonical sidebar', async () => {
     renderRouter(
       [
         {
@@ -170,22 +173,14 @@ describe('App', () => {
     )
 
     const user = userEvent.setup()
-    const navigation = screen.getByRole('navigation', { name: '主导航' })
-    const trigger = within(navigation).getByText('管理')
-    const menu = trigger.closest('details')
+    const sidebar = screen.getByRole('complementary', { name: '应用侧栏' })
+    const frame = sidebar.closest('.app-frame')
 
-    expect(menu).not.toBeNull()
-    await user.click(trigger)
-    expect(menu).toHaveAttribute('open', '')
-
-    fireEvent.pointerDown(document.body)
-    expect(menu).not.toHaveAttribute('open')
-
-    await user.click(trigger)
-    expect(menu).toHaveAttribute('open', '')
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(menu).not.toHaveAttribute('open')
-    expect(document.activeElement).toBe(trigger)
+    expect(frame).not.toHaveAttribute('data-sidebar-collapsed')
+    await user.click(screen.getByRole('button', { name: '收起侧栏' }))
+    expect(frame).toHaveAttribute('data-sidebar-collapsed', 'true')
+    await user.click(screen.getByRole('button', { name: '展开侧栏' }))
+    expect(frame).not.toHaveAttribute('data-sidebar-collapsed')
   })
 
   it('only exposes project rename and archive commands to project administrators', async () => {
