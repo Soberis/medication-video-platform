@@ -4390,7 +4390,7 @@ components:
         file_name:
           type: [string, "null"]
           maxLength: 255
-          description: Original client filename. Required for a video bound to an external ingest manifest.
+          description: Original client filename. Required for PLATFORM_LOCAL videos and for videos bound to an external ingest manifest.
     UploadFile:
       type: object
       additionalProperties: false
@@ -5116,7 +5116,7 @@ components:
         - retention_status
       properties:
         video_id: { type: string, format: uuid }
-        display_name: { type: string, minLength: 1, maxLength: 128 }
+        display_name: { type: string, minLength: 1, maxLength: 255 }
         source_name: { $ref: "#/components/schemas/UploadSourceType" }
         camera_number: { type: [integer, "null"], minimum: 1, maximum: 64 }
         captured_at: { type: [string, "null"], format: date-time }

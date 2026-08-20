@@ -61,7 +61,7 @@ describe('VideoManagementView', () => {
 
     expect(await screen.findByRole('heading', { name: '视频管理' })).toBeInTheDocument()
     expect(await screen.findByText('synthetic-no-hand.mp4')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'synthetic-no-hand.mp4' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /synthetic-no-hand\.mp4/ })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
@@ -341,7 +341,7 @@ describe('VideoManagementView', () => {
     )
 
     renderRoute(<VideoManagementView />, {
-      route: `/projects/${projectId}/videos`,
+      route: `/projects/${projectId}/videos?media_status=INGESTED`,
       path: '/projects/:projectId/videos',
     })
 
@@ -349,6 +349,10 @@ describe('VideoManagementView', () => {
     expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
+    )
+    expect(screen.getByRole('link', { name: '下一步：进入人工标注' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('?media_status=INGESTED'),
     )
   })
 
@@ -406,10 +410,52 @@ describe('VideoManagementView', () => {
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
   })
+
+  it('keeps same-named uploads distinguishable by their immutable asset ids', async () => {
+    const first = videoRow({
+      video_id: '50000000-0000-4000-8000-000000000001',
+      display_name: 'video-1.mp4',
+      received_at: '2026-08-20T09:24:39Z',
+    })
+    const second = videoRow({
+      video_id: '50000000-0000-4000-8000-000000000002',
+      display_name: 'video-1.mp4',
+      received_at: '2026-08-19T14:33:50Z',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [first, second], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    const links = await screen.findAllByRole('link', { name: /视频 video-1\.mp4，资产 ID/ })
+    expect(links).toHaveLength(2)
+    expect(links[0]).toHaveAccessibleName(
+      '视频 video-1.mp4，资产 ID 50000000-0000-4000-8000-000000000001',
+    )
+    expect(links[1]).toHaveAccessibleName(
+      '视频 video-1.mp4，资产 ID 50000000-0000-4000-8000-000000000002',
+    )
+    expect(screen.getByText('ID 50000000…0001')).toBeInTheDocument()
+    expect(screen.getByText('ID 50000000…0002')).toBeInTheDocument()
+  })
 })
 
 function videoRow(
   overrides: Partial<{
+    video_id: string
+    display_name: string
+    received_at: string
     media_status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
     quality_decision: 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
     hand_status: 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'

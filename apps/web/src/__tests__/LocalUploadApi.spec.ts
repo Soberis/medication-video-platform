@@ -103,6 +103,10 @@ describe('platform-local upload API', () => {
       upload_source_type: 'PLATFORM_LOCAL',
       file_count: 1,
     })
+    expect(JSON.parse(fetchMock.mock.calls[1]?.[1].body as string)).toMatchObject({
+      file_kind: 'VIDEO',
+      file_name: 'synthetic.mp4',
+    })
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       `/api/v1/upload/${batchId}/files/${clientFileId}/parts/1/authorization`,

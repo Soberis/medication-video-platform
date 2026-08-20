@@ -35,6 +35,8 @@ class UploadFileContractTests {
 
 	private static final String TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
+	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
+
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
@@ -216,6 +218,17 @@ class UploadFileContractTests {
 		assertEquals(2, constraintCount);
 	}
 
+	@Test
+	void requiresTheOriginalFileNameForPlatformLocalVideos() throws Exception {
+		var batchId = initializePlatformLocalBatch(1, 12L, "platform-local-file-name-0001");
+		registerAsAdmin(batchId, UUID.fromString("10000000-0000-0000-0000-000000000012"),
+				"platform-local-file-name-0002", registrationRequest(12L, SHA256_A, MIN_PART_SIZE))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("PLATFORM_LOCAL_FILE_NAME_REQUIRED"));
+
+		assertEquals(0, this.fileRepository.count());
+	}
+
 	private UUID initializeBatch(int fileCount, long totalSizeBytes, String idempotencyKey) throws Exception {
 		var request = """
 				{
@@ -239,10 +252,45 @@ class UploadFileContractTests {
 			.getBatchId();
 	}
 
+	private UUID initializePlatformLocalBatch(int fileCount, long totalSizeBytes, String idempotencyKey)
+			throws Exception {
+		var request = """
+				{
+				  "project_id": "%s",
+				  "device_id": "PLATFORM_LOCAL",
+				  "upload_source_type": "PLATFORM_LOCAL",
+				  "file_count": %d,
+				  "total_size_bytes": %d,
+				  "manifest_sha256": "%s"
+				}
+				""".formatted(PROJECT_ID, fileCount, totalSizeBytes, SHA256_A);
+
+		this.mockMvc
+			.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isCreated());
+
+		return this.batchRepository.findByProjectIdAndIdempotencyKey(PROJECT_ID, idempotencyKey)
+			.orElseThrow()
+			.getBatchId();
+	}
+
 	private org.springframework.test.web.servlet.ResultActions register(UUID batchId, UUID clientFileId,
 			String idempotencyKey, String request) throws Exception {
+		return register(TOKEN, batchId, clientFileId, idempotencyKey, request);
+	}
+
+	private org.springframework.test.web.servlet.ResultActions registerAsAdmin(UUID batchId, UUID clientFileId,
+			String idempotencyKey, String request) throws Exception {
+		return register(ADMIN_TOKEN, batchId, clientFileId, idempotencyKey, request);
+	}
+
+	private org.springframework.test.web.servlet.ResultActions register(String bearerToken, UUID batchId,
+			UUID clientFileId, String idempotencyKey, String request) throws Exception {
 		return this.mockMvc.perform(put("/api/v1/upload/{batchId}/files/{clientFileId}", batchId, clientFileId)
-			.header("Authorization", "Bearer " + TOKEN)
+			.header("Authorization", "Bearer " + bearerToken)
 			.header("Idempotency-Key", idempotencyKey)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(request));

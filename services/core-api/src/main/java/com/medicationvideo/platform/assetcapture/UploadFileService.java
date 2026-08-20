@@ -59,6 +59,11 @@ class UploadFileService {
 			throw new UploadFileRegistrationException("PLATFORM_LOCAL_VIDEO_REQUIRED",
 					"A platform-local upload batch accepts exactly one VIDEO file.");
 		}
+		if (batch.getUploadSourceType() == UploadSourceType.PLATFORM_LOCAL && request.fileKind() == UploadFileKind.VIDEO
+				&& (request.fileName() == null || request.fileName().isBlank())) {
+			throw new UploadFileRegistrationException("PLATFORM_LOCAL_FILE_NAME_REQUIRED",
+					"A platform-local video registration must include the original file name.");
+		}
 		if (batch.getExternalManifestId() != null && request.fileKind() == UploadFileKind.VIDEO) {
 			var expected = this.externalManifestVideoRepository
 				.findByManifestIdAndClientFileId(batch.getExternalManifestId(), clientFileId)

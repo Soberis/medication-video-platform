@@ -465,17 +465,24 @@ export default function VideoManagementView() {
                 width: 260,
                 render: (_, row) => (
                   <>
-                    <strong className="mono-wrap">
-                      <Link
-                        className="video-name-link"
-                        to={{
-                          pathname: paths.asset(projectId, row.video_id),
-                          search: location.search,
-                        }}
-                      >
-                        {row.display_name}
-                      </Link>
-                    </strong>
+                    <div className="video-name-line">
+                      <strong className="mono-wrap">
+                        <Link
+                          className="video-name-link"
+                          aria-label={`视频 ${row.display_name}，资产 ID ${row.video_id}`}
+                          title={`唯一视频资产 ID：${row.video_id}`}
+                          to={{
+                            pathname: paths.asset(projectId, row.video_id),
+                            search: location.search,
+                          }}
+                        >
+                          {row.display_name}
+                        </Link>
+                      </strong>
+                      <span className="video-identity" title={`唯一视频资产 ID：${row.video_id}`}>
+                        ID {shortId(row.video_id)}
+                      </span>
+                    </div>
                     <span className="cell-secondary">
                       来源 {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
                       {' · '}
@@ -528,7 +535,10 @@ export default function VideoManagementView() {
                           className="text-link"
                           to={
                             action.target === 'detail'
-                              ? paths.asset(projectId, row.video_id)
+                              ? {
+                                  pathname: paths.asset(projectId, row.video_id),
+                                  search: location.search,
+                                }
                               : paths.annotationTasks(projectId)
                           }
                         >

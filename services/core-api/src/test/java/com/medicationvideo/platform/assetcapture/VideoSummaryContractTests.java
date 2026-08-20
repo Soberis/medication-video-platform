@@ -84,6 +84,30 @@ class VideoSummaryContractTests {
 	}
 
 	@Test
+	void exposesAnOriginalFileNameUpToTheUploadFileLimit() throws Exception {
+		var createdAt = Instant.parse("2026-08-15T02:00:00Z");
+		var video = insertVideoSummaryFixture(createdAt, null);
+		var fileName = "clinical-video-" + "a".repeat(236) + ".mp4";
+		try {
+			this.jdbcTemplate.update("UPDATE upload_file SET file_name = ? WHERE upload_file_id = ?", fileName,
+					video.uploadFileId());
+			this.mockMvc
+				.perform(get("/api/v1/projects/{projectId}/videos", PROJECT_ID)
+					.param("received_from", createdAt.minusSeconds(1).toString())
+					.param("received_before", createdAt.plusSeconds(1).toString())
+					.header("Authorization", "Bearer " + TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andExpect(jsonPath("$.items[0].display_name").value(fileName));
+		}
+		finally {
+			this.jdbcTemplate.update("DELETE FROM clip_asset WHERE clip_asset_id = ?", video.clipAssetId());
+			this.jdbcTemplate.update("DELETE FROM upload_file WHERE upload_file_id = ?", video.uploadFileId());
+			this.jdbcTemplate.update("DELETE FROM upload_batch WHERE batch_id = ?", video.batchId());
+		}
+	}
+
+	@Test
 	void rejectsWorkflowFilterValuesOutsideThePublishedContract() throws Exception {
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/videos?hand_status=BOGUS", PROJECT_ID).header("Authorization",

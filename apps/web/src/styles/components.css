@@ -823,6 +823,23 @@
   text-underline-offset: 3px;
 }
 
+.video-name-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.video-identity {
+  flex: 0 0 auto;
+  color: var(--app-color-text-secondary);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .video-next-step {
   display: grid;
   gap: var(--app-space-4);
