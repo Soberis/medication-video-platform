@@ -62,7 +62,7 @@ export default function ProjectMembershipView() {
       setErrorMessage(
         error instanceof AdminApiError || error instanceof CatalogApiError
           ? error.message
-          : '暂时无法读取项目成员。',
+          : '暂时无法读取项目成员，请稍后重试。',
       )
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
@@ -98,7 +98,7 @@ export default function ProjectMembershipView() {
     if (!canManageMembers || isMutating) return
     modal.confirm({
       title: '确认移除项目成员',
-      content: `移除“${membership.actor_id}”后，该账号将看不到当前项目及其视频数据。`,
+      content: `移除“${membership.actor_id}”后，该账号将无法查看当前项目及其视频数据。`,
       okText: '移除成员',
       cancelText: '取消',
       okButtonProps: { danger: true },
@@ -122,7 +122,7 @@ export default function ProjectMembershipView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑">
+      <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={paths.projects}>项目</Link>
         <span aria-hidden="true">/</span>
         <span>项目成员</span>
@@ -153,14 +153,14 @@ export default function ProjectMembershipView() {
                 placeholder="选择已启用的内部账号"
                 options={availableAccounts.map((account) => ({
                   value: account.username,
-                  label: `${account.username}（${account.role === 'ADMIN' ? '管理员' : '普通用户'}）`,
+                  label: `${account.username}（${account.role === 'ADMIN' ? '管理员' : '成员'}）`,
                 }))}
               />
             </Form.Item>
             <Form.Item label="项目角色" name="role">
               <Select
                 options={[
-                  { label: '普通用户', value: 'MEMBER' },
+                  { label: '成员', value: 'MEMBER' },
                   { label: '项目管理员', value: 'ADMIN' },
                 ]}
               />
@@ -196,7 +196,7 @@ export default function ProjectMembershipView() {
                 width: 140,
                 render: (_, row) => (
                   <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
-                    {row.role === 'ADMIN' ? '项目管理员' : '普通用户'}
+                    {row.role === 'ADMIN' ? '项目管理员' : '成员'}
                   </StatusBadge>
                 ),
               },

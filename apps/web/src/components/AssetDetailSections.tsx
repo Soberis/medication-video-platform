@@ -167,7 +167,7 @@ export function PlaybackCard({
         return
       }
       if (typeof stage.requestFullscreen !== 'function') {
-        setFullscreenError('当前浏览器不支持整合视频与骨架叠加的全屏查看。')
+        setFullscreenError('当前浏览器不支持视频与骨架叠加的全屏查看。')
         return
       }
       await stage.requestFullscreen()
@@ -267,11 +267,11 @@ export function PlaybackCard({
             </div>
           ) : null}
           {candidateOverlay.length > 0 ? (
-            <div className="playback-supporting-note" aria-label="Skeleton Overlay 说明">
+            <div className="playback-supporting-note" aria-label="骨架叠加说明">
               <span>
-                <strong>Skeleton Overlay</strong> · 21 点与连接线
+                <strong>骨架叠加</strong> · 21 个关键点与连接线
               </span>
-              <span>Left / Right 仅作方向辅助</span>
+              <span>左 / 右仅作方向辅助</span>
             </div>
           ) : null}
           {fullscreenError ? (
@@ -295,9 +295,9 @@ export function PlaybackCard({
       {canRecoverMissingMediaProbe ? (
         <div className="playback-toolbar media-probe-toolbar">
           <Button loading={isRecoveringMediaProbe} onClick={onRecoverMissingMediaProbe}>
-            恢复已丢失的检测任务
+            恢复丢失的检测任务
           </Button>
-          <p className="form-hint">仅在已确认原任务消息不存在时使用；会创建新的受审计尝试。</p>
+          <p className="form-hint">仅在确认原任务消息不存在时使用；将创建新的审计尝试。</p>
         </div>
       ) : null}
     </section>
@@ -346,7 +346,7 @@ export function MediaReportCard({
       <>
         <div className="media-report-summary">
           <StatusBadge tone="success">完整解码已验证</StatusBadge>
-          <span className="form-hint">检测完成于 {formatDateTime(report.created_at)}</span>
+          <span className="form-hint">完成时间：{formatDateTime(report.created_at)}</span>
         </div>
         <Descriptions
           column={{ xs: 1, sm: 2, lg: 3 }}
@@ -524,7 +524,7 @@ export function QualityReviewCard({
         <>
           <div className="quality-review-summary">
             <StatusBadge tone={assetStatus === 'INGESTED' ? tagTone : 'default'}>
-              {assetStatus === 'INGESTED' ? qualityDecisionLabels[review.decision] : '待技术检测'}
+              {assetStatus === 'INGESTED' ? qualityDecisionLabels[review.decision] : '待媒体检测'}
             </StatusBadge>
             {assetStatus === 'INGESTED' && review.reason_code ? (
               <span>{qualityReasonLabels[review.reason_code]}</span>
@@ -537,7 +537,7 @@ export function QualityReviewCard({
           </div>
           {assetStatus !== 'INGESTED' ? (
             <p className="form-hint">
-              技术检测完成后才能记录质量结论；当前视频仍可直接播放并供人工预览。
+              媒体检测完成后才能记录质量结论；当前视频仍可直接播放并供人工预览。
             </p>
           ) : canReview ? (
             showEditorInline ? (
@@ -549,7 +549,7 @@ export function QualityReviewCard({
               </details>
             )
           ) : (
-            <p className="form-hint">当前账号没有记录质量结论的权限。</p>
+            <p className="form-hint">当前账号无权记录质量结论。</p>
           )}
         </>
       ) : null}
@@ -573,7 +573,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
             <span>执行人：{createdTask.assignee_actor_id}</span>
           </div>
           <p className="form-hint">
-            质量合格后系统已自动分配；请在标注页提交时间段，项目管理员随后人工复核。
+            质量合格后系统已自动分配任务。请在标注页提交时间段，项目管理员随后复核。
           </p>
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
             查看配药动作标注
@@ -582,7 +582,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
       ) : (
         <>
           <p className="form-hint">
-            质量结论保存为合格时，系统会自动创建唯一标注任务并分配给质量确认人。当前账号没有可见任务时，请刷新状态或在任务列表查看自己的受理任务。
+            质量结论为合格后，系统会自动创建并分配唯一标注任务。若当前账号没有可见任务，请刷新状态或前往任务列表查看。
           </p>
         </>
       )}
@@ -600,7 +600,7 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
         items={[
           {
             key: 'asset',
-            label: '资产 ID',
+            label: '视频资产 ID',
             children: <code>{detail.clip_asset_id}</code>,
           },
           { key: 'content', label: '内容类型', children: detail.content_type },
@@ -632,7 +632,7 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
           items={[
             {
               key: 'session',
-              label: '所属 Session',
+              label: '所属会话',
               children: <code>{detail.session_binding.capture_session_id}</code>,
             },
             {
@@ -657,7 +657,7 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
             },
             {
               key: 'quality',
-              label: '流技术检测',
+              label: '视频流检测',
               children: qualityStatusLabels[detail.session_binding.quality_status],
             },
             {
@@ -673,7 +673,7 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
           ]}
         />
       ) : (
-        <p className="empty-state">该资产已校验上传，但尚未绑定到 CaptureSession。</p>
+        <p className="empty-state">该视频已完成上传校验，但尚未绑定到配药操作记录。</p>
       )}
     </section>
   )
@@ -692,7 +692,7 @@ export function DangerZoneCard({
         <span className="app-eyebrow">低频高风险操作</span>
         <strong id="danger-zone-title">删除视频</strong>
         <p className="form-hint">
-          从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一 Session
+          从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一配药操作
           的其他视频。
         </p>
       </div>

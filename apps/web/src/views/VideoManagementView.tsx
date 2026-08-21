@@ -30,14 +30,14 @@ import {
 } from '@/features/catalog/catalog-video-filters'
 
 const mediaStatusLabels: Record<VideoSummaryMediaStatus, string> = {
-  UPLOADED: '待处理',
-  INGESTING: '处理中',
-  INGESTED: '可检测',
-  INGEST_FAILED: '媒体失败',
+  UPLOADED: '待媒体检测',
+  INGESTING: '媒体检测中',
+  INGESTED: '媒体检测完成',
+  INGEST_FAILED: '媒体检测失败',
 }
 
 const handStatusLabels: Record<VideoSummaryHandStatus, string> = {
-  NOT_REQUESTED: '未检测',
+  NOT_REQUESTED: '未发起',
   QUEUED: '排队中',
   RUNNING: '检测中',
   SUCCEEDED: '已完成',
@@ -64,9 +64,9 @@ const annotationStatusLabels: Record<VideoSummaryAnnotationStatus, string> = {
 
 const cleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> = {
   NOT_STARTED: '待清洗',
-  PASS: '通过',
+  PASS: '已通过',
   WARNING: '需关注',
-  REJECT: '不通过',
+  REJECT: '未通过',
 }
 
 export default function VideoManagementView() {
@@ -148,9 +148,7 @@ export default function VideoManagementView() {
         if (background || request.signal.aborted || activeRequest.current !== request) return
         setLoadState('error')
         setErrorMessage(
-          error instanceof CatalogApiError
-            ? error.message
-            : '暂时无法读取视频管理列表，请稍后重试。',
+          error instanceof CatalogApiError ? error.message : '暂时无法读取视频列表，请稍后重试。',
         )
       } finally {
         if (activeRequest.current === request) activeRequest.current = null
@@ -470,7 +468,7 @@ export default function VideoManagementView() {
       </section>
       {loadState === 'loading' ? (
         <div className="video-list-state" role="status">
-          正在读取视频管理列表…
+          正在读取视频列表…
         </div>
       ) : null}
       {loadState === 'error' ? (
@@ -505,7 +503,7 @@ export default function VideoManagementView() {
                   <div className="video-identity-cell">
                     <Link
                       className="video-name-link"
-                      aria-label={`视频 ${row.display_name}，资产 ID ${row.video_id}`}
+                      aria-label={`视频 ${row.display_name}，视频资产 ID ${row.video_id}`}
                       title={`唯一视频资产 ID：${row.video_id}`}
                       to={{
                         pathname: paths.asset(projectId, row.video_id),
@@ -638,17 +636,17 @@ function cleaningStatusTone(status: VideoSummaryCleaningStatus): StatusIndicator
 
 function nextStepLabel(row: VideoSummary) {
   if (row.media_status !== 'INGESTED') {
-    return row.media_status === 'INGEST_FAILED' ? '视频检测失败' : '视频检测中'
+    return row.media_status === 'INGEST_FAILED' ? '媒体检测失败' : '媒体检测中'
   }
   if (row.quality_decision === 'UNREVIEWED') return '待人工质量判断'
-  if (row.quality_decision === 'NEEDS_REVIEW') return '需重新人工质量判断'
+  if (row.quality_decision === 'NEEDS_REVIEW') return '需要重新判断质量'
   if (row.quality_decision === 'REJECTED') return '质量判断未通过'
   if (row.quality_decision !== 'QUALIFIED') return '待人工质量判断'
-  if (row.annotation_status === 'SUBMITTED') return '等待人工复核'
+  if (row.annotation_status === 'SUBMITTED') return '待人工复核'
   if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
-  if (row.annotation_status === 'NOT_STARTED') return '正在确认自动分配'
-  if (row.cleaning_status === 'NOT_STARTED') return '等待数据清洗'
-  if (row.cleaning_status === 'PASS') return '已通过清洗，可参与训练数据导出'
+  if (row.annotation_status === 'NOT_STARTED') return '待系统分配标注任务'
+  if (row.cleaning_status === 'NOT_STARTED') return '待清洗'
+  if (row.cleaning_status === 'PASS') return '当前数据已通过清洗，可用于训练'
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT')
     return '需要重新核对清洗'
   return '查看处理结果'
@@ -691,7 +689,7 @@ function notifyVideoTransitions(
       (previousItem.media_status === 'UPLOADED' || previousItem.media_status === 'INGESTING') &&
       nextItem.media_status === 'INGESTED'
     ) {
-      void message.success('视频检测完成')
+      void message.success('媒体检测完成')
     }
     if (
       (previousItem.hand_status === 'QUEUED' || previousItem.hand_status === 'RUNNING') &&

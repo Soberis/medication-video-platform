@@ -6,10 +6,10 @@ import type {
 } from '@/api/catalog'
 
 export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
-  PENDING: '待检测',
-  PASS: '通过',
+  PENDING: '待审核',
+  PASS: '已通过',
   WARNING: '需关注',
-  REJECT: '不通过',
+  REJECT: '未通过',
 }
 
 export const streamStatusLabels: Record<CameraStreamStatus, string> = {
@@ -27,7 +27,7 @@ export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
 }
 
 export const assetStatusLabels: Record<ClipAssetStatus, string> = {
-  UPLOADED: '上传完成，待检测',
+  UPLOADED: '上传完成，待媒体检测',
   INGESTING: '媒体检测中',
   INGESTED: '媒体检测完成',
   INGEST_FAILED: '媒体检测失败',

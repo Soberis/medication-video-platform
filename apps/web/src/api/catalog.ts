@@ -262,7 +262,7 @@ const errorMessages: Record<string, string> = {
   AI_HAND_POSE_MODEL_NOT_CONFIGURED: '手部姿态模型尚未由管理员配置，当前不能生成候选。',
   CLIP_ASSET_NOT_READY_FOR_AI_CANDIDATES: '视频尚未完成媒体入库，当前不能生成手部姿态候选。',
   CLIP_ASSET_CAMERA_HAND_DETECTION_DISABLED: '当前相机未启用手部检测，请联系管理员调整相机配置。',
-  AI_HAND_POSE_MEDIA_SUMMARY_REQUIRED: '视频媒体检查摘要尚未就绪，请刷新后重试。',
+  AI_HAND_POSE_MEDIA_SUMMARY_REQUIRED: '视频媒体检测摘要尚未就绪，请刷新后重试。',
   AI_HAND_POSE_INPUT_EXCEEDS_P0_RESULT_LIMIT: '当前视频长度超出本阶段单视频手部检测范围。',
   AI_HAND_POSE_INFERENCE_FAILED: '手部检测未完成，请稍后重试。',
   AI_HAND_POSE_INVALID_OUTPUT: '手部检测输出无效，请稍后重试。',

@@ -33,20 +33,20 @@ interface DraftAnnotationSegment extends AnnotationSegment {
 }
 const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是合格',
+  QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是“合格”',
   ASSET_INPUT_DIGEST_INVALID: '视频输入摘要无效',
   ANNOTATION_DOCUMENT_DIGEST_INVALID: '标注文档摘要无效',
   ANNOTATION_DOCUMENT_DIGEST_MISMATCH: '标注文档内容与摘要不一致',
   LABEL_SCHEMA_MISMATCH: '任务与修订绑定的标签规范不一致',
-  ANNOTATION_SEGMENTS_MISSING: '缺少主流程时间片段',
+  ANNOTATION_SEGMENTS_MISSING: '缺少主流程时间段',
   SEGMENT_TIME_RANGE_INVALID: '存在无效的时间范围',
   PRIMARY_STEP_LABEL_NOT_ALLOWED: '存在标签规范未允许的主流程标签',
-  PRIMARY_STEP_OVERLAP: '主流程时间片段存在重叠',
-  VERIFIED_MEDIA_DURATION_UNAVAILABLE: '缺少已验证的视频时长',
-  VERIFIED_MEDIA_DURATION_INVALID: '已验证的视频时长无效',
-  VERIFIED_MEDIA_FACT_INCOMPLETE: '媒体探测事实不完整',
-  VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体探测输入摘要与视频资产不一致',
-  SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间片段超出已验证的视频时长',
+  PRIMARY_STEP_OVERLAP: '主流程时间段存在重叠',
+  VERIFIED_MEDIA_DURATION_UNAVAILABLE: '缺少已确认的视频时长',
+  VERIFIED_MEDIA_DURATION_INVALID: '已确认的视频时长无效',
+  VERIFIED_MEDIA_FACT_INCOMPLETE: '媒体检测事实不完整',
+  VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体检测输入摘要与视频资产不一致',
+  SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间段超出已确认的视频时长',
   LEGACY_APPROVED_REVISION_REQUIRES_REVALIDATION: '历史通过记录需要按当前规则重新验证',
 }
 let nextDraftSegmentId = 0
@@ -82,27 +82,27 @@ function postCleaningPresentation(task: AnnotationTask): {
   )
   if (result?.outcome === 'PASS')
     return {
-      label: '当前规则检查通过',
+      label: '已通过清洗',
       color: 'success',
-      description: '已通过清洗，可参与训练数据导出',
+      description: '当前数据已通过清洗，可用于训练',
       reasons,
     }
   if (result?.outcome === 'WARNING')
     return {
-      label: '后置清洗待确认',
+      label: '清洗待确认',
       color: 'warning',
-      description: '当前数据暂不可用于训练，需补充事实后重新核对清洗。',
+      description: '当前数据暂不可用于训练，请补充事实后重新核对清洗。',
       reasons,
     }
   if (result?.outcome === 'REJECT')
     return {
-      label: '后置清洗不通过',
+      label: '清洗未通过',
       color: 'error',
       description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
       reasons,
     }
   return {
-    label: '后置清洗未执行',
+    label: '尚未执行清洗',
     color: 'default',
     description: '尚未形成可用于训练的清洗结论。',
     reasons,
@@ -245,7 +245,7 @@ export default function AnnotationTaskListView() {
       }
       setIsTrainingExportOpen(false)
       setTrainingExportPreview(null)
-      void message.success('training_data.parquet 已开始下载。')
+      void message.success('已开始下载 training_data.parquet。')
     } catch (error) {
       if (request.signal.aborted) return
       void message.error(
@@ -302,7 +302,7 @@ export default function AnnotationTaskListView() {
         (segment) => !segment.label || segment.start_ms < 0 || segment.end_ms <= segment.start_ms,
       )
     ) {
-      void message.error('请填写标签，并确保每个片段的结束时间晚于开始时间。')
+      void message.error('请填写标签，并确保每个时间段的结束时间晚于开始时间。')
       return
     }
     setIsSubmitting(true)
@@ -326,9 +326,9 @@ export default function AnnotationTaskListView() {
     if (!revision || !task.can_review || reviewingRevisionId) return
     const approved = decision === 'APPROVED'
     modal.confirm({
-      title: approved ? '通过配药动作标注复核' : '配药动作标注复核不通过',
+      title: approved ? '确认配药动作标注复核通过' : '确认配药动作标注复核不通过',
       content: approved
-        ? '确认该时间段标注与视频画面一致，并将其作为通过的人工配药动作标注？'
+        ? '确认时间段标注与视频画面一致，并将其作为正式人工配药动作标注？'
         : '确认该配药动作标注不符合要求？本次将记录为不通过，并退回给标注人修改。',
       okText: approved ? '确认通过' : '确认不通过',
       cancelText: '取消',
@@ -338,7 +338,7 @@ export default function AnnotationTaskListView() {
         try {
           await reviewAnnotationRevision(projectId, revision.annotation_revision_id, decision)
           void message.success(
-            approved ? '配药动作标注已通过管理员复核。' : '已记录配药动作标注不通过。',
+            approved ? '配药动作标注已通过管理员复核。' : '已记录配药动作标注未通过。',
           )
           await loadTasks()
         } catch (error) {
@@ -358,14 +358,14 @@ export default function AnnotationTaskListView() {
     modal.confirm({
       title: '重新核对清洗',
       content:
-        '将按当前人工质量、视频和标注事实重新生成后置清洗结果；历史结果会保留，不会修改已通过的标注。',
+        '将按当前人工质量、视频和标注事实重新生成清洗结果；历史结果会保留，不会修改已通过的标注。',
       okText: '确认重新核对',
       cancelText: '取消',
       async onOk() {
         setRecheckingRevisionId(revision.annotation_revision_id)
         try {
           await recheckAnnotationPostCleaning(projectId, revision.annotation_revision_id)
-          void message.success('已按当前事实核对清洗结果。')
+          void message.success('已按当前事实重新核对清洗结果。')
           await loadTasks()
         } catch (error) {
           void message.error(
@@ -387,7 +387,7 @@ export default function AnnotationTaskListView() {
         eyebrow="固定机位视频 · 人工确认"
         titleId="annotation-task-title"
         title="配药动作标注"
-        description="在配药舱固定机位视频上记录动作时间段；提交后由当前项目管理员复核。"
+        description="在固定机位视频上记录配药动作时间段；提交后由当前项目管理员复核。"
         actions={
           <>
             {loadState === 'success' && progress?.scope === 'PROJECT' ? (
@@ -405,7 +405,7 @@ export default function AnnotationTaskListView() {
           </>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在读取配药动作标注…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在读取配药动作标注任务…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadTasks()}>
           {errorMessage}
@@ -471,7 +471,7 @@ export default function AnnotationTaskListView() {
                     <details className="task-record-details">
                       <summary>查看任务记录</summary>
                       <p>
-                        创建人：{row.created_by} · 创建时间：{formatDateTime(row.created_at)}
+                        创建者：{row.created_by} · 创建时间：{formatDateTime(row.created_at)}
                       </p>
                       {presentation ? (
                         <>
@@ -494,7 +494,7 @@ export default function AnnotationTaskListView() {
                             revision.review.decision === 'APPROVED' ? 'approved' : 'rejected'
                           }`}
                         >
-                          {revision.review.decision === 'APPROVED' ? '复核通过' : '复核不通过'}
+                          {revision.review.decision === 'APPROVED' ? '复核通过' : '复核未通过'}
                           {revision.review.reviewed_by === revision.submitted_by ? (
                             <small>管理员自审</small>
                           ) : null}
@@ -554,7 +554,7 @@ export default function AnnotationTaskListView() {
                     ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
                       <Button
                         type="link"
-                        aria-label={`重新核对视频 ${row.clip_asset_id} 的后置清洗`}
+                        aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
                         loading={
                           recheckingRevisionId === row.annotation_revision.annotation_revision_id
                         }
@@ -573,7 +573,7 @@ export default function AnnotationTaskListView() {
         </section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有可处理的配药动作标注。管理员可在已判定合格的视频详情中创建并分配任务。" />
+        <EmptyState description="当前没有配药动作标注任务。管理员可在质量合格的视频详情中创建并分配任务。" />
       ) : null}
       <Modal
         open={isTrainingExportOpen}
@@ -599,8 +599,8 @@ export default function AnnotationTaskListView() {
               items={[
                 {
                   id: 'training-row-count',
-                  label: '可导出数量',
-                  value: `${trainingExportPreview.training_row_count} 条（Parquet 训练行）`,
+                  label: '训练行数',
+                  value: `${trainingExportPreview.training_row_count} 条`,
                 },
                 { id: 'format', label: '格式', value: 'Parquet' },
                 { id: 'includes', label: '包含', value: '手部关键点 + 人工动作标签' },
@@ -613,12 +613,11 @@ export default function AnnotationTaskListView() {
             />
             {trainingExportPreview.training_row_count === 0 ? (
               <p className="training-data-export-empty" role="status">
-                当前没有合格训练行，暂时无法导出。
+                当前没有符合条件的训练行，暂时无法导出。
               </p>
             ) : null}
             <p className="form-hint">
-              MediaPipe Candidate 仅作为手部候选观测，不是 Ground Truth；动作标签来自人工
-              AnnotationRevision。
+              MediaPipe 候选仅作为手部观测数据，不是人工真值；动作标签来自人工正式标注。
             </p>
           </>
         ) : null}
@@ -632,7 +631,7 @@ export default function AnnotationTaskListView() {
         destroyOnHidden
       >
         <p className="form-hint">
-          按项目标签规范记录一个或多个配药动作时间段。提交后内容不可覆盖，后续由管理员复核处理。
+          按项目标签规范记录一个或多个配药动作时间段。提交后不能覆盖，后续由管理员复核。
         </p>
         <Form layout="vertical" onFinish={() => void submit()}>
           {segments.map((segment, index) => (
@@ -640,7 +639,7 @@ export default function AnnotationTaskListView() {
               key={segment.draftId}
               className="annotation-segment-row"
               role="group"
-              aria-label={`标注片段 ${index + 1}`}
+              aria-label={`标注时间段 ${index + 1}`}
             >
               <Form.Item label="开始（毫秒）">
                 <InputNumber
@@ -662,7 +661,7 @@ export default function AnnotationTaskListView() {
                 <Select
                   value={segment.label || undefined}
                   placeholder="选择步骤标签"
-                  aria-label={`标注片段 ${index + 1} 的标签`}
+                  aria-label={`标注时间段 ${index + 1} 的标签`}
                   onChange={(value) => updateSegment(index, { label: value })}
                   options={sortedLabels.map((label) => ({
                     value: label.label_id,
@@ -671,7 +670,7 @@ export default function AnnotationTaskListView() {
                 />
               </Form.Item>
               <Button
-                aria-label={`移除标注片段 ${index + 1}`}
+                aria-label={`移除标注时间段 ${index + 1}`}
                 disabled={segments.length === 1}
                 onClick={() =>
                   setSegments((current) =>

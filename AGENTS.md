@@ -22,11 +22,27 @@
 
 所有 UI 工作必须遵守 `docs/DESIGN_SYSTEM.md`。不得引入新的视觉语言、任意设计 Token 或一次性页面样式；确需改变时，应有意识地先修订设计系统。
 
-## 前端设计身份
+## Frontend Design Identity
 
-All frontend UI work must follow the permanent design identity defined in
-`docs/DESIGN_SYSTEM.md`: **Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue
-visual theme.**
+All frontend UI work must follow the permanent design identity:
+
+Linear-inspired Quiet Professional Workspace
+
+with Graphite + Medical Blue visual theme.
+
+Before modifying frontend UI, read:
+
+`docs/DESIGN_SYSTEM.md`
+
+The design system is the source of truth for:
+
+- layout;
+- colors;
+- spacing;
+- components;
+- interaction patterns.
+
+Do not introduce independent page-level visual styles.
 
 ## Architecture
 

@@ -79,7 +79,7 @@ describe('UploadProgressView', () => {
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(await screen.findByText('synthetic-device-01')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(screen.getByText(/已确认 1 \/ 1 Part/)).toBeInTheDocument()
+    expect(screen.getByText(/已确认 1 \/ 1 个分片/)).toBeInTheDocument()
     expect(screen.getByText('UPLOAD_FILE_SHA256_MISMATCH')).toBeInTheDocument()
     expect(screen.getByText('校验失败')).toBeInTheDocument()
   })

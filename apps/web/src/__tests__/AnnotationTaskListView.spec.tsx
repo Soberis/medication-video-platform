@@ -135,7 +135,7 @@ describe('annotation task list view', () => {
     renderView()
     await user.click(await screen.findByRole('button', { name: /提交视频/ }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('combobox', { name: '标注片段 1 的标签' }))
+    await user.click(within(dialog).getByRole('combobox', { name: '标注时间段 1 的标签' }))
     expect(await screen.findByText('准备工作区')).toBeInTheDocument()
     await user.click(screen.getByText('拿取药品'))
     await user.click(within(dialog).getByRole('button', { name: '提交配药动作标注' }))
@@ -148,10 +148,10 @@ describe('annotation task list view', () => {
 
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
     const outcomes = [
-      { outcome: 'PASS', expected: '当前规则检查通过' },
-      { outcome: 'WARNING', expected: '后置清洗待确认' },
-      { outcome: 'REJECT', expected: '后置清洗不通过' },
-      { outcome: null, expected: '后置清洗未执行' },
+      { outcome: 'PASS', expected: '已通过清洗' },
+      { outcome: 'WARNING', expected: '清洗待确认' },
+      { outcome: 'REJECT', expected: '清洗未通过' },
+      { outcome: null, expected: '尚未执行清洗' },
     ] as const
     const tasks = outcomes.map(({ outcome }, index) => ({
       ...assignedTask,
@@ -180,19 +180,21 @@ describe('annotation task list view', () => {
     stubTasks(tasks, labelSchema)
     const user = userEvent.setup()
     renderView()
-    expect(await screen.findByText('当前规则检查通过')).toBeInTheDocument()
+    expect(await screen.findByText('已通过清洗')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看任务记录')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
     expect(evidenceDetails[1]?.closest('details')).toHaveAttribute('open')
-    expect(screen.getAllByText(/创建人：local-synthetic-admin/)).toHaveLength(4)
+    expect(screen.getAllByText(/创建者：local-synthetic-admin/)).toHaveLength(4)
     expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
-    expect(screen.getByText(/缺少已验证的视频时长/)).toBeInTheDocument()
+    expect(screen.getByText(/缺少已确认的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
     await user.click(evidenceDetails[2]!)
-    expect(await screen.findByText(/当前数据未通过清洗，暂不可用于训练/)).toBeInTheDocument()
-    expect(screen.getByText(/主流程时间片段存在重叠/)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/当前数据未通过清洗，暂不可用于训练；视频资产未被删除/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/主流程时间段存在重叠/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
   }, 20_000)
@@ -248,7 +250,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByText('复核通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
-    expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
+    expect(screen.getByText('已通过清洗')).toBeInTheDocument()
   })
 
   it('loads a project export preview only after the administrator requests it', async () => {
@@ -264,12 +266,12 @@ describe('annotation task list view', () => {
       `/api/v1/projects/${projectId}/training-data/preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
-    expect(dialog).toHaveTextContent('12 条（Parquet 训练行）')
+    expect(dialog).toHaveTextContent('12 条')
     expect(dialog).toHaveTextContent('格式Parquet')
     expect(dialog).toHaveTextContent('包含手部关键点 + 人工动作标签')
     expect(dialog).toHaveTextContent('原始视频不包含')
     expect(dialog).toHaveTextContent(
-      'MediaPipe Candidate 仅作为手部候选观测，不是 Ground Truth；动作标签来自人工 AnnotationRevision。',
+      'MediaPipe 候选仅作为手部观测数据，不是人工真值；动作标签来自人工正式标注。',
     )
   })
 
@@ -312,7 +314,7 @@ describe('annotation task list view', () => {
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:training-data')
     expect(document.body.contains(link)).toBe(false)
-    expect(await screen.findByText('training_data.parquet 已开始下载。')).toBeInTheDocument()
+    expect(await screen.findByText('已开始下载 training_data.parquet。')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/training-data/download`,
       expect.objectContaining({
@@ -331,8 +333,8 @@ describe('annotation task list view', () => {
 
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('0 条（Parquet 训练行）')
-    expect(dialog).toHaveTextContent('当前没有合格训练行，暂时无法导出。')
+    expect(dialog).toHaveTextContent('0 条')
+    expect(dialog).toHaveTextContent('当前没有符合条件的训练行，暂时无法导出。')
     expect(within(dialog).getByRole('button', { name: /导出/ })).toBeDisabled()
   })
 

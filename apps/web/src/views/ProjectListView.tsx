@@ -49,7 +49,7 @@ export default function ProjectListView() {
       setLoadState('error')
       setErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_REQUEST_FAILED')
       setErrorMessage(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取授权项目，请稍后重试。',
+        error instanceof CatalogApiError ? error.message : '暂时无法读取项目，请稍后重试。',
       )
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
@@ -68,7 +68,7 @@ export default function ProjectListView() {
     if (isCreating) return
     const value = await prompt({
       title: '新建项目',
-      description: '创建后，当前管理员会自动成为该项目的第一位项目管理员。',
+      description: '创建后，当前管理员将自动成为该项目的项目管理员。',
       confirmText: '创建项目',
       placeholder: '例如：病区 A 合成数据验证',
       validate: (input) => {
@@ -80,7 +80,7 @@ export default function ProjectListView() {
     setIsCreating(true)
     try {
       await createProject(value.trim())
-      void message.success('项目已创建，当前身份已获得该项目的管理员权限。')
+      void message.success('项目已创建，当前身份已获得项目管理员权限。')
       await loadProjects()
     } catch (error) {
       void message.error(
@@ -95,7 +95,7 @@ export default function ProjectListView() {
     if (renamingProjectId) return
     const value = await prompt({
       title: '修改项目名称',
-      description: '仅修改项目显示名称，不会影响项目成员或视频归属。',
+      description: '只修改项目显示名称，不影响项目成员或视频归属。',
       confirmText: '保存名称',
       initialValue: project.display_name,
       validate: (input) => {
@@ -123,17 +123,19 @@ export default function ProjectListView() {
     const value = await prompt({
       title: '归档项目',
       description:
-        '归档会立即停止项目访问并从日常列表移除，但不会物理删除视频、对象或审计记录。请输入完整项目名称确认。',
+        '归档后将立即停止项目访问并从日常列表移除；视频、对象和审计记录不会被物理删除。请输入完整项目名称确认。',
       confirmText: '确认归档',
       placeholder: project.display_name,
       validate: (input) =>
-        input.trim() === project.display_name ? null : '输入的项目名称不匹配，未执行归档。',
+        input.trim() === project.display_name
+          ? null
+          : '输入的项目名称与当前项目不一致，未执行归档。',
     })
     if (value === null) return
     setArchivingProjectId(project.project_id)
     try {
       await archiveProject(project.project_id)
-      void message.success('项目已归档，视频与审计记录仍被保留。')
+      void message.success('项目已归档，视频和审计记录仍被保留。')
       await loadProjects()
     } catch (error) {
       void message.error(
@@ -164,7 +166,7 @@ export default function ProjectListView() {
           </>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在读取授权项目…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在读取项目…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadProjects()}>
           {errorMessage}
@@ -172,17 +174,17 @@ export default function ProjectListView() {
       ) : null}
       {projects.length > 0 ? (
         <section className="project-list-surface working-surface" aria-label="项目列表">
-          <ul className="project-list" aria-label="已加入的项目">
+          <ul className="project-list" aria-label="已加入项目">
             {projects.map((project) => (
               <li key={project.project_id} className="project-list-item">
                 <div className="project-list-name">
                   <div className="project-list-heading">
                     <strong>{project.display_name}</strong>
                     <StatusBadge tone={project.current_role === 'ADMIN' ? 'info' : 'default'}>
-                      {project.current_role === 'ADMIN' ? '管理员' : '普通用户'}
+                      {project.current_role === 'ADMIN' ? '管理员' : '成员'}
                     </StatusBadge>
                   </div>
-                  <p>在项目内统一管理配药操作、视频资产和配药动作标注。</p>
+                  <p>统一管理配药操作、视频资产和配药动作标注。</p>
                 </div>
                 <div className="project-list-actions">
                   <Link
@@ -226,7 +228,7 @@ export default function ProjectListView() {
           </ul>
         </section>
       ) : loadState === 'success' ? (
-        <EmptyState description="当前账号尚未加入任何项目。管理员可新建首个项目；普通用户需要由项目管理员添加为成员。">
+        <EmptyState description="当前账号尚未加入项目。管理员可新建项目；成员需由项目管理员添加。">
           {canCreateProjects ? (
             <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
               新建项目

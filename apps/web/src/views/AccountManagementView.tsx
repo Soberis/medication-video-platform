@@ -43,7 +43,9 @@ export default function AccountManagementView() {
       if (request.signal.aborted || activeRequest.current !== request) return
       setAccounts([])
       setLoadState('error')
-      setErrorMessage(error instanceof AdminApiError ? error.message : '暂时无法读取平台账号。')
+      setErrorMessage(
+        error instanceof AdminApiError ? error.message : '暂时无法读取平台账号，请稍后重试。',
+      )
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
     }
@@ -72,7 +74,7 @@ export default function AccountManagementView() {
     try {
       await createPlatformAccount(username, values.password)
       form.resetFields()
-      void message.success('普通用户账号已创建。请在对应项目中添加该成员。')
+      void message.success('成员账号已创建，请在对应项目中添加该成员。')
       await loadAccounts()
     } catch (error) {
       void message.error(
@@ -118,7 +120,7 @@ export default function AccountManagementView() {
         eyebrow="内部访问控制"
         titleId="accounts-title"
         title="平台账号"
-        description="创建、启停内部账号；加入项目后才能访问项目数据。"
+        description="创建、启用或停用内部账号；账号加入项目后才能访问项目数据。"
         actions={
           <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
             刷新
@@ -127,7 +129,7 @@ export default function AccountManagementView() {
       />
       <Section
         className="account-create-panel working-surface"
-        title="创建普通用户"
+        title="创建成员账号"
         titleId="account-create-title"
       >
         <Form<AccountFields>
@@ -168,7 +170,7 @@ export default function AccountManagementView() {
                 width: 130,
                 render: (_, row) => (
                   <StatusBadge tone={row.role === 'ADMIN' ? 'processing' : 'default'}>
-                    {row.role === 'ADMIN' ? '管理员' : '普通用户'}
+                    {row.role === 'ADMIN' ? '管理员' : '成员'}
                   </StatusBadge>
                 ),
               },

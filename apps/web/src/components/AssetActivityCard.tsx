@@ -9,26 +9,26 @@ import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation
 const actionLabels: Record<string, string> = {
   CLIP_ASSET_PLAYBACK_GRANTED: '获取视频播放授权',
   CLIP_ASSET_DELETED: '删除视频',
-  CLIP_ASSET_QUALITY_REVIEWED: '记录人工质量结论',
-  ANNOTATION_TASK_CREATED: '创建配药动作标注',
-  ANNOTATION_TASK_AUTO_ASSIGNED: '自动创建并分配配药动作标注',
+  CLIP_ASSET_QUALITY_REVIEWED: '记录质量结论',
+  ANNOTATION_TASK_CREATED: '创建配药动作标注任务',
+  ANNOTATION_TASK_AUTO_ASSIGNED: '自动创建并分配配药动作标注任务',
   ANNOTATION_REVISION_SUBMITTED: '提交配药动作标注修订',
   ANNOTATION_REVISION_REVIEWED: '复核配药动作标注修订',
-  POST_ANNOTATION_CLEANING_COMPLETED: '完成后置清洗检查',
+  POST_ANNOTATION_CLEANING_COMPLETED: '完成清洗',
 }
 
 const reasonLabels: Record<string, string> = {
   DATA_REVIEW: '人工查看',
   USER_REQUESTED_DELETION: '用户请求删除',
-  QUALIFIED_CLIP_ASSET: '视频已通过人工质量判断',
-  AUTO_AFTER_QUALITY_QUALIFIED: '质量合格后自动分配',
+  QUALIFIED_CLIP_ASSET: '视频质量判断为合格',
+  AUTO_AFTER_QUALITY_QUALIFIED: '质量合格后自动分配任务',
   MANUAL_ANNOTATION_SUBMITTED: '人工配药动作标注已提交',
   INDEPENDENT_ANNOTATION_REVIEW: '独立复核',
-  SELF_ADMIN_APPROVAL: '管理员自审（SELF_ADMIN_APPROVAL）',
+  SELF_ADMIN_APPROVAL: '管理员自审',
   MEETS_REQUIREMENTS: '符合质量要求',
-  POST_CLEANING_PASS: '后置清洗通过',
-  POST_CLEANING_WARNING: '后置清洗需确认',
-  POST_CLEANING_REJECT: '后置清洗不通过',
+  POST_CLEANING_PASS: '清洗通过',
+  POST_CLEANING_WARNING: '清洗需确认',
+  POST_CLEANING_REJECT: '清洗未通过',
 }
 
 export function AssetActivityCard({ projectId, assetId }: { projectId: string; assetId: string }) {
@@ -89,14 +89,14 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
       }
       variant="outlined"
     >
-      {state === 'idle' ? <p className="form-hint">按需加载该视频的操作记录。</p> : null}
+      {state === 'idle' ? <p className="form-hint">点击查看该视频的操作记录。</p> : null}
       {state === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void load(items.length === 0)}>
           {errorMessage}
         </ErrorState>
       ) : null}
       {state === 'success' && items.length === 0 ? (
-        <EmptyState description="该视频还没有可显示的操作记录。" />
+        <EmptyState description="该视频暂无可显示的操作记录。" />
       ) : null}
       {items.length > 0 ? (
         <>
@@ -158,7 +158,7 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
                       {reasonLabels[item.reason_code] ?? item.reason_code}
                     </summary>
                     <small>
-                      请求 {shortId(item.request_id)} · {item.object_type}
+                      请求 ID {shortId(item.request_id)} · {item.object_type}
                       {item.object_version ? ` v${item.object_version}` : ''}
                     </small>
                   </details>

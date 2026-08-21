@@ -177,19 +177,19 @@ export default function AssetDetailView() {
             label: '媒体',
             state: 'complete',
             status: '已完成',
-            detail: '视频可播放并可进入后续人工流程',
+            detail: '视频可播放，可进入后续人工流程',
           }
         : detail.status === 'INGEST_FAILED'
           ? {
               label: '媒体',
               state: 'blocked',
-              status: '检测失败',
+              status: '媒体检测失败',
               detail: '需先处理媒体检测问题',
             }
           : {
               label: '媒体',
               state: 'current',
-              status: detail.status === 'INGESTING' ? '检测中' : '待检测',
+              status: detail.status === 'INGESTING' ? '媒体检测中' : '待媒体检测',
               detail: '完成后才能记录质量结论',
             }
 
@@ -205,7 +205,7 @@ export default function AssetDetailView() {
           ? {
               label: '人工标注',
               state: 'current',
-              status: '待质量判断',
+              status: '待人工质量判断',
               detail: '先完成人工质量判断',
             }
           : annotationTaskLoadState === 'loading' || annotationTaskLoadState === 'idle'
@@ -213,29 +213,28 @@ export default function AssetDetailView() {
                 label: '人工标注',
                 state: 'waiting',
                 status: '读取中',
-                detail: '正在读取服务端标注任务状态',
+                detail: '正在读取标注任务状态',
               }
             : annotationTaskLoadState === 'error'
               ? {
                   label: '人工标注',
                   state: 'waiting',
                   status: '状态未读取',
-                  detail: '请刷新后确认，不使用前端推断结果',
+                  detail: '请刷新后确认，不使用页面推断结果',
                 }
               : annotationTask === null
                 ? {
                     label: '人工标注',
                     state: 'waiting',
                     status: '已自动分配',
-                    detail:
-                      '质量合格后系统自动分配给质量确认人；请在任务列表查看当前账号可见任务。',
+                    detail: '质量合格后系统会自动分配任务；请在任务列表查看当前账号可见任务。',
                   }
                 : annotationTask.annotation_revision?.review?.decision === 'REJECTED'
                   ? {
                       label: '人工标注',
                       state: 'current',
                       status: '待修改',
-                      detail: '人工复核未通过，等待执行人修订',
+                      detail: '人工复核未通过，等待执行人修改',
                     }
                   : annotationTask.status === 'ASSIGNED'
                     ? {
@@ -250,8 +249,8 @@ export default function AssetDetailView() {
                         status: annotationTask.status === 'SUBMITTED' ? '已提交' : '已完成',
                         detail:
                           annotationTask.status === 'SUBMITTED'
-                            ? '正式动作标签已提交，等待人工复核'
-                            : '正式动作标签已经人工复核',
+                            ? '正式动作标签已提交，待项目管理员复核'
+                            : '正式动作标签已完成人工复核',
                       }
 
     const annotationReview = annotationTask?.annotation_revision?.review
@@ -268,14 +267,14 @@ export default function AssetDetailView() {
               label: '人工复核',
               state: 'current',
               status: '待复核',
-              detail: '等待项目管理员人工复核，AI 不会自动通过',
+              detail: '等待项目管理员复核，AI 不会自动通过',
             }
           : annotationReview?.decision === 'APPROVED'
             ? {
                 label: '人工复核',
                 state: 'complete',
                 status: '已通过',
-                detail: '正式动作标签已经人工确认',
+                detail: '正式动作标签已由人工确认',
               }
             : {
                 label: '人工复核',
@@ -292,22 +291,22 @@ export default function AssetDetailView() {
             state: 'complete',
             status: '已通过清洗',
             detail: hasCurrentQualifiedQuality
-              ? '已通过清洗，可参与训练数据导出'
-              : '历史清洗已通过；当前质量结论未确认或未通过，暂不能参与训练数据导出',
+              ? '当前数据已通过清洗，可用于训练'
+              : '历史清洗已通过；当前质量结论未确认或未通过，暂不能用于训练',
           }
         : cleaningResult?.outcome === 'WARNING' || cleaningResult?.outcome === 'REJECT'
           ? {
               label: '清洗',
               state: 'blocked',
               status: cleaningResult.outcome === 'WARNING' ? '需处理' : '未通过',
-              detail: '未通过 Cleaning 的数据不会进入训练导出',
+              detail: '未通过清洗的数据不会进入训练导出',
             }
           : annotationReview?.decision === 'APPROVED'
             ? {
                 label: '清洗',
                 state: 'current',
-                status: '等待结果',
-                detail: '人工复核已通过，等待服务端清洗结果',
+                status: '待清洗',
+                detail: '人工复核已通过，等待生成清洗结果',
               }
             : {
                 label: '清洗',
@@ -336,18 +335,18 @@ export default function AssetDetailView() {
     }
     if (detail.status === 'UPLOADED' || detail.status === 'INGESTING') {
       return {
-        title: '视频检测中',
+        title: '媒体检测中',
         description: '后台检测中，不影响当前人工查看；检测完成后页面会自动更新。',
-        buttonLabel: '视频检测中',
+        buttonLabel: '媒体检测中',
         kind: 'none',
         interactive: false,
       }
     }
     if (detail.status === 'INGEST_FAILED') {
       return {
-        title: '视频检测失败',
+        title: '媒体检测失败',
         description: '视频不能进入质量判断或人工标注，请查看下方媒体检测信息。',
-        buttonLabel: '视频检测失败',
+        buttonLabel: '媒体检测失败',
         kind: 'none',
         interactive: false,
       }
@@ -381,7 +380,7 @@ export default function AssetDetailView() {
     }
     if (canParticipateInTrainingDataExport) {
       return {
-        title: '已通过清洗，可参与训练数据导出',
+        title: '当前数据已通过清洗，可用于训练',
         description: '实际可导出的训练行数以训练数据导出预览为准。',
         buttonLabel: '导出训练数据',
         kind: 'navigate',
@@ -403,8 +402,7 @@ export default function AssetDetailView() {
     if (qualityReview?.decision === 'QUALIFIED' && annotationTask === null) {
       return {
         title: '标注任务已自动分配',
-        description:
-          '质量合格后系统会自动分配任务给质量确认人；可进入任务列表查看当前账号可见的任务。',
+        description: '质量合格后系统会自动分配任务；可进入任务列表查看当前账号可见的任务。',
         buttonLabel: '查看标注任务',
         kind: 'navigate',
         interactive: true,
@@ -425,16 +423,16 @@ export default function AssetDetailView() {
       if (annotationTask.status === 'SUBMITTED') {
         return annotationTask.can_review
           ? {
-              title: '等待人工复核',
-              description: '正式动作标签已提交，当前账号可以进入现有复核入口。',
+              title: '待人工复核',
+              description: '正式动作标签已提交，当前账号可以进入复核入口。',
               buttonLabel: '下一步：人工复核',
               kind: 'navigate',
               interactive: true,
             }
           : {
-              title: '等待人工复核',
-              description: '正式动作标签已提交，等待项目管理员人工复核。',
-              buttonLabel: '等待人工复核',
+              title: '待人工复核',
+              description: '正式动作标签已提交，等待项目管理员复核。',
+              buttonLabel: '待人工复核',
               kind: 'none',
               interactive: false,
             }
@@ -444,30 +442,30 @@ export default function AssetDetailView() {
           return annotationTask.can_recheck_post_cleaning
             ? {
                 title: '需要重新核对清洗',
-                description: '清洗结论需要通过现有清洗复核入口重新核对。',
+                description: '清洗结论需要通过现有入口重新核对。',
                 buttonLabel: '重新核对清洗',
                 kind: 'navigate',
                 interactive: true,
               }
             : {
-                title: '等待数据清洗',
-                description: '人工复核已通过，等待具备权限的用户处理清洗结论。',
-                buttonLabel: '等待数据清洗',
+                title: '待清洗',
+                description: '人工复核已通过，等待有权限的用户处理清洗结论。',
+                buttonLabel: '待清洗',
                 kind: 'none',
                 interactive: false,
               }
         }
         return {
-          title: '等待数据清洗',
-          description: '人工复核已通过，等待服务端完成数据清洗。',
-          buttonLabel: '等待数据清洗',
+          title: '待清洗',
+          description: '人工复核已通过，等待完成清洗。',
+          buttonLabel: '待清洗',
           kind: 'none',
           interactive: false,
         }
       }
       return {
         title: '查看标注处理结果',
-        description: '请进入现有标注任务页面查看服务端状态。',
+        description: '请进入标注任务页面查看处理状态。',
         buttonLabel: '查看标注任务',
         kind: 'navigate',
         interactive: true,
@@ -494,7 +492,7 @@ export default function AssetDetailView() {
       return {
         tone: 'idle' as const,
         title: '等待自动手部检测',
-        description: 'MediaPipe 只提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。',
+        description: 'MediaPipe 仅提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。',
       }
     }
     if (handPoseJob.status === 'FAILED') {
@@ -505,7 +503,7 @@ export default function AssetDetailView() {
           handPoseJob.run_summary?.failure_reason,
           handPoseJob.run_summary?.retryable === true
             ? '可以重新检测。'
-            : '当前失败不可重试，可继续人工处理。',
+            : '当前失败不可重试，但可继续人工处理。',
         ]
           .filter(Boolean)
           .join(' '),
@@ -516,19 +514,19 @@ export default function AssetDetailView() {
         return {
           tone: 'succeeded' as const,
           title: '未发现手部，可继续人工查看和标注',
-          description: '本次视频已完整分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。',
+          description: '本次视频已完成分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。',
         }
       }
       return {
         tone: 'succeeded' as const,
         title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已发现手部候选' : '手部姿态检测完成',
-        description: `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍须人工审核。`,
+        description: `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍需人工确认。`,
       }
     }
     return {
       tone: 'running' as const,
       title: '手部检测中',
-      description: '系统正在分析该路视频。页面会自动刷新状态，关闭页面不会取消后台任务。',
+      description: '系统正在分析当前视频。页面会自动刷新状态，关闭页面不会取消后台任务。',
     }
   }, [handPoseCandidates, handPoseJob])
   const playbackAvailability = useMemo(() => {
@@ -544,20 +542,20 @@ export default function AssetDetailView() {
       return {
         title: '媒体检测等待处理',
         description:
-          '上传完成后平台已自动创建或复用检测任务。视频可直接人工查看；检测会补充时长、编码和完整解码等技术事实。',
+          '上传完成后平台已自动创建或复用检测任务。视频可直接人工查看；检测会补充时长、编码和完整解码等技术信息。',
         type: 'info' as const,
       }
     if (detail.status === 'INGESTING')
       return {
         title: '正在进行媒体检测',
-        description: '平台正在检查视频是否可读取和完整解码；这不影响你直接人工查看。',
+        description: '平台正在检查视频是否可读取和完整解码；这不影响直接人工查看。',
         type: 'warning' as const,
       }
     if (detail.status === 'INGEST_FAILED')
       return {
         title: '媒体检测未通过',
         description:
-          '技术检测未完成，但仍可人工查看并决定是否保留。该视频不能进入配药动作标注或训练数据流程。',
+          '媒体检测未完成，但仍可人工查看并决定是否保留。该视频不能进入配药动作标注或训练数据流程。',
         type: 'error' as const,
       }
     return {
@@ -611,7 +609,7 @@ export default function AssetDetailView() {
         (previousStatus === 'QUEUED' || previousStatus === 'RUNNING') &&
         response.job.status === 'FAILED'
       ) {
-        void message.error('手部检测失败，可继续人工处理。')
+        void message.error('手部检测失败，仍可继续人工处理。')
       }
       handPoseJobRef.current = response.job
       setHandPoseJob(response.job)
@@ -754,7 +752,7 @@ export default function AssetDetailView() {
       setLoadState('error')
       setErrorCode(error instanceof CatalogApiError ? error.errorCode : 'CATALOG_REQUEST_FAILED')
       setErrorMessage(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取视频资产详情，请稍后重试。',
+        error instanceof CatalogApiError ? error.message : '暂时无法读取视频详情，请稍后重试。',
       )
     } finally {
       if (detailRequest.current === request) detailRequest.current = null
@@ -784,7 +782,7 @@ export default function AssetDetailView() {
         (previousStatus === 'UPLOADED' || previousStatus === 'INGESTING') &&
         response.status === 'INGESTED'
       ) {
-        void message.success('视频检测完成')
+        void message.success('媒体检测完成')
         void loadQualityReview()
         void loadAnnotationTask()
         void loadMediaReport()
@@ -903,7 +901,7 @@ export default function AssetDetailView() {
     setIsDeleting(true)
     try {
       await deleteClipAsset(projectId, assetId, reason.trim())
-      void message.success('视频已删除，并已从普通视频列表中隐藏。')
+      void message.success('视频已删除，并已从视频列表中隐藏。')
       await navigate(paths.videos(projectId), { replace: true })
     } catch (error) {
       setActionErrorCode(
@@ -929,12 +927,12 @@ export default function AssetDetailView() {
       const remaining = new Date(grant.expires_at).getTime() - Date.now()
       if (!Number.isFinite(remaining) || remaining <= 0) {
         setPlaybackState('expired')
-        setPlaybackMessage('本次播放授权已到期，请重新获取后继续审核。')
+        setPlaybackMessage('本次播放授权已到期，请重新获取后继续查看。')
       } else {
         playbackExpiryTimer.current = setTimeout(() => {
           playbackExpiryTimer.current = null
           setPlaybackState('expired')
-          setPlaybackMessage('本次播放授权已到期，请重新获取后继续审核。')
+          setPlaybackMessage('本次播放授权已到期，请重新获取后继续查看。')
         }, remaining)
       }
     } catch (error) {
@@ -950,9 +948,9 @@ export default function AssetDetailView() {
   async function recoverMissingMediaProbe() {
     if (!canRecoverMissingMediaProbe || isRecoveringMediaProbe) return
     const changeReference = await prompt({
-      title: '恢复已丢失的检测任务',
+      title: '恢复丢失的检测任务',
       description:
-        '仅在已确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的受审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
+        '仅在确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
       confirmText: '确认恢复',
       placeholder: '例如：INC-20260805-001',
       validate: (value) =>
@@ -979,7 +977,7 @@ export default function AssetDetailView() {
       )
       mediaProbeRecoveryIntent.current = null
       setMediaProbeMessage(`媒体检测已恢复为第 ${recovery.new_attempt} 次尝试。请稍后刷新状态。`)
-      void message.success('媒体检测恢复命令已记录并排队。')
+      void message.success('媒体检测恢复命令已记录，任务已排队。')
     } catch (error) {
       setActionErrorCode(
         error instanceof CatalogApiError ? error.errorCode : 'MEDIA_PROBE_DELIVERY_RECOVERY_FAILED',
@@ -1055,10 +1053,10 @@ export default function AssetDetailView() {
     if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
       clearPlaybackExpiryTimer()
       setPlaybackState('expired')
-      setPlaybackMessage('本次播放授权已到期，请重新获取后继续审核。')
+      setPlaybackMessage('本次播放授权已到期，请重新获取后继续查看。')
     } else {
       setPlaybackState('error')
-      setPlaybackMessage('视频加载失败。请检查对象存储连接，或重新获取播放授权后再试。')
+      setPlaybackMessage('视频加载失败，请检查对象存储连接，或重新获取播放授权后重试。')
     }
   }
 
@@ -1083,12 +1081,12 @@ export default function AssetDetailView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑">
+      <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={{ pathname: paths.videos(projectId), search: location.search }}>视频管理</Link>
         <span aria-hidden="true">/</span>
-        <span>详情</span>
+        <span>视频详情</span>
       </nav>
-      {loadState === 'loading' ? <LoadingState>正在读取视频资产详情…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在读取视频详情…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadDetail()}>
           {errorMessage}
@@ -1108,7 +1106,7 @@ export default function AssetDetailView() {
                 </StatusBadge>
               </div>
               <p className="workbench-video-name">
-                <span>视频资产</span>
+                <span>视频</span>
                 <code title={detail.client_file_id}>
                   {conciseAssetIdentifier(detail.client_file_id)}
                 </code>
@@ -1241,7 +1239,7 @@ export default function AssetDetailView() {
                       <summary>
                         <span className="hand-pose-disclosure-title">
                           <strong id="hand-pose-title">手部候选</strong>
-                          <small>MediaPipe · 仅辅助候选</small>
+                          <small>MediaPipe · 辅助候选</small>
                         </span>
                         <StatusBadge tone={handPoseStatusTone(handPoseStatus.tone)}>
                           {handPoseStatus.title}
@@ -1249,8 +1247,8 @@ export default function AssetDetailView() {
                       </summary>
                       <div className="hand-pose-disclosure-content">
                         <p className="form-hint">
-                          {handPoseStatus.description} MediaPipe Candidate 不是 Ground
-                          Truth，不会自动改变正式动作标注或训练数据。
+                          {handPoseStatus.description} MediaPipe
+                          候选不是人工真值，不会自动改变正式动作标注或训练数据。
                         </p>
                         {canRequestHandPose ? (
                           <Button
@@ -1274,7 +1272,7 @@ export default function AssetDetailView() {
             <details className="detail-disclosure">
               <summary>
                 <strong>更多信息</strong>
-                <span>媒体检测、文件技术信息、相机绑定与操作记录</span>
+                <span>媒体检测、文件信息、相机绑定与操作记录</span>
               </summary>
               <div className="detail-disclosure-content">
                 <MediaReportCard

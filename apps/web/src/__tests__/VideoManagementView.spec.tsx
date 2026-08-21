@@ -85,7 +85,7 @@ describe('VideoManagementView', () => {
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
-    expect(screen.getByText('可检测')).toBeInTheDocument()
+    expect(screen.getByText('媒体检测完成')).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(`/projects/${projectId}/videos?limit=50`)
     expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('/clip-assets')
@@ -112,7 +112,7 @@ describe('VideoManagementView', () => {
       'true',
     )
     expect(screen.getByLabelText('2 项已应用')).toHaveTextContent('2')
-    expect(screen.getByText('可检测')).toBeInTheDocument()
+    expect(screen.getByText('媒体检测完成')).toBeInTheDocument()
     expect(screen.getByText('平台本地上传')).toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: '清除筛选' })[0]!)
@@ -141,7 +141,7 @@ describe('VideoManagementView', () => {
 
     await screen.findByText('synthetic-hand-failed.mp4')
     await user.click(screen.getByRole('combobox', { name: '媒体状态' }))
-    const processingOptions = await screen.findAllByText('处理中')
+    const processingOptions = await screen.findAllByText('媒体检测中')
     await user.click(processingOptions[processingOptions.length - 1]!)
 
     await waitFor(() => expect(router.state.location.search).toBe('?mediaStatus=INGESTING'))
@@ -252,7 +252,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('等待人工复核')).toBeInTheDocument()
+    expect(await screen.findByText('待人工复核')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '人工复核' })).toBeInTheDocument()
   })
 
@@ -296,9 +296,7 @@ describe('VideoManagementView', () => {
     expect(await screen.findByLabelText('数据管理汇总')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /刷\s*新/ }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      '暂时无法读取视频管理列表，请稍后重试。',
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法读取视频列表，请稍后重试。')
     expect(screen.queryByLabelText('数据管理汇总')).not.toBeInTheDocument()
   })
 
@@ -320,9 +318,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      '暂时无法读取视频管理列表，请稍后重试。',
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法读取视频列表，请稍后重试。')
     await user.click(screen.getByRole('button', { name: /重\s*试/ }))
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
@@ -349,7 +345,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('正在确认自动分配')).toBeInTheDocument()
+    expect(await screen.findByText('待系统分配标注任务')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '进入人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
     expect(
@@ -386,14 +382,13 @@ describe('VideoManagementView', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(screen.getByText('视频检测中')).toBeInTheDocument()
+    expect(screen.getAllByText('媒体检测中').length).toBeGreaterThan(0)
     expect(listRequests).toBe(1)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500)
     })
-    expect(screen.getByText('可检测')).toBeInTheDocument()
-    expect(screen.getByText('视频检测完成')).toBeInTheDocument()
+    expect(screen.getAllByText('媒体检测完成').length).toBeGreaterThanOrEqual(2)
     expect(listRequests).toBe(2)
 
     await act(async () => {
@@ -420,7 +415,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('需重新人工质量判断')).toBeInTheDocument()
+    expect(await screen.findByText('需要重新判断质量')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '人工质量判断' })).toHaveAttribute(
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
@@ -471,7 +466,7 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByText('正在确认自动分配')).toBeInTheDocument()
+    expect(await screen.findByText('待系统分配标注任务')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '进入人工标注' })).not.toBeInTheDocument()
   })
 
@@ -558,13 +553,13 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    const links = await screen.findAllByRole('link', { name: /视频 video-1\.mp4，资产 ID/ })
+    const links = await screen.findAllByRole('link', { name: /视频 video-1\.mp4，视频资产 ID/ })
     expect(links).toHaveLength(2)
     expect(links[0]).toHaveAccessibleName(
-      '视频 video-1.mp4，资产 ID 50000000-0000-4000-8000-000000000001',
+      '视频 video-1.mp4，视频资产 ID 50000000-0000-4000-8000-000000000001',
     )
     expect(links[1]).toHaveAccessibleName(
-      '视频 video-1.mp4，资产 ID 50000000-0000-4000-8000-000000000002',
+      '视频 video-1.mp4，视频资产 ID 50000000-0000-4000-8000-000000000002',
     )
     expect(screen.getByText('视频 ID 50000000…0001')).toBeInTheDocument()
     expect(screen.getByText('视频 ID 50000000…0002')).toBeInTheDocument()

@@ -145,7 +145,7 @@ export default function LocalUploadView() {
       setProjectLoadState('error')
       setErrorCode(error instanceof CatalogApiError ? error.errorCode : 'PROJECT_REQUEST_FAILED')
       setErrorMessage(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取授权项目，请稍后重试。',
+        error instanceof CatalogApiError ? error.message : '暂时无法读取项目，请稍后重试。',
       )
     } finally {
       if (projectRequest.current === request) projectRequest.current = null
@@ -267,7 +267,7 @@ export default function LocalUploadView() {
                 onChange={setSelectedProjectId}
                 options={projects.map((project) => ({
                   value: project.project_id,
-                  label: `${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '普通用户'}）`,
+                  label: `${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '成员'}）`,
                 }))}
               />
             </div>
@@ -290,7 +290,7 @@ export default function LocalUploadView() {
               </p>
             </div>
             {selectedFiles.length > 0 && tasks.length === 0 ? (
-              <ul className="selected-file-list" aria-label="已选择的视频">
+              <ul className="selected-file-list" aria-label="已选择视频">
                 {selectedFiles.map((file) => (
                   <li key={`${file.name}:${file.size}:${file.lastModified}`}>
                     <strong>{file.name}</strong>
@@ -324,7 +324,7 @@ export default function LocalUploadView() {
         >
           <div className="card-header-row">
             <div>
-              <p className="app-eyebrow">真实上传进度</p>
+              <p className="app-eyebrow">上传进度</p>
               <h2 id="local-upload-progress-title">
                 已完成 {completedTaskCount} / {tasks.length} 个视频
               </h2>
@@ -348,7 +348,7 @@ export default function LocalUploadView() {
                   {task.status === 'QUEUED'
                     ? '等待中'
                     : task.status === 'RUNNING'
-                      ? '处理中'
+                      ? '上传中'
                       : task.status === 'COMPLETED'
                         ? '完成'
                         : '失败'}

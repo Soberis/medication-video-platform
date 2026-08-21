@@ -20,7 +20,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const batchStatusLabels: Record<UploadBatchStatus, string> = {
   INITIATED: '已初始化',
   UPLOADING: '上传中',
-  COMPLETING: '完成处理中',
+  COMPLETING: '完成中',
   COMPLETED: '已完成',
   FAILED: '失败',
   ABORTED: '已中止',
@@ -110,7 +110,7 @@ export default function UploadProgressView() {
         setErrorMessage(error.message)
       } else {
         setErrorCode('UPLOAD_PROGRESS_REQUEST_FAILED')
-        setErrorMessage('无法连接上传进度服务，请确认本地 API 已启动。')
+        setErrorMessage('无法连接上传进度服务，请稍后重试。')
       }
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
@@ -199,7 +199,7 @@ export default function UploadProgressView() {
                 },
                 {
                   id: 'uploaded-parts',
-                  label: '已确认 Part',
+                  label: '已确认分片',
                   value: `${batch.uploaded_part_count} / ${batch.tracked_part_count}`,
                 },
               ]}
@@ -233,20 +233,20 @@ export default function UploadProgressView() {
                 </div>
                 <div className="progress-block progress-compact">
                   <div className="progress-copy">
-                    <span>Part 进度</span>
+                    <span>分片进度</span>
                     <strong>{percent(file.uploaded_parts, file.total_parts)}%</strong>
                   </div>
                   <progress value={file.uploaded_parts} max={file.total_parts}>
                     {percent(file.uploaded_parts, file.total_parts)}%
                   </progress>
                   <p>
-                    已确认 {file.uploaded_parts} / {file.total_parts} Part，
+                    已确认 {file.uploaded_parts} / {file.total_parts} 个分片，
                     {formatBytes(file.uploaded_size_bytes)} / {formatBytes(file.size_bytes)}
                   </p>
                 </div>
                 {file.completion_error_code ? (
                   <div className="file-error" role="status">
-                    <span>稳定错误码</span>
+                    <span>错误码</span>
                     <code>{file.completion_error_code}</code>
                   </div>
                 ) : null}
@@ -255,7 +255,7 @@ export default function UploadProgressView() {
                   items={[
                     {
                       id: 'tracked-parts',
-                      label: '已跟踪 Part',
+                      label: '已跟踪分片',
                       value: file.tracked_parts,
                     },
                     {

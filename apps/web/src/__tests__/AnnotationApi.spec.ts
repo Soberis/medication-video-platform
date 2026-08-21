@@ -78,7 +78,7 @@ describe('annotation task API', () => {
       createAnnotationTask(projectId, assetId, 'local-synthetic-uploader'),
     ).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
-      message: '只有已判定合格的视频才能创建配药动作标注。',
+      message: '只有质量结论为“合格”的视频才能创建配药动作标注。',
     })
   })
 
