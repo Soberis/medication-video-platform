@@ -3,7 +3,7 @@
   margin: 0;
   color: var(--app-color-focus);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   letter-spacing: 0.04em;
 }
 
@@ -27,13 +27,13 @@
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .section-description {
   margin: var(--app-space-8) 0 0;
   color: var(--app-color-text-secondary);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .batch-form {
@@ -43,7 +43,7 @@
 .batch-form label {
   display: block;
   margin-bottom: var(--app-space-8);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .batch-form-row {
@@ -73,7 +73,7 @@
   border-radius: var(--app-radius-default);
   color: var(--app-color-surface);
   background: var(--app-color-brand);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   cursor: pointer;
 }
 
@@ -167,7 +167,7 @@
 .metric-grid dd,
 .file-meta-grid dd {
   margin: var(--app-space-4) 0 0;
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .files-heading {
@@ -190,15 +190,15 @@
   margin: 0 0 var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 500;
+  font-weight: var(--app-font-weight-medium);
 }
 
 .file-heading h3 {
   margin: 0;
   overflow-wrap: anywhere;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-heading-3);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .progress-compact {
@@ -218,7 +218,7 @@
 }
 
 .file-error span {
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .file-meta-grid {
@@ -251,9 +251,9 @@
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-1);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: var(--app-line-height-heading);
 }
 
 .page-heading-description {
@@ -261,7 +261,7 @@
   margin: var(--app-space-8) 0 0;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-base);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .page-toolbar,
@@ -316,8 +316,8 @@
   margin: 0;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-compact);
 }
 
 .workspace-section-actions {
@@ -387,7 +387,7 @@
   overflow: hidden;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -396,7 +396,7 @@
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-base);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .project-list-actions {
@@ -411,7 +411,7 @@
   border-radius: var(--app-radius-default);
   color: var(--app-color-surface);
   background: var(--app-color-brand);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -467,8 +467,8 @@
 .summary-strip dt {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 500;
-  line-height: 1.35;
+  font-weight: var(--app-font-weight-medium);
+  line-height: var(--app-line-height-compact);
 }
 
 .summary-strip dd {
@@ -476,8 +476,8 @@
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  line-height: 1.25;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-metric);
 }
 
 .summary-strip small {
@@ -485,8 +485,8 @@
   margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 400;
-  line-height: 1.35;
+  font-weight: var(--app-font-weight-regular);
+  line-height: var(--app-line-height-compact);
 }
 
 .summary-strip-footer {
@@ -496,7 +496,7 @@
   margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  line-height: 1.45;
+  line-height: var(--app-line-height-metadata);
 }
 
 .metadata-list {
@@ -520,7 +520,7 @@
 .property-row dt {
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
-  font-weight: 500;
+  font-weight: var(--app-font-weight-medium);
 }
 
 .property-row dd {
@@ -529,7 +529,7 @@
   overflow-wrap: anywhere;
   color: var(--app-color-foreground);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-align: right;
 }
 
@@ -561,8 +561,8 @@
   margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 400;
-  line-height: 1.45;
+  font-weight: var(--app-font-weight-regular);
+  line-height: var(--app-line-height-metadata);
 }
 
 .video-management-heading {
@@ -605,7 +605,7 @@
   gap: var(--app-space-8);
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .video-filter-control > span:first-child {
@@ -664,7 +664,7 @@
   background: var(--app-color-primary-subtle);
   font-size: var(--app-font-size-helper);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: var(--app-line-height-single);
 }
 
 .catalog-filters {
@@ -682,7 +682,7 @@
   gap: var(--app-space-8);
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .catalog-filters > label > input[type='datetime-local'] {
@@ -719,7 +719,7 @@
 .catalog-filters .ant-form-item-label > label {
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .catalog-filters .ant-select,
@@ -761,16 +761,16 @@
   grid-column: 1;
   grid-row: 1;
   font-size: var(--app-font-size-base);
-  font-weight: 600;
-  line-height: 1.55;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-prose);
 }
 
 .workspace-error code {
   grid-column: 1;
   grid-row: 2;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .workspace-error small {
@@ -801,7 +801,7 @@
 }
 
 .table-card .ant-table-cell {
-  line-height: 1.45;
+  line-height: var(--app-line-height-metadata);
 }
 
 .annotation-task-table .ant-table-cell {
@@ -822,8 +822,8 @@
   color: var(--app-color-text-regular);
   background: var(--app-color-neutral-surface);
   font-size: var(--app-font-size-helper);
-  font-weight: 500;
-  line-height: 1.5;
+  font-weight: var(--app-font-weight-medium);
+  line-height: var(--app-line-height-body);
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -853,7 +853,7 @@
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
-  line-height: 1.35;
+  line-height: var(--app-line-height-compact);
 }
 
 .annotation-task-table .table-actions {
@@ -949,8 +949,8 @@
   color: var(--app-color-text-regular);
   background: var(--app-color-surface-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-compact);
   white-space: nowrap;
 }
 
@@ -983,7 +983,7 @@
   overflow: hidden;
   color: var(--app-color-text-primary);
   text-overflow: ellipsis;
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -1001,7 +1001,7 @@
   min-width: 0;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  line-height: 1.35;
+  line-height: var(--app-line-height-compact);
 }
 
 .video-metadata-time {
@@ -1016,9 +1016,9 @@
 
 .video-identity {
   color: var(--app-color-text-secondary);
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-helper);
-  font-weight: 500;
+  font-weight: var(--app-font-weight-medium);
   white-space: nowrap;
 }
 
@@ -1033,8 +1033,8 @@
   word-break: break-word;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-compact);
 }
 
 .video-next-step-action {
@@ -1045,7 +1045,7 @@
   min-height: var(--app-control-height-compact);
   color: var(--app-color-primary);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -1061,8 +1061,8 @@
   gap: var(--app-space-8);
   color: var(--app-color-text-regular);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: var(--app-font-weight-semibold);
+  line-height: var(--app-line-height-control);
   white-space: nowrap;
 }
 
@@ -1121,7 +1121,7 @@
 .text-link,
 .breadcrumb a {
   color: var(--app-color-primary);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -1178,12 +1178,12 @@
   background: var(--app-color-surface-muted);
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  line-height: 1.4;
+  line-height: var(--app-line-height-control);
 }
 
 .playback-meta-label {
   color: var(--app-color-text-primary);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .playback-meta time {
@@ -1236,9 +1236,9 @@
 }
 
 .hand-pose-label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   opacity: 0.68;
   paint-order: stroke;
   stroke: #101828;
@@ -1294,12 +1294,12 @@
   margin-top: var(--app-space-8);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  line-height: 1.45;
+  line-height: var(--app-line-height-metadata);
 }
 
 .playback-supporting-note strong {
   color: var(--app-color-foreground-secondary);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .playback-primary-action,
@@ -1374,12 +1374,12 @@
 .task-record-details > summary {
   color: var(--app-color-brand-hover);
   cursor: pointer;
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .task-record-details p {
   margin: var(--app-space-4) 0 0;
-  line-height: 1.45;
+  line-height: var(--app-line-height-metadata);
 }
 
 .training-data-export-summary {
@@ -1404,7 +1404,7 @@
 .training-data-export-summary dd {
   margin: 0;
   color: var(--app-color-text-primary);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   text-align: right;
 }
 
@@ -1412,7 +1412,7 @@
   margin: 0 0 var(--app-space-12);
   color: var(--app-color-warning);
   font-size: var(--app-font-size-base);
-  line-height: 1.55;
+  line-height: var(--app-line-height-prose);
 }
 
 .annotation-segment-row {
@@ -1483,7 +1483,7 @@
   margin-top: 4px;
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
-  font-weight: 400;
+  font-weight: var(--app-font-weight-regular);
 }
 
 .readiness-loading {
@@ -1548,7 +1548,7 @@
 .readiness-result > div > span {
   margin-top: 5px;
   color: var(--app-color-foreground-secondary);
-  line-height: 1.55;
+  line-height: var(--app-line-height-prose);
 }
 
 .readiness-result-ready {
@@ -1573,13 +1573,13 @@
 
 .permission-check-error span {
   color: var(--app-color-warning);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .permission-check-error strong {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .readiness-result ul {
@@ -1593,7 +1593,7 @@
 .readiness-result li {
   min-width: 0;
   color: var(--app-color-foreground-secondary);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .readiness-result li small {
@@ -1612,7 +1612,7 @@
   padding: var(--app-space-8) 0;
   color: var(--app-color-primary);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
   cursor: pointer;
 }
 
@@ -1640,7 +1640,7 @@
 
 .mono-wrap {
   overflow-wrap: anywhere;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-base);
 }
 
@@ -1681,12 +1681,12 @@
   margin: 0;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-1);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .login-card > p {
   color: var(--app-color-foreground-secondary);
-  line-height: 1.65;
+  line-height: var(--app-line-height-relaxed);
 }
 
 .login-form {
@@ -1752,7 +1752,7 @@
 }
 
 .local-upload-field label {
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .ant-empty.workspace-empty-state {
@@ -1763,7 +1763,7 @@
 .workspace-empty-state .ant-empty-description {
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .workspace-loading-state {
@@ -1797,7 +1797,7 @@
   margin: 0;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-base);
-  line-height: 1.55;
+  line-height: var(--app-line-height-prose);
 }
 
 .selected-file-list {
@@ -1839,7 +1839,7 @@
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .local-upload-task {
@@ -1854,7 +1854,7 @@
   margin: 0;
   overflow-wrap: anywhere;
   font-size: var(--app-font-size-heading-2);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .local-upload-task .ant-progress {

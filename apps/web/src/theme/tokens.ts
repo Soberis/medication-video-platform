@@ -58,12 +58,29 @@ export const appTokens = {
   typography: {
     fontFamily:
       "Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    monoFamily: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace",
     baseSize: 14,
     helperSize: 12,
     heading: {
       h1: 24,
       h2: 16,
       h3: 14,
+    },
+    weight: {
+      regular: 400,
+      medium: 500,
+      semibold: 600,
+    },
+    lineHeight: {
+      single: 1,
+      heading: 1.2,
+      metric: 1.25,
+      compact: 1.35,
+      control: 1.4,
+      metadata: 1.45,
+      body: 1.5,
+      prose: 1.55,
+      relaxed: 1.65,
     },
   },
   control: {

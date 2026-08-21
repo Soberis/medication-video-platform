@@ -130,7 +130,7 @@
 .playback-idle-copy > span:last-child {
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-base);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .playback-idle-stage .playback-primary-action {
@@ -239,14 +239,14 @@
 .next-action-panel strong {
   color: var(--app-color-text-primary);
   font-size: var(--app-font-size-heading-2);
-  line-height: 1.4;
+  line-height: var(--app-line-height-control);
 }
 
 .next-action-panel p {
   margin: 0;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .next-action-panel .ant-btn {
@@ -292,7 +292,7 @@
 .workflow-facts-item > strong {
   color: var(--app-color-text-regular);
   font-size: var(--app-font-size-base);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .workflow-fact-details,
@@ -308,7 +308,7 @@
   color: var(--app-color-brand-hover);
   cursor: pointer;
   font-size: var(--app-font-size-helper);
-  font-weight: 600;
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .quality-review-editor > .quality-review-actions {
@@ -337,7 +337,7 @@
 .hand-pose-disclosure-content .form-hint {
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  line-height: 1.5;
+  line-height: var(--app-line-height-body);
 }
 
 .hand-pose-disclosure > summary {
@@ -414,7 +414,7 @@
   color: var(--app-color-text-secondary);
   content: '＋';
   font-size: var(--app-font-size-heading-2);
-  line-height: 1;
+  line-height: var(--app-line-height-single);
 }
 
 .detail-disclosure[open] > summary::after {
@@ -425,7 +425,7 @@
   flex: 1;
   color: var(--app-color-text-secondary);
   font-size: var(--app-font-size-helper);
-  font-weight: 400;
+  font-weight: var(--app-font-weight-regular);
 }
 
 .detail-disclosure-content {
