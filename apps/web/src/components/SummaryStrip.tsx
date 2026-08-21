@@ -23,8 +23,10 @@ export function SummaryStrip({ ariaLabel, footer, items }: SummaryStripProps) {
         {items.map((item, index) => (
           <div key={`${String(item.label)}-${index}`}>
             <dt>{item.label}</dt>
-            <dd>{item.value}</dd>
-            {item.detail ? <small>{item.detail}</small> : null}
+            <dd>
+              {item.value}
+              {item.detail ? <small>{item.detail}</small> : null}
+            </dd>
           </div>
         ))}
       </dl>

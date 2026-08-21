@@ -111,7 +111,7 @@ async function readResponse(response: Response): Promise<QualityReview> {
     QUALITY_REVIEW_NOT_READY: '视频完成媒体检测后才能记录质量结论。',
     INVALID_QUALITY_REASON: '所选原因与质量结论不匹配。',
     INVALID_QUALITY_REVIEW: '质量判断内容不完整，请重新选择。',
-    QUALITY_REVIEW_CONFLICT: '质量结论已被其他用户更新，请刷新后重试。',
+    QUALITY_REVIEW_CONFLICT: '质量结论已被其他项目成员更新，请刷新后重试。',
   }
   throw new QualityReviewApiError(
     messages[errorCode] ?? '质量结论暂未保存，请稍后重试。',

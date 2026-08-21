@@ -176,7 +176,7 @@ export default function AssetDetailView() {
         ? {
             label: '媒体',
             state: 'complete',
-            status: '已完成',
+            status: '媒体检测完成',
             detail: '视频可播放，可进入后续人工流程',
           }
         : detail.status === 'INGEST_FAILED'
@@ -246,7 +246,7 @@ export default function AssetDetailView() {
                     : {
                         label: '人工标注',
                         state: 'complete',
-                        status: annotationTask.status === 'SUBMITTED' ? '已提交' : '已完成',
+                        status: annotationTask.status === 'SUBMITTED' ? '已提交' : '标注完成',
                         detail:
                           annotationTask.status === 'SUBMITTED'
                             ? '正式动作标签已提交，待项目管理员复核'
@@ -449,7 +449,7 @@ export default function AssetDetailView() {
               }
             : {
                 title: '待清洗',
-                description: '人工复核已通过，等待有权限的用户处理清洗结论。',
+                description: '人工复核已通过，等待有权限的项目成员处理清洗结论。',
                 buttonLabel: '待清洗',
                 kind: 'none',
                 interactive: false,
@@ -503,7 +503,7 @@ export default function AssetDetailView() {
           handPoseJob.run_summary?.failure_reason,
           handPoseJob.run_summary?.retryable === true
             ? '可以重新检测。'
-            : '当前失败不可重试，但可继续人工处理。',
+            : '当前手部检测处理失败且不可重试，但可继续人工处理。',
         ]
           .filter(Boolean)
           .join(' '),
@@ -609,7 +609,7 @@ export default function AssetDetailView() {
         (previousStatus === 'QUEUED' || previousStatus === 'RUNNING') &&
         response.job.status === 'FAILED'
       ) {
-        void message.error('手部检测失败，仍可继续人工处理。')
+        void message.error('手部检测处理失败，仍可继续人工处理。')
       }
       handPoseJobRef.current = response.job
       setHandPoseJob(response.job)

@@ -40,8 +40,8 @@ const handStatusLabels: Record<VideoSummaryHandStatus, string> = {
   NOT_REQUESTED: '未发起',
   QUEUED: '排队中',
   RUNNING: '检测中',
-  SUCCEEDED: '已完成',
-  FAILED: '失败',
+  SUCCEEDED: '检测完成',
+  FAILED: '检测失败',
 }
 
 const handResultLabels: Record<VideoSummaryHandResult, string> = {
@@ -59,7 +59,7 @@ const annotationStatusLabels: Record<VideoSummaryAnnotationStatus, string> = {
   NOT_STARTED: '待创建',
   ASSIGNED: '待标注',
   SUBMITTED: '待复核',
-  COMPLETED: '已完成',
+  COMPLETED: '标注完成',
 }
 
 const cleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> = {
@@ -259,9 +259,9 @@ export default function VideoManagementView() {
       />
       {summary ? (
         <SummaryStrip
-          ariaLabel="数据管理汇总"
+          ariaLabel="项目视频摘要"
           items={[
-            { label: '视频', value: summary.total_videos },
+            { label: '视频总数', value: summary.total_videos },
             {
               label: '待处理',
               value: pendingWorkCount,
@@ -277,7 +277,7 @@ export default function VideoManagementView() {
           }
         />
       ) : null}
-      {summaryError ? <NoticeState>数据管理汇总暂不可用，视频列表仍可使用。</NoticeState> : null}
+      {summaryError ? <NoticeState>视频摘要暂不可用，视频列表仍可使用。</NoticeState> : null}
       <section className="video-filter-toolbar" aria-labelledby="video-management-filters-title">
         <h2 id="video-management-filters-title" className="visually-hidden">
           筛选视频
@@ -468,7 +468,7 @@ export default function VideoManagementView() {
         ) : null}
       </section>
       {loadState === 'loading' ? (
-        <LoadingState className="video-list-state">正在读取视频列表…</LoadingState>
+        <LoadingState className="video-list-state">正在加载视频列表…</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadPage(false, filters)}>{errorMessage}</ErrorState>
@@ -506,7 +506,7 @@ export default function VideoManagementView() {
                     <Link
                       className="video-name-link"
                       aria-label={`视频 ${row.display_name}，视频资产 ID ${row.video_id}`}
-                      title={`唯一视频资产 ID：${row.video_id}`}
+                      title={row.display_name}
                       to={{
                         pathname: paths.asset(projectId, row.video_id),
                         search: location.search,
@@ -519,7 +519,7 @@ export default function VideoManagementView() {
                         {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
                       </span>
                       <span>{row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}</span>
-                      <span>
+                      <span className="video-metadata-time">
                         {row.captured_at
                           ? `拍摄 ${formatDateTime(row.captured_at)}`
                           : `接收 ${formatDateTime(row.received_at)}`}
@@ -532,8 +532,10 @@ export default function VideoManagementView() {
                 ),
               },
               {
-                title: '媒体',
-                width: 110,
+                title: '媒体状态',
+                className: 'video-table-status-column',
+                align: 'center',
+                width: 128,
                 render: (_, row) => (
                   <StatusIndicator tone={mediaStatusTone(row.media_status)}>
                     {mediaStatusLabels[row.media_status]}
@@ -541,9 +543,11 @@ export default function VideoManagementView() {
                 ),
               },
               {
-                title: '配药动作标注',
+                title: '标注',
                 dataIndex: 'annotation_status',
-                width: 125,
+                className: 'video-table-status-column',
+                align: 'center',
+                width: 104,
                 render: (value: VideoSummaryAnnotationStatus) => (
                   <StatusIndicator tone={annotationStatusTone(value)}>
                     {annotationStatusLabels[value]}
@@ -553,7 +557,9 @@ export default function VideoManagementView() {
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
-                width: 95,
+                className: 'video-table-status-column',
+                align: 'center',
+                width: 96,
                 render: (value: VideoSummaryCleaningStatus) => (
                   <StatusIndicator tone={cleaningStatusTone(value)}>
                     {cleaningStatusLabels[value]}

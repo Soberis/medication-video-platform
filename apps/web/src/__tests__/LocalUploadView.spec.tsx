@@ -94,12 +94,12 @@ describe('LocalUploadView', () => {
       new File([], 'empty.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
-    expect(await screen.findByText('本轮失败')).toBeInTheDocument()
+    expect(await screen.findByText('本轮上传失败')).toBeInTheDocument()
     const submit = screen.getByRole('button', { name: /重新选择视频后上传/ })
     expect(submit).toBeDisabled()
     await selectProject(user, '另一个合成项目')
     await waitFor(() => expect(screen.queryByText('empty.mp4')).not.toBeInTheDocument())
-    expect(screen.queryByText('本轮失败')).not.toBeInTheDocument()
+    expect(screen.queryByText('本轮上传失败')).not.toBeInTheDocument()
   })
 
   it('aborts the active hash or upload request when leaving the page', async () => {

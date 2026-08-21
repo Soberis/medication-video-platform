@@ -89,7 +89,7 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(await screen.findByLabelText('项目配药动作标注进度')).toHaveTextContent(
-      '项目任务1待处理1待提交 1 · 待修改 0 · 待复核 0已完成0',
+      '项目任务1待处理1待提交 1 · 待修改 0 · 待复核 0标注完成0',
     )
     expect(screen.getByText('已分配')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()

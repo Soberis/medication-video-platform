@@ -13,9 +13,9 @@ export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
 }
 
 export const streamStatusLabels: Record<CameraStreamStatus, string> = {
-  BOUND: '已绑定，待入库',
-  INGESTED: '已入库',
-  INGEST_FAILED: '入库失败',
+  BOUND: '已绑定，待媒体入库',
+  INGESTED: '媒体已入库',
+  INGEST_FAILED: '媒体入库失败',
   UNAVAILABLE: '视频已删除，不可用',
 }
 

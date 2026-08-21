@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { SummaryStrip } from '@/components/SummaryStrip'
 import { InspectorSection } from '@/components/workspace/InspectorSection'
 import { Section } from '@/components/workspace/Section'
 
@@ -42,5 +43,24 @@ describe('workspace layout primitives', () => {
     expect(heading.closest('section')).toHaveClass('workspace-section', 'inspector-section')
     expect(screen.getByRole('button', { name: '查看' })).toBeInTheDocument()
     expect(screen.getByText('已完成')).toBeInTheDocument()
+  })
+
+  it('keeps summary values grouped as a compact semantic collection', () => {
+    render(
+      <SummaryStrip
+        ariaLabel="项目视频摘要"
+        items={[
+          { label: '视频总数', value: 120 },
+          { label: '待处理', value: 6, detail: '标注 3 · 复核 2 · 清洗 1' },
+        ]}
+        footer={<span>总时长 2时10分</span>}
+      />,
+    )
+
+    const summary = screen.getByRole('region', { name: '项目视频摘要' })
+    expect(summary.querySelector('dl')).toBeInTheDocument()
+    expect(screen.getByText('120').closest('dd')).toBeInTheDocument()
+    expect(screen.getByText('标注 3 · 复核 2 · 清洗 1').closest('dd')).toBeInTheDocument()
+    expect(screen.getByText('总时长 2时10分')).toBeInTheDocument()
   })
 })

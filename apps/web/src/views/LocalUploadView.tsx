@@ -81,9 +81,9 @@ function taskPercent(task: UploadTask) {
   )
 }
 function taskDescription(task: UploadTask) {
-  if (task.status === 'QUEUED') return '等待前一个视频完成。'
-  if (task.status === 'FAILED') return task.errorMessage ?? '上传未完成。'
-  if (task.status === 'COMPLETED') return '已完成校验，并建立单视角配药操作记录。'
+  if (task.status === 'QUEUED') return '等待前一个视频上传完成。'
+  if (task.status === 'FAILED') return task.errorMessage ?? '上传失败，请检查网络和本地服务后重试。'
+  if (task.status === 'COMPLETED') return '上传完成并通过校验，已建立单视角配药操作记录。'
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
 
@@ -118,10 +118,10 @@ export default function LocalUploadView() {
     uploadState !== 'completed'
       ? { label: '上传中', color: 'processing' }
       : failedTaskCount === 0
-        ? { label: '全部完成', color: 'success' }
+        ? { label: '全部上传完成', color: 'success' }
         : completedTaskCount === 0
-          ? { label: '本轮失败', color: 'error' }
-          : { label: '部分完成', color: 'warning' }
+          ? { label: '本轮上传失败', color: 'error' }
+          : { label: '部分上传完成', color: 'warning' }
 
   const loadProjects = useCallback(async () => {
     projectRequest.current?.abort()
@@ -209,7 +209,7 @@ export default function LocalUploadView() {
           errorMessage:
             error instanceof LocalUploadApiError
               ? error.message
-              : '本地视频上传未完成，请检查网络和本地服务后重试。',
+              : '本地视频上传失败，请检查网络和本地服务后重试。',
         })
       }
     }
@@ -326,7 +326,7 @@ export default function LocalUploadView() {
             <div>
               <p className="app-eyebrow">上传进度</p>
               <h2 id="local-upload-progress-title">
-                已完成 {completedTaskCount} / {tasks.length} 个视频
+                已上传 {completedTaskCount} / {tasks.length} 个视频
               </h2>
             </div>
             <StatusBadge tone={uploadSummary.color}>{uploadSummary.label}</StatusBadge>
@@ -337,9 +337,9 @@ export default function LocalUploadView() {
                 <div>
                   <p className="file-kind">
                     {task.status === 'COMPLETED'
-                      ? '已完成'
+                      ? '上传完成'
                       : task.status === 'FAILED'
-                        ? '失败'
+                        ? '上传失败'
                         : '视频上传'}
                   </p>
                   <h3>{task.file.name}</h3>
@@ -350,8 +350,8 @@ export default function LocalUploadView() {
                     : task.status === 'RUNNING'
                       ? '上传中'
                       : task.status === 'COMPLETED'
-                        ? '完成'
-                        : '失败'}
+                        ? '上传完成'
+                        : '上传失败'}
                 </StatusBadge>
               </div>
               <Progress

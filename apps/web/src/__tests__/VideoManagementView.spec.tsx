@@ -69,8 +69,12 @@ describe('VideoManagementView', () => {
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
     expect(screen.queryByText('V1.18 P0 · 单视频闭环')).not.toBeInTheDocument()
+    expect(screen.getByText('视频总数')).toBeInTheDocument()
     expect(screen.getByText('待处理')).toBeInTheDocument()
     expect(screen.getByText(/标注 1 · 复核 0 · 清洗 0/)).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '媒体状态' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '标注' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: '配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: '下一步' })).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '相机' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '留存' })).not.toBeInTheDocument()
@@ -278,7 +282,7 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('synthetic-hand-failed.mp4')).toBeInTheDocument()
-    expect(await screen.findByText('数据管理汇总暂不可用，视频列表仍可使用。')).toBeInTheDocument()
+    expect(await screen.findByText('视频摘要暂不可用，视频列表仍可使用。')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -299,11 +303,11 @@ describe('VideoManagementView', () => {
       path: '/projects/:projectId/videos',
     })
 
-    expect(await screen.findByLabelText('数据管理汇总')).toBeInTheDocument()
+    expect(await screen.findByLabelText('项目视频摘要')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /刷\s*新/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法读取视频列表，请稍后重试。')
-    expect(screen.queryByLabelText('数据管理汇总')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('项目视频摘要')).not.toBeInTheDocument()
   })
 
   it('recovers the video workspace after retrying a failed list request', async () => {
@@ -567,6 +571,8 @@ describe('VideoManagementView', () => {
     expect(links[1]).toHaveAccessibleName(
       '视频 video-1.mp4，视频资产 ID 50000000-0000-4000-8000-000000000002',
     )
+    expect(links[0]).toHaveAttribute('title', 'video-1.mp4')
+    expect(links[1]).toHaveAttribute('title', 'video-1.mp4')
     expect(screen.getByText('视频 ID 50000000…0001')).toBeInTheDocument()
     expect(screen.getByText('视频 ID 50000000…0002')).toBeInTheDocument()
   })

@@ -19,7 +19,7 @@ const actionLabels: Record<string, string> = {
 
 const reasonLabels: Record<string, string> = {
   DATA_REVIEW: '人工查看',
-  USER_REQUESTED_DELETION: '用户请求删除',
+  USER_REQUESTED_DELETION: '成员请求删除',
   QUALIFIED_CLIP_ASSET: '视频质量判断为合格',
   AUTO_AFTER_QUALITY_QUALIFIED: '质量合格后自动分配任务',
   MANUAL_ANNOTATION_SUBMITTED: '人工配药动作标注已提交',
@@ -126,7 +126,7 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
                 render: (_, item) => (
                   <span>
                     {item.actor_type === 'USER'
-                      ? '用户'
+                      ? '成员'
                       : item.actor_type === 'SERVICE'
                         ? '服务'
                         : '系统'}
@@ -145,7 +145,11 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
                       value === 'SUCCEEDED' ? 'success' : value === 'DENIED' ? 'warning' : 'error'
                     }
                   >
-                    {value === 'SUCCEEDED' ? '成功' : value === 'DENIED' ? '已拒绝' : '失败'}
+                    {value === 'SUCCEEDED'
+                      ? '处理完成'
+                      : value === 'DENIED'
+                        ? '已拒绝'
+                        : '处理失败'}
                   </StatusBadge>
                 ),
               },

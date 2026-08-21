@@ -81,7 +81,7 @@ describe('UploadProgressView', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(screen.getByText(/已确认 1 \/ 1 个分片/)).toBeInTheDocument()
     expect(screen.getByText('UPLOAD_FILE_SHA256_MISMATCH')).toBeInTheDocument()
-    expect(screen.getByText('校验失败')).toBeInTheDocument()
+    expect(screen.getByText('上传校验失败')).toBeInTheDocument()
   })
 
   it('shows a stable backend error without leaking internal details', async () => {

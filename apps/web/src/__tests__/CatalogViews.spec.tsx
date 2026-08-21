@@ -122,7 +122,7 @@ describe('catalog views', () => {
     await user.click(button)
 
     expect(await screen.findByText('获取视频播放授权')).toBeInTheDocument()
-    expect(screen.getByText('用户 · reviewer')).toBeInTheDocument()
+    expect(screen.getByText('成员 · reviewer')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${assetId}/activity?limit=20`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -299,7 +299,7 @@ describe('catalog views', () => {
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
     await user.click(screen.getByText('手部候选'))
     expect(screen.getByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
-    expect(screen.getAllByText(/当前失败不可重试，但可继续人工处理/)).toHaveLength(1)
+    expect(screen.getAllByText(/当前手部检测处理失败且不可重试，但可继续人工处理/)).toHaveLength(1)
     expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 
@@ -462,7 +462,7 @@ describe('catalog views', () => {
     })
 
     expect(screen.getByText('手部检测失败')).toBeInTheDocument()
-    expect(screen.getByText('手部检测失败，仍可继续人工处理。')).toBeInTheDocument()
+    expect(screen.getByText('手部检测处理失败，仍可继续人工处理。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
   })
 

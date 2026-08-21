@@ -55,7 +55,7 @@ function createDraftSegment(): DraftAnnotationSegment {
   return { draftId: nextDraftSegmentId, start_ms: 0, end_ms: 1000, label: '' }
 }
 function taskStatusLabel(task: AnnotationTask) {
-  if (task.status === 'COMPLETED') return '已完成'
+  if (task.status === 'COMPLETED') return '标注完成'
   if (task.status === 'SUBMITTED') return '已提交'
   return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '已分配'
 }
@@ -425,7 +425,7 @@ export default function AnnotationTaskListView() {
                 progress.awaiting_submission + progress.rework_required + progress.awaiting_review,
               detail: `待提交 ${progress.awaiting_submission} · 待修改 ${progress.rework_required} · 待复核 ${progress.awaiting_review}`,
             },
-            { label: '已完成', value: progress.completed },
+            { label: '标注完成', value: progress.completed },
           ]}
         />
       ) : null}

@@ -18,11 +18,11 @@ import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const batchStatusLabels: Record<UploadBatchStatus, string> = {
-  INITIATED: '已初始化',
+  INITIATED: '待上传',
   UPLOADING: '上传中',
-  COMPLETING: '完成中',
-  COMPLETED: '已完成',
-  FAILED: '失败',
+  COMPLETING: '正在完成上传',
+  COMPLETED: '上传完成',
+  FAILED: '上传失败',
   ABORTED: '已中止',
   EXPIRED: '已过期',
 }
@@ -32,10 +32,10 @@ const fileStatusLabels: Record<UploadFileStatus, string> = {
   UPLOADING: '上传中',
   COMPLETING: '校验中',
   UPLOADED: '已上传并校验',
-  FAILED: '校验失败',
+  FAILED: '上传校验失败',
 }
 const fileKindLabels: Record<UploadFileKind, string> = {
-  VIDEO: '视频',
+  VIDEO: '视频文件',
   METADATA: '元数据',
   EVENT_LOG: '事件日志',
 }
@@ -189,12 +189,12 @@ export default function UploadProgressView() {
                 },
                 {
                   id: 'uploaded-files',
-                  label: '已完成文件',
+                  label: '上传完成文件',
                   value: batch.uploaded_file_count,
                 },
                 {
                   id: 'failed-files',
-                  label: '失败文件',
+                  label: '上传失败文件',
                   value: batch.failed_file_count,
                 },
                 {

@@ -64,15 +64,15 @@ interface ApiErrorBody {
 
 const errorMessages: Record<string, string> = {
   INVALID_REQUEST: '上传信息不符合要求，请检查项目和视频后重试。',
-  PROJECT_NOT_FOUND: '未找到该项目，或当前用户尚未加入该项目。',
-  PROJECT_ACCESS_DENIED: '当前用户无权向该项目上传视频。',
+  PROJECT_NOT_FOUND: '未找到该项目，或当前账号尚未加入该项目。',
+  PROJECT_ACCESS_DENIED: '当前账号无权向该项目上传视频。',
   PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED: '每个本地上传批次只能包含一个视频。',
   PLATFORM_LOCAL_VIDEO_REQUIRED: '本地上传只能登记一个视频文件。',
   PLATFORM_LOCAL_FILE_NAME_REQUIRED: '本地上传缺少原始文件名，请重新选择视频后重试。',
   PLATFORM_LOCAL_DEVICE_INVALID: '本地上传来源标识无效。',
   UPLOAD_BATCH_EXPIRED: '上传批次已过期，请重新开始。',
   UPLOAD_PART_AUTHORIZATION_FAILED: '无法取得视频分片上传授权，请稍后重试。',
-  UPLOAD_FILE_SHA256_MISMATCH: '服务器校验到视频内容不完整或已变化，请重新选择文件后上传。',
+  UPLOAD_FILE_SHA256_MISMATCH: '服务器校验到视频文件内容不完整或已变化，请重新选择文件后上传。',
 }
 
 export class LocalUploadApiError extends Error {
