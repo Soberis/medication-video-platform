@@ -1445,7 +1445,7 @@
 }
 
 .media-report-warnings {
-  margin-top: 14px;
+  margin-top: var(--app-space-16);
 }
 
 .quality-review-actions .ant-select {
@@ -1453,7 +1453,7 @@
 }
 
 .annotation-task-actions {
-  margin-top: 14px;
+  margin-top: var(--app-space-16);
 }
 
 .annotation-task-actions .ant-select {
@@ -1480,7 +1480,7 @@
 
 .card-header-note {
   display: block;
-  margin-top: 4px;
+  margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-regular);
@@ -1546,7 +1546,7 @@
 
 .readiness-result > span,
 .readiness-result > div > span {
-  margin-top: 5px;
+  margin-top: var(--app-space-4);
   color: var(--app-color-foreground-secondary);
   line-height: var(--app-line-height-prose);
 }
@@ -1598,7 +1598,7 @@
 
 .readiness-result li small {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
 }
 
@@ -1690,7 +1690,7 @@
 }
 
 .login-form {
-  margin-top: 24px;
+  margin-top: var(--app-space-24);
 }
 
 .login-form .ant-btn {
@@ -1858,7 +1858,7 @@
 }
 
 .local-upload-task .ant-progress {
-  margin-top: 18px;
+  margin-top: var(--app-space-16);
 }
 
 .task-description {
@@ -1928,7 +1928,7 @@
 }
 @media (max-width: 720px) {
   .login-page {
-    padding-inline: 12px;
+    padding-inline: var(--app-space-12);
   }
 
   .page-heading,
@@ -2012,7 +2012,7 @@
     grid-column: 1;
     grid-row: auto;
     justify-self: start;
-    margin-top: 8px;
+    margin-top: var(--app-space-8);
   }
 
   .permission-check-error {
