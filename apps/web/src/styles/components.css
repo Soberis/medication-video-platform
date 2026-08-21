@@ -277,6 +277,59 @@
   box-shadow: none;
 }
 
+.workspace-section {
+  min-width: 0;
+}
+
+.workspace-section + .workspace-section {
+  margin-top: var(--app-space-24);
+  padding-top: var(--app-space-24);
+  border-top: 1px solid var(--app-color-border-subtle);
+}
+
+.workspace-section-heading,
+.inspector-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--app-space-16);
+  flex-wrap: wrap;
+}
+
+.workspace-section-heading {
+  margin-bottom: var(--app-space-16);
+}
+
+.workspace-section-heading h2,
+.inspector-section-heading h2 {
+  margin: 0;
+  color: var(--app-color-text-primary);
+  font-size: var(--app-font-size-heading-3);
+  line-height: 1.35;
+}
+
+.workspace-section-actions,
+.inspector-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.inspector-section {
+  min-width: 0;
+}
+
+.inspector-section + .inspector-section {
+  margin-top: var(--app-space-16);
+  padding-top: var(--app-space-16);
+  border-top: 1px solid var(--app-color-border-subtle);
+}
+
+.inspector-section-content {
+  margin-top: var(--app-space-8);
+}
+
 .form-surface {
   width: 100%;
 }
@@ -1552,17 +1605,6 @@
 .account-create-panel {
   width: 100%;
   padding: var(--app-space-24);
-}
-
-.surface-section-heading {
-  margin-bottom: var(--app-space-16);
-}
-
-.surface-section-heading h2 {
-  margin: 0;
-  color: var(--app-color-text-primary);
-  font-size: var(--app-font-size-heading-3);
-  line-height: 1.35;
 }
 
 .login-error {

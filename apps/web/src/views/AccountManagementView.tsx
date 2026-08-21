@@ -11,6 +11,7 @@ import {
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { Section } from '@/components/workspace/Section'
 
 interface AccountFields {
   username: string
@@ -124,13 +125,11 @@ export default function AccountManagementView() {
           </Button>
         }
       />
-      <section
+      <Section
         className="account-create-panel working-surface"
-        aria-labelledby="account-create-title"
+        title="创建普通用户"
+        titleId="account-create-title"
       >
-        <header className="surface-section-heading">
-          <h2 id="account-create-title">创建普通用户</h2>
-        </header>
         <Form<AccountFields>
           form={form}
           layout="vertical"
@@ -148,7 +147,7 @@ export default function AccountManagementView() {
             创建账号
           </Button>
         </Form>
-      </section>
+      </Section>
       {loadState === 'loading' ? <LoadingState>正在读取平台账号…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
