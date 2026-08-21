@@ -886,18 +886,25 @@
 }
 
 .video-empty-state {
-  display: grid;
-  justify-items: start;
-  gap: var(--app-space-4);
+  display: block;
 }
 
-.video-empty-state strong {
-  color: var(--app-color-text-regular);
-  font-size: var(--app-font-size-base);
+.video-empty-state .workspace-empty-state {
+  margin-top: 0;
+  padding: var(--app-space-12) 0 0;
 }
 
 .video-empty-state .ant-btn {
   padding-inline: 0;
+}
+
+.video-list-state.workspace-loading-state {
+  margin-top: var(--app-space-16);
+  padding: var(--app-space-16) 0;
+  border: 0;
+  border-bottom: 1px solid var(--app-color-border-subtle);
+  border-radius: 0;
+  background: transparent;
 }
 
 .video-list-surface {

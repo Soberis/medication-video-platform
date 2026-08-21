@@ -60,6 +60,9 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByRole('heading', { name: '视频管理' })).toBeInTheDocument()
+    expect(
+      screen.getByText('按状态、来源和拍摄时间筛选项目视频，查看处理进度并进入下一步工作。'),
+    ).toBeInTheDocument()
     expect(await screen.findByText('synthetic-no-hand.mp4')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /synthetic-no-hand\.mp4/ })).toHaveAttribute(
       'href',
@@ -107,6 +110,9 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByText('没有符合当前筛选条件的视频')).toBeInTheDocument()
+    expect(
+      screen.getByText('没有符合当前筛选条件的视频').closest('.workspace-empty-state'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /更多筛选/ })).toHaveAttribute(
       'aria-expanded',
       'true',

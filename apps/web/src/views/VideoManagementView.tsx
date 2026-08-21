@@ -22,7 +22,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { PageToolbar } from '@/components/PageToolbar'
 import { SummaryStrip } from '@/components/SummaryStrip'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
-import { ErrorState, NoticeState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState, NoticeState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import {
   parseVideoFilters,
@@ -245,6 +245,7 @@ export default function VideoManagementView() {
         eyebrow={projectId ? `当前项目 · ${shortId(projectId)}` : '当前项目'}
         titleId="video-management-title"
         title="视频管理"
+        description="按状态、来源和拍摄时间筛选项目视频，查看处理进度并进入下一步工作。"
         actions={
           <Button
             size="small"
@@ -467,23 +468,24 @@ export default function VideoManagementView() {
         ) : null}
       </section>
       {loadState === 'loading' ? (
-        <div className="video-list-state" role="status">
-          正在读取视频列表…
-        </div>
+        <LoadingState className="video-list-state">正在读取视频列表…</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadPage(false, filters)}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' && items.length === 0 ? (
         <section className="video-list-state video-empty-state" aria-label="视频列表为空">
-          <strong>
-            {activeFilterCount > 0 ? '没有符合当前筛选条件的视频' : '当前项目还没有视频'}
-          </strong>
-          {activeFilterCount > 0 ? (
-            <Button type="link" size="small" onClick={() => applyFilters({})}>
-              清除筛选
-            </Button>
-          ) : null}
+          <EmptyState
+            description={
+              activeFilterCount > 0 ? '没有符合当前筛选条件的视频' : '当前项目还没有视频'
+            }
+          >
+            {activeFilterCount > 0 ? (
+              <Button type="link" size="small" onClick={() => applyFilters({})}>
+                清除筛选
+              </Button>
+            ) : null}
+          </EmptyState>
         </section>
       ) : null}
       {items.length > 0 ? (
