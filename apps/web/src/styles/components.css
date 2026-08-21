@@ -306,9 +306,6 @@
   justify-content: space-between;
   gap: var(--app-space-16);
   flex-wrap: wrap;
-}
-
-.workspace-section-heading {
   margin-bottom: var(--app-space-12);
 }
 
@@ -757,7 +754,7 @@
   background: var(--app-color-destructive-surface);
 }
 
-.workspace-error span {
+.workspace-error-message {
   grid-column: 1;
   grid-row: 1;
   font-size: var(--app-font-size-base);

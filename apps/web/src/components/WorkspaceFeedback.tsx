@@ -65,7 +65,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div className={`workspace-error workspace-error-state ${className}`.trim()} role="alert">
-      <span>{children}</span>
+      <div className="workspace-error-message">{children}</div>
       {code ? <code>{code}</code> : null}
       {onRetry ? <Button onClick={onRetry}>{retryLabel}</Button> : null}
     </div>

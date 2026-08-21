@@ -1,7 +1,7 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-interface AppShellProps {
+export interface AppShellProps {
   children: ReactNode
   collapsed?: boolean
   inspector?: ReactNode
@@ -24,7 +24,7 @@ export function AppShell({ children, collapsed = false, inspector, sidebar }: Ap
   )
 }
 
-interface SidebarProps {
+export interface SidebarProps {
   brand: ReactNode
   children: ReactNode
   collapsed: boolean
@@ -41,7 +41,7 @@ export function Sidebar({ brand, children, collapsed, footer, onCollapsedChange 
           className="sidebar-toggle"
           type="button"
           aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
-          aria-pressed={collapsed}
+          aria-expanded={!collapsed}
           onClick={() => onCollapsedChange(!collapsed)}
         >
           {collapsed ? (
@@ -57,7 +57,7 @@ export function Sidebar({ brand, children, collapsed, footer, onCollapsedChange 
   )
 }
 
-interface WorkspaceProps {
+export interface WorkspaceProps {
   children: ReactNode
   inspector?: ReactNode
 }
@@ -73,7 +73,7 @@ export function Workspace({ children, inspector }: WorkspaceProps) {
   )
 }
 
-interface InspectorProps {
+export interface InspectorProps {
   ariaLabel: string
   children: ReactNode
 }

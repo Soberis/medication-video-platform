@@ -2,10 +2,19 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { SummaryStrip } from '@/components/SummaryStrip'
+import { PageHeader } from '@/components/PageHeader'
 import { InspectorSection } from '@/components/workspace/InspectorSection'
 import { Section } from '@/components/workspace/Section'
 
 describe('workspace layout primitives', () => {
+  it('generates a heading relationship for page headers when no id is supplied', () => {
+    render(<PageHeader title="视频管理" />)
+
+    const heading = screen.getByRole('heading', { level: 1, name: '视频管理' })
+    expect(heading.id).not.toBe('')
+    expect(heading.closest('section')).toHaveAttribute('aria-labelledby', heading.id)
+  })
+
   it('renders a labelled section with optional actions', () => {
     render(
       <Section title="Metadata" titleId="metadata-title" actions={<button>刷新</button>}>

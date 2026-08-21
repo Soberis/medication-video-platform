@@ -6,7 +6,7 @@ export interface SummaryStripItem {
   value: ReactNode
 }
 
-interface SummaryStripProps {
+export interface SummaryStripProps {
   ariaLabel: string
   footer?: ReactNode
   items: readonly SummaryStripItem[]

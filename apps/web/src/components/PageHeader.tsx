@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 
 import { PageToolbar } from '@/components/PageToolbar'
 
-interface PageHeaderProps {
+export interface PageHeaderProps {
   actions?: ReactNode
   className?: string
   description?: ReactNode
   eyebrow?: ReactNode
   title: ReactNode
-  titleId: string
+  titleId?: string
 }
 
 /**
@@ -23,11 +23,14 @@ export function PageHeader({
   title,
   titleId,
 }: PageHeaderProps) {
+  const generatedTitleId = useId()
+  const resolvedTitleId = titleId ?? generatedTitleId
+
   return (
-    <section className={`page-heading ${className}`.trim()} aria-labelledby={titleId}>
+    <section className={`page-heading ${className}`.trim()} aria-labelledby={resolvedTitleId}>
       <div className="page-heading-copy">
         {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
-        <h1 id={titleId}>{title}</h1>
+        <h1 id={resolvedTitleId}>{title}</h1>
         {description ? <p className="page-heading-description">{description}</p> : null}
       </div>
       {actions ? <PageToolbar className="page-heading-actions">{actions}</PageToolbar> : null}

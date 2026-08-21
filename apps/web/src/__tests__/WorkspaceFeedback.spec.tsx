@@ -37,4 +37,16 @@ describe('workspace feedback primitives', () => {
       screen.getByText('当前没有可处理的视频。').closest('.workspace-empty-state'),
     ).toBeInTheDocument()
   })
+
+  it('keeps rich error content in a valid message container', () => {
+    render(
+      <ErrorState>
+        <p>请稍后重试。</p>
+      </ErrorState>,
+    )
+
+    expect(screen.getByRole('alert').querySelector('.workspace-error-message')).toContainElement(
+      screen.getByText('请稍后重试。'),
+    )
+  })
 })

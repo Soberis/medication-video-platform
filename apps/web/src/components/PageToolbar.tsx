@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-interface PageToolbarProps {
+export interface PageToolbarProps {
   children: ReactNode
   className?: string
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 export type StatusBadgeTone = 'default' | 'error' | 'info' | 'processing' | 'success' | 'warning'
 
-interface StatusBadgeProps {
+export interface StatusBadgeProps {
   children: ReactNode
   className?: string
   tone?: StatusBadgeTone

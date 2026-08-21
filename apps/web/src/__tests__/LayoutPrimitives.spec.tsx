@@ -23,4 +23,16 @@ describe('layout primitives', () => {
     expect(screen.getByRole('heading', { name: '工作内容' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: '详情检查器' })).toHaveTextContent('检查内容')
   })
+
+  it('exposes the sidebar expansion state through the toggle control', () => {
+    render(
+      <Sidebar brand={<span>产品</span>} collapsed={false} onCollapsedChange={vi.fn()}>
+        <nav aria-label="测试导航">导航</nav>
+      </Sidebar>,
+    )
+
+    const toggle = screen.getByRole('button', { name: '收起侧栏' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).not.toHaveAttribute('aria-pressed')
+  })
 })
