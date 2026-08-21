@@ -33,7 +33,11 @@ export function PageHeader({
         <h1 id={resolvedTitleId}>{title}</h1>
         {description ? <p className="page-heading-description">{description}</p> : null}
       </div>
-      {actions ? <PageToolbar className="page-heading-actions">{actions}</PageToolbar> : null}
+      {actions ? (
+        <PageToolbar ariaLabel="页面操作" className="page-heading-actions">
+          {actions}
+        </PageToolbar>
+      ) : null}
     </section>
   )
 }

@@ -639,9 +639,6 @@
 
 .video-filter-toolbar input[type='datetime-local'] {
   height: var(--app-control-height-compact);
-}
-
-.video-filter-toolbar input[type='datetime-local'] {
   padding-inline: var(--app-space-8);
   border: 1px solid var(--app-color-border);
   border-radius: var(--app-radius-default);

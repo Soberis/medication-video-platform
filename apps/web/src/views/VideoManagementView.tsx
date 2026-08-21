@@ -282,7 +282,7 @@ export default function VideoManagementView() {
         <h2 id="video-management-filters-title" className="visually-hidden">
           筛选视频
         </h2>
-        <PageToolbar className="video-filter-toolbar-main">
+        <PageToolbar ariaLabel="视频筛选和操作" className="video-filter-toolbar-main">
           <div className="video-filter-primary">
             <label className="video-filter-control">
               <span>媒体状态</span>
@@ -600,6 +600,7 @@ export default function VideoManagementView() {
             <div className="catalog-pagination">
               <Button
                 loading={loadState === 'loading'}
+                size="small"
                 onClick={() => void loadPage(true, filters, nextCursor)}
               >
                 加载更多

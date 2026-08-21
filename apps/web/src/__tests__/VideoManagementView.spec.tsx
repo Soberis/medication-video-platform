@@ -60,6 +60,8 @@ describe('VideoManagementView', () => {
     })
 
     expect(await screen.findByRole('heading', { name: '视频管理' })).toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: '页面操作' })).toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: '视频筛选和操作' })).toBeInTheDocument()
     expect(
       screen.getByText('按状态、来源和拍摄时间筛选项目视频，查看处理进度并进入下一步工作。'),
     ).toBeInTheDocument()
