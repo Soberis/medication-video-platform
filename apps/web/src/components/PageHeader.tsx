@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { PageToolbar } from '@/components/PageToolbar'
+
 interface PageHeaderProps {
   actions?: ReactNode
   className?: string
@@ -28,7 +30,7 @@ export function PageHeader({
         <h1 id={titleId}>{title}</h1>
         {description ? <p>{description}</p> : null}
       </div>
-      {actions ? <div className="page-heading-actions">{actions}</div> : null}
+      {actions ? <PageToolbar className="page-heading-actions">{actions}</PageToolbar> : null}
     </section>
   )
 }

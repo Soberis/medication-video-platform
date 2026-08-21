@@ -1,0 +1,26 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+
+describe('workspace feedback primitives', () => {
+  it('exposes loading and retryable error states with accessible roles', () => {
+    const onRetry = vi.fn()
+    render(
+      <>
+        <LoadingState>正在加载视频…</LoadingState>
+        <ErrorState code="VIDEO_REQUEST_FAILED" onRetry={onRetry}>
+          暂时无法读取视频。
+        </ErrorState>
+      </>,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载视频…')
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByRole('alert')).toHaveTextContent('VIDEO_REQUEST_FAILED')
+    expect(screen.getByRole('alert')).toHaveTextContent('暂时无法读取视频。')
+
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+})

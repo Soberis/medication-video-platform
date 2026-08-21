@@ -10,6 +10,7 @@ import {
 } from '@/api/admin'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 interface AccountFields {
   username: string
@@ -148,16 +149,9 @@ export default function AccountManagementView() {
           </Button>
         </Form>
       </section>
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取平台账号…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取平台账号…</LoadingState> : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadAccounts()}>重试</Button>
-        </div>
+        <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' ? (
         <section

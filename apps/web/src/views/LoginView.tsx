@@ -5,6 +5,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router'
 import { AuthApiError } from '@/api/auth'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
+import { LoadingState } from '@/components/WorkspaceFeedback'
 
 interface LoginFields {
   username: string
@@ -28,11 +29,7 @@ export default function LoginView() {
       : paths.projects
 
   if (!auth.initialized && auth.loading) {
-    return (
-      <div className="catalog-notice" role="status">
-        正在确认登录状态…
-      </div>
-    )
+    return <LoadingState>正在确认登录状态…</LoadingState>
   }
   if (auth.isAuthenticated) return <Navigate replace to={safeRedirect} />
 

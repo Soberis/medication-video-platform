@@ -48,6 +48,7 @@ import {
 } from '@/components/AssetDetailSections'
 import { usePromptDialog } from '@/components/PromptDialog'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 type WorkflowStepState = 'complete' | 'current' | 'waiting' | 'blocked'
 
@@ -316,14 +317,7 @@ export default function AssetDetailView() {
               }
 
     return [mediaStep, annotationStep, reviewStep, cleaningStep]
-  }, [
-    annotationTask,
-    annotationTaskLoadState,
-    detail,
-    hasCurrentQualifiedQuality,
-    projectRole,
-    qualityReview,
-  ])
+  }, [annotationTask, annotationTaskLoadState, detail, hasCurrentQualifiedQuality, qualityReview])
 
   const canParticipateInTrainingDataExport =
     hasCurrentQualifiedQuality &&
@@ -1094,17 +1088,11 @@ export default function AssetDetailView() {
         <span aria-hidden="true">/</span>
         <span>详情</span>
       </nav>
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取视频资产详情…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取视频资产详情…</LoadingState> : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <strong>{errorCode}</strong>
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadDetail()}>重试</Button>
-        </div>
+        <ErrorState code={errorCode} onRetry={() => void loadDetail()}>
+          {errorMessage}
+        </ErrorState>
       ) : null}
       {loadState === 'success' && detail ? (
         <>

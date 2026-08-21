@@ -1,7 +1,9 @@
-import { Button, Card, Empty, Table, Tag } from 'antd'
+import { Button, Card, Empty, Table } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 
 import { CatalogApiError, listClipAssetActivity, type ClipAssetActivityItem } from '@/api/catalog'
+import { StatusBadge } from '@/components/StatusBadge'
+import { ErrorState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 const actionLabels: Record<string, string> = {
@@ -89,11 +91,9 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
     >
       {state === 'idle' ? <p className="form-hint">按需加载该视频的操作记录。</p> : null}
       {state === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <strong>{errorCode}</strong>
-          <span>{errorMessage}</span>
-          <Button onClick={() => void load(items.length === 0)}>重试</Button>
-        </div>
+        <ErrorState code={errorCode} onRetry={() => void load(items.length === 0)}>
+          {errorMessage}
+        </ErrorState>
       ) : null}
       {state === 'success' && items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该视频还没有可显示的操作记录。" />
@@ -140,13 +140,13 @@ export function AssetActivityCard({ projectId, assetId }: { projectId: string; a
                 dataIndex: 'outcome',
                 width: 100,
                 render: (value: ClipAssetActivityItem['outcome']) => (
-                  <Tag
-                    color={
+                  <StatusBadge
+                    tone={
                       value === 'SUCCEEDED' ? 'success' : value === 'DENIED' ? 'warning' : 'error'
                     }
                   >
                     {value === 'SUCCEEDED' ? '成功' : value === 'DENIED' ? '已拒绝' : '失败'}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
               {

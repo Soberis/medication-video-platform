@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Card, Empty, Form, Select, Table, Tag } from 'antd'
+import { Alert, App as AntdApp, Button, Card, Empty, Form, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -13,6 +13,9 @@ import {
   upsertProjectMembership,
 } from '@/api/projects'
 import { paths } from '@/app/paths'
+import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge } from '@/components/StatusBadge'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 interface MembershipFields {
   actorId: string
@@ -124,16 +127,17 @@ export default function ProjectMembershipView() {
         <span aria-hidden="true">/</span>
         <span>项目成员</span>
       </nav>
-      <section className="page-heading" aria-labelledby="members-title">
-        <div>
-          <p className="app-eyebrow">项目访问范围</p>
-          <h1 id="members-title">项目成员</h1>
-          <p>分配当前项目的访问范围；项目角色不改变账号的全局身份。</p>
-        </div>
-        <Button loading={loadState === 'loading'} onClick={() => void loadMemberships()}>
-          刷新
-        </Button>
-      </section>
+      <PageHeader
+        eyebrow="项目访问范围"
+        titleId="members-title"
+        title="项目成员"
+        description="分配当前项目的访问范围；项目角色不改变账号的全局身份。"
+        actions={
+          <Button loading={loadState === 'loading'} onClick={() => void loadMemberships()}>
+            刷新
+          </Button>
+        }
+      />
       {canManageMembers ? (
         <Card className="detail-card" title="添加或更新成员" variant="outlined">
           <Form<MembershipFields>
@@ -175,16 +179,9 @@ export default function ProjectMembershipView() {
           showIcon
         />
       ) : null}
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取项目成员…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取项目成员…</LoadingState> : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadMemberships()}>重试</Button>
-        </div>
+        <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' && memberships.length > 0 ? (
         <Card className="table-card" variant="outlined">
@@ -198,12 +195,16 @@ export default function ProjectMembershipView() {
                 title: '项目角色',
                 width: 140,
                 render: (_, row) => (
-                  <Tag color={row.role === 'ADMIN' ? 'blue' : 'default'}>
+                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
                     {row.role === 'ADMIN' ? '项目管理员' : '普通用户'}
-                  </Tag>
+                  </StatusBadge>
                 ),
               },
-              { title: '状态', width: 110, render: () => '有效' },
+              {
+                title: '状态',
+                width: 110,
+                render: () => <StatusBadge tone="success">有效</StatusBadge>,
+              },
               ...(canManageMembers
                 ? [
                     {

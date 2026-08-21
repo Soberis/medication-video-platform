@@ -14,6 +14,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { usePromptDialog } from '@/components/PromptDialog'
 import { StatusBadge } from '@/components/StatusBadge'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 type LoadState = 'loading' | 'success' | 'error'
 
@@ -163,17 +164,11 @@ export default function ProjectListView() {
           </>
         }
       />
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取授权项目…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取授权项目…</LoadingState> : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <strong>{errorCode}</strong>
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadProjects()}>重试</Button>
-        </div>
+        <ErrorState code={errorCode} onRetry={() => void loadProjects()}>
+          {errorMessage}
+        </ErrorState>
       ) : null}
       {projects.length > 0 ? (
         <section className="project-list-surface working-surface" aria-label="项目列表">

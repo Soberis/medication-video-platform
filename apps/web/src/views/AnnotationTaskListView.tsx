@@ -24,6 +24,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { SummaryStrip } from '@/components/SummaryStrip'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
@@ -403,17 +404,11 @@ export default function AnnotationTaskListView() {
           </>
         }
       />
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取配药动作标注…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取配药动作标注…</LoadingState> : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <strong>{errorCode}</strong>
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadTasks()}>重试</Button>
-        </div>
+        <ErrorState code={errorCode} onRetry={() => void loadTasks()}>
+          {errorMessage}
+        </ErrorState>
       ) : null}
       {loadState === 'success' && progress ? (
         <SummaryStrip

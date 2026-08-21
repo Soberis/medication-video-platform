@@ -1,18 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import { Button } from 'antd'
 import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router'
 
 import AppShell from '@/App'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 function RouteLoading() {
-  return (
-    <div className="catalog-notice" role="status">
-      正在加载页面…
-    </div>
-  )
+  return <LoadingState>正在加载页面…</LoadingState>
 }
 
 function AuthenticationBoundary() {
@@ -20,19 +16,13 @@ function AuthenticationBoundary() {
   const location = useLocation()
 
   if (!auth.initialized || auth.loading) {
-    return (
-      <div className="catalog-notice" role="status">
-        正在确认登录状态…
-      </div>
-    )
+    return <LoadingState>正在确认登录状态…</LoadingState>
   }
   if (auth.sessionError) {
     return (
-      <div className="catalog-error" role="alert">
-        <strong>{auth.sessionError.errorCode}</strong>
-        <span>{auth.sessionError.message}</span>
-        <Button onClick={() => void auth.retrySession()}>重试</Button>
-      </div>
+      <ErrorState code={auth.sessionError.errorCode} onRetry={() => void auth.retrySession()}>
+        {auth.sessionError.message}
+      </ErrorState>
     )
   }
   if (!auth.isAuthenticated) {

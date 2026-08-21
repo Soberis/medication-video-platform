@@ -19,7 +19,9 @@ import {
 } from '@/api/catalog'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
+import { PageToolbar } from '@/components/PageToolbar'
 import { SummaryStrip } from '@/components/SummaryStrip'
+import { ErrorState, NoticeState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import {
   parseVideoFilters,
@@ -275,16 +277,12 @@ export default function VideoManagementView() {
           }
         />
       ) : null}
-      {summaryError ? (
-        <div className="catalog-notice" role="status">
-          数据管理汇总暂不可用，视频列表仍可使用。
-        </div>
-      ) : null}
+      {summaryError ? <NoticeState>数据管理汇总暂不可用，视频列表仍可使用。</NoticeState> : null}
       <section className="video-filter-toolbar" aria-labelledby="video-management-filters-title">
         <h2 id="video-management-filters-title" className="visually-hidden">
           筛选视频
         </h2>
-        <div className="video-filter-toolbar-main">
+        <PageToolbar className="video-filter-toolbar-main">
           <div className="video-filter-primary">
             <label className="video-filter-control">
               <span>媒体</span>
@@ -374,7 +372,7 @@ export default function VideoManagementView() {
               </Button>
             ) : null}
           </div>
-        </div>
+        </PageToolbar>
         {isAdvancedFiltersOpen ? (
           <div id="video-secondary-filters" className="video-filter-secondary">
             <label className="video-filter-control">
@@ -475,10 +473,7 @@ export default function VideoManagementView() {
         </div>
       ) : null}
       {loadState === 'error' ? (
-        <div className="catalog-error" role="alert">
-          <span>{errorMessage}</span>
-          <Button onClick={() => void loadPage(false, filters)}>重试</Button>
-        </div>
+        <ErrorState onRetry={() => void loadPage(false, filters)}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' && items.length === 0 ? (
         <section className="video-list-state video-empty-state" aria-label="视频列表为空">

@@ -11,6 +11,7 @@ import type {
 } from '@/api/catalog'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { LoadingState } from '@/components/WorkspaceFeedback'
 import {
   qualityDecisionLabels,
   qualityReasonLabels,
@@ -329,11 +330,7 @@ export function MediaReportCard({
 }: MediaReportCardProps) {
   let content
   if (detail.status === 'INGESTED' && loadState === 'loading') {
-    content = (
-      <div className="catalog-notice" role="status">
-        正在读取媒体检测报告…
-      </div>
-    )
+    content = <LoadingState>正在读取媒体检测报告…</LoadingState>
   } else if (detail.status === 'INGESTED' && loadState === 'error') {
     content = (
       <Alert
@@ -514,11 +511,7 @@ export function QualityReviewCard({
       <p className="form-hint">
         根据实际画面判断该视频是否适合进入配药动作标注。播放本身不会自动产生质量结论。
       </p>
-      {loadState === 'loading' ? (
-        <div className="catalog-notice" role="status">
-          正在读取质量结论…
-        </div>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在读取质量结论…</LoadingState> : null}
       {loadState === 'error' ? (
         <Alert
           type="error"

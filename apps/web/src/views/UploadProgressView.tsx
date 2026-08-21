@@ -11,6 +11,8 @@ import {
   type UploadFileStatus,
 } from '@/api/uploads'
 import { PageHeader } from '@/components/PageHeader'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -36,6 +38,19 @@ const fileKindLabels: Record<UploadFileKind, string> = {
   METADATA: '元数据',
   EVENT_LOG: '事件日志',
 }
+
+function batchStatusTone(status: UploadBatchStatus): StatusBadgeTone {
+  if (status === 'COMPLETED') return 'success'
+  if (status === 'FAILED' || status === 'ABORTED' || status === 'EXPIRED') return 'error'
+  return 'processing'
+}
+
+function fileStatusTone(status: UploadFileStatus): StatusBadgeTone {
+  if (status === 'UPLOADED') return 'success'
+  if (status === 'FAILED') return 'error'
+  return 'processing'
+}
+
 const percent = (value: number, total: number) =>
   total <= 0 ? 0 : Math.min(100, Math.max(0, Math.round((value / total) * 100)))
 const formatTime = (value: string | null) =>
@@ -137,17 +152,8 @@ export default function UploadProgressView() {
           </div>
         </form>
       </section>
-      {isLoading ? (
-        <div className="notice" role="status" aria-live="polite">
-          正在读取批次和文件进度…
-        </div>
-      ) : null}
-      {loadState === 'error' ? (
-        <div className="notice notice-error" role="alert">
-          <strong>{errorCode}</strong>
-          <span>{errorMessage}</span>
-        </div>
-      ) : null}
+      {isLoading ? <LoadingState>正在读取批次和文件进度…</LoadingState> : null}
+      {loadState === 'error' ? <ErrorState code={errorCode}>{errorMessage}</ErrorState> : null}
       {batch && hasResult ? (
         <>
           <section className="summary-card" aria-labelledby="batch-summary-title">
@@ -156,9 +162,9 @@ export default function UploadProgressView() {
                 <p className="status-label">批次汇总</p>
                 <h2 id="batch-summary-title">{batch.device_id}</h2>
               </div>
-              <span className="status-badge" data-status={batch.status}>
+              <StatusBadge tone={batchStatusTone(batch.status)}>
                 {batchStatusLabels[batch.status]}
-              </span>
+              </StatusBadge>
             </div>
             <div className="progress-block">
               <div className="progress-copy">
@@ -217,9 +223,9 @@ export default function UploadProgressView() {
                     </p>
                     <h3>{file.client_file_id}</h3>
                   </div>
-                  <span className="status-badge" data-status={file.status}>
+                  <StatusBadge tone={fileStatusTone(file.status)}>
                     {fileStatusLabels[file.status]}
-                  </span>
+                  </StatusBadge>
                 </div>
                 <div className="progress-block progress-compact">
                   <div className="progress-copy">
