@@ -61,7 +61,7 @@ function currentFrame(candidates: HandPoseCandidate[], playbackTimeMs: number) {
 }
 
 function overlayColor() {
-  return '#8aa9d9'
+  return 'var(--app-color-media-overlay)'
 }
 
 function handednessLabel(candidate: HandPoseCandidate) {

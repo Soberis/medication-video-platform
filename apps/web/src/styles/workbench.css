@@ -26,12 +26,12 @@
   flex-wrap: wrap;
   gap: var(--app-space-8);
   margin: var(--app-space-4) 0 0;
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
 }
 
 .workbench-video-name span {
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
 
@@ -48,7 +48,7 @@
   flex-wrap: wrap;
   gap: var(--app-space-4) var(--app-space-16);
   margin: var(--app-space-4) 0 0;
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
 
@@ -123,12 +123,12 @@
 }
 
 .playback-idle-copy strong {
-  color: var(--app-color-text-primary);
+  color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-3);
 }
 
 .playback-idle-copy > span:last-child {
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-base);
   line-height: var(--app-line-height-body);
 }
@@ -147,12 +147,12 @@
 }
 
 .playback-idle-stage.playback-availability-error {
-  border-color: var(--app-color-danger);
-  background: var(--app-color-danger-surface);
+  border-color: var(--app-color-destructive);
+  background: var(--app-color-destructive-surface);
 }
 
 .playback-idle-stage.playback-availability-error .playback-idle-copy strong {
-  color: var(--app-color-danger);
+  color: var(--app-color-destructive);
 }
 
 /* Human workflow panels under the player. */
@@ -171,7 +171,7 @@
   margin: 0;
   padding: var(--app-space-16) var(--app-space-16) var(--app-space-12);
   border-bottom: 1px solid var(--app-color-border-subtle);
-  color: var(--app-color-text-primary);
+  color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-3);
 }
 
@@ -198,13 +198,13 @@
 
 .workbench-panel > h3 {
   margin: 0;
-  color: var(--app-color-text-primary);
+  color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-2);
 }
 
 .workbench-panel > h4 {
   margin: var(--app-space-8) 0 0;
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
 }
 
@@ -237,14 +237,14 @@
 }
 
 .next-action-panel strong {
-  color: var(--app-color-text-primary);
+  color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-2);
   line-height: var(--app-line-height-control);
 }
 
 .next-action-panel p {
   margin: 0;
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-body);
 }
@@ -269,7 +269,7 @@
 
 .workflow-facts-heading h2 {
   margin: 0;
-  color: var(--app-color-text-primary);
+  color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-2);
 }
 
@@ -290,7 +290,7 @@
 }
 
 .workflow-facts-item > strong {
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
   font-weight: var(--app-font-weight-semibold);
 }
@@ -305,7 +305,7 @@
 .quality-review-editor > summary {
   min-height: 40px;
   padding-top: var(--app-space-8);
-  color: var(--app-color-brand-hover);
+  color: var(--app-color-primary-hover);
   cursor: pointer;
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-semibold);
@@ -329,13 +329,13 @@
 }
 
 .workflow-fact-details li strong {
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
 }
 
 .workflow-fact-details li span,
 .hand-pose-disclosure-content .form-hint {
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-body);
 }
@@ -361,12 +361,12 @@
 }
 
 .hand-pose-disclosure-title strong {
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
 }
 
 .hand-pose-disclosure-title small {
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
 
@@ -400,7 +400,7 @@
   gap: var(--app-space-16);
   min-height: 48px;
   padding: var(--app-space-12) var(--app-space-16);
-  color: var(--app-color-text-regular);
+  color: var(--app-color-foreground-secondary);
   cursor: pointer;
   list-style: none;
 }
@@ -411,7 +411,7 @@
 
 .detail-disclosure > summary::after {
   flex: none;
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   content: '＋';
   font-size: var(--app-font-size-heading-2);
   line-height: var(--app-line-height-single);
@@ -423,7 +423,7 @@
 
 .detail-disclosure > summary span {
   flex: 1;
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-regular);
 }
@@ -458,7 +458,7 @@
 }
 
 .danger-zone-inline > div > strong {
-  color: var(--app-color-danger);
+  color: var(--app-color-destructive);
   font-size: var(--app-font-size-base);
 }
 
@@ -472,7 +472,7 @@
   flex-wrap: wrap;
   gap: var(--app-space-8);
   margin: 0;
-  color: var(--app-color-text-secondary);
+  color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
 
