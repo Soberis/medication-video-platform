@@ -37,10 +37,6 @@ select {
   font: inherit;
 }
 
-button {
-  min-height: var(--app-control-height);
-}
-
 :where(a, button, input, textarea, select, summary):focus-visible {
   outline: 2px solid var(--app-color-focus-ring);
   outline-offset: 2px;

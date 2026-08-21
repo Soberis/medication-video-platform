@@ -467,10 +467,6 @@
   margin-bottom: var(--app-space-16);
 }
 
-.video-management-heading .ant-btn {
-  min-height: var(--app-control-height-compact);
-}
-
 .video-filter-toolbar {
   padding-block: var(--app-space-12);
   border-top: 1px solid var(--app-color-border-subtle);
@@ -539,14 +535,11 @@
 }
 
 .video-filter-toolbar .ant-btn {
-  min-height: var(--app-control-height-compact);
   color: var(--app-color-text-regular);
 }
 
-.video-filter-toolbar .ant-select-selector,
-.video-filter-toolbar .ant-input-number,
 .video-filter-toolbar input[type='datetime-local'] {
-  min-height: var(--app-control-height-compact);
+  height: var(--app-control-height-compact);
 }
 
 .video-filter-toolbar input[type='datetime-local'] {
@@ -625,17 +618,6 @@
 .catalog-filters .ant-input,
 .catalog-filters .ant-input-affix-wrapper {
   width: 100%;
-}
-
-.ant-input,
-.ant-input-affix-wrapper,
-.ant-select-selector,
-.ant-picker {
-  min-height: 44px;
-}
-
-.ant-btn:not(.ant-btn-link) {
-  min-height: 44px;
 }
 
 .filter-actions {
@@ -816,13 +798,11 @@
 }
 
 .video-empty-state .ant-btn {
-  min-height: var(--app-control-height-compact);
   padding-inline: 0;
 }
 
 .video-list-surface {
   margin-top: var(--app-space-16);
-  overflow-x: auto;
   border-top: 1px solid var(--app-color-border-subtle);
   border-bottom: 1px solid var(--app-color-border-subtle);
   background: var(--app-color-surface);
