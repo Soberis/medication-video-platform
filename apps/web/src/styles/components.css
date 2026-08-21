@@ -18,7 +18,7 @@
 .upload-progress-query,
 .summary-card {
   width: 100%;
-  padding: var(--app-space-24);
+  padding: var(--app-space-16);
   border-radius: var(--app-radius-large);
 }
 
@@ -88,7 +88,7 @@
 
 .summary-card,
 .files-section {
-  margin-top: var(--app-space-24);
+  margin-top: var(--app-space-16);
 }
 
 .files-section {
@@ -106,7 +106,7 @@
 }
 
 .progress-block {
-  margin-top: var(--app-space-24);
+  margin-top: var(--app-space-16);
 }
 
 .progress-copy {
@@ -147,7 +147,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--app-space-12);
-  margin: var(--app-space-24) 0;
+  margin: var(--app-space-16) 0;
 }
 
 .metric-grid div,
@@ -239,8 +239,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--app-space-24);
-  margin: 0 0 var(--app-space-24);
+  gap: var(--app-space-16);
+  margin: 0 0 var(--app-space-16);
 }
 
 .page-heading-copy {
@@ -269,6 +269,13 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.page-toolbar {
+  gap: var(--app-space-8);
+}
+
+.detail-actions {
   gap: var(--app-space-12);
 }
 
@@ -288,8 +295,8 @@
 }
 
 .workspace-section + .workspace-section {
-  margin-top: var(--app-space-24);
-  padding-top: var(--app-space-24);
+  margin-top: var(--app-space-16);
+  padding-top: var(--app-space-16);
   border-top: 1px solid var(--app-color-border-subtle);
 }
 
@@ -302,7 +309,7 @@
 }
 
 .workspace-section-heading {
-  margin-bottom: var(--app-space-16);
+  margin-bottom: var(--app-space-12);
 }
 
 .workspace-section-heading h2 {
@@ -329,13 +336,13 @@
 }
 
 .inspector-section + .inspector-section {
-  margin-top: var(--app-space-16);
-  padding-top: var(--app-space-16);
+  margin-top: var(--app-space-12);
+  padding-top: var(--app-space-12);
   border-top: 1px solid var(--app-color-border-subtle);
 }
 
 .inspector-section-content {
-  margin-top: var(--app-space-8);
+  margin-top: var(--app-space-4);
 }
 
 .form-surface {
@@ -356,8 +363,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-32);
-  padding: var(--app-space-16) var(--app-space-24);
+  gap: var(--app-space-16);
+  padding: var(--app-space-12) var(--app-space-16);
 }
 
 .project-list-item + .project-list-item {
@@ -922,8 +929,16 @@
 
 .video-management-table .ant-table-thead > tr > th,
 .video-management-table .ant-table-tbody > tr > td {
-  padding: var(--app-space-8);
   border-color: var(--app-color-border-subtle);
+}
+
+.video-management-table .ant-table-thead > tr > th {
+  padding: var(--app-space-8);
+}
+
+.video-management-table .ant-table-tbody > tr > td {
+  padding: var(--app-space-4) var(--app-space-8);
+  vertical-align: middle;
 }
 
 .video-management-table {
@@ -941,6 +956,11 @@
 
 .video-management-table .ant-table-tbody > tr:hover > td {
   background: var(--app-color-surface-hover);
+}
+
+.video-management-table .ant-table-tbody > tr:focus-within > td,
+.video-management-table .ant-table-tbody > tr:hover:focus-within > td {
+  background: var(--app-color-primary-subtle);
 }
 
 .video-management-table .ant-table-cell {
@@ -1022,7 +1042,7 @@
   width: fit-content;
   align-items: center;
   gap: var(--app-space-4);
-  min-height: 32px;
+  min-height: var(--app-control-height-compact);
   color: var(--app-color-primary);
   font-size: var(--app-font-size-base);
   font-weight: 600;
@@ -1636,7 +1656,7 @@
 
 .local-upload-card {
   width: 100%;
-  padding: var(--app-space-24);
+  padding: var(--app-space-16);
 }
 
 .local-upload-results {
@@ -1700,12 +1720,12 @@
 }
 
 .account-form .form-hint {
-  margin-bottom: 16px;
+  margin-bottom: var(--app-space-16);
 }
 
 .account-create-panel {
   width: 100%;
-  padding: var(--app-space-24);
+  padding: var(--app-space-16);
 }
 
 .login-error {
@@ -1721,7 +1741,7 @@
 .local-upload-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--app-space-24);
+  gap: var(--app-space-16);
 }
 
 .local-upload-field {

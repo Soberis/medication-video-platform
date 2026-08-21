@@ -285,7 +285,7 @@ export default function VideoManagementView() {
         <PageToolbar className="video-filter-toolbar-main">
           <div className="video-filter-primary">
             <label className="video-filter-control">
-              <span>媒体</span>
+              <span>媒体状态</span>
               <Select
                 aria-label="媒体状态"
                 allowClear

@@ -111,7 +111,7 @@
 
 .primary-nav {
   display: grid;
-  gap: var(--app-space-24);
+  gap: var(--app-space-16);
 }
 
 .sidebar-nav-group {
@@ -244,7 +244,7 @@
 .workspace-content {
   width: min(100%, var(--app-workspace-max-width));
   margin: 0 auto;
-  padding: var(--app-space-24) var(--app-space-32) var(--app-space-32);
+  padding: var(--app-space-16) var(--app-space-24) var(--app-space-24);
 }
 
 .workspace-inspector {
@@ -252,7 +252,7 @@
   top: 0;
   height: 100vh;
   overflow-y: auto;
-  padding: var(--app-space-24);
+  padding: var(--app-space-16);
   border-left: 1px solid var(--app-color-border-subtle);
   background: var(--app-color-surface);
 }
@@ -337,7 +337,7 @@
   }
 
   .workspace-content {
-    padding-inline: var(--app-space-24);
+    padding-inline: var(--app-space-16);
   }
 
   .workspace[data-has-inspector='true'] {
@@ -418,6 +418,6 @@
   }
 
   .workspace-content {
-    padding: var(--app-space-16) var(--app-space-12) var(--app-space-24);
+    padding: var(--app-space-12) var(--app-space-8) var(--app-space-16);
   }
 }
