@@ -21,6 +21,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { PageToolbar } from '@/components/PageToolbar'
 import { SummaryStrip } from '@/components/SummaryStrip'
+import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { ErrorState, NoticeState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import {
@@ -534,10 +535,9 @@ export default function VideoManagementView() {
                 title: '媒体',
                 width: 110,
                 render: (_, row) => (
-                  <VideoStatusIndicator
-                    label={mediaStatusLabels[row.media_status]}
-                    tone={mediaStatusTone(row.media_status)}
-                  />
+                  <StatusIndicator tone={mediaStatusTone(row.media_status)}>
+                    {mediaStatusLabels[row.media_status]}
+                  </StatusIndicator>
                 ),
               },
               {
@@ -545,10 +545,9 @@ export default function VideoManagementView() {
                 dataIndex: 'annotation_status',
                 width: 125,
                 render: (value: VideoSummaryAnnotationStatus) => (
-                  <VideoStatusIndicator
-                    label={annotationStatusLabels[value]}
-                    tone={annotationStatusTone(value)}
-                  />
+                  <StatusIndicator tone={annotationStatusTone(value)}>
+                    {annotationStatusLabels[value]}
+                  </StatusIndicator>
                 ),
               },
               {
@@ -556,10 +555,9 @@ export default function VideoManagementView() {
                 dataIndex: 'cleaning_status',
                 width: 95,
                 render: (value: VideoSummaryCleaningStatus) => (
-                  <VideoStatusIndicator
-                    label={cleaningStatusLabels[value]}
-                    tone={cleaningStatusTone(value)}
-                  />
+                  <StatusIndicator tone={cleaningStatusTone(value)}>
+                    {cleaningStatusLabels[value]}
+                  </StatusIndicator>
                 ),
               },
               {
@@ -608,17 +606,6 @@ export default function VideoManagementView() {
   )
 }
 
-type VideoStatusTone = 'neutral' | 'information' | 'success' | 'warning' | 'destructive'
-
-function VideoStatusIndicator({ label, tone }: { label: string; tone: VideoStatusTone }) {
-  return (
-    <span className="video-status-indicator" data-tone={tone}>
-      <span className="video-status-dot" aria-hidden="true" />
-      {label}
-    </span>
-  )
-}
-
 function toInstant(value: string) {
   return value ? new Date(value).toISOString() : undefined
 }
@@ -630,19 +617,19 @@ function toLocalDateTimeInput(value?: string) {
   return local.toISOString().slice(0, 16)
 }
 
-function mediaStatusTone(status: VideoSummaryMediaStatus): VideoStatusTone {
+function mediaStatusTone(status: VideoSummaryMediaStatus): StatusIndicatorTone {
   if (status === 'INGEST_FAILED') return 'destructive'
   if (status === 'INGESTED') return 'success'
   return 'information'
 }
 
-function annotationStatusTone(status: VideoSummaryAnnotationStatus): VideoStatusTone {
+function annotationStatusTone(status: VideoSummaryAnnotationStatus): StatusIndicatorTone {
   if (status === 'COMPLETED') return 'success'
   if (status === 'SUBMITTED' || status === 'ASSIGNED') return 'information'
   return 'neutral'
 }
 
-function cleaningStatusTone(status: VideoSummaryCleaningStatus): VideoStatusTone {
+function cleaningStatusTone(status: VideoSummaryCleaningStatus): StatusIndicatorTone {
   if (status === 'PASS') return 'success'
   if (status === 'WARNING') return 'warning'
   if (status === 'REJECT') return 'destructive'

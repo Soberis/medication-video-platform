@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 describe('workspace feedback primitives', () => {
   it('exposes loading and retryable error states with accessible roles', () => {
@@ -22,5 +22,11 @@ describe('workspace feedback primitives', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
     expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('uses the shared empty-state presentation for collection views', () => {
+    render(<EmptyState description="当前没有可处理的视频。" />)
+
+    expect(screen.getByText('当前没有可处理的视频。')).toBeInTheDocument()
   })
 })

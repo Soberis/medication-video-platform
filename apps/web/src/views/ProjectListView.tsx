@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Dropdown, Empty } from 'antd'
+import { App as AntdApp, Button, Dropdown } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -14,7 +14,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { usePromptDialog } from '@/components/PromptDialog'
 import { StatusBadge } from '@/components/StatusBadge'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 type LoadState = 'loading' | 'success' | 'error'
 
@@ -226,13 +226,13 @@ export default function ProjectListView() {
           </ul>
         </section>
       ) : loadState === 'success' ? (
-        <Empty description="当前账号尚未加入任何项目。管理员可新建首个项目；普通用户需要由项目管理员添加为成员。">
+        <EmptyState description="当前账号尚未加入任何项目。管理员可新建首个项目；普通用户需要由项目管理员添加为成员。">
           {canCreateProjects ? (
             <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
               新建项目
             </Button>
           ) : null}
-        </Empty>
+        </EmptyState>
       ) : null}
     </>
   )

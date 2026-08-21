@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Progress, Select } from 'antd'
+import { Alert, Button, Progress, Select } from 'antd'
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -13,6 +13,7 @@ import { listProjects, type DataProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { EmptyState } from '@/components/WorkspaceFeedback'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 type TaskStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
@@ -385,7 +386,7 @@ export default function LocalUploadView() {
         </section>
       ) : null}
       {projectLoadState === 'success' && projects.length === 0 ? (
-        <Empty description="当前账号尚未加入项目，无法上传视频。请联系管理员添加项目成员。" />
+        <EmptyState description="当前账号尚未加入项目，无法上传视频。请联系管理员添加项目成员。" />
       ) : null}
     </>
   )

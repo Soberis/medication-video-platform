@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Empty } from 'antd'
 import type { ReactNode } from 'react'
 
 interface NoticeStateProps {
@@ -21,6 +21,21 @@ export function NoticeState({
 
 export function LoadingState({ children, className = '' }: Omit<NoticeStateProps, 'aria-live'>) {
   return <NoticeState className={className}>{children}</NoticeState>
+}
+
+interface EmptyStateProps {
+  children?: ReactNode
+  className?: string
+  description?: ReactNode
+}
+
+/** Shared empty-state presentation for list and collection views. */
+export function EmptyState({ children, className = '', description }: EmptyStateProps) {
+  return (
+    <Empty className={className} description={description}>
+      {children}
+    </Empty>
+  )
 }
 
 interface ErrorStateProps {

@@ -11,6 +11,7 @@ import {
   type UploadFileStatus,
 } from '@/api/uploads'
 import { PageHeader } from '@/components/PageHeader'
+import { MetadataList } from '@/components/data/MetadataList'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
@@ -178,28 +179,31 @@ export default function UploadProgressView() {
                 {formatBytes(batch.uploaded_size_bytes)} / {formatBytes(batch.total_size_bytes)}
               </p>
             </div>
-            <dl className="metric-grid">
-              <div>
-                <dt>文件登记</dt>
-                <dd>
-                  {batch.registered_file_count} / {batch.file_count}
-                </dd>
-              </div>
-              <div>
-                <dt>已完成文件</dt>
-                <dd>{batch.uploaded_file_count}</dd>
-              </div>
-              <div>
-                <dt>失败文件</dt>
-                <dd>{batch.failed_file_count}</dd>
-              </div>
-              <div>
-                <dt>已确认 Part</dt>
-                <dd>
-                  {batch.uploaded_part_count} / {batch.tracked_part_count}
-                </dd>
-              </div>
-            </dl>
+            <MetadataList
+              className="metric-grid"
+              items={[
+                {
+                  id: 'registered-files',
+                  label: '文件登记',
+                  value: `${batch.registered_file_count} / ${batch.file_count}`,
+                },
+                {
+                  id: 'uploaded-files',
+                  label: '已完成文件',
+                  value: batch.uploaded_file_count,
+                },
+                {
+                  id: 'failed-files',
+                  label: '失败文件',
+                  value: batch.failed_file_count,
+                },
+                {
+                  id: 'uploaded-parts',
+                  label: '已确认 Part',
+                  value: `${batch.uploaded_part_count} / ${batch.tracked_part_count}`,
+                },
+              ]}
+            />
             <p className="batch-meta">
               批次 ID：<code>{batch.batch_id}</code>
             </p>
@@ -246,20 +250,26 @@ export default function UploadProgressView() {
                     <code>{file.completion_error_code}</code>
                   </div>
                 ) : null}
-                <dl className="file-meta-grid">
-                  <div>
-                    <dt>已跟踪 Part</dt>
-                    <dd>{file.tracked_parts}</dd>
-                  </div>
-                  <div>
-                    <dt>最后更新</dt>
-                    <dd>{formatTime(file.updated_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>完成时间</dt>
-                    <dd>{formatTime(file.completed_at)}</dd>
-                  </div>
-                </dl>
+                <MetadataList
+                  className="file-meta-grid"
+                  items={[
+                    {
+                      id: 'tracked-parts',
+                      label: '已跟踪 Part',
+                      value: file.tracked_parts,
+                    },
+                    {
+                      id: 'updated-at',
+                      label: '最后更新',
+                      value: formatTime(file.updated_at),
+                    },
+                    {
+                      id: 'completed-at',
+                      label: '完成时间',
+                      value: formatTime(file.completed_at),
+                    },
+                  ]}
+                />
               </article>
             ))}
           </section>

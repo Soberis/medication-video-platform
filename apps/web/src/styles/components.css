@@ -426,6 +426,23 @@
   line-height: 1.45;
 }
 
+.metadata-list {
+  margin: 0;
+}
+
+.property-row {
+  min-width: 0;
+}
+
+.property-row-secondary {
+  display: block;
+  margin-top: var(--app-space-4);
+  color: var(--app-color-text-secondary);
+  font-size: var(--app-font-size-helper);
+  font-weight: 400;
+  line-height: 1.45;
+}
+
 .video-management-heading {
   margin-bottom: var(--app-space-16);
 }
@@ -868,7 +885,7 @@
   text-underline-offset: 3px;
 }
 
-.video-status-indicator {
+.status-indicator {
   display: inline-flex;
   align-items: center;
   gap: var(--app-space-8);
@@ -877,7 +894,7 @@
   font-weight: 500;
 }
 
-.video-status-dot {
+.status-indicator-dot {
   width: 6px;
   height: 6px;
   flex: 0 0 auto;
@@ -885,19 +902,19 @@
   background: var(--app-color-text-secondary);
 }
 
-.video-status-indicator[data-tone='information'] .video-status-dot {
+.status-indicator[data-tone='information'] .status-indicator-dot {
   background: var(--app-color-information);
 }
 
-.video-status-indicator[data-tone='success'] .video-status-dot {
+.status-indicator[data-tone='success'] .status-indicator-dot {
   background: var(--app-color-success);
 }
 
-.video-status-indicator[data-tone='warning'] .video-status-dot {
+.status-indicator[data-tone='warning'] .status-indicator-dot {
   background: var(--app-color-warning);
 }
 
-.video-status-indicator[data-tone='destructive'] .video-status-dot {
+.status-indicator[data-tone='destructive'] .status-indicator-dot {
   background: var(--app-color-destructive);
 }
 

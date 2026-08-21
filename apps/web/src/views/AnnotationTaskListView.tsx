@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Empty, Form, Input, InputNumber, Modal, Select, Table } from 'antd'
+import { App as AntdApp, Button, Form, Input, InputNumber, Modal, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -22,9 +22,10 @@ import {
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
+import { MetadataList } from '@/components/data/MetadataList'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { SummaryStrip } from '@/components/SummaryStrip'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
@@ -572,7 +573,7 @@ export default function AnnotationTaskListView() {
         </section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <Empty description="当前没有可处理的配药动作标注。管理员可在已判定合格的视频详情中创建并分配任务。" />
+        <EmptyState description="当前没有可处理的配药动作标注。管理员可在已判定合格的视频详情中创建并分配任务。" />
       ) : null}
       <Modal
         open={isTrainingExportOpen}
@@ -593,24 +594,23 @@ export default function AnnotationTaskListView() {
       >
         {trainingExportPreview ? (
           <>
-            <dl className="training-data-export-summary">
-              <div>
-                <dt>可导出数量</dt>
-                <dd>{trainingExportPreview.training_row_count} 条（Parquet 训练行）</dd>
-              </div>
-              <div>
-                <dt>格式</dt>
-                <dd>Parquet</dd>
-              </div>
-              <div>
-                <dt>包含</dt>
-                <dd>手部关键点 + 人工动作标签</dd>
-              </div>
-              <div>
-                <dt>原始视频</dt>
-                <dd>{trainingExportPreview.includes_mp4 ? '包含' : '不包含'}</dd>
-              </div>
-            </dl>
+            <MetadataList
+              className="training-data-export-summary"
+              items={[
+                {
+                  id: 'training-row-count',
+                  label: '可导出数量',
+                  value: `${trainingExportPreview.training_row_count} 条（Parquet 训练行）`,
+                },
+                { id: 'format', label: '格式', value: 'Parquet' },
+                { id: 'includes', label: '包含', value: '手部关键点 + 人工动作标签' },
+                {
+                  id: 'includes-mp4',
+                  label: '原始视频',
+                  value: trainingExportPreview.includes_mp4 ? '包含' : '不包含',
+                },
+              ]}
+            />
             {trainingExportPreview.training_row_count === 0 ? (
               <p className="training-data-export-empty" role="status">
                 当前没有合格训练行，暂时无法导出。

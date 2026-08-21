@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Card, Empty, Form, Select, Table } from 'antd'
+import { Alert, App as AntdApp, Button, Card, Form, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -15,7 +15,7 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 interface MembershipFields {
   actorId: string
@@ -229,7 +229,7 @@ export default function ProjectMembershipView() {
         </Card>
       ) : null}
       {loadState === 'success' && memberships.length === 0 ? (
-        <Empty description="当前项目尚未分配成员。" />
+        <EmptyState description="当前项目尚未分配成员。" />
       ) : null}
     </>
   )
