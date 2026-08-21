@@ -28,6 +28,9 @@ body {
   min-height: 100vh;
   margin: 0;
   background: var(--app-color-background);
+  color: var(--app-color-foreground);
+  font-size: var(--app-font-size-base);
+  line-height: 1.5;
 }
 
 button,
