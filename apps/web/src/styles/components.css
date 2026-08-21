@@ -369,7 +369,7 @@
 
 .summary-strip {
   margin-top: var(--app-space-16);
-  padding: var(--app-space-16) var(--app-space-24);
+  padding: var(--app-space-12) var(--app-space-24);
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-large);
   background: var(--app-color-surface);
@@ -418,7 +418,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--app-space-4) var(--app-space-16);
-  margin-top: var(--app-space-12);
+  margin-top: var(--app-space-8);
   padding-top: var(--app-space-8);
   border-top: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-text-secondary);
@@ -664,7 +664,7 @@
 
 .annotation-task-table .ant-table-thead > tr > th,
 .annotation-task-table .ant-table-tbody > tr > td {
-  padding: 10px 10px;
+  padding: var(--app-space-8);
 }
 
 .status-badge {
@@ -773,7 +773,7 @@
 
 .video-management-table .ant-table-thead > tr > th,
 .video-management-table .ant-table-tbody > tr > td {
-  padding: var(--app-space-12) var(--app-space-8);
+  padding: var(--app-space-8);
   border-color: var(--app-color-border-subtle);
 }
 
@@ -842,6 +842,8 @@
 }
 
 .video-next-step > strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: var(--app-color-text-regular);
   font-size: 13px;
   font-weight: 600;

@@ -1212,7 +1212,6 @@ export default function AssetDetailView() {
                 </section>
                 <section className="workflow-facts" aria-labelledby="workflow-facts-title">
                   <div className="workflow-facts-heading">
-                    <span className="app-eyebrow">服务端事实</span>
                     <h2 id="workflow-facts-title">流程状态</h2>
                   </div>
                   <ol className="workflow-facts-list">

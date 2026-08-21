@@ -496,11 +496,10 @@ export default function VideoManagementView() {
             pagination={false}
             size="small"
             tableLayout="fixed"
-            scroll={{ x: 980 }}
             columns={[
               {
                 title: '视频',
-                width: 380,
+                width: 320,
                 render: (_, row) => (
                   <div className="video-identity-cell">
                     <Link
@@ -533,7 +532,7 @@ export default function VideoManagementView() {
               },
               {
                 title: '媒体',
-                width: 120,
+                width: 110,
                 render: (_, row) => (
                   <VideoStatusIndicator
                     label={mediaStatusLabels[row.media_status]}
@@ -544,7 +543,7 @@ export default function VideoManagementView() {
               {
                 title: '配药动作标注',
                 dataIndex: 'annotation_status',
-                width: 140,
+                width: 125,
                 render: (value: VideoSummaryAnnotationStatus) => (
                   <VideoStatusIndicator
                     label={annotationStatusLabels[value]}
@@ -555,7 +554,7 @@ export default function VideoManagementView() {
               {
                 title: '清洗',
                 dataIndex: 'cleaning_status',
-                width: 110,
+                width: 95,
                 render: (value: VideoSummaryCleaningStatus) => (
                   <VideoStatusIndicator
                     label={cleaningStatusLabels[value]}
@@ -565,7 +564,7 @@ export default function VideoManagementView() {
               },
               {
                 title: '下一步',
-                width: 230,
+                width: 220,
                 render: (_, row) => {
                   const action = nextStepAction(row)
                   return (

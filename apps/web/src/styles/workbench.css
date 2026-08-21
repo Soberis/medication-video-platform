@@ -1,7 +1,8 @@
 /* Video detail, playback and hand-pose workbench only. */
 .workbench-heading {
   align-items: flex-start;
-  gap: var(--app-space-24);
+  gap: var(--app-space-16);
+  margin-bottom: var(--app-space-16);
 }
 
 .workbench-heading-copy {
@@ -69,7 +70,7 @@
 
 .workbench-primary {
   display: grid;
-  gap: var(--app-space-24);
+  gap: var(--app-space-16);
 }
 
 .workbench-primary > .playback-panel {
@@ -232,7 +233,7 @@
   display: grid;
   gap: var(--app-space-4);
   justify-items: start;
-  padding: var(--app-space-16);
+  padding: var(--app-space-12);
 }
 
 .next-action-panel strong {
@@ -254,8 +255,8 @@
 
 .workflow-facts {
   display: grid;
-  gap: var(--app-space-12);
-  padding: var(--app-space-16);
+  gap: var(--app-space-8);
+  padding: var(--app-space-12);
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-large);
   background: var(--app-color-surface);
@@ -263,7 +264,7 @@
 
 .workflow-facts-heading {
   display: grid;
-  gap: var(--app-space-4);
+  gap: 0;
 }
 
 .workflow-facts-heading h2 {
