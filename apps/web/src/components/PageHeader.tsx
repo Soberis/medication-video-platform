@@ -25,10 +25,10 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <section className={`page-heading ${className}`.trim()} aria-labelledby={titleId}>
-      <div>
+      <div className="page-heading-copy">
         {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
         <h1 id={titleId}>{title}</h1>
-        {description ? <p>{description}</p> : null}
+        {description ? <p className="page-heading-description">{description}</p> : null}
       </div>
       {actions ? <PageToolbar className="page-heading-actions">{actions}</PageToolbar> : null}
     </section>

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 export type StatusIndicatorTone = 'destructive' | 'information' | 'neutral' | 'success' | 'warning'
 
-interface StatusIndicatorProps {
+export interface StatusIndicatorProps {
   children: ReactNode
   className?: string
   tone?: StatusIndicatorTone

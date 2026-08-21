@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { Section } from '@/components/workspace/Section'
+
 export interface InspectorSectionProps {
   actions?: ReactNode
   children: ReactNode
@@ -17,12 +19,13 @@ export function InspectorSection({
   titleId,
 }: InspectorSectionProps) {
   return (
-    <section className={`inspector-section ${className}`.trim()} aria-labelledby={titleId}>
-      <header className="inspector-section-heading">
-        <h2 id={titleId}>{title}</h2>
-        {actions ? <div className="inspector-section-actions">{actions}</div> : null}
-      </header>
+    <Section
+      actions={actions}
+      className={`inspector-section ${className}`.trim()}
+      title={title}
+      titleId={titleId}
+    >
       <div className="inspector-section-content">{children}</div>
-    </section>
+    </Section>
   )
 }

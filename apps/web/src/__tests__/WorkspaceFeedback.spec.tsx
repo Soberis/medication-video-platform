@@ -16,9 +16,14 @@ describe('workspace feedback primitives', () => {
     )
 
     expect(screen.getByRole('status')).toHaveTextContent('正在加载视频…')
+    expect(screen.getByRole('status')).toHaveClass('workspace-loading-state')
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
     expect(screen.getByRole('alert')).toHaveTextContent('VIDEO_REQUEST_FAILED')
+    expect(screen.getByRole('alert')).toHaveClass('workspace-error-state')
     expect(screen.getByRole('alert')).toHaveTextContent('暂时无法读取视频。')
+    expect(screen.getByRole('alert').querySelector('code')).toHaveTextContent(
+      'VIDEO_REQUEST_FAILED',
+    )
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
     expect(onRetry).toHaveBeenCalledOnce()
@@ -28,5 +33,8 @@ describe('workspace feedback primitives', () => {
     render(<EmptyState description="当前没有可处理的视频。" />)
 
     expect(screen.getByText('当前没有可处理的视频。')).toBeInTheDocument()
+    expect(
+      screen.getByText('当前没有可处理的视频。').closest('.workspace-empty-state'),
+    ).toBeInTheDocument()
   })
 })

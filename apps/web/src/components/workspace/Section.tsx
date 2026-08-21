@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 
 export interface SectionProps {
   actions?: ReactNode
@@ -10,10 +10,13 @@ export interface SectionProps {
 
 /** A lightweight semantic section for consistent workspace hierarchy. */
 export function Section({ actions, children, className = '', title, titleId }: SectionProps) {
+  const generatedTitleId = useId()
+  const resolvedTitleId = titleId ?? generatedTitleId
+
   return (
-    <section className={`workspace-section ${className}`.trim()} aria-labelledby={titleId}>
+    <section className={`workspace-section ${className}`.trim()} aria-labelledby={resolvedTitleId}>
       <header className="workspace-section-heading">
-        <h2 id={titleId}>{title}</h2>
+        <h2 id={resolvedTitleId}>{title}</h2>
         {actions ? <div className="workspace-section-actions">{actions}</div> : null}
       </header>
       {children}

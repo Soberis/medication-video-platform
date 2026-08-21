@@ -199,7 +199,7 @@
 .workbench-panel > h3 {
   margin: 0;
   color: var(--app-color-text-primary);
-  font-size: 16px;
+  font-size: var(--app-font-size-heading-2);
 }
 
 .workbench-panel > h4 {
@@ -238,7 +238,7 @@
 
 .next-action-panel strong {
   color: var(--app-color-text-primary);
-  font-size: 16px;
+  font-size: var(--app-font-size-heading-2);
   line-height: 1.4;
 }
 
@@ -270,7 +270,7 @@
 .workflow-facts-heading h2 {
   margin: 0;
   color: var(--app-color-text-primary);
-  font-size: 16px;
+  font-size: var(--app-font-size-heading-2);
 }
 
 .workflow-facts-list {
@@ -308,7 +308,7 @@
   color: var(--app-color-brand-hover);
   cursor: pointer;
   font-size: var(--app-font-size-helper);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .quality-review-editor > .quality-review-actions {
@@ -413,7 +413,7 @@
   flex: none;
   color: var(--app-color-text-secondary);
   content: '＋';
-  font-size: 16px;
+  font-size: var(--app-font-size-heading-2);
   line-height: 1;
 }
 

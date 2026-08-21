@@ -4,7 +4,7 @@ export interface MetadataListItem extends PropertyRowProps {
   id: string
 }
 
-interface MetadataListProps {
+export interface MetadataListProps {
   ariaLabel?: string
   className?: string
   items: readonly MetadataListItem[]

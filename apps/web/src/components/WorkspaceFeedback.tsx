@@ -1,7 +1,7 @@
 import { Button, Empty } from 'antd'
 import type { ReactNode } from 'react'
 
-interface NoticeStateProps {
+export interface NoticeStateProps {
   'aria-live'?: 'off' | 'polite' | 'assertive'
   children: ReactNode
   className?: string
@@ -19,11 +19,15 @@ export function NoticeState({
   )
 }
 
-export function LoadingState({ children, className = '' }: Omit<NoticeStateProps, 'aria-live'>) {
-  return <NoticeState className={className}>{children}</NoticeState>
+export type LoadingStateProps = Omit<NoticeStateProps, 'aria-live'>
+
+export function LoadingState({ children, className = '' }: LoadingStateProps) {
+  return (
+    <NoticeState className={`workspace-loading-state ${className}`.trim()}>{children}</NoticeState>
+  )
 }
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   children?: ReactNode
   className?: string
   description?: ReactNode
@@ -31,14 +35,20 @@ interface EmptyStateProps {
 
 /** Shared empty-state presentation for list and collection views. */
 export function EmptyState({ children, className = '', description }: EmptyStateProps) {
+  const emptyStateClassName = ['workspace-empty-state', className].filter(Boolean).join(' ')
+
   return (
-    <Empty className={className} description={description}>
+    <Empty
+      className={emptyStateClassName}
+      description={description}
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+    >
       {children}
     </Empty>
   )
 }
 
-interface ErrorStateProps {
+export interface ErrorStateProps {
   children: ReactNode
   className?: string
   code?: ReactNode
@@ -54,9 +64,9 @@ export function ErrorState({
   retryLabel = '重试',
 }: ErrorStateProps) {
   return (
-    <div className={`workspace-error ${className}`.trim()} role="alert">
+    <div className={`workspace-error workspace-error-state ${className}`.trim()} role="alert">
       <span>{children}</span>
-      {code ? <strong>{code}</strong> : null}
+      {code ? <code>{code}</code> : null}
       {onRetry ? <Button onClick={onRetry}>{retryLabel}</Button> : null}
     </div>
   )
