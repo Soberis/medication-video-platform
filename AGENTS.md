@@ -24,25 +24,9 @@
 
 ## 前端设计身份
 
-所有前端 UI 工作必须遵循以下永久设计身份：
-
-Linear 风格的安静专业工作区
-
-视觉主题为石墨灰 + 医疗蓝。
-
-修改前端 UI 前，必须阅读：
-
-`docs/DESIGN_SYSTEM.md`
-
-设计系统是以下内容的唯一事实来源：
-
-- 布局；
-- 颜色；
-- 间距；
-- 组件；
-- 交互模式。
-
-不得引入独立的页面级视觉风格。
+All frontend UI work must follow the permanent design identity defined in
+`docs/DESIGN_SYSTEM.md`: **Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue
+visual theme.**
 
 ## Architecture
 

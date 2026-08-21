@@ -10,24 +10,31 @@
 任何前端 UI 变更开始前都必须阅读本文件。若业务需要与本文件不兼容，应明确修订本设计系统，
 而不是在页面中增加另一套视觉语言、任意 Token 或一次性样式。
 
-## 设计身份
+## Design Identity / 设计身份
+
+**Official identity:** Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue
+visual theme.
+
+This is the permanent design identity for the professional medication video management platform.
+It is a governance baseline for future frontend work, not a page-specific visual treatment.
 
 | 层级 | 定义 |
 | --- | --- |
-| 正式名称 | Linear 风格的安静专业工作区 |
-| 参考风格 | Linear 风格的专业生产力工具 |
-| 设计语言 | 安静的专业工作区 |
-| 视觉主题 | 石墨灰 + 医疗蓝 |
-| 产品定位 | 专业的配药视频管理平台 |
+| Official name / 正式名称 | Linear-inspired Quiet Professional Workspace |
+| Reference style / 参考风格 | Linear-inspired professional productivity tools |
+| Design language / 设计语言 | Quiet Professional Workspace |
+| Visual theme / 视觉主题 | Graphite + Medical Blue |
+| Product positioning / 产品定位 | Professional medication video management platform |
 
 以上术语描述同一设计系统的不同层次，不是相互替代的风格：
 
 ```text
-Linear 风格 → 安静的专业工作区 → 石墨灰 + 医疗蓝 →
-设计 Token、组件、布局、交互模式
+Linear-inspired → Quiet Professional Workspace → Graphite + Medical Blue →
+design tokens, components, layouts, interaction patterns
 ```
 
-完整的设计身份是：**具有石墨灰 + 医疗蓝视觉主题的 Linear 风格安静专业工作区。**
+完整的设计身份是：**Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue visual
+theme.**
 
 ### 核心原则
 
