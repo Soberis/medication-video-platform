@@ -145,7 +145,7 @@ describe('UploadProgressView', () => {
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(await screen.findByText('UPLOAD_BATCH_NOT_FOUND')).toBeInTheDocument()
-    expect(screen.getByText('The upload batch was not found.')).toBeInTheDocument()
+    expect(screen.getByText('未找到该上传批次，请检查批次 ID 后重试。')).toBeInTheDocument()
     expect(screen.queryByText('synthetic-request-id')).not.toBeInTheDocument()
   })
 })

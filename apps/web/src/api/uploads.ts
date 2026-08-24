@@ -69,6 +69,12 @@ interface ApiErrorBody {
   request_id?: unknown
 }
 
+const uploadErrorMessages: Record<string, string> = {
+  UPLOAD_BATCH_NOT_FOUND: '未找到该上传批次，请检查批次 ID 后重试。',
+  UPLOAD_BATCH_FILES_NOT_FOUND: '未找到该批次的文件进度，请检查批次 ID 后重试。',
+  UPLOAD_BATCH_EXPIRED: '该上传批次已过期，请重新开始上传。',
+}
+
 export class UploadApiError extends Error {
   readonly errorCode: string
   readonly retryable: boolean
@@ -109,9 +115,11 @@ async function readJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     // The fallback below deliberately avoids exposing proxy or server internals.
   }
 
+  const errorCode =
+    typeof body.error_code === 'string' ? body.error_code : 'UPLOAD_PROGRESS_REQUEST_FAILED'
   throw new UploadApiError(
-    typeof body.error_message === 'string' ? body.error_message : '无法读取上传进度，请稍后重试。',
-    typeof body.error_code === 'string' ? body.error_code : 'UPLOAD_PROGRESS_REQUEST_FAILED',
+    uploadErrorMessages[errorCode] ?? '无法读取上传进度，请稍后重试。',
+    errorCode,
     body.retryable === true,
     typeof body.request_id === 'string' ? body.request_id : null,
   )
