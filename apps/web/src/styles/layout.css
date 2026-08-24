@@ -140,7 +140,7 @@
   color: var(--app-color-sidebar-muted);
   font-size: var(--app-font-size-base);
   font-weight: var(--app-font-weight-medium);
-  line-height: var(--app-control-height);
+  line-height: var(--app-line-height-control);
   text-decoration: none;
   white-space: nowrap;
 }

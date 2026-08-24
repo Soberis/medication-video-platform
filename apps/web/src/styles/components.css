@@ -857,7 +857,7 @@
 
 .annotation-task-table .table-actions .ant-btn {
   height: auto;
-  min-height: 32px;
+  min-height: var(--app-control-height);
   padding-inline: 0;
   white-space: normal;
 }
