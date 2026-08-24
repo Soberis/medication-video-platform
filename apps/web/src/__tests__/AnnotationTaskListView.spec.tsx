@@ -89,9 +89,15 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(await screen.findByLabelText('项目配药动作标注进度')).toHaveTextContent(
-      '项目任务1待处理1待提交 1 · 待修改 0 · 待复核 0标注完成0',
+      '项目任务1待处理1待标注 1 · 待修改 0 · 待复核 0标注完成0',
     )
-    expect(screen.getByText('已分配')).toBeInTheDocument()
+    expect(screen.getByText('待标注')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/videos`,
+    )
+    expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
+    expect(screen.getByText(/任务 a0000000.*0001/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
@@ -136,9 +142,16 @@ describe('annotation task list view', () => {
     await user.click(await screen.findByRole('button', { name: /提交视频/ }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('combobox', { name: '标注时间段 1 的标签' }))
-    expect(await screen.findByText('准备工作区')).toBeInTheDocument()
-    await user.click(screen.getByText('拿取药品'))
+    expect(await screen.findByRole('option', { name: '准备工作区' })).toBeInTheDocument()
+    const retrieveOption = screen
+      .getAllByText('拿取药品')
+      .find((element) => element.classList.contains('ant-select-item-option-content'))
+    expect(retrieveOption).toBeDefined()
+    await user.click(retrieveOption!)
     await user.click(within(dialog).getByRole('button', { name: '提交配药动作标注' }))
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')).toBeDefined()
+    })
     const revisionCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(revisionCall).toBeDefined()
     expect(JSON.parse(String(revisionCall?.[1]?.body))).toEqual({
@@ -149,9 +162,9 @@ describe('annotation task list view', () => {
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
     const outcomes = [
       { outcome: 'PASS', expected: '已通过清洗' },
-      { outcome: 'WARNING', expected: '清洗待确认' },
-      { outcome: 'REJECT', expected: '清洗未通过' },
-      { outcome: null, expected: '尚未执行清洗' },
+      { outcome: 'WARNING', expected: '需处理' },
+      { outcome: 'REJECT', expected: '未通过' },
+      { outcome: null, expected: '待清洗' },
     ] as const
     const tasks = outcomes.map(({ outcome }, index) => ({
       ...assignedTask,
@@ -182,6 +195,11 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('已通过清洗')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
+    const completedRow = screen.getAllByRole('row')[1]!
+    const annotationDetails = within(completedRow).getByText('查看标注时间段')
+    await user.click(annotationDetails)
+    expect(within(completedRow).getByText(/时间段 1.*0.*1000.*毫秒/)).toBeInTheDocument()
+    expect(within(completedRow).getByText('准备工作区')).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看任务记录')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
@@ -218,11 +236,14 @@ describe('annotation task list view', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const firstRender = renderView()
-    expect(await screen.findByText('已分配')).toBeInTheDocument()
+    expect(await screen.findByText('待标注')).toBeInTheDocument()
     firstRender.unmount()
 
     renderView()
-    expect(await screen.findByText('已提交')).toBeInTheDocument()
+    await waitFor(() => {
+      const taskRow = screen.getAllByRole('row')[1]
+      expect(taskRow).toHaveTextContent('待复核')
+    })
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/annotation-tasks')),
     ).toHaveLength(2)
@@ -248,9 +269,104 @@ describe('annotation task list view', () => {
     )
     renderView()
 
-    expect(await screen.findByText('复核通过')).toBeInTheDocument()
+    expect(await screen.findByText('已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
     expect(screen.getByText('已通过清洗')).toBeInTheDocument()
+  })
+
+  it('makes rejected revisions and their rework guidance explicit', async () => {
+    const rejectedTask = {
+      ...assignedTask,
+      annotation_revision: {
+        ...completedRevision,
+        review: {
+          ...completedRevision.review,
+          decision: 'REJECTED',
+          review_note: '请补充完整的拿取药品时间段。',
+        },
+        post_cleaning_result: null,
+      },
+    }
+    stubTasks([rejectedTask], labelSchema)
+    const user = userEvent.setup()
+    renderView()
+
+    const taskRow = await screen.findByRole('row', { name: /待修改/ })
+    expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
+    await user.click(within(taskRow).getByRole('button', { name: /提交视频/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('当前状态：待修改')
+    expect(dialog).toHaveTextContent('需要根据上次复核意见修改')
+    expect(dialog).toHaveTextContent('请补充完整的拿取药品时间段。')
+    expect(dialog).toHaveTextContent('查看标签说明')
+  })
+
+  it('lets an administrator record an optional reason when returning a revision', async () => {
+    const reviewableTask = {
+      ...assignedTask,
+      status: 'SUBMITTED',
+      can_submit: false,
+      can_review: true,
+      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+    }
+    const reworkTask = {
+      ...assignedTask,
+      annotation_revision: {
+        ...completedRevision,
+        review: {
+          ...completedRevision.review,
+          decision: 'REJECTED',
+          review_note: '请补充完整的拿取药品时间段。',
+        },
+        post_cleaning_result: null,
+      },
+    }
+    const responses = [taskList([reviewableTask]), taskList([reworkTask])]
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
+      if (url.endsWith('/annotation-tasks') && init?.method === 'GET')
+        return jsonResponse(responses.shift() ?? taskList([reworkTask]))
+      if (url.endsWith(`/annotation-revisions/${completedRevision.annotation_revision_id}/review`))
+        return jsonResponse({
+          annotation_review_id: '81000000-0000-4000-8000-000000000002',
+          project_id: projectId,
+          annotation_revision_id: completedRevision.annotation_revision_id,
+          decision: 'REJECTED',
+          review_note: '请补充完整的拿取药品时间段。',
+          reviewed_by: 'local-synthetic-admin',
+          reviewed_at: '2026-07-26T01:10:00Z',
+        })
+      throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderView()
+
+    const taskRow = await screen.findByRole('row', { name: /待复核/ })
+    await user.click(within(taskRow).getByRole('button', { name: /退回修改/ }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(
+      within(dialog).getByRole('textbox', { name: '退回修改说明（可选）' }),
+      '请补充完整的拿取药品时间段。',
+    )
+    await user.click(within(dialog).getByRole('button', { name: '确认不通过' }))
+
+    await waitFor(() => {
+      const reviewCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          String(input).endsWith(
+            `/annotation-revisions/${completedRevision.annotation_revision_id}/review`,
+          ) && init?.method === 'POST',
+      )
+      expect(reviewCall).toBeDefined()
+      expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
+        decision: 'REJECTED',
+        review_note: '请补充完整的拿取药品时间段。',
+      })
+    })
+    expect(await screen.findByText('待修改')).toBeInTheDocument()
   })
 
   it('loads a project export preview only after the administrator requests it', async () => {

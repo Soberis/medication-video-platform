@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Form, Input, InputNumber, Modal, Select, Table } from 'antd'
+import { Alert, App as AntdApp, Button, Form, Input, InputNumber, Modal, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -23,9 +23,10 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
-import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { SummaryStrip } from '@/components/SummaryStrip'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { Section } from '@/components/workspace/Section'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
@@ -56,19 +57,17 @@ function createDraftSegment(): DraftAnnotationSegment {
 }
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
-  if (task.status === 'SUBMITTED') return '已提交'
-  return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '已分配'
+  if (task.status === 'SUBMITTED') return '待复核'
+  return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '待标注'
 }
-function taskStatusColor(task: AnnotationTask): 'success' | 'default' | 'warning' {
-  return task.status === 'COMPLETED'
-    ? 'success'
-    : task.status === 'SUBMITTED'
-      ? 'default'
-      : 'warning'
+function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
+  if (task.status === 'COMPLETED') return 'success'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
+  return 'information'
 }
 function postCleaningPresentation(task: AnnotationTask): {
   label: string
-  color: StatusBadgeTone
+  tone: StatusIndicatorTone
   description: string
   reasons: string[]
 } | null {
@@ -83,30 +82,34 @@ function postCleaningPresentation(task: AnnotationTask): {
   if (result?.outcome === 'PASS')
     return {
       label: '已通过清洗',
-      color: 'success',
-      description: '当前数据已通过清洗，可用于训练',
+      tone: 'success',
+      description: '当前规则检查通过；实际训练行数以服务端导出预览为准。',
       reasons,
     }
   if (result?.outcome === 'WARNING')
     return {
-      label: '清洗待确认',
-      color: 'warning',
+      label: '需处理',
+      tone: 'warning',
       description: '当前数据暂不可用于训练，请补充事实后重新核对清洗。',
       reasons,
     }
   if (result?.outcome === 'REJECT')
     return {
-      label: '清洗未通过',
-      color: 'error',
+      label: '未通过',
+      tone: 'destructive',
       description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
       reasons,
     }
   return {
-    label: '尚未执行清洗',
-    color: 'default',
+    label: '待清洗',
+    tone: 'neutral',
     description: '尚未形成可用于训练的清洗结论。',
     reasons,
   }
+}
+
+function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTone {
+  return decision === 'APPROVED' ? 'success' : 'destructive'
 }
 
 export default function AnnotationTaskListView() {
@@ -325,18 +328,37 @@ export default function AnnotationTaskListView() {
     const revision = task.annotation_revision
     if (!revision || !task.can_review || reviewingRevisionId) return
     const approved = decision === 'APPROVED'
+    let reviewNote = ''
     modal.confirm({
       title: approved ? '确认配药动作标注复核通过' : '确认配药动作标注复核不通过',
-      content: approved
-        ? '确认时间段标注与视频画面一致，并将其作为正式人工配药动作标注？'
-        : '确认该配药动作标注不符合要求？本次将记录为不通过，并退回给标注人修改。',
+      content: approved ? (
+        '确认时间段标注与视频画面一致，并将其作为正式人工配药动作标注？'
+      ) : (
+        <div className="annotation-review-confirmation">
+          <p>确认该配药动作标注不符合要求？本次将记录为不通过，并退回给标注人修改。</p>
+          <Input.TextArea
+            aria-label="退回修改说明（可选）"
+            maxLength={1000}
+            rows={3}
+            placeholder="补充需要修改的内容（可选）"
+            onChange={(event) => {
+              reviewNote = event.target.value
+            }}
+          />
+        </div>
+      ),
       okText: approved ? '确认通过' : '确认不通过',
       cancelText: '取消',
       okButtonProps: { danger: !approved },
       async onOk() {
         setReviewingRevisionId(revision.annotation_revision_id)
         try {
-          await reviewAnnotationRevision(projectId, revision.annotation_revision_id, decision)
+          await reviewAnnotationRevision(
+            projectId,
+            revision.annotation_revision_id,
+            decision,
+            reviewNote,
+          )
           void message.success(
             approved ? '配药动作标注已通过管理员复核。' : '已记录配药动作标注未通过。',
           )
@@ -383,15 +405,21 @@ export default function AnnotationTaskListView() {
 
   return (
     <>
+      <nav className="breadcrumb" aria-label="面包屑导航">
+        <Link to={paths.videos(projectId)}>视频管理</Link>
+        <span aria-hidden="true">/</span>
+        <span>配药动作标注</span>
+      </nav>
       <PageHeader
         eyebrow="固定机位视频 · 人工确认"
         titleId="annotation-task-title"
         title="配药动作标注"
-        description="在固定机位视频上记录配药动作时间段；提交后由当前项目管理员复核。"
+        description="查看当前项目可见的标注任务，完成时间段标注、人工复核或清洗重核。"
         actions={
           <>
             {loadState === 'success' && progress?.scope === 'PROJECT' ? (
               <Button
+                size="small"
                 loading={isTrainingPreviewLoading}
                 disabled={isTrainingDownloadLoading}
                 onClick={() => void openTrainingExport()}
@@ -399,7 +427,7 @@ export default function AnnotationTaskListView() {
                 导出训练数据
               </Button>
             ) : null}
-            <Button loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
               刷新
             </Button>
           </>
@@ -423,154 +451,206 @@ export default function AnnotationTaskListView() {
               label: '待处理',
               value:
                 progress.awaiting_submission + progress.rework_required + progress.awaiting_review,
-              detail: `待提交 ${progress.awaiting_submission} · 待修改 ${progress.rework_required} · 待复核 ${progress.awaiting_review}`,
+              detail: `待标注 ${progress.awaiting_submission} · 待修改 ${progress.rework_required} · 待复核 ${progress.awaiting_review}`,
             },
             { label: '标注完成', value: progress.completed },
           ]}
         />
       ) : null}
       {loadState === 'success' && items.length ? (
-        <section
-          className="table-card annotation-task-table-card working-surface"
-          aria-label="配药动作标注任务列表"
+        <Section
+          className="annotation-task-queue"
+          title="任务队列"
+          titleId="annotation-task-queue-title"
         >
-          <Table<AnnotationTask>
-            className="annotation-task-table"
-            dataSource={items}
-            rowKey="annotation_task_id"
-            pagination={false}
-            tableLayout="fixed"
-            columns={[
-              {
-                title: '视频',
-                width: 190,
-                render: (_, row) => (
-                  <Link
-                    className="text-link mono-wrap"
-                    to={paths.asset(projectId, row.clip_asset_id)}
-                    title={row.clip_asset_id}
-                  >
-                    视频 {shortId(row.clip_asset_id)}
-                  </Link>
-                ),
-              },
-              {
-                title: '状态',
-                width: 85,
-                render: (_, row) => (
-                  <StatusBadge tone={taskStatusColor(row)}>{taskStatusLabel(row)}</StatusBadge>
-                ),
-              },
-              {
-                title: '当前进度',
-                width: 280,
-                render: (_, row) => {
-                  const revision = row.annotation_revision
-                  const presentation = postCleaningPresentation(row)
-                  const taskRecord = (
-                    <details className="task-record-details">
-                      <summary>查看任务记录</summary>
-                      <p>
-                        创建者：{row.created_by} · 创建时间：{formatDateTime(row.created_at)}
-                      </p>
-                      {presentation ? (
-                        <>
-                          <p>{presentation.description}</p>
-                          {presentation.reasons.length ? (
-                            <p>原因：{presentation.reasons.join('；')}</p>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </details>
-                  )
-                  return revision ? (
-                    <div className="task-evidence-summary">
-                      <strong>
-                        已提交 · {revision.annotation_document.segments.length} 个时间段
-                      </strong>
-                      {revision.review ? (
-                        <span
-                          className={`task-evidence-review task-evidence-review-${
-                            revision.review.decision === 'APPROVED' ? 'approved' : 'rejected'
-                          }`}
-                        >
-                          {revision.review.decision === 'APPROVED' ? '复核通过' : '复核未通过'}
-                          {revision.review.reviewed_by === revision.submitted_by ? (
-                            <small>管理员自审</small>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span className="muted-text">等待管理员复核</span>
-                      )}
-                      {presentation ? (
-                        <StatusBadge tone={presentation.color}>{presentation.label}</StatusBadge>
-                      ) : null}
-                      {taskRecord}
+          <div className="annotation-task-table-surface working-surface">
+            <Table<AnnotationTask>
+              className="annotation-task-table"
+              dataSource={items}
+              rowKey="annotation_task_id"
+              pagination={false}
+              size="small"
+              tableLayout="fixed"
+              columns={[
+                {
+                  title: '视频',
+                  width: 220,
+                  render: (_, row) => (
+                    <div className="annotation-task-identity">
+                      <Link
+                        className="text-link mono-wrap"
+                        to={paths.asset(projectId, row.clip_asset_id)}
+                        title={row.clip_asset_id}
+                      >
+                        视频 {shortId(row.clip_asset_id)}
+                      </Link>
+                      <span className="cell-secondary" title={row.annotation_task_id}>
+                        任务 {shortId(row.annotation_task_id)}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="task-evidence-summary">
-                      <span className="muted-text">尚未提交</span>
-                      {taskRecord}
-                    </div>
-                  )
+                  ),
                 },
-              },
-              { title: '执行人', dataIndex: 'assignee_actor_id', width: 105 },
-              {
-                title: '操作',
-                width: 160,
-                render: (_, row) => (
-                  <div className="table-actions">
-                    {row.can_submit && row.status === 'ASSIGNED' ? (
-                      <Button
-                        type="link"
-                        aria-label={`提交视频 ${row.clip_asset_id} 的配药动作标注`}
-                        onClick={() => openSubmission(row)}
-                      >
-                        提交配药动作标注
-                      </Button>
-                    ) : row.can_review && row.annotation_revision ? (
-                      <>
-                        <Button
-                          type="link"
-                          aria-label={`通过视频 ${row.clip_asset_id} 的配药动作标注复核`}
-                          loading={
-                            reviewingRevisionId === row.annotation_revision.annotation_revision_id
-                          }
-                          onClick={() => review(row, 'APPROVED')}
-                        >
-                          通过
-                        </Button>
-                        <Button
-                          type="link"
-                          danger
-                          aria-label={`不通过视频 ${row.clip_asset_id} 的配药动作标注复核`}
-                          disabled={reviewingRevisionId !== null}
-                          onClick={() => review(row, 'REJECTED')}
-                        >
-                          不通过
-                        </Button>
-                      </>
-                    ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
-                      <Button
-                        type="link"
-                        aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
-                        loading={
-                          recheckingRevisionId === row.annotation_revision.annotation_revision_id
-                        }
-                        onClick={() => recheckPostCleaning(row)}
-                      >
-                        重新核对清洗
-                      </Button>
+                {
+                  title: '状态',
+                  width: 100,
+                  render: (_, row) => (
+                    <StatusIndicator tone={taskStatusTone(row)}>
+                      {taskStatusLabel(row)}
+                    </StatusIndicator>
+                  ),
+                },
+                {
+                  title: '当前进度',
+                  width: 340,
+                  render: (_, row) => {
+                    const revision = row.annotation_revision
+                    const presentation = postCleaningPresentation(row)
+                    const taskRecord = (
+                      <details className="task-record-details">
+                        <summary>查看任务记录</summary>
+                        <p>
+                          创建者：{row.created_by} · 创建时间：{formatDateTime(row.created_at)}
+                        </p>
+                        {presentation ? (
+                          <>
+                            <p>{presentation.description}</p>
+                            {presentation.reasons.length ? (
+                              <p>原因：{presentation.reasons.join('；')}</p>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </details>
+                    )
+                    return revision ? (
+                      <div className="task-evidence-summary">
+                        <strong>
+                          第 {revision.revision_number} 次提交 ·{' '}
+                          {revision.annotation_document.segments.length} 个时间段
+                        </strong>
+                        {revision.review ? (
+                          <StatusIndicator
+                            className="task-evidence-review"
+                            tone={reviewStatusTone(revision.review.decision)}
+                          >
+                            {revision.review.decision === 'APPROVED' ? '已通过' : '未通过'}
+                            {revision.review.reviewed_by === revision.submitted_by ? (
+                              <small>管理员自审</small>
+                            ) : null}
+                          </StatusIndicator>
+                        ) : (
+                          <StatusIndicator tone="information">待复核</StatusIndicator>
+                        )}
+                        {presentation ? (
+                          <StatusIndicator tone={presentation.tone}>
+                            {presentation.label}
+                          </StatusIndicator>
+                        ) : null}
+                        {revision.review?.review_note ? (
+                          <span className="task-review-note">
+                            复核意见：{revision.review.review_note}
+                          </span>
+                        ) : null}
+                        <span className="cell-secondary">
+                          提交于 {formatDateTime(revision.submitted_at)} · 提交人{' '}
+                          {revision.submitted_by}
+                        </span>
+                        <details className="task-annotation-details">
+                          <summary>查看标注时间段</summary>
+                          <ol>
+                            {revision.annotation_document.segments.map((segment, index) => {
+                              const label =
+                                labelSchema?.labels.find((item) => item.label_id === segment.label)
+                                  ?.display_name ?? segment.label
+                              return (
+                                <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
+                                  <span className="task-annotation-range">
+                                    时间段 {index + 1} · {segment.start_ms}–{segment.end_ms} 毫秒
+                                  </span>
+                                  <span>{label}</span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                          {revision.annotation_document.note ? (
+                            <p className="task-annotation-note">
+                              标注备注：{revision.annotation_document.note}
+                            </p>
+                          ) : null}
+                        </details>
+                        {taskRecord}
+                      </div>
                     ) : (
-                      <span>—</span>
-                    )}
-                  </div>
-                ),
-              },
-            ]}
-          />
-        </section>
+                      <div className="task-evidence-summary">
+                        <span className="muted-text">尚未提交</span>
+                        {taskRecord}
+                      </div>
+                    )
+                  },
+                },
+                {
+                  title: '执行人',
+                  dataIndex: 'assignee_actor_id',
+                  width: 120,
+                  render: (value: string) => (
+                    <span className="annotation-task-assignee">{value}</span>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 200,
+                  render: (_, row) => (
+                    <div className="table-actions">
+                      {row.can_submit && row.status === 'ASSIGNED' ? (
+                        <Button
+                          type="link"
+                          aria-label={`提交视频 ${row.clip_asset_id} 的配药动作标注`}
+                          onClick={() => openSubmission(row)}
+                        >
+                          提交标注
+                        </Button>
+                      ) : row.can_review && row.annotation_revision ? (
+                        <>
+                          <Button
+                            type="link"
+                            aria-label={`通过视频 ${row.clip_asset_id} 的配药动作标注复核`}
+                            loading={
+                              reviewingRevisionId === row.annotation_revision.annotation_revision_id
+                            }
+                            onClick={() => review(row, 'APPROVED')}
+                          >
+                            通过复核
+                          </Button>
+                          <Button
+                            type="link"
+                            danger
+                            aria-label={`退回修改视频 ${row.clip_asset_id} 的配药动作标注`}
+                            disabled={reviewingRevisionId !== null}
+                            onClick={() => review(row, 'REJECTED')}
+                          >
+                            退回修改
+                          </Button>
+                        </>
+                      ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
+                        <Button
+                          type="link"
+                          aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
+                          loading={
+                            recheckingRevisionId === row.annotation_revision.annotation_revision_id
+                          }
+                          onClick={() => recheckPostCleaning(row)}
+                        >
+                          重新核对清洗
+                        </Button>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
         <EmptyState description="当前没有配药动作标注任务。管理员可在质量合格的视频详情中创建并分配任务。" />
@@ -630,10 +710,74 @@ export default function AnnotationTaskListView() {
         onCancel={() => setIsSubmissionOpen(false)}
         destroyOnHidden
       >
+        {selectedTask && labelSchema ? (
+          <div className="annotation-submission-context">
+            <MetadataList
+              ariaLabel="提交任务上下文"
+              items={[
+                {
+                  id: 'submission-video',
+                  label: '视频',
+                  value: (
+                    <Link
+                      className="text-link"
+                      to={paths.asset(projectId, selectedTask.clip_asset_id)}
+                      title={selectedTask.clip_asset_id}
+                    >
+                      {shortId(selectedTask.clip_asset_id)}
+                    </Link>
+                  ),
+                },
+                {
+                  id: 'submission-task',
+                  label: '任务',
+                  value: (
+                    <code title={selectedTask.annotation_task_id}>
+                      {shortId(selectedTask.annotation_task_id)}
+                    </code>
+                  ),
+                },
+                {
+                  id: 'submission-schema',
+                  label: '标签规范',
+                  value: `${labelSchema.schema_key} · ${labelSchema.schema_version}`,
+                },
+              ]}
+            />
+            <p className="annotation-submission-state" role="status">
+              当前状态：
+              {selectedTask.annotation_revision?.review?.decision === 'REJECTED'
+                ? '待修改'
+                : '待标注'}
+              。
+              当前编辑仅保存在此窗口内，关闭窗口不会保存；正式提交后才会创建不可变修订并进入管理员复核。
+            </p>
+            {selectedTask.annotation_revision?.review?.review_note ? (
+              <Alert
+                className="annotation-rework-notice"
+                type="warning"
+                showIcon
+                title="需要根据上次复核意见修改"
+                description={selectedTask.annotation_revision.review.review_note}
+              />
+            ) : null}
+            <details className="annotation-label-guide">
+              <summary>查看标签说明</summary>
+              <ul>
+                {sortedLabels.map((label) => (
+                  <li key={label.label_id}>
+                    <strong>{label.display_name}</strong>
+                    <span>{label.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        ) : null}
         <p className="form-hint">
-          按项目标签规范记录一个或多个配药动作时间段。提交后不能覆盖，后续由管理员复核。
+          按项目标签规范记录一个或多个配药动作时间段。每个时间段必须有明确标签，且结束时间晚于开始时间。
         </p>
-        <Form layout="vertical" onFinish={() => void submit()}>
+        <Form layout="vertical" aria-label="提交配药动作时间段" onFinish={() => void submit()}>
           {segments.map((segment, index) => (
             <div
               key={segment.draftId}
@@ -693,7 +837,7 @@ export default function AnnotationTaskListView() {
               onChange={(event) => setNote(event.target.value)}
             />
           </Form.Item>
-          <div className="detail-actions">
+          <div className="detail-actions annotation-submit-actions">
             <Button onClick={() => setIsSubmissionOpen(false)}>取消</Button>
             <Button htmlType="submit" type="primary" loading={isSubmitting}>
               提交配药动作标注

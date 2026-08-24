@@ -274,6 +274,40 @@ describe('annotation task API', () => {
     )
   })
 
+  it('includes an optional review note when returning a revision for rework', async () => {
+    const revisionId = '30000000-0000-4000-8000-000000000004'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotation_review_id: '30000000-0000-4000-8000-000000000005',
+        project_id: projectId,
+        annotation_revision_id: revisionId,
+        decision: 'REJECTED',
+        review_note: '请补充时间段。',
+        reviewed_by: 'local-synthetic-admin',
+        reviewed_at: '2026-07-24T00:00:00Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('annotation-review-idempotency-0002'),
+    })
+
+    await expect(
+      reviewAnnotationRevision(projectId, revisionId, 'REJECTED', '  请补充时间段。  '),
+    ).resolves.toMatchObject({
+      annotation_revision_id: revisionId,
+      decision: 'REJECTED',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/review`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ decision: 'REJECTED', review_note: '请补充时间段。' }),
+      }),
+    )
+  })
+
   it('rechecks post-cleaning with the current facts without a browser-side idempotency model', async () => {
     const revisionId = '30000000-0000-4000-8000-000000000004'
     const fetchMock = vi.fn().mockResolvedValue(

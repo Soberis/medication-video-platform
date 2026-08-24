@@ -200,6 +200,7 @@ export async function reviewAnnotationRevision(
   projectId: string,
   annotationRevisionId: string,
   decision: AnnotationReview['decision'],
+  reviewNote = '',
 ): Promise<AnnotationReview> {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-revisions/${encodeURIComponent(annotationRevisionId)}/review`,
@@ -211,7 +212,10 @@ export async function reviewAnnotationRevision(
         'Idempotency-Key': crypto.randomUUID(),
         ...csrfHeaders(),
       },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({
+        decision,
+        ...(reviewNote.trim() ? { review_note: reviewNote.trim() } : {}),
+      }),
       cache: 'no-store',
     },
   )
@@ -244,12 +248,16 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     // Keep the stable fallback for proxy and non-JSON failures.
   }
   const messages: Record<string, string> = {
+    ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问配药动作标注的权限。',
+    ANNOTATION_TASK_NOT_FOUND: '当前标注任务已不存在，请刷新任务列表。',
+    ANNOTATION_REVISION_NOT_FOUND: '当前标注修订已不存在，请刷新任务列表。',
     ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '只有质量结论为“合格”的视频才能创建配药动作标注。',
     ANNOTATION_TASK_NOT_READY: '视频完成媒体检测后才能创建配药动作标注。',
     ANNOTATION_TASK_ALREADY_EXISTS: '该视频已有配药动作标注，请在配药动作标注页面继续处理。',
     ANNOTATION_TASK_IDEMPOTENCY_KEY_REUSED: '本次请求与已提交请求冲突，请刷新后重试。',
     ANNOTATION_TASK_NOT_ASSIGNEE: '只有该任务的执行人可以提交标注。',
     ANNOTATION_TASK_ALREADY_SUBMITTED: '该配药动作标注已经提交，等待后续复核。',
+    ANNOTATION_TASK_NOT_SUBMITTED: '该标注任务已不是待复核状态，请刷新任务列表。',
     ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该视频已不再满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间段的结束时间必须晚于开始时间。',
     ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了已确认的视频时长。',
@@ -257,13 +265,16 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_PRIMARY_STEP_OVERLAP: '主流程步骤的时间段不能重叠，请调整后重试。',
     ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '配药动作标注提交者不能复核自己的标注。',
     ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
+    ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED: '本次复核请求与已有记录冲突，请刷新后重试。',
+    ANNOTATION_REVISION_NOT_CURRENT: '当前修订已不是待复核版本，请刷新任务列表查看最新状态。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',
     ANNOTATION_POST_CLEANING_RECHECK_NOT_READY:
       '当前配药动作标注、任务或视频状态不允许重新核对清洗。',
+    INVALID_ANNOTATION_TASK: '提交内容不符合当前标注规范，请检查后重试。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(
-    messages[errorCode] ?? '配药动作标注暂未创建，请稍后重试。',
+    messages[errorCode] ?? '配药动作操作暂未完成，请稍后重试。',
     errorCode,
   )
 }
