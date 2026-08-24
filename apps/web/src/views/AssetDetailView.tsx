@@ -37,6 +37,8 @@ import {
   statusTone,
 } from '@/features/catalog/catalog-presentation'
 import { AssetActivityCard } from '@/components/AssetActivityCard'
+import { PageHeader } from '@/components/PageHeader'
+import { MetadataList } from '@/components/data/MetadataList'
 import {
   AnnotationTaskCard,
   AssetFacts,
@@ -49,6 +51,8 @@ import {
 import { usePromptDialog } from '@/components/PromptDialog'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { InspectorSection } from '@/components/workspace/InspectorSection'
+import { Section } from '@/components/workspace/Section'
 
 type WorkflowStepState = 'complete' | 'current' | 'waiting' | 'blocked'
 
@@ -1094,36 +1098,19 @@ export default function AssetDetailView() {
       ) : null}
       {loadState === 'success' && detail ? (
         <>
-          <section
-            className="page-heading detail-heading workbench-heading"
-            aria-labelledby="asset-detail-title"
-          >
-            <div className="workbench-heading-copy">
-              <div className="workbench-title-row">
-                <h1 id="asset-detail-title">视频详情</h1>
+          <PageHeader
+            className="workbench-heading asset-detail-page-header"
+            eyebrow="当前视频"
+            title="视频详情"
+            description={
+              <span className="asset-detail-header-status">
                 <StatusBadge tone={statusTone(detail.status)}>
                   {assetStatusLabels[detail.status]}
                 </StatusBadge>
-              </div>
-              <p className="workbench-video-name">
-                <span>视频</span>
-                <code title={detail.client_file_id}>
-                  {conciseAssetIdentifier(detail.client_file_id)}
-                </code>
-              </p>
-              {detail.session_binding ? (
-                <p className="workbench-video-meta">
-                  <span>
-                    相机 {detail.session_binding.camera_role} #{detail.session_binding.camera_index}
-                    {detail.session_binding.mount_position
-                      ? ` · ${detail.session_binding.mount_position}`
-                      : ''}
-                  </span>
-                  <span>拍摄开始 {formatDateTime(detail.session_binding.record_start_utc)}</span>
-                </p>
-              ) : null}
-            </div>
-            <div className="detail-actions">
+                <span>当前媒体状态</span>
+              </span>
+            }
+            actions={
               <Button
                 onClick={() => {
                   void loadDetail()
@@ -1131,8 +1118,27 @@ export default function AssetDetailView() {
               >
                 刷新状态
               </Button>
-            </div>
-          </section>
+            }
+          />
+          <div className="asset-detail-identity" aria-label="视频身份">
+            <p className="workbench-video-name">
+              <span>视频</span>
+              <code title={detail.client_file_id}>
+                {conciseAssetIdentifier(detail.client_file_id)}
+              </code>
+            </p>
+            {detail.session_binding ? (
+              <p className="workbench-video-meta">
+                <span>
+                  相机 {detail.session_binding.camera_role} #{detail.session_binding.camera_index}
+                  {detail.session_binding.mount_position
+                    ? ` · ${detail.session_binding.mount_position}`
+                    : ''}
+                </span>
+                <span>拍摄开始 {formatDateTime(detail.session_binding.record_start_utc)}</span>
+              </p>
+            ) : null}
+          </div>
           {actionErrorMessage ? (
             <Alert
               className="catalog-alert"
@@ -1165,12 +1171,12 @@ export default function AssetDetailView() {
                   onRecoverMissingMediaProbe={() => void recoverMissingMediaProbe()}
                   onStartPlayback={() => void startPlayback()}
                 />
-                <section
-                  className="workbench-under-player"
+                <Section
                   id="detail-next-step"
-                  aria-labelledby="detail-next-step-title"
+                  className="workbench-under-player"
+                  title="人工处理"
+                  titleId="detail-next-step-title"
                 >
-                  <h2 id="detail-next-step-title">人工处理</h2>
                   <QualityReviewCard
                     assetStatus={detail.status}
                     canReview={canReviewQuality}
@@ -1190,28 +1196,29 @@ export default function AssetDetailView() {
                   {canShowAnnotationTaskCard ? (
                     <AnnotationTaskCard createdTask={annotationTask} projectId={projectId} />
                   ) : null}
-                </section>
+                </Section>
               </section>
               <aside className="workbench-sidebar" aria-label="视频处理流程">
-                <section
-                  className="next-action-panel semantic-panel"
-                  aria-labelledby="next-action-title"
+                <InspectorSection
+                  className="next-action-panel"
+                  title={canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
+                  titleId="next-action-title"
                 >
-                  <span className="app-eyebrow">
-                    {canParticipateInTrainingDataExport ? '当前结果' : '下一步'}
-                  </span>
-                  <strong id="next-action-title">{nextStep.title}</strong>
-                  <p>{nextStep.description}</p>
-                  {nextStep.interactive ? (
-                    <Button type="primary" onClick={handleNextStep}>
-                      {nextStep.buttonLabel}
-                    </Button>
-                  ) : null}
-                </section>
-                <section className="workflow-facts" aria-labelledby="workflow-facts-title">
-                  <div className="workflow-facts-heading">
-                    <h2 id="workflow-facts-title">流程状态</h2>
+                  <div className="next-action-content">
+                    <strong>{nextStep.title}</strong>
+                    <p>{nextStep.description}</p>
+                    {nextStep.interactive ? (
+                      <Button type="primary" onClick={handleNextStep}>
+                        {nextStep.buttonLabel}
+                      </Button>
+                    ) : null}
                   </div>
+                </InspectorSection>
+                <InspectorSection
+                  className="workflow-facts"
+                  title="流程状态"
+                  titleId="workflow-facts-title"
+                >
                   <ol className="workflow-facts-list">
                     {workflowSteps.map((step) => (
                       <li
@@ -1234,7 +1241,48 @@ export default function AssetDetailView() {
                       ))}
                     </ul>
                   </details>
-                  {detail.status === 'INGESTED' ? (
+                </InspectorSection>
+                <InspectorSection className="asset-key-metadata" title="关键元数据">
+                  <MetadataList
+                    ariaLabel="关键元数据"
+                    items={[
+                      {
+                        id: 'asset-id',
+                        label: '视频 ID',
+                        value: <code>{conciseAssetIdentifier(detail.client_file_id)}</code>,
+                      },
+                      {
+                        id: 'source',
+                        label: '来源',
+                        value: (
+                          <code title={detail.source_upload_file_id}>
+                            {conciseAssetIdentifier(detail.source_upload_file_id)}
+                          </code>
+                        ),
+                      },
+                      { id: 'content-type', label: '内容类型', value: detail.content_type },
+                      {
+                        id: 'camera',
+                        label: '相机',
+                        value: detail.session_binding
+                          ? `${detail.session_binding.camera_role} #${detail.session_binding.camera_index}`
+                          : '未绑定',
+                      },
+                      {
+                        id: 'record-start',
+                        label: '拍摄开始',
+                        value: formatDateTime(detail.session_binding?.record_start_utc),
+                      },
+                      {
+                        id: 'created-at',
+                        label: '创建时间',
+                        value: formatDateTime(detail.created_at),
+                      },
+                    ]}
+                  />
+                </InspectorSection>
+                {detail.status === 'INGESTED' ? (
+                  <InspectorSection className="hand-pose-inspector" title="辅助候选">
                     <details className="hand-pose-disclosure" aria-labelledby="hand-pose-title">
                       <summary>
                         <span className="hand-pose-disclosure-title">
@@ -1265,8 +1313,8 @@ export default function AssetDetailView() {
                         ) : null}
                       </div>
                     </details>
-                  ) : null}
-                </section>
+                  </InspectorSection>
+                ) : null}
               </aside>
             </div>
             <details className="detail-disclosure">

@@ -222,7 +222,13 @@ describe('catalog views', () => {
     renderAssetDetail()
 
     const workflow = await screen.findByRole('complementary', { name: '视频处理流程' })
+    expect(screen.getByRole('heading', { level: 2, name: '人工处理' })).toBeInTheDocument()
+    expect(
+      within(workflow).getByRole('heading', { name: /^(下一步|当前结果)$/ }),
+    ).toBeInTheDocument()
     expect(within(workflow).getByRole('heading', { name: '流程状态' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('heading', { name: '关键元数据' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('heading', { name: '辅助候选' })).toBeInTheDocument()
     expect(within(workflow).getAllByText('人工复核')).toHaveLength(2)
     expect(within(workflow).getAllByText('已通过清洗')).toHaveLength(1)
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()

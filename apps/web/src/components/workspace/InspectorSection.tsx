@@ -6,6 +6,7 @@ export interface InspectorSectionProps {
   actions?: ReactNode
   children: ReactNode
   className?: string
+  id?: string
   title: ReactNode
   titleId?: string
 }
@@ -15,6 +16,7 @@ export function InspectorSection({
   actions,
   children,
   className = '',
+  id,
   title,
   titleId,
 }: InspectorSectionProps) {
@@ -22,6 +24,7 @@ export function InspectorSection({
     <Section
       actions={actions}
       className={`inspector-section ${className}`.trim()}
+      id={id}
       title={title}
       titleId={titleId}
     >

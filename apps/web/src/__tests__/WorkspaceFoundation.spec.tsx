@@ -17,13 +17,19 @@ describe('workspace layout primitives', () => {
 
   it('renders a labelled section with optional actions', () => {
     render(
-      <Section title="Metadata" titleId="metadata-title" actions={<button>刷新</button>}>
+      <Section
+        id="metadata-section"
+        title="Metadata"
+        titleId="metadata-title"
+        actions={<button>刷新</button>}
+      >
         <p>相机信息</p>
       </Section>,
     )
 
     const heading = screen.getByRole('heading', { level: 2, name: 'Metadata' })
     expect(heading.closest('section')).toHaveAttribute('aria-labelledby', 'metadata-title')
+    expect(heading.closest('section')).toHaveAttribute('id', 'metadata-section')
     expect(screen.getByRole('button', { name: '刷新' })).toBeInTheDocument()
     expect(screen.getByText('相机信息')).toBeInTheDocument()
   })
