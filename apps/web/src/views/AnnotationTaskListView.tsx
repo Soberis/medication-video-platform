@@ -532,17 +532,17 @@ export default function AnnotationTaskListView() {
                             className="task-evidence-review"
                             tone={reviewStatusTone(revision.review.decision)}
                           >
-                            {revision.review.decision === 'APPROVED' ? '已通过' : '未通过'}
+                            复核 · {revision.review.decision === 'APPROVED' ? '已通过' : '未通过'}
                             {revision.review.reviewed_by === revision.submitted_by ? (
                               <small>管理员自审</small>
                             ) : null}
                           </StatusIndicator>
                         ) : (
-                          <StatusIndicator tone="information">待复核</StatusIndicator>
+                          <StatusIndicator tone="information">复核 · 待复核</StatusIndicator>
                         )}
                         {presentation ? (
                           <StatusIndicator tone={presentation.tone}>
-                            {presentation.label}
+                            清洗 · {presentation.label}
                           </StatusIndicator>
                         ) : null}
                         {revision.review?.review_note ? (
@@ -653,7 +653,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有配药动作标注任务。管理员可在质量合格的视频详情中创建并分配任务。" />
+        <EmptyState description="当前没有配药动作标注任务。质量合格的视频将由系统自动进入标注流程。" />
       ) : null}
       <Modal
         open={isTrainingExportOpen}

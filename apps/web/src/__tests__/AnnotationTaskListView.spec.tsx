@@ -114,6 +114,17 @@ describe('annotation task list view', () => {
     )
   })
 
+  it('explains that qualified videos enter the annotation flow automatically when the queue is empty', async () => {
+    stubTasks([], labelSchema)
+    renderView()
+
+    const emptyState = await screen.findByText(
+      '当前没有配药动作标注任务。质量合格的视频将由系统自动进入标注流程。',
+    )
+    expect(emptyState).toBeInTheDocument()
+    expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
+  })
+
   it('shows schema display names and submits the selected label id', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
@@ -161,10 +172,10 @@ describe('annotation task list view', () => {
 
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
     const outcomes = [
-      { outcome: 'PASS', expected: '已通过清洗' },
-      { outcome: 'WARNING', expected: '需处理' },
-      { outcome: 'REJECT', expected: '未通过' },
-      { outcome: null, expected: '待清洗' },
+      { outcome: 'PASS', expected: '清洗 · 已通过清洗' },
+      { outcome: 'WARNING', expected: '清洗 · 需处理' },
+      { outcome: 'REJECT', expected: '清洗 · 未通过' },
+      { outcome: null, expected: '清洗 · 待清洗' },
     ] as const
     const tasks = outcomes.map(({ outcome }, index) => ({
       ...assignedTask,
@@ -193,7 +204,7 @@ describe('annotation task list view', () => {
     stubTasks(tasks, labelSchema)
     const user = userEvent.setup()
     renderView()
-    expect(await screen.findByText('已通过清洗')).toBeInTheDocument()
+    expect(await screen.findByText('清洗 · 已通过清洗')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
     const completedRow = screen.getAllByRole('row')[1]!
     const annotationDetails = within(completedRow).getByText('查看标注时间段')
@@ -269,9 +280,9 @@ describe('annotation task list view', () => {
     )
     renderView()
 
-    expect(await screen.findByText('已通过')).toBeInTheDocument()
+    expect(await screen.findByText('复核 · 已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
-    expect(screen.getByText('已通过清洗')).toBeInTheDocument()
+    expect(screen.getByText('清洗 · 已通过清洗')).toBeInTheDocument()
   })
 
   it('makes rejected revisions and their rework guidance explicit', async () => {
