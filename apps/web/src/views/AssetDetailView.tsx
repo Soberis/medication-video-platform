@@ -896,7 +896,7 @@ export default function AssetDetailView() {
     setActionErrorMessage('')
     const reason = await prompt({
       title: '确认删除视频',
-      description: `将从项目中隐藏视频 ${detail.client_file_id}。不会立即物理删除对象或影响其他视频；请输入删除原因。`,
+      description: `将从项目中隐藏视频 ${shortId(detail.client_file_id)}。不会立即物理删除对象或影响其他视频；请输入删除原因。`,
       confirmText: '确认删除',
       placeholder: '例如：上传错误、无用或质量不合格',
       validate: (value) => (value.trim() ? null : '请填写删除原因。'),

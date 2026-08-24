@@ -52,7 +52,7 @@ export default function LoginView() {
     <section className="login-page" aria-labelledby="login-title">
       <Card className="login-card" variant="borderless">
         <h1 id="login-title">登录数据管理平台</h1>
-        <p>仅限平台管理员使用。采集设备请使用独立上传凭据。</p>
+        <p>平台成员使用此处登录；采集设备请使用独立上传凭据。</p>
         {errorMessage || auth.sessionError ? (
           <Alert
             className="login-error"

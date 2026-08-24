@@ -155,9 +155,10 @@ export default function AccountManagementView() {
         <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' ? (
-        <section
+        <Section
           className="table-card account-table-card working-surface"
-          aria-label="平台账号列表"
+          title="平台账号列表"
+          titleId="account-list-title"
         >
           <Table<PlatformAccount>
             dataSource={accounts}
@@ -169,7 +170,7 @@ export default function AccountManagementView() {
                 title: '全局角色',
                 width: 130,
                 render: (_, row) => (
-                  <StatusBadge tone={row.role === 'ADMIN' ? 'processing' : 'default'}>
+                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
                     {row.role === 'ADMIN' ? '管理员' : '成员'}
                   </StatusBadge>
                 ),
@@ -202,7 +203,7 @@ export default function AccountManagementView() {
               },
             ]}
           />
-        </section>
+        </Section>
       ) : null}
     </>
   )

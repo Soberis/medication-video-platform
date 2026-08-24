@@ -74,7 +74,7 @@ export default function AppShell() {
               <div className="account-summary">
                 <div className="sidebar-account-copy">
                   <span title={auth.session.username}>{auth.session.username}</span>
-                  <StatusBadge tone={isAdministrator ? 'processing' : 'default'}>
+                  <StatusBadge tone={isAdministrator ? 'info' : 'default'}>
                     {isAdministrator ? '管理员' : '成员'}
                   </StatusBadge>
                 </div>

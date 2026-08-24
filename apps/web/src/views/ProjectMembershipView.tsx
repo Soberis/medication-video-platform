@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Card, Form, Select, Table } from 'antd'
+import { Alert, App as AntdApp, Button, Form, Select, Table } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -16,6 +16,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { Section } from '@/components/workspace/Section'
 
 interface MembershipFields {
   actorId: string
@@ -139,7 +140,11 @@ export default function ProjectMembershipView() {
         }
       />
       {canManageMembers ? (
-        <Card className="detail-card" title="添加或更新成员" variant="outlined">
+        <Section
+          className="membership-create-panel working-surface"
+          title="添加或更新成员"
+          titleId="membership-create-title"
+        >
           <Form<MembershipFields>
             form={form}
             className="membership-form"
@@ -169,7 +174,7 @@ export default function ProjectMembershipView() {
               保存成员
             </Button>
           </Form>
-        </Card>
+        </Section>
       ) : loadState === 'success' ? (
         <Alert
           className="catalog-alert"
@@ -184,7 +189,11 @@ export default function ProjectMembershipView() {
         <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
       ) : null}
       {loadState === 'success' && memberships.length > 0 ? (
-        <Card className="table-card" variant="outlined">
+        <Section
+          className="table-card membership-list-panel working-surface"
+          title="项目成员列表"
+          titleId="membership-list-title"
+        >
           <Table<ProjectMembership>
             dataSource={memberships}
             rowKey="membership_id"
@@ -226,7 +235,7 @@ export default function ProjectMembershipView() {
                 : []),
             ]}
           />
-        </Card>
+        </Section>
       ) : null}
       {loadState === 'success' && memberships.length === 0 ? (
         <EmptyState description="当前项目尚未分配成员。" />
