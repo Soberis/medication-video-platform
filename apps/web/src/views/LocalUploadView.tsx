@@ -12,8 +12,10 @@ import {
 import { listProjects, type DataProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
+import { MetadataList } from '@/components/data/MetadataList'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/WorkspaceFeedback'
+import { Section } from '@/components/workspace/Section'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 type TaskStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
@@ -25,13 +27,14 @@ interface UploadTask {
   errorCode: string | null
   errorMessage: string | null
   captureSessionId: string | null
+  clipAssetId: string | null
 }
 type TaskAction =
   | { type: 'initialize'; files: File[] }
   | { type: 'reset' }
   | { type: 'running'; id: number }
   | { type: 'progress'; id: number; progress: LocalUploadProgress }
-  | { type: 'completed'; id: number; captureSessionId: string }
+  | { type: 'completed'; id: number; captureSessionId: string; clipAssetId: string | null }
   | { type: 'failed'; id: number; errorCode: string; errorMessage: string }
 function taskReducer(tasks: UploadTask[], action: TaskAction): UploadTask[] {
   if (action.type === 'reset') return []
@@ -44,6 +47,7 @@ function taskReducer(tasks: UploadTask[], action: TaskAction): UploadTask[] {
       errorCode: null,
       errorMessage: null,
       captureSessionId: null,
+      clipAssetId: null,
     }))
   return tasks.map((task) =>
     task.id !== action.id
@@ -53,7 +57,12 @@ function taskReducer(tasks: UploadTask[], action: TaskAction): UploadTask[] {
         : action.type === 'progress'
           ? { ...task, progress: action.progress }
           : action.type === 'completed'
-            ? { ...task, status: 'COMPLETED', captureSessionId: action.captureSessionId }
+            ? {
+                ...task,
+                status: 'COMPLETED',
+                captureSessionId: action.captureSessionId,
+                clipAssetId: action.clipAssetId,
+              }
             : {
                 ...task,
                 status: 'FAILED',
@@ -66,10 +75,10 @@ const phaseLabels: Record<LocalUploadPhase, string> = {
   HASHING: '正在计算文件摘要',
   INITIALIZING: '正在创建上传批次',
   REGISTERING: '正在登记视频文件',
-  UPLOADING: '正在上传分片',
-  VERIFYING: '服务器正在校验视频',
+  UPLOADING: '正在传输视频分片',
+  VERIFYING: '平台正在校验文件',
   ASSEMBLING: '正在建立单视角配药操作记录',
-  COMPLETED: '上传完成',
+  COMPLETED: '平台已确认上传完成',
 }
 function taskPercent(task: UploadTask) {
   const progress = task.progress
@@ -81,10 +90,37 @@ function taskPercent(task: UploadTask) {
   )
 }
 function taskDescription(task: UploadTask) {
-  if (task.status === 'QUEUED') return '等待前一个视频上传完成。'
-  if (task.status === 'FAILED') return task.errorMessage ?? '上传失败，请检查网络和本地服务后重试。'
-  if (task.status === 'COMPLETED') return '上传完成并通过校验，已建立单视角配药操作记录。'
+  if (task.status === 'QUEUED') return '等待前一个视频处理完成。'
+  if (task.status === 'FAILED') {
+    const message = task.errorMessage ?? '本轮处理未完成，请检查网络和本地服务后重试。'
+    return message.includes('重新选择') ? message : `${message} 请重新选择该文件后开始新一轮上传。`
+  }
+  if (task.status === 'COMPLETED') {
+    return task.clipAssetId
+      ? '平台已确认上传完成，并建立单视角配药操作记录；可进入视频资产继续处理。'
+      : '平台已确认上传完成，并建立单视角配药操作记录。'
+  }
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
+}
+
+function taskStatusLabel(task: UploadTask) {
+  if (task.status === 'QUEUED') return '等待处理'
+  if (task.status === 'FAILED') return '处理失败'
+  if (task.status === 'COMPLETED') return '已确认完成'
+  return task.progress ? phaseLabels[task.progress.phase] : '准备中'
+}
+
+function taskProgressLabel(task: UploadTask) {
+  if (task.status === 'QUEUED') return '等待开始'
+  if (task.status === 'FAILED') return '本轮未完成'
+  if (task.status === 'COMPLETED') return '平台已确认完成'
+  const progress = task.progress
+  if (!progress) return '准备中'
+  if (progress.phase === 'HASHING') return `摘要已处理 ${taskPercent(task)}%`
+  if (progress.phase === 'UPLOADING') return `已传输 ${taskPercent(task)}%`
+  if (progress.phase === 'VERIFYING') return '传输已完成，平台校验中'
+  if (progress.phase === 'ASSEMBLING') return '校验通过，正在建立记录'
+  return phaseLabels[progress.phase]
 }
 
 function uploadTaskTone(status: TaskStatus): 'error' | 'processing' | 'success' {
@@ -114,14 +150,16 @@ export default function LocalUploadView() {
     selectedFiles.length > 0
   const completedTaskCount = tasks.filter((task) => task.status === 'COMPLETED').length
   const failedTaskCount = tasks.filter((task) => task.status === 'FAILED').length
-  const uploadSummary: { color: StatusBadgeTone; label: string } =
-    uploadState !== 'completed'
-      ? { label: '上传中', color: 'processing' }
-      : failedTaskCount === 0
-        ? { label: '全部上传完成', color: 'success' }
-        : completedTaskCount === 0
-          ? { label: '本轮上传失败', color: 'error' }
-          : { label: '部分上传完成', color: 'warning' }
+  const uploadSummary: { color: StatusBadgeTone; label: string } | null =
+    uploadState === 'idle'
+      ? null
+      : uploadState === 'uploading'
+        ? { label: '处理中', color: 'processing' }
+        : failedTaskCount === 0
+          ? { label: '全部上传完成', color: 'success' }
+          : completedTaskCount === 0
+            ? { label: '本轮上传失败', color: 'error' }
+            : { label: '部分上传完成', color: 'warning' }
 
   const loadProjects = useCallback(async () => {
     projectRequest.current?.abort()
@@ -196,7 +234,12 @@ export default function LocalUploadView() {
           (progress) => dispatchTasks({ type: 'progress', id, progress }),
           request.signal,
         )
-        dispatchTasks({ type: 'completed', id, captureSessionId: result.captureSessionId })
+        dispatchTasks({
+          type: 'completed',
+          id,
+          captureSessionId: result.captureSessionId,
+          clipAssetId: result.clipAssetId,
+        })
       } catch (error) {
         if (request.signal.aborted) {
           if (uploadRequest.current === request) uploadRequest.current = null
@@ -245,9 +288,10 @@ export default function LocalUploadView() {
         />
       ) : null}
       {projectLoadState !== 'success' || projects.length > 0 ? (
-        <section
+        <Section
           className="local-upload-card form-surface working-surface"
-          aria-label="本地视频上传"
+          title="上传准备"
+          titleId="local-upload-preparation-title"
         >
           <form
             className="local-upload-form"
@@ -294,7 +338,9 @@ export default function LocalUploadView() {
                 {selectedFiles.map((file) => (
                   <li key={`${file.name}:${file.size}:${file.lastModified}`}>
                     <strong>{file.name}</strong>
-                    <span>{formatBytes(file.size)}</span>
+                    <span>
+                      {file.type || '视频文件'} · {formatBytes(file.size)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -314,7 +360,7 @@ export default function LocalUploadView() {
               ) : null}
             </div>
           </form>
-        </section>
+        </Section>
       ) : null}
       {tasks.length > 0 ? (
         <section
@@ -329,33 +375,33 @@ export default function LocalUploadView() {
                 已上传 {completedTaskCount} / {tasks.length} 个视频
               </h2>
             </div>
-            <StatusBadge tone={uploadSummary.color}>{uploadSummary.label}</StatusBadge>
+            {uploadSummary ? (
+              <StatusBadge tone={uploadSummary.color}>{uploadSummary.label}</StatusBadge>
+            ) : null}
           </div>
+          <p className="section-description">
+            传输进度只代表浏览器已发送的字节；只有平台完成校验并建立记录后，文件才会标记为“已确认完成”。
+          </p>
           {tasks.map((task) => (
             <article key={task.id} className="local-upload-task">
               <div className="file-heading">
                 <div>
                   <p className="file-kind">
                     {task.status === 'COMPLETED'
-                      ? '上传完成'
+                      ? '平台已确认'
                       : task.status === 'FAILED'
-                        ? '上传失败'
-                        : '视频上传'}
+                        ? '需要处理'
+                        : '上传流程'}
                   </p>
                   <h3>{task.file.name}</h3>
                 </div>
                 <StatusBadge tone={uploadTaskTone(task.status)}>
-                  {task.status === 'QUEUED'
-                    ? '等待中'
-                    : task.status === 'RUNNING'
-                      ? '上传中'
-                      : task.status === 'COMPLETED'
-                        ? '上传完成'
-                        : '上传失败'}
+                  {taskStatusLabel(task)}
                 </StatusBadge>
               </div>
               <Progress
                 percent={taskPercent(task)}
+                format={() => taskProgressLabel(task)}
                 status={
                   task.status === 'FAILED'
                     ? 'exception'
@@ -365,15 +411,39 @@ export default function LocalUploadView() {
                 }
               />
               <p className="task-description">{taskDescription(task)}</p>
-              {task.progress?.batchId ? (
-                <p className="batch-meta">
-                  批次 ID：<code>{task.progress.batchId}</code>
-                </p>
+              {task.progress?.batchId || task.captureSessionId ? (
+                <details className="upload-technical-details">
+                  <summary>查看技术信息</summary>
+                  <MetadataList
+                    items={[
+                      ...(task.progress?.batchId
+                        ? [
+                            {
+                              id: 'batch-id',
+                              label: '上传批次 ID',
+                              value: <code>{task.progress.batchId}</code>,
+                            },
+                          ]
+                        : []),
+                      ...(task.captureSessionId
+                        ? [
+                            {
+                              id: 'capture-session-id',
+                              label: '配药操作 ID',
+                              value: <code>{task.captureSessionId}</code>,
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                </details>
               ) : null}
-              {task.captureSessionId ? (
-                <p className="batch-meta">
-                  配药操作 ID：<code>{task.captureSessionId}</code>
-                </p>
+              {task.clipAssetId ? (
+                <div className="local-upload-task-actions">
+                  <Link className="text-link" to={paths.asset(selectedProjectId, task.clipAssetId)}>
+                    查看视频资产
+                  </Link>
+                </div>
               ) : null}
               {task.errorCode ? (
                 <p className="task-error" role="alert">

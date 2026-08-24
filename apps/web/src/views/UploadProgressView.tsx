@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 
 import {
   getUploadBatchProgress,
@@ -10,19 +11,22 @@ import {
   type UploadFileProgress,
   type UploadFileStatus,
 } from '@/api/uploads'
+import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { formatBytes } from '@/features/catalog/catalog-presentation'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { Section } from '@/components/workspace/Section'
+import { SummaryStrip } from '@/components/SummaryStrip'
+import { formatBytes, shortId } from '@/features/catalog/catalog-presentation'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const batchStatusLabels: Record<UploadBatchStatus, string> = {
   INITIATED: '待上传',
   UPLOADING: '上传中',
-  COMPLETING: '正在完成上传',
-  COMPLETED: '上传完成',
-  FAILED: '上传失败',
+  COMPLETING: '平台正在完成校验',
+  COMPLETED: '批次已确认完成',
+  FAILED: '批次处理失败',
   ABORTED: '已中止',
   EXPIRED: '已过期',
 }
@@ -31,7 +35,7 @@ const fileStatusLabels: Record<UploadFileStatus, string> = {
   SESSION_CREATED: '会话已创建',
   UPLOADING: '上传中',
   COMPLETING: '校验中',
-  UPLOADED: '已上传并校验',
+  UPLOADED: '文件已上传并校验',
   FAILED: '上传校验失败',
 }
 const fileKindLabels: Record<UploadFileKind, string> = {
@@ -50,6 +54,25 @@ function fileStatusTone(status: UploadFileStatus): StatusBadgeTone {
   if (status === 'UPLOADED') return 'success'
   if (status === 'FAILED') return 'error'
   return 'processing'
+}
+
+function batchStatusDescription(status: UploadBatchStatus) {
+  if (status === 'INITIATED') return '批次已创建，等待文件登记和上传开始。'
+  if (status === 'UPLOADING') return '文件分片正在传输或等待服务端确认。'
+  if (status === 'COMPLETING') return '字节传输已结束，平台正在校验完整文件和清单。'
+  if (status === 'COMPLETED') return '平台已确认批次完成，视频文件已建立可追踪的资产绑定。'
+  if (status === 'FAILED') return '平台未能完成该批次，具体原因请查看文件级错误信息。'
+  if (status === 'ABORTED') return '该批次已被中止，不能继续使用本批次上传。'
+  return '该批次已过期，不能继续使用本批次上传。'
+}
+
+function fileStatusDescription(file: UploadFileProgress) {
+  if (file.status === 'REGISTERED') return '文件已登记，等待创建分片上传会话。'
+  if (file.status === 'SESSION_CREATED') return '平台已创建上传会话，等待分片传输。'
+  if (file.status === 'UPLOADING') return '分片正在传输；进度来自服务端已确认的分片记录。'
+  if (file.status === 'COMPLETING') return '分片已提交，平台正在校验对象大小和完整摘要。'
+  if (file.status === 'UPLOADED') return '文件对象已完成服务端校验；批次是否完成仍以批次状态为准。'
+  return '文件最终校验未通过，请根据错误码处理或重新上传。'
 }
 
 const percent = (value: number, total: number) =>
@@ -123,9 +146,13 @@ export default function UploadProgressView() {
         eyebrow="上传状态查询"
         titleId="progress-title"
         title="查看批次上传进度"
-        description="只读取平台已确认的状态，不会上传文件或改变批次。"
+        description="只读取平台已确认的批次和文件状态，不会上传文件或改变批次。"
       />
-      <section className="upload-progress-query working-surface" aria-labelledby="progress-title">
+      <Section
+        className="upload-progress-query working-surface"
+        title="批次查询"
+        titleId="progress-query-title"
+      >
         <form
           className="batch-form"
           onSubmit={(event) => {
@@ -152,72 +179,103 @@ export default function UploadProgressView() {
             </button>
           </div>
         </form>
-      </section>
+      </Section>
       {isLoading ? <LoadingState>正在读取批次和文件进度…</LoadingState> : null}
-      {loadState === 'error' ? <ErrorState code={errorCode}>{errorMessage}</ErrorState> : null}
+      {loadState === 'error' ? (
+        <ErrorState code={errorCode} onRetry={() => void loadProgress()}>
+          {errorMessage}
+        </ErrorState>
+      ) : null}
       {batch && hasResult ? (
         <>
-          <section className="summary-card" aria-labelledby="batch-summary-title">
-            <div className="summary-heading">
-              <div>
-                <p className="status-label">批次汇总</p>
-                <h2 id="batch-summary-title">{batch.device_id}</h2>
-              </div>
+          <Section
+            className="upload-progress-summary working-surface"
+            title="批次状态"
+            titleId="batch-summary-title"
+            actions={
               <StatusBadge tone={batchStatusTone(batch.status)}>
                 {batchStatusLabels[batch.status]}
               </StatusBadge>
-            </div>
+            }
+          >
+            <p className="section-description">{batchStatusDescription(batch.status)}</p>
             <div className="progress-block">
               <div className="progress-copy">
-                <span>已确认字节</span>
+                <span>已确认传输</span>
                 <strong>{batchBytePercent}%</strong>
               </div>
-              <progress value={batch.uploaded_size_bytes} max={batch.total_size_bytes}>
+              <progress
+                aria-label="批次已确认传输进度"
+                value={batch.uploaded_size_bytes}
+                max={batch.total_size_bytes}
+              >
                 {batchBytePercent}%
               </progress>
               <p>
                 {formatBytes(batch.uploaded_size_bytes)} / {formatBytes(batch.total_size_bytes)}
               </p>
             </div>
-            <MetadataList
-              className="metric-grid"
+            <SummaryStrip
+              ariaLabel="上传批次汇总"
               items={[
                 {
-                  id: 'registered-files',
-                  label: '文件登记',
+                  label: '已登记文件',
                   value: `${batch.registered_file_count} / ${batch.file_count}`,
                 },
                 {
-                  id: 'uploaded-files',
-                  label: '上传完成文件',
+                  label: '已确认文件',
                   value: batch.uploaded_file_count,
                 },
                 {
-                  id: 'failed-files',
-                  label: '上传失败文件',
+                  label: '需处理文件',
                   value: batch.failed_file_count,
                 },
                 {
-                  id: 'uploaded-parts',
                   label: '已确认分片',
                   value: `${batch.uploaded_part_count} / ${batch.tracked_part_count}`,
                 },
               ]}
+              footer={
+                batch.status === 'COMPLETED' ? (
+                  <Link className="text-link" to={paths.videos(batch.project_id)}>
+                    查看项目视频
+                  </Link>
+                ) : null
+              }
             />
-            <p className="batch-meta">
-              批次 ID：<code>{batch.batch_id}</code>
-            </p>
-            <p className="batch-meta">有效期至：{formatTime(batch.expires_at)}</p>
-          </section>
-          <section className="files-section" aria-labelledby="files-title">
-            <div className="files-heading">
-              <div>
-                <p className="status-label">文件进度</p>
-                <h2 id="files-title">已登记文件</h2>
-              </div>
-              <span>{files.length} 个</span>
-            </div>
-            {files.length === 0 ? <p className="empty-state">该批次尚未登记文件。</p> : null}
+            <MetadataList
+              className="upload-batch-context"
+              items={[
+                {
+                  id: 'project-id',
+                  label: '所属项目',
+                  value: <code>{shortId(batch.project_id)}</code>,
+                },
+                { id: 'device-id', label: '来源设备', value: batch.device_id },
+              ]}
+            />
+            <details className="upload-technical-details">
+              <summary>查看技术信息</summary>
+              <MetadataList
+                items={[
+                  {
+                    id: 'batch-id',
+                    label: '上传批次 ID',
+                    value: <code>{batch.batch_id}</code>,
+                  },
+                  { id: 'created-at', label: '创建时间', value: formatTime(batch.created_at) },
+                  { id: 'expires-at', label: '有效期至', value: formatTime(batch.expires_at) },
+                ]}
+              />
+            </details>
+          </Section>
+          <Section
+            className="files-section"
+            title="文件进度"
+            titleId="files-title"
+            actions={<span className="upload-file-count">{files.length} 个</span>}
+          >
+            {files.length === 0 ? <EmptyState description="该批次尚未登记文件。" /> : null}
             {files.map((file) => (
               <article key={file.upload_file_id} className="file-card">
                 <div className="file-heading">
@@ -225,18 +283,23 @@ export default function UploadProgressView() {
                     <p className="file-kind">
                       {fileKindLabels[file.file_kind]} · {file.content_type}
                     </p>
-                    <h3>{file.client_file_id}</h3>
+                    <h3>文件 {shortId(file.client_file_id)}</h3>
                   </div>
                   <StatusBadge tone={fileStatusTone(file.status)}>
                     {fileStatusLabels[file.status]}
                   </StatusBadge>
                 </div>
+                <p className="section-description">{fileStatusDescription(file)}</p>
                 <div className="progress-block progress-compact">
                   <div className="progress-copy">
-                    <span>分片进度</span>
+                    <span>服务端已确认分片</span>
                     <strong>{percent(file.uploaded_parts, file.total_parts)}%</strong>
                   </div>
-                  <progress value={file.uploaded_parts} max={file.total_parts}>
+                  <progress
+                    aria-label={`文件 ${shortId(file.client_file_id)} 的已确认分片进度`}
+                    value={file.uploaded_parts}
+                    max={file.total_parts}
+                  >
                     {percent(file.uploaded_parts, file.total_parts)}%
                   </progress>
                   <p>
@@ -270,9 +333,49 @@ export default function UploadProgressView() {
                     },
                   ]}
                 />
+                <details className="upload-technical-details">
+                  <summary>查看技术信息</summary>
+                  <MetadataList
+                    items={[
+                      {
+                        id: 'upload-file-id',
+                        label: '上传文件 ID',
+                        value: <code>{file.upload_file_id}</code>,
+                      },
+                      {
+                        id: 'client-file-id',
+                        label: '客户端文件 ID',
+                        value: <code>{file.client_file_id}</code>,
+                      },
+                      {
+                        id: 'declared-sha256',
+                        label: '声明摘要',
+                        value: <code>{file.declared_sha256}</code>,
+                      },
+                      {
+                        id: 'verified-sha256',
+                        label: '已验证摘要',
+                        value: <code>{file.verified_sha256 ?? '—'}</code>,
+                      },
+                      {
+                        id: 'completion-started-at',
+                        label: '校验开始',
+                        value: formatTime(file.completion_started_at),
+                      },
+                    ]}
+                  />
+                </details>
+                {batch.device_id === 'PLATFORM_LOCAL' && file.status === 'FAILED' ? (
+                  <div className="upload-recovery-actions">
+                    <span>本地上传页面不提供断点续传；请重新选择文件开始新一轮上传。</span>
+                    <Link className="text-link" to={paths.localUpload}>
+                      返回本地上传
+                    </Link>
+                  </div>
+                ) : null}
               </article>
             ))}
-          </section>
+          </Section>
         </>
       ) : null}
     </>

@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { renderRoute } from '@/test/render'
 import UploadProgressView from '@/views/UploadProgressView'
 
 const batchId = '40000000-0000-4000-8000-000000000001'
@@ -56,7 +57,7 @@ describe('UploadProgressView', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
-    render(<UploadProgressView />)
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
     await user.type(screen.getByLabelText('上传批次 ID'), 'not-a-uuid')
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(fetchMock).not.toHaveBeenCalled()
@@ -74,7 +75,7 @@ describe('UploadProgressView', () => {
       )
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
-    render(<UploadProgressView />)
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(await screen.findByText('synthetic-device-01')).toBeInTheDocument()
@@ -82,6 +83,44 @@ describe('UploadProgressView', () => {
     expect(screen.getByText(/已确认 1 \/ 1 个分片/)).toBeInTheDocument()
     expect(screen.getByText('UPLOAD_FILE_SHA256_MISMATCH')).toBeInTheDocument()
     expect(screen.getByText('上传校验失败')).toBeInTheDocument()
+    expect(screen.getByText('文件 60000000…0001')).toBeInTheDocument()
+    const clientFileId = screen.getByText(fileProgress.files[0]!.client_file_id)
+    expect(clientFileId.closest('details')).not.toHaveAttribute('open')
+
+    const technicalDetails = screen.getAllByText('查看技术信息')
+    expect(technicalDetails).toHaveLength(2)
+    await user.click(technicalDetails[1]!)
+    expect(clientFileId.closest('details')).toHaveAttribute('open')
+  })
+
+  it('shows the project destination after the batch is authoritatively completed', async () => {
+    const completedBatch = { ...batchProgress, status: 'COMPLETED' }
+    const completedFile = { ...fileProgress.files[0], status: 'UPLOADED' }
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((input: RequestInfo | URL) =>
+          Promise.resolve(
+            jsonResponse(
+              String(input).endsWith('/files')
+                ? { ...fileProgress, files: [completedFile] }
+                : completedBatch,
+            ),
+          ),
+        ),
+    )
+    const user = userEvent.setup()
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
+    await user.type(screen.getByLabelText('上传批次 ID'), batchId)
+    await user.click(screen.getByRole('button', { name: '查询进度' }))
+
+    expect(await screen.findByRole('link', { name: '查看项目视频' })).toHaveAttribute(
+      'href',
+      '/projects/00000000-0000-4000-8000-000000000001/videos',
+    )
+    const batchIdDetails = screen.getByText(batchId)
+    expect(batchIdDetails.closest('details')).not.toHaveAttribute('open')
   })
 
   it('shows a stable backend error without leaking internal details', async () => {
@@ -102,7 +141,7 @@ describe('UploadProgressView', () => {
       ),
     )
     const user = userEvent.setup()
-    render(<UploadProgressView />)
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(await screen.findByText('UPLOAD_BATCH_NOT_FOUND')).toBeInTheDocument()

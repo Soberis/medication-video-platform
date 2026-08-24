@@ -86,28 +86,30 @@ afterEach(() => vi.unstubAllGlobals())
 describe('annotation task list view', () => {
   it('loads the task queue and label schema together, then links back to the video', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
+    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
-    expect(await screen.findByLabelText('项目配药动作标注进度')).toHaveTextContent(
-      '项目任务1待处理1待标注 1 · 待修改 0 · 待复核 0标注完成0',
-    )
+    const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
+    expect(progressSummary).toHaveTextContent('1 个任务')
+    expect(progressSummary).toHaveTextContent('0 个已完成 · 1 个待处理')
     expect(screen.getByText('待标注')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/videos`,
     )
     expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
-    expect(screen.getByText(/任务 a0000000.*0001/)).toBeInTheDocument()
+    await user.click(screen.getByText('查看详情'))
+    expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
       'href',
       `/projects/${projectId}/assets/${assetId}`,
     )
-    expect(screen.getByRole('table').closest('.ant-table-wrapper')).toHaveClass(
-      'annotation-task-table',
+    expect(screen.getByRole('list', { name: '配药动作标注任务列表' })).toHaveClass(
+      'annotation-task-list-surface',
     )
-    expect(screen.getByRole('columnheader', { name: '当前进度' })).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -206,16 +208,16 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('清洗 · 已通过清洗')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    const completedRow = screen.getAllByRole('row')[1]!
-    const annotationDetails = within(completedRow).getByText('查看标注时间段')
+    const completedRow = screen.getAllByRole('article')[0]!
+    const annotationDetails = within(completedRow).getByText('查看详情')
     await user.click(annotationDetails)
     expect(within(completedRow).getByText(/时间段 1.*0.*1000.*毫秒/)).toBeInTheDocument()
     expect(within(completedRow).getByText('准备工作区')).toBeInTheDocument()
-    const evidenceDetails = screen.getAllByText('查看任务记录')
+    const evidenceDetails = screen.getAllByText('查看详情')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
     expect(evidenceDetails[1]?.closest('details')).toHaveAttribute('open')
-    expect(screen.getAllByText(/创建者：local-synthetic-admin/)).toHaveLength(4)
+    expect(screen.getAllByText('local-synthetic-admin')).toHaveLength(4)
     expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已确认的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
@@ -252,7 +254,7 @@ describe('annotation task list view', () => {
 
     renderView()
     await waitFor(() => {
-      const taskRow = screen.getAllByRole('row')[1]
+      const taskRow = screen.getAllByRole('article')[0]
       expect(taskRow).toHaveTextContent('待复核')
     })
     expect(
@@ -283,6 +285,10 @@ describe('annotation task list view', () => {
     expect(await screen.findByText('复核 · 已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
     expect(screen.getByText('清洗 · 已通过清洗')).toBeInTheDocument()
+    const taskRow = screen.getByRole('article', { name: /标注完成/ })
+    expect(taskRow).toHaveTextContent('提交人 local-synthetic-admin')
+    expect(taskRow).not.toHaveTextContent('执行人 local-synthetic-admin')
+    expect(taskRow).toHaveTextContent('（管理员自审）')
   })
 
   it('makes rejected revisions and their rework guidance explicit', async () => {
@@ -302,7 +308,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    const taskRow = await screen.findByRole('row', { name: /待修改/ })
+    const taskRow = await screen.findByRole('article', { name: /待修改/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
     await user.click(within(taskRow).getByRole('button', { name: /提交视频/ }))
 
@@ -355,7 +361,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    const taskRow = await screen.findByRole('row', { name: /待复核/ })
+    const taskRow = await screen.findByRole('article', { name: /待复核/ })
     await user.click(within(taskRow).getByRole('button', { name: /退回修改/ }))
     const dialog = await screen.findByRole('dialog')
     await user.type(
@@ -469,7 +475,7 @@ describe('annotation task list view', () => {
     stubTasks([assignedTask], labelSchema, 'ASSIGNEE')
     renderView()
 
-    expect(await screen.findByText('我的任务')).toBeInTheDocument()
+    expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
   })
 

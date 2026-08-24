@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import * as localUploadApi from '@/api/local-upload'
+import { paths } from '@/app/paths'
 import { renderRoute } from '@/test/render'
 import LocalUploadView from '@/views/LocalUploadView'
 
@@ -100,6 +101,31 @@ describe('LocalUploadView', () => {
     await selectProject(user, '另一个合成项目')
     await waitFor(() => expect(screen.queryByText('empty.mp4')).not.toBeInTheDocument())
     expect(screen.queryByText('本轮上传失败')).not.toBeInTheDocument()
+  })
+
+  it('shows platform-confirmed completion and links to the created video asset', async () => {
+    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockResolvedValue({
+      batchId: '40000000-0000-4000-8000-000000000001',
+      captureSessionId: '50000000-0000-4000-8000-000000000001',
+      clipAssetId: '60000000-0000-4000-8000-000000000001',
+    })
+    stubCatalog([project])
+    const user = userEvent.setup()
+    renderRoute(<LocalUploadView />)
+
+    await selectProject(user, '合成测试项目')
+    await user.upload(
+      screen.getByLabelText('本机视频'),
+      new File(['synthetic-video'], 'confirmed.mp4', { type: 'video/mp4' }),
+    )
+    await user.click(screen.getByRole('button', { name: '开始上传' }))
+
+    expect(await screen.findByText('已确认完成')).toBeInTheDocument()
+    expect(screen.getByText(/平台已确认上传完成/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看视频资产' })).toHaveAttribute(
+      'href',
+      paths.asset(project.project_id, '60000000-0000-4000-8000-000000000001'),
+    )
   })
 
   it('aborts the active hash or upload request when leaving the page', async () => {
