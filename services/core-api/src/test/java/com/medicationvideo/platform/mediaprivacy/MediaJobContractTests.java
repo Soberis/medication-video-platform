@@ -248,6 +248,28 @@ class MediaJobContractTests {
 	}
 
 	@Test
+	void genericMediaJobRoutesRequireAnActiveProjectMembership() throws Exception {
+		var clipAssetId = insertUploadedClipAsset(UUID.fromString(PROJECT_ID), "video/mp4", "UPLOADED",
+				Instant.parse("2026-07-15T01:00:00Z"));
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET status = 'REMOVED', removed_by = ?, removed_at = ?
+				WHERE project_id = ? AND actor_id = ?
+				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")),
+				UUID.fromString(PROJECT_ID), ProjectMembershipTestData.MEMBER_ACTOR);
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs").header("Authorization", "Bearer " + TOKEN)
+				.header("Idempotency-Key", IDEMPOTENCY_KEY)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(mediaProbeBody(clipAssetId)))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM media_job", Integer.class));
+	}
+
+	@Test
 	void getReturnsNotFoundForUnknownJobId() throws Exception {
 		mockMvc.perform(get("/api/v1/media-jobs/" + UUID.randomUUID()).header("Authorization", "Bearer " + TOKEN))
 			.andExpect(status().isNotFound())

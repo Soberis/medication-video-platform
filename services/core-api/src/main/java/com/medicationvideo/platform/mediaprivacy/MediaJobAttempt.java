@@ -131,6 +131,13 @@ class MediaJobAttempt {
 		this.updatedAt = now;
 	}
 
+	void requireWorker(String authenticatedWorkerId) {
+		if (authenticatedWorkerId == null || !authenticatedWorkerId.equals(this.workerId)) {
+			throw new MediaJobExecutionException("MEDIA_WORKER_IDENTITY_MISMATCH",
+					"The authenticated Worker does not own this media job lease.", false);
+		}
+	}
+
 	void succeed(Instant now) {
 		requireActiveLease(now);
 		this.status = MediaJobAttemptStatus.SUCCEEDED;

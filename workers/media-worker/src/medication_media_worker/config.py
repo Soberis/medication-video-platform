@@ -51,6 +51,13 @@ class Settings:
         parsed_rabbitmq_url = urlparse(rabbitmq_url)
         if parsed_rabbitmq_url.scheme not in {"amqp", "amqps"} or not parsed_rabbitmq_url.hostname:
             raise ValueError("RABBITMQ_URL must be an absolute AMQP(S) URL")
+        if values.get("DATA_PROFILE") != "synthetic":
+            if parsed_base_url.scheme != "https":
+                raise ValueError(
+                    "PLATFORM_API_BASE_URL must use HTTPS outside synthetic data profiles"
+                )
+            if parsed_rabbitmq_url.scheme != "amqps":
+                raise ValueError("RABBITMQ_URL must use AMQPS outside synthetic data profiles")
 
         timeout = _positive_int(values.get("MEDIA_PROBE_TIMEOUT_SECONDS", "1800"), "timeout")
         temp_dir_value = values.get("MEDIA_WORKER_TEMP_DIR")

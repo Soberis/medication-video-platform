@@ -27,9 +27,10 @@ for (const environmentFile of localEnvironmentFiles) {
 
 const bearerToken = process.env.DEV_BEARER_TOKEN;
 const adminBearerToken = process.env.DEV_ADMIN_BEARER_TOKEN;
-if (!bearerToken || !adminBearerToken) {
+const projectId = process.env.DEV_PROJECT_ID;
+if (!bearerToken || !adminBearerToken || !projectId) {
   console.error(
-    "DEV_BEARER_TOKEN and DEV_ADMIN_BEARER_TOKEN are required in the process environment, repository .env, Bruno collection .env, or .env.example.",
+    "DEV_BEARER_TOKEN, DEV_ADMIN_BEARER_TOKEN and DEV_PROJECT_ID are required in the process environment, repository .env, Bruno collection .env, or .env.example.",
   );
   process.exit(2);
 }
@@ -47,6 +48,8 @@ const result = spawnSync(
     `devBearerToken=${bearerToken}`,
     "--env-var",
     `devAdminBearerToken=${adminBearerToken}`,
+    "--env-var",
+    `projectId=${projectId}`,
   ],
   {
     cwd: collectionDirectory,

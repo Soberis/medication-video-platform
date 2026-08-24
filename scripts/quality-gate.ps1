@@ -384,8 +384,21 @@ else {
     }
 }
 
-$pythonProjects = Get-ChildItem -LiteralPath $root -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match '[\\/](workers|plugins|tools[\\/]minimal-export)[\\/]' }
+$pythonSearchRoots = @(
+    (Join-Path $root 'workers'),
+    (Join-Path $root 'plugins'),
+    (Join-Path $root 'tools/minimal-export')
+) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
+
+# Keep generated/ignored verification copies (for example under tmp/) out of
+# the production Python project inventory.  The Bash gate already scopes its
+# search to these active roots; matching that boundary prevents a stale copy
+# from producing a false strict-gate failure.
+$pythonProjects = @(
+    foreach ($pythonSearchRoot in $pythonSearchRoots) {
+        Get-ChildItem -LiteralPath $pythonSearchRoot -Recurse -File -Filter pyproject.toml -ErrorAction SilentlyContinue
+    }
+)
 
 if ($Changed) {
     $pythonProjects = @($pythonProjects | Where-Object {

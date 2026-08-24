@@ -34,6 +34,13 @@ class Settings:
         )
         if not _is_url(rabbitmq_url, {"amqp", "amqps"}):
             raise ValueError("RABBITMQ_URL must be an absolute AMQP(S) URL")
+        if values.get("DATA_PROFILE") != "synthetic":
+            if urlparse(base_url).scheme != "https":
+                raise ValueError(
+                    "PLATFORM_API_BASE_URL must use HTTPS outside synthetic data profiles"
+                )
+            if urlparse(rabbitmq_url).scheme != "amqps":
+                raise ValueError("RABBITMQ_URL must use AMQPS outside synthetic data profiles")
         token, token_file = _identity(values)
         model_path = Path(values.get("AI_HAND_POSE_MODEL_PATH", "")).resolve()
         if not model_path.is_file():

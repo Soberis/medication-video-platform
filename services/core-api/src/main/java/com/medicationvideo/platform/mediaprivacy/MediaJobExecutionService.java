@@ -67,12 +67,14 @@ class MediaJobExecutionService {
 	}
 
 	@Transactional
-	MediaLeaseResponse acquire(UUID mediaJobId, int attemptNumber, String leaseToken, MediaLeaseRequest request) {
+	MediaLeaseResponse acquire(UUID mediaJobId, int attemptNumber, String leaseToken, MediaLeaseRequest request,
+			String authenticatedWorkerId) {
+		requireWorkerIdentity(authenticatedWorkerId, request.workerId());
 		var now = now();
 		var job = lockJob(mediaJobId);
 		var attempt = lockAttempt(mediaJobId, attemptNumber);
 		requireLease(attempt, leaseToken);
-		attempt.acquire(request.workerId(), now, this.leaseDuration);
+		attempt.acquire(authenticatedWorkerId, now, this.leaseDuration);
 		job.start(now);
 		var grant = this.assetIngest.begin(job.getProjectId(), job.getClipAssetId(), this.inputAuthorizationLifetime,
 				now);
@@ -82,7 +84,9 @@ class MediaJobExecutionService {
 	}
 
 	@Transactional
-	MediaHeartbeatResponse heartbeat(UUID mediaJobId, int attemptNumber, String leaseToken, MediaLeaseRequest request) {
+	MediaHeartbeatResponse heartbeat(UUID mediaJobId, int attemptNumber, String leaseToken, MediaLeaseRequest request,
+			String authenticatedWorkerId) {
+		requireWorkerIdentity(authenticatedWorkerId, request.workerId());
 		var now = now();
 		var job = lockJob(mediaJobId);
 		var attempt = lockAttempt(mediaJobId, attemptNumber);
@@ -90,29 +94,32 @@ class MediaJobExecutionService {
 		if (job.getStatus() != MediaJobStatus.RUNNING) {
 			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is no longer running.", false);
 		}
-		attempt.heartbeat(request.workerId(), now, this.leaseDuration);
+		attempt.heartbeat(authenticatedWorkerId, now, this.leaseDuration);
 		return new MediaHeartbeatResponse(job.getMediaJobId(), attempt.getAttempt(), attempt.getLeaseUntil(),
 				this.heartbeatInterval.toSeconds());
 	}
 
 	@Transactional
 	MediaResultAcceptedResponse acceptResult(UUID mediaJobId, int attemptNumber, String leaseToken,
-			MediaProbeResultRequest request) {
+			MediaProbeResultRequest request, String authenticatedWorkerId) {
 		var now = now();
 		var job = lockJob(mediaJobId);
 		var attempt = lockAttempt(mediaJobId, attemptNumber);
 		requireResultIdentity(job, attempt, mediaJobId, attemptNumber, leaseToken, request, now);
-
+		// Preserve the existing stale/cancelled-attempt contract before applying the
+		// additional authenticated Worker ownership check.
 		var fingerprint = request.fingerprint();
 		var existing = this.inbox.find(request.messageId());
 		if (existing.isPresent()) {
+			attempt.requireWorker(authenticatedWorkerId);
 			return requireSameReceipt(existing.get(), request, fingerprint);
 		}
+		attempt.requireActiveLease(now);
+		attempt.requireWorker(authenticatedWorkerId);
 		if (!this.approvedSoftwareDigests.contains(request.softwareDigest())) {
 			throw new MediaJobExecutionException("MEDIA_WORKER_SOFTWARE_UNAPPROVED",
 					"The Worker software digest is not approved for this profile.", false);
 		}
-		attempt.requireActiveLease(now);
 		if (job.getStatus() != MediaJobStatus.RUNNING) {
 			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is no longer running.", false);
 		}
@@ -210,6 +217,13 @@ class MediaJobExecutionService {
 		if (!attempt.matchesLeaseHash(MediaLeaseCapabilityFactory.hash(leaseToken))) {
 			throw new MediaJobExecutionException("MEDIA_JOB_LEASE_INVALID", "The media job lease token is invalid.",
 					false);
+		}
+	}
+
+	private static void requireWorkerIdentity(String authenticatedWorkerId, String requestedWorkerId) {
+		if (authenticatedWorkerId == null || !authenticatedWorkerId.equals(requestedWorkerId)) {
+			throw new MediaJobExecutionException("MEDIA_JOB_LEASE_CONFLICT",
+					"The requested Worker identity does not match the authenticated Worker.", false);
 		}
 	}
 

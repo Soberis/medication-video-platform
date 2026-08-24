@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -116,7 +117,10 @@ class UploadBatchExceptionHandler {
 	private static ResponseEntity<ApiErrorResponse> error(HttpStatus status, String errorCode, String errorMessage,
 			boolean retryable) {
 		var body = new ApiErrorResponse(errorCode, errorMessage, retryable, UUID.randomUUID().toString(), null);
-		return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body);
+		return ResponseEntity.status(status)
+			.cacheControl(CacheControl.noStore())
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.body(body);
 	}
 
 }

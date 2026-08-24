@@ -17,6 +17,7 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
 @Service
 class MediaJobReplayService {
@@ -31,11 +32,13 @@ class MediaJobReplayService {
 
 	private final AuditEventRecorder auditRecorder;
 
+	private final ProjectAccessService projectAccessService;
+
 	private final int maxManualReplays;
 
 	MediaJobReplayService(MediaJobRepository jobRepository, MediaJobAttemptRepository attemptRepository,
 			MediaJobManualReplayRepository replayRepository, MediaJobAttemptQueueService attemptQueue,
-			AuditEventRecorder auditRecorder,
+			AuditEventRecorder auditRecorder, ProjectAccessService projectAccessService,
 			@Value("${platform.media-probe.max-manual-replays:2}") int maxManualReplays) {
 		if (maxManualReplays < 1 || maxManualReplays > 10) {
 			throw new IllegalArgumentException("Media probe max manual replays must be between 1 and 10.");
@@ -45,12 +48,14 @@ class MediaJobReplayService {
 		this.replayRepository = replayRepository;
 		this.attemptQueue = attemptQueue;
 		this.auditRecorder = auditRecorder;
+		this.projectAccessService = projectAccessService;
 		this.maxManualReplays = maxManualReplays;
 	}
 
 	@Transactional
 	MediaJobManualReplay replay(UUID projectId, String actorId, UUID mediaJobId, String idempotencyKey,
 			String requestId, String traceId, MediaJobReplayRequest request) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = fingerprint(projectId, mediaJobId, request);
 		var byIdempotency = this.replayRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
 		if (byIdempotency.isPresent()) {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -232,6 +233,7 @@ class UploadBatchContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(validRequest(PROJECT_ID, 5_368_709_121L)))
 			.andExpect(status().isConflict())
+			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.error_code").value("IDEMPOTENCY_KEY_REUSED"))
 			.andExpect(jsonPath("$.retryable").value(false))
@@ -247,6 +249,7 @@ class UploadBatchContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(validRequest(PROJECT_ID, 1L)))
 			.andExpect(status().isUnauthorized())
+			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.error_code").value("UNAUTHENTICATED"));
 
 		this.mockMvc

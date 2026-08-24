@@ -64,6 +64,7 @@ class MediaJobController {
 					regexp = "^[A-Za-z0-9._:-]{16,128}$") String idempotencyKey,
 			@RequestBody @Valid MediaJobRequest request, Authentication authentication) {
 		var actor = requireActor(authentication);
+		this.projectAccessService.requireMember(actor.projectId(), actor.actorId());
 		var job = this.service.create(actor.projectId(), idempotencyKey, request);
 		var body = MediaJobResponse.from(job, this.service.currentAttempt(job));
 		var location = URI.create("/api/v1/media-jobs/" + job.getMediaJobId());
@@ -76,6 +77,7 @@ class MediaJobController {
 	@GetMapping("/media-jobs/{mediaJobId}")
 	ResponseEntity<MediaJobResponse> getMediaJob(@PathVariable UUID mediaJobId, Authentication authentication) {
 		var actor = requireActor(authentication);
+		this.projectAccessService.requireMember(actor.projectId(), actor.actorId());
 		var job = this.service.get(actor.projectId(), mediaJobId);
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())

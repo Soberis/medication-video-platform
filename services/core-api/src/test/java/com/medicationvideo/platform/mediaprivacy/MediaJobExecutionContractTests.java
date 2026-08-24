@@ -163,6 +163,32 @@ class MediaJobExecutionContractTests {
 	}
 
 	@Test
+	void replayRequiresProjectAdministratorMembership() throws Exception {
+		var created = createQueuedJob();
+		acquire(created).andExpect(status().isOk());
+		var bodySha256 = "d".repeat(64);
+		var deadLetterId = MediaDeadLetterIdentity.from(MediaDeadLetterReason.MEDIA_JOB_ACQUIRE_REJECTED, bodySha256);
+		var request = replayRequest(created, deadLetterId, bodySha256);
+		this.jdbcTemplate.update("""
+				UPDATE membership
+				SET status = 'REMOVED', removed_by = ?, removed_at = ?
+				WHERE project_id = ? AND actor_id = ?
+				""", ProjectMembershipTestData.ADMIN_ACTOR, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")),
+				PROJECT_ID, ProjectMembershipTestData.ADMIN_ACTOR);
+
+		this.mockMvc
+			.perform(post("/api/v1/media-jobs/{jobId}/replays", created.jobId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", "media-replay-membership-001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_NOT_FOUND"));
+
+		assertEquals(0, count("SELECT count(*) FROM media_job_manual_replay WHERE media_job_id = ?", created.jobId()));
+	}
+
+	@Test
 	void rejectsForgedDeadLetterIdentityWithoutChangingTheCurrentAttempt() throws Exception {
 		var created = createQueuedJob();
 		var request = replayRequest(created, UUID.fromString("99999999-9999-5999-8999-999999999999"), "d".repeat(64));

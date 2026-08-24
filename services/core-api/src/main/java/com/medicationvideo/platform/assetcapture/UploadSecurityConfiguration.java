@@ -79,6 +79,7 @@ class PlatformSecurityConfiguration {
 						return;
 					}
 					response.setStatus(403);
+					response.setHeader("Cache-Control", "no-store");
 					response.setContentType("application/problem+json");
 					response.getWriter()
 						.write("{\"error_code\":\"FORBIDDEN\","
@@ -102,6 +103,7 @@ class PlatformSecurityConfiguration {
 			throws java.io.IOException {
 		response.setStatus(401);
 		response.setHeader("WWW-Authenticate", "Bearer");
+		response.setHeader("Cache-Control", "no-store");
 		response.setContentType("application/problem+json");
 		response.getWriter()
 			.write("{\"error_code\":\"UNAUTHENTICATED\","

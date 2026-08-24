@@ -33,20 +33,20 @@ class MediaWorkerController {
 	ResponseEntity<MediaLeaseResponse> acquire(@PathVariable UUID mediaJobId, @PathVariable @Min(1) int attempt,
 			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
 			@RequestBody @Valid MediaLeaseRequest request, Authentication authentication) {
-		requireWorker(authentication);
+		var workerId = requireWorker(authentication);
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(this.service.acquire(mediaJobId, attempt, leaseToken, request));
+			.body(this.service.acquire(mediaJobId, attempt, leaseToken, request, workerId));
 	}
 
 	@PostMapping("/{mediaJobId}/attempts/{attempt}/heartbeat")
 	ResponseEntity<MediaHeartbeatResponse> heartbeat(@PathVariable UUID mediaJobId, @PathVariable @Min(1) int attempt,
 			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
 			@RequestBody @Valid MediaLeaseRequest request, Authentication authentication) {
-		requireWorker(authentication);
+		var workerId = requireWorker(authentication);
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(this.service.heartbeat(mediaJobId, attempt, leaseToken, request));
+			.body(this.service.heartbeat(mediaJobId, attempt, leaseToken, request, workerId));
 	}
 
 	@PutMapping("/{mediaJobId}/attempts/{attempt}/result")
@@ -54,18 +54,30 @@ class MediaWorkerController {
 			@PathVariable @Min(1) int attempt,
 			@RequestHeader(name = "X-Media-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
 			@RequestBody @Valid MediaProbeResultRequest request, Authentication authentication) {
-		requireWorker(authentication);
+		var workerId = requireWorker(authentication);
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(this.service.acceptResult(mediaJobId, attempt, leaseToken, request));
+			.body(this.service.acceptResult(mediaJobId, attempt, leaseToken, request, workerId));
 	}
 
-	private static void requireWorker(Authentication authentication) {
+	private static String requireWorker(Authentication authentication) {
 		if (authentication == null || authentication.getAuthorities()
 			.stream()
 			.noneMatch(authority -> authority.getAuthority().equals("ROLE_MEDIA_WORKER"))) {
 			throw new MediaJobAuthorizationException();
 		}
+		var name = authentication.getName();
+		if (name == null || name.isBlank()) {
+			throw new MediaJobAuthorizationException();
+		}
+		var prefix = "MediaWorkerActor[serviceId=";
+		if (name.startsWith(prefix) && name.endsWith("]")) {
+			name = name.substring(prefix.length(), name.length() - 1);
+		}
+		if (!name.matches("^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")) {
+			throw new MediaJobAuthorizationException();
+		}
+		return name;
 	}
 
 }
