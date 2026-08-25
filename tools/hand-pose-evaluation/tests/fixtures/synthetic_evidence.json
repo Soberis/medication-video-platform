@@ -1,0 +1,27 @@
+{
+  "format": "hand-pose-evaluation.v1",
+  "evaluation_id": "synthetic-hand-pose-eval-001",
+  "sample_version": "synthetic-authorized-v1",
+  "sample_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sample_authorization": {
+    "status": "AUTHORIZED",
+    "evidence": "synthetic-fixture.authorization"
+  },
+  "model_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "profile_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "parameter_adjustment_note": "Synthetic format fixture only; evaluation values remain PENDING.",
+  "metrics": [
+    {"name": "HAND_FRAME_RECALL", "status": "PENDING", "value": null},
+    {"name": "NO_HAND_FRAME_FALSE_POSITIVE_RATE", "status": "PENDING", "value": null},
+    {"name": "LANDMARK_21_VALID_RATE", "status": "PENDING", "value": null},
+    {"name": "HANDEDNESS_ACCURACY", "status": "PENDING", "value": null},
+    {"name": "FAST_MOTION_OCCLUSION_USEFULNESS", "status": "PENDING", "value": null},
+    {"name": "OVERLAY_TIME_ERROR", "status": "PENDING", "value": null},
+    {"name": "PROCESSING_TIME_PER_MINUTE", "status": "PENDING", "value": null}
+  ],
+  "invariants": [
+    {"name": "WORKER_INTERRUPTION_RECOVERY", "status": "PENDING", "evidence": null},
+    {"name": "ORIGINAL_VIDEO_UNMODIFIED", "status": "PENDING", "evidence": null},
+    {"name": "CANDIDATE_NOT_FORMAL_ANNOTATION", "status": "PENDING", "evidence": null}
+  ]
+}

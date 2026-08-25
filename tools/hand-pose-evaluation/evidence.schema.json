@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hand-pose-evaluation.v1",
+  "title": "Offline hand-pose evaluation evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "evaluation_id",
+    "sample_version",
+    "sample_sha256",
+    "sample_authorization",
+    "model_sha256",
+    "profile_sha256",
+    "parameter_adjustment_note",
+    "metrics",
+    "invariants"
+  ],
+  "properties": {
+    "format": {"const": "hand-pose-evaluation.v1"},
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "sample_version": {"type": ["string", "null"], "minLength": 1},
+    "sample_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "sample_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {"const": "AUTHORIZED"},
+        "evidence": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "model_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "profile_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "parameter_adjustment_note": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "metrics": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "$ref": "#/$defs/metric"
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/invariant"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"sample_version": {"type": "null"}}},
+      "then": {"properties": {"sample_sha256": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"sample_sha256": {"type": "null"}}},
+      "then": {"properties": {"sample_version": {"type": "string"}}}
+    }
+  ],
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "value"],
+      "properties": {
+        "name": {
+          "enum": [
+            "HAND_FRAME_RECALL",
+            "NO_HAND_FRAME_FALSE_POSITIVE_RATE",
+            "LANDMARK_21_VALID_RATE",
+            "HANDEDNESS_ACCURACY",
+            "FAST_MOTION_OCCLUSION_USEFULNESS",
+            "OVERLAY_TIME_ERROR",
+            "PROCESSING_TIME_PER_MINUTE"
+          ]
+        },
+        "status": {"enum": ["PENDING", "RECORDED"]},
+        "value": {"type": ["number", "null"], "minimum": 0}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "PENDING"}}},
+          "then": {"properties": {"value": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "RECORDED"}}},
+          "then": {"properties": {"value": {"type": "number"}}}
+        },
+        {
+          "if": {
+            "properties": {
+              "name": {
+                "enum": [
+                  "HAND_FRAME_RECALL",
+                  "NO_HAND_FRAME_FALSE_POSITIVE_RATE",
+                  "LANDMARK_21_VALID_RATE",
+                  "HANDEDNESS_ACCURACY",
+                  "FAST_MOTION_OCCLUSION_USEFULNESS"
+                ]
+              }
+            }
+          },
+          "then": {"properties": {"value": {"maximum": 1}}}
+        }
+      ]
+    },
+    "invariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "evidence"],
+      "properties": {
+        "name": {
+          "enum": [
+            "WORKER_INTERRUPTION_RECOVERY",
+            "ORIGINAL_VIDEO_UNMODIFIED",
+            "CANDIDATE_NOT_FORMAL_ANNOTATION"
+          ]
+        },
+        "status": {"enum": ["PASS", "PENDING"]},
+        "evidence": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/evidence"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "PASS"}}},
+          "then": {
+            "properties": {
+              "evidence": {"$ref": "#/$defs/evidence"}
+            }
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "reference": {"type": ["string", "null"], "maxLength": 256},
+        "description": {"type": ["string", "null"], "maxLength": 2000}
+      },
+      "anyOf": [
+        {"required": ["reference"]},
+        {"required": ["description"]}
+      ]
+    }
+  }
+}
