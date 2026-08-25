@@ -152,7 +152,11 @@ export default function ProjectMembershipView() {
             initialValues={{ role: 'MEMBER' }}
             onFinish={(values) => void saveMembership(values)}
           >
-            <Form.Item label="平台账号" name="actorId">
+            <Form.Item
+              label="平台账号"
+              name="actorId"
+              rules={[{ required: true, message: '请选择平台账号。' }]}
+            >
               <Select
                 showSearch
                 placeholder="选择已启用的内部账号"
@@ -162,7 +166,11 @@ export default function ProjectMembershipView() {
                 }))}
               />
             </Form.Item>
-            <Form.Item label="项目角色" name="role">
+            <Form.Item
+              label="项目角色"
+              name="role"
+              rules={[{ required: true, message: '请选择项目角色。' }]}
+            >
               <Select
                 options={[
                   { label: '成员', value: 'MEMBER' },

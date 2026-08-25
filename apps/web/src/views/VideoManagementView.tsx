@@ -227,24 +227,26 @@ export default function VideoManagementView() {
         }
       />
       {summary ? (
-        <SummaryStrip
-          ariaLabel="项目视频摘要"
-          items={[
-            { label: '视频总数', value: summary.total_videos },
-            {
-              label: '待处理',
-              value: pendingWorkCount,
-              detail: `标注 ${summary.pending_annotation} · 复核 ${summary.pending_review} · 清洗 ${summary.pending_cleaning}`,
-            },
-            { label: '可用数据', value: summary.usable_count },
-          ]}
-          footer={
-            <>
-              <span>总时长 {formatDuration(summary.total_duration)}</span>
-              <span>存储 {formatBytes(summary.storage_bytes)}</span>
-            </>
-          }
-        />
+        <div className="video-management-summary">
+          <SummaryStrip
+            ariaLabel="项目视频摘要"
+            items={[
+              { label: '视频总数', value: summary.total_videos },
+              {
+                label: '待处理',
+                value: pendingWorkCount,
+                detail: `标注 ${summary.pending_annotation} · 复核 ${summary.pending_review} · 清洗 ${summary.pending_cleaning}`,
+              },
+              { label: '可用数据', value: summary.usable_count },
+            ]}
+            footer={
+              <>
+                <span>总时长 {formatDuration(summary.total_duration)}</span>
+                <span>存储 {formatBytes(summary.storage_bytes)}</span>
+              </>
+            }
+          />
+        </div>
       ) : null}
       {summaryError ? <NoticeState>视频摘要暂不可用，视频列表仍可使用。</NoticeState> : null}
       <section className="video-filter-toolbar" aria-labelledby="video-management-filters-title">
@@ -473,13 +475,13 @@ export default function VideoManagementView() {
             columns={[
               {
                 title: '视频',
-                width: 320,
+                width: 300,
                 render: (_, row) => (
                   <div className="video-identity-cell">
                     <Link
                       className="video-name-link"
                       aria-label={`视频 ${row.display_name}，视频资产 ID ${row.video_id}`}
-                      title={row.display_name}
+                      title={`视频资产 ID：${row.video_id}`}
                       to={{
                         pathname: paths.asset(projectId, row.video_id),
                         search: location.search,
@@ -498,9 +500,6 @@ export default function VideoManagementView() {
                           : `接收 ${formatDateTime(row.received_at)}`}
                       </span>
                     </span>
-                    <span className="video-identity" title={`唯一视频资产 ID：${row.video_id}`}>
-                      视频 ID {shortId(row.video_id)}
-                    </span>
                   </div>
                 ),
               },
@@ -508,7 +507,7 @@ export default function VideoManagementView() {
                 title: '媒体状态',
                 className: 'video-table-status-column',
                 align: 'center',
-                width: 128,
+                width: 120,
                 render: (_, row) => (
                   <StatusIndicator tone={mediaStatusTone(row.media_status)}>
                     {videoMediaStatusLabels[row.media_status]}
@@ -520,7 +519,7 @@ export default function VideoManagementView() {
                 dataIndex: 'annotation_status',
                 className: 'video-table-status-column',
                 align: 'center',
-                width: 104,
+                width: 96,
                 render: (value: VideoSummaryAnnotationStatus) => (
                   <StatusIndicator tone={annotationStatusTone(value)}>
                     {videoAnnotationStatusLabels[value]}
@@ -532,7 +531,7 @@ export default function VideoManagementView() {
                 dataIndex: 'cleaning_status',
                 className: 'video-table-status-column',
                 align: 'center',
-                width: 152,
+                width: 144,
                 render: (value: VideoSummaryCleaningStatus) => (
                   <StatusIndicator tone={cleaningStatusTone(value)}>
                     {videoCleaningStatusLabels[value]}
@@ -541,12 +540,19 @@ export default function VideoManagementView() {
               },
               {
                 title: '下一步',
-                width: 220,
+                width: 184,
                 render: (_, row) => {
                   const action = nextStepAction(row)
+                  const label = nextStepLabel(row)
+                  const description = nextStepDescription(row)
                   return (
                     <div className="video-next-step">
-                      <strong>{nextStepLabel(row)}</strong>
+                      <strong
+                        aria-label={description}
+                        title={description !== label ? description : undefined}
+                      >
+                        {label}
+                      </strong>
                       {action ? (
                         <Link
                           className="video-next-step-action"
@@ -628,10 +634,17 @@ function nextStepLabel(row: VideoSummary) {
   if (row.annotation_status === 'ASSIGNED') return '继续人工标注'
   if (row.annotation_status === 'NOT_STARTED') return '待系统分配标注任务'
   if (row.cleaning_status === 'NOT_STARTED') return '待清洗'
-  if (row.cleaning_status === 'PASS') return '当前数据已通过清洗，可用于训练'
+  if (row.cleaning_status === 'PASS') return '可用于训练'
   if (row.cleaning_status === 'WARNING' || row.cleaning_status === 'REJECT')
     return '需要重新核对清洗'
   return '查看处理结果'
+}
+
+function nextStepDescription(row: VideoSummary) {
+  if (row.cleaning_status === 'PASS') {
+    return '当前数据已通过清洗，可用于训练；实际训练行数以服务端导出预览为准。'
+  }
+  return nextStepLabel(row)
 }
 
 function nextStepAction(row: VideoSummary) {

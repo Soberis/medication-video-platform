@@ -573,10 +573,40 @@ describe('VideoManagementView', () => {
     expect(links[1]).toHaveAccessibleName(
       '视频 video-1.mp4，视频资产 ID 50000000-0000-4000-8000-000000000002',
     )
-    expect(links[0]).toHaveAttribute('title', 'video-1.mp4')
-    expect(links[1]).toHaveAttribute('title', 'video-1.mp4')
-    expect(screen.getByText('视频 ID 50000000…0001')).toBeInTheDocument()
-    expect(screen.getByText('视频 ID 50000000…0002')).toBeInTheDocument()
+    expect(links[0]).toHaveAttribute('title', '视频资产 ID：50000000-0000-4000-8000-000000000001')
+    expect(links[1]).toHaveAttribute('title', '视频资产 ID：50000000-0000-4000-8000-000000000002')
+    expect(screen.queryByText('视频 ID 50000000…0001')).not.toBeInTheDocument()
+    expect(screen.queryByText('视频 ID 50000000…0002')).not.toBeInTheDocument()
+  })
+
+  it('keeps the completed cleaning next step concise while retaining the full fact as context', async () => {
+    const row = videoRow({
+      quality_decision: 'QUALIFIED',
+      annotation_status: 'COMPLETED',
+      cleaning_status: 'PASS',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes('/video-data/summary')
+            ? jsonResponse(summaryBody())
+            : jsonResponse({ items: [row], next_cursor: null }),
+        ),
+    )
+
+    renderRoute(<VideoManagementView />, {
+      route: `/projects/${projectId}/videos`,
+      path: '/projects/:projectId/videos',
+    })
+
+    const nextStep = await screen.findByText('可用于训练')
+    expect(nextStep).toHaveAttribute(
+      'title',
+      '当前数据已通过清洗，可用于训练；实际训练行数以服务端导出预览为准。',
+    )
+    expect(screen.queryByText('当前数据已通过清洗，可用于训练')).not.toBeInTheDocument()
   })
 })
 

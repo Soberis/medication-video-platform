@@ -53,6 +53,35 @@ const fileProgress = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('UploadProgressView', () => {
+  it('uses the loading state to prevent duplicate progress queries', async () => {
+    let resolveBatch: ((response: Response) => void) | undefined
+    let resolveFiles: ((response: Response) => void) | undefined
+    const batchResponse = new Promise<Response>((resolve) => {
+      resolveBatch = resolve
+    })
+    const fileResponse = new Promise<Response>((resolve) => {
+      resolveFiles = resolve
+    })
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      return String(input).endsWith('/files') ? fileResponse : batchResponse
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
+
+    await user.type(screen.getByLabelText('上传批次 ID'), batchId)
+    await user.click(screen.getByRole('button', { name: '查询进度' }))
+
+    const loadingButton = (await screen.findByText('查询中…')).closest('button')
+    expect(loadingButton).not.toBeNull()
+    expect(loadingButton).toBeDisabled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    resolveBatch?.(jsonResponse(batchProgress))
+    resolveFiles?.(jsonResponse(fileProgress))
+    expect(await screen.findByText('synthetic-device-01')).toBeInTheDocument()
+  })
+
   it('validates the batch UUID before calling the API', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

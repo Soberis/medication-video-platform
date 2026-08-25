@@ -18,6 +18,10 @@ interface AccountFields {
   password: string
 }
 
+const usernamePattern = /^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/
+const usernameConstraintMessage = '账号名需为 3 至 128 位字母、数字或 . _ : @ -。'
+const passwordConstraintMessage = '初始密码长度需为 12 至 72 个字符。'
+
 export default function AccountManagementView() {
   const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm<AccountFields>()
@@ -62,12 +66,12 @@ export default function AccountManagementView() {
   async function createAccount(values: AccountFields) {
     if (isSubmitting) return
     const username = values.username.trim()
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/.test(username)) {
-      void message.error('账号名需为 3 至 128 位字母、数字或 . _ : @ -。')
+    if (!usernamePattern.test(username)) {
+      void message.error(usernameConstraintMessage)
       return
     }
     if (values.password.length < 12 || values.password.length > 72) {
-      void message.error('初始密码长度需为 12 至 72 个字符。')
+      void message.error(passwordConstraintMessage)
       return
     }
     setIsSubmitting(true)
@@ -138,10 +142,40 @@ export default function AccountManagementView() {
           className="account-form"
           onFinish={(values) => void createAccount(values)}
         >
-          <Form.Item label="账号名" name="username">
+          <Form.Item
+            label="账号名"
+            name="username"
+            validateFirst
+            rules={[
+              { required: true, whitespace: true, message: '请输入账号名。' },
+              {
+                validator: (_, value: unknown) => {
+                  if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
+                  return usernamePattern.test(value.trim())
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(usernameConstraintMessage))
+                },
+              },
+            ]}
+          >
             <Input autoComplete="username" maxLength={128} />
           </Form.Item>
-          <Form.Item label="初始密码" name="password">
+          <Form.Item
+            label="初始密码"
+            name="password"
+            validateFirst
+            rules={[
+              { required: true, message: '请输入初始密码。' },
+              {
+                validator: (_, value: unknown) => {
+                  if (typeof value !== 'string' || value.length === 0) return Promise.resolve()
+                  return value.length >= 12 && value.length <= 72
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(passwordConstraintMessage))
+                },
+              },
+            ]}
+          >
             <Input.Password autoComplete="new-password" maxLength={72} />
           </Form.Item>
           <p className="form-hint">初始密码不会写入账号列表、日志或审计记录。</p>

@@ -235,6 +235,54 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
   }, 20_000)
 
+  it('explains when a cleaning recheck replays the unchanged immutable result', async () => {
+    const completedTask = {
+      ...assignedTask,
+      status: 'COMPLETED',
+      can_submit: false,
+      can_recheck_post_cleaning: true,
+      annotation_revision: completedRevision,
+    }
+    const recheckUrl = `/api/v1/projects/${projectId}/annotation-revisions/${completedRevision.annotation_revision_id}/post-cleaning-rechecks`
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
+      if (url.endsWith('/annotation-tasks') && init?.method === 'GET') {
+        return jsonResponse(taskList([completedTask]))
+      }
+      if (url === recheckUrl && init?.method === 'POST') {
+        return jsonResponse(completedRevision.post_cleaning_result)
+      }
+      throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const user = userEvent.setup()
+    renderView()
+
+    const taskRow = await screen.findByRole('article', { name: /标注完成/ })
+    expect(within(taskRow).getByRole('button', { name: /重新核对视频/ })).toHaveClass(
+      'ant-btn-link',
+    )
+    await user.click(within(taskRow).getByRole('button', { name: /重新核对视频/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('历史结果会保留')
+    await user.click(within(dialog).getByRole('button', { name: '重新核对' }))
+
+    expect(
+      await screen.findByText('当前事实未变化，清洗结论保持为“当前规则检查通过”。'),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      recheckUrl,
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
+    )
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) => String(input).endsWith('/annotation-tasks') && init?.method === 'GET',
+      ),
+    ).toHaveLength(2)
+  })
+
   it('reloads the current task state from the server when the page is re-entered', async () => {
     const submittedTask = {
       ...assignedTask,

@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -174,9 +175,9 @@ export default function UploadProgressView() {
               placeholder="例如：00000000-0000-4000-8000-000000000001"
               aria-invalid={loadState === 'error'}
             />
-            <button type="submit" disabled={isLoading}>
+            <Button htmlType="submit" type="primary" loading={isLoading} disabled={isLoading}>
               {isLoading ? '查询中…' : hasResult ? '刷新进度' : '查询进度'}
-            </button>
+            </Button>
           </div>
         </form>
       </Section>

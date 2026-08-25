@@ -78,6 +78,7 @@ function postCleaningPresentation(task: AnnotationTask): {
   tone: StatusIndicatorTone
   description: string
   reasons: string[]
+  evaluatedAt: string | null
 } | null {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
@@ -93,6 +94,7 @@ function postCleaningPresentation(task: AnnotationTask): {
       tone: 'success',
       description: '当前规则检查通过；实际训练行数以服务端导出预览为准。',
       reasons,
+      evaluatedAt: result.evaluated_at,
     }
   if (result?.outcome === 'WARNING')
     return {
@@ -100,6 +102,7 @@ function postCleaningPresentation(task: AnnotationTask): {
       tone: 'warning',
       description: '当前数据暂不可用于训练，请补充事实后重新核对清洗。',
       reasons,
+      evaluatedAt: result.evaluated_at,
     }
   if (result?.outcome === 'REJECT')
     return {
@@ -107,12 +110,14 @@ function postCleaningPresentation(task: AnnotationTask): {
       tone: 'destructive',
       description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
       reasons,
+      evaluatedAt: result.evaluated_at,
     }
   return {
     label: cleaningStatusLabels.NOT_STARTED,
     tone: 'neutral',
     description: '尚未形成可用于训练的清洗结论。',
     reasons,
+    evaluatedAt: null,
   }
 }
 
@@ -393,8 +398,21 @@ export default function AnnotationTaskListView() {
       async onOk() {
         setRecheckingRevisionId(revision.annotation_revision_id)
         try {
-          await recheckAnnotationPostCleaning(projectId, revision.annotation_revision_id)
-          void message.success('已按当前事实重新核对清洗结果。')
+          const previousResult = revision.post_cleaning_result
+          const result = await recheckAnnotationPostCleaning(
+            projectId,
+            revision.annotation_revision_id,
+          )
+          const sameResult = previousResult?.cleaning_result_id === result.cleaning_result_id
+          if (sameResult) {
+            void message.info(
+              `当前事实未变化，清洗结论保持为“${cleaningStatusLabels[result.outcome]}”。`,
+            )
+          } else {
+            const resultMessage = `已按当前事实重新核对清洗：${cleaningStatusLabels[result.outcome]}。`
+            if (result.outcome === 'PASS') void message.success(resultMessage)
+            else void message.warning(resultMessage)
+          }
           await loadTasks()
         } catch (error) {
           void message.error(
@@ -566,6 +584,9 @@ export default function AnnotationTaskListView() {
                       <div className="task-details-block">
                         <h3>清洗说明</h3>
                         <p>{presentation.description}</p>
+                        {presentation.evaluatedAt ? (
+                          <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
+                        ) : null}
                         {presentation.reasons.length ? (
                           <p>原因：{presentation.reasons.join('；')}</p>
                         ) : null}
@@ -611,7 +632,12 @@ export default function AnnotationTaskListView() {
                   </>
                 ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
                   <Button
-                    type="primary"
+                    type={
+                      row.annotation_revision.post_cleaning_result?.outcome === 'WARNING' ||
+                      row.annotation_revision.post_cleaning_result?.outcome === 'REJECT'
+                        ? 'primary'
+                        : 'link'
+                    }
                     size="small"
                     aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
                     loading={
