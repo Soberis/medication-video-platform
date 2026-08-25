@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 
 import { paths } from '@/app/paths'
+import { AppShell } from '@/components/layout/AppShell'
 import { renderRoute } from '@/test/render'
 import AnnotationTaskWorkbenchView from '@/views/AnnotationTaskWorkbenchView'
 
@@ -145,6 +146,25 @@ const completedTask = {
   },
 }
 
+const recheckableTask = {
+  ...completedTask,
+  can_recheck_post_cleaning: true,
+  annotation_revision: {
+    ...completedTask.annotation_revision,
+    post_cleaning_result: {
+      cleaning_result_id: '85000000-0000-4000-8000-000000000001',
+      cleaning_run_id: '86000000-0000-4000-8000-000000000001',
+      rule_set_key: 'p0-post-annotation',
+      rule_set_version: 'p0-post-annotation.v1',
+      rule_set_digest: 'f'.repeat(64),
+      outcome: 'WARNING',
+      reason_codes: ['VERIFIED_MEDIA_DURATION_UNAVAILABLE'],
+      executed_checks: [],
+      evaluated_at: '2026-08-20T01:35:00Z',
+    },
+  },
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task workbench', () => {
@@ -163,6 +183,25 @@ describe('annotation task workbench', () => {
       `/api/v1/projects/${projectId}/clip-assets/${assetId}`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
+  })
+
+  it('keeps AppShell as the only main landmark', async () => {
+    stubWorkbench([assignedTask])
+    renderRoute(
+      <AppShell sidebar={<aside aria-label="测试导航" />}>
+        <AnnotationTaskWorkbenchView />
+      </AppShell>,
+      {
+        route: paths.annotationTask(projectId, taskId),
+        path: '/projects/:projectId/annotation-tasks/:taskId',
+      },
+    )
+
+    expect(await screen.findByRole('heading', { name: '配药动作标注工作台' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '提交标注' })).toBeInTheDocument()
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content')
+    expect(document.querySelector('.workbench-primary')).toHaveProperty('tagName', 'SECTION')
   })
 
   it('does not autoplay and uses the existing authorized playback path', async () => {
@@ -322,6 +361,26 @@ describe('annotation task workbench', () => {
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
       decision: 'REJECTED',
       review_note: '请补充动作结束位置。',
+    })
+  })
+
+  it('keeps post-cleaning recheck available when the server authorizes it', async () => {
+    const fetchMock = stubWorkbench([recheckableTask])
+    const user = userEvent.setup()
+    renderWorkbench()
+
+    await user.click(await screen.findByRole('button', { name: '重新核对清洗' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('历史结果会保留')
+    await user.click(within(dialog).getByRole('button', { name: '重新核对' }))
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([input, init]) =>
+            String(input).endsWith('/post-cleaning-rechecks') && init?.method === 'POST',
+        ),
+      ).toBe(true)
     })
   })
 

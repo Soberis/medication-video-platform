@@ -590,7 +590,7 @@ export default function AnnotationTaskWorkbenchView() {
       {loadState === 'loading' ? <LoadingState>正在读取当前标注任务…</LoadingState> : null}
       {loadState === 'success' && task && detail ? (
         <div className="annotation-workbench-layout workbench-grid">
-          <main className="workbench-primary" aria-label="视频与人工标注">
+          <section className="workbench-primary" aria-label="视频与人工标注">
             <PlaybackCard
               availability={playbackAvailability}
               candidateOverlay={candidateOverlay}
@@ -781,7 +781,7 @@ export default function AnnotationTaskWorkbenchView() {
                 </>
               )}
             </Section>
-          </main>
+          </section>
           <aside
             className="workbench-sidebar annotation-workbench-inspector"
             aria-label="任务检查器"

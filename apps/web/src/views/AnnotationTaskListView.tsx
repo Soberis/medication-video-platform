@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Input, Modal } from 'antd'
+import { App as AntdApp, Button, Modal } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -6,8 +6,6 @@ import {
   AnnotationTaskApiError,
   getAnnotationLabelSchema,
   listAnnotationTasks,
-  recheckAnnotationPostCleaning,
-  reviewAnnotationRevision,
   type AnnotationLabelSchema,
   type AnnotationTask,
   type AnnotationTaskProgress,
@@ -118,15 +116,13 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
-  const { message, modal } = AntdApp.useApp()
+  const { message } = AntdApp.useApp()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [reviewingRevisionId, setReviewingRevisionId] = useState<string | null>(null)
-  const [recheckingRevisionId, setRecheckingRevisionId] = useState<string | null>(null)
   const [trainingExportPreview, setTrainingExportPreview] =
     useState<TrainingDataExportPreview | null>(null)
   const [isTrainingExportOpen, setIsTrainingExportOpen] = useState(false)
@@ -253,97 +249,6 @@ export default function AnnotationTaskListView() {
       setIsTrainingDownloadLoading(false)
     }
   }, [isTrainingDownloadLoading, message, projectId, trainingExportPreview])
-
-  function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
-    const revision = task.annotation_revision
-    if (!revision || !task.can_review || reviewingRevisionId) return
-    const approved = decision === 'APPROVED'
-    let reviewNote = ''
-    modal.confirm({
-      title: approved ? '通过配药动作标注' : '退回配药动作标注',
-      content: approved ? (
-        '确认时间段标注与视频画面一致，并将其作为正式人工配药动作标注？'
-      ) : (
-        <div className="annotation-review-confirmation">
-          <p>退回这次配药动作标注，要求标注人修改后重新提交。</p>
-          <Input.TextArea
-            aria-label="退回修改说明（可选）"
-            maxLength={1000}
-            rows={3}
-            placeholder="补充需要修改的内容（可选）"
-            onChange={(event) => {
-              reviewNote = event.target.value
-            }}
-          />
-        </div>
-      ),
-      okText: approved ? '通过复核' : '退回修改',
-      cancelText: '取消',
-      okButtonProps: { danger: !approved },
-      async onOk() {
-        setReviewingRevisionId(revision.annotation_revision_id)
-        try {
-          await reviewAnnotationRevision(
-            projectId,
-            revision.annotation_revision_id,
-            decision,
-            reviewNote,
-          )
-          void message.success(
-            approved ? '配药动作标注已通过管理员复核。' : '已记录配药动作标注未通过。',
-          )
-          await loadTasks()
-        } catch (error) {
-          void message.error(
-            error instanceof AnnotationTaskApiError ? error.message : '复核暂未提交，请稍后重试。',
-          )
-          throw error
-        } finally {
-          setReviewingRevisionId(null)
-        }
-      },
-    })
-  }
-  function recheckPostCleaning(task: AnnotationTask) {
-    const revision = task.annotation_revision
-    if (!revision || !task.can_recheck_post_cleaning || recheckingRevisionId) return
-    modal.confirm({
-      title: '重新核对清洗',
-      content: '按当前人工质量、视频和标注事实重新核对清洗结果；历史结果会保留。',
-      okText: '重新核对',
-      cancelText: '取消',
-      async onOk() {
-        setRecheckingRevisionId(revision.annotation_revision_id)
-        try {
-          const previousResult = revision.post_cleaning_result
-          const result = await recheckAnnotationPostCleaning(
-            projectId,
-            revision.annotation_revision_id,
-          )
-          const sameResult = previousResult?.cleaning_result_id === result.cleaning_result_id
-          if (sameResult) {
-            void message.info(
-              `当前事实未变化，清洗结论保持为“${cleaningStatusLabels[result.outcome]}”。`,
-            )
-          } else {
-            const resultMessage = `已按当前事实重新核对清洗：${cleaningStatusLabels[result.outcome]}。`
-            if (result.outcome === 'PASS') void message.success(resultMessage)
-            else void message.warning(resultMessage)
-          }
-          await loadTasks()
-        } catch (error) {
-          void message.error(
-            error instanceof AnnotationTaskApiError
-              ? error.message
-              : '暂时无法重新核对清洗，请稍后重试。',
-          )
-          throw error
-        } finally {
-          setRecheckingRevisionId(null)
-        }
-      },
-    })
-  }
 
   return (
     <>
@@ -512,61 +417,24 @@ export default function AnnotationTaskListView() {
                   </div>
                 </details>
               )
-              const taskAction =
-                row.can_submit && row.status === 'ASSIGNED' ? (
-                  <Button
-                    type="primary"
-                    size="small"
-                    aria-label={`进入视频 ${row.clip_asset_id} 的配药动作标注工作台`}
-                    onClick={() =>
-                      void navigate(paths.annotationTask(projectId, row.annotation_task_id))
-                    }
-                  >
-                    进入工作台
-                  </Button>
-                ) : row.can_review && row.annotation_revision ? (
-                  <>
-                    <Button
-                      type="primary"
-                      size="small"
-                      aria-label={`通过视频 ${row.clip_asset_id} 的配药动作标注复核`}
-                      loading={
-                        reviewingRevisionId === row.annotation_revision.annotation_revision_id
-                      }
-                      onClick={() => review(row, 'APPROVED')}
-                    >
-                      通过复核
-                    </Button>
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      className="annotation-task-danger-action"
-                      aria-label={`退回修改视频 ${row.clip_asset_id} 的配药动作标注`}
-                      disabled={reviewingRevisionId !== null}
-                      onClick={() => review(row, 'REJECTED')}
-                    >
-                      退回修改
-                    </Button>
-                  </>
-                ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
-                  <Button
-                    type={
-                      row.annotation_revision.post_cleaning_result?.outcome === 'WARNING' ||
-                      row.annotation_revision.post_cleaning_result?.outcome === 'REJECT'
-                        ? 'primary'
-                        : 'link'
-                    }
-                    size="small"
-                    aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
-                    loading={
-                      recheckingRevisionId === row.annotation_revision.annotation_revision_id
-                    }
-                    onClick={() => recheckPostCleaning(row)}
-                  >
-                    重新核对清洗
-                  </Button>
-                ) : null
+              const postCleaningOutcome = revision?.post_cleaning_result?.outcome
+              const canOpenWorkbench =
+                (row.can_submit && row.status === 'ASSIGNED') ||
+                (row.can_review && Boolean(revision)) ||
+                (row.can_recheck_post_cleaning &&
+                  (postCleaningOutcome === 'WARNING' || postCleaningOutcome === 'REJECT'))
+              const taskAction = canOpenWorkbench ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  aria-label={`进入视频 ${row.clip_asset_id} 的配药动作标注工作台`}
+                  onClick={() =>
+                    void navigate(paths.annotationTask(projectId, row.annotation_task_id))
+                  }
+                >
+                  进入工作台
+                </Button>
+              ) : null
               return (
                 <article
                   aria-label={`视频 ${shortId(row.clip_asset_id)} · ${taskStatusLabel(row)}`}

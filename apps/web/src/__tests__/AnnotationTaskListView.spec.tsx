@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { paths } from '@/app/paths'
 import { renderRoute } from '@/test/render'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
@@ -135,10 +136,16 @@ describe('annotation task list view', () => {
 
   it('makes the workbench the only primary action for an assigned task', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
-    renderView()
-    expect(
-      await screen.findByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
-    ).toBeInTheDocument()
+    const { router } = renderView()
+    const user = userEvent.setup()
+    const action = await screen.findByRole('button', {
+      name: /进入视频 .*配药动作标注工作台/,
+    })
+    expect(action).toBeInTheDocument()
+    await user.click(action)
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+    )
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining('/revisions'),
       expect.objectContaining({ method: 'POST' }),
@@ -200,56 +207,41 @@ describe('annotation task list view', () => {
       await screen.findByText(/当前数据未通过清洗，暂不可用于训练；视频资产未被删除/),
     ).toBeInTheDocument()
     expect(screen.getByText(/主流程时间段存在重叠/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /重新核对视频/ })).toHaveLength(4)
+    expect(screen.getAllByRole('button', { name: /进入视频 .*配药动作标注工作台/ })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /提交视频/ })).not.toBeInTheDocument()
   }, 20_000)
 
-  it('explains when a cleaning recheck replays the unchanged immutable result', async () => {
+  it('routes a completed warning or rejected cleaning result to the workbench', async () => {
     const completedTask = {
       ...assignedTask,
       status: 'COMPLETED',
       can_submit: false,
       can_recheck_post_cleaning: true,
-      annotation_revision: completedRevision,
+      annotation_revision: {
+        ...completedRevision,
+        post_cleaning_result: {
+          ...completedRevision.post_cleaning_result,
+          outcome: 'WARNING',
+          reason_codes: ['VERIFIED_MEDIA_DURATION_UNAVAILABLE'],
+        },
+      },
     }
-    const recheckUrl = `/api/v1/projects/${projectId}/annotation-revisions/${completedRevision.annotation_revision_id}/post-cleaning-rechecks`
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
-      if (url.endsWith('/annotation-tasks') && init?.method === 'GET') {
-        return jsonResponse(taskList([completedTask]))
-      }
-      if (url === recheckUrl && init?.method === 'POST') {
-        return jsonResponse(completedRevision.post_cleaning_result)
-      }
-      throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
+    stubTasks([completedTask], labelSchema)
     const user = userEvent.setup()
-    renderView()
+    const { router } = renderView()
 
     const taskRow = await screen.findByRole('article', { name: /标注完成/ })
-    expect(within(taskRow).getByRole('button', { name: /重新核对视频/ })).toHaveClass(
-      'ant-btn-link',
+    const action = within(taskRow).getByRole('button', {
+      name: /进入视频 .*配药动作标注工作台/,
+    })
+    expect(within(taskRow).queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
+    await user.click(action)
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
     )
-    await user.click(within(taskRow).getByRole('button', { name: /重新核对视频/ }))
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('历史结果会保留')
-    await user.click(within(dialog).getByRole('button', { name: '重新核对' }))
-
-    expect(
-      await screen.findByText('当前事实未变化，清洗结论保持为“当前规则检查通过”。'),
-    ).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      recheckUrl,
-      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
-    )
-    expect(
-      fetchMock.mock.calls.filter(
-        ([input, init]) => String(input).endsWith('/annotation-tasks') && init?.method === 'GET',
-      ),
-    ).toHaveLength(2)
   })
 
   it('reloads the current task state from the server when the page is re-entered', async () => {
@@ -331,16 +323,18 @@ describe('annotation task list view', () => {
       },
     }
     stubTasks([rejectedTask], labelSchema)
-    renderView()
+    const { router } = renderView()
+    const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('article', { name: /待修改/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
-    expect(
-      within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
-    ).toBeInTheDocument()
+    await user.click(within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+    )
   })
 
-  it('lets an administrator record an optional reason when returning a revision', async () => {
+  it('routes a reviewable submitted task to the workbench without direct review controls', async () => {
     const reviewableTask = {
       ...assignedTask,
       status: 'SUBMITTED',
@@ -348,63 +342,20 @@ describe('annotation task list view', () => {
       can_review: true,
       annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
     }
-    const reworkTask = {
-      ...assignedTask,
-      annotation_revision: {
-        ...completedRevision,
-        review: {
-          ...completedRevision.review,
-          decision: 'REJECTED',
-          review_note: '请补充完整的拿取药品时间段。',
-        },
-        post_cleaning_result: null,
-      },
-    }
-    const responses = [taskList([reviewableTask]), taskList([reworkTask])]
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
-      if (url.endsWith('/annotation-tasks') && init?.method === 'GET')
-        return jsonResponse(responses.shift() ?? taskList([reworkTask]))
-      if (url.endsWith(`/annotation-revisions/${completedRevision.annotation_revision_id}/review`))
-        return jsonResponse({
-          annotation_review_id: '81000000-0000-4000-8000-000000000002',
-          project_id: projectId,
-          annotation_revision_id: completedRevision.annotation_revision_id,
-          decision: 'REJECTED',
-          review_note: '请补充完整的拿取药品时间段。',
-          reviewed_by: 'local-synthetic-admin',
-          reviewed_at: '2026-07-26T01:10:00Z',
-        })
-      throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
+    stubTasks([reviewableTask], labelSchema)
+    const { router } = renderView()
     const user = userEvent.setup()
-    renderView()
 
     const taskRow = await screen.findByRole('article', { name: /待复核/ })
-    await user.click(within(taskRow).getByRole('button', { name: /退回修改/ }))
-    const dialog = await screen.findByRole('dialog')
-    await user.type(
-      within(dialog).getByRole('textbox', { name: '退回修改说明（可选）' }),
-      '请补充完整的拿取药品时间段。',
+    expect(
+      within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+    ).toBeInTheDocument()
+    expect(within(taskRow).queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
+    expect(within(taskRow).queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
+    await user.click(within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
     )
-    await user.click(within(dialog).getByRole('button', { name: '退回修改' }))
-
-    await waitFor(() => {
-      const reviewCall = fetchMock.mock.calls.find(
-        ([input, init]) =>
-          String(input).endsWith(
-            `/annotation-revisions/${completedRevision.annotation_revision_id}/review`,
-          ) && init?.method === 'POST',
-      )
-      expect(reviewCall).toBeDefined()
-      expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
-        decision: 'REJECTED',
-        review_note: '请补充完整的拿取药品时间段。',
-      })
-    })
-    expect(await screen.findByText('待修改')).toBeInTheDocument()
   })
 
   it('loads a project export preview only after the administrator requests it', async () => {
