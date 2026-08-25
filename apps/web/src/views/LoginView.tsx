@@ -82,7 +82,7 @@ export default function LoginView() {
           >
             <Input.Password autoComplete="current-password" maxLength={256} />
           </Form.Item>
-          <Button htmlType="submit" type="primary" loading={auth.loading}>
+          <Button size="middle" htmlType="submit" type="primary" loading={auth.loading}>
             登录
           </Button>
         </Form>

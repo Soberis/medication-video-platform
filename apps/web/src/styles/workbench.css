@@ -139,7 +139,7 @@
   line-height: var(--app-line-height-body-text);
 }
 
-.playback-idle-stage .playback-primary-action {
+.playback-idle-stage .playback-start-action {
   margin: 0;
 }
 
@@ -383,10 +383,6 @@
 
 .hand-pose-disclosure-content .ant-btn {
   justify-self: start;
-}
-
-.hand-pose-candidate-note {
-  margin: 0;
 }
 
 .asset-key-metadata .metadata-list {

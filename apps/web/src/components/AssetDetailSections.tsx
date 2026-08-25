@@ -192,8 +192,8 @@ export function PlaybackCard({
           </div>
           {canPlay ? (
             <Button
-              className="playback-primary-action"
-              type="primary"
+              className="playback-start-action"
+              size="middle"
               loading={isRequestingPlayback}
               onClick={onStartPlayback}
             >
@@ -508,9 +508,7 @@ export function QualityReviewCard({
   return (
     <section className="workbench-panel" aria-labelledby="quality-review-title">
       <h3 id="quality-review-title">人工质量判断</h3>
-      <p className="form-hint">
-        根据实际画面判断该视频是否适合进入配药动作标注。播放本身不会自动产生质量结论。
-      </p>
+      <p className="form-hint">查看画面，判断视频是否可进入配药动作标注。</p>
       {loadState === 'loading' ? <LoadingState>正在读取质量结论…</LoadingState> : null}
       {loadState === 'error' ? (
         <Alert

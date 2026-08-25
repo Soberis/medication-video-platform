@@ -155,7 +155,11 @@ export default function ProjectListView() {
         description="选择项目，继续管理配药操作和视频。"
         actions={
           <>
-            <Button loading={loadState === 'loading'} onClick={() => void loadProjects()}>
+            <Button
+              size="small"
+              loading={loadState === 'loading'}
+              onClick={() => void loadProjects()}
+            >
               刷新
             </Button>
             {canCreateProjects ? (
@@ -217,7 +221,11 @@ export default function ProjectListView() {
                             : archiveDataProject(project)),
                       }}
                     >
-                      <Button type="link" aria-label={`管理项目：${project.display_name}`}>
+                      <Button
+                        type="link"
+                        size="small"
+                        aria-label={`管理项目：${project.display_name}`}
+                      >
                         管理
                       </Button>
                     </Dropdown>

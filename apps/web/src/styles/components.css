@@ -423,22 +423,23 @@
 .project-open-link {
   display: inline-flex;
   align-items: center;
-  min-height: var(--app-control-height);
-  padding: 0 var(--app-space-16);
+  min-height: var(--app-control-height-compact);
+  padding: 0 var(--app-space-4);
   border-radius: var(--app-radius-default);
-  color: var(--app-color-surface);
-  background: var(--app-color-primary);
-  font-weight: var(--app-font-weight-semibold);
+  color: var(--app-color-primary);
+  background: transparent;
+  font-weight: var(--app-font-weight-medium);
+  line-height: var(--app-line-height-control);
   text-decoration: none;
 }
 
 .project-open-link:hover {
-  color: var(--app-color-surface);
-  background: var(--app-color-primary-hover);
+  color: var(--app-color-primary-hover);
+  background: var(--app-color-primary-subtle);
 }
 
 .project-open-link:focus-visible {
-  outline: 3px solid var(--app-color-focus-ring);
+  outline: 2px solid var(--app-color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1276,7 +1277,7 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
-.playback-primary-action,
+.playback-start-action,
 .playback-feedback {
   margin-top: var(--app-space-16);
 }

@@ -27,8 +27,8 @@ describe('catalog views', () => {
       'href',
       `/projects/${projectId}/videos`,
     )
-    expect(screen.getByText('可以直接查看视频')).toBeInTheDocument()
-    expect(screen.getByText(/视频已完成上传完整性校验/)).toBeInTheDocument()
+    expect(screen.getByText('视频可播放')).toBeInTheDocument()
+    expect(screen.getByText(/临时只读地址/)).toBeInTheDocument()
     expect(screen.getByTitle('90000000-0000-4000-8000-000000000001')).toHaveTextContent(
       '90000000…0001',
     )
@@ -47,7 +47,7 @@ describe('catalog views', () => {
   it('does not offer the destructive action to a project member', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     renderAssetDetail()
-    await screen.findByText('可以直接查看视频')
+    await screen.findByText('视频可播放')
     expect(screen.queryByRole('button', { name: '删除视频' })).not.toBeInTheDocument()
   })
 
@@ -227,14 +227,17 @@ describe('catalog views', () => {
       within(workflow).getByRole('heading', { name: /^(下一步|当前结果)$/ }),
     ).toBeInTheDocument()
     expect(within(workflow).getByRole('heading', { name: '流程状态' })).toBeInTheDocument()
-    expect(within(workflow).getByRole('heading', { name: '关键元数据' })).toBeInTheDocument()
-    expect(within(workflow).getByRole('heading', { name: '辅助候选' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('heading', { name: '视频信息' })).toBeInTheDocument()
+    expect(within(workflow).getByRole('heading', { name: '手部检测' })).toBeInTheDocument()
+    expect(
+      within(workflow.querySelector('.workflow-facts-list') as HTMLElement).getByText('手部检测'),
+    ).toBeInTheDocument()
     expect(within(workflow).getAllByText('人工复核')).toHaveLength(2)
     expect(within(workflow).getAllByText('当前规则检查通过')).toHaveLength(1)
     expect(within(workflow).getByText('当前结果')).toBeInTheDocument()
-    const workflowDetails = within(workflow).getByText('查看流程依据').closest('details')
+    const workflowDetails = within(workflow).getByText('查看说明').closest('details')
     expect(workflowDetails).not.toHaveAttribute('open')
-    await user.click(within(workflow).getByText('查看流程依据'))
+    await user.click(within(workflow).getByText('查看说明'))
     expect(workflowDetails).toHaveAttribute('open')
     expect(within(workflow).getAllByText('当前数据已通过清洗，可用于训练')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: '创建配药动作标注' })).not.toBeInTheDocument()
@@ -264,7 +267,7 @@ describe('catalog views', () => {
     expect(await screen.findByRole('button', { name: '查看质量结论' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
     const workflow = screen.getByRole('complementary', { name: '视频处理流程' })
-    await user.click(within(workflow).getByText('查看流程依据'))
+    await user.click(within(workflow).getByText('查看说明'))
     expect(
       screen.getByText('历史清洗已通过；当前质量结论未确认或未通过，暂不能用于训练'),
     ).toBeInTheDocument()
@@ -275,15 +278,15 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    const handPoseSummary = await screen.findByText('手部候选')
+    const handPoseSummary = await screen.findByText('检测详情')
     expect(handPoseSummary.closest('details')).not.toHaveAttribute('open')
-    expect(await screen.findByText('等待自动手部检测')).toBeInTheDocument()
+    expect(await screen.findByText('等待自动检测')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新检测' })).not.toBeInTheDocument()
     await user.click(handPoseSummary)
     expect(handPoseSummary.closest('details')).toHaveAttribute('open')
-    expect(screen.getByText(/MediaPipe 候选不是人工真值/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getByText(/检测结果不是人工标注/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -301,12 +304,12 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    expect(await screen.findByText('手部检测失败')).toBeInTheDocument()
+    expect((await screen.findAllByText('检测失败')).length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByRole('button', { name: '重试检测' })).not.toBeInTheDocument()
-    await user.click(screen.getByText('手部候选'))
+    await user.click(screen.getByText('检测详情'))
     expect(screen.getByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
     expect(screen.getAllByText(/当前手部检测处理失败且不可重试，但可继续人工处理/)).toHaveLength(1)
-    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
   })
 
   it('uses the AssetDetail retry endpoint only for a retryable failed run', async () => {
@@ -319,7 +322,7 @@ describe('catalog views', () => {
     const user = userEvent.setup()
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    await user.click(await screen.findByText('手部候选'))
+    await user.click(await screen.findByText('检测详情'))
     expect(await screen.findByText(/AI_HAND_POSE_INFERENCE_FAILED/)).toBeInTheDocument()
     expect(screen.getByText(/可以重新检测/)).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '重新检测' }))
@@ -448,13 +451,13 @@ describe('catalog views', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(screen.getByText('手部检测中')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getAllByText('检测中').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500)
     })
-    expect(screen.getByText('已发现手部候选')).toBeInTheDocument()
+    expect(screen.getAllByText('已检测到手部').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('手部检测完成')).toBeInTheDocument()
     expect(handPoseReads).toBe(2)
 
@@ -495,14 +498,14 @@ describe('catalog views', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(screen.getByText('手部检测中')).toBeInTheDocument()
+    expect(screen.getAllByText('检测中').length).toBeGreaterThanOrEqual(2)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500)
     })
 
-    expect(screen.getByText('手部检测失败')).toBeInTheDocument()
+    expect(screen.getAllByText('检测失败').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('手部检测处理失败，仍可继续人工处理。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
   })
 
   it('keeps the human quality step when MediaPipe finds no hand', async () => {
@@ -513,8 +516,8 @@ describe('catalog views', () => {
     })
     renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
 
-    expect(await screen.findByText('未发现手部，可继续人工查看和标注')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '下一步：人工质量判断' })).toBeInTheDocument()
+    expect((await screen.findAllByText('未检测到手部')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
   })
 })
 

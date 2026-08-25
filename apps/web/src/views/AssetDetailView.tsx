@@ -180,24 +180,65 @@ export default function AssetDetailView() {
     const mediaStep: WorkflowStep =
       detail.status === 'INGESTED'
         ? {
-            label: '媒体',
+            label: '媒体检测',
             state: 'complete',
-            status: '媒体检测完成',
+            status: '已完成',
             detail: '视频可播放，可进入后续人工流程',
           }
         : detail.status === 'INGEST_FAILED'
           ? {
-              label: '媒体',
+              label: '媒体检测',
               state: 'blocked',
-              status: '媒体检测失败',
+              status: '失败',
               detail: '需先处理媒体检测问题',
             }
           : {
-              label: '媒体',
+              label: '媒体检测',
               state: 'current',
-              status: detail.status === 'INGESTING' ? '媒体检测中' : '待媒体检测',
+              status: detail.status === 'INGESTING' ? '检测中' : '等待检测',
               detail: '完成后才能记录质量结论',
             }
+
+    const handPoseStep: WorkflowStep =
+      detail.status !== 'INGESTED'
+        ? {
+            label: '手部检测',
+            state: 'waiting',
+            status: '等待检测',
+            detail: '媒体检测完成后自动开始；结果仅作为人工处理的辅助候选',
+          }
+        : !handPoseJob
+          ? {
+              label: '手部检测',
+              state: 'current',
+              status: '等待检测',
+              detail: '系统正在等待自动创建或读取 MediaPipe 检测任务',
+            }
+          : handPoseJob.status === 'FAILED'
+            ? {
+                label: '手部检测',
+                state: 'waiting',
+                status: '检测失败',
+                detail: '手部检测不阻断人工流程；可在下方查看原因或重新检测',
+              }
+            : handPoseJob.status === 'SUCCEEDED'
+              ? {
+                  label: '手部检测',
+                  state: 'complete',
+                  status:
+                    handPoseJob.hand_result === 'HAND_DETECTED'
+                      ? '已检测到手部'
+                      : handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                        ? '未检测到手部'
+                        : '检测完成',
+                  detail: 'MediaPipe 已完成手部关键点检测；结果仅作为辅助候选，不是人工标注',
+                }
+              : {
+                  label: '手部检测',
+                  state: 'current',
+                  status: '检测中',
+                  detail: 'MediaPipe 正在提取手部关键点，不影响继续人工查看',
+                }
 
     const annotationStep: WorkflowStep =
       qualityReview?.decision === 'REJECTED'
@@ -324,8 +365,15 @@ export default function AssetDetailView() {
                 detail: '只有人工复核通过后才会产生清洗结果',
               }
 
-    return [mediaStep, annotationStep, reviewStep, cleaningStep]
-  }, [annotationTask, annotationTaskLoadState, detail, hasCurrentQualifiedQuality, qualityReview])
+    return [mediaStep, handPoseStep, annotationStep, reviewStep, cleaningStep]
+  }, [
+    annotationTask,
+    annotationTaskLoadState,
+    detail,
+    handPoseJob,
+    hasCurrentQualifiedQuality,
+    qualityReview,
+  ])
 
   const canParticipateInTrainingDataExport =
     hasCurrentQualifiedQuality &&
@@ -389,9 +437,9 @@ export default function AssetDetailView() {
     }
     if (qualityReview?.decision === 'UNREVIEWED' || qualityReview?.decision === 'NEEDS_REVIEW') {
       return {
-        title: '进行人工质量判断',
-        description: '确认视频是否适合进入配药动作标注。',
-        buttonLabel: '下一步：人工质量判断',
+        title: '完成人工质量判断',
+        description: '确认视频是否可进入配药动作标注。',
+        buttonLabel: '填写质量结论',
         kind: 'scroll',
         interactive: true,
       }
@@ -510,14 +558,14 @@ export default function AssetDetailView() {
     if (!handPoseJob) {
       return {
         tone: 'idle' as const,
-        title: '等待自动手部检测',
-        description: 'MediaPipe 仅提供辅助候选，不会阻断人工质量判断、标注、复核或清洗。',
+        title: '等待自动检测',
+        description: '媒体检测完成后自动开始。',
       }
     }
     if (handPoseJob.status === 'FAILED') {
       return {
         tone: 'failed' as const,
-        title: '手部检测失败',
+        title: '检测失败',
         description: [
           handPoseJob.run_summary?.failure_reason,
           handPoseJob.run_summary?.retryable === true
@@ -532,29 +580,28 @@ export default function AssetDetailView() {
       if (handPoseJob.hand_result === 'NO_HAND_DETECTED') {
         return {
           tone: 'succeeded' as const,
-          title: '未发现手部，可继续人工查看和标注',
-          description: '本次视频已完成分析，没有发现可用手部候选；原视频仍可继续人工查看和标注。',
+          title: '未检测到手部',
+          description: '检测已完成，仍可继续人工查看和标注。',
         }
       }
       return {
         tone: 'succeeded' as const,
-        title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已发现手部候选' : '手部姿态检测完成',
-        description: `已收到 ${handPoseCandidates?.candidates.length ?? 0} 条手部候选。打开视频后可查看叠加效果；候选仍需人工确认。`,
+        title: handPoseJob.hand_result === 'HAND_DETECTED' ? '已检测到手部' : '检测完成',
+        description: `检测到 ${handPoseCandidates?.candidates.length ?? 0} 组手部关键点。播放视频可查看骨架叠加。`,
       }
     }
     return {
       tone: 'running' as const,
-      title: '手部检测中',
-      description: '系统正在分析当前视频。页面会自动刷新状态，关闭页面不会取消后台任务。',
+      title: '检测中',
+      description: '页面会自动刷新；关闭页面不会取消检测。',
     }
   }, [handPoseCandidates, handPoseJob])
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
     if (canPlay)
       return {
-        title: '可以直接查看视频',
-        description:
-          '视频已完成上传完整性校验。点击播放后获取短期只读地址；媒体检测不影响人工查看，也不会自动改变质量结论。',
+        title: '视频可播放',
+        description: '点击播放后获取临时只读地址。播放不会改变质量结论。',
         type: 'success' as const,
       }
     if (detail.status === 'UPLOADED')
@@ -1124,7 +1171,6 @@ export default function AssetDetailView() {
                 <StatusBadge tone={statusTone(detail.status)}>
                   {assetStatusLabels[detail.status]}
                 </StatusBadge>
-                <span>当前媒体状态</span>
               </span>
             }
             actions={
@@ -1152,7 +1198,7 @@ export default function AssetDetailView() {
                     ? ` · ${detail.session_binding.mount_position}`
                     : ''}
                 </span>
-                <span>拍摄开始 {formatDateTime(detail.session_binding.record_start_utc)}</span>
+                <span>拍摄时间 {formatDateTime(detail.session_binding.record_start_utc)}</span>
               </p>
             ) : null}
           </div>
@@ -1262,7 +1308,7 @@ export default function AssetDetailView() {
                     ))}
                   </ol>
                   <details className="workflow-fact-details">
-                    <summary>查看流程依据</summary>
+                    <summary>查看说明</summary>
                     <ul>
                       {workflowSteps.map((step) => (
                         <li key={step.label}>
@@ -1273,9 +1319,9 @@ export default function AssetDetailView() {
                     </ul>
                   </details>
                 </InspectorSection>
-                <InspectorSection className="asset-key-metadata" title="关键元数据">
+                <InspectorSection className="asset-key-metadata" title="视频信息">
                   <MetadataList
-                    ariaLabel="关键元数据"
+                    ariaLabel="视频信息"
                     items={[
                       {
                         id: 'asset-id',
@@ -1284,14 +1330,14 @@ export default function AssetDetailView() {
                       },
                       {
                         id: 'source',
-                        label: '来源',
+                        label: '上传文件 ID',
                         value: (
                           <code title={detail.source_upload_file_id}>
                             {conciseAssetIdentifier(detail.source_upload_file_id)}
                           </code>
                         ),
                       },
-                      { id: 'content-type', label: '内容类型', value: detail.content_type },
+                      { id: 'content-type', label: '格式', value: detail.content_type },
                       {
                         id: 'camera',
                         label: '相机',
@@ -1301,7 +1347,7 @@ export default function AssetDetailView() {
                       },
                       {
                         id: 'record-start',
-                        label: '拍摄开始',
+                        label: '拍摄时间',
                         value: formatDateTime(detail.session_binding?.record_start_utc),
                       },
                       {
@@ -1313,12 +1359,12 @@ export default function AssetDetailView() {
                   />
                 </InspectorSection>
                 {detail.status === 'INGESTED' ? (
-                  <InspectorSection className="hand-pose-inspector" title="辅助候选">
+                  <InspectorSection className="hand-pose-inspector" title="手部检测">
                     <details className="hand-pose-disclosure" aria-labelledby="hand-pose-title">
                       <summary>
                         <span className="hand-pose-disclosure-title">
-                          <strong id="hand-pose-title">手部候选</strong>
-                          <small>MediaPipe · 辅助候选</small>
+                          <strong id="hand-pose-title">检测详情</strong>
+                          <small>MediaPipe · 仅作辅助</small>
                         </span>
                         <StatusBadge tone={handPoseStatusTone(handPoseStatus.tone)}>
                           {handPoseStatus.title}
@@ -1326,8 +1372,8 @@ export default function AssetDetailView() {
                       </summary>
                       <div className="hand-pose-disclosure-content">
                         <p className="form-hint">
-                          {handPoseStatus.description} MediaPipe
-                          候选不是人工真值，不会自动改变正式动作标注或训练数据。
+                          {handPoseStatus.description}
+                          检测结果不是人工标注，也不会自动进入训练数据。
                         </p>
                         {canRequestHandPose ? (
                           <Button
@@ -1336,11 +1382,6 @@ export default function AssetDetailView() {
                           >
                             重新检测
                           </Button>
-                        ) : null}
-                        {handPoseCandidates?.candidates?.[0] ? (
-                          <p className="form-hint hand-pose-candidate-note">
-                            已找到手部候选。点击“播放视频”即可在对应时间点查看骨架叠加。
-                          </p>
                         ) : null}
                       </div>
                     </details>
@@ -1351,7 +1392,7 @@ export default function AssetDetailView() {
             <details className="detail-disclosure">
               <summary>
                 <strong>更多信息</strong>
-                <span>媒体检测、文件信息、相机绑定与操作记录</span>
+                <span>媒体、文件、相机与操作记录</span>
               </summary>
               <div className="detail-disclosure-content">
                 <MediaReportCard
@@ -1369,7 +1410,7 @@ export default function AssetDetailView() {
               <details className="detail-disclosure detail-more-actions">
                 <summary>
                   <strong>更多操作</strong>
-                  <span>删除视频等低频高风险操作</span>
+                  <span>删除视频</span>
                 </summary>
                 <div className="detail-disclosure-content">
                   <DangerZoneCard isDeleting={isDeleting} onDelete={() => void confirmDelete()} />

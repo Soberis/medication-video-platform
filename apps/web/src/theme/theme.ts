@@ -37,6 +37,13 @@ export const appTheme: ThemeConfig = {
     controlHeightLG: appTokens.control.large,
     controlOutline: appTokens.color.focusRing,
   },
+  components: {
+    Button: {
+      defaultShadow: 'none',
+      primaryShadow: 'none',
+      dangerShadow: 'none',
+    },
+  },
 }
 
 const cssTokenBridge = {
