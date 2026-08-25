@@ -53,8 +53,11 @@ class MediaJobReplayService {
 	}
 
 	@Transactional
-	MediaJobManualReplay replay(UUID projectId, String actorId, UUID mediaJobId, String idempotencyKey,
-			String requestId, String traceId, MediaJobReplayRequest request) {
+	MediaJobManualReplay replay(String actorId, UUID mediaJobId, String idempotencyKey, String requestId,
+			String traceId, MediaJobReplayRequest request) {
+		var job = this.jobRepository.findForUpdate(mediaJobId)
+			.orElseThrow(() -> new MediaJobNotFoundException("The media job was not found."));
+		var projectId = job.getProjectId();
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var fingerprint = fingerprint(projectId, mediaJobId, request);
 		var byIdempotency = this.replayRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
@@ -62,9 +65,6 @@ class MediaJobReplayService {
 			return requireSameRequest(byIdempotency.get(), fingerprint);
 		}
 
-		var job = this.jobRepository.findForUpdate(mediaJobId)
-			.filter(candidate -> candidate.getProjectId().equals(projectId))
-			.orElseThrow(() -> new MediaJobNotFoundException("The media job was not found."));
 		var byDeadLetter = this.replayRepository.findByDeadLetterId(request.deadLetterId());
 		if (byDeadLetter.isPresent()) {
 			return requireSameRequest(byDeadLetter.get(), fingerprint);

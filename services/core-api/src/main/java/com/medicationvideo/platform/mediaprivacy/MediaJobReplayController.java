@@ -43,7 +43,7 @@ class MediaJobReplayController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@RequestBody @Valid MediaJobReplayRequest request, Authentication authentication) {
 		var actor = requireAdministrator(authentication);
-		var replay = this.service.replay(actor.projectId(), actor.actorId(), mediaJobId, idempotencyKey,
+		var replay = this.service.replay(actor.actorId(), mediaJobId, idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				request);
 		return ResponseEntity.status(HttpStatus.ACCEPTED)

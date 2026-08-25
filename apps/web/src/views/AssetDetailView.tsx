@@ -108,6 +108,7 @@ export default function AssetDetailView() {
   const [isRequestingPlayback, setIsRequestingPlayback] = useState(false)
   const [isRecoveringMediaProbe, setIsRecoveringMediaProbe] = useState(false)
   const [mediaProbeMessage, setMediaProbeMessage] = useState('')
+  const [transientRefreshError, setTransientRefreshError] = useState(false)
   const [mediaReport, setMediaReport] = useState<MediaReport | null>(null)
   const [mediaReportLoadState, setMediaReportLoadState] = useState<
     'idle' | 'loading' | 'success' | 'error'
@@ -341,6 +342,15 @@ export default function AssetDetailView() {
         interactive: false,
       }
     }
+    if (transientRefreshError && (detail.status === 'UPLOADED' || detail.status === 'INGESTING')) {
+      return {
+        title: '暂时无法刷新检测状态',
+        description: '后台服务连接失败；当前显示的是最后一次成功读取的状态，请刷新后重试。',
+        buttonLabel: '刷新状态',
+        kind: 'none',
+        interactive: false,
+      }
+    }
     if (detail.status === 'UPLOADED' || detail.status === 'INGESTING') {
       return {
         title: '媒体检测中',
@@ -494,6 +504,7 @@ export default function AssetDetailView() {
     qualityLoadState,
     qualityReview,
     projectRole,
+    transientRefreshError,
   ])
   const handPoseStatus = useMemo(() => {
     if (!handPoseJob) {
@@ -728,6 +739,7 @@ export default function AssetDetailView() {
       if (detailRequest.current !== request) return
       detailRef.current = response
       setDetail(response)
+      setTransientRefreshError(false)
       resetPlayback()
       setAnnotationTask(null)
       setAnnotationTaskLoadState(response.status === 'INGESTED' ? 'loading' : 'idle')
@@ -786,6 +798,7 @@ export default function AssetDetailView() {
       const previousStatus = detailRef.current?.status
       detailRef.current = response
       setDetail(response)
+      setTransientRefreshError(false)
       if (
         (previousStatus === 'UPLOADED' || previousStatus === 'INGESTING') &&
         response.status === 'INGESTED'
@@ -799,7 +812,7 @@ export default function AssetDetailView() {
         void loadHandPoseCandidates()
       }
     } catch {
-      // Background refresh is best effort; the existing manual refresh remains available.
+      setTransientRefreshError(true)
     } finally {
       if (transientStateRequest.current === request) transientStateRequest.current = null
     }
@@ -1149,6 +1162,20 @@ export default function AssetDetailView() {
               type="error"
               title={actionErrorMessage}
               description={actionErrorCode ? `错误码：${actionErrorCode}` : undefined}
+              showIcon
+            />
+          ) : null}
+          {transientRefreshError ? (
+            <Alert
+              className="catalog-alert"
+              type="error"
+              title="状态自动刷新失败"
+              description="无法连接后台服务，当前页面显示的是最后一次成功读取的状态。请确认服务恢复后刷新状态。"
+              action={
+                <Button size="small" onClick={() => void loadDetail()}>
+                  重新刷新
+                </Button>
+              }
               showIcon
             />
           ) : null}

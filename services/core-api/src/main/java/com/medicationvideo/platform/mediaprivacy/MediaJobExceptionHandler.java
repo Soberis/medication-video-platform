@@ -36,6 +36,8 @@ class MediaJobExceptionHandler {
 			MissingRequestHeaderException.class, HttpMessageNotReadableException.class,
 			IllegalArgumentException.class })
 	ResponseEntity<ApiErrorResponse> invalidRequest(Exception exception) {
+		log.warn("Rejected media job request during validation: exception_type={}",
+				exception.getClass().getSimpleName());
 		return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The request is invalid.", false);
 	}
 
@@ -77,6 +79,7 @@ class MediaJobExceptionHandler {
 
 	@ExceptionHandler(MediaJobExecutionException.class)
 	ResponseEntity<ApiErrorResponse> executionConflict(MediaJobExecutionException exception) {
+		log.warn("Rejected media job execution request: error_code={}", exception.getErrorCode());
 		var status = switch (exception.getErrorCode()) {
 			case "MEDIA_REPORT_NOT_FOUND" -> HttpStatus.NOT_FOUND;
 			case "MEDIA_WORKER_SOFTWARE_UNAPPROVED" -> HttpStatus.FORBIDDEN;

@@ -382,6 +382,39 @@ describe('catalog views', () => {
     expect(detailReads).toBe(2)
   })
 
+  it('shows that a processing status is stale when background refresh fails', async () => {
+    vi.useFakeTimers()
+    let detailReads = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === `/api/v1/projects/${projectId}`)
+        return Promise.resolve(jsonResponse(project('MEMBER')))
+      if (url === `/api/v1/projects/${projectId}/clip-assets/${assetId}`) {
+        detailReads += 1
+        return detailReads === 1
+          ? Promise.resolve(jsonResponse(assetDetail('INGESTING')))
+          : Promise.reject(new TypeError('Failed to fetch'))
+      }
+      return Promise.resolve(jsonResponse(assetDetail('INGESTING')))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getAllByText('媒体检测中').length).toBeGreaterThan(0)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500)
+    })
+
+    expect(screen.getByText('状态自动刷新失败')).toBeInTheDocument()
+    expect(screen.getByText('暂时无法刷新检测状态')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新刷新' })).toBeInTheDocument()
+    expect(detailReads).toBe(2)
+  })
+
   it('polls a running hand-pose job and keeps the human quality action available', async () => {
     vi.useFakeTimers()
     let handPoseReads = 0
