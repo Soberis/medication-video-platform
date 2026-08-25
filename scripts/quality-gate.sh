@@ -472,7 +472,12 @@ else
 fi
 
 python_projects=()
-for python_search_root in "$PROJECT_ROOT/workers" "$PROJECT_ROOT/plugins" "$PROJECT_ROOT/tools/minimal-export"; do
+for python_search_root in \
+    "$PROJECT_ROOT/workers" \
+    "$PROJECT_ROOT/plugins" \
+    "$PROJECT_ROOT/tools/minimal-export" \
+    "$PROJECT_ROOT/tools/hand-pose-evaluation" \
+    "$PROJECT_ROOT/tools/candidate-capacity-review"; do
     [[ -d "$python_search_root" ]] || continue
     while IFS= read -r -d '' python_project; do
         python_projects[${#python_projects[@]}]="$python_project"

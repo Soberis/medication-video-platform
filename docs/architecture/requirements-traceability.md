@@ -3,11 +3,11 @@
 > 当前需求基线：[V1.24 FLOW-FIRST P0 自动任务衔接](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)<br>
 > 当前技术设计：[手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-08-20
+> 最后更新：2026-08-25
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、Review、Cleaning 或管理员导出确认。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。
+V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、Review、Cleaning 或管理员导出确认。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。V18-FR-006 的离线手部评估证据工具已实现并通过合成校验，但尚无授权样本实测，因此保持 `PI`，不代表效果已验收。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅�
 | V18-FR-003 单视频手部预标注 | P0 | `aicandidate`、`integration` | 单视频 job、candidate、run summary、Overlay | 含手/无手、幂等、租约恢复、候选隔离；handedness 不作 Gate | I |
 | V18-FR-004 配药动作标注与复核 | P0 | `annotationreview` | schema、任务、revision、review | 候选辅助；退回产生新 revision；历史不覆盖 | I |
 | V18-FR-005 数据清洗与可用数据 | P0 | `qualitycleaning` | rule run/result、可用数据投影 | 媒体/元数据/标注完整性问题可追溯 | I |
-| V18-FR-006 算法效果评估 | P0 | `aicandidate`、`governance` | profile、summary、朴素评估证据 | 授权样本指标与参数调整可追溯；不新增评估平台 | D1 |
+| V18-FR-006 算法效果评估 | P0 | `aicandidate`、`governance` | profile、summary、离线评估证据 | 授权样本指标与参数调整可追溯；不新增评估平台 | PI |
 | V18-FR-007 显式批量预标注 | P1 | `aicandidate` | batch request/result | 容量评审、逐项语义和幂等边界冻结后才启用 | D1 |
 | V18-FR-008 自动预标注策略 | P1/P2 | `aicandidate`、`governance` | policy snapshot | 相机/模型/资源审批后才启用 | D1 |
 | V18-FR-009 测试数据彻底清理 | P1 | `assetcapture`、`governance` | purge request/audit | 仅 `SYNTHETIC_TEST` 经确认删除 | D1 |

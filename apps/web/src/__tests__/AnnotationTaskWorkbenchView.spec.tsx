@@ -153,7 +153,7 @@ describe('annotation task workbench', () => {
     renderWorkbench()
 
     expect(await screen.findByRole('heading', { name: '配药动作标注工作台' })).toBeInTheDocument()
-    expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
+    expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.queryByText('approved-synthetic-hand.mp4')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-tasks`,
