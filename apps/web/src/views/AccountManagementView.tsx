@@ -10,7 +10,7 @@ import {
 } from '@/api/admin'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 
 interface AccountFields {
@@ -19,7 +19,7 @@ interface AccountFields {
 }
 
 const usernamePattern = /^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/
-const usernameConstraintMessage = '账号名需为 3 至 128 位字母、数字或 . _ : @ -。'
+const usernameConstraintMessage = '账号需为 3 至 128 位字母、数字或 . _ : @ -。'
 const passwordConstraintMessage = '初始密码长度需为 12 至 72 个字符。'
 
 export default function AccountManagementView() {
@@ -78,7 +78,7 @@ export default function AccountManagementView() {
     try {
       await createPlatformAccount(username, values.password)
       form.resetFields()
-      void message.success('成员账号已创建，请在项目成员页分配项目角色。')
+      void message.success('账号已创建，请在项目成员页分配项目角色。')
       await loadAccounts()
     } catch (error) {
       void message.error(
@@ -124,16 +124,20 @@ export default function AccountManagementView() {
         eyebrow="内部访问控制"
         titleId="accounts-title"
         title="平台账号"
-        description="管理平台账号；账号加入项目后才能访问项目数据。"
+        description="平台账号加入项目后，才可访问项目数据。"
         actions={
-          <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
+          <Button
+            size="small"
+            loading={loadState === 'loading'}
+            onClick={() => void loadAccounts()}
+          >
             刷新
           </Button>
         }
       />
       <Section
         className="account-create-panel working-surface"
-        title="创建成员账号"
+        title="创建账号"
         titleId="account-create-title"
       >
         <Form<AccountFields>
@@ -143,11 +147,11 @@ export default function AccountManagementView() {
           onFinish={(values) => void createAccount(values)}
         >
           <Form.Item
-            label="账号名"
+            label="账号"
             name="username"
             validateFirst
             rules={[
-              { required: true, whitespace: true, message: '请输入账号名。' },
+              { required: true, whitespace: true, message: '请输入账号。' },
               {
                 validator: (_, value: unknown) => {
                   if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
@@ -157,8 +161,9 @@ export default function AccountManagementView() {
                 },
               },
             ]}
+            extra="3 至 128 位；仅限字母、数字和 . _ : @ -"
           >
-            <Input autoComplete="username" maxLength={128} />
+            <Input autoComplete="username" maxLength={128} placeholder="输入平台账号" />
           </Form.Item>
           <Form.Item
             label="初始密码"
@@ -175,20 +180,21 @@ export default function AccountManagementView() {
                 },
               },
             ]}
+            extra="12 至 72 个字符"
           >
-            <Input.Password autoComplete="new-password" maxLength={72} />
+            <Input.Password autoComplete="new-password" maxLength={72} placeholder="输入初始密码" />
           </Form.Item>
-          <p className="form-hint">初始密码不会写入账号列表、日志或审计记录。</p>
+          <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>
           <Button htmlType="submit" type="primary" loading={isSubmitting}>
             创建账号
           </Button>
         </Form>
       </Section>
-      {loadState === 'loading' ? <LoadingState>正在读取平台账号…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在加载平台账号…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
       ) : null}
-      {loadState === 'success' ? (
+      {loadState === 'success' && accounts.length > 0 ? (
         <Section
           className="table-card account-table-card working-surface"
           title="平台账号列表"
@@ -199,7 +205,7 @@ export default function AccountManagementView() {
             rowKey="username"
             pagination={false}
             columns={[
-              { title: '账号名', dataIndex: 'username' },
+              { title: '账号', dataIndex: 'username' },
               {
                 title: '全局角色',
                 width: 130,
@@ -227,17 +233,20 @@ export default function AccountManagementView() {
                       type="link"
                       danger={row.enabled}
                       disabled={isChanging}
+                      aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
                       onClick={() => toggleEnabled(row)}
                     >
                       {row.enabled ? '停用' : '启用'}
                     </Button>
                   ) : (
-                    <span className="cell-secondary">不可停用</span>
+                    <span className="cell-secondary">管理员不可停用</span>
                   ),
               },
             ]}
           />
         </Section>
+      ) : loadState === 'success' ? (
+        <EmptyState description="当前没有平台账号。" />
       ) : null}
     </>
   )

@@ -41,7 +41,7 @@ describe('ProjectMembershipView', () => {
     expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
     await user.click(screen.getByRole('combobox', { name: '平台账号' }))
     await user.click(
-      await screen.findByText('reviewer（成员）', {
+      await screen.findByText('reviewer（平台成员）', {
         selector: '.ant-select-item-option-content',
       }),
     )
@@ -82,6 +82,27 @@ describe('ProjectMembershipView', () => {
     expect(screen.queryByRole('button', { name: '保存成员' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '操作' })).not.toBeInTheDocument()
   })
+
+  it('requires confirmation before removing a project member', async () => {
+    const fetchMock = membershipFetch(projectWithRole('ADMIN'))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderMembership('ADMIN')
+
+    expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '移除项目成员：reviewer' }))
+    expect(
+      await screen.findByText(/移除“reviewer”后，该账号将无法查看当前项目及其视频数据/),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '移除成员' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/memberships/reviewer`,
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
+  })
 })
 
 describe('AccountManagementView', () => {
@@ -93,7 +114,7 @@ describe('AccountManagementView', () => {
     await screen.findByRole('heading', { name: '平台账号列表' })
     await user.click(screen.getByRole('button', { name: '创建账号' }))
 
-    expect(await screen.findByText('请输入账号名。')).toBeInTheDocument()
+    expect(await screen.findByText('请输入账号。')).toBeInTheDocument()
   })
 
   it('shows inline validation when the initial password is empty', async () => {
@@ -102,7 +123,7 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
-    await user.type(screen.getByLabelText('账号名'), 'reviewer')
+    await user.type(screen.getByLabelText('账号'), 'reviewer')
     await user.click(screen.getByRole('button', { name: '创建账号' }))
 
     expect(await screen.findByText('请输入初始密码。')).toBeInTheDocument()
@@ -114,12 +135,12 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
-    await user.type(screen.getByLabelText('账号名'), 'invalid username')
+    await user.type(screen.getByLabelText('账号'), 'invalid username')
     await user.type(screen.getByLabelText('初始密码'), 'short')
     await user.click(screen.getByRole('button', { name: '创建账号' }))
 
     expect(
-      await screen.findByText('账号名需为 3 至 128 位字母、数字或 . _ : @ -。'),
+      await screen.findByText('账号需为 3 至 128 位字母、数字或 . _ : @ -。'),
     ).toBeInTheDocument()
     expect(await screen.findByText('初始密码长度需为 12 至 72 个字符。')).toBeInTheDocument()
   })
@@ -134,9 +155,9 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     expect(await screen.findByRole('heading', { name: '平台账号列表' })).toBeInTheDocument()
-    expect(screen.getByText('不可停用')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '停用' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '启用' })).toBeInTheDocument()
+    expect(screen.getByText('管理员不可停用')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '停用账号：reviewer' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '启用账号：disabled' })).toBeInTheDocument()
     expect(screen.getByText('登录状态')).toBeInTheDocument()
   })
 
@@ -147,7 +168,7 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
-    await user.type(screen.getByLabelText('账号名'), 'reviewer')
+    await user.type(screen.getByLabelText('账号'), 'reviewer')
     await user.type(screen.getByLabelText('初始密码'), 'synthetic-password')
     await user.click(screen.getByRole('button', { name: '创建账号' }))
 
@@ -166,7 +187,7 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
-    await user.click(screen.getByRole('button', { name: '停用' }))
+    await user.click(screen.getByRole('button', { name: '停用账号：reviewer' }))
     expect(await screen.findByText(/停用“reviewer”会阻止其创建新的登录会话/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '停用账号' }))
@@ -179,7 +200,18 @@ describe('AccountManagementView', () => {
         }),
       )
     })
-    expect(await screen.findByRole('button', { name: '启用' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '启用账号：reviewer' }))
+    expect(await screen.findByText(/启用“reviewer”后，该账号可以再次登录/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '启用账号' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/admin/accounts/reviewer/enabled`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ enabled: true }),
+        }),
+      )
+    })
   })
 })
 
@@ -211,16 +243,22 @@ function membershipFetch(project: DataProject) {
     version: 1,
     updated_at: '2026-07-20T00:00:00Z',
   }
+  let currentMembership: ProjectMembership | null = membership
   return vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
     if (url === `/api/v1/projects/${projectId}`) return Promise.resolve(jsonResponse(project))
     if (url === `/api/v1/projects/${projectId}/memberships`) {
-      return Promise.resolve(jsonResponse({ items: [membership] }))
+      return Promise.resolve(jsonResponse({ items: currentMembership ? [currentMembership] : [] }))
     }
     if (method === 'PUT' && url === `/api/v1/projects/${projectId}/memberships/reviewer`) {
       const body = JSON.parse(String(init?.body)) as { role: ProjectRole }
-      return Promise.resolve(jsonResponse({ ...membership, role: body.role }))
+      currentMembership = { ...membership, role: body.role }
+      return Promise.resolve(jsonResponse(currentMembership))
+    }
+    if (method === 'DELETE' && url === `/api/v1/projects/${projectId}/memberships/reviewer`) {
+      currentMembership = null
+      return Promise.resolve(jsonResponse(membership))
     }
     if (url === '/api/v1/admin/accounts') {
       return Promise.resolve(

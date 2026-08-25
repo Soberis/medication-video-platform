@@ -12,7 +12,7 @@ describe('workspace layout primitives', () => {
 
     const heading = screen.getByRole('heading', { level: 1, name: '视频管理' })
     expect(heading.id).not.toBe('')
-    expect(heading.closest('section')).toHaveAttribute('aria-labelledby', heading.id)
+    expect(heading.closest('header')).toHaveAttribute('aria-labelledby', heading.id)
   })
 
   it('renders a labelled section with optional actions', () => {

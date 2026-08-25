@@ -165,6 +165,7 @@
 .file-error {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--app-space-8);
   margin-top: var(--app-space-16);
   padding: var(--app-space-8) var(--app-space-12);
@@ -175,7 +176,30 @@
 }
 
 .file-error span {
+  font-weight: var(--app-font-weight-medium);
+}
+
+.file-error span:last-of-type {
   font-weight: var(--app-font-weight-semibold);
+}
+
+.file-error code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.file-card-failed {
+  border-color: var(--app-color-destructive);
+}
+
+.file-reference {
+  margin: var(--app-space-4) 0 0;
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+}
+
+.file-reference code {
+  overflow-wrap: anywhere;
 }
 
 .file-meta-grid {
@@ -237,6 +261,7 @@
 
 .page-heading {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--app-space-16);
@@ -244,6 +269,7 @@
 }
 
 .page-heading-copy {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -262,6 +288,7 @@
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-body);
   line-height: var(--app-line-height-body-text);
+  overflow-wrap: anywhere;
 }
 
 .page-toolbar,
@@ -280,7 +307,13 @@
 }
 
 .page-heading-actions {
+  max-width: 100%;
+  min-width: 0;
   justify-content: flex-end;
+}
+
+.page-toolbar > * {
+  max-width: 100%;
 }
 
 .working-surface {
@@ -366,6 +399,11 @@
 
 .project-list-item + .project-list-item {
   border-top: 1px solid var(--app-color-border-subtle);
+}
+
+.project-list-item:hover,
+.project-list-item:focus-within {
+  background: var(--app-color-surface-hover);
 }
 
 .project-list-heading,
@@ -603,6 +641,7 @@
 
 .video-filter-actions {
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: var(--app-space-4);
   margin-left: auto;
 }
@@ -1662,7 +1701,7 @@
 }
 
 .login-card {
-  width: min(100%, 560px);
+  width: min(100%, 480px);
   overflow: hidden;
   box-shadow: var(--app-shadow-raised);
 }
@@ -1679,6 +1718,14 @@
   line-height: var(--app-line-height-relaxed);
 }
 
+.login-card > .app-eyebrow {
+  color: var(--app-color-primary);
+}
+
+.login-card > .login-description {
+  margin: var(--app-space-8) 0 0;
+}
+
 .login-form {
   margin-top: var(--app-space-24);
 }
@@ -1690,7 +1737,7 @@
 .account-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  max-width: 760px;
+  max-width: 560px;
   gap: 0;
   align-items: end;
 }
@@ -1698,11 +1745,13 @@
 .membership-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 720px;
   gap: 0 var(--app-space-16);
   align-items: end;
 }
 
 .account-form .form-hint,
+.membership-form .membership-form-hint,
 .account-form > .ant-btn,
 .membership-form > .ant-btn {
   grid-column: 1 / -1;
@@ -1710,6 +1759,10 @@
 }
 
 .account-form .form-hint {
+  margin-bottom: var(--app-space-16);
+}
+
+.membership-form .membership-form-hint {
   margin-bottom: var(--app-space-16);
 }
 
@@ -1726,6 +1779,20 @@
 
 .membership-list-panel {
   width: 100%;
+}
+
+.membership-list-panel .ant-table-wrapper,
+.account-table-card .ant-table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.membership-list-panel .ant-table {
+  min-width: 440px;
+}
+
+.account-table-card .ant-table {
+  min-width: 520px;
 }
 
 .login-error {
@@ -1802,6 +1869,19 @@
   list-style: none;
 }
 
+.selected-file-selection {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--app-space-8);
+}
+
+.selected-file-count {
+  margin: 0;
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
+  font-weight: var(--app-font-weight-semibold);
+}
+
 .selected-file-list li {
   display: flex;
   align-items: center;
@@ -1813,6 +1893,8 @@
 }
 
 .selected-file-list strong {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow-wrap: anywhere;
 }
 
@@ -1827,6 +1909,14 @@
   align-items: center;
   gap: var(--app-space-16);
   margin-top: 0;
+}
+
+.local-upload-results-summary {
+  margin: var(--app-space-12) 0 0;
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-body);
+  font-weight: var(--app-font-weight-medium);
+  line-height: var(--app-line-height-body-text);
 }
 
 .local-upload-results h2 {
@@ -1851,8 +1941,16 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
-.local-upload-task .ant-progress {
+.local-upload-task-progress {
   margin-top: var(--app-space-16);
+}
+
+.local-upload-task-progress .ant-progress {
+  margin-top: 0;
+}
+
+.local-upload-task .file-heading > div {
+  min-width: 0;
 }
 
 .task-description {
@@ -1996,6 +2094,10 @@
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .selected-file-list li span {
+    text-align: left;
   }
 
   .project-list-heading {

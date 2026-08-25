@@ -149,6 +149,9 @@ export default function AnnotationTaskWorkbenchView() {
   const canReview = Boolean(task?.can_review && revision)
   const canRecheck = Boolean(task?.can_recheck_post_cleaning && revision)
   const canPlay = detail?.content_type === 'video/mp4'
+  const canControlPlayback = Boolean(
+    playbackGrant && playbackState !== 'error' && playbackState !== 'expired',
+  )
   const candidateOverlay = candidateResponse?.candidates ?? []
 
   const clearPlaybackExpiryTimer = useCallback(() => {
@@ -358,13 +361,14 @@ export default function AnnotationTaskWorkbenchView() {
   }
 
   function seekVideo(timeMs: number) {
-    if (!videoRef.current || !playbackGrant) return
+    if (!videoRef.current || !canControlPlayback) return
     const nextTimeMs = Math.max(0, Math.round(timeMs))
     videoRef.current.currentTime = nextTimeMs / 1000
     setPlaybackTimeMs(nextTimeMs)
   }
 
   function setSegmentTime(index: number, field: 'start_ms' | 'end_ms') {
+    if (!canControlPlayback) return
     updateSegment(index, { [field]: Math.max(0, Math.round(playbackTimeMs)) })
   }
 
@@ -657,7 +661,7 @@ export default function AnnotationTaskWorkbenchView() {
                     <span>当前播放位置：{formatPlaybackTime(playbackTimeMs)}</span>
                     <Button
                       size="small"
-                      disabled={!playbackGrant}
+                      disabled={!canControlPlayback}
                       onClick={() => seekVideo(playbackTimeMs)}
                     >
                       重新定位
@@ -669,12 +673,8 @@ export default function AnnotationTaskWorkbenchView() {
                     onFinish={() => void submit()}
                   >
                     {draftSegments.map((segment, index) => (
-                      <div
-                        key={segment.draftId}
-                        className="annotation-workbench-segment-row"
-                        role="group"
-                        aria-label={`标注时间段 ${index + 1}`}
-                      >
+                      <fieldset key={segment.draftId} className="annotation-workbench-segment-row">
+                        <legend>标注时间段 {index + 1}</legend>
                         <Form.Item label="开始（毫秒）">
                           <InputNumber
                             aria-label={`标注时间段 ${index + 1} 的开始时间`}
@@ -685,7 +685,7 @@ export default function AnnotationTaskWorkbenchView() {
                           />
                           <Button
                             size="small"
-                            disabled={!playbackGrant}
+                            disabled={!canControlPlayback}
                             onClick={() => setSegmentTime(index, 'start_ms')}
                           >
                             取当前
@@ -701,7 +701,7 @@ export default function AnnotationTaskWorkbenchView() {
                           />
                           <Button
                             size="small"
-                            disabled={!playbackGrant}
+                            disabled={!canControlPlayback}
                             onClick={() => setSegmentTime(index, 'end_ms')}
                           >
                             取当前
@@ -722,7 +722,7 @@ export default function AnnotationTaskWorkbenchView() {
                         <Button
                           size="small"
                           aria-label={`跳转到标注时间段 ${index + 1} 的开始时间`}
-                          disabled={!playbackGrant}
+                          disabled={!canControlPlayback}
                           onClick={() => seekVideo(segment.start_ms)}
                         >
                           跳转
@@ -739,7 +739,7 @@ export default function AnnotationTaskWorkbenchView() {
                         >
                           移除
                         </Button>
-                      </div>
+                      </fieldset>
                     ))}
                     <Button
                       onClick={() =>

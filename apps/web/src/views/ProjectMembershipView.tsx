@@ -132,9 +132,13 @@ export default function ProjectMembershipView() {
         eyebrow="项目访问范围"
         titleId="members-title"
         title="项目成员"
-        description="为平台账号分配当前项目的成员角色。"
+        description="维护当前项目的成员和角色。"
         actions={
-          <Button loading={loadState === 'loading'} onClick={() => void loadMemberships()}>
+          <Button
+            size="small"
+            loading={loadState === 'loading'}
+            onClick={() => void loadMemberships()}
+          >
             刷新
           </Button>
         }
@@ -159,10 +163,10 @@ export default function ProjectMembershipView() {
             >
               <Select
                 showSearch
-                placeholder="选择已启用的内部账号"
+                placeholder="选择已启用账号"
                 options={availableAccounts.map((account) => ({
                   value: account.username,
-                  label: `${account.username}（${account.role === 'ADMIN' ? '管理员' : '成员'}）`,
+                  label: `${account.username}（${account.role === 'ADMIN' ? '平台管理员' : '平台成员'}）`,
                 }))}
               />
             </Form.Item>
@@ -178,6 +182,9 @@ export default function ProjectMembershipView() {
                 ]}
               />
             </Form.Item>
+            <p className="form-hint membership-form-hint">
+              平台账号是全局身份；项目角色仅对当前项目生效。
+            </p>
             <Button htmlType="submit" type="primary" loading={isMutating}>
               保存成员
             </Button>
@@ -192,7 +199,7 @@ export default function ProjectMembershipView() {
           showIcon
         />
       ) : null}
-      {loadState === 'loading' ? <LoadingState>正在读取项目成员…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在加载项目成员…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
       ) : null}
@@ -207,7 +214,7 @@ export default function ProjectMembershipView() {
             rowKey="membership_id"
             pagination={false}
             columns={[
-              { title: '账号', dataIndex: 'actor_id' },
+              { title: '平台账号', dataIndex: 'actor_id' },
               {
                 title: '项目角色',
                 width: 140,
@@ -230,7 +237,7 @@ export default function ProjectMembershipView() {
                           aria-label={`移除项目成员：${row.actor_id}`}
                           onClick={() => removeMembership(row)}
                         >
-                          移除
+                          移除成员
                         </Button>
                       ),
                     },
@@ -241,7 +248,7 @@ export default function ProjectMembershipView() {
         </Section>
       ) : null}
       {loadState === 'success' && memberships.length === 0 ? (
-        <EmptyState description="当前项目尚未分配成员。" />
+        <EmptyState description="当前项目还没有成员。" />
       ) : null}
     </>
   )

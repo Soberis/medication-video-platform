@@ -76,6 +76,13 @@ function fileStatusDescription(file: UploadFileProgress) {
   return '文件最终校验未通过，请根据错误码处理或重新上传。'
 }
 
+function fileErrorDescription(errorCode: string) {
+  if (errorCode === 'UPLOAD_FILE_SHA256_MISMATCH') {
+    return '平台校验到文件内容与登记摘要不一致，请重新选择原文件上传。'
+  }
+  return '平台未确认该文件完整性，请根据错误码处理或重新上传。'
+}
+
 const percent = (value: number, total: number) =>
   total <= 0 ? 0 : Math.min(100, Math.max(0, Math.round((value / total) * 100)))
 const formatTime = (value: string | null) =>
@@ -94,7 +101,8 @@ export default function UploadProgressView() {
   const [errorCode, setErrorCode] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
   const isLoading = loadState === 'loading'
-  const hasResult = batch !== null && loadState === 'success'
+  const hasResult = batch !== null && (loadState === 'success' || loadState === 'loading')
+  const isRefreshing = isLoading && batch !== null
   const batchBytePercent = percent(batch?.uploaded_size_bytes ?? 0, batch?.total_size_bytes ?? 0)
 
   useEffect(() => () => activeRequest.current?.abort(), [])
@@ -156,6 +164,7 @@ export default function UploadProgressView() {
       >
         <form
           className="batch-form"
+          aria-busy={isLoading}
           onSubmit={(event) => {
             event.preventDefault()
             void loadProgress()
@@ -174,14 +183,22 @@ export default function UploadProgressView() {
               spellCheck={false}
               placeholder="例如：00000000-0000-4000-8000-000000000001"
               aria-invalid={loadState === 'error'}
+              aria-describedby="batch-id-hint"
             />
             <Button htmlType="submit" type="primary" loading={isLoading} disabled={isLoading}>
               {isLoading ? '查询中…' : hasResult ? '刷新进度' : '查询进度'}
             </Button>
           </div>
+          <p id="batch-id-hint" className="form-hint">
+            粘贴平台返回的批次 ID；这里只读取进度，不会上传文件或修改批次。
+          </p>
         </form>
       </Section>
-      {isLoading ? <LoadingState>正在读取批次和文件进度…</LoadingState> : null}
+      {isLoading ? (
+        <LoadingState>
+          {isRefreshing ? '正在刷新批次和文件进度…' : '正在读取批次和文件进度…'}
+        </LoadingState>
+      ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadProgress()}>
           {errorMessage}
@@ -200,7 +217,7 @@ export default function UploadProgressView() {
             }
           >
             <p className="section-description">{batchStatusDescription(batch.status)}</p>
-            <div className="progress-block">
+            <div className="progress-block" role="group" aria-label="批次平台确认传输进度">
               <div className="progress-copy">
                 <span>已确认传输</span>
                 <strong>{batchBytePercent}%</strong>
@@ -209,6 +226,7 @@ export default function UploadProgressView() {
                 aria-label="批次已确认传输进度"
                 value={batch.uploaded_size_bytes}
                 max={batch.total_size_bytes}
+                aria-valuetext={`${batchBytePercent}%，${formatBytes(batch.uploaded_size_bytes)} / ${formatBytes(batch.total_size_bytes)}`}
               >
                 {batchBytePercent}%
               </progress>
@@ -272,26 +290,39 @@ export default function UploadProgressView() {
           </Section>
           <Section
             className="files-section"
-            title="文件进度"
+            title={batch.failed_file_count > 0 ? '问题文件与进度' : '文件进度'}
             titleId="files-title"
             actions={<span className="upload-file-count">{files.length} 个</span>}
           >
             {files.length === 0 ? <EmptyState description="该批次尚未登记文件。" /> : null}
             {files.map((file) => (
-              <article key={file.upload_file_id} className="file-card">
+              <article
+                key={file.upload_file_id}
+                className={`file-card${file.status === 'FAILED' ? ' file-card-failed' : ''}`}
+                aria-labelledby={`upload-file-${file.upload_file_id}-title`}
+              >
                 <div className="file-heading">
                   <div>
                     <p className="file-kind">
                       {fileKindLabels[file.file_kind]} · {file.content_type}
                     </p>
-                    <h3>文件 {shortId(file.client_file_id)}</h3>
+                    <h3 id={`upload-file-${file.upload_file_id}-title`}>
+                      {fileKindLabels[file.file_kind]}
+                    </h3>
+                    <p className="file-reference">
+                      客户端标识：<code>{shortId(file.client_file_id)}</code>
+                    </p>
                   </div>
                   <StatusBadge tone={fileStatusTone(file.status)}>
                     {fileStatusLabels[file.status]}
                   </StatusBadge>
                 </div>
                 <p className="section-description">{fileStatusDescription(file)}</p>
-                <div className="progress-block progress-compact">
+                <div
+                  className="progress-block progress-compact"
+                  role="group"
+                  aria-label={`${fileKindLabels[file.file_kind]}的服务端确认进度`}
+                >
                   <div className="progress-copy">
                     <span>服务端已确认分片</span>
                     <strong>{percent(file.uploaded_parts, file.total_parts)}%</strong>
@@ -300,6 +331,7 @@ export default function UploadProgressView() {
                     aria-label={`文件 ${shortId(file.client_file_id)} 的已确认分片进度`}
                     value={file.uploaded_parts}
                     max={file.total_parts}
+                    aria-valuetext={`${percent(file.uploaded_parts, file.total_parts)}%，已确认 ${file.uploaded_parts} / ${file.total_parts} 个分片`}
                   >
                     {percent(file.uploaded_parts, file.total_parts)}%
                   </progress>
@@ -309,7 +341,9 @@ export default function UploadProgressView() {
                   </p>
                 </div>
                 {file.completion_error_code ? (
-                  <div className="file-error" role="status">
+                  <div className="file-error" role="alert">
+                    <strong>需要处理</strong>
+                    <span>{fileErrorDescription(file.completion_error_code)}</span>
                     <span>错误码</span>
                     <code>{file.completion_error_code}</code>
                   </div>
@@ -368,7 +402,8 @@ export default function UploadProgressView() {
                 </details>
                 {batch.device_id === 'PLATFORM_LOCAL' && file.status === 'FAILED' ? (
                   <div className="upload-recovery-actions">
-                    <span>本地上传页面不提供断点续传；请重新选择文件开始新一轮上传。</span>
+                    <strong>恢复方向</strong>
+                    <span>本地上传不提供断点续传，请重新选择原文件开始新一轮上传。</span>
                     <Link className="text-link" to={paths.localUpload}>
                       返回本地上传
                     </Link>

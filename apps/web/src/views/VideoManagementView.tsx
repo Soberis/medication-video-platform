@@ -463,7 +463,11 @@ export default function VideoManagementView() {
         </section>
       ) : null}
       {items.length > 0 ? (
-        <section className="video-list-surface" aria-label="视频列表">
+        <section
+          className="video-list-surface"
+          aria-label="视频列表"
+          aria-busy={loadState === 'loading'}
+        >
           <Table<VideoSummary>
             className="video-management-table"
             dataSource={items}
@@ -481,7 +485,7 @@ export default function VideoManagementView() {
                     <Link
                       className="video-name-link"
                       aria-label={`视频 ${row.display_name}，视频资产 ID ${row.video_id}`}
-                      title={`视频资产 ID：${row.video_id}`}
+                      title={`${row.display_name} · 视频资产 ID：${row.video_id}`}
                       to={{
                         pathname: paths.asset(projectId, row.video_id),
                         search: location.search,

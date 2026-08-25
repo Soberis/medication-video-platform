@@ -1324,20 +1324,10 @@ export default function AssetDetailView() {
                     ariaLabel="视频信息"
                     items={[
                       {
-                        id: 'asset-id',
-                        label: '视频 ID',
-                        value: <code>{conciseAssetIdentifier(detail.client_file_id)}</code>,
+                        id: 'content-type',
+                        label: '格式',
+                        value: detail.content_type,
                       },
-                      {
-                        id: 'source',
-                        label: '上传文件 ID',
-                        value: (
-                          <code title={detail.source_upload_file_id}>
-                            {conciseAssetIdentifier(detail.source_upload_file_id)}
-                          </code>
-                        ),
-                      },
-                      { id: 'content-type', label: '格式', value: detail.content_type },
                       {
                         id: 'camera',
                         label: '相机',
@@ -1349,11 +1339,6 @@ export default function AssetDetailView() {
                         id: 'record-start',
                         label: '拍摄时间',
                         value: formatDateTime(detail.session_binding?.record_start_utc),
-                      },
-                      {
-                        id: 'created-at',
-                        label: '创建时间',
-                        value: formatDateTime(detail.created_at),
                       },
                     ]}
                   />
@@ -1401,6 +1386,7 @@ export default function AssetDetailView() {
                   loadState={mediaReportLoadState}
                   errorCode={mediaReportErrorCode}
                   errorMessage={mediaReportErrorMessage}
+                  onRetry={() => void loadMediaReport()}
                 />
                 <AssetFacts detail={detail} />
                 <AssetActivityCard key={assetId} assetId={assetId} projectId={projectId} />

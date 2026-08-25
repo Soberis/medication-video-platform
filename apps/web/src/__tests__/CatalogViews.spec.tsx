@@ -35,6 +35,10 @@ describe('catalog views', () => {
     expect(screen.getByText(/尚未绑定到配药操作记录/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '播放视频' })).toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
+    const workflow = screen.getByRole('complementary', { name: '视频处理流程' })
+    expect(within(workflow).getByText('格式')).toBeInTheDocument()
+    expect(within(workflow).queryByText('上传文件 ID')).not.toBeInTheDocument()
+    expect(within(workflow).queryByText('创建时间')).not.toBeInTheDocument()
     const additionalDetails = screen.getByText('更多信息').closest('details')
     expect(additionalDetails).not.toHaveAttribute('open')
     await user.click(screen.getByText('更多信息'))
@@ -102,6 +106,24 @@ describe('catalog views', () => {
       ),
     )
     expect((await screen.findAllByText('符合训练数据要求')).length).toBeGreaterThan(0)
+  })
+
+  it('offers a local retry when the media report request fails', async () => {
+    const fetchMock = stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      mediaReportFailureOnce: true,
+    })
+    const user = userEvent.setup()
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    expect(await screen.findByText('暂时无法读取视频数据，请稍后重试。')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '重试读取' }))
+
+    expect(await screen.findByText('完整解码已验证')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/media-report')),
+    ).toHaveLength(2)
   })
 
   it('loads minimized asset activity only after an explicit request', async () => {
@@ -532,6 +554,7 @@ function stubAsset(options: {
   role: 'ADMIN' | 'MEMBER'
   status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
   mediaReport?: object
+  mediaReportFailureOnce?: boolean
   quality?: object
   playback?: boolean
   mediaProbe?: boolean
@@ -543,6 +566,7 @@ function stubAsset(options: {
   activity?: boolean
 }) {
   let qualitySaved = false
+  let mediaReportReads = 0
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith(`/api/v1/projects/${projectId}`))
@@ -555,8 +579,13 @@ function stubAsset(options: {
           created_at: '2026-07-15T01:03:03Z',
         }),
       )
-    if (url.endsWith('/media-report'))
+    if (url.endsWith('/media-report')) {
+      mediaReportReads += 1
+      if (options.mediaReportFailureOnce && mediaReportReads === 1) {
+        return Promise.resolve(jsonResponse({ error_code: 'MEDIA_REPORT_TEMPORARY' }, 503))
+      }
       return Promise.resolve(jsonResponse(options.mediaReport ?? verifiedMediaReport()))
+    }
     if (url.includes(`/clip-assets/${assetId}/activity`) && options.activity)
       return Promise.resolve(
         jsonResponse({

@@ -112,7 +112,10 @@ describe('UploadProgressView', () => {
     expect(screen.getByText(/已确认 1 \/ 1 个分片/)).toBeInTheDocument()
     expect(screen.getByText('UPLOAD_FILE_SHA256_MISMATCH')).toBeInTheDocument()
     expect(screen.getByText('上传校验失败')).toBeInTheDocument()
-    expect(screen.getByText('文件 60000000…0001')).toBeInTheDocument()
+    expect(screen.getByText(/客户端标识：/)).toBeInTheDocument()
+    expect(
+      screen.getByText('平台校验到文件内容与登记摘要不一致，请重新选择原文件上传。'),
+    ).toBeInTheDocument()
     const clientFileId = screen.getByText(fileProgress.files[0]!.client_file_id)
     expect(clientFileId.closest('details')).not.toHaveAttribute('open')
 

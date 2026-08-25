@@ -70,6 +70,11 @@ describe('VideoManagementView', () => {
       'href',
       expect.stringContaining(`/projects/${projectId}/assets/`),
     )
+    expect(screen.getByRole('link', { name: /synthetic-no-hand\.mp4/ })).toHaveAttribute(
+      'title',
+      'synthetic-no-hand.mp4 · 视频资产 ID：50000000-0000-4000-8000-000000000001',
+    )
+    expect(screen.getByLabelText('视频列表')).toHaveAttribute('aria-busy', 'false')
     expect(screen.queryByText('V1.18 P0 · 单视频闭环')).not.toBeInTheDocument()
     expect(screen.getByText('视频总数')).toBeInTheDocument()
     expect(screen.getByText('待处理')).toBeInTheDocument()
@@ -573,8 +578,14 @@ describe('VideoManagementView', () => {
     expect(links[1]).toHaveAccessibleName(
       '视频 video-1.mp4，视频资产 ID 50000000-0000-4000-8000-000000000002',
     )
-    expect(links[0]).toHaveAttribute('title', '视频资产 ID：50000000-0000-4000-8000-000000000001')
-    expect(links[1]).toHaveAttribute('title', '视频资产 ID：50000000-0000-4000-8000-000000000002')
+    expect(links[0]).toHaveAttribute(
+      'title',
+      'video-1.mp4 · 视频资产 ID：50000000-0000-4000-8000-000000000001',
+    )
+    expect(links[1]).toHaveAttribute(
+      'title',
+      'video-1.mp4 · 视频资产 ID：50000000-0000-4000-8000-000000000002',
+    )
     expect(screen.queryByText('视频 ID 50000000…0001')).not.toBeInTheDocument()
     expect(screen.queryByText('视频 ID 50000000…0002')).not.toBeInTheDocument()
   })

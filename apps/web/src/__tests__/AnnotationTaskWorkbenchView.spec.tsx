@@ -204,6 +204,61 @@ describe('annotation task workbench', () => {
     expect(document.querySelector('.workbench-primary')).toHaveProperty('tagName', 'SECTION')
   })
 
+  it('uses semantic groups and supports multiple segment editing controls', async () => {
+    stubWorkbench([assignedTask])
+    const user = userEvent.setup()
+    renderWorkbench()
+
+    const addSegmentButton = await screen.findByRole('button', { name: '新增时间段' })
+    const firstSegment = document.querySelector('fieldset.annotation-workbench-segment-row')
+    expect(firstSegment).toHaveProperty('tagName', 'FIELDSET')
+    expect(
+      within(firstSegment as HTMLElement).getAllByRole('button', { name: '取当前' }),
+    ).toHaveLength(2)
+    within(firstSegment as HTMLElement)
+      .getAllByRole('button', { name: '取当前' })
+      .forEach((button) => expect(button).toBeDisabled())
+
+    await user.click(addSegmentButton)
+    const secondSegment = document.querySelectorAll('fieldset.annotation-workbench-segment-row')[1]
+    expect(secondSegment).toHaveProperty('tagName', 'FIELDSET')
+    expect(
+      within(secondSegment as HTMLElement).getByRole('spinbutton', {
+        name: '标注时间段 2 的开始时间',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(secondSegment as HTMLElement).getByRole('button', {
+        name: '跳转到标注时间段 2 的开始时间',
+      }),
+    ).toBeDisabled()
+
+    await user.click(await screen.findByRole('button', { name: '播放视频' }))
+    const video = await screen.findByLabelText('视频预览')
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 2.5, writable: true })
+    fireEvent.timeUpdate(video)
+    await user.click(
+      within(secondSegment as HTMLElement)
+        .getAllByRole('button', { name: '取当前' })
+        .at(0)!,
+    )
+    expect(
+      within(secondSegment as HTMLElement).getByRole('spinbutton', {
+        name: '标注时间段 2 的开始时间',
+      }),
+    ).toHaveValue('2500')
+    expect(
+      within(secondSegment as HTMLElement).getByRole('button', {
+        name: '跳转到标注时间段 2 的开始时间',
+      }),
+    ).toBeEnabled()
+
+    await user.click(
+      within(secondSegment as HTMLElement).getByRole('button', { name: '移除标注时间段 2' }),
+    )
+    expect(document.querySelectorAll('fieldset.annotation-workbench-segment-row')).toHaveLength(1)
+  })
+
   it('does not autoplay and uses the existing authorized playback path', async () => {
     const fetchMock = stubWorkbench([assignedTask])
     const user = userEvent.setup()

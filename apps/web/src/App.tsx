@@ -96,7 +96,7 @@ export default function AppShell() {
           <nav className="primary-nav" aria-label="主导航">
             <div className="sidebar-nav-group">
               <p className="sidebar-nav-group-label">工作区</p>
-              <NavLink end to={paths.projects} title="项目">
+              <NavLink end to={paths.projects} aria-label="项目" title="项目">
                 <FolderKanban {...iconProps} />
                 <span className="sidebar-label">项目</span>
               </NavLink>
@@ -104,6 +104,7 @@ export default function AppShell() {
                 <Link
                   to={paths.videos(projectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
+                  aria-label="视频管理"
                   title="视频管理"
                 >
                   <Video {...iconProps} />
@@ -111,7 +112,11 @@ export default function AppShell() {
                 </Link>
               ) : null}
               {projectId ? (
-                <NavLink to={paths.annotationTasks(projectId)} title="配药动作标注">
+                <NavLink
+                  to={paths.annotationTasks(projectId)}
+                  aria-label="配药动作标注"
+                  title="配药动作标注"
+                >
                   <ListChecks {...iconProps} />
                   <span className="sidebar-label">配药动作标注</span>
                 </NavLink>
@@ -126,25 +131,35 @@ export default function AppShell() {
                 管理
               </p>
               {isAdministrator ? (
-                <NavLink end to={paths.localUpload} title="本地上传（辅助）">
+                <NavLink
+                  end
+                  to={paths.localUpload}
+                  aria-label="本地上传（辅助）"
+                  title="本地上传（辅助）"
+                >
                   <Upload {...iconProps} />
                   <span className="sidebar-label">本地上传（辅助）</span>
                 </NavLink>
               ) : null}
               {projectId && isAdministrator ? (
-                <NavLink end to={paths.memberships(projectId)} title="项目成员">
+                <NavLink
+                  end
+                  to={paths.memberships(projectId)}
+                  aria-label="项目成员"
+                  title="项目成员"
+                >
                   <UsersRound {...iconProps} />
                   <span className="sidebar-label">项目成员</span>
                 </NavLink>
               ) : null}
               {isAdministrator ? (
-                <NavLink end to={paths.uploads} title="上传排障">
+                <NavLink end to={paths.uploads} aria-label="上传排障" title="上传排障">
                   <Activity {...iconProps} />
                   <span className="sidebar-label">上传排障</span>
                 </NavLink>
               ) : null}
               {isAdministrator ? (
-                <NavLink end to={paths.accounts} title="账号管理">
+                <NavLink end to={paths.accounts} aria-label="账号管理" title="账号管理">
                   <UserRoundCog {...iconProps} />
                   <span className="sidebar-label">账号管理</span>
                 </NavLink>

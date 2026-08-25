@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { paths } from '@/app/paths'
-import { renderRoute } from '@/test/render'
+import { renderRouter } from '@/test/render'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
@@ -499,10 +499,19 @@ describe('annotation task list view', () => {
 })
 
 function renderView() {
-  return renderRoute(<AnnotationTaskListView />, {
-    route: `/projects/${projectId}/annotation-tasks`,
-    path: '/projects/:projectId/annotation-tasks',
-  })
+  return renderRouter(
+    [
+      {
+        path: '/projects/:projectId/annotation-tasks',
+        element: <AnnotationTaskListView />,
+      },
+      {
+        path: '/projects/:projectId/annotation-tasks/:taskId',
+        element: <div aria-label="标注工作台路由占位" />,
+      },
+    ],
+    [`/projects/${projectId}/annotation-tasks`],
+  )
 }
 function stubTasks(tasks: object[], schema: object, scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
   const fetchMock = vi

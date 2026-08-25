@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,7 +41,7 @@ describe('App', () => {
 
     expect(await screen.findByText('合成测试项目')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '返回项目列表' })).toHaveTextContent('配药视频数据管理')
-    expect(screen.getByText('选择项目并进入工作区。')).toBeInTheDocument()
+    expect(screen.queryByText('选择项目并进入工作区。')).not.toBeInTheDocument()
     expect(screen.queryByText('统一管理配药操作、视频资产和配药动作标注。')).not.toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('项目')
@@ -70,6 +70,95 @@ describe('App', () => {
     expect(
       (await screen.findAllByRole('button', { name: /新\s*建\s*项\s*目/ })).length,
     ).toBeGreaterThan(0)
+  })
+
+  it('creates a project and reloads the project list', async () => {
+    const fetchMock = projectListFetch([], true)
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
+
+    const pageToolbar = await screen.findByRole('toolbar', { name: '页面操作' })
+    await user.click(await within(pageToolbar).findByRole('button', { name: '新建项目' }))
+    const dialog = await screen.findByRole('dialog', { name: '新建项目' })
+    await user.type(within(dialog).getByRole('textbox'), '合成验证项目')
+    await user.click(within(dialog).getByRole('button', { name: '创建项目' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/projects',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ display_name: '合成验证项目' }),
+        }),
+      )
+    })
+    expect(await screen.findByText('合成验证项目')).toBeInTheDocument()
+  })
+
+  it('renames a project from its administrator menu', async () => {
+    const project = projectFixture('管理员项目')
+    const fetchMock = projectListFetch([project], false)
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
+
+    await user.click(await screen.findByRole('button', { name: '管理项目：管理员项目' }))
+    await user.click(await screen.findByRole('menuitem', { name: '修改名称' }))
+    const dialog = await screen.findByRole('dialog', { name: '修改项目名称' })
+    const input = within(dialog).getByRole('textbox')
+    await user.clear(input)
+    await user.type(input, '已更新项目')
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${project.project_id}`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ display_name: '已更新项目' }),
+        }),
+      )
+    })
+    expect(await screen.findByText('已更新项目')).toBeInTheDocument()
+  })
+
+  it('requires the exact project name before archiving', async () => {
+    const project = projectFixture('待归档项目')
+    const fetchMock = projectListFetch([project], false)
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
+
+    await user.click(await screen.findByRole('button', { name: '管理项目：待归档项目' }))
+    await user.click(await screen.findByRole('menuitem', { name: '归档项目' }))
+    const dialog = await screen.findByRole('dialog', { name: '归档项目' })
+    const input = within(dialog).getByRole('textbox')
+    await user.type(input, '待归档')
+    await user.click(within(dialog).getByRole('button', { name: '确认归档' }))
+    expect(
+      await within(dialog).findByText('输入的项目名称与当前项目不一致，未执行归档。'),
+    ).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input) === `/api/v1/projects/${project.project_id}` &&
+          (init as RequestInit | undefined)?.method === 'DELETE',
+      ),
+    ).toBe(false)
+
+    await user.clear(input)
+    await user.type(input, '待归档项目')
+    await user.click(within(dialog).getByRole('button', { name: '确认归档' }))
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${project.project_id}`,
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
+    expect(
+      await screen.findByText(/当前账号尚未加入项目。平台管理员可新建项目/),
+    ).toBeInTheDocument()
   })
 
   it('keeps the ordinary project workflow in the primary navigation', () => {
@@ -133,6 +222,39 @@ describe('App', () => {
     )
   })
 
+  it('keeps the nested annotation workbench in the annotation navigation context', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    const taskId = '60000000-0000-4000-8000-000000000001'
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            {
+              path: 'projects/:projectId/annotation-tasks/:taskId',
+              element: <div>配药动作标注工作台</div>,
+            },
+          ],
+        },
+      ],
+      [`/projects/${projectId}/annotation-tasks/${taskId}`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).not.toHaveAttribute(
+      'aria-current',
+    )
+    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).not.toHaveAttribute(
+      'data-active',
+    )
+  })
+
   it('only highlights local upload in the management menu on the local-upload page', () => {
     renderRouter(
       [
@@ -180,8 +302,32 @@ describe('App', () => {
     expect(frame).not.toHaveAttribute('data-sidebar-collapsed')
     await user.click(screen.getByRole('button', { name: '收起侧栏' }))
     expect(frame).toHaveAttribute('data-sidebar-collapsed', 'true')
+    expect(screen.getByRole('button', { name: '展开侧栏' })).toHaveAttribute(
+      'aria-controls',
+      'sidebar-navigation',
+    )
     await user.click(screen.getByRole('button', { name: '展开侧栏' }))
     expect(frame).not.toHaveAttribute('data-sidebar-collapsed')
+  })
+
+  it('moves focus to the single main landmark through the skip link', async () => {
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [{ path: 'projects', element: <div>项目页面</div> }],
+        },
+      ],
+      ['/projects'],
+      { username: 'platform-admin', role: 'ADMIN' },
+    )
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('link', { name: '跳到主要内容' }))
+
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(document.activeElement).toBe(screen.getByRole('main'))
   })
 
   it('only exposes project rename and archive commands to project administrators', async () => {
@@ -243,5 +389,54 @@ function jsonResponse(body: object, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function projectFixture(displayName: string) {
+  return {
+    project_id: '30000000-0000-4000-8000-000000000001',
+    display_name: displayName,
+    status: 'ACTIVE' as const,
+    current_role: 'ADMIN' as const,
+    created_at: '2026-07-20T00:00:00Z',
+  }
+}
+
+function projectListFetch(
+  initialProjects: ReturnType<typeof projectFixture>[],
+  canCreateProjects: boolean,
+) {
+  let projects = [...initialProjects]
+  return vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    if (method === 'GET' && url === '/api/v1/projects') {
+      return Promise.resolve(
+        jsonResponse({ items: projects, can_create_projects: canCreateProjects }),
+      )
+    }
+    if (method === 'POST' && url === '/api/v1/projects') {
+      const body = JSON.parse(String(init?.body)) as { display_name: string }
+      const created = projectFixture(body.display_name)
+      projects = [...projects, created]
+      return Promise.resolve(jsonResponse(created))
+    }
+    if (method === 'PUT' && url.startsWith('/api/v1/projects/')) {
+      const projectId = url.split('/').at(-1)
+      const body = JSON.parse(String(init?.body)) as { display_name: string }
+      projects = projects.map((project) =>
+        project.project_id === projectId
+          ? { ...project, display_name: body.display_name }
+          : project,
+      )
+      const updatedProject = projects.find((project) => project.project_id === projectId)
+      return Promise.resolve(jsonResponse(updatedProject ?? projectFixture(body.display_name)))
+    }
+    if (method === 'DELETE' && url.startsWith('/api/v1/projects/')) {
+      const projectId = url.split('/').at(-1)
+      projects = projects.filter((project) => project.project_id !== projectId)
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }
+    return Promise.resolve(jsonResponse({ error_code: 'NOT_FOUND' }, 404))
   })
 }

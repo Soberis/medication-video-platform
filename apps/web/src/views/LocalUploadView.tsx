@@ -128,6 +128,24 @@ function uploadTaskTone(status: TaskStatus): 'error' | 'processing' | 'success' 
   return status === 'COMPLETED' ? 'success' : 'processing'
 }
 
+function uploadResultDescription(
+  uploadState: 'idle' | 'uploading' | 'completed',
+  completedTaskCount: number,
+  failedTaskCount: number,
+  totalTaskCount: number,
+) {
+  if (uploadState === 'uploading') {
+    return `平台已确认 ${completedTaskCount} / ${totalTaskCount} 个视频；其余文件仍在处理。`
+  }
+  if (failedTaskCount === 0) {
+    return '所有视频都已由平台完成校验并确认；现在可以进入视频管理继续处理。'
+  }
+  if (completedTaskCount === 0) {
+    return '本轮没有视频得到平台确认；请根据每个文件的原因重新选择后再上传。'
+  }
+  return `平台已确认 ${completedTaskCount} 个视频，${failedTaskCount} 个文件需要重新选择后再上传。`
+}
+
 export default function LocalUploadView() {
   const [projects, setProjects] = useState<DataProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
@@ -267,7 +285,7 @@ export default function LocalUploadView() {
         eyebrow="平台本地上传"
         titleId="local-upload-title"
         title="选择视频并上传"
-        description="每个视频使用独立批次上传、校验并建立单视角配药操作记录；不会从文件名推断多相机关系。"
+        description="每个视频单独上传并建立可追踪记录；平台不会根据文件名猜测多机位关系。"
         actions={
           <Button
             loading={projectLoadState === 'loading'}
@@ -323,7 +341,7 @@ export default function LocalUploadView() {
                 type="file"
                 accept="video/*"
                 multiple
-                aria-describedby="local-upload-files-hint"
+                aria-describedby={`local-upload-files-hint${selectedFiles.length > 0 ? ' local-upload-selected-files' : ''}`}
                 disabled={isUploading || !selectedProjectId}
                 onChange={selectFiles}
               />
@@ -334,16 +352,21 @@ export default function LocalUploadView() {
               </p>
             </div>
             {selectedFiles.length > 0 && tasks.length === 0 ? (
-              <ul className="selected-file-list" aria-label="已选择视频">
-                {selectedFiles.map((file) => (
-                  <li key={`${file.name}:${file.size}:${file.lastModified}`}>
-                    <strong>{file.name}</strong>
-                    <span>
-                      {file.type || '视频文件'} · {formatBytes(file.size)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="selected-file-selection">
+                <p id="local-upload-selected-files" className="selected-file-count" role="status">
+                  已选择 {selectedFiles.length} 个视频
+                </p>
+                <ul className="selected-file-list" aria-label="已选择视频">
+                  {selectedFiles.map((file) => (
+                    <li key={`${file.name}:${file.size}:${file.lastModified}`}>
+                      <strong>{file.name}</strong>
+                      <span>
+                        {file.type || '视频文件'} · {formatBytes(file.size)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
             <div className="local-upload-actions">
               <Button type="primary" htmlType="submit" disabled={!canStart} loading={isUploading}>
@@ -372,18 +395,30 @@ export default function LocalUploadView() {
             <div>
               <p className="app-eyebrow">上传进度</p>
               <h2 id="local-upload-progress-title">
-                已上传 {completedTaskCount} / {tasks.length} 个视频
+                平台已确认 {completedTaskCount} / {tasks.length} 个视频
               </h2>
             </div>
             {uploadSummary ? (
               <StatusBadge tone={uploadSummary.color}>{uploadSummary.label}</StatusBadge>
             ) : null}
           </div>
+          <p className="local-upload-results-summary" role="status">
+            {uploadResultDescription(
+              uploadState,
+              completedTaskCount,
+              failedTaskCount,
+              tasks.length,
+            )}
+          </p>
           <p className="section-description">
             传输进度只代表浏览器已发送的字节；只有平台完成校验并建立记录后，文件才会标记为“已确认完成”。
           </p>
           {tasks.map((task) => (
-            <article key={task.id} className="local-upload-task">
+            <article
+              key={task.id}
+              className="local-upload-task"
+              aria-labelledby={`local-upload-task-${task.id}-title`}
+            >
               <div className="file-heading">
                 <div>
                   <p className="file-kind">
@@ -393,23 +428,29 @@ export default function LocalUploadView() {
                         ? '需要处理'
                         : '上传流程'}
                   </p>
-                  <h3>{task.file.name}</h3>
+                  <h3 id={`local-upload-task-${task.id}-title`}>{task.file.name}</h3>
                 </div>
                 <StatusBadge tone={uploadTaskTone(task.status)}>
                   {taskStatusLabel(task)}
                 </StatusBadge>
               </div>
-              <Progress
-                percent={taskPercent(task)}
-                format={() => taskProgressLabel(task)}
-                status={
-                  task.status === 'FAILED'
-                    ? 'exception'
-                    : task.status === 'COMPLETED'
-                      ? 'success'
-                      : 'normal'
-                }
-              />
+              <div
+                className="local-upload-task-progress"
+                role="group"
+                aria-label={`${task.file.name} 的上传进度`}
+              >
+                <Progress
+                  percent={taskPercent(task)}
+                  format={() => taskProgressLabel(task)}
+                  status={
+                    task.status === 'FAILED'
+                      ? 'exception'
+                      : task.status === 'COMPLETED'
+                        ? 'success'
+                        : 'normal'
+                  }
+                />
+              </div>
               <p className="task-description">{taskDescription(task)}</p>
               {task.progress?.batchId || task.captureSessionId ? (
                 <details className="upload-technical-details">

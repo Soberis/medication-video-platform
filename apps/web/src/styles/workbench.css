@@ -105,6 +105,7 @@
 }
 
 .annotation-workbench-auxiliary-heading > span:last-child {
+  overflow-wrap: anywhere;
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-body);
@@ -126,6 +127,11 @@
   font-size: var(--app-font-size-section-title);
 }
 
+.annotation-workbench-editor .ant-alert-description,
+.annotation-workbench-inspector .annotation-label-guide li span {
+  overflow-wrap: anywhere;
+}
+
 .annotation-playback-position {
   display: flex;
   align-items: center;
@@ -141,11 +147,23 @@
 }
 
 .annotation-workbench-segment-row {
+  min-inline-size: 0;
+  margin: 0 0 var(--app-space-12);
+  padding: var(--app-space-12);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-surface-muted);
   display: grid;
   grid-template-columns: 180px 180px minmax(220px, 1fr) auto auto;
   align-items: end;
   gap: var(--app-space-12);
-  margin-bottom: var(--app-space-12);
+}
+
+.annotation-workbench-segment-row > legend {
+  padding: 0 var(--app-space-4);
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .annotation-workbench-segment-row .ant-form-item {
@@ -643,6 +661,18 @@
     padding-left: 0;
     border-left: 0;
   }
+
+  .annotation-workbench-segment-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .annotation-workbench-segment-row .ant-form-item:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+
+  .annotation-workbench-segment-row > .ant-btn {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 720px) {
@@ -681,11 +711,11 @@
   }
 
   .annotation-workbench-segment-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .annotation-workbench-segment-row .ant-form-item:nth-child(3) {
-    grid-column: 1 / -1;
+  .annotation-workbench-segment-row .ant-form-item:nth-of-type(3) {
+    grid-column: auto;
   }
 
   .annotation-workbench-segment-row > .ant-btn {

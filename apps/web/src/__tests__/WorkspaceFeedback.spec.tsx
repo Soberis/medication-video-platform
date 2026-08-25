@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState, NoticeState } from '@/components/WorkspaceFeedback'
 
 describe('workspace feedback primitives', () => {
   it('exposes loading and retryable error states with accessible roles', () => {
@@ -18,6 +18,7 @@ describe('workspace feedback primitives', () => {
     expect(screen.getByRole('status')).toHaveTextContent('正在加载视频…')
     expect(screen.getByRole('status')).toHaveClass('workspace-loading-state')
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByRole('alert')).toHaveTextContent('VIDEO_REQUEST_FAILED')
     expect(screen.getByRole('alert')).toHaveClass('workspace-error-state')
     expect(screen.getByRole('alert')).toHaveTextContent('暂时无法读取视频。')
@@ -27,6 +28,13 @@ describe('workspace feedback primitives', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
     expect(onRetry).toHaveBeenCalledOnce()
+  })
+
+  it('keeps informational notices separate from loading and error states', () => {
+    render(<NoticeState>视频摘要暂不可用，视频列表仍可使用。</NoticeState>)
+
+    expect(screen.getByRole('status')).toHaveTextContent('视频摘要暂不可用，视频列表仍可使用。')
+    expect(screen.getByRole('status')).not.toHaveAttribute('aria-busy')
   })
 
   it('uses the shared empty-state presentation for collection views', () => {

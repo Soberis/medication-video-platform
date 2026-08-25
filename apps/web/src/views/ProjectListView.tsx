@@ -152,7 +152,6 @@ export default function ProjectListView() {
         className="project-page-heading"
         titleId="projects-title"
         title="项目"
-        description="选择项目并进入工作区。"
         actions={
           <>
             <Button
@@ -170,7 +169,7 @@ export default function ProjectListView() {
           </>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在读取项目…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在加载项目…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadProjects()}>
           {errorMessage}
@@ -185,7 +184,7 @@ export default function ProjectListView() {
                   <div className="project-list-heading">
                     <strong>{project.display_name}</strong>
                     <StatusBadge tone={project.current_role === 'ADMIN' ? 'info' : 'default'}>
-                      {project.current_role === 'ADMIN' ? '管理员' : '成员'}
+                      {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                     </StatusBadge>
                   </div>
                 </div>
@@ -235,7 +234,7 @@ export default function ProjectListView() {
           </ul>
         </section>
       ) : loadState === 'success' ? (
-        <EmptyState description="当前账号尚未加入项目。管理员可新建项目；成员需由项目管理员添加。">
+        <EmptyState description="当前账号尚未加入项目。平台管理员可新建项目；成员需由项目管理员添加。">
           {canCreateProjects ? (
             <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
               新建项目

@@ -327,6 +327,7 @@ interface MediaReportCardProps {
   errorCode: string
   errorMessage: string
   loadState: 'idle' | 'loading' | 'success' | 'error'
+  onRetry: () => void
   report: MediaReport | null
 }
 
@@ -344,6 +345,7 @@ export function MediaReportCard({
   errorCode,
   errorMessage,
   loadState,
+  onRetry,
   report,
 }: MediaReportCardProps) {
   let content
@@ -355,6 +357,11 @@ export function MediaReportCard({
         type="error"
         title={errorMessage}
         description={errorCode ? `错误码：${errorCode}` : undefined}
+        action={
+          <Button size="small" onClick={onRetry}>
+            重试读取
+          </Button>
+        }
         showIcon
       />
     )
@@ -431,7 +438,11 @@ export function MediaReportCard({
   }
 
   return (
-    <section className="workbench-panel" aria-labelledby="media-report-title">
+    <section
+      className="workbench-panel"
+      aria-labelledby="media-report-title"
+      aria-busy={loadState === 'loading'}
+    >
       <h3 id="media-report-title">媒体检测报告</h3>
       {content}
     </section>

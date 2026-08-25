@@ -32,6 +32,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: var(--app-sidebar-width);
+  min-width: 0;
   height: 100vh;
   min-height: 0;
   border-right: 1px solid var(--app-color-sidebar-border);
@@ -104,6 +105,7 @@
 }
 
 .sidebar-navigation {
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   padding: var(--app-space-12) var(--app-space-8);
@@ -117,6 +119,10 @@
 .sidebar-nav-group {
   display: grid;
   gap: var(--app-space-4);
+}
+
+.sidebar-nav-group[data-active='true'] > .sidebar-nav-group-label {
+  color: var(--app-color-sidebar-foreground);
 }
 
 .sidebar-nav-group-label {
@@ -242,6 +248,7 @@
 }
 
 .workspace-content {
+  min-width: 0;
   width: min(100%, var(--app-workspace-max-width));
   margin: 0 auto;
   padding: var(--app-space-16) var(--app-space-24) var(--app-space-24);

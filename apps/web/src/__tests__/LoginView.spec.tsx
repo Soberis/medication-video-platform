@@ -14,7 +14,8 @@ describe('LoginView', () => {
     renderLogin()
 
     expect(screen.getByText('配药视频数据管理平台')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '登录工作区' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '登录' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('账号'), 'platform-admin')
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
     await user.click(screen.getByRole('button', { name: /登\s*录/ }))
@@ -42,6 +43,24 @@ describe('LoginView', () => {
 
     expect(await screen.findByText(/账号或密码不正确/)).toBeInTheDocument()
     await waitFor(() => expect(screen.getByLabelText('密码')).toHaveValue(''))
+  })
+
+  it('shows a loading state while login is pending', async () => {
+    let resolveLogin: (response: Response) => void = () => undefined
+    const pendingLogin = new Promise<Response>((resolve) => {
+      resolveLogin = resolve
+    })
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(pendingLogin))
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByLabelText('账号'), 'platform-admin')
+    await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
+    await user.click(screen.getByRole('button', { name: /登\s*录/ }))
+
+    expect(screen.getByRole('button', { name: /登\s*录/ })).toHaveClass('ant-btn-loading')
+    resolveLogin(jsonResponse({ username: 'platform-admin', role: 'ADMIN' }))
+    await waitFor(() => expect(screen.getByText('Projects')).toBeInTheDocument())
   })
 
   it.each([

@@ -2,28 +2,37 @@ import { Button, Empty } from 'antd'
 import type { ReactNode } from 'react'
 
 export interface NoticeStateProps {
+  'aria-busy'?: boolean
   'aria-live'?: 'off' | 'polite' | 'assertive'
   children: ReactNode
   className?: string
 }
 
 export function NoticeState({
+  'aria-busy': ariaBusy,
   'aria-live': ariaLive = 'polite',
   children,
   className = '',
 }: NoticeStateProps) {
   return (
-    <div className={`workspace-notice ${className}`.trim()} role="status" aria-live={ariaLive}>
+    <div
+      className={`workspace-notice ${className}`.trim()}
+      role="status"
+      aria-live={ariaLive}
+      aria-busy={ariaBusy || undefined}
+    >
       {children}
     </div>
   )
 }
 
-export type LoadingStateProps = Omit<NoticeStateProps, 'aria-live'>
+export type LoadingStateProps = Omit<NoticeStateProps, 'aria-busy' | 'aria-live'>
 
 export function LoadingState({ children, className = '' }: LoadingStateProps) {
   return (
-    <NoticeState className={`workspace-loading-state ${className}`.trim()}>{children}</NoticeState>
+    <NoticeState className={`workspace-loading-state ${className}`.trim()} aria-busy>
+      {children}
+    </NoticeState>
   )
 }
 

@@ -49,11 +49,11 @@ export default function LoginView() {
   }
 
   return (
-    <section className="login-page" aria-labelledby="login-title">
+    <main className="login-page" aria-labelledby="login-title">
       <Card className="login-card" variant="borderless">
         <p className="app-eyebrow">配药视频数据管理平台</p>
-        <h1 id="login-title">登录工作区</h1>
-        <p>使用平台账号登录。采集设备使用独立上传凭据，不在此处登录。</p>
+        <h1 id="login-title">登录</h1>
+        <p className="login-description">使用平台账号登录。</p>
         {errorMessage || auth.sessionError ? (
           <Alert
             className="login-error"
@@ -88,6 +88,6 @@ export default function LoginView() {
           </Button>
         </Form>
       </Card>
-    </section>
+    </main>
   )
 }
