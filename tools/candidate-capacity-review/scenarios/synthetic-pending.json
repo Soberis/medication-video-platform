@@ -1,0 +1,106 @@
+{
+  "schema_version": "candidate-capacity-review.v1",
+  "scenario_id": "synthetic-pending-baseline",
+  "description": "合成规模示例；仅用于验证公式，生产证据仍待补齐。",
+  "inputs": {
+    "average_video_duration_minutes": {
+      "status": "ASSUMED",
+      "value": 10,
+      "note": "沿用 V1.18 文档示例，不是生产测量。"
+    },
+    "p95_video_duration_minutes": {
+      "status": "PENDING",
+      "value": null,
+      "note": "尚无授权样本时长分布。"
+    },
+    "average_camera_count": {
+      "status": "ASSUMED",
+      "value": 1,
+      "note": "文档示例按单路视频演算。"
+    },
+    "videos_per_day": {
+      "status": "ASSUMED",
+      "value": 1000,
+      "note": "仅用于复现 1000 × 10 分钟示例。"
+    },
+    "video_count_basis": {
+      "status": "ASSUMED",
+      "value": "camera_video",
+      "note": "该示例的数量已按单路相机视频计。"
+    },
+    "inference_fps": {
+      "status": "ASSUMED",
+      "value": 10,
+      "note": "V1.18 MediaPipe 基线。"
+    },
+    "max_hands_per_frame": {
+      "status": "ASSUMED",
+      "value": 2,
+      "note": "V1.18 MediaPipe 基线。"
+    },
+    "observed_or_assumed_candidate_density": {
+      "status": "ASSUMED",
+      "value": 0.35,
+      "note": "待授权样本测量的占位假设。"
+    },
+    "estimated_candidate_row_bytes": {
+      "status": "ASSUMED",
+      "value": 512,
+      "note": "待 PostgreSQL 行、索引或压缩工件实测。"
+    },
+    "index_overhead_ratio": {
+      "status": "ASSUMED",
+      "value": 0.25,
+      "note": "待分区/索引基准测量。"
+    },
+    "growth_factor": {
+      "status": "ASSUMED",
+      "value": 1.0,
+      "note": "当前不额外放大。"
+    },
+    "expected_query_patterns": {
+      "status": "PENDING",
+      "value": null,
+      "note": "尚无典型查询窗口和 P95/P99。"
+    }
+  },
+  "retention_days": [30, 90, 365],
+  "decision_criteria": {
+    "postgresql_max_retained_rows": 50000000,
+    "postgresql_max_retained_storage_bytes": 50000000000,
+    "postgresql_hot_query_patterns": [
+      "single_video_time_window",
+      "small_candidate_window"
+    ],
+    "s3_artifact_query_patterns": [
+      "bulk_export",
+      "long_range_scan"
+    ],
+    "required_measured_inputs": [
+      "average_video_duration_minutes",
+      "p95_video_duration_minutes",
+      "average_camera_count",
+      "videos_per_day",
+      "video_count_basis",
+      "observed_or_assumed_candidate_density",
+      "estimated_candidate_row_bytes",
+      "index_overhead_ratio",
+      "expected_query_patterns"
+    ],
+    "postgresql_partition_index_feasible": {
+      "status": "PENDING",
+      "value": null,
+      "note": "需要分区、索引、保留和热查询基准。"
+    },
+    "postgresql_operational_complexity_acceptable": {
+      "status": "PENDING",
+      "value": null,
+      "note": "需要平台运维评审。"
+    },
+    "s3_artifact_retrieval_tradeoff_acceptable": {
+      "status": "PENDING",
+      "value": null,
+      "note": "需要对象工件范围读取和长窗口查询基准。"
+    }
+  }
+}
