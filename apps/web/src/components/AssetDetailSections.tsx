@@ -1,5 +1,12 @@
 import { Alert, Button, Descriptions, Select } from 'antd'
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MutableRefObject,
+} from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
@@ -56,6 +63,8 @@ interface PlaybackCardProps {
   mediaProbeMessage: string
   playbackMessage: string
   playbackState: PlaybackState
+  externalVideoRef?: MutableRefObject<HTMLVideoElement | null>
+  onPlaybackTimeChange?: (timeMs: number) => void
   onClose: () => void
   onLoadedMetadata: () => void
   onPlaybackError: () => void
@@ -74,6 +83,8 @@ export function PlaybackCard({
   mediaProbeMessage,
   playbackMessage,
   playbackState,
+  externalVideoRef,
+  onPlaybackTimeChange,
   onClose,
   onLoadedMetadata,
   onPlaybackError,
@@ -235,7 +246,10 @@ export function PlaybackCard({
               }
             >
               <video
-                ref={videoRef}
+                ref={(node) => {
+                  videoRef.current = node
+                  if (externalVideoRef) externalVideoRef.current = node
+                }}
                 className="review-video"
                 controls
                 controlsList="nofullscreen"
@@ -245,9 +259,13 @@ export function PlaybackCard({
                 src={grant.media_url}
                 onLoadedMetadata={(event) => {
                   setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
+                  onPlaybackTimeChange?.(event.currentTarget.currentTime * 1000)
                   onLoadedMetadata()
                 }}
-                onTimeUpdate={(event) => setPlaybackTimeMs(event.currentTarget.currentTime * 1000)}
+                onTimeUpdate={(event) => {
+                  setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
+                  onPlaybackTimeChange?.(event.currentTarget.currentTime * 1000)
+                }}
                 onError={onPlaybackError}
               >
                 当前浏览器不支持视频播放。

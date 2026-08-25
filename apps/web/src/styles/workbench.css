@@ -83,6 +83,130 @@
   margin-top: 0;
 }
 
+.annotation-workbench-layout {
+  margin-top: var(--app-space-16);
+}
+
+.annotation-workbench-auxiliary {
+  display: grid;
+  gap: var(--app-space-4);
+  width: min(100%, 960px);
+  padding: var(--app-space-12) var(--app-space-16);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-surface-muted);
+}
+
+.annotation-workbench-auxiliary-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
+}
+
+.annotation-workbench-auxiliary-heading > span:last-child {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  line-height: var(--app-line-height-body);
+}
+
+.annotation-workbench-editor {
+  width: min(100%, 960px);
+  padding: var(--app-space-16);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-large);
+  background: var(--app-color-surface);
+}
+
+.annotation-workbench-editor .workspace-section-heading {
+  margin-bottom: var(--app-space-16);
+}
+
+.annotation-workbench-editor .workspace-section-heading h2 {
+  font-size: var(--app-font-size-section-title);
+}
+
+.annotation-playback-position {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-12);
+  margin: var(--app-space-12) 0;
+  padding: var(--app-space-8) var(--app-space-12);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  color: var(--app-color-foreground-secondary);
+  background: var(--app-color-surface-muted);
+  font-size: var(--app-font-size-helper);
+}
+
+.annotation-workbench-segment-row {
+  display: grid;
+  grid-template-columns: 180px 180px minmax(220px, 1fr) auto auto;
+  align-items: end;
+  gap: var(--app-space-12);
+  margin-bottom: var(--app-space-12);
+}
+
+.annotation-workbench-segment-row .ant-form-item {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.annotation-workbench-segment-row .ant-input-number,
+.annotation-workbench-segment-row .ant-select {
+  width: 100%;
+}
+
+.annotation-workbench-segment-row .ant-form-item-control-input-content {
+  display: flex;
+  gap: var(--app-space-8);
+}
+
+.annotation-workbench-segment-row .ant-form-item-control-input-content > .ant-input-number {
+  min-width: 0;
+}
+
+.annotation-workbench-evidence {
+  display: grid;
+  gap: var(--app-space-12);
+}
+
+.annotation-evidence-summary,
+.annotation-workbench-status-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
+}
+
+.annotation-readonly-segments {
+  display: grid;
+  gap: var(--app-space-8);
+  margin: 0;
+  padding-left: var(--app-space-24);
+}
+
+.annotation-readonly-segments li {
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) minmax(120px, max-content) minmax(0, 1fr);
+  gap: var(--app-space-8) var(--app-space-12);
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
+}
+
+.annotation-readonly-segments li > span:first-child {
+  color: var(--app-color-foreground-muted);
+}
+
+.annotation-workbench-review-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
+  margin-top: var(--app-space-12);
+}
+
 /* The player is a real work surface: the frame separates an inactive video area
  * from the page without inventing a thumbnail or a loading state. */
 .playback-panel {
@@ -554,5 +678,22 @@
     position: absolute;
     right: var(--app-space-16);
     margin-top: 0;
+  }
+
+  .annotation-workbench-segment-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .annotation-workbench-segment-row .ant-form-item:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .annotation-workbench-segment-row > .ant-btn {
+    justify-self: start;
+  }
+
+  .annotation-readonly-segments li {
+    grid-template-columns: 1fr;
+    gap: var(--app-space-4);
   }
 }

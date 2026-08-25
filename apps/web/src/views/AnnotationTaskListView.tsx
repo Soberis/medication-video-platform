@@ -1,6 +1,6 @@
-import { Alert, App as AntdApp, Button, Form, Input, InputNumber, Modal, Select } from 'antd'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { App as AntdApp, Button, Input, Modal } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   AnnotationTaskApiError,
@@ -8,9 +8,7 @@ import {
   listAnnotationTasks,
   recheckAnnotationPostCleaning,
   reviewAnnotationRevision,
-  submitAnnotationRevision,
   type AnnotationLabelSchema,
-  type AnnotationSegment,
   type AnnotationTask,
   type AnnotationTaskProgress,
 } from '@/api/annotation'
@@ -32,9 +30,6 @@ import {
   shortId,
 } from '@/features/catalog/catalog-presentation'
 
-interface DraftAnnotationSegment extends AnnotationSegment {
-  readonly draftId: number
-}
 const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
   QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是“合格”',
@@ -52,11 +47,6 @@ const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体检测输入摘要与视频资产不一致',
   SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间段超出已确认的视频时长',
   LEGACY_APPROVED_REVISION_REQUIRES_REVALIDATION: '历史通过记录需要按当前规则重新验证',
-}
-let nextDraftSegmentId = 0
-function createDraftSegment(): DraftAnnotationSegment {
-  nextDraftSegmentId += 1
-  return { draftId: nextDraftSegmentId, start_ms: 0, end_ms: 1000, label: '' }
 }
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
@@ -127,25 +117,14 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
 
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
+  const navigate = useNavigate()
   const { message, modal } = AntdApp.useApp()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
-  const sortedLabels = useMemo(
-    () =>
-      [...(labelSchema?.labels ?? [])].sort(
-        (a, b) => a.sort_order - b.sort_order || a.label_id.localeCompare(b.label_id),
-      ),
-    [labelSchema],
-  )
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [selectedTask, setSelectedTask] = useState<AnnotationTask | null>(null)
-  const [isSubmissionOpen, setIsSubmissionOpen] = useState(false)
-  const [segments, setSegments] = useState<DraftAnnotationSegment[]>([])
-  const [note, setNote] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [reviewingRevisionId, setReviewingRevisionId] = useState<string | null>(null)
   const [recheckingRevisionId, setRecheckingRevisionId] = useState<string | null>(null)
   const [trainingExportPreview, setTrainingExportPreview] =
@@ -275,68 +254,6 @@ export default function AnnotationTaskListView() {
     }
   }, [isTrainingDownloadLoading, message, projectId, trainingExportPreview])
 
-  function openSubmission(task: AnnotationTask) {
-    if (!task.can_submit || task.status !== 'ASSIGNED') return
-    if (
-      !labelSchema ||
-      labelSchema.label_schema_id !== task.label_schema_id ||
-      labelSchema.schema_digest !== task.label_schema_digest
-    ) {
-      void message.error('任务绑定的标签规范与当前项目不一致，请刷新后重试。')
-      return
-    }
-    setSelectedTask(task)
-    setIsSubmissionOpen(true)
-    setSegments([createDraftSegment()])
-    setNote('')
-  }
-  function updateSegment(index: number, patch: Partial<AnnotationSegment>) {
-    setSegments((current) =>
-      current.map((segment, currentIndex) =>
-        currentIndex === index ? { ...segment, ...patch } : segment,
-      ),
-    )
-  }
-  async function submit() {
-    const task = selectedTask
-    const schema = labelSchema
-    if (!task || !schema || isSubmitting) return
-    if (
-      schema.label_schema_id !== task.label_schema_id ||
-      schema.schema_digest !== task.label_schema_digest
-    ) {
-      void message.error('任务绑定的标签规范已发生变化，请关闭窗口并刷新后重试。')
-      return
-    }
-    const validSegments = segments.map(({ start_ms, end_ms, label }) => ({
-      start_ms,
-      end_ms,
-      label: label.trim(),
-    }))
-    if (
-      validSegments.some(
-        (segment) => !segment.label || segment.start_ms < 0 || segment.end_ms <= segment.start_ms,
-      )
-    ) {
-      void message.error('请填写标签，并确保每个时间段的结束时间晚于开始时间。')
-      return
-    }
-    setIsSubmitting(true)
-    try {
-      await submitAnnotationRevision(projectId, task.annotation_task_id, validSegments, note)
-      void message.success('配药动作标注已提交，等待管理员复核。')
-      setIsSubmissionOpen(false)
-      await loadTasks()
-    } catch (error) {
-      void message.error(
-        error instanceof AnnotationTaskApiError
-          ? error.message
-          : '配药动作标注暂未提交，请稍后重试。',
-      )
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
   function review(task: AnnotationTask, decision: 'APPROVED' | 'REJECTED') {
     const revision = task.annotation_revision
     if (!revision || !task.can_review || reviewingRevisionId) return
@@ -600,10 +517,12 @@ export default function AnnotationTaskListView() {
                   <Button
                     type="primary"
                     size="small"
-                    aria-label={`提交视频 ${row.clip_asset_id} 的配药动作标注`}
-                    onClick={() => openSubmission(row)}
+                    aria-label={`进入视频 ${row.clip_asset_id} 的配药动作标注工作台`}
+                    onClick={() =>
+                      void navigate(paths.annotationTask(projectId, row.annotation_task_id))
+                    }
                   >
-                    提交标注
+                    进入工作台
                   </Button>
                 ) : row.can_review && row.annotation_revision ? (
                   <>
@@ -791,148 +710,6 @@ export default function AnnotationTaskListView() {
             </p>
           </>
         ) : null}
-      </Modal>
-      <Modal
-        open={isSubmissionOpen}
-        title="提交配药动作时间段"
-        width={720}
-        footer={null}
-        onCancel={() => setIsSubmissionOpen(false)}
-        destroyOnHidden
-      >
-        {selectedTask && labelSchema ? (
-          <div className="annotation-submission-context">
-            <MetadataList
-              ariaLabel="提交任务上下文"
-              items={[
-                {
-                  id: 'submission-video',
-                  label: '视频',
-                  value: (
-                    <Link
-                      className="text-link"
-                      to={paths.asset(projectId, selectedTask.clip_asset_id)}
-                      title={selectedTask.clip_asset_id}
-                    >
-                      {shortId(selectedTask.clip_asset_id)}
-                    </Link>
-                  ),
-                },
-                {
-                  id: 'submission-task',
-                  label: '任务',
-                  value: (
-                    <code title={selectedTask.annotation_task_id}>
-                      {shortId(selectedTask.annotation_task_id)}
-                    </code>
-                  ),
-                },
-                {
-                  id: 'submission-schema',
-                  label: '标签规范',
-                  value: `${labelSchema.schema_key} · ${labelSchema.schema_version}`,
-                },
-              ]}
-            />
-            <p className="annotation-submission-state" role="status">
-              当前状态：
-              {selectedTask.annotation_revision?.review?.decision === 'REJECTED'
-                ? '待修改。'
-                : '待标注。'}
-              未提交前关闭窗口不会保存；提交后将生成正式修订并进入管理员复核。
-            </p>
-            {selectedTask.annotation_revision?.review?.review_note ? (
-              <Alert
-                className="annotation-rework-notice"
-                type="warning"
-                showIcon
-                title="需要根据上次复核意见修改"
-                description={selectedTask.annotation_revision.review.review_note}
-              />
-            ) : null}
-            <details className="annotation-label-guide">
-              <summary>查看标签说明</summary>
-              <ul>
-                {sortedLabels.map((label) => (
-                  <li key={label.label_id}>
-                    <strong>{label.display_name}</strong>
-                    <span>{label.description}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </div>
-        ) : null}
-        <p className="form-hint">
-          按项目标签规范记录配药动作时间段。每段需有标签，且结束时间晚于开始时间。
-        </p>
-        <Form layout="vertical" aria-label="提交配药动作时间段" onFinish={() => void submit()}>
-          {segments.map((segment, index) => (
-            <div
-              key={segment.draftId}
-              className="annotation-segment-row"
-              role="group"
-              aria-label={`标注时间段 ${index + 1}`}
-            >
-              <Form.Item label="开始（毫秒）">
-                <InputNumber
-                  min={0}
-                  step={100}
-                  value={segment.start_ms}
-                  onChange={(value) => updateSegment(index, { start_ms: value ?? 0 })}
-                />
-              </Form.Item>
-              <Form.Item label="结束（毫秒）">
-                <InputNumber
-                  min={1}
-                  step={100}
-                  value={segment.end_ms}
-                  onChange={(value) => updateSegment(index, { end_ms: value ?? 1 })}
-                />
-              </Form.Item>
-              <Form.Item label="标签">
-                <Select
-                  value={segment.label || undefined}
-                  placeholder="选择步骤标签"
-                  aria-label={`标注时间段 ${index + 1} 的标签`}
-                  onChange={(value) => updateSegment(index, { label: value })}
-                  options={sortedLabels.map((label) => ({
-                    value: label.label_id,
-                    label: label.display_name,
-                  }))}
-                />
-              </Form.Item>
-              <Button
-                aria-label={`移除标注时间段 ${index + 1}`}
-                disabled={segments.length === 1}
-                onClick={() =>
-                  setSegments((current) =>
-                    current.filter((_, currentIndex) => currentIndex !== index),
-                  )
-                }
-              >
-                移除
-              </Button>
-            </div>
-          ))}
-          <Button onClick={() => setSegments((current) => [...current, createDraftSegment()])}>
-            新增片段
-          </Button>
-          <Form.Item label="备注（可选）">
-            <Input.TextArea
-              value={note}
-              maxLength={1000}
-              rows={3}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </Form.Item>
-          <div className="detail-actions annotation-submit-actions">
-            <Button onClick={() => setIsSubmissionOpen(false)}>取消</Button>
-            <Button htmlType="submit" type="primary" loading={isSubmitting}>
-              提交标注
-            </Button>
-          </div>
-        </Form>
       </Modal>
     </>
   )

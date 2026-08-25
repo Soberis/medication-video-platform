@@ -6,6 +6,8 @@ export const paths = {
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
   annotationTasks: (projectId: string) =>
     `/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
+  annotationTask: (projectId: string, taskId: string) =>
+    `/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(taskId)}`,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
   accounts: '/admin/users',
   uploads: '/uploads',

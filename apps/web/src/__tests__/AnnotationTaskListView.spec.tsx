@@ -104,7 +104,9 @@ describe('annotation task list view', () => {
     expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /提交视频/ })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
       'href',
@@ -131,49 +133,16 @@ describe('annotation task list view', () => {
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
   })
 
-  it('shows schema display names and submits the selected label id', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url.endsWith('/annotation-label-schema')) return jsonResponse(labelSchema)
-      if (url.endsWith('/annotation-tasks') && init?.method === 'GET')
-        return jsonResponse(taskList([assignedTask]))
-      if (url.endsWith(`/annotation-tasks/${taskId}/revisions`) && init?.method === 'POST')
-        return jsonResponse({
-          annotation_revision_id: '80000000-0000-4000-8000-000000000001',
-          project_id: projectId,
-          annotation_task_id: taskId,
-          clip_asset_id: assetId,
-          label_schema_id: labelSchemaId,
-          label_schema_digest: labelSchemaDigest,
-          revision_number: 1,
-          annotation_schema_version: 'annotation-document.v1',
-          document_sha256: 'c'.repeat(64),
-          submitted_by: 'local-synthetic-uploader',
-          submitted_at: '2026-07-26T01:00:00Z',
-        })
-      throw new Error(`Unexpected fetch: ${init?.method ?? 'GET'} ${url}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    const user = userEvent.setup()
+  it('makes the workbench the only primary action for an assigned task', async () => {
+    const fetchMock = stubTasks([assignedTask], labelSchema)
     renderView()
-    await user.click(await screen.findByRole('button', { name: /提交视频/ }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('combobox', { name: '标注时间段 1 的标签' }))
-    expect(await screen.findByRole('option', { name: '准备工作区' })).toBeInTheDocument()
-    const retrieveOption = screen
-      .getAllByText('拿取药品')
-      .find((element) => element.classList.contains('ant-select-item-option-content'))
-    expect(retrieveOption).toBeDefined()
-    await user.click(retrieveOption!)
-    await user.click(within(dialog).getByRole('button', { name: '提交标注' }))
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')).toBeDefined()
-    })
-    const revisionCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
-    expect(revisionCall).toBeDefined()
-    expect(JSON.parse(String(revisionCall?.[1]?.body))).toEqual({
-      segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
-    })
+    expect(
+      await screen.findByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/revisions'),
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
@@ -362,18 +331,13 @@ describe('annotation task list view', () => {
       },
     }
     stubTasks([rejectedTask], labelSchema)
-    const user = userEvent.setup()
     renderView()
 
     const taskRow = await screen.findByRole('article', { name: /待修改/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
-    await user.click(within(taskRow).getByRole('button', { name: /提交视频/ }))
-
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('当前状态：待修改')
-    expect(dialog).toHaveTextContent('需要根据上次复核意见修改')
-    expect(dialog).toHaveTextContent('请补充完整的拿取药品时间段。')
-    expect(dialog).toHaveTextContent('查看标签说明')
+    expect(
+      within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+    ).toBeInTheDocument()
   })
 
   it('lets an administrator record an optional reason when returning a revision', async () => {

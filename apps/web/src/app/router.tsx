@@ -72,6 +72,12 @@ export const router = createBrowserRouter([
             }),
           },
           {
+            path: '/projects/:projectId/annotation-tasks/:taskId',
+            lazy: async () => ({
+              Component: (await import('@/views/AnnotationTaskWorkbenchView')).default,
+            }),
+          },
+          {
             path: paths.uploads,
             lazy: async () => ({ Component: (await import('@/views/UploadProgressView')).default }),
           },
