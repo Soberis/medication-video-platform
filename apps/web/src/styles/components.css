@@ -754,7 +754,7 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: var(--app-space-8);
-  margin: 0 0 var(--app-space-24);
+  margin: 0 0 var(--app-space-16);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-base);
 }
@@ -765,6 +765,38 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
+.annotation-task-project-tools {
+  display: flex;
+  width: min(100%, 1120px);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-16);
+  margin: 0 0 var(--app-space-16);
+  padding: var(--app-space-8) 0;
+  border-top: 1px solid var(--app-color-border-subtle);
+  border-bottom: 1px solid var(--app-color-border-subtle);
+}
+
+.annotation-task-project-tools-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--app-space-8) var(--app-space-12);
+}
+
+.annotation-task-project-tools-copy strong {
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
+  font-weight: var(--app-font-weight-semibold);
+}
+
+.annotation-task-project-tools-copy span {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  line-height: var(--app-line-height-metadata);
+}
+
 .annotation-task-list-surface {
   display: grid;
   min-width: 0;
@@ -773,8 +805,13 @@
 
 .annotation-task-card {
   min-width: 0;
-  padding: var(--app-space-16);
+  padding: var(--app-space-12) var(--app-space-16);
   background: var(--app-color-surface);
+}
+
+.annotation-task-card:hover,
+.annotation-task-card:focus-within {
+  background: var(--app-color-surface-hover);
 }
 
 .annotation-task-card + .annotation-task-card {
@@ -792,6 +829,7 @@
 
 .annotation-task-card-header {
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .annotation-task-card-status {
@@ -801,7 +839,7 @@
 
 .annotation-task-card-content {
   min-width: 0;
-  margin-top: var(--app-space-12);
+  margin-top: var(--app-space-8);
 }
 
 .annotation-task-progress {
@@ -813,7 +851,7 @@
 .annotation-task-card-footer {
   align-items: center;
   flex-wrap: wrap;
-  margin-top: var(--app-space-8);
+  margin-top: var(--app-space-12);
 }
 
 .annotation-task-identity {
@@ -864,11 +902,27 @@
   margin-left: auto;
 }
 
+.annotation-task-action-label {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  font-weight: var(--app-font-weight-medium);
+}
+
 .annotation-task-card-actions .ant-btn {
   height: auto;
-  min-height: var(--app-control-height);
+  min-height: var(--app-control-height-compact);
   padding-inline: 0;
   white-space: normal;
+}
+
+.annotation-task-card-actions .ant-btn.ant-btn-primary {
+  padding-inline: var(--app-space-12);
+}
+
+.annotation-task-card-actions .annotation-task-danger-action {
+  margin-left: var(--app-space-4);
+  padding-left: var(--app-space-8);
+  border-left: 1px solid var(--app-color-border-subtle);
 }
 
 .annotation-task-no-action {
@@ -1347,6 +1401,7 @@
 .task-details > summary {
   color: var(--app-color-primary-hover);
   cursor: pointer;
+  padding-block: var(--app-space-4);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-semibold);
 }
@@ -1972,6 +2027,15 @@
   .annotation-task-card-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .annotation-task-project-tools {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .annotation-task-project-tools .ant-btn {
+    width: 100%;
   }
 
   .annotation-task-card-actions {

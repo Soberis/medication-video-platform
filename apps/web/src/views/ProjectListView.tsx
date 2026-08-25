@@ -80,7 +80,7 @@ export default function ProjectListView() {
     setIsCreating(true)
     try {
       await createProject(value.trim())
-      void message.success('项目已创建，当前身份已获得项目管理员权限。')
+      void message.success('项目已创建。当前账号已成为项目管理员。')
       await loadProjects()
     } catch (error) {
       void message.error(
@@ -152,7 +152,7 @@ export default function ProjectListView() {
         className="project-page-heading"
         titleId="projects-title"
         title="项目"
-        description="选择项目，继续管理配药操作和视频。"
+        description="选择项目并进入工作区。"
         actions={
           <>
             <Button
@@ -188,7 +188,6 @@ export default function ProjectListView() {
                       {project.current_role === 'ADMIN' ? '管理员' : '成员'}
                     </StatusBadge>
                   </div>
-                  <p>统一管理配药操作、视频资产和配药动作标注。</p>
                 </div>
                 <div className="project-list-actions">
                   <Link

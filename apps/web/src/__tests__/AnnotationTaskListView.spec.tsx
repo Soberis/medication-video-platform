@@ -93,6 +93,10 @@ describe('annotation task list view', () => {
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent('0 个已完成 · 1 个待处理')
     expect(screen.getByText('待标注')).toBeInTheDocument()
+    expect(screen.getByText('下一步')).toBeInTheDocument()
+    expect(
+      screen.getByText('处理已分配的配药动作标注任务；提交后由管理员复核。'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/videos`,
@@ -121,7 +125,7 @@ describe('annotation task list view', () => {
     renderView()
 
     const emptyState = await screen.findByText(
-      '当前没有配药动作标注任务。质量合格的视频将由系统自动进入标注流程。',
+      '当前没有待处理的配药动作标注任务。质量判断合格的视频会自动出现在这里。',
     )
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
@@ -161,7 +165,7 @@ describe('annotation task list view', () => {
       .find((element) => element.classList.contains('ant-select-item-option-content'))
     expect(retrieveOption).toBeDefined()
     await user.click(retrieveOption!)
-    await user.click(within(dialog).getByRole('button', { name: '提交配药动作标注' }))
+    await user.click(within(dialog).getByRole('button', { name: '提交标注' }))
     await waitFor(() => {
       expect(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')).toBeDefined()
     })
@@ -217,7 +221,8 @@ describe('annotation task list view', () => {
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
     expect(evidenceDetails[1]?.closest('details')).toHaveAttribute('open')
-    expect(screen.getAllByText('local-synthetic-admin')).toHaveLength(4)
+    expect(within(completedRow).getByText('提交人')).toBeInTheDocument()
+    expect(within(completedRow).getByText('复核人')).toBeInTheDocument()
     expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已确认的视频时长/)).toBeInTheDocument()
     expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
@@ -286,8 +291,12 @@ describe('annotation task list view', () => {
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
     expect(screen.getByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
     const taskRow = screen.getByRole('article', { name: /标注完成/ })
-    expect(taskRow).toHaveTextContent('提交人 local-synthetic-admin')
-    expect(taskRow).not.toHaveTextContent('执行人 local-synthetic-admin')
+    const user = userEvent.setup()
+    await user.click(within(taskRow).getByText('查看详情'))
+    expect(within(taskRow).getByText('执行人')).toBeInTheDocument()
+    expect(within(taskRow).getByText('提交人')).toBeInTheDocument()
+    expect(within(taskRow).getByText('复核人')).toBeInTheDocument()
+    expect(within(taskRow).getAllByText('local-synthetic-admin')).toHaveLength(4)
     expect(taskRow).toHaveTextContent('（管理员自审）')
   })
 
@@ -368,7 +377,7 @@ describe('annotation task list view', () => {
       within(dialog).getByRole('textbox', { name: '退回修改说明（可选）' }),
       '请补充完整的拿取药品时间段。',
     )
-    await user.click(within(dialog).getByRole('button', { name: '确认不通过' }))
+    await user.click(within(dialog).getByRole('button', { name: '退回修改' }))
 
     await waitFor(() => {
       const reviewCall = fetchMock.mock.calls.find(

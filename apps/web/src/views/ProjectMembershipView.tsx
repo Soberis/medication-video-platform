@@ -132,7 +132,7 @@ export default function ProjectMembershipView() {
         eyebrow="项目访问范围"
         titleId="members-title"
         title="项目成员"
-        description="分配当前项目的访问范围；项目角色不改变账号的全局身份。"
+        description="为平台账号分配当前项目的成员角色。"
         actions={
           <Button loading={loadState === 'loading'} onClick={() => void loadMemberships()}>
             刷新
@@ -142,7 +142,7 @@ export default function ProjectMembershipView() {
       {canManageMembers ? (
         <Section
           className="membership-create-panel working-surface"
-          title="添加或更新成员"
+          title="添加或更新项目成员"
           titleId="membership-create-title"
         >
           <Form<MembershipFields>
@@ -178,8 +178,8 @@ export default function ProjectMembershipView() {
       ) : loadState === 'success' ? (
         <Alert
           className="catalog-alert"
-          title="当前不是该项目管理员"
-          description="只有当前项目的管理员可以调整成员。"
+          title="当前账号无权管理成员"
+          description="只有项目管理员可以添加、修改或移除成员。"
           type="warning"
           showIcon
         />
@@ -208,11 +208,6 @@ export default function ProjectMembershipView() {
                     {row.role === 'ADMIN' ? '项目管理员' : '成员'}
                   </StatusBadge>
                 ),
-              },
-              {
-                title: '状态',
-                width: 110,
-                render: () => <StatusBadge tone="success">有效</StatusBadge>,
               },
               ...(canManageMembers
                 ? [

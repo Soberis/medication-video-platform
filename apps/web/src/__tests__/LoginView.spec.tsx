@@ -13,6 +13,8 @@ describe('LoginView', () => {
     const user = userEvent.setup()
     renderLogin()
 
+    expect(screen.getByText('配药视频数据管理平台')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '登录工作区' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('账号'), 'platform-admin')
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
     await user.click(screen.getByRole('button', { name: /登\s*录/ }))

@@ -74,7 +74,7 @@ export default function AccountManagementView() {
     try {
       await createPlatformAccount(username, values.password)
       form.resetFields()
-      void message.success('成员账号已创建，请在对应项目中添加该成员。')
+      void message.success('成员账号已创建，请在项目成员页分配项目角色。')
       await loadAccounts()
     } catch (error) {
       void message.error(
@@ -120,7 +120,7 @@ export default function AccountManagementView() {
         eyebrow="内部访问控制"
         titleId="accounts-title"
         title="平台账号"
-        description="创建、启用或停用内部账号；账号加入项目后才能访问项目数据。"
+        description="管理平台账号；账号加入项目后才能访问项目数据。"
         actions={
           <Button loading={loadState === 'loading'} onClick={() => void loadAccounts()}>
             刷新
@@ -198,7 +198,7 @@ export default function AccountManagementView() {
                       {row.enabled ? '停用' : '启用'}
                     </Button>
                   ) : (
-                    <span className="cell-secondary">初始管理员</span>
+                    <span className="cell-secondary">不可停用</span>
                   ),
               },
             ]}

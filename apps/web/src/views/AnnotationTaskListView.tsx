@@ -338,12 +338,12 @@ export default function AnnotationTaskListView() {
     const approved = decision === 'APPROVED'
     let reviewNote = ''
     modal.confirm({
-      title: approved ? '确认配药动作标注复核通过' : '确认配药动作标注复核不通过',
+      title: approved ? '通过配药动作标注' : '退回配药动作标注',
       content: approved ? (
         '确认时间段标注与视频画面一致，并将其作为正式人工配药动作标注？'
       ) : (
         <div className="annotation-review-confirmation">
-          <p>确认该配药动作标注不符合要求？本次将记录为不通过，并退回给标注人修改。</p>
+          <p>退回这次配药动作标注，要求标注人修改后重新提交。</p>
           <Input.TextArea
             aria-label="退回修改说明（可选）"
             maxLength={1000}
@@ -355,7 +355,7 @@ export default function AnnotationTaskListView() {
           />
         </div>
       ),
-      okText: approved ? '确认通过' : '确认不通过',
+      okText: approved ? '通过复核' : '退回修改',
       cancelText: '取消',
       okButtonProps: { danger: !approved },
       async onOk() {
@@ -387,9 +387,8 @@ export default function AnnotationTaskListView() {
     if (!revision || !task.can_recheck_post_cleaning || recheckingRevisionId) return
     modal.confirm({
       title: '重新核对清洗',
-      content:
-        '将按当前人工质量、视频和标注事实重新生成清洗结果；历史结果会保留，不会修改已通过的标注。',
-      okText: '确认重新核对',
+      content: '按当前人工质量、视频和标注事实重新核对清洗结果；历史结果会保留。',
+      okText: '重新核对',
       cancelText: '取消',
       async onOk() {
         setRecheckingRevisionId(revision.annotation_revision_id)
@@ -421,25 +420,14 @@ export default function AnnotationTaskListView() {
       <PageHeader
         titleId="annotation-task-title"
         title="配药动作标注"
+        description="处理已分配的配药动作标注任务；提交后由管理员复核。"
         actions={
-          <>
-            {loadState === 'success' && progress?.scope === 'PROJECT' ? (
-              <Button
-                size="small"
-                loading={isTrainingPreviewLoading}
-                disabled={isTrainingDownloadLoading}
-                onClick={() => void openTrainingExport()}
-              >
-                导出训练数据
-              </Button>
-            ) : null}
-            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-              刷新
-            </Button>
-          </>
+          <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+            刷新
+          </Button>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在读取配药动作标注任务…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在加载配药动作标注任务…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadTasks()}>
           {errorMessage}
@@ -461,6 +449,22 @@ export default function AnnotationTaskListView() {
           </span>
         </section>
       ) : null}
+      {loadState === 'success' && progress?.scope === 'PROJECT' ? (
+        <aside className="annotation-task-project-tools" aria-label="项目训练数据">
+          <div className="annotation-task-project-tools-copy">
+            <strong>项目训练数据</strong>
+            <span>导出前先查看当前可用训练行数，实际数量以服务端预览为准。</span>
+          </div>
+          <Button
+            size="small"
+            loading={isTrainingPreviewLoading}
+            disabled={isTrainingDownloadLoading}
+            onClick={() => void openTrainingExport()}
+          >
+            导出训练数据
+          </Button>
+        </aside>
+      ) : null}
       {loadState === 'success' && items.length ? (
         <Section
           className="annotation-task-queue"
@@ -475,11 +479,6 @@ export default function AnnotationTaskListView() {
             {items.map((row) => {
               const revision = row.annotation_revision
               const presentation = postCleaningPresentation(row)
-              const submissionActorText = revision
-                ? row.assignee_actor_id === revision.submitted_by
-                  ? `提交人 ${revision.submitted_by}`
-                  : `执行人 ${row.assignee_actor_id} · 提交人 ${revision.submitted_by}`
-                : null
               const taskDetails = (
                 <details className="task-details">
                   <summary>查看详情</summary>
@@ -503,6 +502,39 @@ export default function AnnotationTaskListView() {
                           label: '创建时间',
                           value: formatDateTime(row.created_at),
                         },
+                        ...(revision
+                          ? [
+                              {
+                                id: 'assignee',
+                                label: '执行人',
+                                value: row.assignee_actor_id,
+                              },
+                              {
+                                id: 'submitted-by',
+                                label: '提交人',
+                                value: revision.submitted_by,
+                              },
+                              {
+                                id: 'submitted-at',
+                                label: '提交时间',
+                                value: formatDateTime(revision.submitted_at),
+                              },
+                              ...(revision.review
+                                ? [
+                                    {
+                                      id: 'reviewed-by',
+                                      label: '复核人',
+                                      value: revision.review.reviewed_by,
+                                    },
+                                    {
+                                      id: 'reviewed-at',
+                                      label: '复核时间',
+                                      value: formatDateTime(revision.review.reviewed_at),
+                                    },
+                                  ]
+                                : []),
+                            ]
+                          : []),
                       ]}
                     />
                     {revision ? (
@@ -545,7 +577,8 @@ export default function AnnotationTaskListView() {
               const taskAction =
                 row.can_submit && row.status === 'ASSIGNED' ? (
                   <Button
-                    type="link"
+                    type="primary"
+                    size="small"
                     aria-label={`提交视频 ${row.clip_asset_id} 的配药动作标注`}
                     onClick={() => openSubmission(row)}
                   >
@@ -554,7 +587,8 @@ export default function AnnotationTaskListView() {
                 ) : row.can_review && row.annotation_revision ? (
                   <>
                     <Button
-                      type="link"
+                      type="primary"
+                      size="small"
                       aria-label={`通过视频 ${row.clip_asset_id} 的配药动作标注复核`}
                       loading={
                         reviewingRevisionId === row.annotation_revision.annotation_revision_id
@@ -565,7 +599,9 @@ export default function AnnotationTaskListView() {
                     </Button>
                     <Button
                       type="link"
+                      size="small"
                       danger
+                      className="annotation-task-danger-action"
                       aria-label={`退回修改视频 ${row.clip_asset_id} 的配药动作标注`}
                       disabled={reviewingRevisionId !== null}
                       onClick={() => review(row, 'REJECTED')}
@@ -575,7 +611,8 @@ export default function AnnotationTaskListView() {
                   </>
                 ) : row.can_recheck_post_cleaning && row.annotation_revision ? (
                   <Button
-                    type="link"
+                    type="primary"
+                    size="small"
                     aria-label={`重新核对视频 ${row.clip_asset_id} 的清洗`}
                     loading={
                       recheckingRevisionId === row.annotation_revision.annotation_revision_id
@@ -646,9 +683,6 @@ export default function AnnotationTaskListView() {
                               复核意见：{revision.review.review_note}
                             </span>
                           ) : null}
-                          <span className="cell-secondary">
-                            提交于 {formatDateTime(revision.submitted_at)} · {submissionActorText}
-                          </span>
                           {taskDetails}
                         </div>
                       ) : (
@@ -664,7 +698,13 @@ export default function AnnotationTaskListView() {
                     </div>
                   </div>
                   <footer className="annotation-task-card-footer">
-                    <div className="annotation-task-card-actions" aria-label="任务操作">
+                    <div
+                      className="annotation-task-card-actions"
+                      aria-label={taskAction ? '下一步操作' : '当前任务状态'}
+                    >
+                      <span className="annotation-task-action-label">
+                        {taskAction ? '下一步' : '当前状态'}
+                      </span>
                       {taskAction ?? (
                         <span className="annotation-task-no-action">{taskNoActionLabel(row)}</span>
                       )}
@@ -677,7 +717,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有配药动作标注任务。质量合格的视频将由系统自动进入标注流程。" />
+        <EmptyState description="当前没有待处理的配药动作标注任务。质量判断合格的视频会自动出现在这里。" />
       ) : null}
       <Modal
         open={isTrainingExportOpen}
@@ -771,10 +811,9 @@ export default function AnnotationTaskListView() {
             <p className="annotation-submission-state" role="status">
               当前状态：
               {selectedTask.annotation_revision?.review?.decision === 'REJECTED'
-                ? '待修改'
-                : '待标注'}
-              。
-              当前编辑仅保存在此窗口内，关闭窗口不会保存；正式提交后才会创建不可变修订并进入管理员复核。
+                ? '待修改。'
+                : '待标注。'}
+              未提交前关闭窗口不会保存；提交后将生成正式修订并进入管理员复核。
             </p>
             {selectedTask.annotation_revision?.review?.review_note ? (
               <Alert
@@ -799,7 +838,7 @@ export default function AnnotationTaskListView() {
           </div>
         ) : null}
         <p className="form-hint">
-          按项目标签规范记录一个或多个配药动作时间段。每个时间段必须有明确标签，且结束时间晚于开始时间。
+          按项目标签规范记录配药动作时间段。每段需有标签，且结束时间晚于开始时间。
         </p>
         <Form layout="vertical" aria-label="提交配药动作时间段" onFinish={() => void submit()}>
           {segments.map((segment, index) => (
@@ -864,7 +903,7 @@ export default function AnnotationTaskListView() {
           <div className="detail-actions annotation-submit-actions">
             <Button onClick={() => setIsSubmissionOpen(false)}>取消</Button>
             <Button htmlType="submit" type="primary" loading={isSubmitting}>
-              提交配药动作标注
+              提交标注
             </Button>
           </div>
         </Form>

@@ -41,7 +41,8 @@ describe('App', () => {
 
     expect(await screen.findByText('合成测试项目')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '返回项目列表' })).toHaveTextContent('配药视频数据管理')
-    expect(screen.getByText('选择项目，继续管理配药操作和视频。')).toBeInTheDocument()
+    expect(screen.getByText('选择项目并进入工作区。')).toBeInTheDocument()
+    expect(screen.queryByText('统一管理配药操作、视频资产和配药动作标注。')).not.toBeInTheDocument()
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('项目')
     expect(screen.getByText('跳到主要内容')).toHaveAttribute('href', '#main-content')
