@@ -26,7 +26,11 @@ import { MetadataList } from '@/components/data/MetadataList'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
-import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import {
+  cleaningStatusLabels,
+  formatDateTime,
+  shortId,
+} from '@/features/catalog/catalog-presentation'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
@@ -85,27 +89,27 @@ function postCleaningPresentation(task: AnnotationTask): {
   )
   if (result?.outcome === 'PASS')
     return {
-      label: '已通过清洗',
+      label: cleaningStatusLabels.PASS,
       tone: 'success',
       description: '当前规则检查通过；实际训练行数以服务端导出预览为准。',
       reasons,
     }
   if (result?.outcome === 'WARNING')
     return {
-      label: '需处理',
+      label: cleaningStatusLabels.WARNING,
       tone: 'warning',
       description: '当前数据暂不可用于训练，请补充事实后重新核对清洗。',
       reasons,
     }
   if (result?.outcome === 'REJECT')
     return {
-      label: '未通过',
+      label: cleaningStatusLabels.REJECT,
       tone: 'destructive',
       description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
       reasons,
     }
   return {
-    label: '待清洗',
+    label: cleaningStatusLabels.NOT_STARTED,
     tone: 'neutral',
     description: '尚未形成可用于训练的清洗结论。',
     reasons,

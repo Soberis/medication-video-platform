@@ -23,51 +23,20 @@ import { PageToolbar } from '@/components/PageToolbar'
 import { SummaryStrip } from '@/components/SummaryStrip'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState, NoticeState } from '@/components/WorkspaceFeedback'
-import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import {
+  formatDateTime,
+  shortId,
+  videoAnnotationStatusLabels,
+  videoCleaningStatusLabels,
+  videoHandResultLabels,
+  videoHandStatusLabels,
+  videoMediaStatusLabels,
+  videoSourceLabels,
+} from '@/features/catalog/catalog-presentation'
 import {
   parseVideoFilters,
   replaceVideoFiltersInSearchParams,
 } from '@/features/catalog/catalog-video-filters'
-
-const mediaStatusLabels: Record<VideoSummaryMediaStatus, string> = {
-  UPLOADED: '待媒体检测',
-  INGESTING: '媒体检测中',
-  INGESTED: '媒体检测完成',
-  INGEST_FAILED: '媒体检测失败',
-}
-
-const handStatusLabels: Record<VideoSummaryHandStatus, string> = {
-  NOT_REQUESTED: '未发起',
-  QUEUED: '排队中',
-  RUNNING: '检测中',
-  SUCCEEDED: '检测完成',
-  FAILED: '检测失败',
-}
-
-const handResultLabels: Record<VideoSummaryHandResult, string> = {
-  UNKNOWN: '未判定',
-  HAND_DETECTED: '发现手部',
-  NO_HAND_DETECTED: '未发现手部',
-}
-
-const sourceLabels: Record<VideoSummarySource, string> = {
-  HOSPITAL_REMOTE: '医院边端',
-  PLATFORM_LOCAL: '平台本地上传',
-}
-
-const annotationStatusLabels: Record<VideoSummaryAnnotationStatus, string> = {
-  NOT_STARTED: '待创建',
-  ASSIGNED: '待标注',
-  SUBMITTED: '待复核',
-  COMPLETED: '标注完成',
-}
-
-const cleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> = {
-  NOT_STARTED: '待清洗',
-  PASS: '已通过',
-  WARNING: '需关注',
-  REJECT: '未通过',
-}
 
 export default function VideoManagementView() {
   const { projectId = '' } = useParams()
@@ -292,7 +261,7 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.mediaStatus}
                 placeholder="全部"
-                options={Object.entries(mediaStatusLabels).map(([value, label]) => ({
+                options={Object.entries(videoMediaStatusLabels).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -312,7 +281,7 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.annotationStatus}
                 placeholder="全部"
-                options={Object.entries(annotationStatusLabels).map(([value, label]) => ({
+                options={Object.entries(videoAnnotationStatusLabels).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -332,7 +301,7 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.cleaningStatus}
                 placeholder="全部"
-                options={Object.entries(cleaningStatusLabels).map(([value, label]) => ({
+                options={Object.entries(videoCleaningStatusLabels).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -383,7 +352,10 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.source}
                 placeholder="全部"
-                options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))}
+                options={Object.entries(videoSourceLabels).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
                 onChange={(value) =>
                   applyFilters({ ...filters, source: value as VideoSummarySource | undefined })
                 }
@@ -397,7 +369,7 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.handStatus}
                 placeholder="全部"
-                options={Object.entries(handStatusLabels).map(([value, label]) => ({
+                options={Object.entries(videoHandStatusLabels).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -452,7 +424,7 @@ export default function VideoManagementView() {
                 size="small"
                 value={filters.handResult}
                 placeholder="全部"
-                options={Object.entries(handResultLabels).map(([value, label]) => ({
+                options={Object.entries(videoHandResultLabels).map(([value, label]) => ({
                   value,
                   label,
                 }))}
@@ -497,6 +469,7 @@ export default function VideoManagementView() {
             pagination={false}
             size="small"
             tableLayout="fixed"
+            scroll={{ x: 'max-content' }}
             columns={[
               {
                 title: '视频',
@@ -516,7 +489,7 @@ export default function VideoManagementView() {
                     </Link>
                     <span className="video-metadata-line">
                       <span>
-                        {sourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
+                        {videoSourceLabels[row.source_name as VideoSummarySource] ?? '其他受控来源'}
                       </span>
                       <span>{row.camera_number ? `相机 ${row.camera_number}` : '未绑定相机'}</span>
                       <span className="video-metadata-time">
@@ -538,7 +511,7 @@ export default function VideoManagementView() {
                 width: 128,
                 render: (_, row) => (
                   <StatusIndicator tone={mediaStatusTone(row.media_status)}>
-                    {mediaStatusLabels[row.media_status]}
+                    {videoMediaStatusLabels[row.media_status]}
                   </StatusIndicator>
                 ),
               },
@@ -550,7 +523,7 @@ export default function VideoManagementView() {
                 width: 104,
                 render: (value: VideoSummaryAnnotationStatus) => (
                   <StatusIndicator tone={annotationStatusTone(value)}>
-                    {annotationStatusLabels[value]}
+                    {videoAnnotationStatusLabels[value]}
                   </StatusIndicator>
                 ),
               },
@@ -559,10 +532,10 @@ export default function VideoManagementView() {
                 dataIndex: 'cleaning_status',
                 className: 'video-table-status-column',
                 align: 'center',
-                width: 96,
+                width: 152,
                 render: (value: VideoSummaryCleaningStatus) => (
                   <StatusIndicator tone={cleaningStatusTone(value)}>
-                    {cleaningStatusLabels[value]}
+                    {videoCleaningStatusLabels[value]}
                   </StatusIndicator>
                 ),
               },

@@ -1,8 +1,9 @@
 .app-eyebrow {
   margin: 0;
   color: var(--app-color-focus-ring);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-semibold);
+  font-size: var(--app-font-size-label);
+  font-weight: var(--app-font-weight-label);
+  line-height: var(--app-line-height-label);
   letter-spacing: 0.04em;
 }
 
@@ -24,7 +25,8 @@
 .section-description {
   margin: var(--app-space-8) 0 0;
   color: var(--app-color-foreground-muted);
-  line-height: var(--app-line-height-body);
+  font-size: var(--app-font-size-body);
+  line-height: var(--app-line-height-body-text);
 }
 
 .batch-form {
@@ -268,18 +270,18 @@
 .page-heading h1 {
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-foreground);
-  font-size: var(--app-font-size-heading-1);
-  font-weight: var(--app-font-weight-semibold);
+  font-size: var(--app-font-size-page-title);
+  font-weight: var(--app-font-weight-page-title);
   letter-spacing: -0.02em;
-  line-height: var(--app-line-height-heading);
+  line-height: var(--app-line-height-page-title);
 }
 
 .page-heading-description {
   max-width: 680px;
   margin: var(--app-space-8) 0 0;
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-base);
-  line-height: var(--app-line-height-body);
+  font-size: var(--app-font-size-body);
+  line-height: var(--app-line-height-body-text);
 }
 
 .page-toolbar,
@@ -330,9 +332,9 @@
 .workspace-section-heading h2 {
   margin: 0;
   color: var(--app-color-foreground);
-  font-size: var(--app-font-size-heading-2);
-  font-weight: var(--app-font-weight-semibold);
-  line-height: var(--app-line-height-compact);
+  font-size: var(--app-font-size-section-title);
+  font-weight: var(--app-font-weight-section-title);
+  line-height: var(--app-line-height-section-title);
 }
 
 .workspace-section-actions {
@@ -476,9 +478,9 @@
 
 .summary-strip dt {
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-medium);
-  line-height: var(--app-line-height-compact);
+  font-size: var(--app-font-size-label);
+  font-weight: var(--app-font-weight-label);
+  line-height: var(--app-line-height-label);
 }
 
 .summary-strip dd {
@@ -494,9 +496,9 @@
   display: block;
   margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-regular);
-  line-height: var(--app-line-height-compact);
+  font-size: var(--app-font-size-caption);
+  font-weight: var(--app-font-weight-caption);
+  line-height: var(--app-line-height-caption);
 }
 
 .summary-strip-footer {
@@ -529,8 +531,8 @@
 
 .property-row dt {
   color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-medium);
+  font-size: var(--app-font-size-label);
+  font-weight: var(--app-font-weight-label);
 }
 
 .property-row dd {
@@ -538,7 +540,7 @@
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--app-color-foreground);
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-semibold);
   text-align: right;
 }
@@ -568,9 +570,9 @@
   display: block;
   margin-top: var(--app-space-4);
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-regular);
-  line-height: var(--app-line-height-metadata);
+  font-size: var(--app-font-size-caption);
+  font-weight: var(--app-font-weight-caption);
+  line-height: var(--app-line-height-caption);
 }
 
 .video-management-heading {
@@ -695,7 +697,7 @@
 .workspace-error-message {
   grid-column: 1;
   grid-row: 1;
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-semibold);
   line-height: var(--app-line-height-prose);
 }
@@ -825,9 +827,9 @@
   border-radius: 999px;
   color: var(--app-color-foreground-secondary);
   background: var(--app-color-neutral-surface);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-medium);
-  line-height: var(--app-line-height-body);
+  font-size: var(--app-font-size-caption);
+  font-weight: var(--app-font-weight-label);
+  line-height: var(--app-line-height-caption);
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -916,7 +918,8 @@
 .video-list-surface {
   min-width: 0;
   margin-top: var(--app-space-16);
-  overflow-x: auto;
+  /* Ant Design owns any narrow-table scrolling; the list surface stays flat. */
+  overflow: visible;
   border-top: 1px solid var(--app-color-border-subtle);
   border-bottom: 1px solid var(--app-color-border-subtle);
   background: var(--app-color-surface);
@@ -995,8 +998,8 @@
   gap: var(--app-space-4) var(--app-space-8);
   min-width: 0;
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-compact);
+  font-size: var(--app-font-size-metadata);
+  line-height: var(--app-line-height-metadata-text);
 }
 
 .video-metadata-time {
@@ -1012,8 +1015,8 @@
 .video-identity {
   color: var(--app-color-foreground-muted);
   font-family: var(--app-font-family-mono);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-medium);
+  font-size: var(--app-font-size-metadata);
+  font-weight: var(--app-font-weight-metadata);
   white-space: nowrap;
 }
 
@@ -1055,7 +1058,7 @@
   align-items: center;
   gap: var(--app-space-8);
   color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-semibold);
   line-height: var(--app-line-height-control);
   white-space: nowrap;
@@ -1696,15 +1699,15 @@
 
 .workspace-empty-state .ant-empty-description {
   color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-base);
-  line-height: var(--app-line-height-body);
+  font-size: var(--app-font-size-body);
+  line-height: var(--app-line-height-body-text);
 }
 
 .workspace-loading-state {
   border-color: var(--app-color-border-subtle);
   color: var(--app-color-foreground-secondary);
   background: var(--app-color-surface-muted);
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
 }
 
 .local-upload-files-field,

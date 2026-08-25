@@ -3,6 +3,72 @@
  * exceptions belong in their feature CSS only when they describe real media or
  * visualization semantics, not a second product theme.
  */
+const typographyScaleTokens = {
+  fontFamily:
+    "Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  monoFamily: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace",
+  baseSize: 14,
+  helperSize: 12,
+  heading: {
+    h1: 24,
+    h2: 16,
+    h3: 14,
+  },
+  weight: {
+    regular: 400,
+    medium: 500,
+    semibold: 600,
+  },
+  lineHeight: {
+    single: 1,
+    heading: 1.2,
+    metric: 1.25,
+    compact: 1.35,
+    control: 1.4,
+    metadata: 1.45,
+    body: 1.5,
+    prose: 1.55,
+    relaxed: 1.65,
+  },
+} as const
+
+/** Semantic roles expose the frozen scale without creating a second set of values. */
+const typographyTokens = {
+  ...typographyScaleTokens,
+  semantic: {
+    pageTitle: {
+      size: typographyScaleTokens.heading.h1,
+      weight: typographyScaleTokens.weight.semibold,
+      lineHeight: typographyScaleTokens.lineHeight.heading,
+    },
+    sectionTitle: {
+      size: typographyScaleTokens.heading.h2,
+      weight: typographyScaleTokens.weight.semibold,
+      lineHeight: typographyScaleTokens.lineHeight.compact,
+    },
+    body: {
+      size: typographyScaleTokens.baseSize,
+      weight: typographyScaleTokens.weight.regular,
+      lineHeight: typographyScaleTokens.lineHeight.body,
+    },
+    label: {
+      size: typographyScaleTokens.helperSize,
+      weight: typographyScaleTokens.weight.medium,
+      lineHeight: typographyScaleTokens.lineHeight.compact,
+    },
+    metadata: {
+      size: typographyScaleTokens.helperSize,
+      weight: typographyScaleTokens.weight.regular,
+      lineHeight: typographyScaleTokens.lineHeight.metadata,
+    },
+    caption: {
+      size: typographyScaleTokens.helperSize,
+      weight: typographyScaleTokens.weight.regular,
+      lineHeight: typographyScaleTokens.lineHeight.compact,
+    },
+  },
+} as const
+
 export const appTokens = {
   color: {
     background: '#F6F7F9',
@@ -62,34 +128,7 @@ export const appTokens = {
     floating: '0 12px 28px rgb(17 24 39 / 14%)',
     overlay: '0 20px 48px rgb(17 24 39 / 18%)',
   },
-  typography: {
-    fontFamily:
-      "Inter, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    monoFamily: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace",
-    baseSize: 14,
-    helperSize: 12,
-    heading: {
-      h1: 24,
-      h2: 16,
-      h3: 14,
-    },
-    weight: {
-      regular: 400,
-      medium: 500,
-      semibold: 600,
-    },
-    lineHeight: {
-      single: 1,
-      heading: 1.2,
-      metric: 1.25,
-      compact: 1.35,
-      control: 1.4,
-      metadata: 1.45,
-      body: 1.5,
-      prose: 1.55,
-      relaxed: 1.65,
-    },
-  },
+  typography: typographyTokens,
   control: {
     compact: 28,
     standard: 32,

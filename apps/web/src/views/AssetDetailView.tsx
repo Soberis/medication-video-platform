@@ -32,6 +32,7 @@ import {
 import { paths } from '@/app/paths'
 import {
   assetStatusLabels,
+  cleaningStatusLabels,
   formatDateTime,
   shortId,
   statusTone,
@@ -293,7 +294,7 @@ export default function AssetDetailView() {
         ? {
             label: '清洗',
             state: 'complete',
-            status: '已通过清洗',
+            status: cleaningStatusLabels.PASS,
             detail: hasCurrentQualifiedQuality
               ? '当前数据已通过清洗，可用于训练'
               : '历史清洗已通过；当前质量结论未确认或未通过，暂不能用于训练',
@@ -302,7 +303,10 @@ export default function AssetDetailView() {
           ? {
               label: '清洗',
               state: 'blocked',
-              status: cleaningResult.outcome === 'WARNING' ? '需处理' : '未通过',
+              status:
+                cleaningResult.outcome === 'WARNING'
+                  ? cleaningStatusLabels.WARNING
+                  : cleaningStatusLabels.REJECT,
               detail: '未通过清洗的数据不会进入训练导出',
             }
           : annotationReview?.decision === 'APPROVED'

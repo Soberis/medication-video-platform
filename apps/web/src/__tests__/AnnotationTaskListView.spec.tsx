@@ -174,9 +174,9 @@ describe('annotation task list view', () => {
 
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
     const outcomes = [
-      { outcome: 'PASS', expected: '清洗 · 已通过清洗' },
+      { outcome: 'PASS', expected: '清洗 · 当前规则检查通过' },
       { outcome: 'WARNING', expected: '清洗 · 需处理' },
-      { outcome: 'REJECT', expected: '清洗 · 未通过' },
+      { outcome: 'REJECT', expected: '清洗 · 清洗未通过' },
       { outcome: null, expected: '清洗 · 待清洗' },
     ] as const
     const tasks = outcomes.map(({ outcome }, index) => ({
@@ -206,7 +206,7 @@ describe('annotation task list view', () => {
     stubTasks(tasks, labelSchema)
     const user = userEvent.setup()
     renderView()
-    expect(await screen.findByText('清洗 · 已通过清洗')).toBeInTheDocument()
+    expect(await screen.findByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
     const completedRow = screen.getAllByRole('article')[0]!
     const annotationDetails = within(completedRow).getByText('查看详情')
@@ -284,7 +284,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByText('复核 · 已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
-    expect(screen.getByText('清洗 · 已通过清洗')).toBeInTheDocument()
+    expect(screen.getByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
     const taskRow = screen.getByRole('article', { name: /标注完成/ })
     expect(taskRow).toHaveTextContent('提交人 local-synthetic-admin')
     expect(taskRow).not.toHaveTextContent('执行人 local-synthetic-admin')

@@ -69,7 +69,7 @@
 
 .app-brand-copy strong {
   overflow: hidden;
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-semibold);
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
@@ -78,7 +78,7 @@
 
 .app-brand-copy span {
   color: var(--app-color-sidebar-muted);
-  font-size: var(--app-font-size-helper);
+  font-size: var(--app-font-size-caption);
 }
 
 .sidebar-toggle,
@@ -123,8 +123,8 @@
   margin: 0;
   padding: 0 var(--app-space-8) var(--app-space-4);
   color: var(--app-color-sidebar-muted);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-semibold);
+  font-size: var(--app-font-size-label);
+  font-weight: var(--app-font-weight-label);
   letter-spacing: 0.04em;
 }
 
@@ -196,13 +196,13 @@
   flex: 1;
   gap: var(--app-space-4);
   color: var(--app-color-sidebar-muted);
-  font-size: var(--app-font-size-helper);
+  font-size: var(--app-font-size-caption);
 }
 
 .sidebar-account-copy > span:first-child {
   overflow: hidden;
   color: var(--app-color-sidebar-foreground);
-  font-size: var(--app-font-size-base);
+  font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -214,7 +214,7 @@
   border: 0;
   color: var(--app-color-sidebar-foreground);
   background: var(--app-color-sidebar-selected);
-  font-size: var(--app-font-size-helper);
+  font-size: var(--app-font-size-caption);
 }
 
 .sidebar-logout.ant-btn {

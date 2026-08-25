@@ -29,8 +29,8 @@ body {
   margin: 0;
   background: var(--app-color-background);
   color: var(--app-color-foreground);
-  font-size: var(--app-font-size-base);
-  line-height: var(--app-line-height-body);
+  font-size: var(--app-font-size-body);
+  line-height: var(--app-line-height-body-text);
 }
 
 button,
