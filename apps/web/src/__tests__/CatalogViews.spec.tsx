@@ -351,7 +351,7 @@ describe('catalog views', () => {
 
     const handPoseSummary = await screen.findByText('检测详情')
     expect(handPoseSummary.closest('details')).not.toHaveAttribute('open')
-    expect(await screen.findByText('等待自动检测')).toBeInTheDocument()
+    expect(await screen.findByText('暂无检测结果')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '检测手部姿态' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重新检测' })).not.toBeInTheDocument()
     await user.click(handPoseSummary)
@@ -364,6 +364,40 @@ describe('catalog views', () => {
           String(input).endsWith('/hand-pose-detections') && init?.method === 'POST',
       ),
     ).toBe(false)
+  })
+
+  it('distinguishes an unavailable hand-pose result from a candidate read failure', async () => {
+    stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      handPoseCandidates: jsonResponse({ error_code: 'AI_HAND_POSE_JOB_NOT_FOUND' }, 404),
+    })
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    expect(await screen.findByText('暂无检测结果')).toBeInTheDocument()
+    expect(screen.getByText('暂无结果')).toBeInTheDocument()
+    expect(
+      screen.queryByText('手部检测结果暂时无法读取；这不会阻止人工处理。'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
+  })
+
+  it('surfaces a hand-pose candidate read failure without blocking human quality review', async () => {
+    stubAsset({
+      role: 'MEMBER',
+      status: 'INGESTED',
+      handPoseCandidates: jsonResponse({}, 503),
+    })
+    renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    const handPoseSummary = await screen.findByText('检测详情')
+    expect(screen.getByText('读取失败')).toBeInTheDocument()
+    await userEvent.setup().click(handPoseSummary)
+    expect(
+      (await screen.findAllByText(/手部检测结果暂时无法读取；这不会阻止人工处理/)).length,
+    ).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText('暂无检测结果')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '填写质量结论' })).toBeInTheDocument()
   })
 
   it('does not offer an AssetDetail retry when the failed run is not retryable', async () => {
@@ -610,6 +644,7 @@ function stubAsset(options: {
   playback?: boolean
   mediaProbe?: boolean
   handPose?: boolean
+  handPoseCandidates?: object | Response
   handPoseState?: object
   deliveryRecovery?: boolean
   autoAssignedAfterQuality?: boolean
@@ -712,6 +747,13 @@ function stubAsset(options: {
           202,
         ),
       )
+    if (url.endsWith('/hand-pose-candidates') && options.handPoseCandidates) {
+      return Promise.resolve(
+        options.handPoseCandidates instanceof Response
+          ? options.handPoseCandidates
+          : jsonResponse(options.handPoseCandidates),
+      )
+    }
     if (url.endsWith('/hand-pose-candidates') && options.handPoseState)
       return Promise.resolve(jsonResponse({ job: options.handPoseState, candidates: [] }))
     if (url.endsWith('/hand-pose-detections/retry') && options.handPoseState)

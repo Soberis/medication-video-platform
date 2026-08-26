@@ -72,6 +72,8 @@ interface DetailNextStep {
   interactive: boolean
 }
 
+type HandPoseLoadState = 'idle' | 'loading' | 'success' | 'unavailable' | 'error'
+
 function workflowStepTone(state: WorkflowStepState): StatusBadgeTone {
   if (state === 'complete') return 'success'
   if (state === 'blocked') return 'error'
@@ -134,6 +136,7 @@ export default function AssetDetailView() {
   const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(
     null,
   )
+  const [handPoseLoadState, setHandPoseLoadState] = useState<HandPoseLoadState>('idle')
   const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
   const detailRef = useRef<ClipAssetRead | null>(null)
   const handPoseJobRef = useRef<HandPoseJob | null>(null)
@@ -207,38 +210,59 @@ export default function AssetDetailView() {
             status: '等待检测',
             detail: '媒体检测完成后自动开始；结果仅作为人工处理的辅助信息',
           }
-        : !handPoseJob
+        : handPoseLoadState === 'loading'
           ? {
               label: '手部检测',
               state: 'current',
-              status: '等待检测',
-              detail: '系统正在等待自动创建或读取 MediaPipe 检测任务',
+              status: '读取中',
+              detail: '正在读取手部检测结果；这不会阻止人工处理',
             }
-          : handPoseJob.status === 'FAILED'
+          : handPoseLoadState === 'error'
             ? {
                 label: '手部检测',
                 state: 'waiting',
-                status: '检测失败',
-                detail: '手部检测不阻断人工流程；可在下方查看原因或重新检测',
+                status: '读取失败',
+                detail: '手部检测结果暂时无法读取；这不会阻止人工处理',
               }
-            : handPoseJob.status === 'SUCCEEDED'
+            : handPoseLoadState === 'unavailable'
               ? {
                   label: '手部检测',
-                  state: 'complete',
-                  status:
-                    handPoseJob.hand_result === 'HAND_DETECTED'
-                      ? '已检测到手部'
-                      : handPoseJob.hand_result === 'NO_HAND_DETECTED'
-                        ? '未检测到手部'
-                        : '检测完成',
-                  detail: 'MediaPipe 已完成手部关键点检测；结果仅作辅助，不是人工标注',
+                  state: 'waiting',
+                  status: '暂无结果',
+                  detail: '当前没有可用的手部检测结果；这不会阻止人工处理',
                 }
-              : {
-                  label: '手部检测',
-                  state: 'current',
-                  status: '检测中',
-                  detail: 'MediaPipe 正在提取手部关键点，不影响继续人工查看',
-                }
+              : !handPoseJob
+                ? {
+                    label: '手部检测',
+                    state: 'current',
+                    status: '等待检测',
+                    detail: '系统正在等待自动创建或读取 MediaPipe 检测任务',
+                  }
+                : handPoseJob.status === 'FAILED'
+                  ? {
+                      label: '手部检测',
+                      state: 'waiting',
+                      status: '检测失败',
+                      detail: '手部检测不阻断人工流程；可在下方查看原因或重新检测',
+                    }
+                  : handPoseJob.status === 'SUCCEEDED'
+                    ? {
+                        label: '手部检测',
+                        state: 'complete',
+                        status:
+                          handPoseJob.hand_result === 'HAND_DETECTED'
+                            ? '已检测到手部'
+                            : handPoseJob.hand_result === 'NO_HAND_DETECTED'
+                              ? '未检测到手部'
+                              : '检测完成',
+                        detail: 'MediaPipe 已完成手部关键点检测；结果仅作辅助，不是人工标注',
+                      }
+                    : {
+                        label: '手部检测',
+                        state: 'current',
+                        status: '检测中',
+                        detail: 'MediaPipe 正在提取手部关键点，不影响继续人工查看',
+                      }
 
     const annotationStep: WorkflowStep =
       qualityReview?.decision === 'REJECTED'
@@ -371,6 +395,7 @@ export default function AssetDetailView() {
     annotationTask,
     annotationTaskLoadState,
     detail,
+    handPoseLoadState,
     handPoseJob,
     hasCurrentQualifiedQuality,
     qualityReview,
@@ -556,6 +581,27 @@ export default function AssetDetailView() {
     transientRefreshError,
   ])
   const handPoseStatus = useMemo(() => {
+    if (handPoseLoadState === 'loading') {
+      return {
+        tone: 'running' as const,
+        title: '读取中',
+        description: '正在读取手部检测结果；这不会阻止人工处理。',
+      }
+    }
+    if (handPoseLoadState === 'error') {
+      return {
+        tone: 'failed' as const,
+        title: '暂时无法读取',
+        description: '手部检测结果暂时无法读取；这不会阻止人工处理。',
+      }
+    }
+    if (handPoseLoadState === 'unavailable') {
+      return {
+        tone: 'idle' as const,
+        title: '暂无检测结果',
+        description: '当前没有可用的手部检测结果；这不会阻止人工处理。',
+      }
+    }
     if (!handPoseJob) {
       return {
         tone: 'idle' as const,
@@ -596,7 +642,7 @@ export default function AssetDetailView() {
       title: '检测中',
       description: '页面会自动刷新；关闭页面不会取消检测。',
     }
-  }, [handPoseCandidates, handPoseJob])
+  }, [handPoseCandidates, handPoseJob, handPoseLoadState])
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
     if (canPlay)
@@ -656,13 +702,22 @@ export default function AssetDetailView() {
     handPoseRequest.current?.abort()
     const request = new AbortController()
     handPoseRequest.current = request
+    setHandPoseLoadState('loading')
     try {
       const response = await getLatestHandPoseCandidates(projectId, assetId, request.signal)
       if (handPoseRequest.current !== request) return
-      if (!response.job || !Array.isArray(response.candidates)) {
+      if (!response.job) {
         handPoseJobRef.current = null
         setHandPoseJob(null)
         setHandPoseCandidates(null)
+        setHandPoseLoadState('unavailable')
+        return
+      }
+      if (!Array.isArray(response.candidates)) {
+        handPoseJobRef.current = null
+        setHandPoseJob(null)
+        setHandPoseCandidates(null)
+        setHandPoseLoadState('error')
         return
       }
       const previousStatus = handPoseJobRef.current?.status
@@ -681,15 +736,18 @@ export default function AssetDetailView() {
       handPoseJobRef.current = response.job
       setHandPoseJob(response.job)
       setHandPoseCandidates(response)
+      setHandPoseLoadState('success')
     } catch (error) {
       if (request.signal.aborted || handPoseRequest.current !== request) return
       if (error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND') {
         handPoseJobRef.current = null
         setHandPoseJob(null)
         setHandPoseCandidates(null)
+        setHandPoseLoadState('unavailable')
         return
       }
       setHandPoseCandidates(null)
+      setHandPoseLoadState('error')
     } finally {
       if (handPoseRequest.current === request) handPoseRequest.current = null
     }
@@ -798,6 +856,7 @@ export default function AssetDetailView() {
       handPoseJobRef.current = null
       setHandPoseJob(null)
       setHandPoseCandidates(null)
+      setHandPoseLoadState('idle')
       setLoadState('success')
       if (response.status === 'INGESTED') {
         void loadQualityReview()
@@ -1116,6 +1175,7 @@ export default function AssetDetailView() {
       handPoseJobRef.current = job
       setHandPoseJob(job)
       setHandPoseCandidates({ job, candidates: [] })
+      setHandPoseLoadState('success')
       void message.success(
         handPoseJob?.status === 'FAILED' ? '手部姿态检测已重新排队。' : '手部姿态检测已开始。',
       )
