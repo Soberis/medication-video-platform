@@ -205,7 +205,7 @@ export default function AssetDetailView() {
             label: '手部检测',
             state: 'waiting',
             status: '等待检测',
-            detail: '媒体检测完成后自动开始；结果仅作为人工处理的辅助候选',
+            detail: '媒体检测完成后自动开始；结果仅作为人工处理的辅助信息',
           }
         : !handPoseJob
           ? {
@@ -231,7 +231,7 @@ export default function AssetDetailView() {
                       : handPoseJob.hand_result === 'NO_HAND_DETECTED'
                         ? '未检测到手部'
                         : '检测完成',
-                  detail: 'MediaPipe 已完成手部关键点检测；结果仅作为辅助候选，不是人工标注',
+                  detail: 'MediaPipe 已完成手部关键点检测；结果仅作辅助，不是人工标注',
                 }
               : {
                   label: '手部检测',

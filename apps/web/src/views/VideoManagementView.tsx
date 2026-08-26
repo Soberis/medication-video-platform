@@ -364,9 +364,9 @@ export default function VideoManagementView() {
               />
             </label>
             <label className="video-filter-control">
-              <span>手部候选</span>
+              <span>手部检测</span>
               <Select
-                aria-label="手部候选状态"
+                aria-label="手部检测状态"
                 allowClear
                 size="small"
                 value={filters.handStatus}

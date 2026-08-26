@@ -84,11 +84,11 @@ export function HandPoseOverlay({ candidates, playbackTimeMs }: HandPoseOverlayP
   return (
     <svg
       className="hand-pose-overlay"
-      aria-label="当前视频帧的手部姿态候选"
+      aria-label="当前视频帧的手部检测结果"
       viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
       preserveAspectRatio="xMidYMid meet"
     >
-      <title>当前视频帧的手部姿态候选</title>
+      <title>当前视频帧的手部检测结果</title>
       {frame.map((candidate) => {
         const color = overlayColor()
         const box = candidate.bounding_box

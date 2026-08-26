@@ -574,7 +574,7 @@ export default function AnnotationTaskListView() {
               </p>
             ) : null}
             <p className="form-hint">
-              MediaPipe 候选仅作为手部观测数据，不是人工真值；动作标签来自人工正式标注。
+              MediaPipe 手部检测结果仅作辅助，不是正式人工标注；动作标签来自人工正式标注。
             </p>
           </>
         ) : null}

@@ -1734,6 +1734,10 @@
   width: 100%;
 }
 
+.account-management-page {
+  width: min(100%, 1120px);
+}
+
 .account-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1781,10 +1785,16 @@
   width: 100%;
 }
 
-.membership-list-panel .ant-table-wrapper,
-.account-table-card .ant-table-wrapper {
+.membership-list-panel .ant-table-wrapper {
   max-width: 100%;
   overflow-x: auto;
+}
+
+.account-table-card .ant-table-wrapper {
+  max-width: 100%;
+  /* Let Ant Design own narrow-table scrolling without creating a second
+     vertical scroll region around the whole account list. */
+  overflow: visible;
 }
 
 .membership-list-panel .ant-table {

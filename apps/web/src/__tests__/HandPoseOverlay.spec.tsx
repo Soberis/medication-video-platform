@@ -42,7 +42,7 @@ describe('HandPoseOverlay', () => {
       />,
     )
 
-    expect(screen.getByLabelText('当前视频帧的手部姿态候选')).toHaveAttribute(
+    expect(screen.getByLabelText('当前视频帧的手部检测结果')).toHaveAttribute(
       'viewBox',
       '0 0 1280 720',
     )

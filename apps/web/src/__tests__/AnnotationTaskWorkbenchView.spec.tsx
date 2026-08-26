@@ -280,7 +280,7 @@ describe('annotation task workbench', () => {
     const user = userEvent.setup()
     renderWorkbench()
 
-    expect(await screen.findByText(/1 组手部关键点候选/)).toBeInTheDocument()
+    expect(await screen.findByText(/1 组手部关键点；结果仅作辅助/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '播放视频' }))
     const video = await screen.findByLabelText('视频预览')
     const stage = video.closest('.video-stage')

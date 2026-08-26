@@ -86,20 +86,20 @@ function safeCandidateDescription(
   candidateState: CandidateLoadState,
   candidateResponse: HandPoseCandidateResponse | null,
 ) {
-  if (candidateState === 'loading') return '正在读取手部检测候选；这不会阻止人工标注。'
-  if (candidateState === 'error') return '手部候选暂时无法读取；这不会阻止人工标注。'
-  if (candidateState === 'unavailable') return '当前没有可用的手部候选；这不会阻止人工标注。'
-  if (!candidateResponse) return '手部候选仅在媒体检测完成后读取。'
+  if (candidateState === 'loading') return '正在读取手部检测结果；这不会阻止人工标注。'
+  if (candidateState === 'error') return '手部检测结果暂时无法读取；这不会阻止人工标注。'
+  if (candidateState === 'unavailable') return '当前没有可用的手部检测结果；这不会阻止人工标注。'
+  if (!candidateResponse) return '手部检测结果仅在媒体检测完成后读取。'
   if (candidateResponse.job.status === 'FAILED') {
-    return '手部检测未完成；候选仅作辅助，不影响人工质量判断或标注。'
+    return '手部检测未完成；结果仅作辅助，不影响人工质量判断或标注。'
   }
   if (candidateResponse.job.status === 'QUEUED' || candidateResponse.job.status === 'RUNNING') {
-    return '手部检测进行中；候选仅作辅助，不影响人工质量判断或标注。'
+    return '手部检测进行中；结果仅作辅助，不影响人工质量判断或标注。'
   }
   if (candidateResponse.job.hand_result === 'NO_HAND_DETECTED') {
-    return '未发现手部候选；这不是人工流程失败，也不会阻止标注。'
+    return '未检测到手部；这不是人工流程失败，也不会阻止标注。'
   }
-  return `${candidateResponse.candidates.length} 组手部关键点候选；仅作辅助，不是正式人工标注。`
+  return `${candidateResponse.candidates.length} 组手部关键点；结果仅作辅助，不是正式人工标注。`
 }
 
 export default function AnnotationTaskWorkbenchView() {
@@ -574,7 +574,7 @@ export default function AnnotationTaskWorkbenchView() {
       <PageHeader
         eyebrow="单任务人工工作台"
         title="配药动作标注工作台"
-        description="以当前视频为依据记录正式人工动作时间段；候选骨架只作查看辅助。"
+        description="以当前视频为依据记录正式人工动作时间段；手部检测结果只作查看辅助。"
         actions={
           <>
             <Button onClick={() => void navigate(paths.annotationTasks(projectId))}>
@@ -620,7 +620,7 @@ export default function AnnotationTaskWorkbenchView() {
             <section className="annotation-workbench-auxiliary" aria-label="手部检测辅助信息">
               <div className="annotation-workbench-auxiliary-heading">
                 <StatusIndicator tone={candidateOverlay.length ? 'success' : 'neutral'}>
-                  手部候选（辅助）
+                  手部检测
                 </StatusIndicator>
                 <span>{safeCandidateDescription(candidateState, candidateResponse)}</span>
               </div>

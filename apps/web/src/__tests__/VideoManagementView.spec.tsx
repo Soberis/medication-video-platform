@@ -93,7 +93,7 @@ describe('VideoManagementView', () => {
     expect(screen.queryByRole('columnheader', { name: '手部检测' })).not.toBeInTheDocument()
     expect(screen.queryByText('未发现手部')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '更多筛选' }))
-    expect(screen.getByRole('combobox', { name: '手部候选状态' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '手部检测状态' })).toBeInTheDocument()
     expect(screen.getByText('待人工质量判断')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '人工质量判断' })).toHaveAttribute(
       'href',

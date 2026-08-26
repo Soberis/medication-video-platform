@@ -119,7 +119,7 @@ export default function AccountManagementView() {
   }
 
   return (
-    <>
+    <div className="account-management-page">
       <PageHeader
         eyebrow="内部访问控制"
         titleId="accounts-title"
@@ -248,6 +248,6 @@ export default function AccountManagementView() {
       ) : loadState === 'success' ? (
         <EmptyState description="当前没有平台账号。" />
       ) : null}
-    </>
+    </div>
   )
 }
