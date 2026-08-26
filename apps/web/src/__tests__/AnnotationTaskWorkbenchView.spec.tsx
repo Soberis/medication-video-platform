@@ -281,11 +281,41 @@ describe('annotation task workbench', () => {
     renderWorkbench()
 
     expect(await screen.findByText(/1 组手部关键点；结果仅作辅助/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交标注' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: '播放视频' }))
     const video = await screen.findByLabelText('视频预览')
     const stage = video.closest('.video-stage')
     expect(stage?.querySelector('.hand-pose-overlay')).toBeInTheDocument()
     expect(screen.getByText(/仅作辅助，不是正式人工标注/)).toBeInTheDocument()
+  })
+
+  it('distinguishes an authoritative missing candidate job from a read failure', async () => {
+    stubWorkbench(
+      [assignedTask],
+      jsonResponse({ error_code: 'AI_HAND_POSE_JOB_NOT_FOUND' }, { status: 404 }),
+    )
+    renderWorkbench()
+
+    expect(
+      await screen.findByText('当前没有可用的手部检测结果；这不会阻止人工标注。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('手部检测结果暂时无法读取；这不会阻止人工标注。'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交标注' })).toBeEnabled()
+  })
+
+  it('surfaces candidate request failures as errors without blocking human annotation', async () => {
+    stubWorkbench([assignedTask], jsonResponse({}, { status: 503 }))
+    renderWorkbench()
+
+    expect(
+      await screen.findByText('手部检测结果暂时无法读取；这不会阻止人工标注。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('当前没有可用的手部检测结果；这不会阻止人工标注。'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交标注' })).toBeEnabled()
   })
 
   it('submits a valid human annotation and reloads server state', async () => {
@@ -556,7 +586,7 @@ function renderWorkbench() {
   })
 }
 
-function stubWorkbench(taskResponses: object[], candidate = candidateResponse) {
+function stubWorkbench(taskResponses: object[], candidate: object | Response = candidateResponse) {
   let taskResponseIndex = 0
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -570,7 +600,9 @@ function stubWorkbench(taskResponses: object[], candidate = candidateResponse) {
       return Promise.resolve(jsonResponse(taskList(tasks)))
     }
     if (url.endsWith(`/clip-assets/${assetId}`)) return Promise.resolve(jsonResponse(detail))
-    if (url.endsWith(`/hand-pose-candidates`)) return Promise.resolve(jsonResponse(candidate))
+    if (url.endsWith(`/hand-pose-candidates`)) {
+      return Promise.resolve(candidate instanceof Response ? candidate : jsonResponse(candidate))
+    }
     if (url.endsWith(`/clip-assets/${assetId}/playback-grants`) && method === 'POST') {
       return Promise.resolve(
         jsonResponse({

@@ -138,6 +138,12 @@ function safeCandidateDescription(
   return `${candidateResponse.candidates.length} 组手部关键点；结果仅作辅助，不是正式人工标注。`
 }
 
+function candidateLoadStateForError(error: unknown): 'unavailable' | 'error' {
+  return error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND'
+    ? 'unavailable'
+    : 'error'
+}
+
 export default function AnnotationTaskWorkbenchView() {
   const { projectId = '', taskId = '' } = useParams()
   const navigate = useNavigate()
@@ -218,10 +224,10 @@ export default function AnnotationTaskWorkbenchView() {
         if (request.signal.aborted || candidateRequest.current !== request) return
         setCandidateResponse(response)
         setCandidateState('success')
-      } catch {
+      } catch (error) {
         if (request.signal.aborted || candidateRequest.current !== request) return
         setCandidateResponse(null)
-        setCandidateState('unavailable')
+        setCandidateState(candidateLoadStateForError(error))
       } finally {
         if (candidateRequest.current === request) candidateRequest.current = null
       }
