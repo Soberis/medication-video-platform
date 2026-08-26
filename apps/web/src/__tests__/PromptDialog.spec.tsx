@@ -15,7 +15,7 @@ describe('PromptDialog', () => {
     await user.click(screen.getByRole('button', { name: '启动两个输入请求' }))
 
     const dialog = await screen.findByRole('dialog', { name: '第二个请求' })
-    await user.type(within(dialog).getByRole('textbox'), 'confirmed')
+    await user.type(within(dialog).getByRole('textbox', { name: '项目名称' }), 'confirmed')
     await user.click(within(dialog).getByRole('button', { name: '确认第二个请求' }))
 
     expect(await screen.findByText('first:null · second:confirmed')).toBeInTheDocument()
@@ -36,6 +36,7 @@ function PromptHarness() {
       title: '第二个请求',
       description: '这是当前活动请求。',
       confirmText: '确认第二个请求',
+      inputLabel: '项目名称',
     })
     const [firstResult, secondResult] = await Promise.all([first, second])
     setResult(`first:${firstResult ?? 'null'} · second:${secondResult ?? 'null'}`)

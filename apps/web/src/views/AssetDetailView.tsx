@@ -273,8 +273,9 @@ export default function AssetDetailView() {
                 ? {
                     label: '人工标注',
                     state: 'waiting',
-                    status: '已自动分配',
-                    detail: '质量合格后系统会自动分配任务；请在任务列表查看当前账号可见任务。',
+                    status: '待确认',
+                    detail:
+                      '质量结论已合格，但当前未查询到对应标注任务；请刷新后确认自动分配状态。',
                   }
                 : annotationTask.annotation_revision?.review?.decision === 'REJECTED'
                   ? {
@@ -467,11 +468,11 @@ export default function AssetDetailView() {
     }
     if (qualityReview?.decision === 'QUALIFIED' && annotationTask === null) {
       return {
-        title: '标注任务已自动分配',
-        description: '质量合格后系统会自动分配任务；可进入任务列表查看当前账号可见的任务。',
-        buttonLabel: '查看标注任务',
-        kind: 'navigate',
-        interactive: true,
+        title: '待确认标注任务',
+        description: '质量结论已合格，但当前未查询到对应标注任务；请刷新状态后确认自动分配结果。',
+        buttonLabel: '刷新状态',
+        kind: 'none',
+        interactive: false,
       }
     }
     if (annotationTask) {
@@ -968,6 +969,7 @@ export default function AssetDetailView() {
       title: '确认删除视频',
       description: `将从项目中隐藏视频 ${shortId(detail.client_file_id)}。不会立即物理删除对象或影响其他视频；请输入删除原因。`,
       confirmText: '确认删除',
+      inputLabel: '删除原因',
       placeholder: '例如：上传错误、无用或质量不合格',
       validate: (value) => (value.trim() ? null : '请填写删除原因。'),
     })
@@ -1026,6 +1028,7 @@ export default function AssetDetailView() {
       description:
         '仅在确认当前检测任务的原消息不存在时继续。平台会结束旧尝试，并创建新的审计尝试；不会自动重投或复用旧租约。请输入非敏感的事件或变更编号。',
       confirmText: '确认恢复',
+      inputLabel: '事件或变更编号',
       placeholder: '例如：INC-20260805-001',
       validate: (value) =>
         /^[A-Za-z0-9][A-Za-z0-9._:/#-]{2,127}$/.test(value.trim())

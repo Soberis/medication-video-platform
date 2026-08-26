@@ -70,6 +70,7 @@ export default function ProjectListView() {
       title: '新建项目',
       description: '创建后，当前管理员将自动成为该项目的项目管理员。',
       confirmText: '创建项目',
+      inputLabel: '项目名称',
       placeholder: '例如：病区 A 合成数据验证',
       validate: (input) => {
         if (!input.trim()) return '请输入项目名称。'
@@ -97,6 +98,7 @@ export default function ProjectListView() {
       title: '修改项目名称',
       description: '只修改项目显示名称，不影响项目成员或视频归属。',
       confirmText: '保存名称',
+      inputLabel: '项目名称',
       initialValue: project.display_name,
       validate: (input) => {
         if (!input.trim()) return '请输入项目名称。'
@@ -125,6 +127,7 @@ export default function ProjectListView() {
       description:
         '归档后将立即停止项目访问并从日常列表移除；视频、对象和审计记录不会被物理删除。请输入完整项目名称确认。',
       confirmText: '确认归档',
+      inputLabel: '项目名称（用于确认归档）',
       placeholder: project.display_name,
       validate: (input) =>
         input.trim() === project.display_name

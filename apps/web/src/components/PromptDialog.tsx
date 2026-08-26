@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
 } from 'react'
@@ -15,6 +16,7 @@ interface PromptOptions {
   title: string
   description: string
   confirmText: string
+  inputLabel?: string
   placeholder?: string
   initialValue?: string
   validate?: (value: string) => string | null
@@ -28,6 +30,8 @@ export function PromptProvider({ children }: PropsWithChildren) {
   const [activePrompt, setActivePrompt] = useState<PromptOptions | null>(null)
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
+  const promptInputId = useId()
+  const promptErrorId = `${promptInputId}-error`
   const activeResolver = useRef<((value: string | null) => void) | null>(null)
 
   const prompt = useCallback<PromptFunction>(
@@ -81,18 +85,28 @@ export function PromptProvider({ children }: PropsWithChildren) {
         destroyOnHidden
       >
         <p>{activePrompt?.description}</p>
+        <label className="visually-hidden" htmlFor={promptInputId}>
+          {activePrompt?.inputLabel ?? '输入内容'}
+        </label>
         <Input
+          id={promptInputId}
           autoFocus
           value={value}
           placeholder={activePrompt?.placeholder}
           status={error ? 'error' : undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? promptErrorId : undefined}
           onChange={(event) => {
             setValue(event.target.value)
             if (error) setError('')
           }}
           onPressEnter={confirm}
         />
-        {error ? <p className="field-error">{error}</p> : null}
+        {error ? (
+          <p id={promptErrorId} className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
       </Modal>
     </PromptContext.Provider>
   )

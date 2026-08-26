@@ -258,6 +258,25 @@ describe('catalog views', () => {
     ).toBe(false)
   })
 
+  it('does not claim assignment when a qualified asset has no task in the completed lookup', async () => {
+    stubAsset({
+      role: 'ADMIN',
+      status: 'INGESTED',
+      mediaReport: verifiedMediaReport(),
+      quality: {
+        ...unreviewedQuality(),
+        decision: 'QUALIFIED',
+        reason_code: 'MEETS_REQUIREMENTS',
+      },
+    })
+    renderAssetDetail()
+
+    expect(await screen.findByText('待确认标注任务')).toBeInTheDocument()
+    expect(screen.getAllByText(/当前未查询到对应标注任务/)).toHaveLength(2)
+    expect(screen.queryByText('标注任务已自动分配')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '查看标注任务' })).not.toBeInTheDocument()
+  })
+
   it('renders persisted annotation, human review and cleaning facts after a detail refresh', async () => {
     stubAsset({
       role: 'ADMIN',
