@@ -755,20 +755,24 @@ export default function AssetDetailView() {
       if (qualityRequest.current === request) qualityRequest.current = null
     }
   }, [assetId, projectId])
-  const loadAnnotationTask = useCallback(async () => {
+  const loadAnnotationTask = useCallback(async (): Promise<{ ok: boolean; found: boolean }> => {
     annotationTaskRequest.current?.abort()
     const request = new AbortController()
     annotationTaskRequest.current = request
     setAnnotationTaskLoadState('loading')
     try {
       const result = await listAnnotationTasks(projectId, request.signal)
-      if (annotationTaskRequest.current !== request) return
-      setAnnotationTask(result.items.find((task) => task.clip_asset_id === assetId) ?? null)
+      if (annotationTaskRequest.current !== request) return { ok: false, found: false }
+      const task = result.items.find((item) => item.clip_asset_id === assetId) ?? null
+      setAnnotationTask(task)
       setAnnotationTaskLoadState('success')
+      return { ok: true, found: task !== null }
     } catch {
-      if (request.signal.aborted || annotationTaskRequest.current !== request) return
+      if (request.signal.aborted || annotationTaskRequest.current !== request)
+        return { ok: false, found: false }
       setAnnotationTask(null)
       setAnnotationTaskLoadState('error')
+      return { ok: false, found: false }
     } finally {
       if (annotationTaskRequest.current === request) annotationTaskRequest.current = null
     }
@@ -1074,8 +1078,14 @@ export default function AssetDetailView() {
       })
       setQualityReview(saved)
       if (saved.decision === 'QUALIFIED') {
-        await loadAnnotationTask()
-        void message.success('质量结论已保存，标注任务已自动创建并分配。')
+        const { ok, found } = await loadAnnotationTask()
+        if (ok && found) {
+          void message.success('质量结论已保存，标注任务已自动创建并分配。')
+        } else if (ok && !found) {
+          void message.warning('质量结论已保存，但未查询到对应的标注任务，请刷新确认。')
+        } else {
+          void message.warning('质量结论已保存，标注任务分配状态暂未确认，请稍后刷新查看。')
+        }
       } else {
         void message.success('质量结论已保存。')
       }

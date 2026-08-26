@@ -99,17 +99,20 @@ function formatPlaybackTime(value: number) {
   return `${Math.max(0, Math.round(value))} 毫秒`
 }
 
+function validateDraftSegment(segment: DraftAnnotationSegment): SegmentValidationErrors {
+  const errors: SegmentValidationErrors = {}
+  if (segment.start_ms < 0) errors.start = '开始时间不能小于 0 毫秒。'
+  if (segment.end_ms <= segment.start_ms) errors.end = '结束时间必须晚于开始时间。'
+  if (!segment.label.trim()) errors.label = '请选择标签。'
+  return errors
+}
+
 function validateDraftSegments(segments: DraftAnnotationSegment[]) {
   const errors: Record<number, SegmentValidationErrors> = {}
-  segments.forEach((segment, index) => {
-    const segmentErrors: SegmentValidationErrors = {}
-    if (segment.start_ms < 0) segmentErrors.start = '开始时间不能小于 0 毫秒。'
-    if (segment.end_ms <= segment.start_ms) {
-      segmentErrors.end = `结束时间必须晚于开始时间（时间段 ${index + 1}）。`
-    }
-    if (!segment.label.trim()) segmentErrors.label = '请选择标签。'
+  segments.forEach((segment) => {
+    const segmentErrors = validateDraftSegment(segment)
     if (segmentErrors.start || segmentErrors.end || segmentErrors.label) {
-      errors[index] = segmentErrors
+      errors[segment.draftId] = segmentErrors
     }
   })
   return errors
@@ -367,22 +370,41 @@ export default function AnnotationTaskWorkbenchView() {
   }
 
   function updateSegment(index: number, patch: Partial<AnnotationSegment>) {
+    const segment = draftSegments[index]
     setDraftSegments((current) =>
-      current.map((segment, currentIndex) =>
-        currentIndex === index ? { ...segment, ...patch } : segment,
+      current.map((currentSegment, currentIndex) =>
+        currentIndex === index ? { ...currentSegment, ...patch } : currentSegment,
       ),
     )
-    setSegmentErrors({})
+    if (segment) {
+      const nextSegment = { ...segment, ...patch }
+      setSegmentErrors((current) => {
+        const nextSegmentErrors = validateDraftSegment(nextSegment)
+        const rest = { ...current }
+        if (Object.keys(nextSegmentErrors).length === 0) {
+          delete rest[segment.draftId]
+        } else {
+          rest[segment.draftId] = nextSegmentErrors
+        }
+        return rest
+      })
+    }
   }
 
   function addSegment() {
-    setSegmentErrors({})
     setDraftSegments((current) => [...current, createDraftSegment()])
   }
 
   function removeSegment(index: number) {
-    setSegmentErrors({})
+    const segment = draftSegments[index]
     setDraftSegments((current) => current.filter((_, currentIndex) => currentIndex !== index))
+    if (segment) {
+      setSegmentErrors((current) => {
+        const rest = { ...current }
+        delete rest[segment.draftId]
+        return rest
+      })
+    }
   }
 
   function seekVideo(timeMs: number) {
@@ -412,7 +434,7 @@ export default function AnnotationTaskWorkbenchView() {
     const nextSegmentErrors = validateDraftSegments(draftSegments)
     if (!validSegments.length || Object.keys(nextSegmentErrors).length) {
       setSegmentErrors(nextSegmentErrors)
-      void message.error('请填写标签，并确保每个时间段的结束时间晚于开始时间。')
+      void message.error('请修正标红的标注时间段后再提交。')
       return
     }
     setSegmentErrors({})
@@ -695,98 +717,104 @@ export default function AnnotationTaskWorkbenchView() {
                     aria-label="提交配药动作时间段"
                     onFinish={() => void submit()}
                   >
-                    {draftSegments.map((segment, index) => (
-                      <fieldset key={segment.draftId} className="annotation-workbench-segment-row">
-                        <legend>标注时间段 {index + 1}</legend>
-                        <Form.Item
-                          label="开始（毫秒）"
-                          validateStatus={segmentErrors[index]?.start ? 'error' : undefined}
-                          help={
-                            segmentErrors[index]?.start ? (
-                              <span role="alert">{segmentErrors[index].start}</span>
-                            ) : undefined
-                          }
+                    {draftSegments.map((segment, index) => {
+                      const segmentError = segmentErrors[segment.draftId]
+                      return (
+                        <fieldset
+                          key={segment.draftId}
+                          className="annotation-workbench-segment-row"
                         >
-                          <InputNumber
-                            aria-label={`标注时间段 ${index + 1} 的开始时间`}
-                            aria-invalid={Boolean(segmentErrors[index]?.start)}
-                            min={0}
-                            step={100}
-                            value={segment.start_ms}
-                            onChange={(value) => updateSegment(index, { start_ms: value ?? 0 })}
-                          />
+                          <legend>标注时间段 {index + 1}</legend>
+                          <Form.Item
+                            label="开始（毫秒）"
+                            validateStatus={segmentError?.start ? 'error' : undefined}
+                            help={
+                              segmentError?.start ? (
+                                <span role="alert">{segmentError.start}</span>
+                              ) : undefined
+                            }
+                          >
+                            <InputNumber
+                              aria-label={`标注时间段 ${index + 1} 的开始时间`}
+                              aria-invalid={Boolean(segmentError?.start)}
+                              min={0}
+                              step={100}
+                              value={segment.start_ms}
+                              onChange={(value) => updateSegment(index, { start_ms: value ?? 0 })}
+                            />
+                            <Button
+                              size="small"
+                              disabled={!canControlPlayback}
+                              onClick={() => setSegmentTime(index, 'start_ms')}
+                            >
+                              取当前
+                            </Button>
+                          </Form.Item>
+                          <Form.Item
+                            label="结束（毫秒）"
+                            validateStatus={segmentError?.end ? 'error' : undefined}
+                            help={
+                              segmentError?.end ? (
+                                <span role="alert">{segmentError.end}</span>
+                              ) : undefined
+                            }
+                          >
+                            <InputNumber
+                              aria-label={`标注时间段 ${index + 1} 的结束时间`}
+                              aria-invalid={Boolean(segmentError?.end)}
+                              min={1}
+                              step={100}
+                              value={segment.end_ms}
+                              onChange={(value) => updateSegment(index, { end_ms: value ?? 1 })}
+                            />
+                            <Button
+                              size="small"
+                              disabled={!canControlPlayback}
+                              onClick={() => setSegmentTime(index, 'end_ms')}
+                            >
+                              取当前
+                            </Button>
+                          </Form.Item>
+                          <Form.Item
+                            label="标签"
+                            validateStatus={segmentError?.label ? 'error' : undefined}
+                            help={
+                              segmentError?.label ? (
+                                <span role="alert">{segmentError.label}</span>
+                              ) : undefined
+                            }
+                          >
+                            <Select
+                              value={segment.label || undefined}
+                              placeholder="选择步骤标签"
+                              aria-label={`标注时间段 ${index + 1} 的标签`}
+                              aria-invalid={Boolean(segmentError?.label)}
+                              onChange={(value) => updateSegment(index, { label: value })}
+                              options={sortedLabels.map((label) => ({
+                                value: label.label_id,
+                                label: label.display_name,
+                              }))}
+                            />
+                          </Form.Item>
                           <Button
                             size="small"
+                            aria-label={`跳转到标注时间段 ${index + 1} 的开始时间`}
                             disabled={!canControlPlayback}
-                            onClick={() => setSegmentTime(index, 'start_ms')}
+                            onClick={() => seekVideo(segment.start_ms)}
                           >
-                            取当前
+                            跳转
                           </Button>
-                        </Form.Item>
-                        <Form.Item
-                          label="结束（毫秒）"
-                          validateStatus={segmentErrors[index]?.end ? 'error' : undefined}
-                          help={
-                            segmentErrors[index]?.end ? (
-                              <span role="alert">{segmentErrors[index].end}</span>
-                            ) : undefined
-                          }
-                        >
-                          <InputNumber
-                            aria-label={`标注时间段 ${index + 1} 的结束时间`}
-                            aria-invalid={Boolean(segmentErrors[index]?.end)}
-                            min={1}
-                            step={100}
-                            value={segment.end_ms}
-                            onChange={(value) => updateSegment(index, { end_ms: value ?? 1 })}
-                          />
                           <Button
                             size="small"
-                            disabled={!canControlPlayback}
-                            onClick={() => setSegmentTime(index, 'end_ms')}
+                            aria-label={`移除标注时间段 ${index + 1}`}
+                            disabled={draftSegments.length === 1}
+                            onClick={() => removeSegment(index)}
                           >
-                            取当前
+                            移除
                           </Button>
-                        </Form.Item>
-                        <Form.Item
-                          label="标签"
-                          validateStatus={segmentErrors[index]?.label ? 'error' : undefined}
-                          help={
-                            segmentErrors[index]?.label ? (
-                              <span role="alert">{segmentErrors[index].label}</span>
-                            ) : undefined
-                          }
-                        >
-                          <Select
-                            value={segment.label || undefined}
-                            placeholder="选择步骤标签"
-                            aria-label={`标注时间段 ${index + 1} 的标签`}
-                            aria-invalid={Boolean(segmentErrors[index]?.label)}
-                            onChange={(value) => updateSegment(index, { label: value })}
-                            options={sortedLabels.map((label) => ({
-                              value: label.label_id,
-                              label: label.display_name,
-                            }))}
-                          />
-                        </Form.Item>
-                        <Button
-                          size="small"
-                          aria-label={`跳转到标注时间段 ${index + 1} 的开始时间`}
-                          disabled={!canControlPlayback}
-                          onClick={() => seekVideo(segment.start_ms)}
-                        >
-                          跳转
-                        </Button>
-                        <Button
-                          size="small"
-                          aria-label={`移除标注时间段 ${index + 1}`}
-                          disabled={draftSegments.length === 1}
-                          onClick={() => removeSegment(index)}
-                        >
-                          移除
-                        </Button>
-                      </fieldset>
-                    ))}
+                        </fieldset>
+                      )
+                    })}
                     <Button onClick={addSegment}>新增时间段</Button>
                     <Form.Item label="备注（可选）">
                       <Input.TextArea

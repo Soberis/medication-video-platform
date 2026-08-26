@@ -324,9 +324,7 @@ describe('annotation task workbench', () => {
     renderWorkbench()
 
     await user.click(await screen.findByRole('button', { name: '提交标注' }))
-    expect(
-      await screen.findByText('请填写标签，并确保每个时间段的结束时间晚于开始时间。'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('请修正标红的标注时间段后再提交。')).toBeInTheDocument()
     expect(await screen.findByText('请选择标签。')).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
@@ -335,6 +333,56 @@ describe('annotation task workbench', () => {
           init?.method === 'POST',
       ),
     ).toBe(false)
+  })
+
+  it('clears only the edited field error while keeping other segment errors', async () => {
+    stubWorkbench([assignedTask])
+    const user = userEvent.setup()
+    renderWorkbench()
+
+    const startInput = await screen.findByRole('spinbutton', {
+      name: '标注时间段 1 的开始时间',
+    })
+    fireEvent.change(startInput, { target: { value: '2000' } })
+
+    await user.click(await screen.findByRole('button', { name: '提交标注' }))
+    expect(await screen.findByText('请选择标签。')).toBeInTheDocument()
+    expect(await screen.findByText('结束时间必须晚于开始时间。')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('combobox', { name: '标注时间段 1 的标签' }))
+    await user.click(
+      await screen.findByText('准备工作区', { selector: '.ant-select-item-option-content' }),
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('请选择标签。')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('结束时间必须晚于开始时间。')).toBeInTheDocument()
+
+    const endInput = screen.getByRole('spinbutton', { name: '标注时间段 1 的结束时间' })
+    fireEvent.change(endInput, { target: { value: '3000' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText('结束时间必须晚于开始时间。')).not.toBeInTheDocument()
+    })
+  })
+
+  it('revalidates the end time when the start time changes', async () => {
+    stubWorkbench([assignedTask])
+    const user = userEvent.setup()
+    renderWorkbench()
+
+    const startInput = await screen.findByRole('spinbutton', {
+      name: '标注时间段 1 的开始时间',
+    })
+    fireEvent.change(startInput, { target: { value: '2000' } })
+    await user.click(await screen.findByRole('button', { name: '提交标注' }))
+    expect(await screen.findByText('结束时间必须晚于开始时间。')).toBeInTheDocument()
+
+    fireEvent.change(startInput, { target: { value: '0' } })
+    await waitFor(() => {
+      expect(screen.queryByText('结束时间必须晚于开始时间。')).not.toBeInTheDocument()
+    })
   })
 
   it('shows rejected review guidance and starts rework from the previous segments', async () => {
