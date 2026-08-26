@@ -177,10 +177,10 @@ def _safe_identifier(value: object, context: str) -> str:
     return normalized
 
 
-def _optional_text(value: object, context: str) -> str | None:
+def _optional_text(value: object, context: str, *, max_length: int = 256) -> str | None:
     if value is None:
         return None
-    return _safe_text(value, context, max_length=256)
+    return _safe_text(value, context, max_length=max_length)
 
 
 def _required_sha256(value: object, context: str) -> str:
@@ -243,7 +243,11 @@ def _parse_invariant_evidence(value: object, context: str) -> dict[str, str | No
     data = _expect_mapping(value, context)
     _reject_unknown_fields(data, _EVIDENCE_FIELDS, context)
     reference = _optional_text(data.get("reference"), f"{context}.reference")
-    description = _optional_text(data.get("description"), f"{context}.description")
+    description = _optional_text(
+        data.get("description"),
+        f"{context}.description",
+        max_length=2000,
+    )
     if reference is None and description is None:
         raise EvidenceError(f"{context} 至少需要 reference 或 description。")
     return {"reference": reference, "description": description}
@@ -280,8 +284,14 @@ def normalize_evidence(value: object) -> EvidenceDocument:
         _require_field(data, "evaluation_id", "evidence"),
         "evaluation_id",
     )
-    sample_version = _optional_text(data.get("sample_version"), "sample_version")
-    sample_sha256 = _optional_sha256(data.get("sample_sha256"), "sample_sha256")
+    sample_version = _optional_text(
+        _require_field(data, "sample_version", "evidence"),
+        "sample_version",
+    )
+    sample_sha256 = _optional_sha256(
+        _require_field(data, "sample_sha256", "evidence"),
+        "sample_sha256",
+    )
     if sample_version is None and sample_sha256 is None:
         raise EvidenceError("sample_version 和 sample_sha256 至少提供一个。")
 

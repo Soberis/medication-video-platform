@@ -95,7 +95,17 @@ function Test-ChangedPath {
 }
 
 $qualityGateConfigPath = Join-Path $root 'scripts/quality-gate.config.json'
+$qualityGateConfigValidatorPath = Join-Path $root 'scripts/internal/validate-quality-gate-config.mjs'
 try {
+    $validationOutput = @(& node $qualityGateConfigValidatorPath $qualityGateConfigPath 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $validationMessage = ($validationOutput | ForEach-Object { $_.ToString() }) -join ' '
+        if ([string]::IsNullOrWhiteSpace($validationMessage)) {
+            $validationMessage = 'shared structure validation failed'
+        }
+        throw $validationMessage
+    }
+
     $qualityGateConfig = Get-Content -LiteralPath $qualityGateConfigPath -Raw | ConvertFrom-Json
 }
 catch {

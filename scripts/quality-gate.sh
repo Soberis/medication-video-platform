@@ -93,25 +93,13 @@ has_changed_path() {
 }
 
 quality_gate_config="$PROJECT_ROOT/scripts/quality-gate.config.json"
-if ! node -e '
-const fs = require("node:fs");
-const [file] = process.argv.slice(1);
-try {
-  const config = JSON.parse(fs.readFileSync(file, "utf8"));
-  for (const property of ["requiredFiles", "jsonContracts", "profiles", "brunoRequests", "strictRequiredFiles"]) {
-    if (!Array.isArray(config[property])) {
-      throw new Error(`${property} must be an array`);
-    }
-  }
-  if (typeof config.brunoManifest !== "string") {
-    throw new Error("brunoManifest must be a string");
-  }
-} catch (error) {
-  process.stderr.write(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-}
-' "$quality_gate_config" 2>&1; then
-    add_failure "Quality gate config is invalid: $quality_gate_config"
+quality_gate_config_validator="$PROJECT_ROOT/scripts/internal/validate-quality-gate-config.mjs"
+if ! config_validation_error="$(node "$quality_gate_config_validator" "$quality_gate_config" 2>&1)"; then
+    if [[ -n "$config_validation_error" ]]; then
+        add_failure "Quality gate config is invalid: $quality_gate_config ($config_validation_error)"
+    else
+        add_failure "Quality gate config is invalid: $quality_gate_config"
+    fi
     exit 1
 fi
 

@@ -140,6 +140,48 @@ def test_missing_sample_binding_is_rejected() -> None:
         evaluator.normalize_evidence(data)
 
 
+@pytest.mark.parametrize("field", ["sample_version", "sample_sha256"])
+def test_missing_sample_binding_field_is_rejected(field: str) -> None:
+    data = fixture_data()
+    del data[field]
+
+    with pytest.raises(evaluator.EvidenceError, match=f"缺少字段 {field}"):
+        evaluator.normalize_evidence(data)
+
+
+def test_unauthorized_sample_is_rejected() -> None:
+    data = fixture_data()
+    data["sample_authorization"]["status"] = "PENDING"
+
+    with pytest.raises(evaluator.EvidenceError, match="必须为 AUTHORIZED"):
+        evaluator.normalize_evidence(data)
+
+
+@pytest.mark.parametrize(
+    ("sample_version", "sample_sha256"),
+    [("synthetic-authorized-v1", None), (None, "a" * 64)],
+)
+def test_sample_binding_accepts_either_explicit_binding(
+    sample_version: str | None, sample_sha256: str | None
+) -> None:
+    data = fixture_data()
+    data["sample_version"] = sample_version
+    data["sample_sha256"] = sample_sha256
+
+    document = evaluator.normalize_evidence(data)
+
+    assert document.sample_version == sample_version
+    assert document.sample_sha256 == sample_sha256
+
+
+def test_sample_version_over_schema_limit_is_rejected() -> None:
+    data = fixture_data()
+    data["sample_version"] = "x" * 257
+
+    with pytest.raises(evaluator.EvidenceError, match="sample_version 过长"):
+        evaluator.normalize_evidence(data)
+
+
 def test_pass_invariant_requires_evidence() -> None:
     data = fixture_data()
     item = invariant(data, "ORIGINAL_VIDEO_UNMODIFIED")
@@ -147,6 +189,57 @@ def test_pass_invariant_requires_evidence() -> None:
 
     with pytest.raises(evaluator.EvidenceError, match=r"PASS.*evidence"):
         evaluator.normalize_evidence(data)
+
+
+def test_invariant_description_uses_schema_length_limit() -> None:
+    data = fixture_data()
+    item = invariant(data, "WORKER_INTERRUPTION_RECOVERY")
+    item.update(
+        status="PASS",
+        evidence={"description": "x" * 2000},
+    )
+
+    document = evaluator.normalize_evidence(data)
+
+    assert document.invariants[0].evidence == {
+        "reference": None,
+        "description": "x" * 2000,
+    }
+
+
+def test_invariant_description_over_schema_limit_is_rejected() -> None:
+    data = fixture_data()
+    item = invariant(data, "WORKER_INTERRUPTION_RECOVERY")
+    item.update(
+        status="PASS",
+        evidence={"description": "x" * 2001},
+    )
+
+    with pytest.raises(evaluator.EvidenceError, match="过长"):
+        evaluator.normalize_evidence(data)
+
+
+def test_empty_invariant_evidence_is_rejected() -> None:
+    data = fixture_data()
+    item = invariant(data, "WORKER_INTERRUPTION_RECOVERY")
+    item.update(
+        status="PASS",
+        evidence={"reference": None, "description": None},
+    )
+
+    with pytest.raises(evaluator.EvidenceError, match="至少需要"):
+        evaluator.normalize_evidence(data)
+
+
+def test_duplicate_json_keys_are_rejected(tmp_path: Path) -> None:
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text(
+        '{"format":"hand-pose-evaluation.v1","format":"hand-pose-evaluation.v1"}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(evaluator.EvidenceError, match="重复字段 format"):
+        evaluator.load_evidence(duplicate)
 
 
 def test_canonical_report_has_frozen_order_and_normalized_hashes() -> None:
@@ -184,6 +277,18 @@ def test_markdown_report_generation(tmp_path: Path) -> None:
     assert "`PENDING`" in markdown
     assert "CandidateAnnotation geometry" in markdown
     assert "no algorithm accuracy is claimed" not in markdown
+
+
+def test_canonical_json_and_markdown_are_deterministic() -> None:
+    data = fixture_data()
+    shuffled = copy.deepcopy(data)
+    shuffled["metrics"] = list(reversed(shuffled["metrics"]))
+    shuffled["invariants"] = list(reversed(shuffled["invariants"]))
+    document = evaluator.normalize_evidence(data)
+    shuffled_document = evaluator.normalize_evidence(shuffled)
+
+    assert evaluator.canonical_json(document) == evaluator.canonical_json(shuffled_document)
+    assert evaluator.render_markdown(document) == evaluator.render_markdown(shuffled_document)
 
 
 def test_invalid_cli_input_returns_non_zero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

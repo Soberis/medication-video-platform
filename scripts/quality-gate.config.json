@@ -33,6 +33,8 @@
     "scripts/quality-gate.ps1",
     "scripts/quality-gate.sh",
     "scripts/quality-gate.config.json",
+    "scripts/internal/validate-quality-gate-config.mjs",
+    "scripts/quality-gate-config.test.mjs",
     "scripts/local-common.sh",
     "scripts/start-local.ps1",
     "scripts/start-local.sh",

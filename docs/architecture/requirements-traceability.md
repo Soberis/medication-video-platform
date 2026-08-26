@@ -3,7 +3,7 @@
 > 当前需求基线：[V1.24 FLOW-FIRST P0 自动任务衔接](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)<br>
 > 当前技术设计：[手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-08-25
+> 最后更新：2026-08-26
 
 本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
@@ -30,3 +30,5 @@ V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅�
 2026-08-11 自动验收证据：`quality-gate.ps1 -Strict` 全部通过；真实本地合成系统验证了显式多相机缺路映射、1,000 条元数据分页/筛选/汇总、候选—Revision—Review—Cleaning 链路、原视频 SHA-256 不变和项目隔离。`VideoSummaryContractTests.acceptsItsServerCursorOnTheNextPage` 覆盖服务端 cursor 与时间筛选，`VideoManagementView.spec.tsx` 覆盖汇总失败时列表仍可用。V18-FR-003 的授权含手 MP4 尚未提供，因此保留 `PI`；本矩阵没有据此标记 `UAT`。
 
 2026-08-12 收口证据：AI Worker 的 `test_landmarker.py` 定向测试 `25 passed`，覆盖 valid hand、valid no-hand、invalid frame、混合有效/无效手、超手数、非法 landmark/handedness，以及三态互斥统计；全仓 `quality-gate.ps1 -Strict` 实际通过（Java 325 tests、Web 121 tests、Python gates 全部通过，跳过 0）。真实本地跨进程合成无手视频 `52b3c43b-8b5e-492c-bf8d-92a98cbea0b3` 经 Core API、RabbitMQ、AI Worker 和 MediaPipe 得到 `SUCCEEDED / NO_HAND_DETECTED`，`total_video_frames=50`、`inference_frame_count=17`、`frames_with_hand=0`、`frames_without_hand=17`、候选数为 0，原视频 SHA-256 前后一致。受控真实 Retry job `9a057122-c93b-49e7-ba74-00e7891417ea` 验证 Attempt 1 `FAILED + retryable=true`、同一 job 的 Attempt 2 成功，重复相同幂等键仍为 2 次 Attempt。授权含手 MP4 仍未提供，因此 V18-FR-003 保持 `PI`，V18-FR-006 保持 `D1`；本轮没有据此标记 `UAT`。
+
+2026-08-26 V18-FR-006 审计证据：仓库及可用本地输入中仅发现 `tools/hand-pose-evaluation/tests/fixtures/synthetic_evidence.json` 合成 fixture，未发现授权真实评估样本或可用于效果测量的授权记录。离线证据工具的 schema、normalizer、report 回归测试 `29 passed`，并通过 lock、Ruff、mypy；AI Worker `45 passed`、Media Worker `23 passed`，Core API 中模型/profile 完整性、候选隔离、租约恢复和结果契约定向测试 `37 passed`，媒体原文件保护与最小导出契约 `28 passed`。本次修复了缺失 sample version/SHA 字段被静默放行、不变量说明长度与 schema 不一致、以及 sample version 长度约束未在 schema 声明三个契约缺口；未改变运行时、指标定义或业务流程。由于尚无授权样本实测，七项指标和三项不变量没有新的真实评估记录，V18-FR-006 继续保持 `PI`，不标记为 `I` 或 `UAT`。

@@ -37,6 +37,10 @@ import {
   shortId,
   statusTone,
 } from '@/features/catalog/catalog-presentation'
+import {
+  classifyCandidateReadError,
+  type CandidateLoadState,
+} from '@/features/catalog/hand-pose-candidate-state'
 import { AssetActivityCard } from '@/components/AssetActivityCard'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -71,8 +75,6 @@ interface DetailNextStep {
   kind: 'hand-pose' | 'media-recovery' | 'scroll' | 'navigate' | 'none'
   interactive: boolean
 }
-
-type HandPoseLoadState = 'idle' | 'loading' | 'success' | 'unavailable' | 'error'
 
 function workflowStepTone(state: WorkflowStepState): StatusBadgeTone {
   if (state === 'complete') return 'success'
@@ -136,7 +138,7 @@ export default function AssetDetailView() {
   const [handPoseCandidates, setHandPoseCandidates] = useState<HandPoseCandidateResponse | null>(
     null,
   )
-  const [handPoseLoadState, setHandPoseLoadState] = useState<HandPoseLoadState>('idle')
+  const [handPoseLoadState, setHandPoseLoadState] = useState<CandidateLoadState>('idle')
   const [isRequestingHandPose, setIsRequestingHandPose] = useState(false)
   const detailRef = useRef<ClipAssetRead | null>(null)
   const handPoseJobRef = useRef<HandPoseJob | null>(null)
@@ -739,7 +741,7 @@ export default function AssetDetailView() {
       setHandPoseLoadState('success')
     } catch (error) {
       if (request.signal.aborted || handPoseRequest.current !== request) return
-      if (error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND') {
+      if (classifyCandidateReadError(error) === 'unavailable') {
         handPoseJobRef.current = null
         setHandPoseJob(null)
         setHandPoseCandidates(null)

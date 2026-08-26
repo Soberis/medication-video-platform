@@ -1,6 +1,9 @@
 package com.medicationvideo.platform.qualitycleaning;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -10,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,11 +21,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import com.medicationvideo.platform.governance.AuditEventCommand;
+import com.medicationvideo.platform.governance.AuditEventRecorder;
+import com.medicationvideo.platform.iamproject.ProjectRole;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 
 @SpringBootTest
@@ -39,6 +50,10 @@ class QualityReviewContractTests {
 
 	private static final String SHA256 = "a".repeat(64);
 
+	private static final String CURRENT_LABEL_SCHEMA_ID = "10000000-0000-0000-0000-000000000001";
+
+	private static final String CURRENT_LABEL_SCHEMA_DIGEST = "305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
+
 	private static final Instant BASE_TIME = Instant.parse("2026-07-22T01:00:00Z");
 
 	@Autowired
@@ -46,6 +61,15 @@ class QualityReviewContractTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private ApplicationEventPublisher eventPublisher;
+
+	@Autowired
+	private PlatformTransactionManager transactionManager;
+
+	@MockitoSpyBean
+	private AuditEventRecorder auditRecorder;
 
 	@BeforeEach
 	void setUp() {
@@ -87,9 +111,19 @@ class QualityReviewContractTests {
 
 		assertEquals(1, count("SELECT count(*) FROM quality_review WHERE clip_asset_id = ?", clipAssetId));
 		assertEquals(1, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
-		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, this.jdbcTemplate.queryForObject("""
-				SELECT assignee_actor_id FROM annotation_task WHERE clip_asset_id = ?
-				""", String.class, clipAssetId));
+		var taskFacts = this.jdbcTemplate.queryForMap("""
+				SELECT project_id, clip_asset_id, label_schema_id, label_schema_digest,
+				       assignee_actor_id, created_by, task_status
+				FROM annotation_task
+				WHERE clip_asset_id = ?
+				""", clipAssetId);
+		assertEquals(PROJECT_ID, taskFacts.get("project_id"));
+		assertEquals(clipAssetId, taskFacts.get("clip_asset_id"));
+		assertEquals(CURRENT_LABEL_SCHEMA_ID, taskFacts.get("label_schema_id").toString());
+		assertEquals(CURRENT_LABEL_SCHEMA_DIGEST, taskFacts.get("label_schema_digest"));
+		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, taskFacts.get("assignee_actor_id"));
+		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, taskFacts.get("created_by"));
+		assertEquals("ASSIGNED", taskFacts.get("task_status"));
 		assertEquals(1, count("""
 				SELECT count(*) FROM audit_event
 				WHERE request_id = ?
@@ -148,16 +182,50 @@ class QualityReviewContractTests {
 	}
 
 	@Test
+	void rejectedAndNeedsReviewConclusionsDoNotCreateAutomaticTasks() throws Exception {
+		var rejectedAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var needsReviewAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+
+		record(rejectedAssetId, "REJECTED", "WRONG_SCENE", 0).andExpect(status().isOk());
+		record(needsReviewAssetId, "NEEDS_REVIEW", "UNCERTAIN_QUALITY", 0).andExpect(status().isOk());
+
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE project_id = ?", PROJECT_ID));
+		assertEquals(0, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
+				  AND details_json ->> 'clip_asset_id' IN (?, ?)
+				""", rejectedAssetId.toString(), needsReviewAssetId.toString()));
+	}
+
+	@Test
+	void nonIngestedAndDeletedAssetsCannotCreateAutomaticTasks() throws Exception {
+		var uploadedAssetId = insertClipAsset(PROJECT_ID, "UPLOADED", false);
+		var deletedAssetId = insertClipAsset(PROJECT_ID, "INGESTED", true);
+
+		record(uploadedAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 0).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("QUALITY_REVIEW_NOT_READY"));
+		record(deletedAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 0).andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+
+		assertEquals(0, count("SELECT count(*) FROM quality_review WHERE project_id = ?", PROJECT_ID));
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE project_id = ?", PROJECT_ID));
+	}
+
+	@Test
 	void requalifyingDoesNotDuplicateOrReassignTheExistingAutomaticTask() throws Exception {
 		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
 
 		record(clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 0).andExpect(status().isOk());
+		var initialTaskId = this.jdbcTemplate.queryForObject(
+				"SELECT annotation_task_id FROM annotation_task WHERE clip_asset_id = ?", UUID.class, clipAssetId);
 		record(clipAssetId, "REJECTED", "WRONG_SCENE", 0).andExpect(status().isOk())
 			.andExpect(jsonPath("$.version").value(1));
 		record(ADMIN_TOKEN, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 1).andExpect(status().isOk())
 			.andExpect(jsonPath("$.version").value(2));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(initialTaskId, this.jdbcTemplate.queryForObject(
+				"SELECT annotation_task_id FROM annotation_task WHERE clip_asset_id = ?", UUID.class, clipAssetId));
 		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, this.jdbcTemplate.queryForObject("""
 				SELECT assignee_actor_id FROM annotation_task WHERE clip_asset_id = ?
 				""", String.class, clipAssetId));
@@ -165,6 +233,47 @@ class QualityReviewContractTests {
 				SELECT count(*) FROM audit_event
 				WHERE action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
 				  AND details_json ->> 'clip_asset_id' = ?
+				""", clipAssetId.toString()));
+	}
+
+	@Test
+	void staleQualifiedEventCannotCreateAnAutomaticTask() {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var qualityReviewId = insertQualityReview(PROJECT_ID, clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS");
+		var requestId = "quality-stale-event-" + UUID.randomUUID();
+
+		new TransactionTemplate(this.transactionManager)
+			.executeWithoutResult(status -> this.eventPublisher.publishEvent(new QualityReviewQualifiedEvent(PROJECT_ID,
+					clipAssetId, qualityReviewId, 1, ProjectMembershipTestData.MEMBER_ACTOR, ProjectRole.MEMBER,
+					BASE_TIME, requestId, "stale-event-trace")));
+
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(0, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'ANNOTATION_TASK_AUTO_ASSIGNED'
+				  AND details_json ->> 'clip_asset_id' = ?
+				""", clipAssetId.toString()));
+	}
+
+	@Test
+	void qualifiedDecisionTaskAndAuditRollBackTogetherWhenAssignmentAuditFails() throws Exception {
+		var clipAssetId = insertClipAsset(PROJECT_ID, "INGESTED", false);
+		var auditCalls = new AtomicInteger();
+		doAnswer(invocation -> {
+			if (auditCalls.incrementAndGet() == 2) {
+				throw new IllegalStateException("Synthetic automatic assignment audit failure.");
+			}
+			return invocation.callRealMethod();
+		}).when(this.auditRecorder).record(any(AuditEventCommand.class));
+
+		assertThrows(Exception.class, () -> record(clipAssetId, "QUALIFIED", "MEETS_REQUIREMENTS", 0));
+
+		assertEquals(2, auditCalls.get());
+		assertEquals(0, count("SELECT count(*) FROM quality_review WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
+		assertEquals(0, count("""
+				SELECT count(*) FROM audit_event
+				WHERE details_json ->> 'clip_asset_id' = ?
 				""", clipAssetId.toString()));
 	}
 
@@ -237,6 +346,18 @@ class QualityReviewContractTests {
 				deleted ? ProjectMembershipTestData.ADMIN_ACTOR : null, deleted ? "synthetic deletion" : null,
 				Timestamp.from(BASE_TIME), Timestamp.from(BASE_TIME));
 		return clipAssetId;
+	}
+
+	private UUID insertQualityReview(UUID projectId, UUID clipAssetId, String decision, String reasonCode) {
+		var qualityReviewId = UUID.randomUUID();
+		this.jdbcTemplate.update("""
+				INSERT INTO quality_review (
+				    quality_review_id, project_id, clip_asset_id, decision, reason_code,
+				    reviewed_by, reviewed_at, version)
+				VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+				""", qualityReviewId, projectId, clipAssetId, decision, reasonCode,
+				ProjectMembershipTestData.MEMBER_ACTOR, Timestamp.from(BASE_TIME));
+		return qualityReviewId;
 	}
 
 	private int count(String sql, Object... arguments) {

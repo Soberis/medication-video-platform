@@ -38,6 +38,10 @@ import {
   formatDateTime,
   shortId,
 } from '@/features/catalog/catalog-presentation'
+import {
+  classifyCandidateReadError,
+  type CandidateLoadState,
+} from '@/features/catalog/hand-pose-candidate-state'
 
 interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
@@ -48,8 +52,6 @@ interface SegmentValidationErrors {
   end?: string
   label?: string
 }
-
-type CandidateLoadState = 'idle' | 'loading' | 'success' | 'unavailable' | 'error'
 
 let nextDraftSegmentId = 0
 
@@ -138,12 +140,6 @@ function safeCandidateDescription(
   return `${candidateResponse.candidates.length} 组手部关键点；结果仅作辅助，不是正式人工标注。`
 }
 
-function candidateLoadStateForError(error: unknown): 'unavailable' | 'error' {
-  return error instanceof CatalogApiError && error.errorCode === 'AI_HAND_POSE_JOB_NOT_FOUND'
-    ? 'unavailable'
-    : 'error'
-}
-
 export default function AnnotationTaskWorkbenchView() {
   const { projectId = '', taskId = '' } = useParams()
   const navigate = useNavigate()
@@ -227,7 +223,7 @@ export default function AnnotationTaskWorkbenchView() {
       } catch (error) {
         if (request.signal.aborted || candidateRequest.current !== request) return
         setCandidateResponse(null)
-        setCandidateState(candidateLoadStateForError(error))
+        setCandidateState(classifyCandidateReadError(error))
       } finally {
         if (candidateRequest.current === request) candidateRequest.current = null
       }
