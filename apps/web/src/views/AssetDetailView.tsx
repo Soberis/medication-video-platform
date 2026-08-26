@@ -815,7 +815,7 @@ export default function AssetDetailView() {
       }
     } catch (error) {
       if (request.signal.aborted || detailRequest.current !== request) return
-      setDetail(null)
+      if (detailRef.current === null) setDetail(null)
       setLoadState('error')
       setErrorCode(error instanceof CatalogApiError ? error.errorCode : 'CATALOG_REQUEST_FAILED')
       setErrorMessage(
@@ -890,6 +890,8 @@ export default function AssetDetailView() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      detailRef.current = null
+      setDetail(null)
       setMediaProbeMessage('')
       void loadDetail()
       void loadProjectRole()
@@ -1154,35 +1156,42 @@ export default function AssetDetailView() {
         <span aria-hidden="true">/</span>
         <span>视频详情</span>
       </nav>
-      {loadState === 'loading' ? <LoadingState>正在读取视频详情…</LoadingState> : null}
+      <PageHeader
+        className="workbench-heading asset-detail-page-header"
+        eyebrow="当前视频"
+        title="视频详情"
+        description={
+          detail ? (
+            <span className="asset-detail-header-status">
+              <StatusBadge tone={statusTone(detail.status)}>
+                {assetStatusLabels[detail.status]}
+              </StatusBadge>
+            </span>
+          ) : undefined
+        }
+        actions={
+          detail ? (
+            <Button
+              loading={loadState === 'loading'}
+              onClick={() => {
+                void loadDetail()
+              }}
+            >
+              刷新状态
+            </Button>
+          ) : undefined
+        }
+      />
+      {loadState === 'loading' ? (
+        <LoadingState>{detail ? '正在刷新视频详情…' : '正在读取视频详情…'}</LoadingState>
+      ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadDetail()}>
           {errorMessage}
         </ErrorState>
       ) : null}
-      {loadState === 'success' && detail ? (
+      {detail ? (
         <>
-          <PageHeader
-            className="workbench-heading asset-detail-page-header"
-            eyebrow="当前视频"
-            title="视频详情"
-            description={
-              <span className="asset-detail-header-status">
-                <StatusBadge tone={statusTone(detail.status)}>
-                  {assetStatusLabels[detail.status]}
-                </StatusBadge>
-              </span>
-            }
-            actions={
-              <Button
-                onClick={() => {
-                  void loadDetail()
-                }}
-              >
-                刷新状态
-              </Button>
-            }
-          />
           <div className="asset-detail-identity" aria-label="视频身份">
             <p className="workbench-video-name">
               <span>视频</span>
@@ -1225,7 +1234,7 @@ export default function AssetDetailView() {
               showIcon
             />
           ) : null}
-          <div className="video-workbench">
+          <div className="video-workbench" aria-busy={loadState === 'loading'}>
             <div className="workbench-grid">
               <section className="workbench-primary" aria-label="视频与人工处理">
                 <PlaybackCard

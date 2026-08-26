@@ -43,6 +43,12 @@ interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
 }
 
+interface SegmentValidationErrors {
+  start?: string
+  end?: string
+  label?: string
+}
+
 type CandidateLoadState = 'idle' | 'loading' | 'success' | 'unavailable' | 'error'
 
 let nextDraftSegmentId = 0
@@ -93,6 +99,22 @@ function formatPlaybackTime(value: number) {
   return `${Math.max(0, Math.round(value))} 毫秒`
 }
 
+function validateDraftSegments(segments: DraftAnnotationSegment[]) {
+  const errors: Record<number, SegmentValidationErrors> = {}
+  segments.forEach((segment, index) => {
+    const segmentErrors: SegmentValidationErrors = {}
+    if (segment.start_ms < 0) segmentErrors.start = '开始时间不能小于 0 毫秒。'
+    if (segment.end_ms <= segment.start_ms) {
+      segmentErrors.end = `结束时间必须晚于开始时间（时间段 ${index + 1}）。`
+    }
+    if (!segment.label.trim()) segmentErrors.label = '请选择标签。'
+    if (segmentErrors.start || segmentErrors.end || segmentErrors.label) {
+      errors[index] = segmentErrors
+    }
+  })
+  return errors
+}
+
 function safeCandidateDescription(
   candidateState: CandidateLoadState,
   candidateResponse: HandPoseCandidateResponse | null,
@@ -126,6 +148,7 @@ export default function AnnotationTaskWorkbenchView() {
   const [candidateResponse, setCandidateResponse] = useState<HandPoseCandidateResponse | null>(null)
   const [candidateState, setCandidateState] = useState<CandidateLoadState>('idle')
   const [draftSegments, setDraftSegments] = useState<DraftAnnotationSegment[]>([])
+  const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [note, setNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reviewingRevisionId, setReviewingRevisionId] = useState<string | null>(null)
@@ -217,6 +240,7 @@ export default function AnnotationTaskWorkbenchView() {
     setCandidateResponse(null)
     setCandidateState('idle')
     setDraftSegments([])
+    setSegmentErrors({})
     setNote('')
     resetPlayback()
     try {
@@ -235,6 +259,7 @@ export default function AnnotationTaskWorkbenchView() {
       const nextDetail = await getClipAsset(projectId, nextTask.clip_asset_id, request.signal)
       if (request.signal.aborted || loadRequest.current !== request) return
       setDraftSegments(initialDraftSegmentsForTask(nextTask))
+      setSegmentErrors({})
       setNote('')
       setTask(nextTask)
       setSchema(labelSchema)
@@ -347,6 +372,17 @@ export default function AnnotationTaskWorkbenchView() {
         currentIndex === index ? { ...segment, ...patch } : segment,
       ),
     )
+    setSegmentErrors({})
+  }
+
+  function addSegment() {
+    setSegmentErrors({})
+    setDraftSegments((current) => [...current, createDraftSegment()])
+  }
+
+  function removeSegment(index: number) {
+    setSegmentErrors({})
+    setDraftSegments((current) => current.filter((_, currentIndex) => currentIndex !== index))
   }
 
   function seekVideo(timeMs: number) {
@@ -373,15 +409,13 @@ export default function AnnotationTaskWorkbenchView() {
       end_ms,
       label: label.trim(),
     }))
-    if (
-      !validSegments.length ||
-      validSegments.some(
-        (segment) => !segment.label || segment.start_ms < 0 || segment.end_ms <= segment.start_ms,
-      )
-    ) {
+    const nextSegmentErrors = validateDraftSegments(draftSegments)
+    if (!validSegments.length || Object.keys(nextSegmentErrors).length) {
+      setSegmentErrors(nextSegmentErrors)
       void message.error('请填写标签，并确保每个时间段的结束时间晚于开始时间。')
       return
     }
+    setSegmentErrors({})
     setIsSubmitting(true)
     try {
       await submitAnnotationRevision(projectId, task.annotation_task_id, validSegments, note)
@@ -664,9 +698,18 @@ export default function AnnotationTaskWorkbenchView() {
                     {draftSegments.map((segment, index) => (
                       <fieldset key={segment.draftId} className="annotation-workbench-segment-row">
                         <legend>标注时间段 {index + 1}</legend>
-                        <Form.Item label="开始（毫秒）">
+                        <Form.Item
+                          label="开始（毫秒）"
+                          validateStatus={segmentErrors[index]?.start ? 'error' : undefined}
+                          help={
+                            segmentErrors[index]?.start ? (
+                              <span role="alert">{segmentErrors[index].start}</span>
+                            ) : undefined
+                          }
+                        >
                           <InputNumber
                             aria-label={`标注时间段 ${index + 1} 的开始时间`}
+                            aria-invalid={Boolean(segmentErrors[index]?.start)}
                             min={0}
                             step={100}
                             value={segment.start_ms}
@@ -680,9 +723,18 @@ export default function AnnotationTaskWorkbenchView() {
                             取当前
                           </Button>
                         </Form.Item>
-                        <Form.Item label="结束（毫秒）">
+                        <Form.Item
+                          label="结束（毫秒）"
+                          validateStatus={segmentErrors[index]?.end ? 'error' : undefined}
+                          help={
+                            segmentErrors[index]?.end ? (
+                              <span role="alert">{segmentErrors[index].end}</span>
+                            ) : undefined
+                          }
+                        >
                           <InputNumber
                             aria-label={`标注时间段 ${index + 1} 的结束时间`}
+                            aria-invalid={Boolean(segmentErrors[index]?.end)}
                             min={1}
                             step={100}
                             value={segment.end_ms}
@@ -696,11 +748,20 @@ export default function AnnotationTaskWorkbenchView() {
                             取当前
                           </Button>
                         </Form.Item>
-                        <Form.Item label="标签">
+                        <Form.Item
+                          label="标签"
+                          validateStatus={segmentErrors[index]?.label ? 'error' : undefined}
+                          help={
+                            segmentErrors[index]?.label ? (
+                              <span role="alert">{segmentErrors[index].label}</span>
+                            ) : undefined
+                          }
+                        >
                           <Select
                             value={segment.label || undefined}
                             placeholder="选择步骤标签"
                             aria-label={`标注时间段 ${index + 1} 的标签`}
+                            aria-invalid={Boolean(segmentErrors[index]?.label)}
                             onChange={(value) => updateSegment(index, { label: value })}
                             options={sortedLabels.map((label) => ({
                               value: label.label_id,
@@ -720,25 +781,16 @@ export default function AnnotationTaskWorkbenchView() {
                           size="small"
                           aria-label={`移除标注时间段 ${index + 1}`}
                           disabled={draftSegments.length === 1}
-                          onClick={() =>
-                            setDraftSegments((current) =>
-                              current.filter((_, currentIndex) => currentIndex !== index),
-                            )
-                          }
+                          onClick={() => removeSegment(index)}
                         >
                           移除
                         </Button>
                       </fieldset>
                     ))}
-                    <Button
-                      onClick={() =>
-                        setDraftSegments((current) => [...current, createDraftSegment()])
-                      }
-                    >
-                      新增时间段
-                    </Button>
+                    <Button onClick={addSegment}>新增时间段</Button>
                     <Form.Item label="备注（可选）">
                       <Input.TextArea
+                        aria-label="备注（可选）"
                         value={note}
                         maxLength={1000}
                         rows={3}

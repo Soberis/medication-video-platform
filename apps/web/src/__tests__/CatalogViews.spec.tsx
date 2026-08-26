@@ -14,11 +14,42 @@ afterEach(() => {
 })
 
 describe('catalog views', () => {
+  it('keeps a page heading and safe retry for an initial detail-load failure', async () => {
+    const fetchMock = stubAsset({ role: 'MEMBER', status: 'UPLOADED', detailFailureOnce: true })
+    const user = userEvent.setup()
+    renderAssetDetail()
+
+    expect(screen.getByRole('heading', { level: 1, name: '视频详情' })).toBeInTheDocument()
+    expect(await screen.findByText('暂时无法读取视频数据，请稍后重试。')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /重\s*试/ }))
+
+    expect(await screen.findByText('视频可播放')).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).endsWith(`/clip-assets/${assetId}`)),
+    ).toHaveLength(2)
+  })
+
+  it('keeps loaded detail facts visible when a manual refresh fails', async () => {
+    stubAsset({ role: 'MEMBER', status: 'UPLOADED', detailFailureAfterFirst: true })
+    const user = userEvent.setup()
+    renderAssetDetail()
+
+    expect(await screen.findByText('视频可播放')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '刷新状态' }))
+
+    expect(await screen.findByText('暂时无法读取视频数据，请稍后重试。')).toBeInTheDocument()
+    expect(screen.getByText('视频可播放')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '视频详情' })).toBeInTheDocument()
+  })
+
   it('offers direct viewing for an uploaded video without exposing storage or using an identifier as the page title', async () => {
     stubAsset({ role: 'MEMBER', status: 'UPLOADED' })
     const user = userEvent.setup()
     renderAssetDetail()
-    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(await screen.findByText('视频可播放')).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { level: 1 })
     expect(heading).toHaveTextContent('视频详情')
     const headingCopy = heading.parentElement?.parentElement
     expect(headingCopy).not.toHaveTextContent('相机')
@@ -27,7 +58,6 @@ describe('catalog views', () => {
       'href',
       `/projects/${projectId}/videos`,
     )
-    expect(screen.getByText('视频可播放')).toBeInTheDocument()
     expect(screen.getByText(/临时只读地址/)).toBeInTheDocument()
     expect(screen.getByTitle('90000000-0000-4000-8000-000000000001')).toHaveTextContent(
       '90000000…0001',
@@ -58,7 +88,7 @@ describe('catalog views', () => {
   it('does not show the legacy folder classification surface in LEAN-P0', async () => {
     stubAsset({ role: 'ADMIN', status: 'UPLOADED' })
     renderAssetDetail()
-    expect(await screen.findByText('视频详情')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '视频详情' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '更新分类' })).not.toBeInTheDocument()
     expect(screen.queryByText('视频分类')).not.toBeInTheDocument()
   })
@@ -553,6 +583,8 @@ function renderAssetDetail(session?: { username: string; role: 'ADMIN' | 'MEMBER
 function stubAsset(options: {
   role: 'ADMIN' | 'MEMBER'
   status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
+  detailFailureOnce?: boolean
+  detailFailureAfterFirst?: boolean
   mediaReport?: object
   mediaReportFailureOnce?: boolean
   quality?: object
@@ -566,6 +598,7 @@ function stubAsset(options: {
   activity?: boolean
 }) {
   let qualitySaved = false
+  let detailReads = 0
   let mediaReportReads = 0
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -579,6 +612,15 @@ function stubAsset(options: {
           created_at: '2026-07-15T01:03:03Z',
         }),
       )
+    if (url.endsWith(`/api/v1/projects/${projectId}/clip-assets/${assetId}`)) {
+      detailReads += 1
+      if (
+        (options.detailFailureOnce && detailReads === 1) ||
+        (options.detailFailureAfterFirst && detailReads > 1)
+      )
+        return Promise.resolve(jsonResponse({ error_code: 'CLIP_ASSET_TEMPORARY' }, 503))
+      return Promise.resolve(jsonResponse(assetDetail(options.status)))
+    }
     if (url.endsWith('/media-report')) {
       mediaReportReads += 1
       if (options.mediaReportFailureOnce && mediaReportReads === 1) {

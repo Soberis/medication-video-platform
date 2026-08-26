@@ -4,7 +4,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 
 import { paths } from '@/app/paths'
 import { AppShell } from '@/components/layout/AppShell'
-import { renderRoute } from '@/test/render'
+import { renderRoute, renderRouter } from '@/test/render'
 import AnnotationTaskWorkbenchView from '@/views/AnnotationTaskWorkbenchView'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
@@ -327,6 +327,7 @@ describe('annotation task workbench', () => {
     expect(
       await screen.findByText('请填写标签，并确保每个时间段的结束时间晚于开始时间。'),
     ).toBeInTheDocument()
+    expect(await screen.findByText('请选择标签。')).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -467,6 +468,36 @@ describe('annotation task workbench', () => {
         ([input, init]) => String(input).endsWith('/annotation-tasks') && init?.method === 'GET',
       ).length,
     ).toBeGreaterThanOrEqual(2)
+  })
+
+  it('clears draft and note state when navigating between tasks', async () => {
+    const otherTaskId = 'a0000000-0000-4000-8000-000000000002'
+    const otherTask = { ...assignedTask, annotation_task_id: otherTaskId }
+    stubWorkbench([assignedTask, otherTask])
+    const user = userEvent.setup()
+    const { router } = renderRouter(
+      [
+        {
+          path: '/projects/:projectId/annotation-tasks/:taskId',
+          element: <AnnotationTaskWorkbenchView />,
+        },
+      ],
+      [paths.annotationTask(projectId, taskId)],
+    )
+
+    const startInput = await screen.findByRole('spinbutton', {
+      name: '标注时间段 1 的开始时间',
+    })
+    fireEvent.change(startInput, { target: { value: '250' } })
+    const noteInput = screen.getByRole('textbox', { name: '备注（可选）' })
+    await user.type(noteInput, '仅属于第一个任务的备注')
+
+    await router.navigate(paths.annotationTask(projectId, otherTaskId))
+
+    await waitFor(() => {
+      expect(screen.getByRole('spinbutton', { name: '标注时间段 1 的开始时间' })).toHaveValue('0')
+      expect(screen.getByRole('textbox', { name: '备注（可选）' })).toHaveValue('')
+    })
   })
 })
 

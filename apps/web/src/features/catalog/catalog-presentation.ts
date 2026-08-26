@@ -12,7 +12,7 @@ import type {
 } from '@/api/catalog'
 
 export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
-  PENDING: '待审核',
+  PENDING: '待检测',
   PASS: '已通过',
   WARNING: '需关注',
   REJECT: '未通过',
