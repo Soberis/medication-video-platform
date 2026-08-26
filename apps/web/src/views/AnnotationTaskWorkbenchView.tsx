@@ -57,6 +57,17 @@ function createDraftSegment(segment?: AnnotationSegment): DraftAnnotationSegment
   }
 }
 
+function initialDraftSegmentsForTask(task: AnnotationTask): DraftAnnotationSegment[] {
+  if (!task.can_submit || task.status !== 'ASSIGNED') return []
+  const rejectedSegments =
+    task.annotation_revision?.review?.decision === 'REJECTED'
+      ? task.annotation_revision.annotation_document.segments
+      : []
+  return rejectedSegments.length
+    ? rejectedSegments.map((segment) => createDraftSegment(segment))
+    : [createDraftSegment()]
+}
+
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
   if (task.status === 'SUBMITTED') return '待管理员复核'
@@ -205,6 +216,8 @@ export default function AnnotationTaskWorkbenchView() {
     setDetail(null)
     setCandidateResponse(null)
     setCandidateState('idle')
+    setDraftSegments([])
+    setNote('')
     resetPlayback()
     try {
       const [taskList, labelSchema] = await Promise.all([
@@ -221,6 +234,8 @@ export default function AnnotationTaskWorkbenchView() {
       }
       const nextDetail = await getClipAsset(projectId, nextTask.clip_asset_id, request.signal)
       if (request.signal.aborted || loadRequest.current !== request) return
+      setDraftSegments(initialDraftSegmentsForTask(nextTask))
+      setNote('')
       setTask(nextTask)
       setSchema(labelSchema)
       setDetail(nextDetail)
@@ -253,32 +268,6 @@ export default function AnnotationTaskWorkbenchView() {
       clearPlaybackExpiryTimer()
     }
   }, [clearPlaybackExpiryTimer, loadWorkbench])
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (!task) {
-        setDraftSegments([])
-        setNote('')
-        return
-      }
-      if (task.can_submit && task.status === 'ASSIGNED') {
-        const rejectedSegments =
-          task.annotation_revision?.review?.decision === 'REJECTED'
-            ? task.annotation_revision.annotation_document.segments
-            : []
-        setDraftSegments(
-          rejectedSegments.length
-            ? rejectedSegments.map((segment) => createDraftSegment(segment))
-            : [createDraftSegment()],
-        )
-        setNote('')
-      } else {
-        setDraftSegments([])
-        setNote('')
-      }
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [task])
 
   const playbackAvailability = useMemo(() => {
     if (!detail) return null
