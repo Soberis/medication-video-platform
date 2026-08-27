@@ -27,7 +27,7 @@ V1.25 目标主链：
 → 每路接收与 Media Probe；成功视图再运行 MediaPipe
 → 自动事实 + 人工查看提示
 → 逐视图 QualityReview
-→ 持久化 CaptureGroupQualityReview
+→ 收件关闭后持久化 CaptureGroupQualityReview
 → 一个属于 CaptureGroup 的 AnnotationTask
 → 选择 primary/anchor view 作为正式时间基准
 → 一条属于 CaptureGroup 的 AnnotationRevision 修订链
@@ -140,6 +140,13 @@ decided_at
 | `NEEDS_REVIEW` | 标注准入未完成，或接收、视图、时间证据仍有疑问 |
 | `REJECTED` | 人工确认剩余视觉证据不足以进入人工标注，或事件不可用 |
 
+收件是组质量的前置条件：`receipt=RECEIVING` 时预期上传集合尚未关闭，组可保持
+`NEEDS_REVIEW`，但不得提交或最终化为 `QUALIFIED` / `QUALIFIED_WITH_EXCLUSIONS`；只有
+`receipt=COMPLETE` 或 `INCOMPLETE` 后，人工才能提交最终的 `CaptureGroupQualityReview` 结果。
+超时不能单独关闭 receipt。预期五路仅收到三路时，即使已收到视图均为 `QualityReview.QUALIFIED`，
+组仍不能成为 `QUALIFIED`；收件明确为 `INCOMPLETE` 且剩余视图足够时，才可由人决定
+`QUALIFIED_WITH_EXCLUSIONS`。
+
 零条 `QualityReview.QUALIFIED` 视图时，组不能是 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS`。
 `CaptureGroupQualityReview` 只表示标注准入，不表示 Review、Cleaning 或训练导出已通过。第一版
 由服务端呈现客观事实、由人作组决定，不写死最低相机数或覆盖阈值；医院/项目政策留待后续。
@@ -154,9 +161,13 @@ CaptureGroup
 → 一条不可变、追加写入的 AnnotationRevision 修订链（业务归属为组）
 ```
 
-只有人工组质量为 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS` 时，才按待冻结的 V1.25 契约
-幂等创建并分配恰好一个组任务；重复事件返回原任务，`NEEDS_REVIEW`、`REJECTED` 和任何
-Candidate/MediaPipe 结果都不能触发任务。任务创建/分配必须保留现有权限、事务和追加式审计边界。
+只有 receipt 已关闭为 `COMPLETE` 或 `INCOMPLETE`，且人工组质量为 `QUALIFIED` 或
+`QUALIFIED_WITH_EXCLUSIONS` 时，才按待冻结的 V1.25 契约幂等创建并分配恰好一个组任务。
+提交该有效组质量结论的 ACTIVE 项目成员就是第一版任务负责人：其 actor ID 同时写入
+`AnnotationTask.assignee_actor_id` 和 `created_by`。提交者必须通过现有项目成员、ACTIVE 和授权校验。
+重复事件返回原任务，不创建或重新分配；已有组任务不得被静默替换或改派。`NEEDS_REVIEW`、
+`REJECTED` 和任何 Candidate/MediaPipe 结果都不能触发任务。任务创建/分配必须保留现有权限、事务
+和追加式审计边界，不引入调度、负载均衡、轮询、队列或技能路由。
 
 同一动作不得按相机重复创建任务或标签。选择 `primary/anchor view` 只决定正式 `[start_ms, end_ms)`
 时间基准；主视图不是组或标注的 owner。其他 `QualityReview.QUALIFIED` 视图是支持/参考证据，不创建第二份动作真值。
@@ -188,10 +199,18 @@ RELIABLE / APPROXIMATE / UNRELIABLE
 offset、不插帧、不自动对齐、不引入 CaptureSync。`camera_number` 是事件内稳定显示编号，
 `camera_channel_id` 等来源身份在可用时保留，缺路不重编号。
 
+同一 CaptureGroup 的事件身份不等于各机位拥有精确共享的时间戳。
+主视图上的 `[start_ms, end_ms)` 是正式动作区间的唯一时间基准，不得直接复制给支持视图。只有同步证据为
+`RELIABLE` 且存在已验证、带版本的 primary→supporting 映射时，才可按该映射推导支持视图区间，并保留
+映射 provenance/version；`APPROXIMATE` 仅供人工对照，不能静默生成精确动作时间；`UNRELIABLE` 或无映射
+只能作为事件级支持证据，不产生伪造的 action-aligned 时间戳。Annotation、Review、Cleaning 和未来导出
+都必须遵守此边界。
+
 ## 8. Review、事件级 Cleaning 与导出方向
 
 - Review 以组任务的正式 `AnnotationRevision` 为对象，审阅组身份、主视图、参与合格视图、拒绝/缺失视图、动作区间和相关候选证据；Review 必须由人通过。
 - `CaptureGroupQualityReview` 是标注准入；Cleaning 是训练数据准入。只有正式修订和人工 Review 通过后，Cleaning 才在配药事件级检查组质量事实、参与视图、媒体完整性和拒绝/缺失原因。Cam2 `REJECTED` 时，Cam1/Cam3/Cam4 可在组为 `QUALIFIED_WITH_EXCLUSIONS` 且人工确认后参与；Cam2 保留但不下游。
+- 主视图区间是正式时间基准；支持视图只有在已验证的 `RELIABLE` 映射下才可推导对应区间并保留 provenance/version。`APPROXIMATE`、`UNRELIABLE` 或无映射的支持视图仅作事件级证据，Review/Cleaning 和未来导出不得为其伪造动作对齐时间戳。
 - 现有 V1.24 `training-data.v2` / `training_data.parquet` 继续服务单视频历史路径。V1.25 不强行复用会丢失组/视图关系的结构；如需多视图输出，未来另行冻结 `training-data.v3`，至少保留组 ID、修订 ID、主视图、参与视频/相机、逐视图质量、组质量、Candidate provenance 和 Cleaning provenance。
 - 默认不复制 MP4，不创建 DatasetVersion 或数据集平台。所有同一 CaptureGroup 的训练行必须进入同一 train/validation/test split。
 
