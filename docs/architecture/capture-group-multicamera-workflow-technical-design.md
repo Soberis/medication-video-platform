@@ -27,9 +27,12 @@ CaptureGroup 是一次明确声明的配药事件的逻辑读取名称，真值�
 → CaptureSession / CameraSetSnapshot / CameraStream / ClipAsset
 → 每路 Media Probe
 → 每路 MediaPipe Candidate
-→ 自动证据建议
-→ 人工视图质量与排除
-→ 一个锚点视图上的正式 AnnotationRevision
+→ 自动事实与人工查看提示
+→ 人工逐视图 QualityReview（QUALIFIED / NEEDS_REVIEW / REJECTED）
+→ CaptureGroup 质量结果
+→ 选择一个标注锚点
+→ 锚点 `QUALIFIED` 自动创建并分配唯一 AnnotationTask
+→ 锚点上的人工 AnnotationRevision
 → Review
 → Cleaning
 → 当前可用数据资格投影
@@ -46,7 +49,7 @@ CaptureGroup 是一次明确声明的配药事件的逻辑读取名称，真值�
 | 视频资产 | ClipAsset | 不可变媒体身份、摘要、入库状态和软删除事实 |
 | 手部候选 | CandidateAnnotation 及其观测 | MediaPipe 辅助几何；不产生正式动作标签 |
 | 人工质量 | QualityReview（按 ClipAsset） | 继续保存人工质量结论，不能由自动证据替代 |
-| 正式动作标注 | AnnotationTask、AnnotationRevision | 复用现有区间标注和冻结 schema；第一版以一个锚点视图承载 |
+| 正式动作标注 | AnnotationTask、AnnotationRevision | 复用现有区间标注和冻结 schema；第一版以一个锚点视图承载，并保留 V1.24 自动任务桥 |
 | 人工复核 | AnnotationReview | APPROVED 仍是正式 Review 闸门 |
 | 清洗 | CleaningRun、CleaningResult | PASS / SUCCEEDED 仍是清洗闸门 |
 | 可用数据 | 现有训练数据资格投影和 minimal-export | 不创建 DatasetVersion，不改造当前 Parquet 契约 |
@@ -55,23 +58,27 @@ CaptureGroup 是一次明确声明的配药事件的逻辑读取名称，真值�
 
 ## 3. 最小组接收状态
 
-组的预期机位必须来自冻结的 CameraSetSnapshot 或显式上游 manifest 的 expected_camera_numbers。received_camera_count 只表示当前已观测到的技术计数，不单独证明组已经结束。
+组的预期机位必须来自冻结的 CameraSetSnapshot 或显式上游 manifest 的 expected_camera_numbers。received_camera_count 只表示当前已观测到的接收计数，不单独证明组已经结束。
 
 未来组读取语义定义为：
 
 | 状态 | 必要条件 |
 | --- | --- |
-| RECEIVING（接收中） | CaptureGroup 身份和预期机位已确定，但尚未收到可信的组结束事实，或仍有预期机位没有唯一绑定且已入库的 ClipAsset |
-| COMPLETE（完整） | 已收到并接受上游/边端的显式组完成事实，且每个预期机位都有唯一 CameraStream，所绑定的 ClipAsset 均未删除并处于 INGESTED |
-| INCOMPLETE（不完整） | 已收到显式组结束事实，并明确记录一个或多个预期机位缺失、不可用或未能入库；缺失编号和原因必须保留 |
+| RECEIVING（接收中） | CaptureGroup 身份和预期机位已确定，但接收尚未最终确认，或仍有预期机位没有已最终确认的文件 |
+| COMPLETE（完整） | 接收已最终确认，且每个预期机位都有唯一、已接收并最终确认的文件/绑定事实；后续 Media Probe、MediaPipe 或质量结果不改变该收件状态 |
+| INCOMPLETE（不完整） | 接收已最终确认，但一个或多个预期机位没有文件；缺失编号和原因必须保留 |
 
 显式结束事实可以来自版本化 manifest 的完成标记、边端发送的组完成消息或等价的不可变接收事实。当前 external-video-ingest-v1 已有预期相机声明，但如果运行环境没有组完成标记，就不能安全地区分“还在接收”和“已不完整”；后续实现前需要先补充契约语义。本文不修改该契约。
+
+例如五路文件均已接收并最终确认后，即使 Cam2 的 Media Probe 失败，组收件状态仍为
+`COMPLETE`，Cam2 另记媒体/质量失败；只有实际缺少预期相机文件时，最终收件状态才为
+`INCOMPLETE`。
 
 超时最多只能产生 stale / needs attention 这样的运维提示，不能单独把组判为 INCOMPLETE。迟到视频必须使用原有明确的分组键和受控接入路径，不能静默并入其他组，也不能覆盖已经审查的事实。当前 CaptureSession 的 OPEN、ASSEMBLING、COMPLETE、INCOMPLETE、CLOSED 存储状态保持不变；上述三态是未来组视图语义，不是本轮状态机修改。
 
 接收闭合（`COMPLETE` / `INCOMPLETE`）只是接收事实，不是质量放行结论；一个已明确闭合但缺路的
-组，在满足最低有效视图和覆盖规则并完成人工确认后，仍可投影为 `USABLE_WITH_EXCLUSIONS`。
-反过来，`COMPLETE` 也不代表组已自动可用。
+组，在人工确认至少有一条 `QualityReview.QUALIFIED` 视图且其余事实足以支持事件后，仍可投影为
+`QUALIFIED_WITH_EXCLUSIONS`。反过来，`COMPLETE` 也不代表组已自动可用。
 
 ## 4. 同步只表达证据可信度
 
@@ -102,60 +109,65 @@ declared_sync_status 是来源声明，不应被平台直接提升为验证后�
 4. CameraStream 与 CaptureGroup、CameraSetSnapshot 的显式绑定；
 5. 组的缺失机位和同步证据质量。
 
-系统可以输出 LIKELY_USABLE、NEEDS_REVIEW、LIKELY_UNUSABLE 三类建议及可解释原因。建议只服务于排序、提示和人工决策，不写入 QualityReview，也不能自动放行或拒绝组。
+系统只输出事实、稳定原因和“建议人工查看”等提示，不建立一套独立的自动质量状态，
+也不写入 `QualityReview` 或组级结论。
 
-特别是 MediaPipe NO_HAND_DETECTED、候选数量为零、handedness 方向错误或 AI 运行失败，都只是证据。它们可以促使人工查看，但不能直接证明视频不可用、不能创建正式标签，也不能阻断其他视图继续处理。
+特别是 MediaPipe NO_HAND_DETECTED、候选数量为零、候选读取失败、长时间未检测到手部、handedness 方向错误或 AI 运行失败，都只是证据。
+它们可以促使人工查看，但不能直接证明视频不可用、不能创建正式标签，也不能阻断人工质量判断、标注入口或其他视图继续处理。
+在正式动作区间产生前，也不能由自动检查断言“关键动作被遮挡”；关键动作覆盖只在有正式区间后由人工 Review/Cleaning 判断。
 
-组级建议只汇总“缺哪些视图、哪些视图存在技术问题、证据是否足够”，不得把已有视图数量大于零解释成质量通过。最低有效视图数量和必要覆盖应来自已批准的 CameraSet / 项目规则；规则缺失时只能建议人工确认。
+组级汇总只回答“缺哪些视图、哪些视图存在技术问题、证据是否完整”，不得把已有视图数量大于零
+解释成质量通过。第一版不建设可配置的最低视角/覆盖规则平台；正式组质量由人工确认，且没有任何
+`QualityReview.QUALIFIED` 视图时不得将组标为 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS`。
 
 ## 6. 人工质量与排除
 
-### 6.1 视图状态
+### 6.1 视图质量
 
-未来产品可显示三种视图语义：
+第一版直接复用现有逐 `ClipAsset` 的 `QualityReview`：
 
-| 视图状态 | 与当前 QualityReview 的最小关系 |
+| 视图质量 | 含义 |
 | --- | --- |
-| USABLE（可用） | 由人工确认；仅当该决定同时符合单视频语义时才可映射现有 `QUALIFIED`，不代表整组通过 |
-| NEEDS_REVIEW（需复核） | 保持现有 NEEDS_REVIEW，不进入正式放行 |
-| EXCLUDED（排除） | 未来组范围的纳入决定：该视图不参与本组下游但保留 ClipAsset；不能隐式映射为 V1.24 单视频 `QualityReview.REJECTED` |
+| `QUALIFIED` | 人工确认该视频可继续进入单视频下游；V1.24 单视频路径或 V1.25 已选锚点视图的 `QualityReview.QUALIFIED` 自动创建并分配唯一 `AnnotationTask` |
+| `NEEDS_REVIEW` | 证据不足或存在待确认问题，暂不放行 |
+| `REJECTED` | 人工确认该视频不进入下游；视频、Candidate、绑定关系、原因和审计仍保留 |
 
-EXCLUDED 是未来组范围的数据使用决定，不是删除，也不是把现有单视频 `QualityReview` 改写为
-`REJECTED`。被排除视频、CameraStream、原因、操作人和版本仍保留，具备重新评审和审计条件。
-不能把技术 `quality_status=REJECT`、`NO_HAND_DETECTED` 或自动建议直接当成人工排除；若需要
-组范围的视图纳入决定，必须先冻结版本化契约，现有 V1.24 单视频质量语义保持不变。
-
-如果未来需要表达“该资产在一般单视频流程中合格，但在本组中暂不采用”而不复用 REJECTED，必须另行冻结一个组范围的视图纳入决定；不能在实现时悄悄改变现有 QualityReview 的含义。第一版不提前创建第二套质量实体。
+`REJECTED` 不是删除。技术 `quality_status=REJECT`、`NO_HAND_DETECTED` 或自动提示不能直接
+写成人工结论。若未来出现“单视频 `QUALIFIED` 但只在本组排除”的真实用例，再另行定义组范围
+纳入决定；第一版不创建第二套质量真值。
 
 ### 6.2 组状态
 
-组状态由服务端根据预期机位、显式接收闭合、人工视图决定和最低有效视图规则投影，不由前端自行计数：
+组质量结果由服务端汇总接收事实、逐视图 `QualityReview` 和人工组判断投影，不由前端自行计数；
+第一版不建设可配置的最低视角/覆盖规则引擎：
 
 | 组状态 | 推导条件 |
 | --- | --- |
-| USABLE（可用） | 组已完整闭合，所需视图均为人工 USABLE，且没有未解决的缺失、排除或覆盖问题 |
-| USABLE_WITH_EXCLUSIONS（排除部分视图后可用） | 组已明确闭合，至少一个视图人工 USABLE，存在明确缺失/排除/技术不可用视图，但仍满足已批准的最低有效视图和覆盖规则 |
-| NEEDS_REVIEW（需复核） | 存在 NEEDS_REVIEW、未解决缺失、组未闭合或时间/覆盖证据不足 |
-| REJECTED（拒绝） | 人工确认没有足够有效视图支撑目标动作，或所有可用视图都被人工排除；不能由 NO_HAND_DETECTED、单路缺失或自动建议单独触发 |
+| `QUALIFIED` | 人工确认组可用，至少一条视图为 `QualityReview.QUALIFIED`，且没有未解决的阻断问题 |
+| `QUALIFIED_WITH_EXCLUSIONS` | 人工确认组可用，同时保留缺失、媒体失败或 `QualityReview.REJECTED` 视图；至少一条视图为 `QualityReview.QUALIFIED` |
+| `NEEDS_REVIEW` | 视图质量、接收事实、时间证据或人工组判断仍未完成 |
+| `REJECTED` | 人工确认没有足够的 `QualityReview.QUALIFIED` 视图支持目标动作，或事件本身不可用；不能由 `NO_HAND_DETECTED`、单路媒体失败或自动提示单独触发 |
 
-REJECTED 在最小方案中是组结果投影，不是把某一路的 QualityReview 误当成组结论。若未来需要独立的组级人工拒绝理由，再做单独契约设计。
+组级 `REJECTED` 是组结果投影，不是把某一路的 `QualityReview.REJECTED` 误当成组结论。
+`QUALIFIED_WITH_EXCLUSIONS` 只是保留部分视图后的组结果名称，不引入新的视图质量状态。
+如果未来需要独立的组级人工拒绝理由，再做单独契约设计。
 
 现有 `CaptureSession.quality_status` 仍只是技术汇总证据，不是组级人工质量或训练资格；单路
-stream 的 `REJECT` 只能保留为该视图事实和建议，组是否拒绝仍由剩余视图、最低规则和人工确认决定。
+stream 的 `REJECT` 只能保留为该视图事实和建议，组是否拒绝仍由剩余视图和人工确认决定。
 
-## 7. 正式动作标注：复用区间模型和一个锚点
+## 7. 正式动作标注：复用区间模型和一个锚点（多视图辅助的锚点标注）
 
 现有 AnnotationRevision 的 segments 已经使用 [start_ms, end_ms) 区间和人工 label，足以表达第一版的一次逻辑动作，不需要新建 Segment 实体。
 
 最小多机位路径如下：
 
 1. 在组中明确选择一个 annotation anchor view，优先使用 CameraSet 已冻结的主视图角色；没有主视图时由有权限的人员选择并记录；
-2. 在该锚点 ClipAsset 上沿用现有 AnnotationTask 和 AnnotationRevision，revision 的区间与标签代表 CaptureGroup 的逻辑动作；
-3. 其他人工 USABLE 视图只作为同一事件的证据上下文，按 capture_session_id 关联并提供切换/对照，不重复创建同一动作标签；
+2. 在该锚点 ClipAsset 上沿用现有 AnnotationTask 和 AnnotationRevision；revision 仍由锚点拥有，在组上下文中作为该事件的逻辑动作参考，不创建组拥有的 revision；
+3. 其他 `QualityReview.QUALIFIED` 视图只作为同一事件的证据上下文，按 capture_session_id 关联并提供切换/对照，不重复创建同一动作标签；
 4. MediaPipe Candidate 只提供每路手部几何和时间证据，正式 action label 始终来自人工 AnnotationRevision；
-5. 锚点被排除后，不修改旧 revision，也不把它偷偷转移到另一视频；组进入 NEEDS_REVIEW，重新选择锚点后创建新的受控任务/revision。
+5. 锚点为 `QualityReview.REJECTED` 后，不修改旧 revision，也不把它偷偷转移到另一视频；组进入 NEEDS_REVIEW，重新选择锚点后创建新的受控任务/revision。
 
-这里有一个必须保留的兼容性约束：V1.24 的 QUALIFIED → AnnotationTask 自动衔接是按 ClipAsset 创建任务。如果多机位实现把每一路都直接 QUALIFIED，就会产生多个逐视频任务，不能声称已经得到一个组任务。因此，未来组路径必须在正式质量/任务衔接前确定锚点，或增加一个仅负责把现有自动衔接路由到锚点的、版本化的 group annotation intent。这个前置契约未在本文启用，也不能通过修改当前 V1.24 规则来解决。
+这里有一个必须保留的兼容性约束：V1.24 的 `QualityReview.QUALIFIED` → `AnnotationTask` 自动衔接是按 ClipAsset 创建任务。如果多机位实现把每一路都直接标为 `QualityReview.QUALIFIED`，就会产生多个逐视频任务，不能声称已经得到一个组任务。因此，未来组路径必须在正式质量/任务衔接前确定锚点，或增加一个仅负责把现有自动衔接路由到锚点的、版本化的 group annotation intent。这个前置契约未在本文启用，也不能通过修改当前 V1.24 规则来解决。
 
 如果多个视频没有可靠或近似的共同时间依据，AnnotationRevision 仍以锚点时间轴为正式事实，其他视频标记为参考而非已对齐证据。不要为了“多机位”预先建设多路独立编辑器或共享时间轴。
 
@@ -170,9 +182,11 @@ stream 的 `REJECT` 只能保留为该视图事实和建议，组是否拒绝仍
 → 当前训练数据资格
 ~~~
 
-组视图不能绕过 Review 或 Cleaning。排除视图在任何未来组级投影中都必须被过滤；保留视图可以继续作为事件证据。若剩余有效视图满足最低规则，组可为 USABLE_WITH_EXCLUSIONS；若锚点被排除，则必须重新标注，不得仅凭其他视图自动复用旧 revision。
+组视图不能绕过 Review 或 Cleaning。`QualityReview.REJECTED` 视图在任何未来组级投影中都必须被过滤；
+保留的 `QualityReview.QUALIFIED` 视图可以继续作为事件证据。若人工确认剩余视图足以支持事件，组可为
+`QUALIFIED_WITH_EXCLUSIONS`；若锚点被拒绝，则必须重新选择锚点并创建受控任务，不得仅凭其他视图自动复用旧 revision。
 
-当前 CleaningRun 和 minimal-export 仍是按 ClipAsset / revision 组织的 V1.24 能力，本文不把它们伪装成已经支持组级清洗，也不修改 training-data.v2 / training_data.parquet。未来实现若要输出多视图数据，至少必须保留并传递 capture_session_id（组身份）、camera_stream_id 或 camera_channel_id（视图身份），并只投影人工纳入且通过现有 Review/Cleaning 闸门的视图；具体 Parquet 字段和导出契约另行设计。
+当前 CleaningRun 和 minimal-export 仍是按 ClipAsset / revision 组织的 V1.24 能力，本文不把它们伪装成已经支持组级清洗，也不修改 training-data.v2 / training_data.parquet。未来实现若要输出多视图数据，至少必须保留并传递 capture_session_id（组身份）、camera_stream_id 或 camera_channel_id（视图身份），并只投影人工 `QualityReview.QUALIFIED` 且通过现有 Review/Cleaning 闸门的视图；具体 Parquet 字段和导出契约另行设计。
 
 因此，单视频 CaptureGroup 可以直接走当前导出路径；多视图组在没有组范围资格投影前，只能继续使用现有的逐视频路径，不能把多个 ClipAsset 的候选行拼接后宣称为组级可用数据。
 
@@ -201,7 +215,8 @@ stream 的 `REJECT` 只能保留为该视图事实和建议，组是否拒绝仍
 2. **组读取投影**：以 capture_session_id 汇总预期相机、CameraStream、ClipAsset、候选和每路人工结果，不创建第二个 CaptureGroup 真值；
 3. **锚点任务规则**：明确多机位组只有一个正式 AnnotationTask/Revision 锚点，避免逐 ClipAsset 自动任务衔接被误解释为组任务。
 
-视图排除原因、最低有效视图/覆盖规则以及同步证据的取值来源也应随上述契约版本化。完成这些冻结前，不应新增页面、迁移、Worker 或导出字段。
+视图质量原因、人工组判断的记录方式以及同步证据的取值来源也应随上述契约版本化；
+医院/项目特定的最低视角或覆盖政策另行决定。完成这些冻结前，不应新增页面、迁移、Worker 或导出字段。
 
 ## 12. 明确延后
 
