@@ -29,6 +29,15 @@ class AnnotationRevision {
 	@Column(name = "clip_asset_id", nullable = false, updatable = false)
 	private UUID clipAssetId;
 
+	@Column(name = "capture_group_id", updatable = false)
+	private UUID captureGroupId;
+
+	@Column(name = "primary_clip_asset_id", updatable = false)
+	private UUID primaryClipAssetId;
+
+	@Column(name = "primary_camera_number", updatable = false)
+	private Integer primaryCameraNumber;
+
 	@Column(name = "revision_number", nullable = false, updatable = false)
 	private int revisionNumber;
 
@@ -48,6 +57,13 @@ class AnnotationRevision {
 	@Column(name = "document_sha256", nullable = false, updatable = false, length = 64)
 	private String documentSha256;
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "confirmed_view_set", updatable = false, columnDefinition = "jsonb")
+	private Map<String, Object> confirmedViewSet;
+
+	@Column(name = "input_version", updatable = false, length = 128)
+	private String inputVersion;
+
 	@Column(name = "submitted_by", nullable = false, updatable = false, length = 128)
 	private String submittedBy;
 
@@ -63,16 +79,31 @@ class AnnotationRevision {
 	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, int revisionNumber,
 			UUID labelSchemaId, String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
 			String submittedBy, String idempotencyKey, Instant submittedAt) {
+		this(projectId, annotationTaskId, clipAssetId, null, null, null, revisionNumber, labelSchemaId,
+				labelSchemaDigest, annotationDocument, documentSha256, null, null, submittedBy, idempotencyKey,
+				submittedAt);
+	}
+
+	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, UUID captureGroupId,
+			UUID primaryClipAssetId, Integer primaryCameraNumber, int revisionNumber, UUID labelSchemaId,
+			String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
+			Map<String, Object> confirmedViewSet, String inputVersion, String submittedBy, String idempotencyKey,
+			Instant submittedAt) {
 		this.annotationRevisionId = UUID.randomUUID();
 		this.projectId = projectId;
 		this.annotationTaskId = annotationTaskId;
 		this.clipAssetId = clipAssetId;
+		this.captureGroupId = captureGroupId;
+		this.primaryClipAssetId = primaryClipAssetId;
+		this.primaryCameraNumber = primaryCameraNumber;
 		this.revisionNumber = revisionNumber;
 		this.annotationSchemaVersion = "annotation-document.v1";
 		this.labelSchemaId = labelSchemaId;
 		this.labelSchemaDigest = labelSchemaDigest;
 		this.annotationDocument = Map.copyOf(annotationDocument);
 		this.documentSha256 = documentSha256;
+		this.confirmedViewSet = confirmedViewSet == null ? null : Map.copyOf(confirmedViewSet);
+		this.inputVersion = inputVersion;
 		this.submittedBy = submittedBy;
 		this.idempotencyKey = idempotencyKey;
 		this.submittedAt = submittedAt;
@@ -83,6 +114,15 @@ class AnnotationRevision {
 		return new AnnotationRevision(task.getProjectId(), task.getAnnotationTaskId(), task.getClipAssetId(),
 				revisionNumber, task.getLabelSchemaId(), task.getLabelSchemaDigest(), annotationDocument,
 				documentSha256, submittedBy, idempotencyKey, submittedAt);
+	}
+
+	static AnnotationRevision submitForCaptureGroup(AnnotationTask task, int revisionNumber,
+			Map<String, Object> annotationDocument, String documentSha256, String submittedBy, String idempotencyKey,
+			Instant submittedAt, Map<String, Object> confirmedViewSet, String inputVersion) {
+		return new AnnotationRevision(task.getProjectId(), task.getAnnotationTaskId(), task.getPrimaryClipAssetId(),
+				task.getCaptureGroupId(), task.getPrimaryClipAssetId(), task.getPrimaryCameraNumber(), revisionNumber,
+				task.getLabelSchemaId(), task.getLabelSchemaDigest(), annotationDocument, documentSha256,
+				confirmedViewSet, inputVersion, submittedBy, idempotencyKey, submittedAt);
 	}
 
 	UUID getAnnotationRevisionId() {
@@ -99,6 +139,18 @@ class AnnotationRevision {
 
 	UUID getClipAssetId() {
 		return this.clipAssetId;
+	}
+
+	UUID getCaptureGroupId() {
+		return this.captureGroupId;
+	}
+
+	UUID getPrimaryClipAssetId() {
+		return this.primaryClipAssetId;
+	}
+
+	Integer getPrimaryCameraNumber() {
+		return this.primaryCameraNumber;
 	}
 
 	int getRevisionNumber() {
@@ -119,6 +171,14 @@ class AnnotationRevision {
 
 	String getDocumentSha256() {
 		return this.documentSha256;
+	}
+
+	Map<String, Object> getConfirmedViewSet() {
+		return this.confirmedViewSet;
+	}
+
+	String getInputVersion() {
+		return this.inputVersion;
 	}
 
 	Map<String, Object> getAnnotationDocument() {

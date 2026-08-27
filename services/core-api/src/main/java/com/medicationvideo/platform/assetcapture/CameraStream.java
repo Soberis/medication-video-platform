@@ -158,6 +158,10 @@ class CameraStream {
 		return this.qualityStatus;
 	}
 
+	long getVersion() {
+		return this.version;
+	}
+
 	void completeMediaIngest(boolean succeeded, Instant changedAt) {
 		if (this.streamStatus != CameraStreamStatus.BOUND) {
 			throw new ClipAssetMediaIngestException("CAMERA_STREAM_INGEST_STATE_CONFLICT",

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -96,6 +97,18 @@ class AnnotationTaskController {
 			.body(response);
 	}
 
+	@PutMapping("/annotation-tasks/{annotationTaskId}/primary-view")
+	ResponseEntity<AnnotationTaskResponse> selectPrimaryView(@PathVariable UUID projectId,
+			@PathVariable UUID annotationTaskId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationPrimaryViewRequest request, Authentication authentication) {
+		var response = this.service.selectPrimaryView(projectId, annotationTaskId,
+				requireActor(authentication).actorId(), request.clipAssetId(),
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
 	@PostMapping("/annotation-revisions/{annotationRevisionId}/review")
 	ResponseEntity<AnnotationReviewResponse> reviewRevision(@PathVariable UUID projectId,
 			@PathVariable UUID annotationRevisionId,
@@ -154,6 +167,9 @@ class AnnotationTaskController {
 
 record AnnotationTaskRequest(
 		@NotNull @NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
+}
+
+record AnnotationPrimaryViewRequest(@NotNull UUID clipAssetId) {
 }
 
 record AnnotationRevisionRequest(

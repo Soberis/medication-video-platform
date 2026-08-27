@@ -7,6 +7,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.medicationvideo.platform.assetcapture.ClipAssetReviewQueryService;
+import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
@@ -24,6 +25,8 @@ class QualifiedAnnotationTaskAutoAssignmentListener {
 
 	private final ClipAssetReviewQueryService assetQueryService;
 
+	private final CaptureGroupViewQueryService captureGroupViewQueryService;
+
 	private final QualityReviewQueryService qualityReviewQueryService;
 
 	private final AnnotationLabelSchemaService labelSchemaService;
@@ -33,9 +36,11 @@ class QualifiedAnnotationTaskAutoAssignmentListener {
 	private final AuditEventRecorder auditRecorder;
 
 	QualifiedAnnotationTaskAutoAssignmentListener(ClipAssetReviewQueryService assetQueryService,
+			CaptureGroupViewQueryService captureGroupViewQueryService,
 			QualityReviewQueryService qualityReviewQueryService, AnnotationLabelSchemaService labelSchemaService,
 			AnnotationTaskRepository taskRepository, AuditEventRecorder auditRecorder) {
 		this.assetQueryService = assetQueryService;
+		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.labelSchemaService = labelSchemaService;
 		this.taskRepository = taskRepository;
@@ -44,6 +49,9 @@ class QualifiedAnnotationTaskAutoAssignmentListener {
 
 	@TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
 	void assign(QualityReviewQualifiedEvent event) {
+		if (this.captureGroupViewQueryService.isViewOfCaptureGroup(event.projectId(), event.clipAssetId())) {
+			return;
+		}
 		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(event.projectId(), event.clipAssetId());
 		var quality = this.qualityReviewQueryService.lockAndGetCurrentDecision(event.projectId(), event.clipAssetId());
 		if (!assetFacts.reviewable() || !quality.isQualified() || quality.version() != event.qualityReviewVersion()

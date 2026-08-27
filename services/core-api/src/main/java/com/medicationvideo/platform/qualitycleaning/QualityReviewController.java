@@ -94,7 +94,7 @@ record QualityReviewResponse(UUID qualityReviewId, UUID projectId, UUID clipAsse
 record QualityReviewErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = QualityReviewController.class)
+@RestControllerAdvice(assignableTypes = { QualityReviewController.class, CaptureGroupQualityReviewController.class })
 class QualityReviewExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

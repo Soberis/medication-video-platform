@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://medication-video-platform.local/contracts/events/capture-group-quality-qualified-v1.schema.json",
+  "title": "CaptureGroupQualityQualifiedV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "capture_group_id",
+    "capture_group_quality_review_id",
+    "review_revision",
+    "reviewer_actor_id",
+    "reviewer_role",
+    "input_version",
+    "triggered_at",
+    "request_id",
+    "trace_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "capture-group-quality-qualified.v1"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "capture_group_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "capture_group_quality_review_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "review_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reviewer_actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "reviewer_role": {
+      "type": "string",
+      "enum": ["ADMIN", "MEMBER"]
+    },
+    "input_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "triggered_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "trace_id": {
+      "type": ["string", "null"],
+      "maxLength": 128
+    }
+  }
+}

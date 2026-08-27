@@ -1,6 +1,6 @@
 package com.medicationvideo.platform.assetcapture;
 
-enum CaptureGroupReceiptState {
+public enum CaptureGroupReceiptState {
 
 	RECEIVING, COMPLETE, INCOMPLETE
 

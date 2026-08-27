@@ -268,6 +268,10 @@ class CaptureSession {
 		return this.currentSyncRevisionId;
 	}
 
+	long getVersion() {
+		return this.version;
+	}
+
 	void acceptSyncRevision(UUID revisionId, Instant changedAt) {
 		if (revisionId == null) {
 			throw new IllegalArgumentException("A sync revision id is required.");
