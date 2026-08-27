@@ -22,11 +22,15 @@ class UploadFileService {
 
 	private final ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository;
 
+	private final ExternalVideoIngestManifestRepository externalManifestRepository;
+
 	UploadFileService(UploadBatchRepository batchRepository, UploadFileRepository fileRepository,
-			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository) {
+			ExternalVideoIngestManifestVideoRepository externalManifestVideoRepository,
+			ExternalVideoIngestManifestRepository externalManifestRepository) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.externalManifestVideoRepository = externalManifestVideoRepository;
+		this.externalManifestRepository = externalManifestRepository;
 	}
 
 	@Transactional
@@ -65,6 +69,13 @@ class UploadFileService {
 					"A platform-local video registration must include the original file name.");
 		}
 		if (batch.getExternalManifestId() != null && request.fileKind() == UploadFileKind.VIDEO) {
+			var manifest = this.externalManifestRepository.findById(batch.getExternalManifestId())
+				.orElseThrow(() -> new UploadFileRegistrationException("EXTERNAL_MANIFEST_VIDEO_MISMATCH",
+						"The bound external manifest no longer exists."));
+			if (manifest.isUploadSetFinalized()) {
+				throw new UploadFileRegistrationException("EXTERNAL_MANIFEST_FINALIZED",
+						"A finalized external capture group cannot accept another upload file.");
+			}
 			var expected = this.externalManifestVideoRepository
 				.findByManifestIdAndClientFileId(batch.getExternalManifestId(), clientFileId)
 				.orElseThrow(() -> new UploadFileRegistrationException("EXTERNAL_MANIFEST_VIDEO_MISMATCH",

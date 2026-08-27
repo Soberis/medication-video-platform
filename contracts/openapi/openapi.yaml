@@ -1845,11 +1845,12 @@ paths:
       summary: Accept an incremental external video ingest manifest with explicit group finalization
       description: >-
         Validates the versioned external CaptureGroup manifest and its explicit camera identities.
-        The videos array may add late camera declarations while upload_set_finalized is false. Once
-        upload_set_finalized is true, the manifest is closed and new or conflicting camera content is
-        rejected. The receipt state is RECEIVING until this explicit signal, then COMPLETE when every
-        expected camera is declared or INCOMPLETE when one or more expected camera numbers are absent.
-        Timeout, Media Probe, MediaPipe and quality facts never finalize or rewrite the receipt.
+        The videos array may add late camera declarations only while the manifest remains ACCEPTED and
+        unbound. Once the manifest is BOUND, its declaration rows are immutable; a declared row is upload
+        intent, not proof that bytes were received. The receipt remains RECEIVING until the explicit
+        receipt-finalize command (or the same-manifest close request after CaptureSession assembly), then
+        COMPLETE or INCOMPLETE is calculated from actual bound ClipAsset/CameraStream facts. Timeout,
+        Media Probe, MediaPipe and quality facts never finalize or rewrite the receipt.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       requestBody:
@@ -1897,6 +1898,35 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/capture-groups/{capture_group_id}/receipt/finalize:
+    post:
+      operationId: finalizeCaptureGroupReceipt
+      tags:
+        - Asset Catalog
+      summary: Explicitly finalize a CaptureGroup receipt from actual bound views
+      description: >-
+        Closes the upload set only after the upload-backed CaptureSession exists. The server computes
+        received_camera_numbers from bound CameraStreams/ClipAssets and persists COMPLETE or INCOMPLETE
+        on the CaptureSession. Repeating the command returns the same final receipt; it never reopens or
+        changes a finalized receipt. Timeout, Media Probe, MediaPipe and quality facts are not used.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Finalized CaptureGroup read model.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaptureGroup" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/videos:
     get:
       operationId: listVideoSummaries
@@ -5199,7 +5229,7 @@ components:
         - ASSEMBLING
         - COMPLETE
         - INCOMPLETE
-         - CLOSED
+        - CLOSED
     CaptureGroupReceiptState:
       type: string
       enum: [RECEIVING, COMPLETE, INCOMPLETE]
@@ -5341,6 +5371,7 @@ components:
         - upload_set_finalized
         - receipt_state
         - video_count
+        - received_video_count
       properties:
         manifest_id: { type: string, format: uuid }
         status:
@@ -5366,10 +5397,21 @@ components:
           type: array
           maxItems: 64
           items: { type: integer, minimum: 1, maximum: 64 }
-        upload_set_finalized: { type: boolean }
+        upload_set_finalized:
+          type: boolean
+          description: Explicit close fact; it is only accepted after an upload-backed CaptureSession exists.
         receipt_state:
           $ref: "#/components/schemas/CaptureGroupReceiptState"
-        video_count: { type: integer, minimum: 0, maximum: 64 }
+        video_count:
+          type: integer
+          minimum: 0
+          maximum: 64
+          description: Number of declared manifest video rows; declarations are upload intent, not receipt.
+        received_video_count:
+          type: integer
+          minimum: 0
+          maximum: 64
+          description: Number of actual bound ClipAsset/CameraStream video facts used by receipt calculation.
     ClipAssetRead:
       type: object
       additionalProperties: false

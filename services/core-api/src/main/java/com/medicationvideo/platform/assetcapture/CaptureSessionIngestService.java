@@ -365,9 +365,15 @@ class CaptureSessionIngestService {
 			.stream()
 			.map(ExternalVideoIngestManifestVideo::getCameraNumber)
 			.collect(Collectors.toUnmodifiableSet());
-		if (!entries.keySet().equals(streamClientFileIds) || !manifestCameraNumbers.equals(streamCameraNumbers)) {
+		var manifestAllowsMissingDeclarations = "external-video-ingest-v2".equals(manifest.getSchemaVersion());
+		var streamSetMismatch = manifestAllowsMissingDeclarations ? !entries.keySet().containsAll(streamClientFileIds)
+				: !entries.keySet().equals(streamClientFileIds);
+		var cameraSetMismatch = manifestAllowsMissingDeclarations
+				? !manifestCameraNumbers.containsAll(streamCameraNumbers)
+				: !manifestCameraNumbers.equals(streamCameraNumbers);
+		if (streamSetMismatch || cameraSetMismatch) {
 			throw failure("EXTERNAL_MANIFEST_CAMERA_BINDING_MISMATCH",
-					"The final CaptureSession streams must exactly match the external manifest video set.");
+					"Every final CaptureSession stream must match an external-manifest video; V2 may retain declared cameras that have not arrived yet.");
 		}
 		for (var stream : metadata.streams()) {
 			var asset = assetsByClientId.get(stream.clientFileId());

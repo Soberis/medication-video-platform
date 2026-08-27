@@ -144,47 +144,39 @@ class ExternalVideoIngestManifestContractTests {
 	}
 
 	@Test
-	void acceptsV2ReceiptStatesAndRequiresExplicitFinalizationForFiveCameras() throws Exception {
+	void keepsManifestDeclarationsSeparateFromActualReceiptFacts() throws Exception {
 		var key = "edge-group-v2-receipt-" + UUID.randomUUID();
 		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 3, 5), false))
 			.andExpect(status().isAccepted())
 			.andExpect(jsonPath("$.schema_version").value("external-video-ingest-v2"))
 			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(5))
 			.andExpect(jsonPath("$.expected_camera_numbers[1]").value(2))
-			.andExpect(jsonPath("$.received_camera_numbers.length()").value(3))
-			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
-			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
-			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
-			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4))
+			.andExpect(jsonPath("$.received_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(5))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(2))
 			.andExpect(jsonPath("$.upload_set_finalized").value(false))
-			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"))
+			.andExpect(jsonPath("$.video_count").value(3))
+			.andExpect(jsonPath("$.received_video_count").value(0));
 
 		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 3, 5), true))
-			.andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.received_camera_numbers.length()").value(3))
-			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
-			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
-			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
-			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4))
-			.andExpect(jsonPath("$.upload_set_finalized").value(true))
-			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"));
-
-		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 2, 3, 5), true))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_FINALIZED"));
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_RECEIPT_NOT_READY"));
 	}
 
 	@Test
-	void acceptsASingleExplicitCameraAsACompleteCaptureGroup() throws Exception {
+	void acceptsASingleExplicitCameraUntilTheActualReceiptIsFinalized() throws Exception {
 		var key = "edge-group-v2-single-" + UUID.randomUUID();
 		this.acceptV2(v2Manifest(key, List.of(7), List.of(7), true))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_RECEIPT_NOT_READY"));
+		this.acceptV2(v2Manifest(key, List.of(7), List.of(7), false))
 			.andExpect(status().isAccepted())
 			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(1))
 			.andExpect(jsonPath("$.expected_camera_numbers[0]").value(7))
-			.andExpect(jsonPath("$.received_camera_numbers.length()").value(1))
-			.andExpect(jsonPath("$.received_camera_numbers[0]").value(7))
-			.andExpect(jsonPath("$.missing_camera_numbers").isEmpty())
-			.andExpect(jsonPath("$.receipt_state").value("COMPLETE"));
+			.andExpect(jsonPath("$.received_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
 	}
 
 	@Test
@@ -192,14 +184,16 @@ class ExternalVideoIngestManifestContractTests {
 		var key = "edge-group-v2-late-" + UUID.randomUUID();
 		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1), false))
 			.andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"))
+			.andExpect(jsonPath("$.received_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.video_count").value(1));
 
 		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1, 3), false))
 			.andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.received_camera_numbers.length()").value(2))
-			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
-			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(1))
-			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2));
+			.andExpect(jsonPath("$.received_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(3))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(2))
+			.andExpect(jsonPath("$.video_count").value(2));
 
 		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1, 3), false)
 			.replace("\"sha256\": \"" + VIDEO_SHA + "\"", "\"sha256\": \"" + "f".repeat(64) + "\""))

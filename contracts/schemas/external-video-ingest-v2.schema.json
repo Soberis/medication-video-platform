@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.medication-video-platform.invalid/external-video-ingest-v2.schema.json",
   "title": "External Video Ingest Manifest V2",
-  "description": "Versioned external capture-group manifest. Video declarations may arrive incrementally until upload_set_finalized is true; finalization is an explicit upstream fact and is never inferred from timeout.",
+  "description": "Versioned external capture-group manifest. Video declarations are upload intent, not proof of receipt. Declarations may be added only while the manifest remains ACCEPTED and unbound; after BOUND the manifest is immutable. Actual receipt is finalized separately from bound ClipAsset/CameraStream facts, never inferred from timeout.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -44,11 +44,11 @@
       "items": {
         "$ref": "#/$defs/video"
       },
-      "description": "The currently received explicit video declarations. It may be a strict subset of expected_camera_numbers until finalization."
+      "description": "Explicit video upload intent. It may be a strict subset of expected_camera_numbers; a declaration is not proof that bytes or a ClipAsset/CameraStream have been received."
     },
     "upload_set_finalized": {
       "type": "boolean",
-      "description": "Explicit upstream close signal. false keeps the receipt RECEIVING; true closes it as COMPLETE or INCOMPLETE based only on received camera numbers."
+      "description": "Explicit upstream close signal. It is accepted only after the bound upload has produced a CaptureSession; false keeps the receipt RECEIVING, and true closes it as COMPLETE or INCOMPLETE from actual bound camera facts. The dedicated CaptureGroup receipt-finalize command is the preferred operation."
     }
   },
   "$defs": {

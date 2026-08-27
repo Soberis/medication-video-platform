@@ -102,6 +102,10 @@ class UploadBatchService {
 				throw new UploadBatchInputException("EXTERNAL_MANIFEST_DEVICE_MISMATCH",
 						"The external manifest source_device_id must match the upload batch device_id.");
 			}
+			if (externalManifest.isUploadSetFinalized()) {
+				throw new UploadBatchInputException("EXTERNAL_MANIFEST_FINALIZED",
+						"A finalized external capture group cannot accept another upload batch.");
+			}
 			if (externalManifest.getStatus() == ExternalVideoIngestManifestStatus.BOUND
 					&& this.repository.findByProjectIdAndIdempotencyKey(request.projectId(), idempotencyKey)
 						.isEmpty()) {

@@ -124,10 +124,14 @@ class UploadBatchCompletionService {
 		var actualClientFileIds = videos.stream()
 			.map(UploadFile::getClientFileId)
 			.collect(java.util.stream.Collectors.toSet());
-		if (!expectedByClientFileId.keySet().equals(actualClientFileIds) || videos.stream()
+		var manifestAllowsMissingDeclarations = "external-video-ingest-v2".equals(manifest.getSchemaVersion());
+		var videoSetMismatch = manifestAllowsMissingDeclarations
+				? !expectedByClientFileId.keySet().containsAll(actualClientFileIds)
+				: !expectedByClientFileId.keySet().equals(actualClientFileIds);
+		if (videoSetMismatch || videos.stream()
 			.anyMatch(file -> !matches(expectedByClientFileId.get(file.getClientFileId()), file))) {
 			throw failure("EXTERNAL_MANIFEST_VIDEO_SET_MISMATCH",
-					"Every external-manifest video must be registered exactly once with its declared file facts.");
+					"Every registered external-manifest video must match its declared file facts; V2 may retain declared cameras that have not arrived yet.");
 		}
 	}
 

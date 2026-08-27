@@ -64,8 +64,11 @@ V1.25 目标主链：
 | `COMPLETE` | 所有预期相机文件都已收到并最终确认 |
 | `INCOMPLETE` | 收件已最终确认，但至少一个预期相机文件缺失 |
 
-完成/不完整必须来自版本化 manifest 的完成标记、边端组完成消息或等价不可变接收事实；任意超时
-最多是运维提示，不能独自决定 `INCOMPLETE`。当前 external-video-ingest-v1 没有组完成语义，
+声明数组只表示上游上传意图，不证明字节、`ClipAsset` 或 `CameraStream` 已收到；预期机位以冻结
+`CameraSetSnapshot`/批准声明为准，已收到机位以实际绑定的 `ClipAsset`/`CameraStream` 为准。
+V2 manifest 只允许在 `ACCEPTED` 且尚未绑定时追加声明；一旦 `BOUND`，声明行不可变。完成/不完整
+必须来自显式版本化 manifest 完成标记或专用 receipt-finalize command，并由上述实际接收事实计算；
+任意超时最多是运维提示，不能独自决定 `INCOMPLETE`。当前 external-video-ingest-v1 没有组完成语义，
 该契约必须先增版，本文不改它。
 
 收件事实一旦表示五路文件均已收到并最终确认，之后 Cam2 Media Probe 失败仍保持：

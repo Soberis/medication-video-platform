@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -74,6 +73,10 @@ class ExternalVideoIngestManifestService {
 		var existing = this.manifestRepository.findByProjectIdAndCaptureGroupKeyAndKeySource(projectId,
 				group.captureGroupKey(), group.keySource());
 		if (existing.isEmpty()) {
+			if (request.uploadSetFinalized()) {
+				throw new UploadBatchInputException("CAPTURE_GROUP_RECEIPT_NOT_READY",
+						"Create and complete the upload-backed CaptureSession before receipt finalization.");
+			}
 			var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 			var manifest = ExternalVideoIngestManifest.accept(projectId, request, now);
 			this.manifestRepository.saveAndFlush(manifest);
@@ -104,10 +107,7 @@ class ExternalVideoIngestManifestService {
 			persistVideos(manifest, additions);
 		}
 		if (request.uploadSetFinalized()) {
-			var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-			manifest.markUploadSetFinalized(now);
-			this.manifestRepository.saveAndFlush(manifest);
-			this.captureGroupReceiptService.refreshForFinalizedManifest(manifest);
+			this.captureGroupReceiptService.finalizeManifest(manifest);
 		}
 		return responseV2(manifest);
 	}
@@ -264,21 +264,14 @@ class ExternalVideoIngestManifestService {
 	}
 
 	private ExternalVideoIngestManifestV2AcceptedResponse responseV2(ExternalVideoIngestManifest manifest) {
-		var expected = manifest.getExpectedCameraNumbers().stream().sorted().toList();
-		var received = this.videoRepository.findAllByManifestIdOrderByCameraNumber(manifest.getManifestId())
-			.stream()
-			.map(ExternalVideoIngestManifestVideo::getCameraNumber)
-			.sorted()
-			.toList();
-		var receivedSet = new HashSet<>(received);
-		var missing = expected.stream().filter(camera -> !receivedSet.contains(camera)).toList();
-		var state = manifest.isUploadSetFinalized()
-				? (missing.isEmpty() ? CaptureGroupReceiptState.COMPLETE : CaptureGroupReceiptState.INCOMPLETE)
-				: CaptureGroupReceiptState.RECEIVING;
+		var receipt = this.captureGroupReceiptService.read(manifest);
+		var declaredVideoCount = this.videoRepository.findAllByManifestIdOrderByCameraNumber(manifest.getManifestId())
+			.size();
 		return new ExternalVideoIngestManifestV2AcceptedResponse(manifest.getManifestId(), manifest.getStatus().name(),
 				manifest.getSchemaVersion(), manifest.getCaptureGroupKey(), manifest.getKeySource().name(),
-				manifest.getCapturedAt(), expected, received, missing, manifest.isUploadSetFinalized(), state,
-				received.size());
+				manifest.getCapturedAt(), receipt.expectedCameraNumbers(), receipt.receivedCameraNumbers(),
+				receipt.missingCameraNumbers(), manifest.isUploadSetFinalized(), receipt.receiptState(),
+				declaredVideoCount, receipt.receivedVideoCount());
 	}
 
 	private static UploadBatchInputException conflict(String message) {

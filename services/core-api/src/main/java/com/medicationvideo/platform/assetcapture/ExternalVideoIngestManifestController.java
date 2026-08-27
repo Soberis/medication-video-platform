@@ -132,5 +132,5 @@ record ExternalVideoIngestManifestAcceptedResponse(UUID manifestId, String statu
 record ExternalVideoIngestManifestV2AcceptedResponse(UUID manifestId, String status, String schemaVersion,
 		String captureGroupKey, String keySource, Instant capturedAt, List<Integer> expectedCameraNumbers,
 		List<Integer> receivedCameraNumbers, List<Integer> missingCameraNumbers, boolean uploadSetFinalized,
-		CaptureGroupReceiptState receiptState, int videoCount) {
+		CaptureGroupReceiptState receiptState, int videoCount, int receivedVideoCount) {
 }

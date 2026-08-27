@@ -3,6 +3,7 @@ package com.medicationvideo.platform.assetcapture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -59,6 +60,8 @@ class CaptureSessionIngestContractTests {
 
 	private static final UUID VIDEO_THREE_ID = UUID.fromString("30000000-0000-0000-0000-000000000004");
 
+	private static final UUID VIDEO_FOUR_ID = UUID.fromString("30000000-0000-0000-0000-000000000006");
+
 	private static final UUID VIDEO_FIVE_ID = UUID.fromString("30000000-0000-0000-0000-000000000005");
 
 	private static final UUID METADATA_ID = UUID.fromString("30000000-0000-0000-0000-000000000003");
@@ -70,6 +73,8 @@ class CaptureSessionIngestContractTests {
 	private static final String VIDEO_SHA_TWO = "b".repeat(64);
 
 	private static final String VIDEO_SHA_THREE = "c".repeat(64);
+
+	private static final String VIDEO_SHA_FOUR = "e".repeat(64);
 
 	private static final String VIDEO_SHA_FIVE = "d".repeat(64);
 
@@ -298,6 +303,17 @@ class CaptureSessionIngestContractTests {
 			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
 			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4));
 
+		var finalizeRetry = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/receipt/finalize", PROJECT_ID,
+					captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
+			.andReturn();
+		assertEquals(CaptureGroupReceiptState.INCOMPLETE,
+				this.sessionRepository.findById(captureSessionId).orElseThrow().getReceiptState());
+
 		var firstStream = this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId).get(0);
 		var changedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		this.mediaIngestService.begin(PROJECT_ID, firstStream.getClipAssetId(), Duration.ofMinutes(1), changedAt);
@@ -309,6 +325,42 @@ class CaptureSessionIngestContractTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"))
 			.andExpect(jsonPath("$.streams[0].stream_status").value("INGEST_FAILED"));
+	}
+
+	@Test
+	void finalizesASingleCameraReceiptAsCompleteAndReplaysTheSameResult() throws Exception {
+		var configuration = cameraSet(PROJECT_ID, true, false);
+		var captureSessionId = UUID.randomUUID();
+		var fixture = createBoundExternalManifestV2(PROJECT_ID, List.of(1),
+				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null)));
+		var metadata = metadata(captureSessionId, configuration.cameraSetId(), 1,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.firstChannelId(), 0, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, List
+			.of(new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4")),
+				fixture.manifestId());
+		this.objectStorage.bytes = metadata;
+
+		ingest(batch.getBatchId()).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+
+		var finalized = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/receipt/finalize", PROJECT_ID,
+					captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.capture_group_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.receipt_state").value("COMPLETE"))
+			.andExpect(jsonPath("$.received_camera_numbers[0]").value(1))
+			.andExpect(jsonPath("$.missing_camera_numbers").isEmpty())
+			.andReturn();
+
+		var replay = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/receipt/finalize", PROJECT_ID,
+					captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andReturn();
+		assertEquals(finalized.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 	}
 
 	@Test
@@ -568,16 +620,23 @@ class CaptureSessionIngestContractTests {
 	}
 
 	private V2ManifestFixture createBoundExternalManifestV2(UUID projectId) {
+		return createBoundExternalManifestV2(projectId, List.of(1, 2, 3, 4, 5),
+				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null),
+						new ExternalVideoManifestVideo(VIDEO_TWO_ID, 2, "camera-2.mp4", 13L, VIDEO_SHA_TWO, null),
+						new ExternalVideoManifestVideo(VIDEO_THREE_ID, 3, "camera-3.mp4", 13L, VIDEO_SHA_THREE, null),
+						new ExternalVideoManifestVideo(VIDEO_FOUR_ID, 4, "camera-4.mp4", 15L, VIDEO_SHA_FOUR, null),
+						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)));
+	}
+
+	private V2ManifestFixture createBoundExternalManifestV2(UUID projectId, List<Integer> expectedCameraNumbers,
+			List<ExternalVideoManifestVideo> videos) {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var request = new ExternalVideoIngestManifestV2Request("external-video-ingest-v2", "synthetic-edge",
 				"synthetic-edge-01", null,
 				new ExternalVideoCaptureGroup("capture-external-v2-" + UUID.randomUUID(),
 						ExternalVideoCaptureGroupKeySource.UPSTREAM_MANIFEST_KEY, Instant.parse("2026-07-15T01:02:03Z"),
-						"Asia/Shanghai", List.of(1, 2, 3, 4, 5)),
-				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null),
-						new ExternalVideoManifestVideo(VIDEO_THREE_ID, 3, "camera-3.mp4", 13L, VIDEO_SHA_THREE, null),
-						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)),
-				false);
+						"Asia/Shanghai", expectedCameraNumbers),
+				videos, false);
 		var accepted = this.externalManifestService.acceptV2(projectId, request);
 		var manifest = this.externalManifestRepository.findById(accepted.manifestId()).orElseThrow();
 		manifest.markBound(now);
