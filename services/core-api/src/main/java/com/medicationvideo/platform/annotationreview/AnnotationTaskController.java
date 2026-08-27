@@ -140,6 +140,36 @@ class AnnotationTaskController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
+	@PostMapping("/annotation-revisions/{annotationRevisionId}/capture-group-cleaning-rechecks")
+	ResponseEntity<CaptureGroupCleaningResponse> recheckCaptureGroupCleaning(@PathVariable UUID projectId,
+			@PathVariable UUID annotationRevisionId,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody(required = false) CaptureGroupCleaningRequest request, Authentication authentication) {
+		var mappings = request == null
+				? java.util.Map.<UUID, com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService.SupportIntervalMapping>of()
+				: request.supportMappings()
+					.stream()
+					.collect(java.util.stream.Collectors.toMap(SupportIntervalMappingRequest::clipAssetId,
+							AnnotationTaskController::toSupportIntervalMapping));
+		var response = this.service.recheckCaptureGroupCleaning(projectId, annotationRevisionId,
+				requirePlatformAdministrator(authentication).actorId(),
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				mappings);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+	}
+
+	private static com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService.SupportIntervalMapping toSupportIntervalMapping(
+			SupportIntervalMappingRequest request) {
+		return new com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService.SupportIntervalMapping(
+				request.validated(), request.mappingVersion(), request.provenance(),
+				request.intervals() == null ? java.util.List.of() : request.intervals()
+					.stream()
+					.map(interval -> new com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService.Interval(
+							interval.startMs(), interval.endMs()))
+					.toList());
+	}
+
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_ACCESS_DENIED",
@@ -185,6 +215,25 @@ record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long star
 
 record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
 		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
+}
+
+record CaptureGroupCleaningRequest(@jakarta.validation.constraints.Size(
+		max = 64) java.util.List<@Valid SupportIntervalMappingRequest> supportMappings) {
+
+	CaptureGroupCleaningRequest {
+		supportMappings = supportMappings == null ? java.util.List.of() : java.util.List.copyOf(supportMappings);
+	}
+}
+
+record SupportIntervalMappingRequest(@NotNull UUID clipAssetId, boolean validated,
+		@NotBlank @jakarta.validation.constraints.Size(max = 128) @Pattern(
+				regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String mappingVersion,
+		@NotBlank @jakarta.validation.constraints.Size(max = 500) @Pattern(regexp = "^[^\\p{Cc}]+$") String provenance,
+		@jakarta.validation.constraints.Size(max = 200) java.util.List<@Valid SupportIntervalRequest> intervals) {
+}
+
+record SupportIntervalRequest(@jakarta.validation.constraints.Min(0) long startMs,
+		@jakarta.validation.constraints.Min(1) long endMs) {
 }
 
 record AnnotationTaskErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {

@@ -69,7 +69,7 @@ class TrainingDataExportController {
 record TrainingDataExportErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = TrainingDataExportController.class)
+@RestControllerAdvice(assignableTypes = { TrainingDataExportController.class, TrainingDataV3ExportController.class })
 class TrainingDataExportExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

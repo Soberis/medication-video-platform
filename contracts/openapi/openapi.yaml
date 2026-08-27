@@ -7,9 +7,9 @@ info:
     authenticate internal platform accounts with an HttpOnly session, manage project memberships,
     initialize verified uploads, assemble CaptureSession/CameraSet/CameraStream facts, expose
     project-scoped videos and ClipAsset detail, run Media Probe and MediaPipe hand candidates,
-    record human quality, annotation, review and post-cleaning facts, and synchronously preview or
-    download training-data.v2 from the authoritative training_data_eligibility and
-    training_data_candidate_observations projections. The API never proxies upload bytes through the
+    record human quality, annotation, Review and event-level CaptureGroup Cleaning facts, and synchronously
+    preview or download training-data.v2 and the minimal training-data.v3 group manifest from authoritative
+    read-only projections. The API never proxies upload bytes through the
     Core API, exposes storage locations through catalog reads, controls or probes edge hardware,
     or performs media processing synchronously inside a user request.
   license:
@@ -58,10 +58,9 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Training Data Export
     description: >-
-      Explicit, synchronous, read-only P0 export of Cleaning PASS hand observations. The API uses
-      the authoritative training_data_eligibility projection and requires a global ROLE_ADMIN with
-      an ACTIVE project ADMIN membership. Preview training_row_count is the number of Parquet rows,
-      not the number of videos; the download contains no MP4 bytes.
+      Explicit, synchronous, read-only P0 export. training-data.v2 remains the compatible Parquet
+      contract for single-video data. training-data.v3 is the minimal CaptureGroup event manifest and
+      preserves group/view, Review, Cleaning and Candidate provenance; CaptureGroup is the split unit.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -152,6 +151,115 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: Current evidence cannot be serialized safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/training-data/v3/preview:
+    get:
+      operationId: getTrainingDataV3ExportPreview
+      tags:
+        - Training Data Export
+      summary: Preview the minimal V1.25 CaptureGroup training-data manifest
+      description: >-
+        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. Only event-level Cleaning PASS
+        rows with APPROVED human Review and a current admitting CaptureGroup quality revision are read.
+        The manifest is read-only, contains no MP4 bytes, and uses CaptureGroup as the minimum split unit.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Current V1.25 group/event manifest preview.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingDataV3ExportPreview"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: Current group evidence cannot be serialized safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/training-data/v3/download:
+    get:
+      operationId: downloadTrainingDataV3
+      tags:
+        - Training Data Export
+      summary: Download the minimal V1.25 CaptureGroup training-data manifest
+      description: >-
+        Returns training-data.v3 JSON events. Each event retains the submitted AnnotationRevision,
+        primary authoritative interval, participating and excluded views, confirmed View Set, current
+        group quality, human Review provenance, event Cleaning provenance and Candidate/model/profile
+        provenance where available. Supporting intervals are present only for RELIABLE validated
+        versioned mappings; other supporting views remain event-level evidence.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Minimal V1.25 group/event manifest.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              schema:
+                type: string
+                const: 'attachment; filename="training_data_v3.json"'
+          content:
+            application/vnd.medication.training-data.v3+json:
+              schema:
+                $ref: "#/components/schemas/TrainingDataV3Document"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: Current group evidence cannot be serialized safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/training-data/v3/validate-splits:
+    post:
+      operationId: validateTrainingDataV3Splits
+      tags:
+        - Training Data Export
+      summary: Validate external split assignments at CaptureGroup granularity
+      description: >-
+        The exporter does not assign splits. This contract/tooling gate rejects an assignment set when
+        views or events of the same CaptureGroup are assigned to different train, validation or test
+        splits.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainingDataV3SplitValidationRequest"
+      responses:
+        "200":
+          description: All supplied assignments satisfy the CaptureGroup split constraint.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingDataV3SplitValidation"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: The supplied assignments contain split leakage.
           content:
             application/problem+json:
               schema:
@@ -3159,6 +3267,56 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "409":
           description: The revision, task or video is no longer eligible for controlled rechecking.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/annotation-revisions/{annotation_revision_id}/capture-group-cleaning-rechecks:
+    post:
+      operationId: recheckCaptureGroupEventCleaning
+      tags:
+        - Annotation Tasks
+      summary: Re-evaluate CaptureGroup event eligibility with optional validated mappings
+      description: >-
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The revision must be an APPROVED,
+        completed CaptureGroup AnnotationRevision. Primary intervals always come from the primary view's
+        AnnotationRevision. A supporting interval is retained only when the current view declares RELIABLE
+        timing and the request supplies a validated mapping version and provenance; APPROXIMATE, UNRELIABLE
+        and unmapped views remain event-level evidence without an action-aligned timestamp. The raw media
+        and rejected views are retained.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: annotation_revision_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureGroupCleaningRequest"
+      responses:
+        "200":
+          description: Current immutable event-cleaning result or idempotent replay.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureGroupCleaning"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: The revision is not an approved completed CaptureGroup revision.
           content:
             application/problem+json:
               schema:
@@ -6477,6 +6635,60 @@ components:
         reviewed_at:
           type: string
           format: date-time
+        capture_group_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        revision:
+          type:
+            - integer
+            - "null"
+          format: int32
+          minimum: 1
+        primary_clip_asset_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        primary_camera_number:
+          type:
+            - integer
+            - "null"
+          format: int32
+          minimum: 1
+          maximum: 64
+        confirmed_view_set:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+        input_version:
+          type:
+            - string
+            - "null"
+          maxLength: 128
+        qualified_views:
+          type:
+            - array
+            - "null"
+          items:
+            type: object
+            additionalProperties: true
+        rejected_missing_views:
+          type:
+            - array
+            - "null"
+          items:
+            type: object
+            additionalProperties: true
+        candidate_evidence:
+          type:
+            - array
+            - "null"
+          items:
+            type: object
+            additionalProperties: true
     QualityReviewDecision:
       type: string
       enum:
@@ -6769,6 +6981,450 @@ components:
     CameraSetMember:
       allOf:
         - $ref: "#/components/schemas/CameraSetMemberRequest"
+    CaptureGroupCleaningRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        support_mappings:
+          type: array
+          maxItems: 64
+          items:
+            $ref: "#/components/schemas/SupportIntervalMappingRequest"
+    SupportIntervalMappingRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - clip_asset_id
+        - validated
+        - mapping_version
+        - provenance
+      properties:
+        clip_asset_id:
+          type: string
+          format: uuid
+        validated:
+          type: boolean
+        mapping_version:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
+        provenance:
+          type: string
+          minLength: 1
+          maxLength: 500
+        intervals:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/SupportInterval"
+    SupportInterval:
+      type: object
+      additionalProperties: false
+      required:
+        - start_ms
+        - end_ms
+      properties:
+        start_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        end_ms:
+          type: integer
+          format: int64
+          minimum: 1
+    CaptureGroupCleaning:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_group_cleaning_id
+        - project_id
+        - capture_group_id
+        - annotation_revision_id
+        - annotation_review_id
+        - annotation_review_decision
+        - group_quality_review_id
+        - group_quality_result
+        - group_quality_revision
+        - primary_clip_asset_id
+        - primary_camera_number
+        - primary_interval
+        - view_evidence
+        - participating_views
+        - excluded_views
+        - mapping_provenance
+        - candidate_provenance
+        - rule_set_key
+        - rule_set_version
+        - rule_set_digest
+        - outcome
+        - reason_codes
+        - executed_checks
+        - input_fingerprint
+        - evaluated_by
+        - evaluated_at
+      properties:
+        capture_group_cleaning_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        capture_group_id:
+          type: string
+          format: uuid
+        annotation_revision_id:
+          type: string
+          format: uuid
+        annotation_review_id:
+          type: string
+          format: uuid
+        annotation_review_decision:
+          type: string
+          enum: [APPROVED, REJECTED]
+        group_quality_review_id:
+          type: string
+          format: uuid
+        group_quality_result:
+          type: string
+          enum: [QUALIFIED, QUALIFIED_WITH_EXCLUSIONS]
+        group_quality_revision:
+          type: integer
+          format: int64
+          minimum: 1
+        primary_clip_asset_id:
+          type: string
+          format: uuid
+        primary_camera_number:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 64
+        primary_interval:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionInterval"
+        view_evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        participating_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        excluded_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        mapping_provenance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        candidate_provenance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rule_set_key:
+          type: string
+        rule_set_version:
+          type: string
+        rule_set_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        outcome:
+          type: string
+          enum: [PASS, WARNING, REJECT]
+        reason_codes:
+          type: array
+          items:
+            type: string
+        executed_checks:
+          type: array
+          items:
+            type: string
+        input_fingerprint:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        evaluated_by:
+          type: string
+        evaluated_at:
+          type: string
+          format: date-time
+    ActionInterval:
+      type: object
+      additionalProperties: false
+      required:
+        - start_ms
+        - end_ms
+        - label
+      properties:
+        start_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        end_ms:
+          type: integer
+          format: int64
+          minimum: 1
+        label:
+          type: string
+          minLength: 1
+    TrainingDataV3ExportPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - eligible_group_count
+        - event_count
+        - file_name
+        - content_type
+        - split_unit
+        - includes_mp4
+      properties:
+        schema_version:
+          type: string
+          const: training-data.v3
+        eligible_group_count:
+          type: integer
+          format: int64
+          minimum: 0
+        event_count:
+          type: integer
+          format: int64
+          minimum: 0
+        file_name:
+          type: string
+          const: training_data_v3.json
+        content_type:
+          type: string
+          const: application/vnd.medication.training-data.v3+json
+        split_unit:
+          type: string
+          const: capture_group
+        includes_mp4:
+          type: boolean
+          const: false
+    TrainingDataV3Document:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - split_unit
+        - events
+      properties:
+        schema_version:
+          type: string
+          const: training-data.v3
+        split_unit:
+          type: string
+          const: capture_group
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingDataV3Event"
+    TrainingDataV3Event:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_group_id
+        - annotation_revision_id
+        - revision
+        - action_labels
+        - primary_clip_asset_id
+        - primary_camera_number
+        - primary_interval
+        - participating_views
+        - excluded_views
+        - group_quality
+        - group_quality_revision
+        - group_quality_review_id
+        - annotation_review_id
+        - review_decision
+        - capture_group_cleaning_id
+        - cleaning_rule_set_key
+        - cleaning_rule_set_version
+        - cleaning_rule_set_digest
+        - cleaning_outcome
+        - cleaning_reason_codes
+        - cleaning_executed_checks
+        - cleaning_input_fingerprint
+        - cleaning_evaluated_by
+        - cleaning_evaluated_at
+        - mapping_provenance
+        - candidate_provenance
+      properties:
+        capture_group_id:
+          type: string
+          format: uuid
+        annotation_revision_id:
+          type: string
+          format: uuid
+        revision:
+          type: integer
+          format: int32
+          minimum: 1
+        action_label:
+          type:
+            - string
+            - "null"
+        action_labels:
+          type: array
+          items:
+            type: string
+        primary_clip_asset_id:
+          type: string
+          format: uuid
+        primary_camera_number:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 64
+        primary_interval:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionInterval"
+        confirmed_view_set:
+          type: object
+          additionalProperties: true
+        input_version:
+          type: string
+        participating_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        excluded_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        group_quality:
+          type: string
+          enum: [QUALIFIED, QUALIFIED_WITH_EXCLUSIONS]
+        group_quality_revision:
+          type: integer
+          format: int64
+        group_quality_review_id:
+          type: string
+          format: uuid
+        group_quality_reviewed_by:
+          type: string
+        group_quality_decided_at:
+          type: string
+          format: date-time
+        annotation_review_id:
+          type: string
+          format: uuid
+        review_decision:
+          type: string
+          const: APPROVED
+        reviewed_by:
+          type: string
+        reviewed_at:
+          type: string
+          format: date-time
+        qualified_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rejected_missing_views:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        candidate_evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        capture_group_cleaning_id:
+          type: string
+          format: uuid
+        cleaning_rule_set_key:
+          type: string
+        cleaning_rule_set_version:
+          type: string
+        cleaning_rule_set_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        cleaning_outcome:
+          type: string
+          const: PASS
+        cleaning_reason_codes:
+          type: array
+          items:
+            type: string
+        cleaning_executed_checks:
+          type: array
+          items:
+            type: string
+        cleaning_input_fingerprint:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        cleaning_evaluated_by:
+          type: string
+        cleaning_authorization_basis:
+          type: string
+        cleaning_evaluated_at:
+          type: string
+          format: date-time
+        mapping_provenance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        candidate_provenance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    TrainingDataV3SplitValidationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - assignments
+      properties:
+        assignments:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/TrainingDataV3SplitAssignment"
+    TrainingDataV3SplitAssignment:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_group_id
+        - split
+      properties:
+        capture_group_id:
+          type: string
+          format: uuid
+        split:
+          type: string
+          enum: [train, validation, test]
+    TrainingDataV3SplitValidation:
+      type: object
+      additionalProperties: false
+      required:
+        - split_unit
+        - assignment_count
+        - valid
+      properties:
+        split_unit:
+          type: string
+          const: capture_group
+        assignment_count:
+          type: integer
+          format: int64
+          minimum: 0
+        valid:
+          type: boolean
     TrainingDataExportPreview:
       type: object
       additionalProperties: false

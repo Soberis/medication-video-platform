@@ -94,13 +94,14 @@ public class CaptureGroupViewQueryService {
 			Map<UUID, ClipAsset> assetsById) {
 		if (stream == null) {
 			return new CaptureGroupView(null, null, member.getCameraChannelId(), member.getCameraIndex() + 1,
-					member.getCameraRole(), member.getMountPosition(), "MISSING", null, 0, 0, false);
+					member.getCameraRole(), member.getMountPosition(), "MISSING", null, 0, 0, false, "UNKNOWN");
 		}
 		var asset = assetsById.get(stream.getClipAssetId());
 		return new CaptureGroupView(stream.getCameraStreamId(), stream.getClipAssetId(), stream.getCameraChannelId(),
 				member.getCameraIndex() + 1, member.getCameraRole(), member.getMountPosition(),
 				stream.getStreamStatus().name(), stream.getQualityStatus().name(), stream.getVersion(),
-				asset == null ? 0 : asset.getVersion(), asset != null && !asset.isDeleted());
+				asset == null ? 0 : asset.getVersion(), asset != null && !asset.isDeleted(),
+				stream.getDeclaredSyncStatus().name());
 	}
 
 	private static AssetCatalogQueryException groupNotFound() {
@@ -118,7 +119,14 @@ public class CaptureGroupViewQueryService {
 
 	public record CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
 			String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
-			long streamVersion, long clipAssetVersion, boolean assetAvailable) {
+			long streamVersion, long clipAssetVersion, boolean assetAvailable, String declaredSyncStatus) {
+
+		public CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
+				String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
+				long streamVersion, long clipAssetVersion, boolean assetAvailable) {
+			this(cameraStreamId, clipAssetId, cameraChannelId, cameraNumber, cameraRole, mountPosition, mediaStatus,
+					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, "UNKNOWN");
+		}
 
 		public boolean present() {
 			return this.cameraStreamId != null && this.clipAssetId != null;

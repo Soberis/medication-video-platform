@@ -237,6 +237,145 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void approvedGroupRevisionReturnsReviewContextAndPassesEventCleaningWithExclusions() throws Exception {
+		var group = createGroup(PROJECT_ID, 5, 3, "INCOMPLETE", 3);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, key("review-context-quality"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var revision = submit(group, taskId, MEMBER_TOKEN, key("review-context-submit"), 400)
+			.andExpect(status().isCreated())
+			.andReturn();
+		var revisionId = UUID
+			.fromString(JsonPath.read(revision.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].annotation_revision.annotation_revision_id").value(revisionId.toString()));
+
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("Idempotency-Key", key("review-context-approve"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"decision\":\"APPROVED\",\"review_note\":\"Synthetic review\"}"))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
+			.andExpect(jsonPath("$.revision").value(1))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getFirst().toString()))
+			.andExpect(jsonPath("$.qualified_views.length()").value(3))
+			.andExpect(jsonPath("$.rejected_missing_views.length()").value(2))
+			.andExpect(jsonPath("$.candidate_evidence.length()").value(0));
+
+		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
+		assertEquals(1,
+				count("SELECT count(*) FROM capture_group_cleaning WHERE annotation_revision_id = ?", revisionId));
+		assertEquals("PASS",
+				this.jdbcTemplate.queryForObject(
+						"SELECT outcome FROM capture_group_cleaning WHERE annotation_revision_id = ?", String.class,
+						revisionId));
+		var evidence = this.jdbcTemplate.queryForObject(
+				"SELECT view_evidence::text FROM capture_group_cleaning WHERE annotation_revision_id = ?", String.class,
+				revisionId);
+		var excluded = this.jdbcTemplate.queryForObject(
+				"SELECT excluded_views::text FROM capture_group_cleaning WHERE annotation_revision_id = ?",
+				String.class, revisionId);
+		assertEquals(5, JsonPath.<Integer>read(evidence, "$.length()"));
+		assertEquals(2, JsonPath.<Integer>read(excluded, "$.length()"));
+		assertEquals(true, JsonPath.<Boolean>read(excluded, "$[0].retained"));
+		assertEquals(false, JsonPath.<Boolean>read(excluded, "$[0].downstream_included"));
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/training-data/v3/preview", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.schema_version").value("training-data.v3"))
+			.andExpect(jsonPath("$.eligible_group_count").value(1))
+			.andExpect(jsonPath("$.event_count").value(1))
+			.andExpect(jsonPath("$.split_unit").value("capture_group"));
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/training-data/v3/download", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.schema_version").value("training-data.v3"))
+			.andExpect(jsonPath("$.events.length()").value(1))
+			.andExpect(jsonPath("$.events[0].capture_group_id").value(group.captureGroupId().toString()))
+			.andExpect(jsonPath("$.events[0].cleaning_outcome").value("PASS"))
+			.andExpect(jsonPath("$.events[0].primary_interval[0].start_ms").value(0))
+			.andExpect(jsonPath("$.events[0].excluded_views.length()").value(2));
+	}
+
+	@Test
+	void rejectedGroupReviewDoesNotCreateACleaningPass() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("review-rejected-quality"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var revision = submit(group, taskId, MEMBER_TOKEN, key("review-rejected-submit"), 200)
+			.andExpect(status().isCreated())
+			.andReturn();
+		var revisionId = UUID
+			.fromString(JsonPath.read(revision.getResponse().getContentAsString(), "$.annotation_revision_id"));
+
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("Idempotency-Key", key("review-rejected-decision"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"decision\":\"REJECTED\",\"review_note\":\"Needs rework\"}"))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.decision").value("REJECTED"))
+			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()));
+
+		assertEquals(0,
+				count("SELECT count(*) FROM capture_group_cleaning WHERE annotation_revision_id = ?", revisionId));
+		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+	}
+
+	@Test
+	void reliableSupportMappingCanBeRecheckedWithoutChangingPrimaryTimebase() throws Exception {
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("mapping-quality"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var revision = submit(group, taskId, MEMBER_TOKEN, key("mapping-submit"), 400).andExpect(status().isCreated())
+			.andReturn();
+		var revisionId = UUID
+			.fromString(JsonPath.read(revision.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("Idempotency-Key", key("mapping-approve"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"decision\":\"APPROVED\"}"))
+			.andExpect(status().isCreated());
+
+		this.mockMvc
+			.perform(post(
+					"/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/capture-group-cleaning-rechecks",
+					PROJECT_ID, revisionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("X-Request-Id", key("mapping-recheck-request"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"support_mappings":[{"clip_asset_id":"%s","validated":true,
+						"mapping_version":"capture-map.v1","provenance":"synthetic-validated-mapping",
+						"intervals":[{"start_ms":120,"end_ms":420}]}]}
+						""".formatted(group.clipAssetIds().get(1))))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.outcome").value("PASS"))
+			.andExpect(jsonPath("$.primary_interval[0].start_ms").value(0))
+			.andExpect(jsonPath("$.primary_interval[0].end_ms").value(400))
+			.andExpect(jsonPath("$.mapping_provenance.length()").value(1))
+			.andExpect(jsonPath("$.participating_views[1].interval_source").value("VALIDATED_VERSIONED_MAPPING"));
+	}
+
+	@Test
 	void qualityDowngradeBlocksNewRevisionAndRequalificationKeepsTheTask() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("downgrade-qualified"))
@@ -451,6 +590,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	private void clearState(UUID projectId) {
+		this.jdbcTemplate.update("DELETE FROM capture_group_cleaning WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_revision WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", projectId);
