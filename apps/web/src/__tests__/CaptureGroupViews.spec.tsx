@@ -194,6 +194,79 @@ describe('CaptureGroup web workflow', () => {
     ).toBe(false)
   })
 
+  it('does not present a missing assignee-scoped task as proof that no group task exists', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'permission-limited-task',
+    })
+    const fetchMock = stubGroupList([group], [], {
+      taskScope: 'ASSIGNEE',
+      qualityByGroup: { [group.capture_group_id]: qualityFixture(group, 'QUALIFIED') },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /permission-limited-task/ })
+    expect(row).toHaveTextContent('任务状态按当前权限不可见')
+    expect(row).not.toHaveTextContent('等待系统创建唯一 CaptureGroup 任务')
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-tasks`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+  })
+
+  it('keeps group summaries visible when task enrichment is temporarily unavailable', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'task-status-unavailable',
+    })
+    stubGroupList([group], [], {
+      taskListError: true,
+      qualityByGroup: { [group.capture_group_id]: qualityFixture(group, 'QUALIFIED') },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /task-status-unavailable/ })
+    expect(row).toHaveTextContent('任务状态暂不可用，请刷新后重试')
+    expect(await screen.findByText('部分任务状态不可直接确认')).toBeInTheDocument()
+  })
+
+  it('explains permission-limited task context in the group detail view', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'detail-permission-limited-task',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      taskScope: 'ASSIGNEE',
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByText(/唯一 CaptureGroup 任务状态按权限不可见/)).toBeInTheDocument()
+    expect(
+      screen.queryByText('Group Quality 通过后，服务端会自动创建唯一 CaptureGroup 任务。'),
+    ).not.toBeInTheDocument()
+  })
+
   it('keeps a single N=1 group and distinguishes receipt from media and AI facts', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
@@ -353,7 +426,11 @@ describe('CaptureGroup web workflow', () => {
 function stubGroupList(
   groups: CaptureGroup[],
   tasks: AnnotationTask[],
-  options: { qualityByGroup?: Record<string, CaptureGroupQualityReview> } = {},
+  options: {
+    qualityByGroup?: Record<string, CaptureGroupQualityReview>
+    taskScope?: 'PROJECT' | 'ASSIGNEE'
+    taskListError?: boolean
+  } = {},
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
@@ -363,7 +440,10 @@ function stubGroupList(
         jsonResponse({ items: groups.map(summaryFromGroup), next_cursor: null }),
       )
     }
-    if (path.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
+    if (path.endsWith('/annotation-tasks')) {
+      if (options.taskListError) return Promise.reject(new Error('TASK_LIST_UNAVAILABLE'))
+      return Promise.resolve(jsonResponse(taskList(tasks, options.taskScope)))
+    }
     const group = groups.find((candidate) =>
       url.endsWith(`/capture-groups/${candidate.capture_group_id}`),
     )
@@ -432,6 +512,7 @@ function stubGroupDetail(
   group: CaptureGroup,
   options: {
     task: AnnotationTask | null
+    taskScope?: 'PROJECT' | 'ASSIGNEE'
     quality: CaptureGroupQualityReview
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
@@ -450,7 +531,9 @@ function stubGroupDetail(
       )
     }
     if (url.endsWith('/annotation-tasks'))
-      return Promise.resolve(jsonResponse(taskList(options.task ? [options.task] : [])))
+      return Promise.resolve(
+        jsonResponse(taskList(options.task ? [options.task] : [], options.taskScope)),
+      )
     if (url.endsWith('/annotation-label-schema'))
       return Promise.resolve(jsonResponse(labelSchema()))
     if (url.includes('/quality-review') && url.includes('/clip-assets/')) {
@@ -711,11 +794,11 @@ function groupTask(
   }
 }
 
-function taskList(items: AnnotationTask[]) {
+function taskList(items: AnnotationTask[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
   return {
     items,
     progress: {
-      scope: 'PROJECT',
+      scope,
       total: items.length,
       awaiting_submission: items.filter((item) => item.status === 'ASSIGNED').length,
       rework_required: 0,

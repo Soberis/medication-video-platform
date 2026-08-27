@@ -57,7 +57,12 @@ class CaptureGroupQueryService {
 				       session.device_time_utc,
 				       session.receipt_state,
 				       session.expected_camera_count,
-				       session.received_camera_count,
+				       (SELECT COUNT(DISTINCT stream.camera_set_snapshot_member_id)
+				          FROM camera_stream stream
+				          JOIN camera_set_snapshot_member member
+				            ON member.camera_set_snapshot_member_id = stream.camera_set_snapshot_member_id
+				         WHERE stream.capture_session_id = session.capture_session_id
+				           AND member.enabled = TRUE) AS received_camera_count,
 				       ARRAY(
 				           SELECT member.camera_index + 1
 				           FROM camera_set_snapshot snapshot

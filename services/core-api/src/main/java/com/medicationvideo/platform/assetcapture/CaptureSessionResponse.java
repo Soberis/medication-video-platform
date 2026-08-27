@@ -30,15 +30,16 @@ record CaptureSessionResponse(UUID captureSessionId, UUID captureGroupId, UUID p
 		var missingCameraNumbers = expectedCameraNumbers.stream()
 			.filter(cameraNumber -> !receivedSet.contains(cameraNumber))
 			.toList();
+		var receivedCameraCount = session.isCaptureGroupWorkflow() ? receivedCameraNumbers.size()
+				: session.getReceivedCameraCount();
 		return new CaptureSessionResponse(session.getCaptureSessionId(), session.getCaptureSessionId(),
 				session.getProjectId(), session.getBatchId(), session.getDeviceId(), session.getMetadataUploadFileId(),
 				session.getMetadataSchemaVersion(), session.getMetadataSha256(), session.getExpectedCameraCount(),
-				session.getReceivedCameraCount(), session.getSyncGroupId(), session.getDeviceTimeUtc(),
-				session.getDeviceTimezone(), session.getServerReceiveTime(), session.getAssemblyStatus(),
-				session.getQualityStatus(), session.getCaptureGroupKey(), session.getCaptureGroupKeySource(),
-				session.getCaptureGroupManifestId(), expectedCameraNumbers, receivedCameraNumbers, missingCameraNumbers,
-				session.getReceiptState(), session.getReceiptFinalizedAt(),
-				CameraSetSnapshotResponse.from(snapshot, members),
+				receivedCameraCount, session.getSyncGroupId(), session.getDeviceTimeUtc(), session.getDeviceTimezone(),
+				session.getServerReceiveTime(), session.getAssemblyStatus(), session.getQualityStatus(),
+				session.getCaptureGroupKey(), session.getCaptureGroupKeySource(), session.getCaptureGroupManifestId(),
+				expectedCameraNumbers, receivedCameraNumbers, missingCameraNumbers, session.getReceiptState(),
+				session.getReceiptFinalizedAt(), CameraSetSnapshotResponse.from(snapshot, members),
 				streams.stream()
 					.sorted(java.util.Comparator.comparingInt(CameraStream::getCameraIndex))
 					.map(stream -> CameraStreamResponse.from(stream,

@@ -128,6 +128,7 @@ export default function CaptureGroupDetailView() {
                 group={data.group}
                 groupQuality={data.groupQuality}
                 task={data.task}
+                taskVisibility={data.taskVisibility}
                 schema={data.schema}
                 viewRows={viewRows}
                 viewReviews={data.viewReviews}

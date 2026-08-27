@@ -108,17 +108,26 @@ export function formatViewQualitySummary(review: CaptureGroupQualityReview | nul
     .join(' · ')
 }
 
+export type CaptureGroupTaskVisibility = 'visible' | 'permission-limited' | 'unavailable'
+
 export function taskNextAction(
   group: Pick<CaptureGroup, 'receipt_state'>,
   quality: CaptureGroupQualityReview | null,
   task: AnnotationTask | null,
+  taskVisibility: CaptureGroupTaskVisibility = 'visible',
 ) {
   if (group.receipt_state === 'RECEIVING') return '等待接收完成后进行组质量判断'
   if (!quality || quality.result === 'UNREVIEWED') return '进行 Group Quality 判断'
   if (quality.result === 'NEEDS_REVIEW' || quality.result === 'REJECTED') {
+    if (!task && taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
+    if (!task && taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
     return task ? '查看历史任务；组质量恢复后再提交修订' : '补充视图事实并重新判断组质量'
   }
-  if (!task) return '等待系统创建唯一 CaptureGroup 任务'
+  if (!task) {
+    if (taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
+    if (taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
+    return '等待系统创建唯一 CaptureGroup 任务'
+  }
   if (!task.primary_clip_asset_id) return '选择主视图'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '根据 Review 意见修改'
   if (task.status === 'ASSIGNED' && task.can_submit) return '提交配药动作修订'

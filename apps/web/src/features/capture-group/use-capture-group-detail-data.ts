@@ -18,6 +18,7 @@ import {
 } from '@/api/annotation'
 import { CatalogApiError } from '@/api/catalog'
 import { getQualityReview, type QualityReview } from '@/api/quality'
+import type { CaptureGroupTaskVisibility } from '@/features/capture-group-presentation'
 
 export function useCaptureGroupDetailData(projectId: string, captureGroupId: string) {
   const { message } = AntdApp.useApp()
@@ -25,6 +26,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   const [groupQuality, setGroupQuality] = useState<CaptureGroupQualityReview | null>(null)
   const [qualityHistory, setQualityHistory] = useState<CaptureGroupQualityReview[]>([])
   const [task, setTask] = useState<AnnotationTask | null>(null)
+  const [taskVisibility, setTaskVisibility] = useState<CaptureGroupTaskVisibility>('visible')
   const [schema, setSchema] = useState<AnnotationLabelSchema | null>(null)
   const [viewReviews, setViewReviews] = useState<Record<string, QualityReview>>({})
   const [viewReviewErrors, setViewReviewErrors] = useState<Record<string, string>>({})
@@ -65,11 +67,18 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       const taskList = taskResult.status === 'fulfilled' ? taskResult.value.items : []
       const nextTask =
         taskList.find((candidate) => candidate.capture_group_id === captureGroupId) ?? null
+      const nextTaskVisibility: CaptureGroupTaskVisibility =
+        taskResult.status === 'rejected'
+          ? 'unavailable'
+          : nextTask || taskResult.value.progress.scope === 'PROJECT'
+            ? 'visible'
+            : 'permission-limited'
       const nextSchema = schemaResult.status === 'fulfilled' ? schemaResult.value : null
       setGroup(nextGroup)
       setGroupQuality(nextQuality)
       setQualityHistory(nextHistory)
       setTask(nextTask)
+      setTaskVisibility(nextTaskVisibility)
       setSchema(nextSchema)
       if (qualityResult.status === 'rejected') {
         setQualityErrorMessage(
@@ -172,6 +181,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     groupQuality,
     qualityHistory,
     task,
+    taskVisibility,
     schema,
     viewReviews,
     viewReviewErrors,

@@ -29,7 +29,11 @@ import {
   type GroupViewRow,
   type SegmentValidationErrors,
 } from '@/features/capture-group/capture-group-detail-model'
-import { groupQualityLabels, viewQualityLabels } from '@/features/capture-group-presentation'
+import {
+  groupQualityLabels,
+  viewQualityLabels,
+  type CaptureGroupTaskVisibility,
+} from '@/features/capture-group-presentation'
 
 interface CaptureGroupAnnotationPanelProps {
   projectId: string
@@ -37,6 +41,7 @@ interface CaptureGroupAnnotationPanelProps {
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
   task: AnnotationTask | null
+  taskVisibility: CaptureGroupTaskVisibility
   schema: AnnotationLabelSchema | null
   viewRows: GroupViewRow[]
   viewReviews: Record<string, QualityReview>
@@ -51,6 +56,7 @@ export function CaptureGroupAnnotationPanel({
   group,
   groupQuality,
   task,
+  taskVisibility,
   schema,
   viewRows,
   viewReviews,
@@ -105,19 +111,25 @@ export function CaptureGroupAnnotationPanel({
     }
   })
 
-  const annotationBlockingReason = !task
-    ? 'Group Quality 通过后，服务端会自动创建唯一 CaptureGroup 任务。'
-    : groupQualityReceiving
-      ? '回执仍在接收中，不能进入组级标注准入。'
-      : !groupQualityAdmitting
-        ? '当前 Group Quality 为需复核或不合格；任务和历史仍保留，但不能提交新的 Revision。'
-        : !task.primary_clip_asset_id
-          ? '请选择一路已接收、媒体可用且 View Quality 合格的主视图。'
-          : !task.can_submit
-            ? '当前账号或任务状态不允许提交；请查看服务端任务状态。'
-            : task.status !== 'ASSIGNED'
-              ? `当前任务状态：${formatTaskStatus(task)}。`
-              : ''
+  const annotationBlockingReason = groupQualityReceiving
+    ? '回执仍在接收中，不能进入组级标注准入。'
+    : !groupQuality
+      ? '当前 Group Quality 结论暂不可用，不能判断组级标注准入。'
+      : !task
+        ? taskVisibility === 'permission-limited'
+          ? '当前账号不是该任务执行人；唯一 CaptureGroup 任务状态按权限不可见。'
+          : taskVisibility === 'unavailable'
+            ? '唯一 CaptureGroup 任务状态暂不可读，请刷新后重试。'
+            : 'Group Quality 通过后，服务端会自动创建唯一 CaptureGroup 任务。'
+        : !groupQualityAdmitting
+          ? '当前 Group Quality 为需复核或不合格；任务和历史仍保留，但不能提交新的 Revision。'
+          : !task.primary_clip_asset_id
+            ? '请选择一路已接收、媒体可用且 View Quality 合格的主视图。'
+            : !task.can_submit
+              ? '当前账号或任务状态不允许提交；请查看服务端任务状态。'
+              : task.status !== 'ASSIGNED'
+                ? `当前任务状态：${formatTaskStatus(task)}。`
+                : ''
 
   async function choosePrimaryView(clipAssetId: string) {
     if (

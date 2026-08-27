@@ -10,7 +10,7 @@ import {
   type CaptureGroupSummary,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
-import { AnnotationTaskApiError, listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
+import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
@@ -22,6 +22,7 @@ import {
   receiptStateLabels,
   receiptTone,
   taskNextAction,
+  type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
@@ -29,6 +30,7 @@ interface CaptureGroupListRow {
   group: CaptureGroupSummary
   quality: CaptureGroupQualityReview | null
   task: AnnotationTask | null
+  taskVisibility: CaptureGroupTaskVisibility
 }
 
 export default function CaptureGroupListView() {
@@ -62,8 +64,19 @@ export default function CaptureGroupListView() {
           return
         }
 
-        const taskList = await listAnnotationTasks(projectId, request.signal)
-        const indexedTasks = taskList.items.filter((task) => Boolean(task.capture_group_id))
+        const taskResult = await listAnnotationTasks(projectId, request.signal)
+          .then((value) => ({ status: 'fulfilled' as const, value }))
+          .catch((error) => ({ status: 'rejected' as const, error }))
+        const indexedTasks =
+          taskResult.status === 'fulfilled'
+            ? taskResult.value.items.filter((task) => Boolean(task.capture_group_id))
+            : []
+        const taskVisibility: CaptureGroupTaskVisibility =
+          taskResult.status === 'rejected'
+            ? 'unavailable'
+            : taskResult.value.progress.scope === 'PROJECT'
+              ? 'visible'
+              : 'permission-limited'
         const loadedRows = await Promise.all(
           groupList.items.map(async (group): Promise<CaptureGroupListRow> => {
             const quality = await getCaptureGroupQualityReview(
@@ -71,13 +84,15 @@ export default function CaptureGroupListView() {
               group.capture_group_id,
               request.signal,
             ).catch(() => null)
+            const task =
+              indexedTasks.find(
+                (candidate) => candidate.capture_group_id === group.capture_group_id,
+              ) ?? null
             return {
               group,
               quality,
-              task:
-                indexedTasks.find(
-                  (candidate) => candidate.capture_group_id === group.capture_group_id,
-                ) ?? null,
+              task,
+              taskVisibility: task ? 'visible' : taskVisibility,
             }
           }),
         )
@@ -91,12 +106,12 @@ export default function CaptureGroupListView() {
         if (request.signal.aborted || activeRequest.current !== request) return
         setLoadState('error')
         setErrorCode(
-          error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
+          error instanceof CaptureGroupApiError
             ? error.errorCode
             : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
         )
         setErrorMessage(
-          error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
+          error instanceof CaptureGroupApiError
             ? error.message
             : '暂时无法读取 CaptureGroup 列表，请稍后重试。',
         )
@@ -159,7 +174,7 @@ export default function CaptureGroupListView() {
             <span className="capture-group-list-count">{rows.length} 个服务端索引组</span>
           </header>
           <div className="capture-group-list" role="list" aria-label="CaptureGroup 操作列表">
-            {rows.map(({ group, quality, task }) => (
+            {rows.map(({ group, quality, task, taskVisibility }) => (
               <article
                 className="capture-group-list-row"
                 key={group.capture_group_id}
@@ -223,7 +238,7 @@ export default function CaptureGroupListView() {
                 </dl>
                 <footer className="capture-group-list-row-footer">
                   <span>
-                    下一步：{taskNextAction(group, quality, task)}
+                    下一步：{taskNextAction(group, quality, task, taskVisibility)}
                     {task ? ` · 任务 ${shortId(task.annotation_task_id)}` : ''}
                   </span>
                   <Link
@@ -257,6 +272,15 @@ export default function CaptureGroupListView() {
           showIcon
           title="部分 Group Quality 暂不可用"
           description="列表保留 CaptureGroup 与回执事实；质量结论将在详情页按服务端状态重试读取。"
+        />
+      ) : null}
+      {loadState === 'success' && rows.some((row) => row.taskVisibility !== 'visible') ? (
+        <Alert
+          className="capture-group-list-note"
+          type="info"
+          showIcon
+          title="部分任务状态不可直接确认"
+          description="普通项目成员只能看到分配给自己的任务；任务查询失败时，列表不会把未知状态误报为没有任务。"
         />
       ) : null}
     </>

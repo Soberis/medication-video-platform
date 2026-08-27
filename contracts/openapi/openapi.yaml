@@ -1180,8 +1180,9 @@ paths:
         batch to be bound exactly once. CaptureSession, CameraSetSnapshot, snapshot members and
         CameraStreams are created in one database transaction. Edge-reported synchronization data
         is retained as an observation and does not override server configuration or become a
-        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams and are not
-        counted in received_camera_count until later media ingest. A natural-resource replay returns
+        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. For the legacy
+        V1.24 single-video projection, received_camera_count is the media-INGESTED count; the V1.25
+        CaptureGroup projection uses the actual bound stream count. A natural-resource replay returns
         the original assembly without rereading object storage. The operation does not control the
         RK3588 device or accept video bytes through the Core API. For PLATFORM_LOCAL batches,
         it creates one server-defined single-view CaptureSession for the one verified VIDEO asset;
@@ -5333,7 +5334,10 @@ components:
           format: int32
           minimum: 0
           maximum: 64
-          description: Unique bound streams whose ClipAsset has reached INGESTED; upload alone does not count.
+          description: >-
+            Legacy V1.24 single-video responses count unique bound streams whose ClipAsset has reached
+            INGESTED; V1.25 CaptureGroup responses count unique streams actually bound to the frozen
+            snapshot. The CaptureGroup receipt count is independent of media probe status.
         sync_group_id:
           type: [string, "null"]
           minLength: 1
@@ -5618,7 +5622,7 @@ components:
           format: int32
           minimum: 0
           maximum: 64
-          description: Unique bound streams whose ClipAsset has reached INGESTED; upload alone does not count.
+          description: Unique camera streams actually bound to the frozen snapshot; this receipt count is independent of media probe status.
         missing_camera_numbers:
           type: array
           maxItems: 64
