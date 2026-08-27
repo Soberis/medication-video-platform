@@ -194,22 +194,26 @@ class AnnotationTask {
 		this.updatedAt = now;
 	}
 
-	void refreshGroupQualitySnapshot(UUID captureGroupQualityReviewId, long groupQualityRevision,
+	boolean refreshGroupQualitySnapshot(UUID captureGroupQualityReviewId, long groupQualityRevision,
 			Map<String, Object> confirmedViewSet, String groupInputVersion, Instant now) {
 		if (!this.isCaptureGroupTask()) {
-			return;
+			return false;
 		}
-		if (Objects.equals(this.captureGroupQualityReviewId, captureGroupQualityReviewId)
-				&& Objects.equals(this.groupQualityRevision, groupQualityRevision)
-				&& Objects.equals(this.confirmedViewSet, confirmedViewSet)
-				&& Objects.equals(this.groupInputVersion, groupInputVersion)) {
-			return;
+		var inputChanged = !Objects.equals(this.confirmedViewSet, confirmedViewSet)
+				|| !Objects.equals(this.groupInputVersion, groupInputVersion);
+		if (!inputChanged && Objects.equals(this.captureGroupQualityReviewId, captureGroupQualityReviewId)
+				&& Objects.equals(this.groupQualityRevision, groupQualityRevision)) {
+			return false;
 		}
 		this.captureGroupQualityReviewId = captureGroupQualityReviewId;
 		this.groupQualityRevision = groupQualityRevision;
 		this.confirmedViewSet = Map.copyOf(confirmedViewSet);
 		this.groupInputVersion = groupInputVersion;
+		if (inputChanged) {
+			this.status = AnnotationTaskStatus.ASSIGNED;
+		}
 		this.updatedAt = now;
+		return inputChanged;
 	}
 
 	UUID getLabelSchemaId() {

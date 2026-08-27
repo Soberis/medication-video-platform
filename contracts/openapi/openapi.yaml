@@ -197,8 +197,8 @@ paths:
         Returns training-data.v3 JSON events. Each event retains the submitted AnnotationRevision,
         primary authoritative interval, participating and excluded views, confirmed View Set, current
         group quality, human Review provenance, event Cleaning provenance and Candidate/model/profile
-        provenance where available. Supporting intervals are present only for RELIABLE validated
-        versioned mappings; other supporting views remain event-level evidence.
+        provenance where available. The Primary View is the only formal action timebase; supporting
+        views are retained as event-level evidence without action-aligned intervals.
       security:
         - sessionCookie: []
       parameters:
@@ -3299,14 +3299,13 @@ paths:
       operationId: recheckCaptureGroupEventCleaning
       tags:
         - Annotation Tasks
-      summary: Re-evaluate CaptureGroup event eligibility with optional validated mappings
+      summary: Re-evaluate CaptureGroup event eligibility
       description: >-
         Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The revision must be an APPROVED,
         completed CaptureGroup AnnotationRevision. Primary intervals always come from the primary view's
-        AnnotationRevision. A supporting interval is retained only when the current view declares RELIABLE
-        timing and the request supplies a validated mapping version and provenance; APPROXIMATE, UNRELIABLE
-        and unmapped views remain event-level evidence without an action-aligned timestamp. The raw media
-        and rejected views are retained.
+        AnnotationRevision. Supporting Views are event-level evidence only. Caller-supplied validated or
+        mapping fields have no authority and cannot create an action-aligned timestamp. The raw media and
+        rejected views are retained.
       security:
         - sessionCookie: []
       parameters:
@@ -7017,55 +7016,6 @@ components:
     CaptureGroupCleaningRequest:
       type: object
       additionalProperties: false
-      properties:
-        support_mappings:
-          type: array
-          maxItems: 64
-          items:
-            $ref: "#/components/schemas/SupportIntervalMappingRequest"
-    SupportIntervalMappingRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - clip_asset_id
-        - validated
-        - mapping_version
-        - provenance
-      properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-        validated:
-          type: boolean
-        mapping_version:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$
-        provenance:
-          type: string
-          minLength: 1
-          maxLength: 500
-        intervals:
-          type: array
-          maxItems: 200
-          items:
-            $ref: "#/components/schemas/SupportInterval"
-    SupportInterval:
-      type: object
-      additionalProperties: false
-      required:
-        - start_ms
-        - end_ms
-      properties:
-        start_ms:
-          type: integer
-          format: int64
-          minimum: 0
-        end_ms:
-          type: integer
-          format: int64
-          minimum: 1
     CaptureGroupCleaning:
       type: object
       additionalProperties: false
@@ -7153,6 +7103,7 @@ components:
             type: object
             additionalProperties: true
         mapping_provenance:
+          description: Always an empty array in the V1.25 MVP; retained for projection compatibility.
           type: array
           items:
             type: object
@@ -7408,6 +7359,7 @@ components:
           type: string
           format: date-time
         mapping_provenance:
+          description: Always an empty array in the V1.25 MVP; retained for projection compatibility.
           type: array
           items:
             type: object

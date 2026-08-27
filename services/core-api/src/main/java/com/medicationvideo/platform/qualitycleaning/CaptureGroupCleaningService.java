@@ -43,7 +43,7 @@ public class CaptureGroupCleaningService {
 	public static final String RULE_SET_DIGEST = "9b0f46e8e6a0a4a2f2d31ef6c2cb2b7d0b7fca0a20a7e6b3f6f4a9d4b7f0a61c";
 
 	private static final List<String> EXECUTED_CHECKS = List.of("REVIEW_APPROVED", "GROUP_QUALITY_ADMITTING",
-			"PRIMARY_VIEW_AUTHORITATIVE_INTERVAL", "QUALIFIED_VIEWS_ONLY", "SUPPORT_INTERVAL_MAPPING_PROVENANCE",
+			"PRIMARY_VIEW_AUTHORITATIVE_INTERVAL", "QUALIFIED_VIEWS_ONLY", "SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE",
 			"RAW_MEDIA_RETAINED");
 
 	private final CaptureGroupCleaningRepository repository;
@@ -86,8 +86,7 @@ public class CaptureGroupCleaningService {
 
 	/**
 	 * Pure event eligibility evaluation used by the application service and focused
-	 * contract tests. Supporting intervals are accepted only when the caller supplies a
-	 * validated, versioned mapping and the view declares RELIABLE timing.
+	 * contract tests.
 	 */
 	public static EligibilityEvaluation evaluateEligibility(EvaluationCommand command) {
 		var reasons = new LinkedHashSet<String>();
@@ -136,21 +135,8 @@ public class CaptureGroupCleaningService {
 				evidence.put("action_aligned_interval", true);
 			}
 			else {
-				var mapping = command.supportMappings().get(view.clipAssetId());
-				var mappedIntervals = mappedIntervals(view, mapping);
-				if (mappedIntervals != null) {
-					evidence.put("interval", mappedIntervals);
-					evidence.put("interval_source", "VALIDATED_VERSIONED_MAPPING");
-					evidence.put("action_aligned_interval", true);
-					var provenance = mappingProvenance(view, mapping);
-					evidence.put("mapping_provenance", provenance);
-					mappingProvenance.add(provenance);
-				}
-				else {
-					evidence.put("interval_source", "EVENT_LEVEL_EVIDENCE");
-					evidence.put("action_aligned_interval", false);
-					evidence.put("mapping_rejection_reason", mappingRejectionReason(view, mapping));
-				}
+				evidence.put("interval_source", "EVENT_LEVEL_EVIDENCE");
+				evidence.put("action_aligned_interval", false);
 			}
 			participatingViews.add(immutableMap(evidence));
 			viewEvidence.add(immutableMap(evidence));
@@ -201,20 +187,6 @@ public class CaptureGroupCleaningService {
 		return interval;
 	}
 
-	private static List<Map<String, Object>> mappedIntervals(ViewInput view, SupportIntervalMapping mapping) {
-		if (!"RELIABLE".equals(normalizeReliability(view.declaredSyncStatus())) || mapping == null
-				|| !mapping.validated() || isBlank(mapping.mappingVersion()) || isBlank(mapping.provenance())
-				|| mapping.intervals().isEmpty() || mapping.intervals().stream().anyMatch(Interval::invalid)) {
-			return null;
-		}
-		return mapping.intervals().stream().map(interval -> {
-			var value = new LinkedHashMap<String, Object>();
-			value.put("start_ms", interval.startMs());
-			value.put("end_ms", interval.endMs());
-			return Map.copyOf(value);
-		}).toList();
-	}
-
 	private static Map<String, Object> baseViewEvidence(ViewInput view) {
 		var value = new LinkedHashMap<String, Object>();
 		value.put("camera_number", view.cameraNumber());
@@ -247,33 +219,6 @@ public class CaptureGroupCleaningService {
 		return "VIEW_QUALITY_NOT_QUALIFIED";
 	}
 
-	private static String mappingRejectionReason(ViewInput view, SupportIntervalMapping mapping) {
-		if (!"RELIABLE".equals(normalizeReliability(view.declaredSyncStatus()))) {
-			return "SUPPORT_SYNC_NOT_RELIABLE";
-		}
-		if (mapping == null) {
-			return "VERSIONED_MAPPING_MISSING";
-		}
-		if (!mapping.validated()) {
-			return "VERSIONED_MAPPING_NOT_VALIDATED";
-		}
-		if (isBlank(mapping.mappingVersion()) || isBlank(mapping.provenance())) {
-			return "VERSIONED_MAPPING_PROVENANCE_MISSING";
-		}
-		return "VERSIONED_MAPPING_INTERVAL_INVALID";
-	}
-
-	private static Map<String, Object> mappingProvenance(ViewInput view, SupportIntervalMapping mapping) {
-		var value = new LinkedHashMap<String, Object>();
-		value.put("clip_asset_id", view.clipAssetId().toString());
-		value.put("camera_number", view.cameraNumber());
-		value.put("mapping_version", mapping.mappingVersion());
-		value.put("provenance", mapping.provenance());
-		value.put("validated", true);
-		value.put("sync_reliability", "RELIABLE");
-		return Map.copyOf(value);
-	}
-
 	private static Map<String, Object> immutableMap(Map<String, Object> value) {
 		return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(value));
 	}
@@ -284,10 +229,6 @@ public class CaptureGroupCleaningService {
 			case "WARNING", "APPROXIMATE" -> "APPROXIMATE";
 			default -> "UNRELIABLE";
 		};
-	}
-
-	private static boolean isBlank(String value) {
-		return value == null || value.isBlank();
 	}
 
 	private static String inputFingerprint(EvaluationCommand command) {
@@ -324,16 +265,6 @@ public class CaptureGroupCleaningService {
 				append(canonical, view.declaredSyncStatus());
 				append(canonical, view.streamVersion());
 				append(canonical, view.clipAssetVersion());
-				var mapping = view.clipAssetId() == null ? null : command.supportMappings().get(view.clipAssetId());
-				if (mapping != null) {
-					append(canonical, mapping.validated());
-					append(canonical, mapping.mappingVersion());
-					append(canonical, mapping.provenance());
-					for (var interval : mapping.intervals()) {
-						append(canonical, interval.startMs());
-						append(canonical, interval.endMs());
-					}
-				}
 			}
 			return HexFormat.of()
 				.formatHex(MessageDigest.getInstance("SHA-256")
@@ -353,8 +284,7 @@ public class CaptureGroupCleaningService {
 			UUID annotationReviewId, boolean approvedReview, String reviewedBy, Instant reviewedAt,
 			UUID groupQualityReviewId, String groupQualityResult, long groupQualityRevision, UUID primaryClipAssetId,
 			int primaryCameraNumber, List<SegmentSnapshot> primarySegments, List<ViewInput> views,
-			Map<UUID, SupportIntervalMapping> supportMappings, List<Map<String, Object>> candidateEvidence,
-			String actorId, String authorizationBasis) {
+			List<Map<String, Object>> candidateEvidence, String actorId, String authorizationBasis) {
 
 		public EvaluationCommand {
 			Objects.requireNonNull(projectId);
@@ -370,7 +300,6 @@ public class CaptureGroupCleaningService {
 			Objects.requireNonNull(authorizationBasis);
 			primarySegments = List.copyOf(primarySegments);
 			views = List.copyOf(views);
-			supportMappings = Map.copyOf(supportMappings);
 			candidateEvidence = List.copyOf(candidateEvidence);
 		}
 	}
@@ -388,21 +317,6 @@ public class CaptureGroupCleaningService {
 
 		public boolean reviewable() {
 			return "INGESTED".equals(mediaStatus);
-		}
-	}
-
-	public record SupportIntervalMapping(boolean validated, String mappingVersion, String provenance,
-			List<Interval> intervals) {
-
-		public SupportIntervalMapping {
-			intervals = List.copyOf(intervals);
-		}
-	}
-
-	public record Interval(long startMs, long endMs) {
-
-		public boolean invalid() {
-			return startMs < 0 || endMs <= startMs;
 		}
 	}
 

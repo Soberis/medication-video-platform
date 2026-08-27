@@ -22,6 +22,14 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 
 	Optional<AnnotationTask> findByProjectIdAndCaptureGroupId(UUID projectId, UUID captureGroupId);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+			select task from AnnotationTask task
+			where task.projectId = :projectId and task.captureGroupId = :captureGroupId
+			""")
+	Optional<AnnotationTask> findForUpdateByProjectIdAndCaptureGroupId(@Param("projectId") UUID projectId,
+			@Param("captureGroupId") UUID captureGroupId);
+
 	List<AnnotationTask> findAllByProjectIdAndClipAssetIdIn(UUID projectId, List<UUID> clipAssetIds);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)

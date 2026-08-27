@@ -363,7 +363,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void reliableSupportMappingCanBeRecheckedWithoutChangingPrimaryTimebase() throws Exception {
+	void callerValidatedSupportMappingCannotCreateActionAlignedTime() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("mapping-quality"))
 			.andExpect(status().isOk());
@@ -397,8 +397,10 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.outcome").value("PASS"))
 			.andExpect(jsonPath("$.primary_interval[0].start_ms").value(0))
 			.andExpect(jsonPath("$.primary_interval[0].end_ms").value(400))
-			.andExpect(jsonPath("$.mapping_provenance.length()").value(1))
-			.andExpect(jsonPath("$.participating_views[1].interval_source").value("VALIDATED_VERSIONED_MAPPING"));
+			.andExpect(jsonPath("$.mapping_provenance.length()").value(0))
+			.andExpect(jsonPath("$.participating_views[1].interval_source").value("EVENT_LEVEL_EVIDENCE"))
+			.andExpect(jsonPath("$.participating_views[1].action_aligned_interval").value(false))
+			.andExpect(jsonPath("$.participating_views[1].interval").doesNotExist());
 	}
 
 	@Test
@@ -411,11 +413,13 @@ class CaptureGroupQualityAnnotationContractTests {
 
 		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "View quality changed", 1, key("downgrade-review"))
 			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "REJECTED", "View quality rejected", 2, key("downgrade-rejected"))
+			.andExpect(status().isOk());
 		submit(group, taskId, MEMBER_TOKEN, key("downgrade-blocked"), 10).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED"));
 		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 
-		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", "View quality rechecked", 2, key("downgrade-requalified"))
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", "View quality rechecked", 3, key("downgrade-requalified"))
 			.andExpect(status().isOk());
 		submit(group, taskId, MEMBER_TOKEN, key("after-requalification"), 10).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1));
@@ -424,6 +428,78 @@ class CaptureGroupQualityAnnotationContractTests {
 		assertEquals(taskId, taskId(group));
 		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, this.jdbcTemplate.queryForObject(
 				"SELECT assignee_actor_id FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+	}
+
+	@Test
+	void changedGroupInputAppendsRevisionWhileSameInputDoesNotCreateOne() throws Exception {
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("input-qualified"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var first = submit(group, taskId, MEMBER_TOKEN, key("input-first-submit"), 100).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(1))
+			.andReturn();
+		var firstRevisionId = UUID
+			.fromString(JsonPath.read(first.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID,
+					firstRevisionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key("input-first-approve"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"APPROVED\"}"))
+			.andExpect(status().isCreated());
+
+		var firstFacts = this.jdbcTemplate.queryForMap("""
+				SELECT annotation_revision_id, annotation_document::text AS annotation_document,
+				       confirmed_view_set::text AS confirmed_view_set, input_version,
+				       submitted_by, primary_clip_asset_id
+				FROM annotation_revision
+				WHERE annotation_task_id = ? AND revision_number = 1
+				""", taskId);
+		var assignee = this.jdbcTemplate.queryForObject(
+				"SELECT assignee_actor_id FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId);
+
+		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Input needs another check", 1, key("input-downgrade"))
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", "Same input requalified", 2, key("input-same"))
+			.andExpect(status().isOk());
+		assertEquals("COMPLETED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+		assertEquals(1, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+		submit(group, taskId, MEMBER_TOKEN, key("input-same-submit"), 100).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_ALREADY_SUBMITTED"));
+
+		recordViewQuality(group.clipAssetIds().get(1), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.version").value(1));
+		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Supporting view changed", 3, key("input-changed-review"))
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 4,
+				key("input-changed-qualified"))
+			.andExpect(status().isOk());
+		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+
+		submit(group, taskId, MEMBER_TOKEN, key("input-second-submit"), 120).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(2))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getFirst().toString()));
+		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+		assertEquals(1,
+				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
+		assertEquals(taskId, taskId(group));
+		assertEquals(assignee, this.jdbcTemplate.queryForObject(
+				"SELECT assignee_actor_id FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+
+		var firstFactsAfter = this.jdbcTemplate.queryForMap("""
+				SELECT annotation_revision_id, annotation_document::text AS annotation_document,
+				       confirmed_view_set::text AS confirmed_view_set, input_version,
+				       submitted_by, primary_clip_asset_id
+				FROM annotation_revision
+				WHERE annotation_task_id = ? AND revision_number = 1
+				""", taskId);
+		assertEquals(firstFacts, firstFactsAfter);
 	}
 
 	@Test
@@ -472,6 +548,17 @@ class CaptureGroupQualityAnnotationContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"prepare_workspace\"}]}"
 					.formatted(endMs)));
+	}
+
+	private ResultActions recordViewQuality(UUID clipAssetId, String token, String decision, String reasonCode,
+			long expectedVersion) throws Exception {
+		return this.mockMvc.perform(
+				put("/api/v1/projects/{projectId}/clip-assets/{clipAssetId}/quality-review", PROJECT_ID, clipAssetId)
+					.header("Authorization", "Bearer " + token)
+					.header("X-Request-Id", key("view-quality-request"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"decision\":\"%s\",\"reason_code\":\"%s\",\"expected_version\":%d}".formatted(decision,
+							reasonCode, expectedVersion)));
 	}
 
 	private GroupFixture createGroup(UUID projectId, int expectedViewCount, int boundViewCount, String receiptState,

@@ -145,6 +145,10 @@ class AnnotationRevision {
 		return this.captureGroupId;
 	}
 
+	boolean isCaptureGroupRevision() {
+		return this.captureGroupId != null;
+	}
+
 	UUID getPrimaryClipAssetId() {
 		return this.primaryClipAssetId;
 	}
