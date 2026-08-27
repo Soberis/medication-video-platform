@@ -61,9 +61,10 @@ public class AssetCatalogQueryService {
 
 	private static ClipAssetSessionBindingResponse binding(CameraStream stream, CameraSetSnapshotMember member) {
 		return new ClipAssetSessionBindingResponse(stream.getCaptureSessionId(), stream.getCameraStreamId(),
-				stream.getCameraChannelId(), stream.getCameraIndex(), member.getCameraRole(), member.getMountPosition(),
-				stream.getRecordStartUtc(), stream.getTimeOffsetMs(), stream.getDeclaredSyncStatus(),
-				stream.getStreamStatus(), stream.getQualityStatus(), member.isEnabledForHandDetection());
+				stream.getCameraChannelId(), stream.getCameraIndex(), stream.getCameraIndex() + 1,
+				member.getCameraRole(), member.getMountPosition(), stream.getRecordStartUtc(), stream.getTimeOffsetMs(),
+				stream.getDeclaredSyncStatus(), stream.getStreamStatus(), stream.getQualityStatus(),
+				member.isEnabledForHandDetection());
 	}
 
 }

@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 record ClipAssetSessionBindingResponse(UUID captureSessionId, UUID cameraStreamId, UUID cameraChannelId,
-		int cameraIndex, String cameraRole, String mountPosition, Instant recordStartUtc, long timeOffsetMs,
-		DeclaredSyncStatus declaredSyncStatus, CameraStreamStatus streamStatus, CaptureQualityStatus qualityStatus,
-		boolean enabledForHandDetection) {
+		int cameraIndex, int cameraNumber, String cameraRole, String mountPosition, Instant recordStartUtc,
+		long timeOffsetMs, DeclaredSyncStatus declaredSyncStatus, CameraStreamStatus streamStatus,
+		CaptureQualityStatus qualityStatus, boolean enabledForHandDetection) {
 }

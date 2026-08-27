@@ -243,7 +243,8 @@ class CaptureSessionIngestService {
 		var filesByClientId = this.fileRepository.findAllByBatchIdOrderByCreatedAtAscUploadFileIdAsc(batchId)
 			.stream()
 			.collect(Collectors.toUnmodifiableMap(UploadFile::getClientFileId, Function.identity()));
-		validateExternalManifestBindings(batch, metadata, assetsByClientId, filesByClientId, configuredMembers);
+		var groupManifest = validateExternalManifestBindings(batch, metadata, assetsByClientId, filesByClientId,
+				configuredMembers);
 
 		var receivedCameraCount = Math.toIntExact(metadata.streams()
 			.stream()
@@ -251,7 +252,12 @@ class CaptureSessionIngestService {
 			.filter(asset -> asset.getStatus() == ClipAssetStatus.INGESTED)
 			.count());
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var session = CaptureSession.assemble(projectId, batchId, metadataFile, metadata, receivedCameraCount, now);
+		var receivedCameraNumbers = metadata.streams()
+			.stream()
+			.map(stream -> stream.cameraIndex() + 1)
+			.collect(Collectors.toUnmodifiableSet());
+		var session = CaptureSession.assemble(projectId, batchId, metadataFile, metadata, receivedCameraCount,
+				groupManifest, receivedCameraNumbers, now);
 		this.sessionRepository.saveAndFlush(session);
 
 		var snapshot = CameraSetSnapshot.freeze(session.getCaptureSessionId(), cameraSet, expectedCameraCount, now);
@@ -304,11 +310,11 @@ class CaptureSessionIngestService {
 		}
 	}
 
-	private void validateExternalManifestBindings(UploadBatch batch, CaptureSessionMetadataV1 metadata,
-			Map<UUID, ClipAsset> assetsByClientId, Map<UUID, UploadFile> filesByClientId,
-			List<CameraSetMember> configuredMembers) {
+	private ExternalVideoIngestManifest validateExternalManifestBindings(UploadBatch batch,
+			CaptureSessionMetadataV1 metadata, Map<UUID, ClipAsset> assetsByClientId,
+			Map<UUID, UploadFile> filesByClientId, List<CameraSetMember> configuredMembers) {
 		if (batch.getExternalManifestId() == null) {
-			return;
+			return null;
 		}
 		var manifest = this.externalManifestRepository.findById(batch.getExternalManifestId())
 			.filter(candidate -> candidate.getProjectId().equals(batch.getProjectId()))
@@ -381,6 +387,7 @@ class CaptureSessionIngestService {
 						"Every declared external record_start_at must match its frozen CaptureSession stream fact.");
 			}
 		}
+		return manifest;
 	}
 
 	private CaptureSessionResponse requireSameSession(CaptureSession existing, MetadataSource source,

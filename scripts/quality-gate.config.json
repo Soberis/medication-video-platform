@@ -13,6 +13,7 @@
     "package.json",
     "pnpm-workspace.yaml",
     "contracts/schemas/capture-session-metadata-v1.schema.json",
+    "contracts/schemas/external-video-ingest-v2.schema.json",
     "contracts/events/media-probe-job-v1.schema.json",
     "contracts/events/media-probe-result-v1.schema.json",
     "contracts/events/media-dead-letter-v1.schema.json",
@@ -79,6 +80,11 @@
       "path": "contracts/schemas/capture-session-metadata-v1.schema.json",
       "success": "Capture session metadata JSON Schema is valid JSON",
       "failure": "Capture session metadata JSON Schema is invalid"
+    },
+    {
+      "path": "contracts/schemas/external-video-ingest-v2.schema.json",
+      "success": "External video ingest v2 JSON Schema is valid JSON",
+      "failure": "External video ingest v2 JSON Schema is invalid"
     },
     {
       "path": "contracts/events/media-probe-job-v1.schema.json",

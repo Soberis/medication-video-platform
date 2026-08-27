@@ -17,6 +17,8 @@ interface UploadBatchRepository extends JpaRepository<UploadBatch, UUID> {
 
 	Optional<UploadBatch> findByBatchIdAndProjectId(UUID batchId, UUID projectId);
 
+	Optional<UploadBatch> findTopByExternalManifestIdOrderByCreatedAtDesc(UUID externalManifestId);
+
 	@Query(value = """
 			SELECT batch.*
 			FROM upload_batch batch

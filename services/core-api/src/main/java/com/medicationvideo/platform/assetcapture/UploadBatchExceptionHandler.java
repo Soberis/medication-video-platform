@@ -17,7 +17,7 @@ import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
 @RestControllerAdvice(assignableTypes = { UploadBatchController.class, UploadFileController.class,
 		UploadMultipartController.class, CameraConfigurationController.class, AssetCatalogController.class,
-		ExternalVideoIngestManifestController.class })
+		ExternalVideoIngestManifestController.class, CaptureGroupController.class })
 class UploadBatchExceptionHandler {
 
 	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class,
@@ -44,7 +44,9 @@ class UploadBatchExceptionHandler {
 	@ExceptionHandler(UploadBatchInputException.class)
 	ResponseEntity<ApiErrorResponse> batchInput(UploadBatchInputException exception) {
 		var status = switch (exception.getErrorCode()) {
-			case "EXTERNAL_MANIFEST_CONFLICT", "EXTERNAL_MANIFEST_ALREADY_BOUND", "EXTERNAL_MANIFEST_DEVICE_MISMATCH" ->
+			case "EXTERNAL_MANIFEST_CONFLICT", "EXTERNAL_MANIFEST_ALREADY_BOUND", "EXTERNAL_MANIFEST_DEVICE_MISMATCH",
+					"EXTERNAL_MANIFEST_FINALIZED", "EXTERNAL_MANIFEST_CAMERA_DIGEST_CONFLICT",
+					"EXTERNAL_MANIFEST_FILE_CAMERA_CONFLICT", "EXTERNAL_MANIFEST_NOT_FINALIZED" ->
 				HttpStatus.CONFLICT;
 			default -> HttpStatus.BAD_REQUEST;
 		};
@@ -104,7 +106,7 @@ class UploadBatchExceptionHandler {
 	@ExceptionHandler(AssetCatalogQueryException.class)
 	ResponseEntity<ApiErrorResponse> assetCatalogQueryFailure(AssetCatalogQueryException exception) {
 		var status = switch (exception.getErrorCode()) {
-			case "CAPTURE_SESSION_NOT_FOUND", "CLIP_ASSET_NOT_FOUND" -> HttpStatus.NOT_FOUND;
+			case "CAPTURE_SESSION_NOT_FOUND", "CAPTURE_GROUP_NOT_FOUND", "CLIP_ASSET_NOT_FOUND" -> HttpStatus.NOT_FOUND;
 			default -> HttpStatus.BAD_REQUEST;
 		};
 		return error(status, exception.getErrorCode(), exception.getMessage());

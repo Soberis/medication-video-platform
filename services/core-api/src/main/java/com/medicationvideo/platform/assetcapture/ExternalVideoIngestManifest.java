@@ -59,6 +59,12 @@ class ExternalVideoIngestManifest {
 	@Column(name = "status", nullable = false, length = 32)
 	private ExternalVideoIngestManifestStatus status;
 
+	@Column(name = "upload_set_finalized", nullable = false)
+	private boolean uploadSetFinalized;
+
+	@Column(name = "upload_set_finalized_at")
+	private Instant uploadSetFinalizedAt;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -68,25 +74,37 @@ class ExternalVideoIngestManifest {
 	protected ExternalVideoIngestManifest() {
 	}
 
-	private ExternalVideoIngestManifest(UUID projectId, ExternalVideoIngestManifestRequest request, Instant now) {
+	private ExternalVideoIngestManifest(UUID projectId, String schemaVersion, String sourceSystem,
+			String sourceDeviceId, String sourceBatchId, ExternalVideoCaptureGroup captureGroup,
+			boolean uploadSetFinalized, Instant now) {
 		this.manifestId = UUID.randomUUID();
 		this.projectId = projectId;
-		this.schemaVersion = request.schemaVersion();
-		this.sourceSystem = request.sourceSystem();
-		this.sourceDeviceId = request.sourceDeviceId();
-		this.sourceBatchId = request.sourceBatchId();
-		this.captureGroupKey = request.captureGroup().captureGroupKey();
-		this.keySource = request.captureGroup().keySource();
-		this.capturedAt = request.captureGroup().capturedAt().truncatedTo(ChronoUnit.MICROS);
-		this.timezone = request.captureGroup().timezone();
-		this.expectedCameraNumbers = request.captureGroup().expectedCameraNumbers().stream().sorted().toList();
+		this.schemaVersion = schemaVersion;
+		this.sourceSystem = sourceSystem;
+		this.sourceDeviceId = sourceDeviceId;
+		this.sourceBatchId = sourceBatchId;
+		this.captureGroupKey = captureGroup.captureGroupKey();
+		this.keySource = captureGroup.keySource();
+		this.capturedAt = captureGroup.capturedAt().truncatedTo(ChronoUnit.MICROS);
+		this.timezone = captureGroup.timezone();
+		this.expectedCameraNumbers = captureGroup.expectedCameraNumbers().stream().sorted().toList();
 		this.status = ExternalVideoIngestManifestStatus.ACCEPTED;
+		this.uploadSetFinalized = uploadSetFinalized;
+		this.uploadSetFinalizedAt = uploadSetFinalized ? now : null;
 		this.createdAt = now;
 		this.updatedAt = now;
 	}
 
 	static ExternalVideoIngestManifest accept(UUID projectId, ExternalVideoIngestManifestRequest request, Instant now) {
-		return new ExternalVideoIngestManifest(projectId, request, now);
+		return new ExternalVideoIngestManifest(projectId, request.schemaVersion(), request.sourceSystem(),
+				request.sourceDeviceId(), request.sourceBatchId(), request.captureGroup(), false, now);
+	}
+
+	static ExternalVideoIngestManifest accept(UUID projectId, ExternalVideoIngestManifestV2Request request,
+			Instant now) {
+		return new ExternalVideoIngestManifest(projectId, request.schemaVersion(), request.sourceSystem(),
+				request.sourceDeviceId(), request.sourceBatchId(), request.captureGroup(), request.uploadSetFinalized(),
+				now);
 	}
 
 	UUID getManifestId() {
@@ -135,6 +153,26 @@ class ExternalVideoIngestManifest {
 
 	ExternalVideoIngestManifestStatus getStatus() {
 		return this.status;
+	}
+
+	boolean isUploadSetFinalized() {
+		return this.uploadSetFinalized;
+	}
+
+	Instant getUploadSetFinalizedAt() {
+		return this.uploadSetFinalizedAt;
+	}
+
+	void markUploadSetFinalized(Instant now) {
+		if (this.uploadSetFinalized) {
+			return;
+		}
+		if (!"external-video-ingest-v2".equals(this.schemaVersion)) {
+			throw new IllegalStateException("An external ingest v1 manifest has no finalization command.");
+		}
+		this.uploadSetFinalized = true;
+		this.uploadSetFinalizedAt = now;
+		this.updatedAt = now;
 	}
 
 	void markBound(Instant now) {

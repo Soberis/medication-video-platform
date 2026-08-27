@@ -20,6 +20,16 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 	@Query("""
 			SELECT session
 			FROM CaptureSession session
+			WHERE session.batchId = :batchId
+			  AND session.projectId = :projectId
+			""")
+	Optional<CaptureSession> findForReceiptFinalization(@Param("batchId") UUID batchId,
+			@Param("projectId") UUID projectId);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+			SELECT session
+			FROM CaptureSession session
 			WHERE session.captureSessionId = :captureSessionId
 			  AND session.projectId = :projectId
 			""")

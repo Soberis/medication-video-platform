@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -67,6 +68,23 @@ class CaptureSession {
 	@Column(name = "quality_status", nullable = false, length = 32)
 	private CaptureQualityStatus qualityStatus;
 
+	@Column(name = "capture_group_key", length = 128, updatable = false)
+	private String captureGroupKey;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "capture_group_key_source", length = 64, updatable = false)
+	private ExternalVideoCaptureGroupKeySource captureGroupKeySource;
+
+	@Column(name = "capture_group_manifest_id", updatable = false)
+	private UUID captureGroupManifestId;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "receipt_state", nullable = false, length = 32)
+	private CaptureGroupReceiptState receiptState;
+
+	@Column(name = "receipt_finalized_at")
+	private Instant receiptFinalizedAt;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -84,7 +102,8 @@ class CaptureSession {
 	}
 
 	private CaptureSession(UUID projectId, UUID batchId, UploadFile metadataFile, CaptureSessionMetadataV1 metadata,
-			int receivedCameraCount, Instant createdAt) {
+			int receivedCameraCount, ExternalVideoIngestManifest groupManifest, Set<Integer> receivedCameraNumbers,
+			Instant createdAt) {
 		this.captureSessionId = metadata.captureSessionId();
 		this.projectId = projectId;
 		this.batchId = batchId;
@@ -102,13 +121,25 @@ class CaptureSession {
 		this.assemblyStatus = receivedCameraCount == this.expectedCameraCount ? CaptureSessionAssemblyStatus.COMPLETE
 				: CaptureSessionAssemblyStatus.ASSEMBLING;
 		this.qualityStatus = CaptureQualityStatus.PENDING;
+		if (groupManifest != null) {
+			this.captureGroupKey = groupManifest.getCaptureGroupKey();
+			this.captureGroupKeySource = groupManifest.getKeySource();
+			this.captureGroupManifestId = groupManifest.getManifestId();
+			this.receiptState = receiptState(groupManifest, receivedCameraNumbers);
+			this.receiptFinalizedAt = groupManifest.getUploadSetFinalizedAt();
+		}
+		else {
+			this.receiptState = CaptureGroupReceiptState.RECEIVING;
+		}
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
 	}
 
 	static CaptureSession assemble(UUID projectId, UUID batchId, UploadFile metadataFile,
-			CaptureSessionMetadataV1 metadata, int receivedCameraCount, Instant createdAt) {
-		return new CaptureSession(projectId, batchId, metadataFile, metadata, receivedCameraCount, createdAt);
+			CaptureSessionMetadataV1 metadata, int receivedCameraCount, ExternalVideoIngestManifest groupManifest,
+			Set<Integer> receivedCameraNumbers, Instant createdAt) {
+		return new CaptureSession(projectId, batchId, metadataFile, metadata, receivedCameraCount, groupManifest,
+				receivedCameraNumbers, createdAt);
 	}
 
 	static CaptureSession importLocal(UUID projectId, UploadBatch batch, CameraSetConfiguration cameraSet,
@@ -129,6 +160,7 @@ class CaptureSession {
 		this.serverReceiveTime = createdAt;
 		this.assemblyStatus = CaptureSessionAssemblyStatus.ASSEMBLING;
 		this.qualityStatus = CaptureQualityStatus.PENDING;
+		this.receiptState = CaptureGroupReceiptState.RECEIVING;
 		this.createdAt = createdAt;
 		this.updatedAt = createdAt;
 	}
@@ -197,6 +229,37 @@ class CaptureSession {
 		return this.qualityStatus;
 	}
 
+	String getCaptureGroupKey() {
+		return this.captureGroupKey;
+	}
+
+	ExternalVideoCaptureGroupKeySource getCaptureGroupKeySource() {
+		return this.captureGroupKeySource;
+	}
+
+	UUID getCaptureGroupManifestId() {
+		return this.captureGroupManifestId;
+	}
+
+	CaptureGroupReceiptState getReceiptState() {
+		return this.receiptState;
+	}
+
+	Instant getReceiptFinalizedAt() {
+		return this.receiptFinalizedAt;
+	}
+
+	void finalizeReceipt(Set<Integer> expectedCameraNumbers, Set<Integer> receivedCameraNumbers, Instant finalizedAt,
+			Instant changedAt) {
+		if (this.receiptState != CaptureGroupReceiptState.RECEIVING) {
+			return;
+		}
+		this.receiptState = expectedCameraNumbers.equals(receivedCameraNumbers) ? CaptureGroupReceiptState.COMPLETE
+				: CaptureGroupReceiptState.INCOMPLETE;
+		this.receiptFinalizedAt = finalizedAt;
+		this.updatedAt = changedAt;
+	}
+
 	Instant getCreatedAt() {
 		return this.createdAt;
 	}
@@ -254,6 +317,16 @@ class CaptureSession {
 			return CaptureQualityStatus.WARNING;
 		}
 		return CaptureQualityStatus.PASS;
+	}
+
+	private static CaptureGroupReceiptState receiptState(ExternalVideoIngestManifest manifest,
+			Set<Integer> receivedCameraNumbers) {
+		if (!manifest.isUploadSetFinalized()) {
+			return CaptureGroupReceiptState.RECEIVING;
+		}
+		var expected = Set.copyOf(manifest.getExpectedCameraNumbers());
+		return expected.equals(receivedCameraNumbers) ? CaptureGroupReceiptState.COMPLETE
+				: CaptureGroupReceiptState.INCOMPLETE;
 	}
 
 }

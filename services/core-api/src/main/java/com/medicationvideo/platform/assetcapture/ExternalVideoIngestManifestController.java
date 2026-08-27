@@ -52,6 +52,17 @@ class ExternalVideoIngestManifestController {
 		return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(response);
 	}
 
+	@PostMapping("/v2")
+	ResponseEntity<ExternalVideoIngestManifestV2AcceptedResponse> acceptV2(@PathVariable UUID projectId,
+			@Valid @RequestBody ExternalVideoIngestManifestV2Request request, Authentication authentication) {
+		if (!(authentication.getPrincipal() instanceof PlatformActor actor)) {
+			throw new UploadBatchAuthorizationException();
+		}
+		this.authorizer.requireMember(projectId, actor.actorId());
+		var response = this.service.acceptV2(projectId, request);
+		return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(response);
+	}
+
 }
 
 record ExternalVideoIngestManifestRequest(
@@ -71,6 +82,28 @@ record ExternalVideoIngestManifestRequest(
 		var actual = new HashSet<Integer>();
 		return expected.size() == this.captureGroup.expectedCameraNumbers().size() && this.videos.stream()
 			.allMatch(video -> expected.contains(video.cameraNumber()) && actual.add(video.cameraNumber()));
+	}
+}
+
+record ExternalVideoIngestManifestV2Request(
+		@NotBlank @Pattern(regexp = "^external-video-ingest-v2$") String schemaVersion,
+		@NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String sourceSystem,
+		@NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String sourceDeviceId,
+		@Size(max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String sourceBatchId,
+		@NotNull @Valid ExternalVideoCaptureGroup captureGroup,
+		@NotNull @Size(max = 64) List<@Valid ExternalVideoManifestVideo> videos, @NotNull Boolean uploadSetFinalized) {
+
+	@AssertTrue(message = "video camera numbers must be explicit, expected and unique.")
+	boolean isCameraNumbersAreExplicit() {
+		if (this.captureGroup == null || this.captureGroup.expectedCameraNumbers() == null || this.videos == null) {
+			return false;
+		}
+		var expected = new HashSet<>(this.captureGroup.expectedCameraNumbers());
+		var actual = new HashSet<Integer>();
+		var clientFileIds = new HashSet<UUID>();
+		return expected.size() == this.captureGroup.expectedCameraNumbers().size() && this.videos.stream()
+			.allMatch(video -> expected.contains(video.cameraNumber()) && actual.add(video.cameraNumber())
+					&& clientFileIds.add(video.clientFileId()));
 	}
 }
 
@@ -94,4 +127,10 @@ record ExternalVideoManifestVideo(@NotNull UUID clientFileId, @NotNull @Min(1) @
 
 record ExternalVideoIngestManifestAcceptedResponse(UUID manifestId, String status, String schemaVersion,
 		String captureGroupKey, String keySource, Instant capturedAt, int expectedCameraCount, int videoCount) {
+}
+
+record ExternalVideoIngestManifestV2AcceptedResponse(UUID manifestId, String status, String schemaVersion,
+		String captureGroupKey, String keySource, Instant capturedAt, List<Integer> expectedCameraNumbers,
+		List<Integer> receivedCameraNumbers, List<Integer> missingCameraNumbers, boolean uploadSetFinalized,
+		CaptureGroupReceiptState receiptState, int videoCount) {
 }

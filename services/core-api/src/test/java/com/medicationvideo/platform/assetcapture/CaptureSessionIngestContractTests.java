@@ -119,6 +119,12 @@ class CaptureSessionIngestContractTests {
 	private UploadBatchCompletionService batchCompletionService;
 
 	@Autowired
+	private ExternalVideoIngestManifestService externalManifestService;
+
+	@Autowired
+	private ClipAssetMediaIngestService mediaIngestService;
+
+	@Autowired
 	private FakeObjectStorage objectStorage;
 
 	private final List<UUID> externalManifestIds = new ArrayList<>();
@@ -157,6 +163,15 @@ class CaptureSessionIngestContractTests {
 			.andExpect(jsonPath("$.metadata_schema_version").value("capture-session-metadata-v1"))
 			.andExpect(jsonPath("$.expected_camera_count").value(2))
 			.andExpect(jsonPath("$.received_camera_count").value(0))
+			.andExpect(jsonPath("$.capture_group_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"))
+			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.expected_camera_numbers[0]").value(1))
+			.andExpect(jsonPath("$.expected_camera_numbers[1]").value(2))
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.received_camera_numbers[0]").value(1))
+			.andExpect(jsonPath("$.received_camera_numbers[1]").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers").isEmpty())
 			.andExpect(jsonPath("$.assembly_status").value("ASSEMBLING"))
 			.andExpect(jsonPath("$.quality_status").value("PENDING"))
 			.andExpect(jsonPath("$.camera_set_snapshot.source_camera_set_id")
@@ -183,6 +198,26 @@ class CaptureSessionIngestContractTests {
 	}
 
 	@Test
+	void acceptsASingleCameraAndUsesTheCaptureSessionIdAsTheCaptureGroupId() throws Exception {
+		var configuration = cameraSet(PROJECT_ID, true, false);
+		var captureSessionId = UUID.randomUUID();
+		var metadata = metadata(captureSessionId, configuration.cameraSetId(), 1,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.firstChannelId(), 0, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, 1);
+		this.objectStorage.bytes = metadata;
+
+		ingest(batch.getBatchId()).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.capture_session_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.capture_group_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.expected_camera_numbers[0]").value(1))
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.received_camera_numbers[0]").value(1))
+			.andExpect(jsonPath("$.missing_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+	}
+
+	@Test
 	void preservesSparseExternalCameraNumbersInTheFinalCaptureStreams() throws Exception {
 		var configuration = fiveCameraSet(PROJECT_ID);
 		var captureSessionId = UUID.randomUUID();
@@ -205,13 +240,75 @@ class CaptureSessionIngestContractTests {
 			.andExpect(jsonPath("$.streams.length()").value(3))
 			.andExpect(jsonPath("$.streams[0].camera_index").value(0))
 			.andExpect(jsonPath("$.streams[1].camera_index").value(2))
-			.andExpect(jsonPath("$.streams[2].camera_index").value(4));
+			.andExpect(jsonPath("$.streams[2].camera_index").value(4))
+			.andExpect(jsonPath("$.streams[0].camera_number").value(1))
+			.andExpect(jsonPath("$.streams[1].camera_number").value(3))
+			.andExpect(jsonPath("$.streams[2].camera_number").value(5))
+			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(5))
+			.andExpect(jsonPath("$.expected_camera_numbers[1]").value(2))
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(3))
+			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4))
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
 
 		assertEquals(List.of(0, 2, 4),
 				this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId)
 					.stream()
 					.map(CameraStream::getCameraIndex)
 					.toList());
+	}
+
+	@Test
+	void finalizesAReceiptAndKeepsItAfterMediaFailure() throws Exception {
+		var configuration = fiveCameraSet(PROJECT_ID);
+		var captureSessionId = UUID.randomUUID();
+		var fixture = createBoundExternalManifestV2(PROJECT_ID);
+		var videoEntries = List.of(
+				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
+				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
+						"camera-3.mp4"),
+				new ManifestEntry(VIDEO_FIVE_ID, UploadFileKind.VIDEO, "video/mp4", 14, VIDEO_SHA_FIVE,
+						"camera-5.mp4"));
+		var metadata = metadata(captureSessionId, configuration.cameraSetId(), 5,
+				List.of(new StreamSpec(VIDEO_ONE_ID, configuration.channelIds().get(0), 0, true, 0, "PASS"),
+						new StreamSpec(VIDEO_THREE_ID, configuration.channelIds().get(2), 2, true, 0, "PASS"),
+						new StreamSpec(VIDEO_FIVE_ID, configuration.channelIds().get(4), 4, true, 0, "PASS")));
+		var batch = completedBatch(PROJECT_ID, metadata, videoEntries, fixture.manifestId());
+		this.objectStorage.bytes = metadata;
+
+		ingest(batch.getBatchId()).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+
+		var finalizedRequest = fixture.request();
+		finalizedRequest = new ExternalVideoIngestManifestV2Request(finalizedRequest.schemaVersion(),
+				finalizedRequest.sourceSystem(), finalizedRequest.sourceDeviceId(), finalizedRequest.sourceBatchId(),
+				finalizedRequest.captureGroup(), finalizedRequest.videos(), true);
+		var finalized = this.externalManifestService.acceptV2(PROJECT_ID, finalizedRequest);
+		assertEquals(CaptureGroupReceiptState.INCOMPLETE, finalized.receiptState());
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}", PROJECT_ID, captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.capture_group_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4));
+
+		var firstStream = this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureSessionId).get(0);
+		var changedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		this.mediaIngestService.begin(PROJECT_ID, firstStream.getClipAssetId(), Duration.ofMinutes(1), changedAt);
+		this.mediaIngestService.complete(PROJECT_ID, firstStream.getClipAssetId(), false, changedAt.plusSeconds(1));
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}", PROJECT_ID, captureSessionId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"))
+			.andExpect(jsonPath("$.streams[0].stream_status").value("INGEST_FAILED"));
 	}
 
 	@Test
@@ -470,6 +567,25 @@ class CaptureSessionIngestContractTests {
 		return manifest.getManifestId();
 	}
 
+	private V2ManifestFixture createBoundExternalManifestV2(UUID projectId) {
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var request = new ExternalVideoIngestManifestV2Request("external-video-ingest-v2", "synthetic-edge",
+				"synthetic-edge-01", null,
+				new ExternalVideoCaptureGroup("capture-external-v2-" + UUID.randomUUID(),
+						ExternalVideoCaptureGroupKeySource.UPSTREAM_MANIFEST_KEY, Instant.parse("2026-07-15T01:02:03Z"),
+						"Asia/Shanghai", List.of(1, 2, 3, 4, 5)),
+				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null),
+						new ExternalVideoManifestVideo(VIDEO_THREE_ID, 3, "camera-3.mp4", 13L, VIDEO_SHA_THREE, null),
+						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)),
+				false);
+		var accepted = this.externalManifestService.acceptV2(projectId, request);
+		var manifest = this.externalManifestRepository.findById(accepted.manifestId()).orElseThrow();
+		manifest.markBound(now);
+		this.externalManifestRepository.saveAndFlush(manifest);
+		this.externalManifestIds.add(manifest.getManifestId());
+		return new V2ManifestFixture(manifest.getManifestId(), request);
+	}
+
 	private static byte[] metadata(UUID captureSessionId, UUID cameraSetId, int expectedCameraCount,
 			List<StreamSpec> streams) {
 		var streamJson = streams.stream()
@@ -587,7 +703,7 @@ class CaptureSessionIngestContractTests {
 
 		@Override
 		public URI authorizeRead(ObjectReference object, Duration lifetime) {
-			throw new UnsupportedOperationException();
+			return URI.create("https://synthetic.invalid/read");
 		}
 
 		@Override
@@ -658,6 +774,9 @@ class CaptureSessionIngestContractTests {
 		ManifestEntry(UUID clientFileId, UploadFileKind kind, String contentType, long sizeBytes, String sha256) {
 			this(clientFileId, kind, contentType, sizeBytes, sha256, null);
 		}
+	}
+
+	private record V2ManifestFixture(UUID manifestId, ExternalVideoIngestManifestV2Request request) {
 	}
 
 }

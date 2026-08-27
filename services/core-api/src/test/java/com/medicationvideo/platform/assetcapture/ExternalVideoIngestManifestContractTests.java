@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -55,6 +56,9 @@ class ExternalVideoIngestManifestContractTests {
 
 	@Autowired
 	private UploadBatchRepository batchRepository;
+
+	@Autowired
+	private UploadBatchTerminationService terminationService;
 
 	@BeforeEach
 	void ensureProjects() {
@@ -137,6 +141,105 @@ class ExternalVideoIngestManifestContractTests {
 			.andExpect(status().isAccepted())
 			.andExpect(jsonPath("$.expected_camera_count").value(5))
 			.andExpect(jsonPath("$.video_count").value(3));
+	}
+
+	@Test
+	void acceptsV2ReceiptStatesAndRequiresExplicitFinalizationForFiveCameras() throws Exception {
+		var key = "edge-group-v2-receipt-" + UUID.randomUUID();
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 3, 5), false))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.schema_version").value("external-video-ingest-v2"))
+			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(5))
+			.andExpect(jsonPath("$.expected_camera_numbers[1]").value(2))
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(3))
+			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4))
+			.andExpect(jsonPath("$.upload_set_finalized").value(false))
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 3, 5), true))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(3))
+			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2))
+			.andExpect(jsonPath("$.missing_camera_numbers[1]").value(4))
+			.andExpect(jsonPath("$.upload_set_finalized").value(true))
+			.andExpect(jsonPath("$.receipt_state").value("INCOMPLETE"));
+
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3, 4, 5), List.of(1, 2, 3, 5), true))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_FINALIZED"));
+	}
+
+	@Test
+	void acceptsASingleExplicitCameraAsACompleteCaptureGroup() throws Exception {
+		var key = "edge-group-v2-single-" + UUID.randomUUID();
+		this.acceptV2(v2Manifest(key, List.of(7), List.of(7), true))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.expected_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.expected_camera_numbers[0]").value(7))
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.received_camera_numbers[0]").value(7))
+			.andExpect(jsonPath("$.missing_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.receipt_state").value("COMPLETE"));
+	}
+
+	@Test
+	void acceptsLateCameraDeclarationsBeforeFinalizationAndRejectsDigestConflicts() throws Exception {
+		var key = "edge-group-v2-late-" + UUID.randomUUID();
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1), false))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.receipt_state").value("RECEIVING"));
+
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1, 3), false))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.received_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.received_camera_numbers[1]").value(3))
+			.andExpect(jsonPath("$.missing_camera_numbers.length()").value(1))
+			.andExpect(jsonPath("$.missing_camera_numbers[0]").value(2));
+
+		this.acceptV2(v2Manifest(key, List.of(1, 2, 3), List.of(1, 3), false)
+			.replace("\"sha256\": \"" + VIDEO_SHA + "\"", "\"sha256\": \"" + "f".repeat(64) + "\""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_CAMERA_DIGEST_CONFLICT"));
+	}
+
+	@Test
+	void timeoutExpiresTheBatchButDoesNotFinalizeTheCaptureGroupReceipt() throws Exception {
+		var key = "edge-group-v2-timeout-" + UUID.randomUUID();
+		this.acceptV2(v2Manifest(key, List.of(1), List.of(1), false)).andExpect(status().isAccepted());
+		var manifestId = manifestId(key, PROJECT_ID);
+		var batchId = UUID.fromString(jsonField(
+				initializeBatch(manifestId, "batch-v2-timeout-" + UUID.randomUUID()).andExpect(status().isCreated())
+					.andReturn()
+					.getResponse()
+					.getContentAsString(),
+				"batch_id"));
+
+		this.jdbcTemplate.update(
+				"UPDATE upload_batch SET created_at = now() - interval '2 minutes', expires_at = now() - interval '1 minute' "
+						+ "WHERE batch_id = ?",
+				batchId);
+		assertTrue(this.terminationService.expireNextDue());
+		var manifest = this.manifestRepository.findById(manifestId).orElseThrow();
+		assertFalse(manifest.isUploadSetFinalized());
+		assertEquals(ExternalVideoIngestManifestStatus.ACCEPTED, manifest.getStatus());
+	}
+
+	@Test
+	void rejectsV2RequestsWithoutAnExplicitCaptureGroup() throws Exception {
+		this.acceptV2("""
+				{
+				  "schema_version": "external-video-ingest-v2",
+				  "source_system": "synthetic-edge",
+				  "source_device_id": "cabinet-001",
+				  "videos": [],
+				  "upload_set_finalized": false
+				}
+				""").andExpect(status().isBadRequest());
 	}
 
 	@Test
@@ -340,6 +443,13 @@ class ExternalVideoIngestManifestContractTests {
 			.content(manifest));
 	}
 
+	private ResultActions acceptV2(String manifest) throws Exception {
+		return this.mockMvc.perform(post("/api/v1/projects/{projectId}/external-video-ingest-manifests/v2", PROJECT_ID)
+			.header("Authorization", "Bearer " + TOKEN)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(manifest));
+	}
+
 	private ResultActions initializeBatch(UUID manifestId, String idempotencyKey) throws Exception {
 		return this.mockMvc.perform(post("/api/v1/upload/init").header("Authorization", "Bearer " + TOKEN)
 			.header("Idempotency-Key", idempotencyKey)
@@ -476,6 +586,50 @@ class ExternalVideoIngestManifestContractTests {
 				  ]
 				}
 				""".formatted(key, VIDEO_SHA);
+	}
+
+	private static String v2Manifest(String key, List<Integer> expectedCameraNumbers,
+			List<Integer> receivedCameraNumbers, boolean uploadSetFinalized) {
+		var expected = expectedCameraNumbers.stream()
+			.map(String::valueOf)
+			.collect(java.util.stream.Collectors.joining(", "));
+		var videos = receivedCameraNumbers.stream()
+			.map(cameraNumber -> """
+					{
+					  "client_file_id": "00000000-0000-0000-0000-0000000001%02d",
+					  "camera_number": %d,
+					  "file_name": "camera-%d.mp4",
+					  "declared_size_bytes": %d,
+					  "sha256": "%s"
+					}
+					""".formatted(cameraNumber, cameraNumber, cameraNumber, cameraNumber * 100L,
+					shaForCamera(cameraNumber)))
+			.collect(java.util.stream.Collectors.joining(","));
+		return """
+				{
+				  "schema_version": "external-video-ingest-v2",
+				  "source_system": "synthetic-edge",
+				  "source_device_id": "cabinet-001",
+				  "capture_group": {
+				    "capture_group_key": "%s",
+				    "key_source": "UPSTREAM_MANIFEST_KEY",
+				    "captured_at": "2026-08-11T02:00:00Z",
+				    "timezone": "Asia/Shanghai",
+				    "expected_camera_numbers": [%s]
+				  },
+				  "videos": [%s],
+				  "upload_set_finalized": %s
+				}
+				""".formatted(key, expected, videos, uploadSetFinalized);
+	}
+
+	private static String shaForCamera(int cameraNumber) {
+		return switch (cameraNumber) {
+			case 1 -> VIDEO_SHA;
+			case 3 -> "c".repeat(64);
+			case 5 -> "d".repeat(64);
+			default -> "e".repeat(64);
+		};
 	}
 
 	private static String jsonField(String json, String field) {
