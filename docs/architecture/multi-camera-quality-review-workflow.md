@@ -6,6 +6,9 @@
 
 `CaptureGroup` 表示一个真实配药事件，身份默认复用 `CaptureSession.capture_session_id`；前端只能读取服务端明确的组和视图，不能按文件名、上传顺序、接收时间或时间接近度猜测归组。
 
+V1.25 生效后，所有新接入事件无论 `N=1` 还是 `N>1` 都统一以 CaptureGroup 进入本流程；`N=1`
+只是一路视图。V1.24 单视频路径仅用于历史数据和兼容迁移，不按摄像头数量维护两条新流程。
+
 ## 1. 主操作旅程
 
 ```text
@@ -23,7 +26,7 @@ CaptureGroup 详情
     ↓
 选择 primary/anchor view 作为正式时间基准
     ↓
-一个属于 CaptureGroup 的 AnnotationRevision
+一条属于 CaptureGroup 的 AnnotationRevision 修订链
     ↓
 人工 Review
     ↓
@@ -112,7 +115,9 @@ Inspector 只回答：
 
 V1.24 `CaptureSession.assembly_status` 和 `quality_status` 仍按既有技术语义展示；它们不是本流程的组 receipt，也不是人工组质量结论。
 
-组质量至少需要一条逐视图 `QualityReview.QUALIFIED` 才能为 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS`；没有就只能保持 `NEEDS_REVIEW` 或由人判为 `REJECTED`。组质量写入 `CaptureGroupQualityReview`，不只是前端临时计数。
+Media Probe 失败时，该视图进入 `MEDIA_FAILED`，停止该视图 AI 处理且不提交该视图的 MediaPipe 处理；其他视图不受影响，具体 API/状态枚举另行版本化。
+
+组质量至少需要一条逐视图 `QualityReview.QUALIFIED` 才能为 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS`；没有就只能保持 `NEEDS_REVIEW` 或由人判为 `REJECTED`。`CaptureGroupQualityReview` 只表示标注准入，不表示 Review、Cleaning 或训练导出已通过；组质量写入该事实，不只是前端临时计数。
 
 ## 5. 组质量操作
 
@@ -120,14 +125,14 @@ V1.24 `CaptureSession.assembly_status` 和 `quality_status` 仍按既有技术�
 
 | 结果 | UI 语义 |
 | --- | --- |
-| `QUALIFIED` | 确认事件可用，且没有影响目标用途的相关缺失/拒绝视图 |
-| `QUALIFIED_WITH_EXCLUSIONS` | 确认缺失/拒绝视图后剩余视图仍足以支持事件 |
-| `NEEDS_REVIEW` | 组决定、接收、视图或时间证据尚未完成 |
-| `REJECTED` | 确认剩余视觉证据不足或事件不可用 |
+| `QUALIFIED` | 确认事件有足够可靠信息进入人工标注，且没有阻断标注的相关缺失/拒绝视图 |
+| `QUALIFIED_WITH_EXCLUSIONS` | 确认缺失/拒绝视图后剩余视图仍足以进入人工标注 |
+| `NEEDS_REVIEW` | 标注准入、接收、视图或时间证据尚未完成 |
+| `REJECTED` | 确认剩余视觉证据不足以进入人工标注，或事件不可用 |
 
 提交时记录组 ID、结果、理由、审核人、时间、版本及本次依据的视图集合/输入摘要。自动提示不能代替或覆盖人工决定。
 
-## 6. 一个组任务和一份组修订
+## 6. 一个组任务和一条修订链
 
 V1.25 多机位路径不为同一事件创建 Cam1、Cam2、Cam3 等重复任务：
 
@@ -135,7 +140,7 @@ V1.25 多机位路径不为同一事件创建 Cam1、Cam2、Cam3 等重复任务
 CaptureGroup
 → 一个 AnnotationTask（属于组）
 → 选择 primary/anchor view（只确定正式时间基准）
-→ 一个 AnnotationRevision（属于组）
+→ 一条不可变、追加写入的 AnnotationRevision 修订链（属于组）
 ```
 
 组质量为 `QUALIFIED` 或 `QUALIFIED_WITH_EXCLUSIONS` 后，系统按待冻结的版本化契约幂等创建并
@@ -143,6 +148,11 @@ CaptureGroup
 任务的权限、事务和审计仍必须保留。
 
 主视图不是业务 owner；其他逐视图 `QUALIFIED` 只提供支持画面和候选证据。正式 action label 和 `[start_ms, end_ms)` 区间只来自人工 AnnotationRevision，Candidate/MediaPipe 不能生成、修改或通过 Review/Cleaning。
+
+组质量结论、组任务工作上下文和每条 `AnnotationRevision` 都记录创建/提交时确认的 View Set 与
+输入版本摘要；后续迟到视图或视图质量变化不得静默改写已有事实。若要纳入新视图或新质量，必须
+重新提交 `CaptureGroupQualityReview`，并在同一组的唯一任务下按新输入版本追加修订；既有修订的
+主视图和时间基准保持不变。
 
 V1.24 冻结单视频路径仍是 `ClipAsset.QUALIFIED → 一个视频 AnnotationTask → 人工 AnnotationRevision`，不回写历史行为。V1.25 需要在实现前冻结组任务/修订关系、主视图引用、权限和审计契约，当前工作台不提前伪装支持它。
 
@@ -163,7 +173,7 @@ V1.24 冻结单视频路径仍是 `ClipAsset.QUALIFIED → 一个视频 Annotati
 
 Review 以组任务的正式 `AnnotationRevision` 为对象，审阅组身份、主视图、参与的 `QUALIFIED` 视图、拒绝/缺失视图、动作区间和相关候选证据；Review 是人工闸门，不能由 AI 自动通过。
 
-Cleaning 在配药事件级回答“该组标注是否适合训练”，检查正式修订、Review、`CaptureGroupQualityReview`、参与视图、媒体完整性及拒绝/缺失原因。示例：Cam1/Cam3/Cam4 `QUALIFIED`、Cam2 `REJECTED`，组为 `QUALIFIED_WITH_EXCLUSIONS`；Review 通过后 Cleaning 可使用 Cam1/Cam3/Cam4，Cam2 保留但不下游。
+`CaptureGroupQualityReview` 只回答“这组信息是否足以进入人工标注”；Cleaning 只在正式修订和人工 Review 通过后回答“该事件是否具备训练资格”。Cleaning 检查组质量事实、参与视图、媒体完整性及拒绝/缺失原因。示例：Cam1/Cam3/Cam4 `QUALIFIED`、Cam2 `REJECTED`，组为 `QUALIFIED_WITH_EXCLUSIONS`；Review 通过后 Cleaning 可使用 Cam1/Cam3/Cam4，Cam2 保留但不下游。
 
 质量拒绝不等于删除：
 
@@ -194,7 +204,7 @@ Cleaning 在配药事件级回答“该组标注是否适合训练”，检查�
 - 三态收件事实及版本化组完成信号；
 - 每路独立 Media Probe/MediaPipe 证据和逐视图 QualityReview；
 - 可审计的四态 `CaptureGroupQualityReview`；
-- 一个组 AnnotationTask、一个组 AnnotationRevision、主视图时间基准；
+- 一个组 AnnotationTask、一条不可变追加的 AnnotationRevision 修订链、主视图时间基准；
 - 组 Review、事件级 Cleaning、组/视图追溯和按组 split。
 
 ### SHOULD
