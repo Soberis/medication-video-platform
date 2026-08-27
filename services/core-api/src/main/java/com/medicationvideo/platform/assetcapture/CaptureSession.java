@@ -78,6 +78,9 @@ class CaptureSession {
 	@Column(name = "capture_group_manifest_id", updatable = false)
 	private UUID captureGroupManifestId;
 
+	@Column(name = "capture_group_workflow", nullable = false, updatable = false)
+	private boolean captureGroupWorkflow;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "receipt_state", nullable = false, length = 32)
 	private CaptureGroupReceiptState receiptState;
@@ -122,6 +125,7 @@ class CaptureSession {
 				: CaptureSessionAssemblyStatus.ASSEMBLING;
 		this.qualityStatus = CaptureQualityStatus.PENDING;
 		if (groupManifest != null) {
+			this.captureGroupWorkflow = "external-video-ingest-v2".equals(groupManifest.getSchemaVersion());
 			this.captureGroupKey = groupManifest.getCaptureGroupKey();
 			this.captureGroupKeySource = groupManifest.getKeySource();
 			this.captureGroupManifestId = groupManifest.getManifestId();
@@ -129,6 +133,7 @@ class CaptureSession {
 			this.receiptFinalizedAt = groupManifest.getUploadSetFinalizedAt();
 		}
 		else {
+			this.captureGroupWorkflow = false;
 			this.receiptState = CaptureGroupReceiptState.RECEIVING;
 		}
 		this.createdAt = createdAt;
@@ -155,6 +160,7 @@ class CaptureSession {
 		this.deviceId = "PLATFORM_LOCAL";
 		this.cameraSetId = cameraSet.getCameraSetId();
 		this.metadataSchemaVersion = "platform-local-upload-v1";
+		this.captureGroupWorkflow = true;
 		this.expectedCameraCount = 1;
 		this.receivedCameraCount = 0;
 		this.serverReceiveTime = createdAt;
@@ -239,6 +245,10 @@ class CaptureSession {
 
 	UUID getCaptureGroupManifestId() {
 		return this.captureGroupManifestId;
+	}
+
+	boolean isCaptureGroupWorkflow() {
+		return this.captureGroupWorkflow;
 	}
 
 	CaptureGroupReceiptState getReceiptState() {

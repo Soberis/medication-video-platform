@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.assetcapture;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,12 +17,21 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 
 	Optional<CaptureSession> findByCaptureSessionIdAndProjectId(UUID captureSessionId, UUID projectId);
 
+	List<CaptureSession> findAllByProjectIdOrderByCreatedAtDescCaptureSessionIdDesc(UUID projectId);
+
+	Optional<CaptureSession> findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(UUID captureSessionId,
+			UUID projectId);
+
+	List<CaptureSession> findAllByProjectIdAndCaptureGroupWorkflowTrueOrderByCreatedAtDescCaptureSessionIdDesc(
+			UUID projectId);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			SELECT session
 			FROM CaptureSession session
 			WHERE session.batchId = :batchId
 			  AND session.projectId = :projectId
+			  AND session.captureGroupWorkflow = TRUE
 			""")
 	Optional<CaptureSession> findForReceiptFinalization(@Param("batchId") UUID batchId,
 			@Param("projectId") UUID projectId);
@@ -32,9 +42,21 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 			FROM CaptureSession session
 			WHERE session.captureSessionId = :captureSessionId
 			  AND session.projectId = :projectId
+			  AND session.captureGroupWorkflow = TRUE
 			""")
 	Optional<CaptureSession> findForReceiptFinalizationByCaptureSessionId(
 			@Param("captureSessionId") UUID captureSessionId, @Param("projectId") UUID projectId);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("""
+			SELECT session
+			FROM CaptureSession session
+			WHERE session.captureSessionId = :captureSessionId
+			  AND session.projectId = :projectId
+			  AND session.captureGroupWorkflow = TRUE
+			""")
+	Optional<CaptureSession> findForGroupView(@Param("captureSessionId") UUID captureSessionId,
+			@Param("projectId") UUID projectId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""

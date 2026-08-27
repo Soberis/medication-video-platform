@@ -89,8 +89,8 @@ class CaptureGroupReceiptService {
 					"The capture group was not found in the current project."));
 		var manifestId = session.getCaptureGroupManifestId();
 		if (manifestId == null) {
-			throw new UploadBatchInputException("CAPTURE_GROUP_RECEIPT_NOT_FINALIZABLE",
-					"The capture group has no versioned external receipt contract.");
+			finalizeSession(session, Instant.now().truncatedTo(ChronoUnit.MICROS));
+			return;
 		}
 		var manifest = this.manifestRepository.findForBinding(manifestId, projectId)
 			.orElseThrow(() -> new UploadBatchInputException("EXTERNAL_MANIFEST_NOT_FOUND",
@@ -129,6 +129,24 @@ class CaptureGroupReceiptService {
 			.collect(Collectors.toUnmodifiableSet());
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		session.finalizeReceipt(expected, received, manifest.getUploadSetFinalizedAt(), now);
+		this.sessionRepository.saveAndFlush(session);
+	}
+
+	private void finalizeSession(CaptureSession session, Instant finalizedAt) {
+		var snapshot = this.snapshotRepository.findByCaptureSessionId(session.getCaptureSessionId())
+			.orElseThrow(() -> new IllegalStateException("Capture session has no frozen camera set snapshot."));
+		var expected = this.snapshotMemberRepository
+			.findAllByCameraSetSnapshotIdOrderByCameraIndexAsc(snapshot.getCameraSetSnapshotId())
+			.stream()
+			.filter(CameraSetSnapshotMember::isEnabled)
+			.map(member -> member.getCameraIndex() + 1)
+			.collect(Collectors.toUnmodifiableSet());
+		var received = this.streamRepository
+			.findAllByCaptureSessionIdOrderByCameraIndexAsc(session.getCaptureSessionId())
+			.stream()
+			.map(stream -> stream.getCameraIndex() + 1)
+			.collect(Collectors.toUnmodifiableSet());
+		session.finalizeReceipt(expected, received, finalizedAt, finalizedAt);
 		this.sessionRepository.saveAndFlush(session);
 	}
 

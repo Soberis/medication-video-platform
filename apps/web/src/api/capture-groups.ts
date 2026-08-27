@@ -82,6 +82,10 @@ export interface CaptureGroup {
   created_at: string
 }
 
+export interface CaptureGroupListResponse {
+  items: CaptureGroup[]
+}
+
 export interface CaptureGroupQualityView {
   camera_number: number
   camera_stream_id: string | null
@@ -144,6 +148,12 @@ const errorMessages: Record<string, string> = {
   CAPTURE_GROUP_QUALITY_RECEIPT_NOT_FINALIZED:
     '回执仍在接收中；当前只能记录“需复核”，不能提交最终组质量结论。',
   CAPTURE_GROUP_QUALITY_NO_QUALIFIED_VIEW: '至少需要一路人工判定为合格的视图，才能提交准入结论。',
+  CAPTURE_GROUP_QUALITY_INCOMPLETE_REQUIRES_EXCLUSIONS:
+    '收件不完整的组不能直接判定为合格；请确认缺失视图并使用“合格（排除部分视图）”。',
+  CAPTURE_GROUP_QUALITY_QUALIFIED_HAS_EXCLUSIONS:
+    '存在拒绝视图时不能判定为整体合格；请使用“合格（排除部分视图）”。',
+  CAPTURE_GROUP_QUALITY_VIEW_NOT_RESOLVED:
+    '所有已接收视图都需要先完成“合格”或“不合格”的人工质量判定。',
   CAPTURE_GROUP_QUALITY_CONFLICT: '组质量事实已被更新，请刷新后重试。',
   CAPTURE_GROUP_QUALITY_IDEMPOTENCY_KEY_REUSED: '本次组质量请求与已有请求冲突，请刷新后重试。',
   ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
@@ -158,6 +168,10 @@ const errorMessages: Record<string, string> = {
 
 export function getCaptureGroup(projectId: string, captureGroupId: string, signal?: AbortSignal) {
   return readJson<CaptureGroup>(path(projectId, captureGroupId), signal)
+}
+
+export function listCaptureGroups(projectId: string, signal?: AbortSignal) {
+  return readJson<CaptureGroupListResponse>(collectionPath(projectId), signal)
 }
 
 export async function finalizeCaptureGroupReceipt(projectId: string, captureGroupId: string) {
@@ -217,6 +231,10 @@ export async function recordCaptureGroupQualityReview(
 
 function path(projectId: string, captureGroupId: string) {
   return `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}`
+}
+
+function collectionPath(projectId: string) {
+  return `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups`
 }
 
 async function readJson<T>(requestPath: string, signal?: AbortSignal): Promise<T> {

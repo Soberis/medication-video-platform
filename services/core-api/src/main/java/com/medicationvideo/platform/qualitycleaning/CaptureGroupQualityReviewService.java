@@ -117,6 +117,9 @@ class CaptureGroupQualityReviewService {
 					"At least one participating view must be human-qualified before the group can enter annotation.",
 					409);
 		}
+		if (command.result().isAdmitting()) {
+			validateAdmittingResult(facts, decisions, command.result());
+		}
 
 		var viewSetSha256 = digestViewSet(facts, decisions);
 		var inputVersion = "capture-group-view-set.v1:" + viewSetSha256;
@@ -138,6 +141,38 @@ class CaptureGroupQualityReviewService {
 					now, requestId, traceId));
 		}
 		return CaptureGroupQualityReviewResponse.from(review);
+	}
+
+	private static void validateAdmittingResult(CaptureGroupFacts facts,
+			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions, CaptureGroupQualityResult result) {
+		var unresolved = facts.views()
+			.stream()
+			.filter(CaptureGroupView::present)
+			.filter(view -> !isResolved(decisions.get(view.clipAssetId())))
+			.toList();
+		if (!unresolved.isEmpty()) {
+			throw new QualityReviewException("CAPTURE_GROUP_QUALITY_VIEW_NOT_RESOLVED",
+					"Every received view must have a human QUALIFIED or REJECTED quality decision before group admission.",
+					409);
+		}
+
+		if (result == CaptureGroupQualityResult.QUALIFIED) {
+			if (facts.receiptState() == CaptureGroupReceiptState.INCOMPLETE
+					|| facts.views().stream().anyMatch(view -> !view.present())) {
+				throw new QualityReviewException("CAPTURE_GROUP_QUALITY_INCOMPLETE_REQUIRES_EXCLUSIONS",
+						"An incomplete capture group cannot be QUALIFIED; use QUALIFIED_WITH_EXCLUSIONS after confirming missing views.",
+						409);
+			}
+			if (facts.views().stream().anyMatch(view -> !decisions.get(view.clipAssetId()).isQualified())) {
+				throw new QualityReviewException("CAPTURE_GROUP_QUALITY_QUALIFIED_HAS_EXCLUSIONS",
+						"QUALIFIED requires every received view to be human-qualified; use QUALIFIED_WITH_EXCLUSIONS for rejected views.",
+						409);
+			}
+		}
+	}
+
+	private static boolean isResolved(QualityReviewQueryService.CurrentDecision decision) {
+		return decision != null && (decision.isQualified() || "REJECTED".equals(decision.decision()));
 	}
 
 	static Map<String, Object> confirmedViewSet(CaptureGroupFacts facts,

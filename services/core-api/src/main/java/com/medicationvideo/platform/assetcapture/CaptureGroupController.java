@@ -33,6 +33,16 @@ class CaptureGroupController {
 		this.authorizer = authorizer;
 	}
 
+	@GetMapping
+	ResponseEntity<CaptureGroupListResponse> list(@PathVariable UUID projectId, Authentication authentication) {
+		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
+			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "An authenticated project actor is required.",
+					403);
+		}
+		this.authorizer.requireMember(projectId, actor.actorId());
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(this.queryService.list(projectId));
+	}
+
 	@GetMapping("/{captureGroupId}")
 	ResponseEntity<CaptureSessionResponse> get(@PathVariable UUID projectId, @PathVariable UUID captureGroupId,
 			Authentication authentication) {

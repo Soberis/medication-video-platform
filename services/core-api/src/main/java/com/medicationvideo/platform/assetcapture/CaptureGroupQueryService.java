@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.assetcapture;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -26,9 +27,24 @@ class CaptureGroupQueryService {
 
 	@Transactional(readOnly = true)
 	CaptureSessionResponse get(UUID projectId, UUID captureGroupId) {
-		var session = this.sessionRepository.findByCaptureSessionIdAndProjectId(captureGroupId, projectId)
+		var session = this.sessionRepository
+			.findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(captureGroupId, projectId)
 			.orElseThrow(() -> new AssetCatalogQueryException("CAPTURE_GROUP_NOT_FOUND",
 					"The capture group was not found in the current project."));
+		return response(session);
+	}
+
+	@Transactional(readOnly = true)
+	CaptureGroupListResponse list(UUID projectId) {
+		var items = this.sessionRepository
+			.findAllByProjectIdAndCaptureGroupWorkflowTrueOrderByCreatedAtDescCaptureSessionIdDesc(projectId)
+			.stream()
+			.map(this::response)
+			.toList();
+		return new CaptureGroupListResponse(items);
+	}
+
+	private CaptureSessionResponse response(CaptureSession session) {
 		var snapshot = this.snapshotRepository.findByCaptureSessionId(session.getCaptureSessionId())
 			.orElseThrow(() -> new IllegalStateException("Capture session has no frozen camera set snapshot."));
 		var members = this.snapshotMemberRepository

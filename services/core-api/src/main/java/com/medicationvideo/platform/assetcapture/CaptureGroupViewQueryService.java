@@ -42,14 +42,15 @@ public class CaptureGroupViewQueryService {
 
 	@Transactional(readOnly = true)
 	public CaptureGroupFacts get(UUID projectId, UUID captureGroupId) {
-		var session = this.sessionRepository.findByCaptureSessionIdAndProjectId(captureGroupId, projectId)
+		var session = this.sessionRepository
+			.findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(captureGroupId, projectId)
 			.orElseThrow(CaptureGroupViewQueryService::groupNotFound);
 		return project(session, false);
 	}
 
 	@Transactional
 	public CaptureGroupFacts lockAndGet(UUID projectId, UUID captureGroupId) {
-		var session = this.sessionRepository.findForMediaProjection(captureGroupId, projectId)
+		var session = this.sessionRepository.findForGroupView(captureGroupId, projectId)
 			.orElseThrow(CaptureGroupViewQueryService::groupNotFound);
 		return project(session, true);
 	}
@@ -61,8 +62,8 @@ public class CaptureGroupViewQueryService {
 	@Transactional(readOnly = true)
 	public boolean isViewOfCaptureGroup(UUID projectId, UUID clipAssetId) {
 		return this.streamRepository.findByClipAssetId(clipAssetId)
-			.flatMap(stream -> this.sessionRepository.findByCaptureSessionIdAndProjectId(stream.getCaptureSessionId(),
-					projectId))
+			.flatMap(stream -> this.sessionRepository
+				.findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(stream.getCaptureSessionId(), projectId))
 			.isPresent();
 	}
 

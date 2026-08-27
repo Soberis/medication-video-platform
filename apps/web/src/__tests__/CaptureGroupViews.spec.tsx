@@ -46,7 +46,7 @@ describe('CaptureGroup web workflow', () => {
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
     expect(firstRow).toHaveTextContent('合格 · 排除部分视图')
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/capture-groups/60000000-0000-4000-8000-000000000001`,
+      `/api/v1/projects/${projectId}/capture-groups`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
   })
@@ -210,6 +210,7 @@ describe('CaptureGroup web workflow', () => {
 function stubGroupList(groups: CaptureGroup[], tasks: AnnotationTask[]) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
+    if (url.endsWith('/capture-groups')) return Promise.resolve(jsonResponse({ items: groups }))
     if (url.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
     const group = groups.find((candidate) =>
       url.endsWith(`/capture-groups/${candidate.capture_group_id}`),

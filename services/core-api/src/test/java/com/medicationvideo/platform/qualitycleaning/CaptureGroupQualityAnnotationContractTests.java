@@ -155,8 +155,34 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void admissionRejectsIncompleteWholeQualificationRejectedViewsAndUnresolvedViews() throws Exception {
+		var incomplete = createGroup(PROJECT_ID, 3, 2, "INCOMPLETE", 2);
+		recordGroup(incomplete, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("incomplete-qualified"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_QUALITY_INCOMPLETE_REQUIRES_EXCLUSIONS"));
+		assertEquals(0, count("SELECT count(*) FROM capture_group_quality_review WHERE capture_group_id = ?",
+				incomplete.captureGroupId()));
+
+		var rejectedView = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
+		recordGroup(rejectedView, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("rejected-qualified"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_QUALITY_QUALIFIED_HAS_EXCLUSIONS"));
+		recordGroup(rejectedView, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0,
+				key("rejected-with-exclusions"))
+			.andExpect(status().isOk());
+
+		var unresolvedView = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
+		this.jdbcTemplate.update("DELETE FROM quality_review WHERE project_id = ? AND clip_asset_id = ?", PROJECT_ID,
+				unresolvedView.clipAssetIds().getLast());
+		recordGroup(unresolvedView, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0,
+				key("unresolved-with-exclusions"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_QUALITY_VIEW_NOT_RESOLVED"));
+	}
+
+	@Test
 	void groupQualityHistoryIsAppendOnlyAndRequalificationReusesTheTask() throws Exception {
-		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("history-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
@@ -193,7 +219,7 @@ class CaptureGroupQualityAnnotationContractTests {
 
 	@Test
 	void groupRevisionChainPreservesTimebaseAndViewSetAndFreezesPrimary() throws Exception {
-		var group = createGroup(PROJECT_ID, 3, 3, "COMPLETE", 2);
+		var group = createGroup(PROJECT_ID, 3, 3, "COMPLETE", 3);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("revision-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
@@ -377,7 +403,7 @@ class CaptureGroupQualityAnnotationContractTests {
 
 	@Test
 	void qualityDowngradeBlocksNewRevisionAndRequalificationKeepsTheTask() throws Exception {
-		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("downgrade-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
@@ -523,9 +549,9 @@ class CaptureGroupQualityAnnotationContractTests {
 				    metadata_upload_file_id, metadata_schema_version, metadata_sha256,
 				    expected_camera_count, received_camera_count, sync_group_id,
 				    device_time_utc, device_timezone, server_receive_time,
-				    assembly_status, quality_status, created_at, updated_at)
+				    assembly_status, quality_status, capture_group_workflow, created_at, updated_at)
 				VALUES (?, ?, ?, 'synthetic-group-device', ?, NULL, 'platform-local-upload-v1', NULL,
-				        ?, ?, NULL, NULL, NULL, ?, ?, 'PASS', ?, ?)
+				        ?, ?, NULL, NULL, NULL, ?, ?, 'PASS', true, ?, ?)
 				""", captureGroupId, projectId, batchId, cameraSetId, expectedViewCount, boundViewCount,
 				Timestamp.from(now), boundViewCount == expectedViewCount ? "COMPLETE" : "INCOMPLETE",
 				Timestamp.from(now), Timestamp.from(now));

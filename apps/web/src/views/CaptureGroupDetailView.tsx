@@ -818,8 +818,8 @@ export default function CaptureGroupDetailView() {
               <span className="app-eyebrow">Receipt</span>
               <strong>{receiptStateLabels[group.receipt_state]}</strong>
               <span>
-                应 {group.expected_camera_count} 路 · 已收 {group.received_camera_count} 路 · 缺失{' '}
-                {group.missing_camera_numbers.length} 路
+                应 {group.expected_camera_count} 路 · 已收 {group.received_camera_numbers.length} 路
+                · 缺失 {group.missing_camera_numbers.length} 路
               </span>
             </div>
             <div className="capture-group-overview-card">

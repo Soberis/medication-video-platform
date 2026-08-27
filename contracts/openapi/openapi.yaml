@@ -1978,6 +1978,29 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{project_id}/capture-groups:
+    get:
+      operationId: listCaptureGroups
+      tags:
+        - Asset Catalog
+      summary: List CaptureGroups and their receipt/view facts
+      description: >-
+        Returns CaptureGroups owned by the project in newest-first order. The list is sourced from
+        server-side CaptureSession facts, so receiving groups and groups without an AnnotationTask
+        remain visible. Expected and received camera numbers preserve the frozen camera identity;
+        receipt facts are independent of media probing and quality state.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: CaptureGroup list.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaptureGroupListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /projects/{project_id}/capture-groups/{capture_group_id}:
     get:
       operationId: getCaptureGroup
@@ -5538,6 +5561,16 @@ components:
         COMPLETE means every expected camera file is bound and INCOMPLETE preserves the missing numbers.
     CaptureGroup:
       $ref: "#/components/schemas/CaptureSession"
+    CaptureGroupListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaptureGroup"
     CaptureGroupQualityResult:
       type: string
       enum:

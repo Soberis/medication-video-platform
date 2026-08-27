@@ -1,12 +1,12 @@
 import { Alert, Button } from 'antd'
 import { ArrowRight, Camera, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
-  getCaptureGroup,
   getCaptureGroupQualityReview,
+  listCaptureGroups,
   type CaptureGroup,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
@@ -33,7 +33,6 @@ interface CaptureGroupListRow {
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
-  const location = useLocation()
   const [rows, setRows] = useState<CaptureGroupListRow[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
@@ -48,29 +47,25 @@ export default function CaptureGroupListView() {
     setErrorCode('')
     setErrorMessage('')
     try {
-      const taskList = await listAnnotationTasks(projectId, request.signal)
+      const [groupList, taskList] = await Promise.all([
+        listCaptureGroups(projectId, request.signal),
+        listAnnotationTasks(projectId, request.signal),
+      ])
       const indexedTasks = taskList.items.filter((task) => Boolean(task.capture_group_id))
-      const explicitGroupId = new URLSearchParams(location.search).get('capture_group_id')?.trim()
-      const groupIds = Array.from(
-        new Set([
-          ...indexedTasks.flatMap((task) => (task.capture_group_id ? [task.capture_group_id] : [])),
-          ...(explicitGroupId ? [explicitGroupId] : []),
-        ]),
-      )
       const loadedRows = await Promise.all(
-        groupIds.map(async (captureGroupId): Promise<CaptureGroupListRow | null> => {
-          const group = await getCaptureGroup(projectId, captureGroupId, request.signal)
+        groupList.items.map(async (group): Promise<CaptureGroupListRow | null> => {
           const quality = await getCaptureGroupQualityReview(
             projectId,
-            captureGroupId,
+            group.capture_group_id,
             request.signal,
           ).catch(() => null)
           return {
             group,
             quality,
             task:
-              indexedTasks.find((candidate) => candidate.capture_group_id === captureGroupId) ??
-              null,
+              indexedTasks.find(
+                (candidate) => candidate.capture_group_id === group.capture_group_id,
+              ) ?? null,
           }
         }),
       )
@@ -93,7 +88,7 @@ export default function CaptureGroupListView() {
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
     }
-  }, [location.search, projectId])
+  }, [projectId])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadGroups(), 0)
@@ -134,7 +129,7 @@ export default function CaptureGroupListView() {
         </ErrorState>
       ) : null}
       {loadState === 'success' && !rows.length ? (
-        <EmptyState description="当前服务端任务索引中没有可显示的 CaptureGroup。接收中的组或尚未自动创建任务的组不会被浏览器伪造出来。" />
+        <EmptyState description="当前项目暂无服务端 CaptureGroup。" />
       ) : null}
       {loadState === 'success' && rows.length ? (
         <section className="capture-group-list-surface" aria-labelledby="capture-group-queue-title">
@@ -182,7 +177,8 @@ export default function CaptureGroupListView() {
                     <dt>视图</dt>
                     <dd>
                       <span>
-                        应 {group.expected_camera_count} · 已收 {group.received_camera_count} · 缺失{' '}
+                        应 {group.expected_camera_count} · 已收{' '}
+                        {group.received_camera_numbers.length} · 缺失{' '}
                         {group.missing_camera_numbers.length}
                       </span>
                       {group.missing_camera_numbers.length ? (
