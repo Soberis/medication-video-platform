@@ -317,6 +317,10 @@ export default function AnnotationTaskListView() {
             aria-label="配药动作标注任务列表"
           >
             {items.map((row) => {
+              const isGroupTask = Boolean(row.capture_group_id)
+              const taskSubject = isGroupTask
+                ? `CaptureGroup ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
+                : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`
               const revision = row.annotation_revision
               const presentation = postCleaningPresentation(row)
               const taskDetails = (
@@ -325,7 +329,7 @@ export default function AnnotationTaskListView() {
                   <div className="task-details-content">
                     <MetadataList
                       className="task-details-metadata"
-                      ariaLabel={`视频 ${shortId(row.clip_asset_id)} 的任务详情`}
+                      ariaLabel={`${taskSubject} 的任务详情`}
                       items={[
                         {
                           id: 'task-id',
@@ -427,9 +431,16 @@ export default function AnnotationTaskListView() {
                 <Button
                   type="primary"
                   size="small"
-                  aria-label={`进入视频 ${row.clip_asset_id} 的配药动作标注工作台`}
+                  aria-label={`进入${taskSubject}的配药动作标注工作台`}
                   onClick={() =>
-                    void navigate(paths.annotationTask(projectId, row.annotation_task_id))
+                    void navigate(
+                      isGroupTask
+                        ? paths.captureGroup(
+                            projectId,
+                            row.capture_group_id ?? row.annotation_task_id,
+                          )
+                        : paths.annotationTask(projectId, row.annotation_task_id),
+                    )
                   }
                 >
                   进入工作台
@@ -437,7 +448,7 @@ export default function AnnotationTaskListView() {
               ) : null
               return (
                 <article
-                  aria-label={`视频 ${shortId(row.clip_asset_id)} · ${taskStatusLabel(row)}`}
+                  aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
                   className="annotation-task-card"
                   key={row.annotation_task_id}
                 >
@@ -445,10 +456,19 @@ export default function AnnotationTaskListView() {
                     <div className="annotation-task-identity">
                       <Link
                         className="text-link mono-wrap"
-                        to={paths.asset(projectId, row.clip_asset_id)}
-                        title={row.clip_asset_id}
+                        to={
+                          isGroupTask
+                            ? paths.captureGroup(
+                                projectId,
+                                row.capture_group_id ?? row.annotation_task_id,
+                              )
+                            : paths.asset(projectId, row.clip_asset_id ?? row.annotation_task_id)
+                        }
+                        title={row.capture_group_id ?? row.clip_asset_id ?? row.annotation_task_id}
                       >
-                        视频 {shortId(row.clip_asset_id)}
+                        {isGroupTask
+                          ? `CaptureGroup ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
+                          : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`}
                       </Link>
                     </div>
                     <StatusIndicator

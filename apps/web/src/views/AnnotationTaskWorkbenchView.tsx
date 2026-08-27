@@ -261,6 +261,16 @@ export default function AnnotationTaskWorkbenchView() {
           'ANNOTATION_TASK_NOT_FOUND',
         )
       }
+      if (nextTask.capture_group_id) {
+        void navigate(paths.captureGroup(projectId, nextTask.capture_group_id), { replace: true })
+        return
+      }
+      if (!nextTask.clip_asset_id) {
+        throw new AnnotationTaskApiError(
+          '当前任务缺少可用的视频资产或 CaptureGroup 归属。请返回任务列表后重试。',
+          'ANNOTATION_TASK_NOT_FOUND',
+        )
+      }
       const nextDetail = await getClipAsset(projectId, nextTask.clip_asset_id, request.signal)
       if (request.signal.aborted || loadRequest.current !== request) return
       setDraftSegments(initialDraftSegmentsForTask(nextTask))
@@ -287,7 +297,7 @@ export default function AnnotationTaskWorkbenchView() {
     } finally {
       if (loadRequest.current === request) loadRequest.current = null
     }
-  }, [loadCandidates, projectId, resetPlayback, taskId])
+  }, [loadCandidates, navigate, projectId, resetPlayback, taskId])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadWorkbench(), 0)
@@ -882,8 +892,11 @@ export default function AnnotationTaskWorkbenchView() {
                     id: 'video-id',
                     label: '视频资产',
                     value: (
-                      <Link className="text-link" to={paths.asset(projectId, task.clip_asset_id)}>
-                        {shortId(task.clip_asset_id)}
+                      <Link
+                        className="text-link"
+                        to={paths.asset(projectId, task.clip_asset_id ?? '')}
+                      >
+                        {shortId(task.clip_asset_id ?? task.annotation_task_id)}
                       </Link>
                     ),
                   },

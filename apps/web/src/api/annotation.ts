@@ -3,7 +3,14 @@ import { csrfHeaders } from '@/api/http'
 export interface AnnotationTask {
   annotation_task_id: string
   project_id: string
-  clip_asset_id: string
+  clip_asset_id: string | null
+  capture_group_id?: string | null
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
+  capture_group_quality_review_id?: string | null
+  group_quality_revision?: number | null
+  confirmed_view_set?: CaptureGroupViewSet | null
+  group_input_version?: string | null
   label_schema_id: string
   label_schema_digest: string
   assignee_actor_id: string
@@ -66,6 +73,11 @@ export interface AnnotationRevision {
   document_sha256: string
   submitted_by: string
   submitted_at: string
+  capture_group_id?: string | null
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
+  confirmed_view_set?: CaptureGroupViewSet | null
+  input_version?: string | null
 }
 
 export interface AnnotationRevisionSummary {
@@ -80,8 +92,51 @@ export interface AnnotationRevisionSummary {
   }
   submitted_by: string
   submitted_at: string
+  capture_group_id?: string | null
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
+  confirmed_view_set?: CaptureGroupViewSet | null
+  input_version?: string | null
   review: AnnotationReview | null
   post_cleaning_result: PostCleaningResult | null
+  capture_group_cleaning?: CaptureGroupCleaning | null
+}
+
+export interface CaptureGroupViewSet {
+  schema_version: 'capture-group-view-set.v1'
+  capture_group_id: string
+  capture_group_version: number
+  camera_set_snapshot_id: string
+  receipt_state: 'RECEIVING' | 'COMPLETE' | 'INCOMPLETE'
+  views: Array<{
+    camera_number: number
+    camera_stream_id: string | null
+    clip_asset_id: string | null
+    camera_channel_id: string | null
+    present: boolean
+    media_status: string
+    technical_quality_status: string | null
+    stream_version: number
+    clip_asset_version: number
+    asset_available: boolean
+    quality_review_decision: 'UNREVIEWED' | 'QUALIFIED' | 'NEEDS_REVIEW' | 'REJECTED'
+    quality_review_version: number
+  }>
+}
+
+export interface CaptureGroupCleaning {
+  capture_group_cleaning_id: string
+  group_quality_result: string
+  group_quality_revision: number
+  primary_clip_asset_id: string
+  primary_camera_number: number
+  outcome: 'PASS' | 'WARNING' | 'REJECT'
+  reason_codes: string[]
+  executed_checks: string[]
+  participating_views: Array<Record<string, unknown>>
+  excluded_views: Array<Record<string, unknown>>
+  mapping_provenance: Array<Record<string, unknown>>
+  evaluated_at: string
 }
 
 export interface PostCleaningResult {
@@ -165,6 +220,29 @@ export async function createAnnotationTask(
         ...csrfHeaders(),
       },
       body: JSON.stringify({ assignee_actor_id: assigneeActorId }),
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as AnnotationTask
+  throw await annotationTaskApiError(response)
+}
+
+export async function selectAnnotationPrimaryView(
+  projectId: string,
+  annotationTaskId: string,
+  clipAssetId: string,
+): Promise<AnnotationTask> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(annotationTaskId)}/primary-view`,
+    {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Request-Id': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ clip_asset_id: clipAssetId }),
       cache: 'no-store',
     },
   )

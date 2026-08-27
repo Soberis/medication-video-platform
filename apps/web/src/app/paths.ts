@@ -2,6 +2,9 @@ export const paths = {
   login: '/login',
   projects: '/projects',
   videos: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/videos`,
+  captureGroups: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/capture-groups`,
+  captureGroup: (projectId: string, captureGroupId: string) =>
+    `/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}`,
   asset: (projectId: string, assetId: string) =>
     `/projects/${encodeURIComponent(projectId)}/assets/${encodeURIComponent(assetId)}`,
   annotationTasks: (projectId: string) =>

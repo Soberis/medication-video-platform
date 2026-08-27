@@ -1,6 +1,7 @@
 import { App as AntdApp, Button } from 'antd'
 import {
   Activity,
+  Camera,
   Clapperboard,
   FolderKanban,
   ListChecks,
@@ -41,6 +42,11 @@ export default function AppShell() {
   const isVideoManagementContext =
     Boolean(projectId) &&
     [paths.videos(projectId), '/projects/:projectId/assets/:id'].some(
+      (path) => matchPath({ path, end: true }, location.pathname) !== null,
+    )
+  const isCaptureGroupContext =
+    Boolean(projectId) &&
+    [paths.captureGroups(projectId), '/projects/:projectId/capture-groups/:captureGroupId'].some(
       (path) => matchPath({ path, end: true }, location.pathname) !== null,
     )
 
@@ -109,6 +115,17 @@ export default function AppShell() {
                 >
                   <Video {...iconProps} />
                   <span className="sidebar-label">视频管理</span>
+                </Link>
+              ) : null}
+              {projectId ? (
+                <Link
+                  to={paths.captureGroups(projectId)}
+                  aria-current={isCaptureGroupContext ? 'page' : undefined}
+                  aria-label="CaptureGroup 多机位"
+                  title="CaptureGroup 多机位"
+                >
+                  <Camera {...iconProps} />
+                  <span className="sidebar-label">CaptureGroup 多机位</span>
                 </Link>
               ) : null}
               {projectId ? (

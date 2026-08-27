@@ -62,6 +62,18 @@ export const router = createBrowserRouter([
             }),
           },
           {
+            path: '/projects/:projectId/capture-groups',
+            lazy: async () => ({
+              Component: (await import('@/views/CaptureGroupListView')).default,
+            }),
+          },
+          {
+            path: '/projects/:projectId/capture-groups/:captureGroupId',
+            lazy: async () => ({
+              Component: (await import('@/views/CaptureGroupDetailView')).default,
+            }),
+          },
+          {
             path: '/projects/:projectId/assets/:id',
             lazy: async () => ({ Component: (await import('@/views/AssetDetailView')).default }),
           },

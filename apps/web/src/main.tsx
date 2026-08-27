@@ -14,6 +14,7 @@ import '@/styles/globals.css'
 import '@/styles/layout.css'
 import '@/styles/components.css'
 import '@/styles/workbench.css'
+import '@/styles/capture-group.css'
 
 const root = document.getElementById('app')
 if (!root) throw new Error('未找到应用挂载节点。')
