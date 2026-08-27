@@ -1,17 +1,19 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前范围以 V1.24 FLOW-FIRST P0 自动任务衔接为准：平台对接边端接收，在云端完成视频管理、自动单视频手部预标注、人工质量判断、合格后自动任务分配、配药动作标注复核、数据清洗和管理员确认的最小 `training-data.v2` preview/download。手部预标注与自动任务创建都不替代人工标注、复核和清洗；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按独立 Physical Reduction 批次退役，未来多视角同步仍由 V1.22 DRAFT / DEFERRED 和相关专题文档承载。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.25 多机位 CaptureGroup 基线为准：一个真实配药事件统一进入 CaptureGroup，支持动态 N 路视图、逐视图 Media Probe/MediaPipe Candidate、人工质量与组质量准入、单组任务/修订链、主视图时间基准、Review、事件级 Cleaning 和保留组/视图关系的训练数据方向。当前已实现运行时仍主要是 V1.24-compatible 单视频闭环；V1.25 文档批准不等于功能已实现。Candidate、人工标注、复核、清洗、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按独立 Physical Reduction 批次退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [配药视频数据管理平台：手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md) | 当前边端对接边界、云端主链、状态、容量和验收 |
-| [当前需求追踪矩阵](./requirements-traceability.md) | V1.24 当前 FR 到模块、契约、测试和状态 |
+| [CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md) | V1.25 当前多机位目标、所有权、实施边界和顺序 |
+| [固定多相机配药事件质量评审、标注与清洗用户流程](./multi-camera-quality-review-workflow.md) | V1.25 当前产品/UX 工作流与人工闸门 |
+| [配药视频数据管理平台：手部预标注组件技术设计](./video-hand-pose-mvp-technical-design.md) | V1.24 已实现单视频组件与 V1.25 继承的 Media Probe/MediaPipe/Candidate 行为 |
+| [当前需求追踪矩阵](./requirements-traceability.md) | V1.25 当前需求到模块、契约、测试和状态；V1.24 实现证据保留 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |
-| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | 未来多视角同步约束参考；V1.24 不交付 CaptureSync runtime，V1.22 继续 DEFERRED |
+| [时间基准与多相机同步](./timebase-and-multicamera-sync.md) | V1.25 时间映射约束参考；不交付 CaptureSync runtime，V1.22 继续 DEFERRED |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |
@@ -22,10 +24,10 @@
 | 文档 | 历史用途 |
 | --- | --- |
 | [历史需求追踪矩阵](./requirements-traceability-history.md) | V1.17 及以前的实施记录、证据和历史结论 |
-| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.24 当前规范为准 |
+| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.25 当前规范为准 |
 | [Hand Pose PoC](./history/hand-pose-poc.md) | 历史本地推理参考；不定义当前产品语言 |
 | [Hand Pose Candidate Phase B](./history/hand-pose-candidate-phase-b.md) | 历史候选机制设计；不定义当前范围 |
-| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；当前范围以 V1.24 为准 |
+| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；当前范围以 V1.25 为准 |
 
 ## 维护规则
 

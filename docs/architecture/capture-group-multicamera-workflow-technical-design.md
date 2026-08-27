@@ -1,10 +1,10 @@
-# CaptureGroup 多机位接收与数据闭环最小技术设计（草案）
+# CaptureGroup 多机位接收与数据闭环最小技术设计（V1.25）
 
-> 状态：DRAFT / FUTURE ADDITIVE
-> 本文只用于下一版本实现规划，不授权当前 V1.24 的代码、迁移、OpenAPI、事件、Worker 或运行时变更。
-> V1.24 仍是当前正式单视频基线；V1.25 多机位路径在独立版本化契约批准后才实施。
+> 状态：V1.25 当前多机位实现设计 — 实现待完成
+> 本文定义已批准的 V1.25 目标与实施顺序，不声称 V1.25 运行时已经实现；代码、迁移、OpenAPI、事件、Worker 和运行时变更须按实施计划单独交付。
+> V1.25 是当前正式需求基线；V1.24 代码和单视频事实仍是迁移起点与历史兼容参考。
 
-本文基于 [V1.24 需求基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[当前手部数据闭环设计](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../contracts/schemas/external-video-ingest-v1.schema.json) 和 [最小训练数据导出说明](../../tools/minimal-export/README.md)。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
+本文基于 [V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[V1.24 前一正式基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[V1.24 手部组件参考](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../contracts/schemas/external-video-ingest-v1.schema.json) 和 [最小训练数据导出说明](../../tools/minimal-export/README.md)。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
 
 ## 1. 设计结论
 
@@ -179,7 +179,7 @@ CaptureGroup
 主视图和时间基准保持不变。
 
 当前 V1.24 单视频规则 `ClipAsset.QUALIFIED → 一个视频 AnnotationTask → 人工 AnnotationRevision`
-继续有效，但只适用于冻结单视频路径。若现有数据库/API不能表达 V1.25 组归属，最小增量方向是：
+继续有效，但只适用于冻结单视频路径。若现有数据库/API不能表达 V1.25 组归属，实施时最小增量方向是：
 
 1. 在 `annotation_task` 与 `annotation_revision` 增加可选 `capture_group_id`（旧 V1.24 行为空）；
 2. 增加显式 `primary_view/anchor_view` 引用，组行的 `clip_asset_id` 若因兼容必须保留，只作技术参考，不作为 owner；
@@ -259,5 +259,5 @@ V1.22 三维多视角、CaptureSync runtime、相机标定/三角测量、跨相
 DatasetVersion/复杂导出、通用 AI Evaluation、工作流引擎和微服务扩张继续是历史/延后方向，不约束
 V1.25，也不因本文恢复。
 
-本文不修改 `docs/requirements/requirements-manifest.json`、V1.24 或历史基线、任何契约、代码、数据库、
-Worker 或运行时；最终状态仍为 DRAFT，待用户设计评审后再决定是否进入实现规划。
+本文不实施 V1.25 生产代码、数据库、契约、Worker 或运行时；当前运行时仍主要是 V1.24-compatible 单视频流程。
+V1.25 实现应以本设计、需求基线和追踪矩阵为准，并在实现完成前保持未验收状态。

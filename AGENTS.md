@@ -11,10 +11,10 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md`：当前正式业务需求基线（FLOW-FIRST P0 自动任务衔接）；未覆盖条款继承 V1.23、V1.21、V1.20、V1.18 及其历史继承基线。V1.22 多视角草案继续为 DRAFT / DEFERRED，不覆盖 V1.24。
-3. `docs/architecture/video-hand-pose-mvp-technical-design.md`：当前云端数据闭环、手部预标注、状态、容量和实施顺序设计。
+2. `docs/requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md`：当前正式业务需求基线，定义新 CaptureGroup 工作流；Candidate 非 Ground Truth、人工 revision、Review、Cleaning、权限、安全、审计和 provenance 继续继承。`docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md` 是前一正式冻结基线、当前 V1.24-compatible 运行时和历史行为参考。V1.25 只对新的 CaptureGroup 工作流替代 V1.24 的单视频任务/标注/清洗/导出所有权，不回写历史行为。
+3. `docs/architecture/capture-group-multicamera-workflow-technical-design.md`：当前 V1.25 多机位实现设计与实施顺序；不得将设计批准误称为运行时已实现。
 4. `docs/adr/`：已经冻结的技术决策。
-5. `docs/architecture/` 中标记为“当前规范”的专题详细设计。
+5. `docs/architecture/` 中标记为“当前规范”的专题详细设计；`video-hand-pose-mvp-technical-design.md` 作为 V1.24 已实现单视频组件和 V1.25 继承参考，不再单独代表整体技术设计。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
 7. 真实代码、数据库迁移和测试结果。
 
@@ -68,15 +68,17 @@ Do not introduce independent page-level visual styles.
 严格遵循：
 
 ```text
-边端接收对接
-→ 视频与数据管理
-→ P0 单视频 MediaPipe 手部预标注
-→ 配药动作标注与复核
-→ 数据清洗与可用数据
-→ P0 最小 training_data.parquet 导出
-→ P0 集成测试与授权样本算法评估
-→ P1 显式批量预标注和项目自动策略
-→ 后续数据集构建、导出与模型演进
+边端接收
+→ CaptureGroup / 视频管理
+→ 每路 Media Probe / MediaPipe Candidate
+→ 逐视图人工质量
+→ CaptureGroup 人工质量准入
+→ 一个 CaptureGroup AnnotationTask / Revision 修订链
+→ Review
+→ 事件级 Cleaning
+→ 版本化 training-data 导出
+→ 授权样本算法评估
+→ 后续 P1 批量预标注和自动策略
 ```
 
 MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只能产生 `CandidateAnnotation`，不得绕过人工确认、复核和清洗进入正式数据。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
@@ -89,7 +91,7 @@ MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 每次优先交付一个可运行、可测试、可回退的纵向切片；完成后再选择下一项，不并行铺开多个未闭环模块。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
-- 当前 P0 不保留未接线的 CaptureSync runtime，仅为了未来 V1.22 Draft 预留；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
+- V1.25 MVP 不恢复未接线的 CaptureSync runtime；V1.22 Draft、3D、标定、DatasetVersion 和通用工作流引擎仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
 
 ## Data And Safety
 

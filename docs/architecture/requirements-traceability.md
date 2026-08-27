@@ -1,15 +1,16 @@
-# 当前需求追踪矩阵
+# 当前需求追踪矩阵（V1.25）
 
-> 当前需求基线：[V1.24 FLOW-FIRST P0 自动任务衔接](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)<br>
-> 当前技术设计：[手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
+> 当前需求基线：[V1.25 多机位 CaptureGroup 工作流](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)<br>
+> 当前技术设计：[CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md)<br>
+> V1.24 实现/历史参考：[V1.24 需求基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md) 与 [V1.24 手部组件设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-08-26
+> 最后更新：2026-08-27
 
-本文件只追踪当前开发主线。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
+本文件区分 CURRENT REQUIREMENTS 与 CURRENT IMPLEMENTATION STATUS。V1.25 是当前正式需求基线，批准设计但尚未完整实现的条目统一使用 `D1`；V1.24/V1.21/V1.18 行保留已有运行时与证据状态。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、Review、Cleaning 或管理员导出确认。CaptureSync / V1.19 多相机同步当前不属于 P0 runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前 P0。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。V18-FR-006 的离线手部评估证据工具已实现并通过合成校验，但尚无授权样本实测，因此保持 `PI`，不代表效果已验收。
+V1.24-compatible 运行时继续保留 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、Review、Cleaning 或管理员导出确认。CaptureSync / V1.19 多机位同步当前不属于已实现 V1.24-compatible runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前运行时。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。V18-FR-006 的离线手部评估证据工具已实现并通过合成校验，但尚无授权样本实测，因此保持 `PI`，不代表效果已验收。
 
-| 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 当前状态 |
+| 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 实现/证据状态 |
 | --- | --- | --- | --- | --- | --- |
 | V18-FR-001 边端接收 | P0 | `assetcapture` | `external-video-ingest-v1`、multipart、接收回执 | 显式 group、SHA、重复上传、损坏媒体；平台不控制边端 | I |
 | V18-FR-002 视频与数据管理 | P0 | `assetcapture` | `VideoSummary`、`DataManagementSummary`、稳定 cursor | 1,000 条合成数据分页、筛选、统计跳转一致 | I |
@@ -22,6 +23,13 @@ V1.24 继承 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅�
 | V18-FR-009 测试数据彻底清理 | P1 | `assetcapture`、`governance` | purge request/audit | 仅 `SYNTHETIC_TEST` 经确认删除 | D1 |
 | V21-FR-001 最小训练数据导出 | P0 | `tools/minimal-export`（只读投影） | `training-data.v2` Parquet | 当前 Cleaning PASS + 人工标签/动作区间 + Candidate 21 点；非 PASS 拒绝；可回读；默认无 MP4 | I |
 | V24-FR-001 质量合格自动任务衔接 | P0 | `qualitycleaning`、`annotationreview` | `QualityReviewQualifiedEvent`、`AnnotationTask`、AuditEvent | 合格事务内唯一自动分配、同结论幂等、非合格不创建、人工 revision/Review/Cleaning 不可绕过 | I |
+| V25-FR-001 CaptureGroup 身份与收件闭环 | P0 | `assetcapture` | `CaptureSession` / `CameraSetSnapshot` / 组 receipt 读模型 | 显式归组、动态 N、N=1 特例、缺路不重编号；`RECEIVING` / `COMPLETE` / `INCOMPLETE` 与版本化完成信号 | D1 |
+| V25-FR-002 逐视图媒体与候选处理 | P0 | `assetcapture`、`aicandidate` | per-view Media Probe / MediaPipe Candidate / `QualityReview` | Media Probe 失败只停止该视图；成功视图独立产生 Candidate；Candidate 不成为 Ground Truth；视图质量三态 | D1 |
+| V25-FR-003 组质量人工准入 | P0 | `qualitycleaning` | `CaptureGroupQualityReview` | 持久四态、收件关闭前不得最终 `QUALIFIED`/`QUALIFIED_WITH_EXCLUSIONS`、零合格视图不得放行；无自动规则引擎 | D1 |
+| V25-FR-004 单组任务与修订链 | P0 | `annotationreview`、`qualitycleaning` | 组 `AnnotationTask` / append-only `AnnotationRevision` / AuditEvent | 每组恰好一个任务；有效组质量提交者写入 `assignee_actor_id` 与 `created_by`；幂等不重建/不改派；View Set/input version 可追溯 | D1 |
+| V25-FR-005 主视图时间基准与映射安全 | P0 | `annotationreview` | primary/anchor view、同步证据和映射 provenance | 主视图正式时间轴；仅已验证 `RELIABLE` 映射可推导支持区间；`APPROXIMATE`/`UNRELIABLE` 不伪造对齐时间戳 | D1 |
+| V25-FR-006 人工 Review 与事件级 Cleaning | P0 | `annotationreview`、`qualitycleaning` | 组 Review / Cleaning 读写模型 | Review、Cleaning 均为人工闸门；拒绝/缺失视图保留并不参与下游；Cleaning 以组事实和正式 revision 为准 | D1 |
+| V25-FR-007 下游追溯、分割与版本化导出方向 | P0 | `qualitycleaning`、`datasetexport`、`governance` | group/view provenance、未来 `training-data.v3` | `REJECTED` 不等于删除；同组视图不跨 train/validation/test；导出保留组/视图关系，未实现不标 I/UAT | D1 |
 
 实现、OpenAPI、事件、数据库或测试的每次变更必须更新本表相应行；被 V1.21 替代或明确 DEFERRED 的范围、历史证据和旧版本结论只记录在历史矩阵或对应草案，不能反向定义当前范围。
 

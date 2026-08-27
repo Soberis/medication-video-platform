@@ -1,11 +1,11 @@
-# 配药视频数据管理平台：手部预标注优先技术设计
+# 配药视频数据管理平台：手部预标注组件技术设计（V1.24 单视频基线 / V1.25 继承参考）
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：对应 V1.24 FLOW-FIRST P0 当前实施设计<br>
+> 状态：V1.24 已实现单视频技术基线 / V1.25 继承组件参考<br>
 > 日期：2026-08-20<br>
-> 对齐需求：[V1.24 配药视频数据管理平台需求文档](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
+> 对齐需求：[V1.25 当前需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)；本文件保留 [V1.24 前一正式基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md) 的单视频实现参考
 
-V1.24 继承本文的单视频数据闭环设计，并在 Cleaning PASS 后提供独立、只读的最小 `training_data.parquet` 导出；人工质量结论变为 `QUALIFIED` 时，同一事务自动创建并分配唯一 `AnnotationTask`。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 不属于当前 P0，已按独立 Physical Reduction 批次退役。V1.19 多相机同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来能力不进入当前单视频闭环。
+本文保留 V1.24-compatible 单视频闭环的已实现组件事实。Media Probe、MediaPipe 和 `CandidateAnnotation` 的候选隔离、人工边界及 provenance 行为继续作为 V1.25 的继承组件；V1.24 的“单视频质量合格后自动创建并分配任务”仅是冻结单视频运行时的历史所有权规则。V1.25 新的 CaptureGroup 任务/修订归属与事件级 Cleaning 以 [V1.25 多机位技术设计](capture-group-multicamera-workflow-technical-design.md) 为准。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 不属于当前 V1.25 MVP，已按独立 Physical Reduction 批次退役。V1.19 多机位同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED；未来能力不进入当前单视频闭环。
 
 ## 1. 设计目标与系统边界
 

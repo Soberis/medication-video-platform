@@ -2,19 +2,30 @@
 
 平台对接医院边端采集系统接收固定舱内相机视频，在云端完成视频与数据管理、MediaPipe 手部预标注、配药动作标注、复核和数据清洗。
 
-当前主线：
+当前需求基线：V1.25（多机位 CaptureGroup 设计已批准，运行时尚未完整实现）
 
 ```text
-边端接收 → 视频/数据管理 → 自动单视频手部预标注 → 人工质量判断 → 合格后自动任务分配 → 人工配药动作标注复核 → 数据清洗 → 可用数据
+一次真实配药事件 → 一个 CaptureGroup → 动态 N 路视图 → 逐视图 Media Probe / MediaPipe Candidate
+→ 人工质量与组质量准入 → 一个组 AnnotationTask / Revision 修订链 → Review → 事件级 Cleaning → 版本化训练数据
 ```
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个成功入库视频会自动提交一个幂等 MediaPipe 候选作业；MediaPipe 只生成可追溯的候选和播放器 Overlay，不能自动成为正式标注或清洗结论。质量合格只会自动创建并分配人工标注任务，不能跳过人工 revision、复核、清洗或管理员导出确认。批量 API 和可配置自动策略属于后续能力。
+当前已实现运行时（V1.24-compatible 单视频流程）：
+
+```text
+边端接收 → 视频/数据管理 → Media Probe → 单视频 MediaPipe Candidate
+→ 人工质量判断 → 合格后自动任务分配 → 人工配药动作标注复核 → 数据清洗 → 可用数据
+```
+
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe 候选作业；MediaPipe 只生成可追溯的候选和播放器 Overlay，不能自动成为正式标注或清洗结论。质量合格只会自动创建并分配人工标注任务，不能跳过人工 revision、复核、清洗或管理员导出确认。V1.25 的 CaptureGroup 组质量、组任务/修订、事件级 Cleaning 和多视图导出仍待实施；批量 API 和可配置自动策略属于后续能力。
 
 当前规范：
 
-- [V1.24 FLOW-FIRST P0 自动任务衔接需求基线](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
-- [当前技术设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)
+- [V1.25 当前正式需求基线（多机位 CaptureGroup）](./docs/requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)
+- [V1.25 多机位实现技术设计](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
+- [V1.25 多机位质量评审与清洗工作流](./docs/architecture/multi-camera-quality-review-workflow.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
+- [V1.24 前一正式基线与当前运行时参考](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
+- [V1.24 单视频手部预标注组件设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
 
 ## 本地运行

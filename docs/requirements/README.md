@@ -2,13 +2,15 @@
 
 本目录只维护需求基线的入口；当前范围不得从历史版本推断。
 
-## 当前
+## 当前正式基线
 
-- [V1.24 配药视频数据管理平台需求基线（FLOW-FIRST P0 自动任务衔接）](./baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
+- [V1.25 配药视频数据管理平台需求基线（多机位 CaptureGroup 工作流）](./baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)
 
-V1.24 是当前唯一正式业务需求基线：继承 V1.23 的 LEAN-P0 主线，并在人工质量结论变为 `QUALIFIED` 时，于同一事务自动创建且分配唯一 `AnnotationTask`。唯一主线为边端接收 → 视频管理 → 自动单视频 MediaPipe Candidate → 人工质量判断 → 自动任务分配 → 人工 AnnotationRevision → Review → Cleaning → 管理员确认的 `training_data.v2` / `training_data.parquet` 导出。V1.23 是上一正式基线；V1.22 继续为 DRAFT / DEFERRED，不进入正式继承链。
+V1.25 是当前正式业务需求基线：一个真实配药事件对应一个 `CaptureGroup`，支持动态 `N` 路固定机位，分离收件、媒体和人工质量事实；组质量通过后自动创建一个组 AnnotationTask 和一条追加修订链，以主视图作为正式时间基准，保留 Review、事件级 Cleaning、权限、审计、来源追踪和按组防泄漏规则。V1.25 是设计已批准、实现待完成的基线；当前运行时仍主要是 V1.24-compatible 单视频闭环，不将文档批准等同于功能已实现。V1.22 继续为 DRAFT / DEFERRED，不进入正式继承链。
 
 ## 前一正式版本
+
+- [V1.24 配药视频数据管理平台需求基线（FLOW-FIRST P0 自动任务衔接）](./baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)：前一正式基线、当前 V1.24-compatible 运行时和历史行为参考；其单视频任务/标注/清洗/导出所有权仅被 V1.25 对新 CaptureGroup 工作流替代。
 
 - [V1.23 配药视频数据管理平台需求基线（FLOW-FIRST P0 Physical Reduction）](./baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)：V1.24 的正式继承基线。
 
