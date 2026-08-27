@@ -293,11 +293,7 @@
   font-size: var(--app-font-size-caption);
 }
 
-.capture-group-sync-note,
-.capture-group-candidate-facts,
-.capture-group-sync-inspector,
-.capture-group-cleaning-fact,
-.capture-group-next-action {
+.capture-group-stack {
   display: grid;
   gap: var(--app-space-8);
 }
@@ -543,13 +539,6 @@
 .capture-group-sync-inspector {
   padding-top: var(--app-space-8);
   border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.capture-group-confirmed-view-set,
-.capture-group-quality-history,
-.capture-group-sync-inspector {
-  display: grid;
-  gap: var(--app-space-8);
 }
 
 .capture-group-confirmed-view-set strong,
