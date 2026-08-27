@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.assetcapture;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -242,9 +243,83 @@ class CaptureSessionIngestContractTests {
 					"Bearer " + TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.next_cursor", nullValue()))
 			.andExpect(jsonPath("$.items[0].capture_group_id").value(captureSessionId.toString()))
+			.andExpect(jsonPath("$.items[0].capture_group_key").isString())
+			.andExpect(jsonPath("$.items[0].device_time_utc").value("2026-07-15T01:02:04Z"))
+			.andExpect(jsonPath("$.items[0].expected_camera_count").value(1))
+			.andExpect(jsonPath("$.items[0].received_camera_count").value(0))
 			.andExpect(jsonPath("$.items[0].receipt_state").value("RECEIVING"))
-			.andExpect(jsonPath("$.items[0].missing_camera_numbers").isEmpty());
+			.andExpect(jsonPath("$.items[0].missing_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.items[0].created_at").isString())
+			.andExpect(jsonPath("$.items[0].camera_set_snapshot").doesNotExist())
+			.andExpect(jsonPath("$.items[0].streams").doesNotExist());
+	}
+
+	@Test
+	void paginatesLightweightCaptureGroupSummariesAndKeepsProjectsIsolated() throws Exception {
+		var isolatedProjectId = UUID.randomUUID();
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, isolatedProjectId);
+		var incomplete = createListGroup(PROJECT_ID, List.of(1, 2, 3, 4, 5), List.of(1, 3, 5));
+		var complete = createListGroup(PROJECT_ID, List.of(1), List.of(1));
+		var other = createListGroup(isolatedProjectId, List.of(1), List.of(1));
+		setCaptureGroupCreatedAt(incomplete.captureGroupId(), Instant.parse("2026-07-15T01:00:00Z"));
+		setCaptureGroupCreatedAt(complete.captureGroupId(), Instant.parse("2026-07-16T01:00:00Z"));
+		setCaptureGroupCreatedAt(other.captureGroupId(), Instant.parse("2026-07-17T01:00:00Z"));
+		finalizeCaptureGroup(PROJECT_ID, incomplete.captureGroupId());
+		finalizeCaptureGroup(PROJECT_ID, complete.captureGroupId());
+
+		var firstPage = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].capture_group_id").value(complete.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[0].receipt_state").value("COMPLETE"))
+			.andExpect(jsonPath("$.items[0].expected_camera_count").value(1))
+			.andExpect(jsonPath("$.items[0].received_camera_count").value(0))
+			.andExpect(jsonPath("$.items[0].missing_camera_numbers").isEmpty())
+			.andExpect(jsonPath("$.items[0].camera_set_snapshot").doesNotExist())
+			.andExpect(jsonPath("$.items[0].streams").doesNotExist())
+			.andExpect(jsonPath("$.next_cursor").isString())
+			.andReturn();
+		String cursor = com.jayway.jsonpath.JsonPath.read(firstPage.getResponse().getContentAsString(),
+				"$.next_cursor");
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+				.param("cursor", cursor)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].capture_group_id").value(incomplete.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[0].receipt_state").value("INCOMPLETE"))
+			.andExpect(jsonPath("$.items[0].expected_camera_count").value(5))
+			.andExpect(jsonPath("$.items[0].received_camera_count").value(0))
+			.andExpect(jsonPath("$.items[0].missing_camera_numbers.length()").value(2))
+			.andExpect(jsonPath("$.items[0].missing_camera_numbers[0]").value(2))
+			.andExpect(jsonPath("$.items[0].missing_camera_numbers[1]").value(4))
+			.andExpect(jsonPath("$.next_cursor", nullValue()));
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", isolatedProjectId).param("limit", "1")
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].capture_group_id").value(other.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[0].capture_group_id")
+				.value(org.hamcrest.Matchers.not(incomplete.captureGroupId().toString())))
+			.andExpect(jsonPath("$.next_cursor", nullValue()));
+	}
+
+	@Test
+	void returnsAnEmptyCaptureGroupPageWithNoCursor() throws Exception {
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.next_cursor", nullValue()));
 	}
 
 	@Test
@@ -572,8 +647,13 @@ class CaptureSessionIngestContractTests {
 
 	private UploadBatch completedBatch(UUID projectId, byte[] metadata, List<ManifestEntry> videoEntries,
 			UUID externalManifestId) {
+		return completedBatch(projectId, metadata, videoEntries, externalManifestId, METADATA_ID);
+	}
+
+	private UploadBatch completedBatch(UUID projectId, byte[] metadata, List<ManifestEntry> videoEntries,
+			UUID externalManifestId, UUID metadataFileId) {
 		var entries = new java.util.ArrayList<>(videoEntries);
-		entries.add(new ManifestEntry(METADATA_ID, UploadFileKind.METADATA, "application/json", metadata.length,
+		entries.add(new ManifestEntry(metadataFileId, UploadFileKind.METADATA, "application/json", metadata.length,
 				sha256(metadata)));
 		var manifestEntries = List.copyOf(entries);
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -701,6 +781,56 @@ class CaptureSessionIngestContractTests {
 				}
 				""".formatted(captureSessionId, cameraSetId, expectedCameraCount, streamJson)
 			.getBytes(StandardCharsets.UTF_8);
+	}
+
+	private ListGroupFixture createListGroup(UUID projectId, List<Integer> expected, List<Integer> received)
+			throws Exception {
+		UUID cameraSetId;
+		List<UUID> channelIds;
+		if (expected.size() == 5) {
+			var configuration = fiveCameraSet(projectId);
+			cameraSetId = configuration.cameraSetId();
+			channelIds = configuration.channelIds();
+		}
+		else {
+			var configuration = cameraSet(projectId, true, false);
+			cameraSetId = configuration.cameraSetId();
+			channelIds = List.of(configuration.firstChannelId());
+		}
+		var captureSessionId = UUID.randomUUID();
+		var manifestVideos = new ArrayList<ExternalVideoManifestVideo>();
+		var videoEntries = new ArrayList<ManifestEntry>();
+		var streams = new ArrayList<StreamSpec>();
+		for (var cameraNumber : received) {
+			var videoId = UUID.randomUUID();
+			var fileName = "camera-" + cameraNumber + ".mp4";
+			var sha256 = "a".repeat(64);
+			var channelId = channelIds.get(cameraNumber - 1);
+			manifestVideos.add(new ExternalVideoManifestVideo(videoId, cameraNumber, fileName, 12L, sha256, null));
+			videoEntries.add(new ManifestEntry(videoId, UploadFileKind.VIDEO, "video/mp4", 12, sha256, fileName));
+			streams.add(new StreamSpec(videoId, channelId, cameraNumber - 1, true, 0, "PASS"));
+		}
+		var manifest = createBoundExternalManifestV2(projectId, expected, manifestVideos);
+		var metadata = metadata(captureSessionId, cameraSetId, expected.size(), streams);
+		var batch = completedBatch(projectId, metadata, videoEntries, manifest.manifestId(), UUID.randomUUID());
+		this.objectStorage.bytes = metadata;
+		ingest(batch.getBatchId()).andExpect(status().isCreated());
+		return new ListGroupFixture(captureSessionId);
+	}
+
+	private void setCaptureGroupCreatedAt(UUID captureGroupId, Instant createdAt) {
+		assertEquals(1,
+				this.jdbcTemplate.update(
+						"UPDATE capture_session SET created_at = ?, updated_at = ? WHERE capture_session_id = ?",
+						java.sql.Timestamp.from(createdAt), java.sql.Timestamp.from(createdAt), captureGroupId));
+	}
+
+	private void finalizeCaptureGroup(UUID projectId, UUID captureGroupId) throws Exception {
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/receipt/finalize", projectId,
+					captureGroupId)
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk());
 	}
 
 	private org.springframework.test.web.servlet.ResultActions ingest(UUID batchId) throws Exception {
@@ -861,6 +991,9 @@ class CaptureSessionIngestContractTests {
 	}
 
 	private record V2ManifestFixture(UUID manifestId, ExternalVideoIngestManifestV2Request request) {
+	}
+
+	private record ListGroupFixture(UUID captureGroupId) {
 	}
 
 }

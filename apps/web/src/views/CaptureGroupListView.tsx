@@ -7,7 +7,7 @@ import {
   CaptureGroupApiError,
   getCaptureGroupQualityReview,
   listCaptureGroups,
-  type CaptureGroup,
+  type CaptureGroupSummary,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import { AnnotationTaskApiError, listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
@@ -26,7 +26,7 @@ import {
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 interface CaptureGroupListRow {
-  group: CaptureGroup
+  group: CaptureGroupSummary
   quality: CaptureGroupQualityReview | null
   task: AnnotationTask | null
 }
@@ -34,67 +34,85 @@ interface CaptureGroupListRow {
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
   const [rows, setRows] = useState<CaptureGroupListRow[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
+  const rowsRef = useRef<CaptureGroupListRow[]>([])
 
-  const loadGroups = useCallback(async () => {
-    activeRequest.current?.abort()
-    const request = new AbortController()
-    activeRequest.current = request
-    setLoadState('loading')
-    setErrorCode('')
-    setErrorMessage('')
-    try {
-      const [groupList, taskList] = await Promise.all([
-        listCaptureGroups(projectId, request.signal),
-        listAnnotationTasks(projectId, request.signal),
-      ])
-      const indexedTasks = taskList.items.filter((task) => Boolean(task.capture_group_id))
-      const loadedRows = await Promise.all(
-        groupList.items.map(async (group): Promise<CaptureGroupListRow | null> => {
-          const quality = await getCaptureGroupQualityReview(
-            projectId,
-            group.capture_group_id,
-            request.signal,
-          ).catch(() => null)
-          return {
-            group,
-            quality,
-            task:
-              indexedTasks.find(
-                (candidate) => candidate.capture_group_id === group.capture_group_id,
-              ) ?? null,
-          }
-        }),
-      )
-      if (request.signal.aborted || activeRequest.current !== request) return
-      setRows(loadedRows.filter((row): row is CaptureGroupListRow => row !== null))
-      setLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || activeRequest.current !== request) return
-      setLoadState('error')
-      setErrorCode(
-        error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
-          ? error.errorCode
-          : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
-      )
-      setErrorMessage(
-        error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
-          ? error.message
-          : '暂时无法读取 CaptureGroup 列表，请稍后重试。',
-      )
-    } finally {
-      if (activeRequest.current === request) activeRequest.current = null
-    }
-  }, [projectId])
+  const loadGroups = useCallback(
+    async (append = false, cursor: string | null = null) => {
+      activeRequest.current?.abort()
+      const request = new AbortController()
+      activeRequest.current = request
+      setLoadState('loading')
+      setErrorCode('')
+      setErrorMessage('')
+      try {
+        const groupList = await listCaptureGroups(projectId, cursor, request.signal)
+        if (request.signal.aborted || activeRequest.current !== request) return
+
+        if (!groupList.items.length) {
+          const nextRows = append ? rowsRef.current : []
+          rowsRef.current = nextRows
+          setRows(nextRows)
+          setNextCursor(groupList.next_cursor)
+          setLoadState('success')
+          return
+        }
+
+        const taskList = await listAnnotationTasks(projectId, request.signal)
+        const indexedTasks = taskList.items.filter((task) => Boolean(task.capture_group_id))
+        const loadedRows = await Promise.all(
+          groupList.items.map(async (group): Promise<CaptureGroupListRow> => {
+            const quality = await getCaptureGroupQualityReview(
+              projectId,
+              group.capture_group_id,
+              request.signal,
+            ).catch(() => null)
+            return {
+              group,
+              quality,
+              task:
+                indexedTasks.find(
+                  (candidate) => candidate.capture_group_id === group.capture_group_id,
+                ) ?? null,
+            }
+          }),
+        )
+        if (request.signal.aborted || activeRequest.current !== request) return
+        const nextRows = append ? [...rowsRef.current, ...loadedRows] : loadedRows
+        rowsRef.current = nextRows
+        setRows(nextRows)
+        setNextCursor(groupList.next_cursor)
+        setLoadState('success')
+      } catch (error) {
+        if (request.signal.aborted || activeRequest.current !== request) return
+        setLoadState('error')
+        setErrorCode(
+          error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
+            ? error.errorCode
+            : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
+        )
+        setErrorMessage(
+          error instanceof CaptureGroupApiError || error instanceof AnnotationTaskApiError
+            ? error.message
+            : '暂时无法读取 CaptureGroup 列表，请稍后重试。',
+        )
+      } finally {
+        if (activeRequest.current === request) activeRequest.current = null
+      }
+    },
+    [projectId],
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadGroups(), 0)
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
+      rowsRef.current = []
     }
   }, [loadGroups])
 
@@ -131,7 +149,7 @@ export default function CaptureGroupListView() {
       {loadState === 'success' && !rows.length ? (
         <EmptyState description="当前项目暂无服务端 CaptureGroup。" />
       ) : null}
-      {loadState === 'success' && rows.length ? (
+      {rows.length ? (
         <section className="capture-group-list-surface" aria-labelledby="capture-group-queue-title">
           <header className="capture-group-list-heading">
             <div>
@@ -177,8 +195,7 @@ export default function CaptureGroupListView() {
                     <dt>视图</dt>
                     <dd>
                       <span>
-                        应 {group.expected_camera_count} · 已收{' '}
-                        {group.received_camera_numbers.length} · 缺失{' '}
+                        应 {group.expected_camera_count} · 已收 {group.received_camera_count} · 缺失{' '}
                         {group.missing_camera_numbers.length}
                       </span>
                       {group.missing_camera_numbers.length ? (
@@ -220,6 +237,17 @@ export default function CaptureGroupListView() {
               </article>
             ))}
           </div>
+          {nextCursor ? (
+            <div className="capture-group-list-pagination">
+              <Button
+                loading={loadState === 'loading'}
+                size="small"
+                onClick={() => void loadGroups(true, nextCursor)}
+              >
+                加载更多
+              </Button>
+            </div>
+          ) : null}
         </section>
       ) : null}
       {loadState === 'success' && rows.some((row) => row.quality === null) ? (

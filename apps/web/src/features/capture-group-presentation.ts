@@ -109,7 +109,7 @@ export function formatViewQualitySummary(review: CaptureGroupQualityReview | nul
 }
 
 export function taskNextAction(
-  group: CaptureGroup,
+  group: Pick<CaptureGroup, 'receipt_state'>,
   quality: CaptureGroupQualityReview | null,
   task: AnnotationTask | null,
 ) {

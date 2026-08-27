@@ -1983,14 +1983,23 @@ paths:
       operationId: listCaptureGroups
       tags:
         - Asset Catalog
-      summary: List CaptureGroups and their receipt/view facts
+      summary: List lightweight CaptureGroup summaries
       description: >-
-        Returns CaptureGroups owned by the project in newest-first order. The list is sourced from
-        server-side CaptureSession facts, so receiving groups and groups without an AnnotationTask
-        remain visible. Expected and received camera numbers preserve the frozen camera identity;
-        receipt facts are independent of media probing and quality state.
+        Returns a bounded page of CaptureGroup summaries owned by the project in newest-first order.
+        The list is sourced from server-side CaptureSession facts, so receiving groups and groups
+        without an AnnotationTask remain visible. Each item contains only group identity, capture and
+        device time, receipt state, camera counts and missing camera numbers; the full camera-set
+        snapshot and stream list remain available from the detail endpoint. Receipt facts are
+        independent of media probing and quality state.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
+        - name: cursor
+          in: query
+          description: Opaque cursor returned by the preceding CaptureGroup page.
+          schema: { type: string, maxLength: 512 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         "200":
           description: CaptureGroup list.
@@ -5563,13 +5572,61 @@ components:
     CaptureGroupListResponse:
       type: object
       additionalProperties: false
-      required:
-        - items
+      required: [items, next_cursor]
       properties:
         items:
           type: array
-          items:
-            $ref: "#/components/schemas/CaptureGroup"
+          maxItems: 100
+          items: { $ref: "#/components/schemas/CaptureGroupSummary" }
+        next_cursor:
+          anyOf:
+            - type: string
+              maxLength: 512
+            - type: "null"
+    CaptureGroupSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - capture_group_id
+        - capture_group_key
+        - device_time_utc
+        - receipt_state
+        - expected_camera_count
+        - received_camera_count
+        - missing_camera_numbers
+        - created_at
+      properties:
+        capture_group_id:
+          type: string
+          format: uuid
+        capture_group_key:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 128
+        device_time_utc:
+          type: [string, "null"]
+          format: date-time
+        receipt_state:
+          $ref: "#/components/schemas/CaptureGroupReceiptState"
+        expected_camera_count:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 64
+        received_camera_count:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 64
+          description: Unique bound streams whose ClipAsset has reached INGESTED; upload alone does not count.
+        missing_camera_numbers:
+          type: array
+          maxItems: 64
+          items: { type: integer, minimum: 1, maximum: 64 }
+          description: Expected camera numbers without a bound uploaded file; gaps are never renumbered.
+        created_at:
+          type: string
+          format: date-time
     CaptureGroupQualityResult:
       type: string
       enum:

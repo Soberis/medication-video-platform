@@ -751,6 +751,13 @@
   text-decoration: underline;
 }
 
+.capture-group-list-pagination {
+  display: flex;
+  justify-content: center;
+  padding: var(--app-space-12);
+  border-top: 1px solid var(--app-color-border-subtle);
+}
+
 .capture-group-list-note {
   margin-top: var(--app-space-12);
 }

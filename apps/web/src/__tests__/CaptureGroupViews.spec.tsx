@@ -3,7 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AnnotationTask } from '@/api/annotation'
-import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
+import type {
+  CaptureGroup,
+  CaptureGroupQualityReview,
+  CaptureGroupSummary,
+} from '@/api/capture-groups'
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 import CaptureGroupListView from '@/views/CaptureGroupListView'
@@ -46,9 +50,148 @@ describe('CaptureGroup web workflow', () => {
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
     expect(firstRow).toHaveTextContent('合格 · 排除部分视图')
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/capture-groups`,
+      `/api/v1/projects/${projectId}/capture-groups?limit=20`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
+  })
+
+  it('keeps receipt states, camera counts, and task enrichment visible for N=1 and N=5 summaries', async () => {
+    const receiving = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'RECEIVING',
+      key: 'receiving-no-task',
+    })
+    const completeUnreviewed = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 2, 3, 4, 5],
+      receipt: 'COMPLETE',
+      key: 'complete-unreviewed',
+    })
+    const incomplete = captureGroupFixture('60000000-0000-4000-8000-000000000003', {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 3, 5],
+      receipt: 'INCOMPLETE',
+      key: 'incomplete-gap',
+    })
+    const rejected = captureGroupFixture('60000000-0000-4000-8000-000000000004', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'rejected-no-task',
+    })
+    const qualified = captureGroupFixture('60000000-0000-4000-8000-000000000005', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'qualified-task',
+    })
+    const groups = [receiving, completeUnreviewed, incomplete, rejected, qualified]
+    const tasks = [groupTask(qualified.capture_group_id, true)]
+    const fetchMock = stubGroupList(groups, tasks, {
+      qualityByGroup: {
+        [receiving.capture_group_id]: qualityFixture(receiving, 'UNREVIEWED'),
+        [completeUnreviewed.capture_group_id]: qualityFixture(completeUnreviewed, 'UNREVIEWED'),
+        [incomplete.capture_group_id]: qualityFixture(incomplete, 'NEEDS_REVIEW'),
+        [rejected.capture_group_id]: qualityFixture(rejected, 'REJECTED'),
+        [qualified.capture_group_id]: qualityFixture(qualified, 'QUALIFIED'),
+      },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const receivingRow = await screen.findByRole('listitem', { name: /receiving-no-task/ })
+    expect(receivingRow).toHaveTextContent('回执 · 接收中')
+    expect(receivingRow).toHaveTextContent('应 1 · 已收 1 · 缺失 0')
+    expect(receivingRow).toHaveTextContent('等待接收完成后进行组质量判断')
+
+    const completeRow = screen.getByRole('listitem', { name: /complete-unreviewed/ })
+    expect(completeRow).toHaveTextContent('应 5 · 已收 5 · 缺失 0')
+    expect(completeRow).toHaveTextContent('待判断')
+    expect(completeRow).toHaveTextContent('进行 Group Quality 判断')
+
+    const incompleteRow = screen.getByRole('listitem', { name: /incomplete-gap/ })
+    expect(incompleteRow).toHaveTextContent('回执 · 接收完成 · 有缺失')
+    expect(incompleteRow).toHaveTextContent('应 5 · 已收 3 · 缺失 2')
+    expect(incompleteRow).toHaveTextContent('缺失：Cam 2、Cam 4')
+
+    const rejectedRow = screen.getByRole('listitem', { name: /rejected-no-task/ })
+    expect(rejectedRow).toHaveTextContent('不合格')
+    expect(rejectedRow).toHaveTextContent('补充视图事实并重新判断组质量')
+
+    const qualifiedRow = screen.getByRole('listitem', { name: /qualified-task/ })
+    expect(qualifiedRow).toHaveTextContent('合格')
+    expect(qualifiedRow).toHaveTextContent('任务 70000000…0001')
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).includes('/quality-review')),
+    ).toHaveLength(5)
+  })
+
+  it('appends the next CaptureGroup cursor page and enriches only returned summaries', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'capture-page-1',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 3, 5],
+      receipt: 'INCOMPLETE',
+      key: 'capture-page-2',
+    })
+    const fetchMock = stubPagedGroupList(
+      [
+        { group: first, nextCursor: 'cursor-page-2' },
+        { group: second, nextCursor: null },
+      ],
+      [groupTask(first.capture_group_id, true)],
+    )
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    expect(await screen.findByRole('listitem', { name: /capture-page-1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('listitem', { name: /capture-page-2/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    expect(await screen.findByRole('listitem', { name: /capture-page-2/ })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: /capture-page-1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-groups?limit=20&cursor=cursor-page-2`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).includes('/quality-review')).length,
+    ).toBe(2)
+  })
+
+  it('renders an empty page without requesting task enrichment', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/capture-groups?')) {
+        return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    expect(await screen.findByText('当前项目暂无服务端 CaptureGroup。')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).endsWith('/annotation-tasks')),
+    ).toBe(false)
   })
 
   it('keeps a single N=1 group and distinguishes receipt from media and AI facts', async () => {
@@ -207,11 +350,20 @@ describe('CaptureGroup web workflow', () => {
   })
 })
 
-function stubGroupList(groups: CaptureGroup[], tasks: AnnotationTask[]) {
+function stubGroupList(
+  groups: CaptureGroup[],
+  tasks: AnnotationTask[],
+  options: { qualityByGroup?: Record<string, CaptureGroupQualityReview> } = {},
+) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.endsWith('/capture-groups')) return Promise.resolve(jsonResponse({ items: groups }))
-    if (url.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
+    const path = new URL(url, 'http://localhost').pathname
+    if (path.endsWith('/capture-groups')) {
+      return Promise.resolve(
+        jsonResponse({ items: groups.map(summaryFromGroup), next_cursor: null }),
+      )
+    }
+    if (path.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
     const group = groups.find((candidate) =>
       url.endsWith(`/capture-groups/${candidate.capture_group_id}`),
     )
@@ -222,12 +374,13 @@ function stubGroupList(groups: CaptureGroup[], tasks: AnnotationTask[]) {
       const group = groups.find((candidate) => url.includes(candidate.capture_group_id))
       return Promise.resolve(
         jsonResponse(
-          group
-            ? qualityFixture(
-                group,
-                group.missing_camera_numbers.length ? 'QUALIFIED_WITH_EXCLUSIONS' : 'QUALIFIED',
-              )
-            : qualityFixture(groups[0]!, 'QUALIFIED'),
+          (group && options.qualityByGroup?.[group.capture_group_id]) ??
+            (group
+              ? qualityFixture(
+                  group,
+                  group.missing_camera_numbers.length ? 'QUALIFIED_WITH_EXCLUSIONS' : 'QUALIFIED',
+                )
+              : qualityFixture(groups[0]!, 'QUALIFIED')),
         ),
       )
     }
@@ -235,6 +388,44 @@ function stubGroupList(groups: CaptureGroup[], tasks: AnnotationTask[]) {
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+function stubPagedGroupList(
+  pages: Array<{ group: CaptureGroup; nextCursor: string | null }>,
+  tasks: AnnotationTask[],
+) {
+  let pageIndex = 0
+  const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input)
+    const path = new URL(url, 'http://localhost').pathname
+    if (path.endsWith('/capture-groups')) {
+      const page = pages[Math.min(pageIndex++, pages.length - 1)]!
+      return Promise.resolve(
+        jsonResponse({ items: [summaryFromGroup(page.group)], next_cursor: page.nextCursor }),
+      )
+    }
+    if (path.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
+    if (url.includes('/quality-review')) {
+      const page = pages.find(({ group }) => url.includes(group.capture_group_id)) ?? pages[0]!
+      return Promise.resolve(jsonResponse(qualityFixture(page.group, 'QUALIFIED')))
+    }
+    return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+function summaryFromGroup(group: CaptureGroup): CaptureGroupSummary {
+  return {
+    capture_group_id: group.capture_group_id,
+    capture_group_key: group.capture_group_key,
+    device_time_utc: group.device_time_utc,
+    receipt_state: group.receipt_state,
+    expected_camera_count: group.expected_camera_count,
+    received_camera_count: group.received_camera_count,
+    missing_camera_numbers: group.missing_camera_numbers,
+    created_at: group.created_at,
+  }
 }
 
 function stubGroupDetail(

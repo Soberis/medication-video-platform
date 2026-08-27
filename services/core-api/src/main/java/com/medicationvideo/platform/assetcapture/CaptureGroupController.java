@@ -10,10 +10,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 import com.medicationvideo.platform.iamproject.ProjectActor;
+
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 
 @Validated
 @RestController
@@ -34,13 +39,17 @@ class CaptureGroupController {
 	}
 
 	@GetMapping
-	ResponseEntity<CaptureGroupListResponse> list(@PathVariable UUID projectId, Authentication authentication) {
+	ResponseEntity<CaptureGroupListResponse> list(@PathVariable UUID projectId,
+			@RequestParam(required = false) @Size(max = 512) String cursor,
+			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit, Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "An authenticated project actor is required.",
 					403);
 		}
 		this.authorizer.requireMember(projectId, actor.actorId());
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(this.queryService.list(projectId));
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.queryService.list(projectId, cursor, limit));
 	}
 
 	@GetMapping("/{captureGroupId}")

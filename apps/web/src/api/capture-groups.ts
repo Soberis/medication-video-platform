@@ -82,8 +82,20 @@ export interface CaptureGroup {
   created_at: string
 }
 
+export interface CaptureGroupSummary {
+  capture_group_id: string
+  capture_group_key: string | null
+  device_time_utc: string | null
+  receipt_state: CaptureGroupReceiptState
+  expected_camera_count: number
+  received_camera_count: number
+  missing_camera_numbers: number[]
+  created_at: string
+}
+
 export interface CaptureGroupListResponse {
-  items: CaptureGroup[]
+  items: CaptureGroupSummary[]
+  next_cursor: string | null
 }
 
 export interface CaptureGroupQualityView {
@@ -143,6 +155,7 @@ export class CaptureGroupApiError extends Error {
 
 const errorMessages: Record<string, string> = {
   CAPTURE_GROUP_NOT_FOUND: '未找到该 CaptureGroup，或它不属于当前项目。',
+  INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
   PROJECT_ACCESS_DENIED: '当前账号无权访问该项目中的 CaptureGroup。',
   CAPTURE_GROUP_QUALITY_ACCESS_DENIED: '当前账号没有读取 CaptureGroup 质量的权限。',
   CAPTURE_GROUP_QUALITY_RECEIPT_NOT_FINALIZED:
@@ -170,8 +183,17 @@ export function getCaptureGroup(projectId: string, captureGroupId: string, signa
   return readJson<CaptureGroup>(path(projectId, captureGroupId), signal)
 }
 
-export function listCaptureGroups(projectId: string, signal?: AbortSignal) {
-  return readJson<CaptureGroupListResponse>(collectionPath(projectId), signal)
+export function listCaptureGroups(
+  projectId: string,
+  cursor: string | null = null,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ limit: '20' })
+  if (cursor) query.set('cursor', cursor)
+  return readJson<CaptureGroupListResponse>(
+    `${collectionPath(projectId)}?${query.toString()}`,
+    signal,
+  )
 }
 
 export async function finalizeCaptureGroupReceipt(projectId: string, captureGroupId: string) {
