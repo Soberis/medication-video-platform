@@ -82,9 +82,12 @@
       "average_camera_count",
       "videos_per_day",
       "video_count_basis",
+      "inference_fps",
+      "max_hands_per_frame",
       "observed_or_assumed_candidate_density",
       "estimated_candidate_row_bytes",
       "index_overhead_ratio",
+      "growth_factor",
       "expected_query_patterns"
     ],
     "postgresql_partition_index_feasible": {

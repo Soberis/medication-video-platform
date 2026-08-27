@@ -11,6 +11,7 @@ import pytest
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "tools" / "candidate-capacity-review" / "candidate_capacity_review.py"
+MEASUREMENT_TEMPLATE = ROOT / "tools" / "candidate-capacity-review" / "scenarios" / "measured-template.json"
 SPEC = importlib.util.spec_from_file_location("candidate_capacity_review", SCRIPT)
 assert SPEC and SPEC.loader
 review = importlib.util.module_from_spec(SPEC)
@@ -48,15 +49,7 @@ def base_payload() -> dict[str, Any]:
             "postgresql_hot_query_patterns": ["single_video_time_window", "small_candidate_window"],
             "s3_artifact_query_patterns": ["bulk_export", "long_range_scan"],
             "required_measured_inputs": [
-                "average_video_duration_minutes",
-                "p95_video_duration_minutes",
-                "average_camera_count",
-                "videos_per_day",
-                "video_count_basis",
-                "observed_or_assumed_candidate_density",
-                "estimated_candidate_row_bytes",
-                "index_overhead_ratio",
-                "expected_query_patterns",
+                *review.REQUIRED_INPUTS,
             ],
             "postgresql_partition_index_feasible": evidence(True),
             "postgresql_operational_complexity_acceptable": evidence(True),
@@ -134,6 +127,39 @@ def test_invalid_negative_input_is_rejected() -> None:
         scenario(payload)
 
 
+def test_retention_days_must_be_explicit_and_are_not_defaulted() -> None:
+    payload = base_payload()
+    del payload["retention_days"]
+
+    with pytest.raises(review.ScenarioError, match="不会使用默认保留期"):
+        scenario(payload)
+
+
+def test_evidence_note_is_required_for_traceability() -> None:
+    payload = base_payload()
+    del payload["inputs"]["inference_fps"]["note"]
+
+    with pytest.raises(review.ScenarioError, match="必须提供 note"):
+        scenario(payload)
+
+
+def test_evidence_value_is_required_and_not_silently_defaulted() -> None:
+    payload = base_payload()
+    del payload["inputs"]["inference_fps"]["value"]
+
+    with pytest.raises(review.ScenarioError, match="必须显式提供 value"):
+        scenario(payload)
+
+
+def test_p95_duration_cannot_be_below_average_duration() -> None:
+    payload = base_payload()
+    payload["inputs"]["average_video_duration_minutes"] = evidence(20.0)
+    payload["inputs"]["p95_video_duration_minutes"] = evidence(15.0)
+
+    with pytest.raises(review.ScenarioError, match="p95_video_duration_minutes"):
+        scenario(payload)
+
+
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
@@ -159,6 +185,53 @@ def test_pending_measured_data_remains_pending_in_results_and_decision() -> None
     assert report["decision"]["status"] == "DECISION PENDING"
     assert "p95_video_duration_minutes" in report["pending_evidence"]
     assert "expected_query_patterns" in report["pending_evidence"]
+
+
+def test_decision_requires_all_capacity_inputs_to_be_measured() -> None:
+    payload = base_payload()
+    payload["inputs"]["inference_fps"] = evidence(10.0, "ASSUMED", "Configured baseline, not measured yet.")
+    payload["inputs"]["max_hands_per_frame"] = evidence(
+        2, "ASSUMED", "Configured baseline, not measured yet."
+    )
+    payload["inputs"]["growth_factor"] = evidence(1.0, "ASSUMED", "Planning factor, not measured yet.")
+    report = review.build_report(scenario(payload))
+
+    assert report["decision"]["status"] == "DECISION PENDING"
+    assert report["decision"]["option"] is None
+    assert "inference_fps" in report["decision"]["gates"][0]["missing"]
+    assert "max_hands_per_frame" in report["decision"]["gates"][0]["missing"]
+    assert "growth_factor" in report["decision"]["gates"][0]["missing"]
+
+
+def test_missing_decision_boundaries_keep_decision_pending() -> None:
+    payload = base_payload()
+    payload["decision_criteria"]["postgresql_max_retained_rows"] = None
+    payload["decision_criteria"]["postgresql_max_retained_storage_bytes"] = None
+    payload["decision_criteria"]["postgresql_hot_query_patterns"] = None
+    payload["decision_criteria"]["s3_artifact_query_patterns"] = None
+    report = review.build_report(scenario(payload))
+
+    assert report["decision"]["status"] == "DECISION PENDING"
+    assert report["decision"]["option"] is None
+    assert report["decision"]["gates"][2]["status"] == "PENDING"
+
+
+def test_measurement_template_contains_no_production_values() -> None:
+    payload = json.loads(MEASUREMENT_TEMPLATE.read_text(encoding="utf-8"))
+    report = review.build_report(review.load_scenario(MEASUREMENT_TEMPLATE))
+
+    assert all(item["status"] == "PENDING" and item["value"] is None for item in payload["inputs"].values())
+    assert all(
+        payload["decision_criteria"][field] is None
+        for field in (
+            "postgresql_max_retained_rows",
+            "postgresql_max_retained_storage_bytes",
+            "postgresql_hot_query_patterns",
+            "s3_artifact_query_patterns",
+        )
+    )
+    assert report["decision"]["status"] == "DECISION PENDING"
+    assert report["decision"]["option"] is None
 
 
 def test_report_generation_separates_sections_and_writes_outputs(tmp_path: Path) -> None:

@@ -1,0 +1,103 @@
+{
+  "schema_version": "candidate-capacity-review.v1",
+  "scenario_id": "capacity-measurement-template",
+  "description": "空白容量测量模板；所有观测值均待填入，不代表生产规模。复制后仅将有来源的值标为 MEASURED，并保留 note。",
+  "inputs": {
+    "average_video_duration_minutes": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从明确的授权或合成采集窗口按单路视频统计平均时长后填写。"
+    },
+    "p95_video_duration_minutes": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从与平均时长相同的采集窗口计算单路视频时长 P95 后填写。"
+    },
+    "average_camera_count": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从采集 session 记录统计每个 session 的平均固定相机路数后填写。"
+    },
+    "videos_per_day": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从明确观察窗口统计日采集量，并结合 video_count_basis 说明单位后填写。"
+    },
+    "video_count_basis": {
+      "status": "PENDING",
+      "value": null,
+      "note": "明确 videos_per_day 表示单路 camera video 还是 capture session 后填写。"
+    },
+    "inference_fps": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从目标 MediaPipe profile 和抽样运行记录确认实际推理采样率后填写。"
+    },
+    "max_hands_per_frame": {
+      "status": "PENDING",
+      "value": null,
+      "note": "从目标推理 profile 和抽样运行记录确认每帧最多保留手数后填写。"
+    },
+    "observed_or_assumed_candidate_density": {
+      "status": "PENDING",
+      "value": null,
+      "note": "用候选数除以推理帧数乘每帧手槽位，并记录样本范围后填写。"
+    },
+    "estimated_candidate_row_bytes": {
+      "status": "PENDING",
+      "value": null,
+      "note": "对代表性 Candidate 行及其基本字段做实际存储基准；若只是估算，保留 ASSUMED。"
+    },
+    "index_overhead_ratio": {
+      "status": "PENDING",
+      "value": null,
+      "note": "对代表性 PostgreSQL 表、分区和索引测量索引及相关开销占原始行存储比例。"
+    },
+    "growth_factor": {
+      "status": "PENDING",
+      "value": null,
+      "note": "根据有来源的增长规划或历史窗口计算放大倍数；没有依据时保持 PENDING。"
+    },
+    "expected_query_patterns": {
+      "status": "PENDING",
+      "value": null,
+      "note": "记录真实热查询、长窗口和批量读取模式，并补充代表性 P50/P95/P99 结果。"
+    }
+  },
+  "retention_days": [30, 90, 365],
+  "decision_criteria": {
+    "postgresql_max_retained_rows": null,
+    "postgresql_max_retained_storage_bytes": null,
+    "postgresql_hot_query_patterns": null,
+    "s3_artifact_query_patterns": null,
+    "required_measured_inputs": [
+      "average_video_duration_minutes",
+      "p95_video_duration_minutes",
+      "average_camera_count",
+      "videos_per_day",
+      "video_count_basis",
+      "inference_fps",
+      "max_hands_per_frame",
+      "observed_or_assumed_candidate_density",
+      "estimated_candidate_row_bytes",
+      "index_overhead_ratio",
+      "growth_factor",
+      "expected_query_patterns"
+    ],
+    "postgresql_partition_index_feasible": {
+      "status": "PENDING",
+      "value": null,
+      "note": "待完成代表性分区、索引、保留和查询基准后填写。"
+    },
+    "postgresql_operational_complexity_acceptable": {
+      "status": "PENDING",
+      "value": null,
+      "note": "待完成 PostgreSQL 运维、监控、迁移和保留复杂度评审后填写。"
+    },
+    "s3_artifact_retrieval_tradeoff_acceptable": {
+      "status": "PENDING",
+      "value": null,
+      "note": "待完成 S3 JSONL/Parquet 范围读取、长窗口和批量取回基准后填写。"
+    }
+  }
+}

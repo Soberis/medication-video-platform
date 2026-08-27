@@ -38,7 +38,7 @@ REQUIRED_CRITERIA_EVIDENCE = (
     "postgresql_operational_complexity_acceptable",
     "s3_artifact_retrieval_tradeoff_acceptable",
 )
-DEFAULT_RETENTION_DAYS = (30, 90, 365)
+REQUIRED_RETENTION_DAYS = (30, 90, 365)
 
 EvidenceStatus = Literal["MEASURED", "ASSUMED", "PENDING"]
 
@@ -60,10 +60,14 @@ class Evidence:
         status = raw.get("status")
         if status not in EVIDENCE_STATUSES:
             raise ScenarioError(f"输入 {field_name} 的 status 必须是 MEASURED、ASSUMED 或 PENDING。")
-        value = raw.get("value")
-        note = raw.get("note", "")
-        if not isinstance(note, str):
-            raise ScenarioError(f"输入 {field_name} 的 note 必须是字符串。")
+        if "value" not in raw:
+            raise ScenarioError(f"输入 {field_name} 必须显式提供 value；PENDING 时使用 null。")
+        value = raw["value"]
+        if "note" not in raw:
+            raise ScenarioError(f"输入 {field_name} 必须提供 note，以记录来源或待补证据原因。")
+        note = raw["note"]
+        if not isinstance(note, str) or not note.strip():
+            raise ScenarioError(f"输入 {field_name} 的 note 必须是非空字符串。")
         if status == "PENDING" and value is not None:
             raise ScenarioError(f"输入 {field_name} 为 PENDING 时 value 必须为 null。")
         if status != "PENDING" and value is None:
@@ -103,7 +107,9 @@ class Scenario:
         inputs = {field: Evidence.from_mapping(field, raw_inputs[field]) for field in REQUIRED_INPUTS}
         _validate_inputs(inputs)
 
-        raw_retention_days = raw.get("retention_days", list(DEFAULT_RETENTION_DAYS))
+        if "retention_days" not in raw:
+            raise ScenarioError("retention_days 必须显式提供；工具不会使用默认保留期。")
+        raw_retention_days = raw["retention_days"]
         retention_days = _validate_retention_days(raw_retention_days)
 
         raw_criteria = raw.get("decision_criteria")
@@ -136,6 +142,12 @@ def _validate_inputs(inputs: Mapping[str, Evidence]) -> None:
     _validate_ratio(inputs["index_overhead_ratio"], "index_overhead_ratio")
     _validate_at_least_one(inputs["growth_factor"], "growth_factor", 1.0)
     _validate_query_patterns(inputs["expected_query_patterns"])
+    average_duration = _numeric_value(
+        inputs["average_video_duration_minutes"], "average_video_duration_minutes"
+    )
+    p95_duration = _numeric_value(inputs["p95_video_duration_minutes"], "p95_video_duration_minutes")
+    if average_duration is not None and p95_duration is not None and p95_duration < average_duration:
+        raise ScenarioError("输入 p95_video_duration_minutes 不能小于 average_video_duration_minutes。")
 
 
 def _validate_non_negative_number(evidence: Evidence, field_name: str, strictly_positive: bool) -> None:
@@ -198,7 +210,7 @@ def _validate_retention_days(raw: Any) -> tuple[int, ...]:
         values.append(value)
     if len(set(values)) != len(values):
         raise ScenarioError("retention_days 不能包含重复值。")
-    for required in DEFAULT_RETENTION_DAYS:
+    for required in REQUIRED_RETENTION_DAYS:
         if required not in values:
             raise ScenarioError("retention_days 必须至少包含 30、90 和 365。")
     return tuple(sorted(values))
@@ -218,12 +230,28 @@ def _validate_decision_criteria(criteria: Mapping[str, Any]) -> None:
         raise ScenarioError(f"decision_criteria 缺少字段：{', '.join(missing)}。")
     for field in ("postgresql_max_retained_rows", "postgresql_max_retained_storage_bytes"):
         value = criteria[field]
+        if value is None:
+            continue
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ScenarioError(f"decision_criteria.{field} 必须是大于 0 的整数。")
     for field in ("postgresql_hot_query_patterns", "s3_artifact_query_patterns", "required_measured_inputs"):
         value = criteria[field]
-        if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        if field != "required_measured_inputs" and value is None:
+            continue
+        if (
+            not isinstance(value, list)
+            or not value
+            or not all(isinstance(item, str) and item.strip() for item in value)
+        ):
             raise ScenarioError(f"decision_criteria.{field} 必须是字符串数组。")
+    missing_required_measurements = [
+        field for field in REQUIRED_INPUTS if field not in criteria["required_measured_inputs"]
+    ]
+    if missing_required_measurements:
+        raise ScenarioError(
+            "decision_criteria.required_measured_inputs 必须包含全部容量证据输入："
+            f"{', '.join(missing_required_measurements)}。"
+        )
     for field in REQUIRED_CRITERIA_EVIDENCE:
         evidence = Evidence.from_mapping(f"decision_criteria.{field}", criteria[field])
         if evidence.status != "PENDING" and not isinstance(evidence.value, bool):
@@ -419,7 +447,7 @@ def _criteria_evidence(scenario: Scenario, name: str) -> Evidence:
 def evaluate_decision(scenario: Scenario, capacity: Mapping[str, Any]) -> dict[str, Any]:
     criteria = scenario.decision_criteria
     required_measured = cast(list[str], criteria["required_measured_inputs"])
-    required_measurement_names = list(dict.fromkeys([*required_measured, "expected_query_patterns"]))
+    required_measurement_names = list(dict.fromkeys([*REQUIRED_INPUTS, *required_measured]))
     missing_measurements = [
         name
         for name in required_measurement_names
@@ -427,6 +455,16 @@ def evaluate_decision(scenario: Scenario, capacity: Mapping[str, Any]) -> dict[s
     ]
     missing_criteria_evidence = [
         name for name in REQUIRED_CRITERIA_EVIDENCE if _criteria_evidence(scenario, name).status != "MEASURED"
+    ]
+    missing_criteria_configuration = [
+        name
+        for name in (
+            "postgresql_max_retained_rows",
+            "postgresql_max_retained_storage_bytes",
+            "postgresql_hot_query_patterns",
+            "s3_artifact_query_patterns",
+        )
+        if not criteria[name]
     ]
     expected_query_patterns = _input_value(scenario, "expected_query_patterns")
     retained = capacity["retention"][str(max(scenario.retention_days))]["p95_duration_case"]
@@ -450,13 +488,26 @@ def evaluate_decision(scenario: Scenario, capacity: Mapping[str, Any]) -> dict[s
     )
     gates.append(
         {
+            "name": "decision_criteria_configuration",
+            "status": "PASS" if not missing_criteria_configuration else "PENDING",
+            "missing": missing_criteria_configuration,
+        }
+    )
+    gates.append(
+        {
             "name": "p95_retained_capacity_available",
             "status": "PASS" if retained_rows is not None and retained_storage is not None else "PENDING",
             "retained_rows": retained_rows,
             "retained_storage_bytes": retained_storage,
         }
     )
-    if missing_measurements or missing_criteria_evidence or retained_rows is None or retained_storage is None:
+    if (
+        missing_measurements
+        or missing_criteria_evidence
+        or missing_criteria_configuration
+        or retained_rows is None
+        or retained_storage is None
+    ):
         return {
             "status": "DECISION PENDING",
             "option": None,
@@ -538,7 +589,7 @@ def build_report(scenario: Scenario) -> dict[str, Any]:
     required_measured = cast(list[str], scenario.decision_criteria["required_measured_inputs"])
     measurement_gaps = [
         name
-        for name in dict.fromkeys([*required_measured, "expected_query_patterns"])
+        for name in dict.fromkeys([*REQUIRED_INPUTS, *required_measured])
         if name not in scenario.inputs or scenario.inputs[name].status != "MEASURED"
     ]
     pending_evidence = [item["name"] for item in _evidence_items(scenario, "PENDING")]
@@ -547,6 +598,16 @@ def build_report(scenario: Scenario) -> dict[str, Any]:
         f"decision_criteria.{name}"
         for name in REQUIRED_CRITERIA_EVIDENCE
         if _criteria_evidence(scenario, name).status != "MEASURED"
+    )
+    pending_evidence.extend(
+        f"decision_criteria.{name}"
+        for name in (
+            "postgresql_max_retained_rows",
+            "postgresql_max_retained_storage_bytes",
+            "postgresql_hot_query_patterns",
+            "s3_artifact_query_patterns",
+        )
+        if not scenario.decision_criteria[name]
     )
     return {
         "schema_version": SCHEMA_VERSION,

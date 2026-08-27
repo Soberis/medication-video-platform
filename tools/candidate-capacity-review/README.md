@@ -26,6 +26,10 @@ uv run --project tools/candidate-capacity-review `
 
 输出包括机器可读 JSON 和简洁 Markdown；输入只是一份显式、版本化 scenario 文件。
 
+`scenarios/measured-template.json` 是空白测量模板：所有观测输入和决策边界都保持
+`PENDING`/`null`，不含生产规模或容量数字。复制后只填写有来源的值，将对应状态改为
+`MEASURED`，并保留非空 `note` 说明样本范围、测量方法或待补证据原因。
+
 ## Scenario schema
 
 顶层 `schema_version` 必须为 `candidate-capacity-review.v1`。所有容量或查询输入都使用：
@@ -34,7 +38,7 @@ uv run --project tools/candidate-capacity-review `
 {
   "status": "MEASURED | ASSUMED | PENDING",
   "value": "实际值；PENDING 时必须为 null",
-  "note": "来源、范围或为何仍是假设"
+  "note": "必填：来源、范围、测量方法或为何仍是假设"
 }
 ```
 
@@ -50,14 +54,16 @@ uv run --project tools/candidate-capacity-review `
 | `inference_fps` | 每路视频的 AI 推理采样率 |
 | `max_hands_per_frame` | 每个推理帧最多保留的手数 |
 | `observed_or_assumed_candidate_density` | 实际候选数 / 理论帧-手槽位，范围 0 到 1 |
-| `estimated_candidate_row_bytes` | 一个候选行及其基本字段的估算字节数 |
+| `estimated_candidate_row_bytes` | 一个候选行及其基本字段的实际或估算字节数；实际基准标记为 `MEASURED` |
 | `index_overhead_ratio` | 索引及相关开销 / 原始行存储，范围 0 到 1 |
 | `growth_factor` | 规划放大倍数，至少为 1；用于保留量和存储估算 |
 | `expected_query_patterns` | 预期热查询、长窗口查询或批量读取模式 |
 
-`retention_days` 必须至少包含 `30`、`90`、`365`。`decision_criteria` 配置 PostgreSQL 行数/存储阈值、
-两种方案的查询模式，以及分区/索引可行性、运维复杂度和对象工件取回权衡的证据状态。决策需要足够的
-`MEASURED` 输入；只有假设值时不会自动选择 A 或 B。
+`retention_days` 必须显式提供且至少包含 `30`、`90`、`365`；工具不会为缺失的保留期套用默认值。
+`decision_criteria.required_measured_inputs` 必须列出全部容量证据输入，工具也会固定检查全部这些输入
+是否为 `MEASURED`，不能通过缩短列表绕过 FPS、最大手数或增长因子。决策边界中的 PostgreSQL 行数/存储
+阈值和两种方案的查询模式可以明确写为 `null` 表示待补；这会使对应决策 Gate 保持 `PENDING`，不会被
+工具填入默认值。分区/索引可行性、运维复杂度和对象工件取回权衡继续使用带状态的证据对象。
 
 ## 公式
 
@@ -106,3 +112,24 @@ storage_bytes_including_index_overhead
 这不是成本平台，也不是生产容量承诺。进入 P1 前仍需补充授权或合成测量：时长分布、相机路数、日量、
 候选密度、单行/索引实测大小、30/90/365 日保留需求、典型查询的 P50/P95/P99、PostgreSQL 分区与索引
 可行性、运维复杂度，以及 S3 JSONL/Parquet 长窗口和范围读取的实际权衡。工具输出不能单独开启 P1。
+
+## 证据采集清单
+
+建议使用同一个明确的授权或合成观察窗口填写模板，并在每个 `MEASURED` 值的 `note` 中记录样本范围和方法：
+
+| 证据 | 最小记录内容 |
+| --- | --- |
+| 平均/P95 视频时长 | 单路视频样本范围、样本数、平均值和 P95；P95 不能小于平均值 |
+| 平均相机数/日量 | session 窗口、相机路数统计、日量单位及 `video_count_basis` |
+| 推理 FPS/每帧最大手数 | 实际目标 profile、版本和抽样 run summary |
+| 候选密度 | 候选数、推理帧数、手槽位定义及计算结果 |
+| 单行大小/索引开销 | 代表性 PostgreSQL 表、分区/索引配置、测量方法和原始大小 |
+| 增长因子 | 规划窗口、基准来源和放大计算；没有依据时保持 `PENDING` |
+| 查询模式 | 热查询、时间窗口/批量范围、返回规模及 P50/P95/P99 |
+| PostgreSQL 可行性 | 分区、索引、保留期基准结果；结论证据写入 criteria `note` |
+| 运维复杂度/S3 取回权衡 | 操作步骤、监控/恢复负担，以及 JSONL/Parquet 长窗口或范围读取结果 |
+
+`decision_criteria` 中的阈值和两种方案查询模式若尚未批准，可以写 `null`；工具会输出
+`decision_criteria_configuration: PENDING`，不会用示例数字替代。只有全部容量输入和决策 criteria 证据
+均为 `MEASURED`，且对应 Gate 通过时，报告才可能从 `DECISION PENDING` 进入某个方案；本工具不自动开启
+FR-007 或 FR-008。
