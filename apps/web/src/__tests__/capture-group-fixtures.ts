@@ -28,36 +28,60 @@ export function stubGroupList(
     qualityByGroup?: Record<string, CaptureGroupQualityReview>
     taskScope?: 'PROJECT' | 'ASSIGNEE'
     taskListError?: boolean
+    qualityListError?: { status: number; errorCode?: string }
+    groupListError?: { status: number; errorCode?: string }
+    omitQualityFor?: string[]
   } = {},
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     const path = new URL(url, 'http://localhost').pathname
     if (path.endsWith('/capture-groups')) {
+      if (options.groupListError) {
+        return Promise.resolve(
+          jsonResponse(
+            { error_code: options.groupListError.errorCode ?? 'CAPTURE_GROUP_LIST_FAILED' },
+            { status: options.groupListError.status },
+          ),
+        )
+      }
       return Promise.resolve(
         jsonResponse({ items: groups.map(summaryFromGroup), next_cursor: null }),
       )
     }
     if (path.endsWith('/capture-group-quality-reviews')) {
+      if (options.qualityListError) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code:
+                options.qualityListError.errorCode ?? 'CAPTURE_GROUP_QUALITY_REQUEST_FAILED',
+            },
+            { status: options.qualityListError.status },
+          ),
+        )
+      }
       const requestedIds = new URL(url, 'http://localhost').searchParams.getAll('capture_group_id')
       return Promise.resolve(
         jsonResponse({
-          items: requestedIds.map((captureGroupId) => {
-            const qualityGroup = groups.find(
-              (candidate) => candidate.capture_group_id === captureGroupId,
-            )
-            return (
-              (qualityGroup && options.qualityByGroup?.[qualityGroup.capture_group_id]) ??
-              (qualityGroup
-                ? qualityFixture(
-                    qualityGroup,
-                    qualityGroup.missing_camera_numbers.length
-                      ? 'QUALIFIED_WITH_EXCLUSIONS'
-                      : 'QUALIFIED',
-                  )
-                : qualityFixture(groups[0]!, 'UNREVIEWED'))
-            )
-          }),
+          items: requestedIds
+            .filter((captureGroupId) => !options.omitQualityFor?.includes(captureGroupId))
+            .map((captureGroupId) => {
+              const qualityGroup = groups.find(
+                (candidate) => candidate.capture_group_id === captureGroupId,
+              )
+              return (
+                (qualityGroup && options.qualityByGroup?.[qualityGroup.capture_group_id]) ??
+                (qualityGroup
+                  ? qualityFixture(
+                      qualityGroup,
+                      qualityGroup.missing_camera_numbers.length
+                        ? 'QUALIFIED_WITH_EXCLUSIONS'
+                        : 'QUALIFIED',
+                    )
+                  : qualityFixture(groups[0]!, 'UNREVIEWED'))
+              )
+            }),
         }),
       )
     }

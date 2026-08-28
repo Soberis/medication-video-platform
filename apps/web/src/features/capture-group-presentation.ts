@@ -185,17 +185,17 @@ export function taskNextAction(
   task: AnnotationTask | null,
   taskVisibility: CaptureGroupTaskVisibility = 'visible',
 ) {
-  if (group.receipt_state === 'RECEIVING') return '等待接收完成后进行组质量判断'
-  if (!quality || quality.result === 'UNREVIEWED') return '进行 Group Quality 判断'
+  if (group.receipt_state === 'RECEIVING') return '等待接收完成后进行事件质量判断'
+  if (!quality || quality.result === 'UNREVIEWED') return '进行事件质量判断'
   if (quality.result === 'NEEDS_REVIEW' || quality.result === 'REJECTED') {
     if (!task && taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
     if (!task && taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
-    return task ? '查看历史任务；组质量恢复后再提交修订' : '补充视图事实并重新判断组质量'
+    return task ? '查看历史任务；事件质量恢复后再提交修订' : '补充机位事实并重新判断事件质量'
   }
   if (!task) {
     if (taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
     if (taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
-    return '等待系统创建唯一 CaptureGroup 任务'
+    return '等待系统创建唯一配药事件任务'
   }
   if (task.status === 'ASSIGNED') {
     if (!task.primary_clip_asset_id) {
@@ -203,19 +203,19 @@ export function taskNextAction(
     }
     if (!task.can_submit) return '等待任务执行人处理'
     if (task.annotation_revision?.review?.decision === 'REJECTED') {
-      return '根据 Review 意见修改'
+      return '根据复核意见修改'
     }
     return '提交配药动作修订'
   }
   if (task.status === 'SUBMITTED') {
-    return task.can_review ? '进入 Review' : '等待 Review'
+    return task.can_review ? '进入人工复核' : '等待人工复核'
   }
   if (!task.primary_clip_asset_id) return '选择主视图'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return '根据 Review 意见修改'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return '根据复核意见修改'
   if (task.annotation_revision?.review?.decision === 'APPROVED') {
     return task.annotation_revision.capture_group_cleaning?.outcome === 'PASS'
-      ? '清洗已通过'
-      : '查看 Cleaning 结果'
+      ? '训练资格检查已通过'
+      : '查看训练资格检查结果'
   }
   return '查看任务历史'
 }

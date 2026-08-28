@@ -38,15 +38,13 @@ describe('CaptureGroup operational list and quality', () => {
       route: `/projects/${projectId}/capture-groups`,
     })
 
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'CaptureGroup 多机位' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: '配药事件' })).toBeInTheDocument()
     expect(await screen.findAllByRole('listitem')).toHaveLength(5)
     const firstRow = screen.getByRole('listitem', { name: /capture-1/ })
     expect(firstRow).toHaveTextContent('应 5 · 已收 4 · 缺失 1')
-    expect(firstRow).toHaveTextContent('缺失：Cam 3')
+    expect(firstRow).toHaveTextContent('缺失：机位 3')
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
-    expect(firstRow).toHaveTextContent('合格 · 排除部分视图')
+    expect(firstRow).toHaveTextContent('合格 · 排除部分机位')
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups?limit=20`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -102,23 +100,23 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const receivingRow = await screen.findByRole('listitem', { name: /receiving-no-task/ })
-    expect(receivingRow).toHaveTextContent('回执 · 接收中')
+    expect(receivingRow).toHaveTextContent('接收状态 · 接收中')
     expect(receivingRow).toHaveTextContent('应 1 · 已收 1 · 缺失 0')
-    expect(receivingRow).toHaveTextContent('等待接收完成后进行组质量判断')
+    expect(receivingRow).toHaveTextContent('等待接收完成后进行事件质量判断')
 
     const completeRow = screen.getByRole('listitem', { name: /complete-unreviewed/ })
     expect(completeRow).toHaveTextContent('应 5 · 已收 5 · 缺失 0')
     expect(completeRow).toHaveTextContent('待判断')
-    expect(completeRow).toHaveTextContent('进行 Group Quality 判断')
+    expect(completeRow).toHaveTextContent('进行事件质量判断')
 
     const incompleteRow = screen.getByRole('listitem', { name: /incomplete-gap/ })
-    expect(incompleteRow).toHaveTextContent('回执 · 接收完成 · 有缺失')
+    expect(incompleteRow).toHaveTextContent('接收状态 · 接收完成 · 有缺失')
     expect(incompleteRow).toHaveTextContent('应 5 · 已收 3 · 缺失 2')
-    expect(incompleteRow).toHaveTextContent('缺失：Cam 2、Cam 4')
+    expect(incompleteRow).toHaveTextContent('缺失：机位 2、机位 4')
 
     const rejectedRow = screen.getByRole('listitem', { name: /rejected-no-task/ })
     expect(rejectedRow).toHaveTextContent('不合格')
-    expect(rejectedRow).toHaveTextContent('补充视图事实并重新判断组质量')
+    expect(rejectedRow).toHaveTextContent('补充机位事实并重新判断事件质量')
 
     const qualifiedRow = screen.getByRole('listitem', { name: /qualified-task/ })
     expect(qualifiedRow).toHaveTextContent('合格')
@@ -196,7 +194,12 @@ describe('CaptureGroup operational list and quality', () => {
       route: `/projects/${projectId}/capture-groups`,
     })
 
-    expect(await screen.findByText('当前项目暂无服务端 CaptureGroup。')).toBeInTheDocument()
+    expect(await screen.findByText('还没有配药事件')).toBeInTheDocument()
+    expect(screen.getByText(/完成明确归组的接收记录后，配药事件会显示在这里/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看视频管理' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/videos`,
+    )
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).endsWith('/annotation-tasks')),
     ).toBe(false)
@@ -221,7 +224,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     const row = await screen.findByRole('listitem', { name: /permission-limited-task/ })
     expect(row).toHaveTextContent('任务状态按当前权限不可见')
-    expect(row).not.toHaveTextContent('等待系统创建唯一 CaptureGroup 任务')
+    expect(row).not.toHaveTextContent('等待系统创建唯一配药事件任务')
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-tasks`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -250,6 +253,114 @@ describe('CaptureGroup operational list and quality', () => {
     expect(await screen.findByText('部分任务状态不可直接确认')).toBeInTheDocument()
   })
 
+  it('keeps a legitimate UNREVIEWED batch result distinct from unavailable quality', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 2, 3, 4, 5],
+      receipt: 'COMPLETE',
+      key: 'unreviewed-quality',
+    })
+    stubGroupList([group], [], {
+      qualityByGroup: { [group.capture_group_id]: qualityFixture(group, 'UNREVIEWED') },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /unreviewed-quality/ })
+    expect(row).toHaveTextContent('事件质量')
+    expect(row).toHaveTextContent('待判断')
+    expect(row).toHaveTextContent('机位质量待判断')
+    expect(screen.queryByText('事件质量 · 暂不可用')).not.toBeInTheDocument()
+  })
+
+  it('shows quality as unavailable after a batch 5xx while keeping event rows visible', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+      key: 'quality-5xx',
+    })
+    stubGroupList([group], [], { qualityListError: { status: 500 } })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /quality-5xx/ })
+    expect(row).toHaveTextContent('机位质量暂不可用')
+    expect(row).toHaveTextContent('事件质量暂不可用，请刷新后重试')
+    expect(row).not.toHaveTextContent('待判断')
+    expect(await screen.findByText('事件质量 · 暂不可用')).toBeInTheDocument()
+  })
+
+  it('shows forbidden quality only when the batch contract identifies a 403', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-forbidden',
+    })
+    stubGroupList([group], [], {
+      qualityListError: {
+        status: 403,
+        errorCode: 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED',
+      },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /quality-forbidden/ })
+    expect(row).toHaveTextContent('机位质量无权查看')
+    expect(row).toHaveTextContent('事件质量无权查看')
+    expect(row).not.toHaveTextContent('待判断')
+    expect(await screen.findByText('事件质量 · 无权查看')).toBeInTheDocument()
+  })
+
+  it('treats a missing item in an otherwise successful quality batch as unavailable', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-present',
+    })
+    const missing = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-missing',
+    })
+    stubGroupList([first, missing], [], {
+      omitQualityFor: [missing.capture_group_id],
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /quality-missing/ })
+    expect(row).toHaveTextContent('事件质量暂不可用，请刷新后重试')
+    expect(row).not.toHaveTextContent('待判断')
+  })
+
+  it('shows the product error state for a top-level group-list failure', async () => {
+    stubGroupList([], [], { groupListError: { status: 500 } })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    expect(await screen.findByText('暂时无法读取配药事件，请稍后重试。')).toBeInTheDocument()
+  })
+
   it('blocks final group qualification while RECEIVING and explains the server guard', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
@@ -266,13 +377,13 @@ describe('CaptureGroup operational list and quality', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText('回执仍在接收中')).toBeInTheDocument()
+    expect(await screen.findByText('接收仍在进行中')).toBeInTheDocument()
     expect(
       screen.getByText(/最终 QUALIFIED \/ QUALIFIED_WITH_EXCLUSIONS 操作已禁用/),
     ).toBeInTheDocument()
-    const qualitySelect = screen.getByRole('combobox', { name: 'Group Quality 结论' })
+    const qualitySelect = screen.getByRole('combobox', { name: '事件质量结论' })
     expect(qualitySelect).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '保存 Group Quality' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '保存事件质量' })).toBeDisabled()
     expect(fetchMock).not.toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups/${groupId}/quality-review`,
       expect.objectContaining({ method: 'PUT' }),
