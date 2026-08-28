@@ -40,7 +40,7 @@ pnpm run synthetic-capture-group -- --scenario n5-missing-camera
 可选环境变量：
 
 - `PLATFORM_BASE_URL`，默认 `http://localhost:8080`；
-- `DEV_PROJECT_ID`，默认本地 synthetic project；
+- `DEV_PROJECT_ID`，必须与启动 Core API 时使用的项目 ID 一致；未设置时仅适用于 `.env.example` 的默认本地 synthetic project；
 - `FFMPEG_PATH`，FFmpeg 不在 `PATH` 时使用；
 - `SYNTHETIC_E2E_TIMEOUT_MS`，Media Probe/Candidate 轮询上限。
 
