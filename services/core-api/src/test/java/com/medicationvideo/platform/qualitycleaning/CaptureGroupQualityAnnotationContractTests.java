@@ -121,6 +121,18 @@ class CaptureGroupQualityAnnotationContractTests {
 		assertEquals(null, task.get("primary_clip_asset_id"));
 		assertEquals(1L, ((Number) task.get("group_quality_revision")).longValue());
 
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].can_submit").value(false))
+			.andExpect(jsonPath("$.items[0].can_select_primary").value(true));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].can_select_primary").value(false));
+
 		var replay = recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, idempotencyKey)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.capture_group_quality_review_id").value(reviewId))

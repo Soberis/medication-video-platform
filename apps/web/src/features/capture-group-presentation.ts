@@ -120,21 +120,25 @@ export function captureGroupTaskDestination(
   task: Pick<
     AnnotationTask,
     | 'capture_group_id'
+    | 'primary_clip_asset_id'
     | 'status'
     | 'can_submit'
+    | 'can_select_primary'
     | 'can_review'
     | 'annotation_revision'
   >,
 ): CaptureGroupTaskDestination | null {
   if (!task.capture_group_id) return null
 
-  if (task.status === 'ASSIGNED' && task.can_submit) {
+  if (task.status === 'ASSIGNED' && (task.can_submit || task.can_select_primary)) {
     return {
       focus: 'annotation',
       actionLabel:
         task.annotation_revision?.review?.decision === 'REJECTED'
           ? '进入标注返工'
-          : '进入事件标注',
+          : task.primary_clip_asset_id
+            ? '进入事件标注'
+            : '选择主视图',
     }
   }
 
@@ -194,11 +198,13 @@ export function taskNextAction(
     return '等待系统创建唯一 CaptureGroup 任务'
   }
   if (task.status === 'ASSIGNED') {
+    if (!task.primary_clip_asset_id) {
+      return task.can_select_primary ? '选择主视图' : '等待任务执行人选择主视图'
+    }
     if (!task.can_submit) return '等待任务执行人处理'
     if (task.annotation_revision?.review?.decision === 'REJECTED') {
       return '根据 Review 意见修改'
     }
-    if (!task.primary_clip_asset_id) return '选择主视图'
     return '提交配药动作修订'
   }
   if (task.status === 'SUBMITTED') {

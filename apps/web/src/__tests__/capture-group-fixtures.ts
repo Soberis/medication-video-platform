@@ -425,6 +425,7 @@ export function groupTask(
     created_by: 'system',
     status: options.revision ? 'COMPLETED' : 'ASSIGNED',
     can_submit: options.revision ? false : canSubmit,
+    can_select_primary: options.revision ? false : true,
     can_review: false,
     can_recheck_post_cleaning: Boolean(options.revision),
     annotation_revision: options.revision

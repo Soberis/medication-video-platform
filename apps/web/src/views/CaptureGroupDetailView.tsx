@@ -35,9 +35,7 @@ export default function CaptureGroupDetailView() {
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
   const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
   const fallbackFocusTargetId =
-    focus === 'review' || focus === 'cleaning'
-      ? captureGroupReviewCleaningFallbackTargetId
-      : null
+    focus === 'review' || focus === 'cleaning' ? captureGroupReviewCleaningFallbackTargetId : null
   const viewRows = useMemo(() => createGroupViewRows(data.group), [data.group])
   const selectedView = useMemo<GroupViewRow | null>(
     () => viewRows.find((view) => view.stream?.clip_asset_id === data.selectedClipAssetId) ?? null,

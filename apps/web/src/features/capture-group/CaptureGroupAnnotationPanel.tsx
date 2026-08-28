@@ -84,7 +84,8 @@ export function CaptureGroupAnnotationPanel({
       task.can_submit &&
       task.primary_clip_asset_id &&
       groupQualityAdmitting &&
-      !groupQualityDowngraded,
+      !groupQualityDowngraded &&
+      !groupQualityReceiving,
   )
 
   useEffect(() => {
@@ -124,7 +125,9 @@ export function CaptureGroupAnnotationPanel({
         : !groupQualityAdmitting
           ? '当前 Group Quality 为需复核或不合格；任务和历史仍保留，但不能提交新的 Revision。'
           : !task.primary_clip_asset_id
-            ? '请选择一路已接收、媒体可用且 View Quality 合格的主视图。'
+            ? task.can_select_primary
+              ? '请选择一路已接收、媒体可用且 View Quality 合格的主视图。'
+              : '当前账号或任务状态不允许选择主视图；请等待任务执行人处理。'
             : !task.can_submit
               ? '当前账号或任务状态不允许提交；请查看服务端任务状态。'
               : task.status !== 'ASSIGNED'
@@ -134,6 +137,7 @@ export function CaptureGroupAnnotationPanel({
   async function choosePrimaryView(clipAssetId: string) {
     if (
       !task ||
+      !task.can_select_primary ||
       primaryLocked ||
       task.primary_clip_asset_id === clipAssetId ||
       isSelectingPrimary
@@ -242,7 +246,12 @@ export function CaptureGroupAnnotationPanel({
               aria-label="Primary View"
               value={task.primary_clip_asset_id ?? undefined}
               placeholder="选择主视图"
-              disabled={primaryLocked || isSelectingPrimary || !groupQualityAdmitting}
+              disabled={
+                primaryLocked ||
+                isSelectingPrimary ||
+                !groupQualityAdmitting ||
+                !task.can_select_primary
+              }
               loading={isSelectingPrimary}
               options={primaryOptions}
               onChange={(value) => void choosePrimaryView(value)}

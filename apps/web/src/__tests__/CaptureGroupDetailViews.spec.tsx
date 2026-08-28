@@ -59,10 +59,9 @@ describe('CaptureGroup detail views', () => {
       )
       const section = document.activeElement as HTMLElement
 
-      expect([
-        'capture-group-review-cleaning',
-        'capture-group-review-cleaning-context',
-      ]).toContain(section.id)
+      expect(['capture-group-review-cleaning', 'capture-group-review-cleaning-context']).toContain(
+        section.id,
+      )
       expect(section).toHaveAttribute('tabindex', '-1')
       expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
       unmount()
@@ -118,7 +117,7 @@ describe('CaptureGroup detail views', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
     expect(screen.getByText('应 1 路 · 已收 1 路 · 缺失 0 路')).toBeInTheDocument()
-    expect(screen.getByText('NO_HAND_DETECTED')).toBeInTheDocument()
+    expect(await screen.findByText('NO_HAND_DETECTED')).toBeInTheDocument()
     expect(screen.getByText(/这是正常候选事实/)).toBeInTheDocument()
     expect(screen.getByText(/服务器不计算组质量|服务端结论/)).toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()

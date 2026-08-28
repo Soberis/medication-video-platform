@@ -97,13 +97,13 @@ P0 非目标：
 | `/projects` | 仅列出当前身份具有 ACTIVE Membership 的数据项目并显示角色；管理员可改名、归档项目和管理成员 | 项目/成员契约、权限与测试具备 | 已启用；归档不物理删除数据。AssetFolder 不属于当前产品面，相关旧表和字段已由 V65 退役。 |
 | `/projects/:projectId/assets/:id` | 查看项目内单路视频安全元数据、自动媒体技术检查、播放、手部候选与人工质量结论 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 详情路由服务视频主链；不展示文件夹归类。单路 Skeleton Overlay 与状态刷新受 AI 功能开关和服务端准入保护。管理员诊断/恢复入口不放入普通用户主界面。 |
 | `/projects/:projectId/videos` | 按来源、时间、固定相机编号和媒体/手部/标注/清洗状态查询单路视频，播放并进入 P0 单视频闭环 | 稳定游标、同条件汇总、项目隔离、产品 `video_id` 路由与测试具备 | 当前默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
-| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的标注任务队列、进度和状态；视频质量保存为合格时系统自动创建并分配任务给质量确认人；在项目权限允许时提供项目级训练数据导出，并为需要处理的任务进入单任务工作台 | 自动任务、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注 |
+| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的标注任务队列、进度和状态；视频质量保存为合格时系统自动创建并分配任务给质量确认人；在项目权限允许时提供项目级训练数据导出，并为需要处理的任务进入单任务工作台 | 自动任务、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。CaptureGroup 首个正式 Revision 前的 Primary View 入口使用服务端 `can_select_primary`，不从 `can_submit` 推断。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注 |
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
 | `/uploads/new` | 从平台页面上传本机视频并展示真实上传进度 | 后端具备角色、项目和文件规则守卫 | 已启用；仅合成数据开发验证，不展示文件夹选择 |
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
 | `/projects/:projectId/sessions`、详情子路由 | 历史多相机配药操作视图 | CaptureSession 事实和后端契约继续保留 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；CaptureSession 后端仍是 REQUIRED 的接入事实。 |
 | `/annotation-projects` | 标注项目和标签/指南版本 | 待 AnnotationProject/Guideline 契约、权限与测试冻结 | 未启用 |
-| `/projects/:projectId/annotation-tasks/:taskId` | 单任务视频辅助人工标注工作台；查看 Skeleton/Candidate 辅助证据，提交不可变 revision，执行管理员复核、退回返工，以及查看 post-cleaning 事实并按权限重新核对清洗 | 自动任务、项目权限、质量守卫、LabelSchema、授权播放、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；该路由是任务级动作的唯一处理入口，权限和状态均使用服务端返回的 `can_submit`、`can_review`、`can_recheck_post_cleaning` 事实，不新增画框工具、批量行为或数据集页面 |
+| `/projects/:projectId/annotation-tasks/:taskId` | 单任务视频辅助人工标注工作台；查看 Skeleton/Candidate 辅助证据，提交不可变 revision，执行管理员复核、退回返工，以及查看 post-cleaning 事实并按权限重新核对清洗 | 自动任务、项目权限、质量守卫、LabelSchema、授权播放、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；该路由是任务级动作的唯一处理入口，权限和状态均使用服务端返回的 `can_submit`、`can_select_primary`、`can_review`、`can_recheck_post_cleaning` 事实，不新增画框工具、批量行为或数据集页面 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 跨资产的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前单 revision post-clean 只随标注任务展示结果，不为它新建清洗页 |
 | `/projects/:projectId/datasets`、详情子路由 | 历史 DatasetVersion/Export 产品视图 | 历史文档和迁移记录仅作演进参考 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；V66 已退役对应旧数据库对象。 |

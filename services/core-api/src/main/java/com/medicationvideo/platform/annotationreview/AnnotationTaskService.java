@@ -547,8 +547,8 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID clipAs
 		UUID primaryClipAssetId, Integer primaryCameraNumber, UUID captureGroupQualityReviewId,
 		Long groupQualityRevision, Map<String, Object> confirmedViewSet, String groupInputVersion, UUID labelSchemaId,
 		String labelSchemaDigest, String assigneeActorId, String createdBy, String status, boolean canSubmit,
-		boolean canReview, boolean canRecheckPostCleaning, AnnotationRevisionSummary annotationRevision,
-		Instant createdAt, Instant updatedAt, long version) {
+		boolean canSelectPrimary, boolean canReview, boolean canRecheckPostCleaning,
+		AnnotationRevisionSummary annotationRevision, Instant createdAt, Instant updatedAt, long version) {
 
 	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, PostCleaningResultSummary postCleaningResult) {
@@ -571,14 +571,36 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID clipAs
 				task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(), task.getConfirmedViewSet(),
 				task.getGroupInputVersion(), task.getLabelSchemaId(), task.getLabelSchemaDigest(),
 				task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
-				task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
-						&& (!task.isCaptureGroupTask() || (task.hasPrimaryView() && captureGroupQualityAdmitting)),
-				task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
-						&& review == null,
-				task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null
-						&& review != null && review.getDecision() == AnnotationReviewDecision.APPROVED,
+				canSubmit(task, actorId, captureGroupQualityAdmitting),
+				canSelectPrimary(task, actorId, revision, captureGroupQualityAdmitting),
+				canReview(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
+				canRecheckPostCleaning(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
 				AnnotationRevisionSummary.from(revision, review, postCleaningResult, captureGroupCleaning),
 				task.getCreatedAt(), task.getUpdatedAt(), task.getVersion());
+	}
+
+	private static boolean canSubmit(AnnotationTask task, String actorId, boolean captureGroupQualityAdmitting) {
+		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
+				&& (!task.isCaptureGroupTask() || (task.hasPrimaryView() && captureGroupQualityAdmitting));
+	}
+
+	private static boolean canSelectPrimary(AnnotationTask task, String actorId, AnnotationRevision revision,
+			boolean captureGroupQualityAdmitting) {
+		return task.isCaptureGroupTask() && task.getStatus() == AnnotationTaskStatus.ASSIGNED
+				&& task.getAssigneeActorId().equals(actorId) && revision == null && captureGroupQualityAdmitting;
+	}
+
+	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
+			AnnotationReview review, boolean captureGroupQualityAdmitting) {
+		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
+				&& review == null && (!task.isCaptureGroupTask() || captureGroupQualityAdmitting);
+	}
+
+	private static boolean canRecheckPostCleaning(AnnotationTask task, boolean projectAdministrator,
+			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
+		return task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null
+				&& review != null && review.getDecision() == AnnotationReviewDecision.APPROVED
+				&& (!task.isCaptureGroupTask() || captureGroupQualityAdmitting);
 	}
 }
 

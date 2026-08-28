@@ -75,6 +75,7 @@ const assignedTask = {
   created_by: 'local-synthetic-admin',
   status: 'ASSIGNED',
   can_submit: true,
+  can_select_primary: false,
   can_review: false,
   can_recheck_post_cleaning: false,
   annotation_revision: null,
@@ -89,6 +90,7 @@ const assignedGroupTask = {
   clip_asset_id: null,
   capture_group_id: captureGroupId,
   primary_clip_asset_id: assetId,
+  can_select_primary: true,
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -177,6 +179,27 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: /配药动作标注工作台/ })).not.toBeInTheDocument()
   })
 
+  it('routes an assigned CaptureGroup task without a primary view to primary selection', async () => {
+    const task = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000015',
+      primary_clip_asset_id: null,
+      can_submit: false,
+      can_select_primary: true,
+    }
+    stubTasks([task], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
+    await user.click(within(taskRow).getByRole('button', { name: /选择主视图/ }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=annotation')
+    })
+  })
+
   it('routes a submitted CaptureGroup task to Review only when the server grants review', async () => {
     const reviewableGroupTask = {
       ...assignedGroupTask,
@@ -247,11 +270,39 @@ describe('annotation task list view', () => {
     })
   })
 
+  it('uses the CaptureGroup cleaning fact for completed task status', async () => {
+    const completedGroupTask = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000016',
+      status: 'COMPLETED',
+      can_submit: false,
+      can_select_primary: false,
+      annotation_revision: {
+        ...completedRevision,
+        capture_group_id: captureGroupId,
+        post_cleaning_result: null,
+        capture_group_cleaning: {
+          capture_group_cleaning_id: '82000000-0000-4000-8000-000000000016',
+          outcome: 'PASS',
+          reason_codes: [],
+          evaluated_at: '2026-07-26T01:10:00Z',
+          participating_views: [],
+          excluded_views: [],
+        },
+      },
+    }
+    stubTasks([completedGroupTask], labelSchema)
+    renderView()
+
+    expect(await screen.findByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
+  })
+
   it('does not invent a CaptureGroup action when the server limits task permission', async () => {
     const deniedGroupTask = {
       ...assignedGroupTask,
       annotation_task_id: 'a0000000-0000-4000-8000-000000000014',
       can_submit: false,
+      can_select_primary: false,
     }
     stubTasks([deniedGroupTask], labelSchema)
     renderView()

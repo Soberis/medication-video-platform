@@ -17,6 +17,7 @@ export interface AnnotationTask {
   created_by: string
   status: 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
   can_submit: boolean
+  can_select_primary: boolean
   can_review: boolean
   can_recheck_post_cleaning: boolean
   annotation_revision: AnnotationRevisionSummary | null

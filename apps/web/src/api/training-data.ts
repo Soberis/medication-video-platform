@@ -114,6 +114,7 @@ async function trainingDataExportApiError(
     TRAINING_DATA_EXPORT_UNAVAILABLE: '当前环境暂未开放训练数据导出。',
     TRAINING_DATA_EXPORT_EVIDENCE_INVALID: '当前可用数据证据不完整，暂时无法导出。',
     TRAINING_DATA_V3_EVIDENCE_INVALID: '当前 CaptureGroup 导出证据不完整，暂时无法导出。',
+    TRAINING_DATA_V3_READBACK_INVALID: 'training-data.v3 导出内容校验未通过，请稍后重试。',
     TRAINING_DATA_EXPORT_FAILED: '训练数据导出未完成，请稍后重试。',
     TRAINING_DATA_V3_EXPORT_FAILED: 'training-data.v3 导出未完成，请稍后重试。',
   }

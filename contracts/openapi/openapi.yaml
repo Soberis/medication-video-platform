@@ -6312,6 +6312,7 @@ components:
         - created_by
         - status
         - can_submit
+        - can_select_primary
         - can_review
         - can_recheck_post_cleaning
         - annotation_revision
@@ -6376,6 +6377,9 @@ components:
         can_submit:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to submit this task.
+        can_select_primary:
+          type: boolean
+          description: Server-evaluated capability for the assigned account to select or change the CaptureGroup Primary View before the first formal revision.
         can_review:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to independently review its submitted revision.

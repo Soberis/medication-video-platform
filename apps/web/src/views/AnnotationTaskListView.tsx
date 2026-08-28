@@ -74,7 +74,7 @@ function postCleaningPresentation(task: AnnotationTask): {
 } | null {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
-  const result = revision.post_cleaning_result
+  const result = revision.capture_group_cleaning ?? revision.post_cleaning_result
   const reasons = (result?.reason_codes ?? []).map(
     (code) =>
       postCleaningReasonLabels[code] ??

@@ -89,6 +89,7 @@ class AnnotationTaskContractTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items.length()").value(1))
 			.andExpect(jsonPath("$.items[0].clip_asset_id").value(clipAssetId.toString()))
+			.andExpect(jsonPath("$.items[0].can_select_primary").value(false))
 			.andExpect(jsonPath("$.progress.scope").value("ASSIGNEE"))
 			.andExpect(jsonPath("$.progress.total").value(1))
 			.andExpect(jsonPath("$.progress.awaiting_submission").value(1))
