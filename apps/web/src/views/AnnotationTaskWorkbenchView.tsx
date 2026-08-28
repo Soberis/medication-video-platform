@@ -38,6 +38,7 @@ import {
   formatDateTime,
   shortId,
 } from '@/features/catalog/catalog-presentation'
+import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 import {
   classifyCandidateReadError,
   type CandidateLoadState,
@@ -262,7 +263,13 @@ export default function AnnotationTaskWorkbenchView() {
         )
       }
       if (nextTask.capture_group_id) {
-        void navigate(paths.captureGroup(projectId, nextTask.capture_group_id), { replace: true })
+        const destination = captureGroupTaskDestination(nextTask)
+        void navigate(
+          destination
+            ? paths.captureGroupFocus(projectId, nextTask.capture_group_id, destination.focus)
+            : paths.captureGroup(projectId, nextTask.capture_group_id),
+          { replace: true },
+        )
         return
       }
       if (!nextTask.clip_asset_id) {

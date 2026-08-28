@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { paths } from '@/app/paths'
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
@@ -11,7 +12,6 @@ import {
   projectId,
   qualityFixture,
   stubGroupDetail,
-  taskId,
 } from './capture-group-fixtures'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -36,12 +36,12 @@ describe('CaptureGroup annotation workflow', () => {
 
     expect(await screen.findByText(/当前 Group Quality 为“需复核”/)).toBeInTheDocument()
     expect(screen.getByText(/任务和既有 Revision 历史仍可审计/)).toBeInTheDocument()
-    expect(screen.getByText('第 1 次正式修订')).toBeInTheDocument()
+    expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '提交 Revision' })).toBeDisabled()
     expect(screen.getByLabelText('Primary View')).toBeDisabled()
-    expect(screen.getByRole('link', { name: 'Review / Cleaning 上下文' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '打开 CaptureGroup Annotation' })).toHaveAttribute(
       'href',
-      `/projects/${projectId}/annotation-tasks/${taskId}`,
+      paths.captureGroupFocus(projectId, groupId, 'annotation'),
     )
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/revisions')),

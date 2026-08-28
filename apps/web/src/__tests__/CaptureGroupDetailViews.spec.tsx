@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,6 +18,62 @@ import {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
+  it('focuses the requested Review section from a Group workflow deep link', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const completedTask = groupTask(groupId, true, { revision: true })
+    const reviewableTask = {
+      ...completedTask,
+      status: 'SUBMITTED' as const,
+      can_submit: false,
+      can_review: true,
+      can_recheck_post_cleaning: false,
+      annotation_revision: {
+        ...completedTask.annotation_revision!,
+        review: null,
+        post_cleaning_result: null,
+      },
+    }
+    stubGroupDetail(group, {
+      task: reviewableTask,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const scrollIntoView = vi.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    try {
+      const { unmount } = renderRoute(<CaptureGroupDetailView />, {
+        path: '/projects/:projectId/capture-groups/:captureGroupId',
+        route: `/projects/${projectId}/capture-groups/${groupId}?focus=review`,
+      })
+      await waitFor(() =>
+        expect(document.activeElement).toHaveClass('capture-group-workflow-focus-target'),
+      )
+      const section = document.activeElement as HTMLElement
+
+      expect([
+        'capture-group-review-cleaning',
+        'capture-group-review-cleaning-context',
+      ]).toContain(section.id)
+      expect(section).toHaveAttribute('tabindex', '-1')
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
+      unmount()
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: originalScrollIntoView,
+      })
+    }
+  })
+
   it('explains permission-limited task context in the group detail view', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

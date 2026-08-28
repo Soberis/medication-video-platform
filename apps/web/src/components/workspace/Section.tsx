@@ -5,18 +5,28 @@ export interface SectionProps {
   children: ReactNode
   className?: string
   id?: string
+  tabIndex?: number
   title: ReactNode
   titleId?: string
 }
 
 /** A lightweight semantic section for consistent workspace hierarchy. */
-export function Section({ actions, children, className = '', id, title, titleId }: SectionProps) {
+export function Section({
+  actions,
+  children,
+  className = '',
+  id,
+  tabIndex,
+  title,
+  titleId,
+}: SectionProps) {
   const generatedTitleId = useId()
   const resolvedTitleId = titleId ?? generatedTitleId
 
   return (
     <section
       id={id}
+      tabIndex={tabIndex}
       className={`workspace-section ${className}`.trim()}
       aria-labelledby={resolvedTitleId}
     >

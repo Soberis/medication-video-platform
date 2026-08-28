@@ -1,3 +1,5 @@
+export type CaptureGroupFocus = 'annotation' | 'review' | 'cleaning'
+
 export const paths = {
   login: '/login',
   projects: '/projects',
@@ -11,8 +13,17 @@ export const paths = {
     `/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
   annotationTask: (projectId: string, taskId: string) =>
     `/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(taskId)}`,
+  captureGroupFocus,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
   accounts: '/admin/users',
   uploads: '/uploads',
   localUpload: '/uploads/new',
 } as const
+
+export function captureGroupFocus(
+  projectId: string,
+  captureGroupId: string,
+  focus: CaptureGroupFocus,
+) {
+  return `${paths.captureGroup(projectId, captureGroupId)}?focus=${focus}`
+}

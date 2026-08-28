@@ -1,6 +1,6 @@
 import { Alert, Button } from 'antd'
 import { RefreshCw } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -20,6 +20,11 @@ import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
+import {
+  captureGroupFocusFromLocation,
+  captureGroupReviewCleaningFallbackTargetId,
+  captureGroupFocusTargetIds,
+} from '@/features/capture-group-presentation'
 import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 
@@ -27,6 +32,12 @@ export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const location = useLocation()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
+  const focus = captureGroupFocusFromLocation(location.search, location.hash)
+  const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
+  const fallbackFocusTargetId =
+    focus === 'review' || focus === 'cleaning'
+      ? captureGroupReviewCleaningFallbackTargetId
+      : null
   const viewRows = useMemo(() => createGroupViewRows(data.group), [data.group])
   const selectedView = useMemo<GroupViewRow | null>(
     () => viewRows.find((view) => view.stream?.clip_asset_id === data.selectedClipAssetId) ?? null,
@@ -36,6 +47,19 @@ export default function CaptureGroupDetailView() {
   const selectedReview = viewState.selectedStream
     ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
     : null
+
+  useEffect(() => {
+    if (!data.group || data.groupLoadState !== 'success' || !focusTargetId) return
+    const timer = window.setTimeout(() => {
+      const target =
+        document.getElementById(focusTargetId) ??
+        (fallbackFocusTargetId ? document.getElementById(fallbackFocusTargetId) : null)
+      if (!target) return
+      target.scrollIntoView?.({ block: 'start', behavior: 'auto' })
+      if (target instanceof HTMLElement) target.focus({ preventScroll: true })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [data.group, data.groupLoadState, data.refreshVersion, fallbackFocusTargetId, focusTargetId])
 
   return (
     <>

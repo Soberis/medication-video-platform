@@ -30,6 +30,7 @@ import {
   formatDateTime,
   shortId,
 } from '@/features/catalog/catalog-presentation'
+import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 
 const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
@@ -452,6 +453,7 @@ export default function AnnotationTaskListView() {
                 : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`
               const revision = row.annotation_revision
               const presentation = postCleaningPresentation(row)
+              const groupTaskDestination = isGroupTask ? captureGroupTaskDestination(row) : null
               const taskDetails = (
                 <details className="task-details">
                   <summary>查看详情</summary>
@@ -551,25 +553,37 @@ export default function AnnotationTaskListView() {
                 </details>
               )
               const postCleaningOutcome = revision?.post_cleaning_result?.outcome
-              const canOpenWorkbench =
+              const canOpenLegacyWorkbench =
                 (row.can_submit && row.status === 'ASSIGNED') ||
                 (row.can_review && Boolean(revision)) ||
                 (row.can_recheck_post_cleaning &&
                   (postCleaningOutcome === 'WARNING' || postCleaningOutcome === 'REJECT'))
-              const taskAction = canOpenWorkbench ? (
+              const taskAction = isGroupTask ? (
+                groupTaskDestination ? (
+                  <Button
+                    type="primary"
+                    size="small"
+                    aria-label={`进入${taskSubject}的${groupTaskDestination.actionLabel}`}
+                    onClick={() =>
+                      void navigate(
+                        paths.captureGroupFocus(
+                          projectId,
+                          row.capture_group_id ?? row.annotation_task_id,
+                          groupTaskDestination.focus,
+                        ),
+                      )
+                    }
+                  >
+                    {groupTaskDestination.actionLabel}
+                  </Button>
+                ) : null
+              ) : canOpenLegacyWorkbench ? (
                 <Button
                   type="primary"
                   size="small"
                   aria-label={`进入${taskSubject}的配药动作标注工作台`}
                   onClick={() =>
-                    void navigate(
-                      isGroupTask
-                        ? paths.captureGroup(
-                            projectId,
-                            row.capture_group_id ?? row.annotation_task_id,
-                          )
-                        : paths.annotationTask(projectId, row.annotation_task_id),
-                    )
+                    void navigate(paths.annotationTask(projectId, row.annotation_task_id))
                   }
                 >
                   进入工作台

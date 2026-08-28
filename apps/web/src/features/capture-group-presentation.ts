@@ -6,6 +6,7 @@ import type {
   CaptureGroupStream,
 } from '@/api/capture-groups'
 import type { AnnotationTask } from '@/api/annotation'
+import type { CaptureGroupFocus } from '@/app/paths'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 
 export const receiptStateLabels: Record<CaptureGroup['receipt_state'], string> = {
@@ -110,6 +111,70 @@ export function formatViewQualitySummary(review: CaptureGroupQualityReview | nul
 
 export type CaptureGroupTaskVisibility = 'visible' | 'permission-limited' | 'unavailable'
 
+export interface CaptureGroupTaskDestination {
+  focus: CaptureGroupFocus
+  actionLabel: string
+}
+
+export function captureGroupTaskDestination(
+  task: Pick<
+    AnnotationTask,
+    | 'capture_group_id'
+    | 'status'
+    | 'can_submit'
+    | 'can_review'
+    | 'annotation_revision'
+  >,
+): CaptureGroupTaskDestination | null {
+  if (!task.capture_group_id) return null
+
+  if (task.status === 'ASSIGNED' && task.can_submit) {
+    return {
+      focus: 'annotation',
+      actionLabel:
+        task.annotation_revision?.review?.decision === 'REJECTED'
+          ? '进入标注返工'
+          : '进入事件标注',
+    }
+  }
+
+  if (task.status === 'SUBMITTED' && task.can_review && task.annotation_revision) {
+    return { focus: 'review', actionLabel: '进入 Review' }
+  }
+
+  // Completed task visibility is already authorized by the task list. The
+  // recheck mutation remains guarded separately by can_recheck_post_cleaning.
+  if (task.status === 'COMPLETED' && task.annotation_revision) {
+    return { focus: 'cleaning', actionLabel: '查看 Review / Cleaning 结果' }
+  }
+
+  return null
+}
+
+export const captureGroupFocusTargetIds: Record<CaptureGroupFocus, string> = {
+  annotation: 'capture-group-annotation',
+  review: 'capture-group-review-cleaning',
+  cleaning: 'capture-group-review-cleaning',
+}
+
+export const captureGroupReviewCleaningFallbackTargetId = 'capture-group-review-cleaning-context'
+
+export function captureGroupFocusFromLocation(
+  search: string,
+  hash: string,
+): CaptureGroupFocus | null {
+  const queryFocus = new URLSearchParams(search).get('focus')
+  if (queryFocus === 'annotation' || queryFocus === 'review' || queryFocus === 'cleaning') {
+    return queryFocus
+  }
+
+  const hashTarget = hash.replace(/^#/, '')
+  const matchedFocus = Object.entries(captureGroupFocusTargetIds).find(
+    ([, targetId]) => targetId === hashTarget,
+  )
+  return (matchedFocus?.[0] as CaptureGroupFocus | undefined) ?? null
+}
+
 export function taskNextAction(
   group: Pick<CaptureGroup, 'receipt_state'>,
   quality: CaptureGroupQualityReview | null,
@@ -128,10 +193,19 @@ export function taskNextAction(
     if (taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
     return '等待系统创建唯一 CaptureGroup 任务'
   }
+  if (task.status === 'ASSIGNED') {
+    if (!task.can_submit) return '等待任务执行人处理'
+    if (task.annotation_revision?.review?.decision === 'REJECTED') {
+      return '根据 Review 意见修改'
+    }
+    if (!task.primary_clip_asset_id) return '选择主视图'
+    return '提交配药动作修订'
+  }
+  if (task.status === 'SUBMITTED') {
+    return task.can_review ? '进入 Review' : '等待 Review'
+  }
   if (!task.primary_clip_asset_id) return '选择主视图'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '根据 Review 意见修改'
-  if (task.status === 'ASSIGNED' && task.can_submit) return '提交配药动作修订'
-  if (task.status === 'SUBMITTED') return '等待 Review'
   if (task.annotation_revision?.review?.decision === 'APPROVED') {
     return task.annotation_revision.capture_group_cleaning?.outcome === 'PASS'
       ? '清洗已通过'

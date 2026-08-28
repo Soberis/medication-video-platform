@@ -16,6 +16,8 @@ import {
 } from '@/features/capture-group/capture-group-detail-model'
 import { CaptureGroupQualityPanel } from '@/features/capture-group/CaptureGroupQualityPanel'
 import {
+  captureGroupReviewCleaningFallbackTargetId,
+  captureGroupTaskDestination,
   mediaStatusLabels,
   syncSafety,
   technicalQualityLabels,
@@ -174,7 +176,13 @@ export function CaptureGroupInspector({
         ) : null}
       </InspectorSection>
 
-      <InspectorSection title="Review / Cleaning" titleId="review-cleaning-context">
+      <InspectorSection
+        className="capture-group-workflow-focus-target"
+        id={captureGroupReviewCleaningFallbackTargetId}
+        tabIndex={-1}
+        title="Review / Cleaning"
+        titleId="review-cleaning-context"
+      >
         {task?.annotation_revision ? (
           <>
             <StatusIndicator
@@ -233,8 +241,15 @@ export function CaptureGroupInspector({
           <p className="form-hint">尚无正式 Revision；Review / 训练资格检查尚未开始。</p>
         )}
         {task ? (
-          <Link className="text-link" to={paths.annotationTask(projectId, task.annotation_task_id)}>
-            打开现有任务上下文
+          <Link
+            className="text-link"
+            to={paths.captureGroupFocus(
+              projectId,
+              captureGroupId,
+              captureGroupTaskDestination(task)?.focus ?? 'annotation',
+            )}
+          >
+            打开 CaptureGroup 任务上下文
           </Link>
         ) : null}
       </InspectorSection>

@@ -9,6 +9,7 @@ import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 const taskId = 'a0000000-0000-4000-8000-000000000001'
+const captureGroupId = '60000000-0000-4000-8000-000000000001'
 const labelSchemaId = '70000000-0000-4000-8000-000000000001'
 const labelSchemaDigest = 'b'.repeat(64)
 const completedRevision = {
@@ -82,6 +83,14 @@ const assignedTask = {
   version: 0,
 }
 
+const assignedGroupTask = {
+  ...assignedTask,
+  annotation_task_id: 'a0000000-0000-4000-8000-000000000010',
+  clip_asset_id: null,
+  capture_group_id: captureGroupId,
+  primary_clip_asset_id: assetId,
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task list view', () => {
@@ -150,6 +159,110 @@ describe('annotation task list view', () => {
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining('/revisions'),
       expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('routes an assigned CaptureGroup task to event annotation', async () => {
+    stubTasks([assignedGroupTask], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
+    await user.click(within(taskRow).getByRole('button', { name: /进入事件标注/ }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=annotation')
+    })
+    expect(screen.queryByRole('button', { name: /配药动作标注工作台/ })).not.toBeInTheDocument()
+  })
+
+  it('routes a submitted CaptureGroup task to Review only when the server grants review', async () => {
+    const reviewableGroupTask = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000011',
+      status: 'SUBMITTED',
+      can_submit: false,
+      can_review: true,
+      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+    }
+    stubTasks([reviewableGroupTask], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待复核/ })
+    await user.click(within(taskRow).getByRole('button', { name: /进入 Review/ }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=review')
+    })
+  })
+
+  it('routes a returned CaptureGroup revision back to annotation rework', async () => {
+    const returnedGroupTask = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000012',
+      annotation_revision: {
+        ...completedRevision,
+        review: {
+          ...completedRevision.review,
+          decision: 'REJECTED',
+          review_note: '请补充动作时间段。',
+        },
+        post_cleaning_result: null,
+      },
+    }
+    stubTasks([returnedGroupTask], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待修改/ })
+    await user.click(within(taskRow).getByRole('button', { name: /进入标注返工/ }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=annotation')
+    })
+  })
+
+  it('routes a completed CaptureGroup task to its Review / Cleaning result context', async () => {
+    const completedGroupTask = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000013',
+      status: 'COMPLETED',
+      can_submit: false,
+      annotation_revision: completedRevision,
+    }
+    stubTasks([completedGroupTask], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*标注完成/ })
+    await user.click(within(taskRow).getByRole('button', { name: /查看 Review \/ Cleaning 结果/ }))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=cleaning')
+    })
+  })
+
+  it('does not invent a CaptureGroup action when the server limits task permission', async () => {
+    const deniedGroupTask = {
+      ...assignedGroupTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000014',
+      can_submit: false,
+    }
+    stubTasks([deniedGroupTask], labelSchema)
+    renderView()
+
+    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
+    expect(
+      within(taskRow).queryByRole('button', { name: /进入 CaptureGroup/ }),
+    ).not.toBeInTheDocument()
+    expect(within(taskRow).getByRole('link', { name: /CaptureGroup/ })).toHaveAttribute(
+      'href',
+      paths.captureGroup(projectId, captureGroupId),
     )
   })
 
@@ -605,6 +718,10 @@ function renderView() {
       {
         path: '/projects/:projectId/annotation-tasks/:taskId',
         element: <div aria-label="标注工作台路由占位" />,
+      },
+      {
+        path: '/projects/:projectId/capture-groups/:captureGroupId',
+        element: <div aria-label="CaptureGroup 路由占位" />,
       },
     ],
     [`/projects/${projectId}/annotation-tasks`],

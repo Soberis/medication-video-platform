@@ -185,6 +185,36 @@ describe('annotation task workbench', () => {
     )
   })
 
+  it('redirects a CaptureGroup task to its group workflow without a workbench loop', async () => {
+    const captureGroupId = '60000000-0000-4000-8000-000000000001'
+    const groupTask = {
+      ...assignedTask,
+      clip_asset_id: null,
+      capture_group_id: captureGroupId,
+    }
+    stubWorkbench([groupTask])
+    const { router } = renderRouter(
+      [
+        {
+          path: '/projects/:projectId/annotation-tasks/:taskId',
+          element: <AnnotationTaskWorkbenchView />,
+        },
+        {
+          path: '/projects/:projectId/capture-groups/:captureGroupId',
+          element: <div aria-label="CaptureGroup 路由占位" />,
+        },
+      ],
+      [paths.annotationTask(projectId, taskId)],
+    )
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=annotation')
+    })
+    expect(await screen.findByLabelText('CaptureGroup 路由占位')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '配药动作标注工作台' })).not.toBeInTheDocument()
+  })
+
   it('keeps AppShell as the only main landmark', async () => {
     stubWorkbench([assignedTask])
     renderRoute(

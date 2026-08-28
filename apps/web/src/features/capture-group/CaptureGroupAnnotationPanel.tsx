@@ -198,8 +198,9 @@ export function CaptureGroupAnnotationPanel({
 
   return (
     <Section
-      className="capture-group-annotation-section"
+      className="capture-group-annotation-section capture-group-workflow-focus-target"
       id="capture-group-annotation"
+      tabIndex={-1}
       title="CaptureGroup Annotation"
       titleId="capture-group-annotation-title"
       actions={<span className="capture-group-section-note">一个组任务 · 一条 Revision 链</span>}
@@ -215,9 +216,9 @@ export function CaptureGroupAnnotationPanel({
             </div>
             <Link
               className="text-link"
-              to={paths.annotationTask(projectId, task.annotation_task_id)}
+              to={paths.captureGroupFocus(projectId, captureGroupId, 'annotation')}
             >
-              Review / Cleaning 上下文
+              打开 CaptureGroup Annotation
             </Link>
           </div>
           {groupQualityDowngraded ? (
