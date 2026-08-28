@@ -118,30 +118,53 @@ export function stubGroupList(
 export function stubPagedGroupList(
   pages: Array<{ group: CaptureGroup; nextCursor: string | null }>,
   tasks: AnnotationTask[],
+  options: {
+    qualityListErrors?: Array<{ status: number; errorCode?: string } | null>
+    taskListErrors?: boolean[]
+    qualityByGroup?: Record<string, CaptureGroupQualityReview>
+  } = {},
 ) {
   let pageIndex = 0
+  let currentPageIndex = 0
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     const path = new URL(url, 'http://localhost').pathname
     if (path.endsWith('/capture-groups')) {
-      const page = pages[Math.min(pageIndex++, pages.length - 1)]!
+      currentPageIndex = Math.min(pageIndex++, pages.length - 1)
+      const page = pages[currentPageIndex]!
       return Promise.resolve(
         jsonResponse({ items: [summaryFromGroup(page.group)], next_cursor: page.nextCursor }),
       )
     }
     if (path.endsWith('/capture-group-quality-reviews')) {
+      const qualityError = options.qualityListErrors?.[currentPageIndex]
+      if (qualityError) {
+        return Promise.resolve(
+          jsonResponse(
+            { error_code: qualityError.errorCode ?? 'CAPTURE_GROUP_QUALITY_REQUEST_FAILED' },
+            { status: qualityError.status },
+          ),
+        )
+      }
       const requestedIds = new URL(url, 'http://localhost').searchParams.getAll('capture_group_id')
       return Promise.resolve(
         jsonResponse({
           items: requestedIds.map((captureGroupId) => {
             const page =
               pages.find(({ group }) => group.capture_group_id === captureGroupId) ?? pages[0]!
-            return qualityFixture(page.group, 'QUALIFIED')
+            return (
+              options.qualityByGroup?.[captureGroupId] ?? qualityFixture(page.group, 'QUALIFIED')
+            )
           }),
         }),
       )
     }
-    if (path.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))
+    if (path.endsWith('/annotation-tasks')) {
+      if (options.taskListErrors?.[currentPageIndex]) {
+        return Promise.reject(new Error('TASK_LIST_UNAVAILABLE'))
+      }
+      return Promise.resolve(jsonResponse(taskList(tasks)))
+    }
     if (url.includes('/quality-review')) {
       const page = pages.find(({ group }) => url.includes(group.capture_group_id)) ?? pages[0]!
       return Promise.resolve(jsonResponse(qualityFixture(page.group, 'QUALIFIED')))

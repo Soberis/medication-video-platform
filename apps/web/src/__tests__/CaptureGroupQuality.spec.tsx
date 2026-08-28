@@ -162,11 +162,14 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     expect(await screen.findByRole('listitem', { name: /capture-page-1/ })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { name: /capture-page-1/ })).toHaveTextContent('合格')
     expect(screen.queryByRole('listitem', { name: /capture-page-2/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
+    const firstRow = screen.getByRole('listitem', { name: /capture-page-1/ })
     expect(await screen.findByRole('listitem', { name: /capture-page-2/ })).toBeInTheDocument()
-    expect(screen.getByRole('listitem', { name: /capture-page-1/ })).toBeInTheDocument()
+    expect(firstRow).toHaveTextContent('合格')
+    expect(screen.getByRole('listitem', { name: /capture-page-2/ })).toHaveTextContent('合格')
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups?limit=20&cursor=cursor-page-2`,
@@ -177,6 +180,169 @@ describe('CaptureGroup operational list and quality', () => {
         String(input).includes('/capture-group-quality-reviews'),
       ).length,
     ).toBe(2)
+  })
+
+  it('keeps first-page quality loaded when a later page quality request fails', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-page-1-loaded',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+      key: 'quality-page-2-unavailable',
+    })
+    stubPagedGroupList(
+      [
+        { group: first, nextCursor: 'cursor-page-2' },
+        { group: second, nextCursor: null },
+      ],
+      [],
+      { qualityListErrors: [null, { status: 500 }] },
+    )
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const firstRow = await screen.findByRole('listitem', { name: /quality-page-1-loaded/ })
+    expect(firstRow).toHaveTextContent('事件质量合格')
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    const secondRow = await screen.findByRole('listitem', { name: /quality-page-2-unavailable/ })
+    expect(firstRow).toHaveTextContent('事件质量合格')
+    expect(firstRow).not.toHaveTextContent('事件质量暂不可用')
+    expect(secondRow).toHaveTextContent('事件质量暂不可用，请刷新后重试')
+    expect(await screen.findByText('事件质量 · 暂不可用')).toBeInTheDocument()
+  })
+
+  it('keeps first-page quality unavailable when a later page loads successfully', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-page-1-unavailable',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+      key: 'quality-page-2-loaded',
+    })
+    stubPagedGroupList(
+      [
+        { group: first, nextCursor: 'cursor-page-2' },
+        { group: second, nextCursor: null },
+      ],
+      [],
+      { qualityListErrors: [{ status: 500 }, null] },
+    )
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const firstRow = await screen.findByRole('listitem', { name: /quality-page-1-unavailable/ })
+    expect(firstRow).toHaveTextContent('事件质量暂不可用，请刷新后重试')
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    const secondRow = await screen.findByRole('listitem', { name: /quality-page-2-loaded/ })
+    expect(firstRow).toHaveTextContent('事件质量暂不可用，请刷新后重试')
+    expect(secondRow).toHaveTextContent('事件质量合格')
+    expect(secondRow).not.toHaveTextContent('事件质量暂不可用')
+  })
+
+  it('keeps forbidden and loaded quality visibility isolated between pages', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'quality-page-1-forbidden',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+      key: 'quality-page-2-loaded-after-forbidden',
+    })
+    stubPagedGroupList(
+      [
+        { group: first, nextCursor: 'cursor-page-2' },
+        { group: second, nextCursor: null },
+      ],
+      [],
+      {
+        qualityListErrors: [
+          { status: 403, errorCode: 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED' },
+          null,
+        ],
+      },
+    )
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const firstRow = await screen.findByRole('listitem', { name: /quality-page-1-forbidden/ })
+    expect(firstRow).toHaveTextContent('事件质量无权查看')
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    const secondRow = await screen.findByRole('listitem', {
+      name: /quality-page-2-loaded-after-forbidden/,
+    })
+    expect(firstRow).toHaveTextContent('事件质量无权查看')
+    expect(secondRow).toHaveTextContent('事件质量合格')
+    expect(secondRow).not.toHaveTextContent('事件质量无权查看')
+    expect(await screen.findByText('事件质量 · 无权查看')).toBeInTheDocument()
+  })
+
+  it('keeps existing task facts when a later page task request fails', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'task-page-1-loaded',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+      key: 'task-page-2-unavailable',
+    })
+    stubPagedGroupList(
+      [
+        { group: first, nextCursor: 'cursor-page-2' },
+        { group: second, nextCursor: null },
+      ],
+      [groupTask(first.capture_group_id, true)],
+      { taskListErrors: [false, true] },
+    )
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const firstRow = await screen.findByRole('listitem', { name: /task-page-1-loaded/ })
+    expect(firstRow).toHaveTextContent('任务 70000000…0001')
+    expect(firstRow).not.toHaveTextContent('任务状态暂不可用，请刷新后重试')
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    const secondRow = await screen.findByRole('listitem', { name: /task-page-2-unavailable/ })
+    expect(firstRow).toHaveTextContent('任务 70000000…0001')
+    expect(firstRow).not.toHaveTextContent('任务状态暂不可用，请刷新后重试')
+    expect(secondRow).toHaveTextContent('任务状态暂不可用，请刷新后重试')
+    expect(await screen.findByText('部分任务状态不可直接确认')).toBeInTheDocument()
   })
 
   it('renders an empty page without requesting task enrichment', async () => {

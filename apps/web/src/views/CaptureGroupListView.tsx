@@ -31,6 +31,7 @@ import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation
 interface CaptureGroupListRow {
   group: CaptureGroupSummary
   quality: CaptureGroupQualityReview | null
+  qualityVisibility: CaptureGroupQualityVisibility
   task: AnnotationTask | null
   taskVisibility: CaptureGroupTaskVisibility
 }
@@ -40,12 +41,12 @@ export default function CaptureGroupListView() {
   const [rows, setRows] = useState<CaptureGroupListRow[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
-  const [qualityVisibility, setQualityVisibility] =
-    useState<CaptureGroupQualityVisibility>('unavailable')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
   const rowsRef = useRef<CaptureGroupListRow[]>([])
+  const hasUnavailableQuality = rows.some((row) => row.qualityVisibility === 'unavailable')
+  const hasForbiddenQuality = rows.some((row) => row.qualityVisibility === 'forbidden')
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
@@ -64,7 +65,6 @@ export default function CaptureGroupListView() {
           rowsRef.current = nextRows
           setRows(nextRows)
           setNextCursor(groupList.next_cursor)
-          setQualityVisibility('loaded')
           setLoadState('success')
           return
         }
@@ -117,21 +117,26 @@ export default function CaptureGroupListView() {
           return {
             group,
             quality,
+            qualityVisibility: nextQualityVisibility,
             task,
             taskVisibility: task ? 'visible' : taskVisibility,
           }
         })
         if (request.signal.aborted || activeRequest.current !== request) return
-        const nextRows = append ? [...rowsRef.current, ...loadedRows] : loadedRows
+        const existingGroupIds = new Set(rowsRef.current.map((row) => row.group.capture_group_id))
+        const nextRows = append
+          ? [
+              ...rowsRef.current,
+              ...loadedRows.filter(({ group }) => !existingGroupIds.has(group.capture_group_id)),
+            ]
+          : loadedRows
         rowsRef.current = nextRows
         setRows(nextRows)
         setNextCursor(groupList.next_cursor)
-        setQualityVisibility(nextQualityVisibility)
         setLoadState('success')
       } catch (error) {
         if (request.signal.aborted || activeRequest.current !== request) return
         setLoadState('error')
-        setQualityVisibility('unavailable')
         setErrorCode(
           error instanceof CaptureGroupApiError
             ? error.errorCode
@@ -206,7 +211,7 @@ export default function CaptureGroupListView() {
             <span className="capture-group-list-count">{rows.length} 个配药事件</span>
           </header>
           <div className="capture-group-list" role="list" aria-label="配药事件操作列表">
-            {rows.map(({ group, quality, task, taskVisibility }) => (
+            {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => (
               <article
                 className="capture-group-list-row"
                 key={group.capture_group_id}
@@ -297,14 +302,14 @@ export default function CaptureGroupListView() {
           ) : null}
         </section>
       ) : null}
-      {loadState === 'success' && qualityVisibility !== 'loaded' ? (
+      {loadState === 'success' && (hasUnavailableQuality || hasForbiddenQuality) ? (
         <Alert
           className="capture-group-list-note"
           type="info"
           showIcon
-          title={qualityVisibility === 'forbidden' ? '事件质量 · 无权查看' : '事件质量 · 暂不可用'}
+          title={hasForbiddenQuality ? '事件质量 · 无权查看' : '事件质量 · 暂不可用'}
           description={
-            qualityVisibility === 'forbidden'
+            hasForbiddenQuality && !hasUnavailableQuality
               ? '当前账号无权读取事件质量；列表保留配药事件与接收状态。'
               : '当前批次的事件质量或机位质量暂时无法读取；列表保留配药事件与接收状态，请刷新后重试。'
           }
