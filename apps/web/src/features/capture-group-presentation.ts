@@ -23,6 +23,25 @@ export const groupQualityLabels: Record<CaptureGroupQualityResult, string> = {
   REJECTED: '不合格',
 }
 
+export type CaptureGroupQualityVisibility = 'loading' | 'loaded' | 'unavailable' | 'forbidden'
+
+export function groupQualityDisplayLabel(
+  visibility: CaptureGroupQualityVisibility,
+  quality: CaptureGroupQualityReview | null,
+) {
+  if (visibility === 'loading') return '读取中'
+  if (visibility === 'forbidden') return '无权查看'
+  if (visibility === 'unavailable' || !quality) return '暂不可用'
+  return groupQualityLabels[quality.result]
+}
+
+export function groupQualityDisplayTone(
+  visibility: CaptureGroupQualityVisibility,
+  quality: CaptureGroupQualityReview | null,
+): StatusIndicatorTone {
+  return visibility === 'loaded' && quality ? groupQualityTone(quality.result) : 'neutral'
+}
+
 export const viewQualityLabels: Record<CaptureGroupQualityView['quality_review_decision'], string> =
   {
     UNREVIEWED: '待判断',

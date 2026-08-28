@@ -123,7 +123,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getAllByText('拍摄时间').length).toBeGreaterThan(0)
     expect(screen.getByText('机位质量')).toBeInTheDocument()
     expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
-    expect(await screen.findByText('NO_HAND_DETECTED')).toBeInTheDocument()
+    expect(await screen.findByText('未检测到手部（NO_HAND_DETECTED）')).toBeInTheDocument()
     expect(screen.getByText(/这是检测事实/)).toBeInTheDocument()
     expect(screen.getByText(/服务端结论/)).toBeInTheDocument()
     expect(screen.queryByText('CaptureGroup 多机位')).not.toBeInTheDocument()
@@ -132,6 +132,58 @@ describe('CaptureGroup detail views', () => {
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
       expect.anything(),
     )
+  })
+
+  it('keeps a group-quality request failure unavailable instead of inventing UNREVIEWED', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'detail-quality-unavailable',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      qualityError: { status: 500 },
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findAllByText('暂不可用')).not.toHaveLength(0)
+    expect(screen.getAllByText('事件质量暂不可用').length).toBeGreaterThan(0)
+    expect(screen.getByText('事件质量暂不可用，请刷新后重试')).toBeInTheDocument()
+    expect(screen.queryByText('待判断')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
+  })
+
+  it('shows detail-quality permission denial only when the contract identifies 403', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'detail-quality-forbidden',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      qualityError: { status: 403, errorCode: 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED' },
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findAllByText('无权查看')).not.toHaveLength(0)
+    expect(screen.getAllByText('事件质量无权查看').length).toBeGreaterThan(0)
+    expect(screen.getByText('事件质量按当前权限不可见')).toBeInTheDocument()
+    expect(screen.queryByText('待判断')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
   })
 
   it('shows missing and rejected views, warns on sync, switches one main player context, and keeps AI failure non-blocking', async () => {
@@ -156,8 +208,8 @@ describe('CaptureGroup detail views', () => {
     expect((await screen.findAllByText('机位 3')).length).toBeGreaterThan(0)
     expect(screen.getByText('缺失机位：机位 3')).toBeInTheDocument()
     expect(screen.getAllByText('合格 · 排除部分机位').length).toBeGreaterThan(0)
-    expect(screen.getByText('检测失败')).toBeInTheDocument()
-    expect(screen.getByText(/手部检测失败/)).toBeInTheDocument()
+    expect(await screen.findByText('检测失败')).toBeInTheDocument()
+    expect(await screen.findByText(/手部检测失败/)).toBeInTheDocument()
     expect(screen.getAllByText(/同步需关注 · 仅供参考/).length).toBeGreaterThan(0)
     const rejectedRow = screen.getByRole('listitem', { name: /机位 5/ })
     expect(rejectedRow).toHaveTextContent('机位质量 · 不合格')

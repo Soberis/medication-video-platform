@@ -113,10 +113,10 @@ async function trainingDataExportApiError(
     PROJECT_NOT_FOUND: '未找到该项目，或当前身份无权访问。',
     TRAINING_DATA_EXPORT_UNAVAILABLE: '当前环境暂未开放训练数据导出。',
     TRAINING_DATA_EXPORT_EVIDENCE_INVALID: '当前可用数据证据不完整，暂时无法导出。',
-    TRAINING_DATA_V3_EVIDENCE_INVALID: '当前 CaptureGroup 导出证据不完整，暂时无法导出。',
-    TRAINING_DATA_V3_READBACK_INVALID: 'training-data.v3 导出内容校验未通过，请稍后重试。',
+    TRAINING_DATA_V3_EVIDENCE_INVALID: '当前配药事件导出证据不完整，暂时无法导出。',
+    TRAINING_DATA_V3_READBACK_INVALID: '配药事件训练数据导出内容校验未通过，请稍后重试。',
     TRAINING_DATA_EXPORT_FAILED: '训练数据导出未完成，请稍后重试。',
-    TRAINING_DATA_V3_EXPORT_FAILED: 'training-data.v3 导出未完成，请稍后重试。',
+    TRAINING_DATA_V3_EXPORT_FAILED: '配药事件训练数据导出未完成，请稍后重试。',
   }
   return new TrainingDataExportApiError(messages[errorCode] ?? fallbackMessage, errorCode)
 }

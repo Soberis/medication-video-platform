@@ -102,7 +102,9 @@ export function candidateStatusLabel(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
-  if (response?.job.hand_result === 'NO_HAND_DETECTED') return 'NO_HAND_DETECTED'
+  if (response?.job.hand_result === 'NO_HAND_DETECTED') {
+    return '未检测到手部（NO_HAND_DETECTED）'
+  }
   if (response?.job.status === 'FAILED' || state === 'error') return '失败'
   return state === 'success' ? '已读取' : '未读取'
 }

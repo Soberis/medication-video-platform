@@ -21,6 +21,7 @@ import {
   mediaStatusLabels,
   syncSafety,
   technicalQualityLabels,
+  type CaptureGroupQualityVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
@@ -29,6 +30,7 @@ interface CaptureGroupInspectorProps {
   captureGroupId: string
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: CaptureGroupQualityVisibility
   qualityHistory: CaptureGroupQualityReview[]
   refreshVersion: number
   selectedView: GroupViewRow | null
@@ -41,6 +43,7 @@ export function CaptureGroupInspector({
   captureGroupId,
   group,
   groupQuality,
+  groupQualityVisibility,
   qualityHistory,
   refreshVersion,
   selectedView,
@@ -49,9 +52,29 @@ export function CaptureGroupInspector({
 }: CaptureGroupInspectorProps) {
   const selectedStream = selectedView?.stream ?? null
   const selectedSync = selectedStream ? syncSafety(selectedStream) : null
-  const currentGroupResult = groupQuality?.result ?? 'UNREVIEWED'
+  const currentGroupResult = groupQuality?.result ?? null
   const groupQualityDowngraded =
     groupQuality?.result === 'NEEDS_REVIEW' || groupQuality?.result === 'REJECTED'
+  const nextAction =
+    group.receipt_state === 'RECEIVING'
+      ? '等待接收完成'
+      : groupQualityVisibility === 'unavailable'
+        ? '事件质量暂不可用，请刷新后重试'
+        : groupQualityVisibility === 'forbidden'
+          ? '事件质量按当前权限不可见'
+          : groupQualityVisibility === 'loading'
+            ? '正在读取事件质量'
+            : !groupQuality || currentGroupResult === 'UNREVIEWED'
+              ? '记录事件质量'
+              : groupQualityDowngraded
+                ? '先恢复事件质量准入'
+                : task && !task.primary_clip_asset_id
+                  ? '选择主视图'
+                  : task?.status === 'SUBMITTED'
+                    ? '等待人工复核'
+                    : task?.annotation_revision?.review?.decision === 'APPROVED'
+                      ? '查看训练资格检查事实'
+                      : '继续配药动作标注'
 
   return (
     <aside className="capture-group-inspector" aria-label="配药事件检查器">
@@ -115,6 +138,7 @@ export function CaptureGroupInspector({
         captureGroupId={captureGroupId}
         group={group}
         groupQuality={groupQuality}
+        groupQualityVisibility={groupQualityVisibility}
         qualityHistory={qualityHistory}
         refreshVersion={refreshVersion}
         onRefresh={onRefresh}
@@ -257,21 +281,7 @@ export function CaptureGroupInspector({
       <InspectorSection title="下一步" titleId="capture-group-next-action">
         <div className="capture-group-next-action capture-group-stack">
           <Check aria-hidden="true" size={16} strokeWidth={1.8} />
-          <strong>
-            {group.receipt_state === 'RECEIVING'
-              ? '等待接收完成'
-              : !groupQuality || currentGroupResult === 'UNREVIEWED'
-                ? '记录事件质量'
-                : groupQualityDowngraded
-                  ? '先恢复事件质量准入'
-                  : task && !task.primary_clip_asset_id
-                    ? '选择主视图'
-                    : task?.status === 'SUBMITTED'
-                      ? '等待人工复核'
-                      : task?.annotation_revision?.review?.decision === 'APPROVED'
-                        ? '查看训练资格检查事实'
-                        : '继续配药动作标注'}
-          </strong>
+          <strong>{nextAction}</strong>
           <span>下一步只依据服务端返回的接收状态、质量和任务状态。</span>
         </div>
       </InspectorSection>

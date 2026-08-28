@@ -24,8 +24,11 @@ import {
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
 import {
+  groupQualityDisplayLabel,
+  groupQualityDisplayTone,
   groupQualityLabels,
   groupQualityTone,
+  type CaptureGroupQualityVisibility,
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
@@ -155,6 +158,7 @@ interface CaptureGroupQualityPanelProps {
   captureGroupId: string
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: CaptureGroupQualityVisibility
   qualityHistory: CaptureGroupQualityReview[]
   refreshVersion: number
   onRefresh: () => Promise<void>
@@ -165,6 +169,7 @@ export function CaptureGroupQualityPanel({
   captureGroupId,
   group,
   groupQuality,
+  groupQualityVisibility,
   qualityHistory,
   refreshVersion,
   onRefresh,
@@ -174,10 +179,10 @@ export function CaptureGroupQualityPanel({
     useState<CaptureGroupQualityCommandResult>('NEEDS_REVIEW')
   const [groupReason, setGroupReason] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const currentResult = groupQuality?.result ?? 'UNREVIEWED'
   const receiving = group.receipt_state === 'RECEIVING'
+  const qualityReadable = groupQualityVisibility === 'loaded' && Boolean(groupQuality)
   const saveDisabled =
-    !groupQuality ||
+    !qualityReadable ||
     !groupReason.trim() ||
     isSaving ||
     (receiving && groupDecision !== 'NEEDS_REVIEW')
@@ -195,7 +200,7 @@ export function CaptureGroupQualityPanel({
   }, [groupQuality, refreshVersion])
 
   async function saveGroupQuality() {
-    if (!groupQuality || !groupReason.trim() || isSaving) return
+    if (!qualityReadable || !groupQuality || !groupReason.trim() || isSaving) return
     if (receiving && groupDecision !== 'NEEDS_REVIEW') return
     setIsSaving(true)
     try {
@@ -218,8 +223,8 @@ export function CaptureGroupQualityPanel({
   return (
     <InspectorSection title="事件质量" titleId="capture-group-quality-inspector">
       <div className="capture-group-inspector-status">
-        <StatusIndicator tone={groupQualityTone(currentResult)}>
-          {groupQualityLabels[currentResult]}
+        <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+          {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
         </StatusIndicator>
         {groupQuality?.reviewer_actor_id ? (
           <span>记录人：{groupQuality.reviewer_actor_id}</span>
@@ -227,73 +232,98 @@ export function CaptureGroupQualityPanel({
         {groupQuality?.decided_at ? <span>{formatDateTime(groupQuality.decided_at)}</span> : null}
       </div>
       {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
-      {receiving ? (
+      {groupQualityVisibility === 'unavailable' ? (
         <Alert
-          type="info"
+          type="warning"
           showIcon
-          title="接收仍在进行中"
-          description="最终 QUALIFIED / QUALIFIED_WITH_EXCLUSIONS 操作已禁用；服务器只接受 NEEDS_REVIEW。"
+          title="事件质量暂不可用"
+          description="当前不能判断或修改事件质量；请刷新后重试。"
         />
       ) : null}
-      <label className="capture-group-decision-field">
-        <span>记录新的事件质量结论</span>
-        <Select
-          aria-label="事件质量结论"
-          value={groupDecision}
-          options={[
-            {
-              value: 'QUALIFIED',
-              label: groupQualityLabels.QUALIFIED,
-              disabled: receiving,
-            },
-            {
-              value: 'QUALIFIED_WITH_EXCLUSIONS',
-              label: groupQualityLabels.QUALIFIED_WITH_EXCLUSIONS,
-              disabled: receiving,
-            },
-            { value: 'NEEDS_REVIEW', label: groupQualityLabels.NEEDS_REVIEW },
-            {
-              value: 'REJECTED',
-              label: groupQualityLabels.REJECTED,
-              disabled: receiving,
-            },
-          ]}
-          onChange={(value) => setGroupDecision(value as CaptureGroupQualityCommandResult)}
+      {groupQualityVisibility === 'forbidden' ? (
+        <Alert
+          type="warning"
+          showIcon
+          title="事件质量无权查看"
+          description="当前账号不能读取或修改事件质量；接收与机位事实仍可查看。"
         />
-      </label>
-      <label className="capture-group-decision-field">
-        <span>结论理由</span>
-        <Input.TextArea
-          value={groupReason}
-          maxLength={1000}
-          autoSize={{ minRows: 2, maxRows: 4 }}
-          onChange={(event) => setGroupReason(event.target.value)}
-        />
-      </label>
-      <Button
-        type="primary"
-        loading={isSaving}
-        disabled={saveDisabled}
-        onClick={() => void saveGroupQuality()}
-      >
-        保存事件质量
-      </Button>
-      {groupQuality?.confirmed_view_set ? (
-        <div className="capture-group-confirmed-view-set capture-group-stack">
-          <strong>本次结论使用的机位集合</strong>
-          <span>
-            {groupQuality.confirmed_view_set.views.length} 个机位 · input version{' '}
-            {groupQuality.input_version ?? '未提供'}
-          </span>
-          <ul>
-            {groupQuality.confirmed_view_set.views.map((view) => (
-              <li key={view.camera_number}>
-                机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
-                {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
+      ) : null}
+      {groupQualityVisibility === 'loading' ? (
+        <p className="form-hint" role="status">
+          正在读取事件质量…
+        </p>
+      ) : null}
+      {qualityReadable ? (
+        <>
+          {receiving ? (
+            <Alert
+              type="info"
+              showIcon
+              title="接收仍在进行中"
+              description="最终 QUALIFIED / QUALIFIED_WITH_EXCLUSIONS 操作已禁用；服务器只接受 NEEDS_REVIEW。"
+            />
+          ) : null}
+          <label className="capture-group-decision-field">
+            <span>记录新的事件质量结论</span>
+            <Select
+              aria-label="事件质量结论"
+              value={groupDecision}
+              options={[
+                {
+                  value: 'QUALIFIED',
+                  label: groupQualityLabels.QUALIFIED,
+                  disabled: receiving,
+                },
+                {
+                  value: 'QUALIFIED_WITH_EXCLUSIONS',
+                  label: groupQualityLabels.QUALIFIED_WITH_EXCLUSIONS,
+                  disabled: receiving,
+                },
+                { value: 'NEEDS_REVIEW', label: groupQualityLabels.NEEDS_REVIEW },
+                {
+                  value: 'REJECTED',
+                  label: groupQualityLabels.REJECTED,
+                  disabled: receiving,
+                },
+              ]}
+              onChange={(value) => setGroupDecision(value as CaptureGroupQualityCommandResult)}
+            />
+          </label>
+          <label className="capture-group-decision-field">
+            <span>结论理由</span>
+            <Input.TextArea
+              value={groupReason}
+              maxLength={1000}
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              onChange={(event) => setGroupReason(event.target.value)}
+            />
+          </label>
+          <Button
+            type="primary"
+            loading={isSaving}
+            disabled={saveDisabled}
+            onClick={() => void saveGroupQuality()}
+          >
+            保存事件质量
+          </Button>
+          {groupQuality?.confirmed_view_set ? (
+            <div className="capture-group-confirmed-view-set capture-group-stack">
+              <strong>本次结论使用的机位集合</strong>
+              <span>
+                {groupQuality.confirmed_view_set.views.length} 个机位 · 输入版本{' '}
+                {groupQuality.input_version ?? '未提供'}
+              </span>
+              <ul>
+                {groupQuality.confirmed_view_set.views.map((view) => (
+                  <li key={view.camera_number}>
+                    机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
+                    {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
       ) : null}
       {qualityHistory.length ? (
         <details className="capture-group-quality-history capture-group-stack">

@@ -274,7 +274,7 @@ export default function AnnotationTaskWorkbenchView() {
       }
       if (!nextTask.clip_asset_id) {
         throw new AnnotationTaskApiError(
-          '当前任务缺少可用的视频资产或 CaptureGroup 归属。请返回任务列表后重试。',
+          '当前任务缺少可用的视频资产或配药事件归属。请返回任务列表后重试。',
           'ANNOTATION_TASK_NOT_FOUND',
         )
       }

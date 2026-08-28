@@ -82,7 +82,7 @@ describe('training data export API', () => {
 
     await expect(getTrainingDataV3ExportPreview(projectId)).rejects.toMatchObject({
       errorCode: 'TRAINING_DATA_V3_EVIDENCE_INVALID',
-      message: '当前 CaptureGroup 导出证据不完整，暂时无法导出。',
+      message: '当前配药事件导出证据不完整，暂时无法导出。',
     })
   })
 })

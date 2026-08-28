@@ -159,6 +159,7 @@ export function stubGroupDetail(
     taskResponses?: Array<AnnotationTask | null>
     taskScope?: 'PROJECT' | 'ASSIGNEE'
     quality: CaptureGroupQualityReview
+    qualityError?: { status: number; errorCode?: string }
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
     reviewResponse?: Partial<AnnotationReview>
@@ -173,6 +174,16 @@ export function stubGroupDetail(
       return Promise.resolve(jsonResponse(group))
     }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/quality-review`)) {
+      if (options.qualityError) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code: options.qualityError.errorCode ?? 'CAPTURE_GROUP_QUALITY_REQUEST_FAILED',
+            },
+            { status: options.qualityError.status },
+          ),
+        )
+      }
       return Promise.resolve(jsonResponse(options.quality))
     }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/quality-review/history`)) {

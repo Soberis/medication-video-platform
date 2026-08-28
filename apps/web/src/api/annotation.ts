@@ -389,7 +389,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_REVISION_NOT_CURRENT: '当前修订已不是待复核版本，请刷新任务列表查看最新状态。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',
     ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY:
-      '当前 CaptureGroup 修订、Review 或任务状态不允许重新检查训练资格。',
+      '当前配药事件修订、复核或任务状态不允许重新检查训练资格。',
     ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
       '训练资格检查不接受浏览器提供的视图映射；请刷新后重试。',
     ANNOTATION_POST_CLEANING_RECHECK_NOT_READY:

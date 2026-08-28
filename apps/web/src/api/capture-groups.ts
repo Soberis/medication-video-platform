@@ -157,11 +157,18 @@ export class CaptureGroupApiError extends Error {
   }
 }
 
+export function isCaptureGroupQualityForbidden(error: unknown) {
+  return (
+    error instanceof CaptureGroupApiError &&
+    (error.status === 403 || error.errorCode === 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED')
+  )
+}
+
 const errorMessages: Record<string, string> = {
-  CAPTURE_GROUP_NOT_FOUND: '未找到该 CaptureGroup，或它不属于当前项目。',
+  CAPTURE_GROUP_NOT_FOUND: '未找到该配药事件，或它不属于当前项目。',
   INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
-  PROJECT_ACCESS_DENIED: '当前账号无权访问该项目中的 CaptureGroup。',
-  CAPTURE_GROUP_QUALITY_ACCESS_DENIED: '当前账号没有读取 CaptureGroup 质量的权限。',
+  PROJECT_ACCESS_DENIED: '当前账号无权访问该项目中的配药事件。',
+  CAPTURE_GROUP_QUALITY_ACCESS_DENIED: '当前账号没有读取事件质量的权限。',
   CAPTURE_GROUP_QUALITY_RECEIPT_NOT_FINALIZED:
     '回执仍在接收中；当前只能记录“需复核”，不能提交最终组质量结论。',
   CAPTURE_GROUP_QUALITY_NO_QUALIFIED_VIEW: '至少需要一路人工判定为合格的视图，才能提交准入结论。',
@@ -174,7 +181,7 @@ const errorMessages: Record<string, string> = {
   CAPTURE_GROUP_QUALITY_CONFLICT: '组质量事实已被更新，请刷新后重试。',
   CAPTURE_GROUP_QUALITY_IDEMPOTENCY_KEY_REUSED: '本次组质量请求与已有请求冲突，请刷新后重试。',
   ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
-    '当前 CaptureGroup 质量不是准入状态，暂不能提交新的标注修订。',
+    '当前配药事件质量不是准入状态，暂不能提交新的标注修订。',
   ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE: '主视图必须是已接收、媒体可用且人工判定合格的视图。',
   ANNOTATION_PRIMARY_VIEW_FROZEN: '首个正式修订已经存在，主视图时间基准已锁定。',
   ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED: '组内事实已变化，请重新提交组质量结论后再选择主视图。',
@@ -298,7 +305,7 @@ async function toCaptureGroupError(response: Response) {
     // Keep the safe fallback for a proxy and non-JSON failure.
   }
   return new CaptureGroupApiError(
-    errorMessages[errorCode] ?? 'CaptureGroup 操作暂未完成，请稍后重试。',
+    errorMessages[errorCode] ?? '配药事件操作暂未完成，请稍后重试。',
     errorCode,
     response.status,
   )

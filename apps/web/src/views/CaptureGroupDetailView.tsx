@@ -107,7 +107,11 @@ export default function CaptureGroupDetailView() {
       ) : null}
       {data.group ? (
         <>
-          <CaptureGroupOverview group={data.group} groupQuality={data.groupQuality} />
+          <CaptureGroupOverview
+            group={data.group}
+            groupQuality={data.groupQuality}
+            groupQualityVisibility={data.groupQualityVisibility}
+          />
           {data.qualityErrorMessage ? (
             <Alert type="warning" showIcon title={data.qualityErrorMessage} />
           ) : null}
@@ -162,6 +166,7 @@ export default function CaptureGroupDetailView() {
                 projectId={projectId}
                 group={data.group}
                 groupQuality={data.groupQuality}
+                groupQualityVisibility={data.groupQualityVisibility}
                 task={data.task}
                 schema={data.schema}
                 onRefresh={data.refresh}
@@ -172,6 +177,7 @@ export default function CaptureGroupDetailView() {
               captureGroupId={captureGroupId}
               group={data.group}
               groupQuality={data.groupQuality}
+              groupQualityVisibility={data.groupQualityVisibility}
               qualityHistory={data.qualityHistory}
               refreshVersion={data.refreshVersion}
               selectedView={selectedView}

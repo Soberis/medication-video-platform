@@ -20,9 +20,10 @@ import { MetadataList } from '@/components/data/MetadataList'
 import { Section } from '@/components/workspace/Section'
 import { cleaningLabel, cleaningTone } from '@/features/capture-group/capture-group-detail-model'
 import {
-  groupQualityLabels,
-  groupQualityTone,
+  groupQualityDisplayLabel,
+  groupQualityDisplayTone,
   receiptStateLabels,
+  type CaptureGroupQualityVisibility,
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
@@ -31,6 +32,7 @@ interface CaptureGroupReviewCleaningPanelProps {
   projectId: string
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: CaptureGroupQualityVisibility
   task: AnnotationTask | null
   schema: AnnotationLabelSchema | null
   onRefresh: () => Promise<void>
@@ -40,6 +42,7 @@ export function CaptureGroupReviewCleaningPanel({
   projectId,
   group,
   groupQuality,
+  groupQualityVisibility,
   task,
   schema,
   onRefresh,
@@ -188,8 +191,8 @@ export function CaptureGroupReviewCleaningPanel({
             />
             <div className="capture-group-review-quality-fact">
               <span className="app-eyebrow">当前事件质量</span>
-              <StatusIndicator tone={groupQualityTone(groupQuality?.result ?? 'UNREVIEWED')}>
-                {groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}
+              <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+                {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
               </StatusIndicator>
               {groupQuality?.reason ? <p>理由：{groupQuality.reason}</p> : null}
               {groupQuality?.decided_at ? (
@@ -259,7 +262,7 @@ export function CaptureGroupReviewCleaningPanel({
           <div className="capture-group-review-annotation-history">
             <div className="capture-group-review-subheading">
               <div>
-                <span className="app-eyebrow">Annotation history</span>
+                <span className="app-eyebrow">修订历史</span>
                 <h3>标注备注与历史</h3>
               </div>
               <History aria-hidden="true" size={16} strokeWidth={1.8} />

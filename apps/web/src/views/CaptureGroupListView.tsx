@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
+  isCaptureGroupQualityForbidden,
   listCaptureGroups,
   listCaptureGroupQualityReviews,
   type CaptureGroupSummary,
@@ -22,6 +23,7 @@ import {
   receiptStateLabels,
   receiptTone,
   taskNextAction,
+  type CaptureGroupQualityVisibility,
   type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
@@ -32,8 +34,6 @@ interface CaptureGroupListRow {
   task: AnnotationTask | null
   taskVisibility: CaptureGroupTaskVisibility
 }
-
-type CaptureGroupQualityVisibility = 'loaded' | 'unavailable' | 'forbidden'
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
@@ -98,7 +98,8 @@ export default function CaptureGroupListView() {
           groupList.items.every((group) => indexedQuality.has(group.capture_group_id))
         const nextQualityVisibility: CaptureGroupQualityVisibility = qualityBatchComplete
           ? 'loaded'
-          : qualityResult.status === 'rejected' && isQualityForbidden(qualityResult.error)
+          : qualityResult.status === 'rejected' &&
+              isCaptureGroupQualityForbidden(qualityResult.error)
             ? 'forbidden'
             : 'unavailable'
         const taskVisibility: CaptureGroupTaskVisibility =
@@ -319,13 +320,6 @@ export default function CaptureGroupListView() {
         />
       ) : null}
     </>
-  )
-}
-
-function isQualityForbidden(error: unknown) {
-  return (
-    error instanceof CaptureGroupApiError &&
-    (error.status === 403 || error.errorCode === 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED')
   )
 }
 

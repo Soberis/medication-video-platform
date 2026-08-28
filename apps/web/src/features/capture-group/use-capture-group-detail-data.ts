@@ -6,6 +6,7 @@ import {
   finalizeCaptureGroupReceipt,
   getCaptureGroup,
   getCaptureGroupQualityReview,
+  isCaptureGroupQualityForbidden,
   listCaptureGroupQualityReviewHistory,
   type CaptureGroup,
   type CaptureGroupQualityReview,
@@ -18,12 +19,17 @@ import {
 } from '@/api/annotation'
 import { CatalogApiError } from '@/api/catalog'
 import { getQualityReview, type QualityReview } from '@/api/quality'
-import type { CaptureGroupTaskVisibility } from '@/features/capture-group-presentation'
+import type {
+  CaptureGroupQualityVisibility,
+  CaptureGroupTaskVisibility,
+} from '@/features/capture-group-presentation'
 
 export function useCaptureGroupDetailData(projectId: string, captureGroupId: string) {
   const { message } = AntdApp.useApp()
   const [group, setGroup] = useState<CaptureGroup | null>(null)
   const [groupQuality, setGroupQuality] = useState<CaptureGroupQualityReview | null>(null)
+  const [groupQualityVisibility, setGroupQualityVisibility] =
+    useState<CaptureGroupQualityVisibility>('loading')
   const [qualityHistory, setQualityHistory] = useState<CaptureGroupQualityReview[]>([])
   const [task, setTask] = useState<AnnotationTask | null>(null)
   const [taskVisibility, setTaskVisibility] = useState<CaptureGroupTaskVisibility>('visible')
@@ -50,6 +56,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     setGroupErrorMessage('')
     setQualityErrorMessage('')
     setTaskErrorMessage('')
+    setGroupQualityVisibility('loading')
     setViewQualityLoading(true)
     try {
       const nextGroup = await getCaptureGroup(projectId, captureGroupId, request.signal)
@@ -63,6 +70,12 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       if (request.signal.aborted || groupRequest.current !== request) return
 
       const nextQuality = qualityResult.status === 'fulfilled' ? qualityResult.value : null
+      const nextQualityVisibility: CaptureGroupQualityVisibility =
+        qualityResult.status === 'fulfilled'
+          ? 'loaded'
+          : isCaptureGroupQualityForbidden(qualityResult.reason)
+            ? 'forbidden'
+            : 'unavailable'
       const nextHistory = historyResult.status === 'fulfilled' ? historyResult.value.items : []
       const taskList = taskResult.status === 'fulfilled' ? taskResult.value.items : []
       const nextTask =
@@ -76,12 +89,17 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       const nextSchema = schemaResult.status === 'fulfilled' ? schemaResult.value : null
       setGroup(nextGroup)
       setGroupQuality(nextQuality)
+      setGroupQualityVisibility(nextQualityVisibility)
       setQualityHistory(nextHistory)
       setTask(nextTask)
       setTaskVisibility(nextTaskVisibility)
       setSchema(nextSchema)
       if (qualityResult.status === 'rejected') {
-        setQualityErrorMessage('暂时无法读取当前事件质量；详情仍保留配药事件与机位事实。')
+        setQualityErrorMessage(
+          nextQualityVisibility === 'forbidden'
+            ? '当前账号无权读取事件质量；详情仍保留配药事件与机位事实。'
+            : '暂时无法读取当前事件质量；详情仍保留配药事件与机位事实。',
+        )
       }
       if (taskResult.status === 'rejected') {
         setTaskErrorMessage('暂时无法读取唯一配药事件任务；请刷新后重试。')
@@ -177,6 +195,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   return {
     group,
     groupQuality,
+    groupQualityVisibility,
     qualityHistory,
     task,
     taskVisibility,

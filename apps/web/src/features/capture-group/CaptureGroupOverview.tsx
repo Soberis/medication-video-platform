@@ -1,21 +1,25 @@
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import {
-  groupQualityLabels,
-  groupQualityTone,
+  groupQualityDisplayLabel,
+  groupQualityDisplayTone,
   receiptStateLabels,
   receiptTone,
+  type CaptureGroupQualityVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
 interface CaptureGroupOverviewProps {
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: CaptureGroupQualityVisibility
 }
 
-export function CaptureGroupOverview({ group, groupQuality }: CaptureGroupOverviewProps) {
-  const result = groupQuality?.result ?? 'UNREVIEWED'
-
+export function CaptureGroupOverview({
+  group,
+  groupQuality,
+  groupQualityVisibility,
+}: CaptureGroupOverviewProps) {
   return (
     <section className="capture-group-overview" aria-label="配药事件接收摘要">
       <div className="capture-group-overview-card">
@@ -28,8 +32,8 @@ export function CaptureGroupOverview({ group, groupQuality }: CaptureGroupOvervi
       </div>
       <div className="capture-group-overview-card">
         <span className="app-eyebrow">事件质量</span>
-        <StatusIndicator tone={groupQualityTone(result)}>
-          {groupQualityLabels[result]}
+        <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+          {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
         </StatusIndicator>
         <span>服务端结论；页面不计算事件质量。</span>
       </div>

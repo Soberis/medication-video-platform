@@ -152,7 +152,7 @@ export function CaptureGroupFocusedView({
             <div className="capture-group-candidate-facts capture-group-stack">
               <StatusIndicator tone={currentCandidateTone}>
                 {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
-                  ? 'NO_HAND_DETECTED'
+                  ? '未检测到手部（NO_HAND_DETECTED）'
                   : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
                     ? '检测失败'
                     : candidateResponse?.job.status === 'SUCCEEDED'

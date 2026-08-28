@@ -164,7 +164,7 @@ test('CLI accepts only named scenarios and never accepts source media or token a
   for (const argument of ['--video', '--video-path', '--source', '--token', '--bearer-token']) {
     assert.throws(() => parseArgs([argument, 'not-accepted']), /Unsupported argument/)
   }
-  assert.throws(() => parseArgs(['C:\\patient-video.mp4']), /Unsupported argument/)
+  assert.throws(() => parseArgs(['patient-video.mp4']), /Unsupported argument/)
   assert.throws(() => parseArgs(['--scenario', 'unknown']), /Unknown synthetic CaptureGroup scenario/)
 })
 
