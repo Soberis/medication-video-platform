@@ -18,7 +18,7 @@ usage() {
 Usage: ./scripts/start-local.sh [options]
 
 Options:
-  --ai-worker                                   Start only the AI Worker after Core API.
+  --ai-worker                                   Enable the AI Worker after Core API.
   --infrastructure-only                         Start only PostgreSQL, RabbitMQ, and S3.
   --restart-api                                 Restart the Core API managed by this script.
   --api-timeout SECONDS                         Core API health timeout, from 30 to 600 (default: 180).
@@ -102,11 +102,27 @@ fi
 
 docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" -f "$COMPOSE_FILE" up -d --wait
 
-rabbitmq_port="${RABBITMQ_PORT:-5672}"
-if ! tcp_port_in_use "$rabbitmq_port"; then
-    echo "RabbitMQ is healthy in Docker but AMQP port $rabbitmq_port is not published to the host." >&2
-    exit 1
-fi
+required_host_ports=(
+    "postgres|PostgreSQL|${POSTGRES_PORT:-15432}"
+    "s3|S3|${S3_PORT:-9000}"
+    "rabbitmq|RabbitMQ|${RABBITMQ_PORT:-5672}"
+)
+for required_host_port in "${required_host_ports[@]}"; do
+    IFS='|' read -r service_name display_name port <<< "$required_host_port"
+    if tcp_port_in_use "$port"; then
+        continue
+    fi
+
+    echo "$display_name is healthy in Docker but port $port is not published. Recreating only $service_name..." >&2
+    if ! docker compose "${COMPOSE_ENVIRONMENT_ARGUMENTS[@]}" -f "$COMPOSE_FILE" up -d --wait --force-recreate "$service_name"; then
+        echo "Could not recreate $service_name while restoring host port $port." >&2
+        exit 1
+    fi
+    if ! tcp_port_in_use "$port"; then
+        echo "$display_name port $port is still unavailable after recreating $service_name." >&2
+        exit 1
+    fi
+done
 
 mkdir -p "$LOG_DIRECTORY"
 api_port="${PLATFORM_API_PORT:-8080}"

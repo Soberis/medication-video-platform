@@ -97,6 +97,26 @@ test('help documents controlled restart options', posixOnly, async () => {
   assert.match(result.stdout, /--ai-worker-concurrency/)
 })
 
+test('local startup verifies every host dependency port before application startup', async () => {
+  const [source, powershellSource] = await Promise.all([
+    readFile(scriptPath, 'utf8'),
+    readFile(powershellScriptPath, 'utf8'),
+  ])
+
+  assert.match(source, /--ai-worker\s+Enable the AI Worker after Core API\./)
+  assert.match(source, /"postgres\|PostgreSQL\|\$\{POSTGRES_PORT:-15432\}"/)
+  assert.match(source, /"s3\|S3\|\$\{S3_PORT:-9000\}"/)
+  assert.match(source, /"rabbitmq\|RabbitMQ\|\$\{RABBITMQ_PORT:-5672\}"/)
+  assert.match(source, /--force-recreate "\$service_name"/)
+  assert.match(powershellSource, /\$requiredHostPorts = @\(/)
+  assert.match(powershellSource, /\$requiredHostPort\.Service/)
+
+  const dependencyPortChecks = source.indexOf('required_host_ports=')
+  const applicationStartup = source.indexOf('mkdir -p "$LOG_DIRECTORY"')
+  assert.ok(dependencyPortChecks >= 0)
+  assert.ok(applicationStartup > dependencyPortChecks)
+})
+
 test('default startup keeps Media Worker enabled without a compatibility flag', async () => {
   const [source, powershellSource] = await Promise.all([
     readFile(scriptPath, 'utf8'),
