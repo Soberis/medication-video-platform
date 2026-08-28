@@ -27,6 +27,7 @@ import com.medicationvideo.platform.qualitycleaning.PostCleaningResultSummary;
 import com.medicationvideo.platform.qualitycleaning.PostCleaningService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningQueryService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary;
+import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
 @Service
@@ -46,6 +47,8 @@ class AnnotationTaskService {
 
 	private final CaptureGroupCleaningQueryService captureGroupCleaningQueryService;
 
+	private final CaptureGroupQualityQueryService captureGroupQualityQueryService;
+
 	private final AnnotationLabelSchemaService labelSchemaService;
 
 	private final CaptureGroupAnnotationWorkflow captureGroupAnnotationWorkflow;
@@ -62,6 +65,7 @@ class AnnotationTaskService {
 			QualityReviewQueryService qualityReviewQueryService, MediaDurationQueryService mediaDurationQueryService,
 			PostCleaningService postCleaningService, PostCleaningQueryService postCleaningQueryService,
 			CaptureGroupCleaningQueryService captureGroupCleaningQueryService,
+			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			AnnotationLabelSchemaService labelSchemaService,
 			CaptureGroupAnnotationWorkflow captureGroupAnnotationWorkflow, AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository, AnnotationReviewRepository reviewRepository,
@@ -73,6 +77,7 @@ class AnnotationTaskService {
 		this.postCleaningService = postCleaningService;
 		this.postCleaningQueryService = postCleaningQueryService;
 		this.captureGroupCleaningQueryService = captureGroupCleaningQueryService;
+		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
 		this.labelSchemaService = labelSchemaService;
 		this.captureGroupAnnotationWorkflow = captureGroupAnnotationWorkflow;
 		this.repository = repository;
@@ -94,11 +99,18 @@ class AnnotationTaskService {
 			return new AnnotationTaskListResponse(items,
 					AnnotationTaskProgressResponse.from(projectAdministrator, items));
 		}
-		var revisionsByTaskId = this.revisionRepository
-			.findAllByAnnotationTaskIdIn(tasks.stream().map(AnnotationTask::getAnnotationTaskId).toList())
+		var tasksById = tasks.stream()
+			.collect(java.util.stream.Collectors.toMap(AnnotationTask::getAnnotationTaskId, task -> task));
+		var revisionsByTaskId = this.revisionRepository.findAllByAnnotationTaskIdIn(tasksById.keySet())
 			.stream()
+			.filter(revision -> tasksById.get(revision.getAnnotationTaskId()).isRevisionForCurrentGroupInput(revision))
 			.collect(java.util.stream.Collectors.toMap(AnnotationRevision::getAnnotationTaskId, revision -> revision,
 					(left, right) -> left.getRevisionNumber() >= right.getRevisionNumber() ? left : right));
+		var currentGroupQualityById = tasks.stream()
+			.filter(AnnotationTask::isCaptureGroupTask)
+			.collect(java.util.stream.Collectors.toMap(AnnotationTask::getCaptureGroupId,
+					task -> this.captureGroupQualityQueryService.getCurrentDecision(projectId, task.getCaptureGroupId())
+						.isAdmitting()));
 		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty() ? Map.of() : this.reviewRepository
 			.findAllByAnnotationRevisionIdIn(
 					revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList())
@@ -119,7 +131,9 @@ class AnnotationTaskService {
 			return AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision,
 					revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()),
 					revision == null ? null : postCleaningByRevisionId.get(revision.getAnnotationRevisionId()),
-					revision == null ? null : captureGroupCleaningByRevisionId.get(revision.getAnnotationRevisionId()));
+					revision == null ? null : captureGroupCleaningByRevisionId.get(revision.getAnnotationRevisionId()),
+					!task.isCaptureGroupTask()
+							|| currentGroupQualityById.getOrDefault(task.getCaptureGroupId(), false));
 		}).toList();
 		return new AnnotationTaskListResponse(items, AnnotationTaskProgressResponse.from(projectAdministrator, items));
 	}
@@ -538,13 +552,21 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID clipAs
 	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, PostCleaningResultSummary postCleaningResult,
 			com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary captureGroupCleaning) {
+		return from(task, actorId, projectAdministrator, revision, review, postCleaningResult, captureGroupCleaning,
+				true);
+	}
+
+	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
+			AnnotationRevision revision, AnnotationReview review, PostCleaningResultSummary postCleaningResult,
+			com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary captureGroupCleaning,
+			boolean captureGroupQualityAdmitting) {
 		return new AnnotationTaskResponse(task.getAnnotationTaskId(), task.getProjectId(), task.getClipAssetId(),
 				task.getCaptureGroupId(), task.getPrimaryClipAssetId(), task.getPrimaryCameraNumber(),
 				task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(), task.getConfirmedViewSet(),
 				task.getGroupInputVersion(), task.getLabelSchemaId(), task.getLabelSchemaDigest(),
 				task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
 				task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
-						&& (!task.isCaptureGroupTask() || task.hasPrimaryView()),
+						&& (!task.isCaptureGroupTask() || (task.hasPrimaryView() && captureGroupQualityAdmitting)),
 				task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
 						&& review == null,
 				task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null

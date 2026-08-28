@@ -431,6 +431,101 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void submittedRevisionFromOldGroupInputIsRetainedButNotExposedAsCurrent() throws Exception {
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("stale-qualified"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var first = submit(group, taskId, MEMBER_TOKEN, key("stale-first-submit"), 100).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(1))
+			.andReturn();
+		var firstRevisionId = UUID
+			.fromString(JsonPath.read(first.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		var firstFacts = this.jdbcTemplate.queryForMap("""
+				SELECT annotation_revision_id, annotation_document::text AS annotation_document,
+				       confirmed_view_set::text AS confirmed_view_set, input_version,
+				       submitted_by, primary_clip_asset_id
+				FROM annotation_revision
+				WHERE annotation_task_id = ? AND revision_number = 1
+				""", taskId);
+
+		recordViewQuality(group.clipAssetIds().getLast(), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Supporting view changed", 1, key("stale-input-review"))
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 2,
+				key("stale-input-qualified"))
+			.andExpect(status().isOk());
+
+		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].status").value("ASSIGNED"))
+			.andExpect(jsonPath("$.items[0].can_submit").value(true))
+			.andExpect(jsonPath("$.items[0].annotation_revision").isEmpty());
+
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID,
+					firstRevisionId)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key("stale-review"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"APPROVED\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVISION_NOT_CURRENT"));
+		assertEquals(0,
+				count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", firstRevisionId));
+
+		submit(group, taskId, MEMBER_TOKEN, key("stale-second-submit"), 120).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(2));
+		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+		assertEquals(firstFacts, this.jdbcTemplate.queryForMap("""
+				SELECT annotation_revision_id, annotation_document::text AS annotation_document,
+				       confirmed_view_set::text AS confirmed_view_set, input_version,
+				       submitted_by, primary_clip_asset_id
+				FROM annotation_revision
+				WHERE annotation_task_id = ? AND revision_number = 1
+				""", taskId));
+		assertEquals(1, count("""
+				SELECT count(*) FROM audit_event
+				WHERE action = 'CAPTURE_GROUP_ANNOTATION_TASK_REOPENED_FOR_INPUT_CHANGE'
+				  AND object_id = ?
+				  AND details_json ->> 'previous_status' = 'SUBMITTED'
+				""", taskId.toString()));
+	}
+
+	@Test
+	void frozenPrimaryBecomingIneligibleBlocksSubmissionWithoutFallback() throws Exception {
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("primary-ineligible-qualified"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		var primaryClipAssetId = group.clipAssetIds().getFirst();
+		selectPrimary(taskId, primaryClipAssetId, MEMBER_TOKEN).andExpect(status().isOk());
+		submit(group, taskId, MEMBER_TOKEN, key("primary-ineligible-first"), 100).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(1));
+
+		recordViewQuality(primaryClipAssetId, MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0).andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Primary view changed", 1, key("primary-ineligible-review"))
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Primary view no longer eligible", 2,
+				key("primary-ineligible-requalified"))
+			.andExpect(status().isOk());
+
+		submit(group, taskId, MEMBER_TOKEN, key("primary-ineligible-second"), 120).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE"));
+		selectPrimary(taskId, group.clipAssetIds().getLast(), MEMBER_TOKEN).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_FROZEN"));
+		assertEquals(primaryClipAssetId, this.jdbcTemplate.queryForObject(
+				"SELECT primary_clip_asset_id FROM annotation_task WHERE annotation_task_id = ?", UUID.class, taskId));
+		assertEquals(1, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+	}
+
+	@Test
 	void changedGroupInputAppendsRevisionWhileSameInputDoesNotCreateOne() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("input-qualified"))
@@ -481,6 +576,11 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isOk());
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
 				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].annotation_revision").isEmpty());
 
 		submit(group, taskId, MEMBER_TOKEN, key("input-second-submit"), 120).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(2))

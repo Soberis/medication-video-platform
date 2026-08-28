@@ -100,9 +100,27 @@ class CaptureGroupAnnotationWorkflow {
 				event.captureGroupId());
 		if (existing.isPresent()) {
 			var task = existing.get();
-			task.refreshGroupQualitySnapshot(current.captureGroupQualityReviewId(), current.revision(),
-					current.confirmedViewSet(), current.inputVersion(), event.triggeredAt());
+			var previousStatus = task.getStatus();
+			var previousInputVersion = task.getGroupInputVersion();
+			var previousGroupQualityRevision = task.getGroupQualityRevision();
+			var inputChanged = task.refreshGroupQualitySnapshot(current.captureGroupQualityReviewId(),
+					current.revision(), current.confirmedViewSet(), current.inputVersion(), event.triggeredAt());
 			this.taskRepository.saveAndFlush(task);
+			if (inputChanged && previousStatus != AnnotationTaskStatus.ASSIGNED) {
+				this.auditRecorder
+					.record(new AuditEventCommand(event.triggeredAt(), AuditActorType.USER, event.reviewerActorId(),
+							event.projectId(), "CAPTURE_GROUP_ANNOTATION_TASK_REOPENED_FOR_INPUT_CHANGE",
+							"AnnotationTask", task.getAnnotationTaskId().toString(), Long.toString(task.getVersion()),
+							AuditOutcome.SUCCEEDED, "GROUP_INPUT_VERSION_CHANGED", event.requestId(), event.traceId(),
+							"PROJECT_MEMBERSHIP_" + event.reviewerRole().name(),
+							Map.of("capture_group_id", event.captureGroupId().toString(), "previous_status",
+									previousStatus.name(), "new_status", task.getStatus().name(),
+									"previous_input_version", String.valueOf(previousInputVersion), "input_version",
+									current.inputVersion(), "previous_group_quality_revision",
+									String.valueOf(previousGroupQualityRevision), "group_quality_revision",
+									Long.toString(current.revision()), "assignee_actor_id", task.getAssigneeActorId(),
+									"created_by", task.getCreatedBy(), "revision_chain_preserved", "true")));
+			}
 			return;
 		}
 

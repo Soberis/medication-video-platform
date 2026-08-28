@@ -184,6 +184,11 @@ class AnnotationTask {
 		return this.primaryClipAssetId != null && this.primaryCameraNumber != null;
 	}
 
+	boolean isRevisionForCurrentGroupInput(AnnotationRevision revision) {
+		return !this.isCaptureGroupTask() || (Objects.equals(this.groupInputVersion, revision.getInputVersion())
+				&& Objects.equals(this.confirmedViewSet, revision.getConfirmedViewSet()));
+	}
+
 	void selectPrimaryView(UUID clipAssetId, int cameraNumber, Instant now) {
 		if (!this.isCaptureGroupTask()) {
 			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_NOT_SUPPORTED",
