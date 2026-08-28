@@ -72,20 +72,20 @@ export function candidateDescription(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
-  if (state === 'loading') return '正在读取 MediaPipe Candidate；这不会阻止人工查看或标注。'
-  if (state === 'error') return 'MediaPipe Candidate 暂时无法读取；这不会阻止人工流程。'
-  if (state === 'unavailable') return '当前没有可用的 MediaPipe Candidate；这不是人工流程失败。'
-  if (!response) return '仅在媒体入库完成后读取 MediaPipe Candidate。'
+  if (state === 'loading') return '正在读取手部检测；这不会阻止人工查看或标注。'
+  if (state === 'error') return '手部检测暂时无法读取；这不会阻止人工流程。'
+  if (state === 'unavailable') return '当前没有可用的手部检测；这不是人工流程失败。'
+  if (!response) return '仅在媒体入库完成后读取手部检测。'
   if (response.job.status === 'FAILED') {
-    return 'MediaPipe Candidate 失败；结果仅作辅助，不影响人工质量判断或标注。'
+    return '手部检测失败；检测结果仅供人工参考，不作为正式标注或质量结论。'
   }
   if (response.job.status === 'QUEUED' || response.job.status === 'RUNNING') {
-    return 'MediaPipe Candidate 处理中；结果仅作辅助，不影响人工质量判断或标注。'
+    return '手部检测处理中；检测结果仅供人工参考，不作为正式标注或质量结论。'
   }
   if (response.job.hand_result === 'NO_HAND_DETECTED') {
-    return 'NO_HAND_DETECTED：未检测到手部；这是正常候选事实，不阻止人工流程。'
+    return '未检测到手部；这是检测事实，不阻止人工流程。检测结果仅供人工参考，不作为正式标注或质量结论。'
   }
-  return `${response.candidates.length} 组手部关键点；结果仅作辅助，不是正式人工标注。`
+  return `${response.candidates.length} 组手部关键点；检测结果仅供人工参考，不作为正式标注或质量结论。`
 }
 
 export function candidateTone(
@@ -109,7 +109,7 @@ export function candidateStatusLabel(
 
 export function formatTaskStatus(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '已完成'
-  if (task.status === 'SUBMITTED') return '待 Review'
+  if (task.status === 'SUBMITTED') return '待复核'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '待修改'
   return '待提交'
 }
@@ -178,9 +178,9 @@ export function selectedQualityLoadState(
 }
 
 export function cleaningLabel(outcome: 'PASS' | 'WARNING' | 'REJECT') {
-  if (outcome === 'PASS') return '已通过'
+  if (outcome === 'PASS') return '当前规则检查通过'
   if (outcome === 'WARNING') return '需处理'
-  return '未通过'
+  return '训练资格检查未通过'
 }
 
 export function cleaningTone(outcome: 'PASS' | 'WARNING' | 'REJECT'): StatusBadgeTone {

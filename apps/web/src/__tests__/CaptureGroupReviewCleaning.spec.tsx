@@ -38,9 +38,9 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '通过 Review' }))
+    await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '通过 Review' }))
+    await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
     await waitFor(() => {
       expect(
@@ -60,7 +60,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
     expect(await screen.findByText('训练资格检查通过')).toBeInTheDocument()
-    expect(screen.getByText('PASS · 已通过')).toBeInTheDocument()
+    expect(screen.getByText('PASS · 当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
     expect(screen.getByText('REVIEW_APPROVED')).toBeInTheDocument()
   })
@@ -79,8 +79,8 @@ describe('CaptureGroup Review and training eligibility check', () => {
     })
     renderCaptureGroup()
 
-    expect(await screen.findByText(/当前账号没有该 Revision 的 Review 权限/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '通过 Review' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/当前账号没有该修订的复核权限/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '通过复核' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退回修改' })).not.toBeInTheDocument()
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
   })
@@ -134,9 +134,9 @@ describe('CaptureGroup Review and training eligibility check', () => {
       decision: 'REJECTED',
       review_note: '请补充动作结束位置。',
     })
-    expect(await screen.findByText('唯一 CaptureGroup task · 待修改')).toBeInTheDocument()
+    expect(await screen.findByText('唯一配药事件任务 · 待修改')).toBeInTheDocument()
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Review · 已退回').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
     expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)
     expect(screen.queryByText('训练资格检查通过')).not.toBeInTheDocument()
   })
@@ -160,9 +160,9 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '通过 Review' }))
+    await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '通过 Review' }))
+    await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
     expect(await screen.findByText('该视频已不再满足标注复核条件。')).toBeInTheDocument()
     expect(
@@ -194,18 +194,18 @@ describe('CaptureGroup Review and training eligibility check', () => {
     })
     renderCaptureGroup()
 
-    const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失视图' })
-    expect(within(rejectedViews).getByText('Cam 2')).toBeInTheDocument()
+    const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
+    expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
     expect(within(rejectedViews).getByText(/MISSING_VIEW|VIEW_NOT_QUALIFIED/)).toBeInTheDocument()
 
-    const eventEvidence = screen.getByRole('list', { name: '事件级 supporting view evidence' })
-    const supportingItem = within(eventEvidence).getByText('Cam 3').closest('li')
+    const eventEvidence = screen.getByRole('list', { name: '事件级参考视图证据' })
+    const supportingItem = within(eventEvidence).getByText('机位 3').closest('li')
     expect(supportingItem).not.toBeNull()
     expect(
-      within(supportingItem as HTMLElement).getByText('Supporting View · 事件级证据'),
+      within(supportingItem as HTMLElement).getByText('参考视图 · 仅供事件级参考'),
     ).toBeInTheDocument()
     expect(within(supportingItem as HTMLElement).queryByText(/100|900/)).not.toBeInTheDocument()
-    expect(screen.getByText('Primary View 正式时间轴')).toBeInTheDocument()
+    expect(screen.getByText('主视图正式时间轴')).toBeInTheDocument()
     expect(screen.queryByText(/first_timestamp_ms|last_timestamp_ms/)).not.toBeInTheDocument()
   })
 
@@ -236,7 +236,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
         ),
       ).toBe(true)
     })
-    expect(screen.queryByRole('button', { name: 'Cleaning PASS' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '训练资格检查通过' })).not.toBeInTheDocument()
   })
 })
 

@@ -66,12 +66,12 @@ export function CaptureGroupReviewCleaningPanel({
     let reviewNote = ''
     const approved = decision === 'APPROVED'
     modal.confirm({
-      title: approved ? '通过 CaptureGroup Review' : '退回 CaptureGroup Revision',
+      title: approved ? '通过配药事件复核' : '退回配药事件修订',
       content: approved ? (
-        <p>确认当前正式动作时间段、Primary View 和组内证据均可接受，并完成这次人工 Review？</p>
+        <p>确认当前正式动作时间段、主视图和事件内证据均可接受，并完成这次人工复核？</p>
       ) : (
         <div className="capture-group-review-confirmation">
-          <p>退回这次 CaptureGroup Revision，任务将回到原执行人并等待下一次 Revision。</p>
+          <p>退回这次配药事件修订，任务将回到原执行人并等待下一次修订。</p>
           <Input.TextArea
             aria-label="退回修改说明（可选）"
             maxLength={1000}
@@ -83,7 +83,7 @@ export function CaptureGroupReviewCleaningPanel({
           />
         </div>
       ),
-      okText: approved ? '通过 Review' : '退回修改',
+      okText: approved ? '通过复核' : '退回修改',
       cancelText: '取消',
       okButtonProps: { danger: !approved },
       async onOk() {
@@ -95,13 +95,11 @@ export function CaptureGroupReviewCleaningPanel({
             decision,
             reviewNote,
           )
-          void message.success(
-            approved ? 'CaptureGroup Review 已通过。' : '已退回 CaptureGroup Revision。',
-          )
+          void message.success(approved ? '配药事件复核已通过。' : '已退回配药事件修订。')
           await onRefresh()
         } catch (error) {
           void message.error(
-            error instanceof Error ? error.message : 'Review 暂未提交，请刷新后重试。',
+            error instanceof Error ? error.message : '复核暂未提交，请刷新后重试。',
           )
         } finally {
           setReviewingDecision(null)
@@ -131,50 +129,48 @@ export function CaptureGroupReviewCleaningPanel({
       className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
       id="capture-group-review-cleaning"
       tabIndex={-1}
-      title="Review / 训练资格检查"
+      title="人工复核 / 训练资格检查"
       titleId="capture-group-review-cleaning-title"
       actions={
-        <span className="capture-group-section-note">Review 是人工闸门 · 检查由服务端执行</span>
+        <span className="capture-group-section-note">复核由人工完成 · 检查由服务端执行</span>
       }
     >
       {!task ? (
         <p className="form-hint">
-          当前没有可见的 CaptureGroup 任务，暂不能读取 Revision、Review 或训练资格事实。
+          当前没有可见的配药事件任务，暂不能读取修订、复核或训练资格事实。
         </p>
       ) : !revision ? (
-        <p className="form-hint">
-          尚无正式 AnnotationRevision；提交后，授权的人工复核人可在此 Review。
-        </p>
+        <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
       ) : (
         <>
           <div className="capture-group-review-boundary" role="status">
             <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
             <div>
-              <strong>人工 Review 操作</strong>
-              <span>Candidate 和手部检测只作为证据展示，不会自动批准 Review。</span>
+              <strong>人工复核操作</strong>
+              <span>检测结果仅供人工参考，不作为正式标注或质量结论。</span>
             </div>
           </div>
 
           <div className="capture-group-review-facts">
             <MetadataList
-              ariaLabel="CaptureGroup Review 核心事实"
+              ariaLabel="配药事件复核核心事实"
               items={[
                 {
                   id: 'review-group',
-                  label: 'CaptureGroup',
+                  label: '配药事件',
                   value: group.capture_group_key ?? group.capture_group_id,
                   secondary: group.capture_group_id,
                 },
                 {
                   id: 'review-revision',
-                  label: 'Revision',
+                  label: '修订',
                   value: `第 ${revision.revision_number} 次正式修订`,
                   secondary: revision.annotation_revision_id,
                 },
                 {
                   id: 'review-primary',
-                  label: 'Primary View',
-                  value: primaryCameraNumber ? `Cam ${primaryCameraNumber}` : '未提供',
+                  label: '主视图',
+                  value: primaryCameraNumber ? `机位 ${primaryCameraNumber}` : '未提供',
                   secondary: primaryClipAssetId ?? undefined,
                 },
                 {
@@ -191,7 +187,7 @@ export function CaptureGroupReviewCleaningPanel({
               ]}
             />
             <div className="capture-group-review-quality-fact">
-              <span className="app-eyebrow">Current Group Quality</span>
+              <span className="app-eyebrow">当前事件质量</span>
               <StatusIndicator tone={groupQualityTone(groupQuality?.result ?? 'UNREVIEWED')}>
                 {groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}
               </StatusIndicator>
@@ -212,15 +208,15 @@ export function CaptureGroupReviewCleaningPanel({
 
           <div className="capture-group-review-evidence-grid">
             <EvidenceViewList
-              title="参与的合格视图"
+              title="参与的合格机位"
               views={qualifiedViews}
-              emptyText="当前没有已确认的参与视图。"
+              emptyText="当前没有已确认的参与机位。"
               tone="success"
             />
             <EvidenceViewList
-              title="拒绝 / 缺失视图"
+              title="拒绝 / 缺失机位"
               views={rejectedMissingViews}
-              emptyText="没有拒绝或缺失视图。"
+              emptyText="没有拒绝或缺失机位。"
               tone="warning"
             />
           </div>
@@ -228,7 +224,7 @@ export function CaptureGroupReviewCleaningPanel({
           <div className="capture-group-review-evidence-block">
             <div className="capture-group-review-subheading">
               <div>
-                <span className="app-eyebrow">Hand-detection evidence</span>
+                <span className="app-eyebrow">手部检测证据</span>
                 <h3>相关手部检测证据</h3>
               </div>
               <span>{candidateEvidence.length} 条已固定证据</span>
@@ -239,7 +235,7 @@ export function CaptureGroupReviewCleaningPanel({
                   <li key={evidenceKey(evidence, index)}>
                     <strong>{evidenceViewName(evidence, index)}</strong>
                     <span>
-                      候选 {numberValue(evidence, 'candidate_count') ?? 0} 组
+                      检测结果 {numberValue(evidence, 'candidate_count') ?? 0} 组
                       {stringValue(evidence, 'algorithm_key')
                         ? ` · ${stringValue(evidence, 'algorithm_key')}`
                         : ''}
@@ -255,8 +251,7 @@ export function CaptureGroupReviewCleaningPanel({
               </ul>
             ) : (
               <p className="form-hint">
-                当前 Revision 尚无已固定的 Candidate evidence；Camera / View
-                工作区中的手部检测仍仅作辅助事实。
+                当前修订尚无已固定的手部检测证据；机位工作区中的检测结果仅供人工参考，不作为正式标注或质量结论。
               </p>
             )}
           </div>
@@ -269,35 +264,35 @@ export function CaptureGroupReviewCleaningPanel({
               </div>
               <History aria-hidden="true" size={16} strokeWidth={1.8} />
             </div>
-            <ol aria-label="Annotation Revision 与 Review 历史">
+            <ol aria-label="配药动作修订与复核历史">
               <li>
-                <strong>Revision {revision.revision_number} · 已提交</strong>
+                <strong>修订 {revision.revision_number} · 已提交</strong>
                 <span>
                   {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
                 </span>
-                <p>{revision.annotation_document.note ?? '未提供 Revision 备注。'}</p>
+                <p>{revision.annotation_document.note ?? '未提供修订备注。'}</p>
               </li>
               {review ? (
                 <li>
-                  <strong>Review · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
+                  <strong>复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
                   <span>
                     {review.reviewed_by} · {formatDateTime(review.reviewed_at)}
                   </span>
-                  <p>{review.review_note ?? '未提供 Review 备注。'}</p>
+                  <p>{review.review_note ?? '未提供复核备注。'}</p>
                 </li>
               ) : null}
             </ol>
           </div>
 
           {canReview ? (
-            <div className="capture-group-review-actions" aria-label="CaptureGroup Review 操作">
+            <div className="capture-group-review-actions" aria-label="配药事件复核操作">
               <Button
                 type="primary"
                 loading={reviewingDecision === 'APPROVED'}
                 disabled={reviewingDecision !== null}
                 onClick={() => openReview('APPROVED')}
               >
-                通过 Review
+                通过复核
               </Button>
               <Button
                 danger
@@ -314,15 +309,15 @@ export function CaptureGroupReviewCleaningPanel({
               showIcon
               title={
                 review.decision === 'APPROVED'
-                  ? '当前 Revision 已完成 Review'
-                  : '当前 Revision 已退回，任务已回到待修改'
+                  ? '当前修订已完成复核'
+                  : '当前修订已退回，任务已回到待修改'
               }
-              description="Review 结果来自服务端；不可对同一 Revision 重复决定。"
+              description="复核结果来自服务端；不可对同一修订重复决定。"
             />
           ) : (
             <p className="capture-group-review-permission" role="status">
               <CircleAlert aria-hidden="true" size={16} strokeWidth={1.8} />
-              当前账号没有该 Revision 的 Review 权限；仍可查看服务端返回的审阅事实。
+              当前账号没有该修订的复核权限；仍可查看服务端返回的审阅事实。
             </p>
           )}
 
@@ -350,35 +345,35 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
     <div className="capture-group-view-set-summary">
       <div className="capture-group-review-subheading">
         <div>
-          <span className="app-eyebrow">Frozen View Set</span>
-          <h3>冻结输入与 View Set</h3>
+          <span className="app-eyebrow">已确认机位集合</span>
+          <h3>已确认输入与机位集合</h3>
         </div>
-        <span>{viewSet ? `${viewSet.views.length} 路` : '未提供'}</span>
+        <span>{viewSet ? `${viewSet.views.length} 个机位` : '未提供'}</span>
       </div>
       {viewSet ? (
         <MetadataList
-          ariaLabel="冻结 View Set 摘要"
+          ariaLabel="已确认机位集合摘要"
           items={[
             { id: 'view-set-schema', label: 'schema', value: viewSet.schema_version },
             {
               id: 'view-set-group-version',
-              label: 'CaptureGroup 版本',
+              label: '配药事件版本',
               value: viewSet.capture_group_version,
             },
             {
               id: 'view-set-snapshot',
-              label: 'CameraSetSnapshot',
+              label: '机位配置快照',
               value: viewSet.camera_set_snapshot_id,
             },
             {
               id: 'view-set-receipt',
-              label: '收件状态',
+              label: '接收状态',
               value: receiptStateLabels[viewSet.receipt_state],
             },
           ]}
         />
       ) : (
-        <p className="form-hint">当前 Revision 没有返回冻结 View Set 摘要。</p>
+        <p className="form-hint">当前修订没有返回已确认机位集合摘要。</p>
       )}
     </div>
   )
@@ -402,10 +397,9 @@ function FormalAnnotationIntervals({
 }) {
   return (
     <div className="capture-group-cleaning-interval capture-group-review-formal-intervals">
-      <strong>Primary View 正式动作时间段</strong>
+      <strong>主视图正式动作时间段</strong>
       <span>
-        {primaryCameraNumber ? `Cam ${primaryCameraNumber} · ` : ''}当前 Revision 的正式 action
-        timeline
+        {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}当前修订的正式动作时间轴
       </span>
       {segments.length ? (
         <ol>
@@ -424,7 +418,7 @@ function FormalAnnotationIntervals({
           })}
         </ol>
       ) : (
-        <span>当前 Revision 没有正式动作时间段。</span>
+        <span>当前修订没有正式动作时间段。</span>
       )}
     </div>
   )
@@ -447,7 +441,7 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
                   {evidenceViewName(view, index)}
                 </StatusIndicator>
                 <span>
-                  {decision ? (viewQualityLabels[decision] ?? decision) : '视图事实已固定'}
+                  {decision ? (viewQualityLabels[decision] ?? decision) : '机位事实已固定'}
                   {stringValue(view, 'rejection_reason')
                     ? ` · ${stringValue(view, 'rejection_reason')}`
                     : ''}
@@ -486,7 +480,7 @@ function TrainingEligibilityCheck({
     <div className="capture-group-training-check" aria-label="训练资格检查">
       <div className="capture-group-review-subheading">
         <div>
-          <span className="app-eyebrow">Event-level cleaning</span>
+          <span className="app-eyebrow">事件级训练资格检查</span>
           <h3>训练资格检查</h3>
         </div>
         {cleaning ? (
@@ -505,7 +499,7 @@ function TrainingEligibilityCheck({
             {cleaning.evaluated_by ? <span>评估人：{cleaning.evaluated_by}</span> : null}
           </div>
           <MetadataList
-            ariaLabel="训练资格检查规则 provenance"
+            ariaLabel="训练资格检查规则来源"
             items={[
               ...(cleaning.rule_set_key
                 ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
@@ -547,15 +541,15 @@ function TrainingEligibilityCheck({
           />
           <div className="capture-group-cleaning-evidence-grid">
             <EvidenceViewList
-              title="参与视图"
+              title="参与机位"
               views={cleaning.participating_views}
-              emptyText="没有参与视图。"
+              emptyText="没有参与机位。"
               tone="success"
             />
             <EvidenceViewList
-              title="排除视图"
+              title="排除机位"
               views={cleaning.excluded_views}
-              emptyText="没有排除视图。"
+              emptyText="没有排除机位。"
               tone="warning"
             />
           </div>
@@ -574,8 +568,8 @@ function TrainingEligibilityCheck({
       ) : (
         <p className="form-hint">
           {review?.decision === 'APPROVED'
-            ? 'Review 已通过；服务端尚未返回训练资格检查结果。'
-            : 'Review 通过后，服务端会在同一事务内生成训练资格检查结果。这里不是第二个人工质量决定。'}
+            ? '人工复核已通过；服务端尚未返回训练资格检查结果。'
+            : '人工复核通过后，服务端会在同一事务内生成训练资格检查结果。这里不是第二个人工质量决定。'}
         </p>
       )}
     </div>
@@ -624,10 +618,8 @@ function CleaningPrimaryInterval({
 }) {
   return (
     <div className="capture-group-cleaning-interval">
-      <strong>Primary View 正式时间轴</strong>
-      <span>
-        {primaryCameraNumber ? `Cam ${primaryCameraNumber} · ` : ''}只展示正式 action interval
-      </span>
+      <strong>主视图正式时间轴</strong>
+      <span>{primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}只展示正式动作时间段</span>
       {primaryInterval.length ? (
         <ol>
           {primaryInterval.map((interval, index) => {
@@ -657,30 +649,28 @@ function EventLevelViewEvidence({ viewEvidence }: { viewEvidence: CaptureGroupEv
   return (
     <div className="capture-group-event-evidence">
       <div className="capture-group-review-subheading">
-        <strong>事件级 supporting view evidence</strong>
-        <span>{viewEvidence.length} 路</span>
+        <strong>事件级参考视图证据</strong>
+        <span>{viewEvidence.length} 个机位</span>
       </div>
       {viewEvidence.length ? (
-        <ul className="capture-group-evidence-list" aria-label="事件级 supporting view evidence">
+        <ul className="capture-group-evidence-list" aria-label="事件级参考视图证据">
           {viewEvidence.map((view, index) => {
             const primary = booleanValue(view, 'action_aligned_interval')
             return (
               <li key={evidenceKey(view, index)}>
                 <strong>{evidenceViewName(view, index)}</strong>
-                <span>
-                  {primary ? 'Primary View · 正式时间基准' : 'Supporting View · 事件级证据'}
-                </span>
+                <span>{primary ? '主视图 · 正式标注时间基准' : '参考视图 · 仅供事件级参考'}</span>
                 <small>
                   {stringValue(view, 'sync_reliability')
                     ? `同步证据：${stringValue(view, 'sync_reliability')}`
-                    : '不生成支持视图 action timestamp'}
+                    : '不生成参考视图动作时间点'}
                 </small>
               </li>
             )
           })}
         </ul>
       ) : (
-        <p className="form-hint">未返回事件级视图证据。</p>
+        <p className="form-hint">未返回事件级机位证据。</p>
       )}
     </div>
   )
@@ -729,7 +719,7 @@ function evidenceKey(evidence: CaptureGroupEvidence, index: number) {
 
 function evidenceViewName(evidence: CaptureGroupEvidence, index: number) {
   const cameraNumber = numberValue(evidence, 'camera_number')
-  return cameraNumber === null ? `视图 ${index + 1}` : `Cam ${cameraNumber}`
+  return cameraNumber === null ? `机位 ${index + 1}` : `机位 ${cameraNumber}`
 }
 
 function viewQualityDecision(evidence: CaptureGroupEvidence) {

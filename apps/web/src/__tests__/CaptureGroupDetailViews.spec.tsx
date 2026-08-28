@@ -92,9 +92,9 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText(/唯一 CaptureGroup 任务状态按权限不可见/)).toBeInTheDocument()
+    expect(await screen.findByText(/唯一配药事件任务状态按权限不可见/)).toBeInTheDocument()
     expect(
-      screen.queryByText('Group Quality 通过后，服务端会自动创建唯一 CaptureGroup 任务。'),
+      screen.queryByText('事件质量通过后，服务端会自动创建唯一配药事件任务。'),
     ).not.toBeInTheDocument()
   })
 
@@ -116,10 +116,17 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
-    expect(screen.getByText('应 1 路 · 已收 1 路 · 缺失 0 路')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
+    expect(screen.getByText('应 1 个机位 · 已收 1 个机位 · 缺失 0 个机位')).toBeInTheDocument()
+    expect(screen.getByText('接收状态')).toBeInTheDocument()
+    expect(screen.getAllByText('事件质量').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('拍摄时间').length).toBeGreaterThan(0)
+    expect(screen.getByText('机位质量')).toBeInTheDocument()
+    expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
     expect(await screen.findByText('NO_HAND_DETECTED')).toBeInTheDocument()
-    expect(screen.getByText(/这是正常候选事实/)).toBeInTheDocument()
-    expect(screen.getByText(/服务器不计算组质量|服务端结论/)).toBeInTheDocument()
+    expect(screen.getByText(/这是检测事实/)).toBeInTheDocument()
+    expect(screen.getByText(/服务端结论/)).toBeInTheDocument()
+    expect(screen.queryByText('CaptureGroup 多机位')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
@@ -146,22 +153,22 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect((await screen.findAllByText('Cam 3')).length).toBeGreaterThan(0)
-    expect(screen.getByText('缺失相机：Cam 3')).toBeInTheDocument()
-    expect(screen.getAllByText('合格 · 排除部分视图').length).toBeGreaterThan(0)
-    expect(screen.getByText('AI FAILED')).toBeInTheDocument()
-    expect(screen.getByText(/MediaPipe Candidate 失败/)).toBeInTheDocument()
-    expect(screen.getAllByText(/同步需关注 · reference-only/).length).toBeGreaterThan(0)
-    const rejectedRow = screen.getByRole('listitem', { name: /相机 5/ })
-    expect(rejectedRow).toHaveTextContent('人工质量 · 不合格')
+    expect((await screen.findAllByText('机位 3')).length).toBeGreaterThan(0)
+    expect(screen.getByText('缺失机位：机位 3')).toBeInTheDocument()
+    expect(screen.getAllByText('合格 · 排除部分机位').length).toBeGreaterThan(0)
+    expect(screen.getByText('检测失败')).toBeInTheDocument()
+    expect(screen.getByText(/手部检测失败/)).toBeInTheDocument()
+    expect(screen.getAllByText(/同步需关注 · 仅供参考/).length).toBeGreaterThan(0)
+    const rejectedRow = screen.getByRole('listitem', { name: /机位 5/ })
+    expect(rejectedRow).toHaveTextContent('机位质量 · 不合格')
     expect(rejectedRow).toHaveTextContent('不合格')
     expect(screen.getAllByText(/REJECTED|不合格/).length).toBeGreaterThan(0)
 
-    const cameraTwoRow = screen.getByRole('listitem', { name: /相机 2/ })
-    await user.click(within(cameraTwoRow).getByRole('button', { name: /Cam 2/ }))
-    expect(await screen.findByRole('heading', { level: 2, name: /Cam 2/ })).toBeInTheDocument()
-    expect(await screen.findByText(/NO_HAND_DETECTED：未检测到手部/)).toBeInTheDocument()
-    expect(screen.getAllByText(/Supporting View/).length).toBeGreaterThan(0)
+    const cameraTwoRow = screen.getByRole('listitem', { name: /机位 2/ })
+    await user.click(within(cameraTwoRow).getByRole('button', { name: /机位 2/ }))
+    expect(await screen.findByRole('heading', { level: 2, name: /机位 2/ })).toBeInTheDocument()
+    expect(await screen.findByText(/未检测到手部；这是检测事实/)).toBeInTheDocument()
+    expect(screen.getAllByText(/参考视图/).length).toBeGreaterThan(0)
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[1]}/media-report`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),

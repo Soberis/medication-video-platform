@@ -54,14 +54,14 @@ export function CaptureGroupInspector({
     groupQuality?.result === 'NEEDS_REVIEW' || groupQuality?.result === 'REJECTED'
 
   return (
-    <aside className="capture-group-inspector" aria-label="CaptureGroup Inspector">
-      <InspectorSection title="Receipt / capture facts" titleId="capture-group-receipt-facts">
+    <aside className="capture-group-inspector" aria-label="配药事件检查器">
+      <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
         <MetadataList
-          ariaLabel="CaptureGroup 接收事实"
+          ariaLabel="配药事件接收事实"
           items={[
             {
               id: 'group-id',
-              label: 'CaptureGroup ID',
+              label: '配药事件 ID',
               value: <code>{group.capture_group_id}</code>,
             },
             { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
@@ -72,7 +72,7 @@ export function CaptureGroupInspector({
             },
             {
               id: 'capture-time',
-              label: '设备采集时间',
+              label: '拍摄时间',
               value: formatDateTime(group.device_time_utc),
             },
             {
@@ -89,21 +89,21 @@ export function CaptureGroupInspector({
           items={[
             {
               key: 'expected',
-              label: '相机集合',
-              children: `应 ${group.expected_camera_numbers.map((number) => `Cam ${number}`).join('、')}`,
+              label: '机位集合',
+              children: `应 ${group.expected_camera_numbers.map((number) => `机位 ${number}`).join('、')}`,
             },
             {
               key: 'received',
               label: '已接收',
               children: group.received_camera_numbers.length
-                ? group.received_camera_numbers.map((number) => `Cam ${number}`).join('、')
+                ? group.received_camera_numbers.map((number) => `机位 ${number}`).join('、')
                 : '暂无',
             },
             {
               key: 'missing',
               label: '缺失',
               children: group.missing_camera_numbers.length
-                ? group.missing_camera_numbers.map((number) => `Cam ${number}`).join('、')
+                ? group.missing_camera_numbers.map((number) => `机位 ${number}`).join('、')
                 : '无',
             },
           ]}
@@ -120,15 +120,15 @@ export function CaptureGroupInspector({
         onRefresh={onRefresh}
       />
 
-      <InspectorSection title="Selected View facts" titleId="capture-group-selected-view-facts">
+      <InspectorSection title="当前机位事实" titleId="capture-group-selected-view-facts">
         {selectedStream ? (
           <MetadataList
-            ariaLabel="当前视图事实"
+            ariaLabel="当前机位事实"
             items={[
               {
                 id: 'camera',
-                label: '相机',
-                value: `Cam ${selectedStream.camera_number} · ${selectedStream.camera_role}`,
+                label: '机位',
+                value: `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`,
               },
               { id: 'mount', label: '安装位置', value: selectedStream.mount_position },
               {
@@ -162,11 +162,11 @@ export function CaptureGroupInspector({
             ]}
           />
         ) : (
-          <p className="form-hint">当前没有选中的已接收视图。</p>
+          <p className="form-hint">当前没有选中的已接收机位。</p>
         )}
         {selectedSync ? (
           <div className="capture-group-sync-inspector capture-group-stack">
-            <strong>Sync evidence</strong>
+            <strong>同步参考</strong>
             <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
             <p>{selectedSync.detail}</p>
             <span>
@@ -180,7 +180,7 @@ export function CaptureGroupInspector({
         className="capture-group-workflow-focus-target"
         id={captureGroupReviewCleaningFallbackTargetId}
         tabIndex={-1}
-        title="Review / Cleaning"
+        title="人工复核 / 训练资格检查"
         titleId="review-cleaning-context"
       >
         {task?.annotation_revision ? (
@@ -194,7 +194,7 @@ export function CaptureGroupInspector({
                   : 'information'
               }
             >
-              Review ·{' '}
+              复核 ·{' '}
               {task.annotation_revision.review
                 ? task.annotation_revision.review.decision === 'APPROVED'
                   ? '已通过'
@@ -234,11 +234,11 @@ export function CaptureGroupInspector({
                 </span>
               </div>
             ) : (
-              <p className="form-hint">Review 通过后才会形成训练资格检查事实。</p>
+              <p className="form-hint">复核通过后才会形成训练资格检查事实。</p>
             )}
           </>
         ) : (
-          <p className="form-hint">尚无正式 Revision；Review / 训练资格检查尚未开始。</p>
+          <p className="form-hint">尚无正式修订；人工复核 / 训练资格检查尚未开始。</p>
         )}
         {task ? (
           <Link
@@ -249,30 +249,30 @@ export function CaptureGroupInspector({
               captureGroupTaskDestination(task)?.focus ?? 'annotation',
             )}
           >
-            打开 CaptureGroup 任务上下文
+            打开配药事件任务上下文
           </Link>
         ) : null}
       </InspectorSection>
 
-      <InspectorSection title="Next action" titleId="capture-group-next-action">
+      <InspectorSection title="下一步" titleId="capture-group-next-action">
         <div className="capture-group-next-action capture-group-stack">
           <Check aria-hidden="true" size={16} strokeWidth={1.8} />
           <strong>
             {group.receipt_state === 'RECEIVING'
-              ? '等待回执关闭'
+              ? '等待接收完成'
               : !groupQuality || currentGroupResult === 'UNREVIEWED'
-                ? '记录 Group Quality'
+                ? '记录事件质量'
                 : groupQualityDowngraded
-                  ? '先恢复组质量准入'
+                  ? '先恢复事件质量准入'
                   : task && !task.primary_clip_asset_id
-                    ? '选择 Primary View'
+                    ? '选择主视图'
                     : task?.status === 'SUBMITTED'
-                      ? '等待 Review'
+                      ? '等待人工复核'
                       : task?.annotation_revision?.review?.decision === 'APPROVED'
                         ? '查看训练资格检查事实'
-                        : '继续 CaptureGroup Annotation'}
+                        : '继续配药动作标注'}
           </strong>
-          <span>下一步只依据服务端返回的 Receipt、Quality 和 Task 状态。</span>
+          <span>下一步只依据服务端返回的接收状态、质量和任务状态。</span>
         </div>
       </InspectorSection>
     </aside>

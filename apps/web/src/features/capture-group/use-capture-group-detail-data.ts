@@ -81,12 +81,10 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       setTaskVisibility(nextTaskVisibility)
       setSchema(nextSchema)
       if (qualityResult.status === 'rejected') {
-        setQualityErrorMessage(
-          '暂时无法读取当前 Group Quality；详情仍保留 CaptureGroup 与视图事实。',
-        )
+        setQualityErrorMessage('暂时无法读取当前事件质量；详情仍保留配药事件与机位事实。')
       }
       if (taskResult.status === 'rejected') {
-        setTaskErrorMessage('暂时无法读取唯一 CaptureGroup 任务；请刷新后重试。')
+        setTaskErrorMessage('暂时无法读取唯一配药事件任务；请刷新后重试。')
       }
       if (nextTask && schemaResult.status === 'rejected') {
         setTaskErrorMessage('标签规范暂时无法读取，当前不能提交新的修订。')
@@ -143,7 +141,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           ? error.message
           : error instanceof Error
             ? error.message
-            : '暂时无法读取 CaptureGroup 详情，请稍后重试。',
+            : '暂时无法读取配药事件详情，请稍后重试。',
       )
     } finally {
       if (groupRequest.current === request) groupRequest.current = null
@@ -163,10 +161,10 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     setIsFinalizingReceipt(true)
     try {
       await finalizeCaptureGroupReceipt(projectId, captureGroupId)
-      void message.success('CaptureGroup 回执已关闭，正在刷新服务端事实。')
+      void message.success('配药事件接收已结束，正在刷新服务端事实。')
       await refresh()
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '回执关闭未完成，请稍后重试。')
+      void message.error(error instanceof Error ? error.message : '结束接收未完成，请稍后重试。')
     } finally {
       setIsFinalizingReceipt(false)
     }

@@ -105,7 +105,7 @@ export function CaptureGroupAnnotationPanel({
     )
     return {
       value: view.stream?.clip_asset_id ?? `missing-${view.cameraNumber}`,
-      label: `相机 ${view.cameraNumber} · ${view.member?.camera_role ?? '未命名'} · ${
+      label: `机位 ${view.cameraNumber} · ${view.member?.camera_role ?? '未命名'} · ${
         view.stream ? viewQualityLabels[decision] : '缺失'
       }`,
       disabled: !enabled,
@@ -113,20 +113,20 @@ export function CaptureGroupAnnotationPanel({
   })
 
   const annotationBlockingReason = groupQualityReceiving
-    ? '回执仍在接收中，不能进入组级标注准入。'
+    ? '接收仍在进行中，不能进入事件级标注准入。'
     : !groupQuality
-      ? '当前 Group Quality 结论暂不可用，不能判断组级标注准入。'
+      ? '当前事件质量结论暂不可用，不能判断事件级标注准入。'
       : !task
         ? taskVisibility === 'permission-limited'
-          ? '当前账号不是该任务执行人；唯一 CaptureGroup 任务状态按权限不可见。'
+          ? '当前账号不是该任务执行人；唯一配药事件任务状态按权限不可见。'
           : taskVisibility === 'unavailable'
-            ? '唯一 CaptureGroup 任务状态暂不可读，请刷新后重试。'
-            : 'Group Quality 通过后，服务端会自动创建唯一 CaptureGroup 任务。'
+            ? '唯一配药事件任务状态暂不可读，请刷新后重试。'
+            : '事件质量通过后，服务端会自动创建唯一配药事件任务。'
         : !groupQualityAdmitting
-          ? '当前 Group Quality 为需复核或不合格；任务和历史仍保留，但不能提交新的 Revision。'
+          ? '当前事件质量为需复核或不合格；任务和历史仍保留，但不能提交新的修订。'
           : !task.primary_clip_asset_id
             ? task.can_select_primary
-              ? '请选择一路已接收、媒体可用且 View Quality 合格的主视图。'
+              ? '请选择一路已接收、媒体可用且机位质量合格的主视图。'
               : '当前账号或任务状态不允许选择主视图；请等待任务执行人处理。'
             : !task.can_submit
               ? '当前账号或任务状态不允许提交；请查看服务端任务状态。'
@@ -152,7 +152,7 @@ export function CaptureGroupAnnotationPanel({
         clipAssetId,
       )
       onTaskChange(updatedTask)
-      void message.success('主视图已保存；正式标注时间轴将以该视图为准。')
+      void message.success('主视图已保存；正式标注时间轴将以该机位为准。')
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '主视图暂未保存，请刷新后重试。')
     } finally {
@@ -181,7 +181,7 @@ export function CaptureGroupAnnotationPanel({
         })),
         annotationNote,
       )
-      void message.success('配药动作修订已提交；Primary View 现在锁定。')
+      void message.success('配药动作修订已提交；主视图现在锁定。')
       await onRefresh()
     } catch (error) {
       void message.error(
@@ -205,16 +205,16 @@ export function CaptureGroupAnnotationPanel({
       className="capture-group-annotation-section capture-group-workflow-focus-target"
       id="capture-group-annotation"
       tabIndex={-1}
-      title="CaptureGroup Annotation"
+      title="配药动作标注"
       titleId="capture-group-annotation-title"
-      actions={<span className="capture-group-section-note">一个组任务 · 一条 Revision 链</span>}
+      actions={<span className="capture-group-section-note">一个事件任务 · 一条修订链</span>}
     >
       {task ? (
         <>
           <div className="capture-group-task-banner">
             <div>
               <StatusIndicator tone={taskStatusTone(task)}>
-                唯一 CaptureGroup task · {formatTaskStatus(task)}
+                唯一配药事件任务 · {formatTaskStatus(task)}
               </StatusIndicator>
               <span>执行人：{task.assignee_actor_id}</span>
             </div>
@@ -222,28 +222,28 @@ export function CaptureGroupAnnotationPanel({
               className="text-link"
               to={paths.captureGroupFocus(projectId, captureGroupId, 'annotation')}
             >
-              打开 CaptureGroup Annotation
+              打开配药事件标注
             </Link>
           </div>
           {groupQualityDowngraded ? (
             <Alert
               type="warning"
               showIcon
-              title={`当前 Group Quality 为“${groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}”`}
-              description="任务和既有 Revision 历史仍可审计；新 Revision submission 已阻止。恢复组质量准入后再继续。"
+              title={`当前事件质量为“${groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}”`}
+              description="任务和既有修订历史仍可审计；不能提交新的修订。恢复事件质量准入后再继续。"
             />
           ) : null}
           <div className="capture-group-primary-view-control">
             <div>
-              <strong>Primary View · 正式时间基准</strong>
+              <strong>主视图 · 正式标注时间基准</strong>
               <p>
                 {primaryLocked
-                  ? '首个正式 Revision 已存在；Primary View 已锁定。'
-                  : '在首个正式 Revision 前选择一路符合服务端条件的视图。'}
+                  ? '首个正式修订已存在；主视图已锁定。'
+                  : '在首个正式修订前选择一路符合服务端条件的机位。'}
               </p>
             </div>
             <Select
-              aria-label="Primary View"
+              aria-label="主视图"
               value={task.primary_clip_asset_id ?? undefined}
               placeholder="选择主视图"
               disabled={
@@ -256,7 +256,7 @@ export function CaptureGroupAnnotationPanel({
               options={primaryOptions}
               onChange={(value) => void choosePrimaryView(value)}
             />
-            {primaryLocked ? <LockKeyhole aria-label="Primary View 已锁定" size={17} /> : null}
+            {primaryLocked ? <LockKeyhole aria-label="主视图已锁定" size={17} /> : null}
           </div>
           {annotationBlockingReason ? (
             <p className="capture-group-annotation-blocking" role="status">
@@ -271,10 +271,10 @@ export function CaptureGroupAnnotationPanel({
             >
               <div className="capture-group-form-heading">
                 <div>
-                  <span className="app-eyebrow">Formal annotation timeline</span>
+                  <span className="app-eyebrow">正式标注时间基准</span>
                   <h3>配药动作时间段</h3>
                 </div>
-                <span>所有相机共享这一条组级 Revision 链，不创建按相机重复的标签。</span>
+                <span>所有机位共享这一条事件级修订链，不创建按机位重复的标签。</span>
               </div>
               {draftSegments.map((segment, index) => {
                 const errors = segmentErrors[segment.draftId] ?? {}
@@ -362,7 +362,7 @@ export function CaptureGroupAnnotationPanel({
                   loading={isSubmittingRevision}
                   disabled={!canSubmitRevision}
                 >
-                  提交 Revision
+                  提交修订
                 </Button>
               </div>
             </form>
@@ -370,23 +370,23 @@ export function CaptureGroupAnnotationPanel({
             <div className="capture-group-annotation-form capture-group-annotation-form-blocked">
               <div className="capture-group-form-heading">
                 <div>
-                  <span className="app-eyebrow">Revision submission</span>
-                  <h3>新 Revision 暂不可提交</h3>
+                  <span className="app-eyebrow">修订提交</span>
+                  <h3>新修订暂不可提交</h3>
                 </div>
-                <span>保留既有 Revision、Review 和训练资格检查历史；等待服务端恢复组级准入。</span>
+                <span>保留既有修订、复核和训练资格检查历史；等待服务端恢复事件级准入。</span>
               </div>
               <div className="capture-group-annotation-form-actions">
                 <Button type="primary" disabled>
-                  提交 Revision
+                  提交修订
                 </Button>
               </div>
             </div>
           ) : null}
           {task.annotation_revision ? (
-            <div className="capture-group-revision-history" aria-label="Annotation Revision 历史">
+            <div className="capture-group-revision-history" aria-label="配药动作修订历史">
               <div className="capture-group-form-heading">
                 <div>
-                  <span className="app-eyebrow">Revision history</span>
+                  <span className="app-eyebrow">修订历史</span>
                   <h3>第 {task.annotation_revision.revision_number} 次正式修订</h3>
                 </div>
                 <StatusIndicator
@@ -400,9 +400,9 @@ export function CaptureGroupAnnotationPanel({
                 >
                   {task.annotation_revision.review
                     ? task.annotation_revision.review.decision === 'APPROVED'
-                      ? 'Review · 已通过'
-                      : 'Review · 已退回'
-                    : 'Review · 待复核'}
+                      ? '复核 · 已通过'
+                      : '复核 · 已退回'
+                    : '复核 · 待复核'}
                 </StatusIndicator>
               </div>
               <ol className="capture-group-readonly-segments">

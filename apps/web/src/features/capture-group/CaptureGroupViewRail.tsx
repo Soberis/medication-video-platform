@@ -44,13 +44,11 @@ export function CaptureGroupViewRail({
   return (
     <Section
       className="capture-group-views-section"
-      title="Camera / View"
+      title="机位"
       titleId="capture-group-views-title"
-      actions={
-        <span className="capture-group-section-note">相机编号来自冻结 CameraSetSnapshot</span>
-      }
+      actions={<span className="capture-group-section-note">机位编号来自已确认的机位集合</span>}
     >
-      <div className="capture-group-view-list" role="list" aria-label="CaptureGroup 相机视图列表">
+      <div className="capture-group-view-list" role="list" aria-label="配药事件机位列表">
         {viewRows.map((view) => {
           const stream = view.stream
           const selected = Boolean(stream && stream.clip_asset_id === selectedClipAssetId)
@@ -61,7 +59,7 @@ export function CaptureGroupViewRail({
               className={`capture-group-view-row${selected ? ' is-selected' : ''}${isRejected ? ' is-rejected' : ''}`}
               key={view.cameraNumber}
               role="listitem"
-              aria-label={`相机 ${view.cameraNumber} · ${stream ? (mediaStatusLabels[stream.stream_status] ?? stream.stream_status) : '缺失'}`}
+              aria-label={`机位 ${view.cameraNumber} · ${stream ? (mediaStatusLabels[stream.stream_status] ?? stream.stream_status) : '缺失'}`}
             >
               <button
                 className="capture-group-view-select"
@@ -70,9 +68,9 @@ export function CaptureGroupViewRail({
                 aria-pressed={selected}
                 onClick={() => stream && onSelectView(stream.clip_asset_id)}
               >
-                <span className="capture-group-camera-number">Cam {view.cameraNumber}</span>
+                <span className="capture-group-camera-number">机位 {view.cameraNumber}</span>
                 <span className="capture-group-view-copy">
-                  <strong>{view.member?.camera_role ?? '相机成员未提供'}</strong>
+                  <strong>{view.member?.camera_role ?? '机位成员未提供'}</strong>
                   <span>{view.member?.mount_position ?? '安装位置未提供'}</span>
                 </span>
               </button>
@@ -84,11 +82,11 @@ export function CaptureGroupViewRail({
                     : '缺失'}
                 </StatusIndicator>
                 <StatusIndicator tone={viewQualityTone(decision)}>
-                  人工质量 · {viewQualityLabels[decision]}
+                  机位质量 · {viewQualityLabels[decision]}
                 </StatusIndicator>
                 {selected && stream ? (
                   <StatusIndicator tone={candidateTone}>
-                    AI Candidate · {candidateStatusLabel(candidateState, candidateResponse)}
+                    手部检测 · {candidateStatusLabel(candidateState, candidateResponse)}
                   </StatusIndicator>
                 ) : null}
                 {stream?.quality_status ? (
@@ -111,7 +109,7 @@ export function CaptureGroupViewRail({
           className="capture-group-missing-note"
           type="warning"
           showIcon
-          title={`缺失相机：${group.missing_camera_numbers.map((number) => `Cam ${number}`).join('、')}`}
+          title={`缺失机位：${group.missing_camera_numbers.map((number) => `机位 ${number}`).join('、')}`}
           description="缺失编号保留在原位置；不会被重新编号，也不会被浏览器当作质量结论。"
         />
       ) : null}

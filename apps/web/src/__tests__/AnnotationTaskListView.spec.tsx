@@ -169,8 +169,8 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
-    await user.click(within(taskRow).getByRole('button', { name: /进入事件标注/ }))
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    await user.click(within(taskRow).getByRole('button', { name: /进入配药动作标注/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -191,7 +191,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
     await user.click(within(taskRow).getByRole('button', { name: /选择主视图/ }))
 
     await waitFor(() => {
@@ -213,8 +213,8 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待复核/ })
-    await user.click(within(taskRow).getByRole('button', { name: /进入 Review/ }))
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待复核/ })
+    await user.click(within(taskRow).getByRole('button', { name: /进入人工复核/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -240,7 +240,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待修改/ })
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待修改/ })
     await user.click(within(taskRow).getByRole('button', { name: /进入标注返工/ }))
 
     await waitFor(() => {
@@ -261,8 +261,8 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*标注完成/ })
-    await user.click(within(taskRow).getByRole('button', { name: /查看 Review \/ Cleaning 结果/ }))
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*标注完成/ })
+    await user.click(within(taskRow).getByRole('button', { name: /查看复核 \/ 训练资格检查结果/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -294,7 +294,7 @@ describe('annotation task list view', () => {
     stubTasks([completedGroupTask], labelSchema)
     renderView()
 
-    expect(await screen.findByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
+    expect(await screen.findByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
   })
 
   it('does not invent a CaptureGroup action when the server limits task permission', async () => {
@@ -307,11 +307,9 @@ describe('annotation task list view', () => {
     stubTasks([deniedGroupTask], labelSchema)
     renderView()
 
-    const taskRow = await screen.findByRole('article', { name: /CaptureGroup .*待标注/ })
-    expect(
-      within(taskRow).queryByRole('button', { name: /进入 CaptureGroup/ }),
-    ).not.toBeInTheDocument()
-    expect(within(taskRow).getByRole('link', { name: /CaptureGroup/ })).toHaveAttribute(
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    expect(within(taskRow).queryByRole('button', { name: /进入配药事件/ })).not.toBeInTheDocument()
+    expect(within(taskRow).getByRole('link', { name: /配药事件/ })).toHaveAttribute(
       'href',
       paths.captureGroup(projectId, captureGroupId),
     )
@@ -541,7 +539,7 @@ describe('annotation task list view', () => {
     expect(dialog).toHaveTextContent('包含手部关键点 + 人工动作标签')
     expect(dialog).toHaveTextContent('原始视频不包含')
     expect(dialog).toHaveTextContent(
-      'MediaPipe 手部检测结果仅作辅助，不是正式人工标注；动作标签来自人工正式标注。',
+      '手部检测结果仅供人工参考，不作为正式标注或质量结论。动作标签来自人工正式标注。',
     )
   })
 
@@ -584,11 +582,11 @@ describe('annotation task list view', () => {
     expect(dialog).toHaveTextContent('excluded_views')
     expect(dialog).toHaveTextContent('annotation_revision_id + revision')
     expect(dialog).toHaveTextContent('capture_group_cleaning_id + rule set + input fingerprint')
-    expect(dialog).toHaveTextContent('primary_interval 只归 Primary View')
-    expect(dialog).toHaveTextContent('Supporting View 不生成动作对齐时间戳')
+    expect(dialog).toHaveTextContent('primary_interval 只归主视图')
+    expect(dialog).toHaveTextContent('参考视图不生成动作对齐时间戳')
     expect(dialog).toHaveTextContent('training-data.v3')
     expect(dialog).toHaveTextContent('application/vnd.medication.training-data.v3+json')
-    expect(dialog).toHaveTextContent('同组视图不跨 train / validation / test')
+    expect(dialog).toHaveTextContent('同一事件的机位不跨 train / validation / test')
     expect(dialog).toHaveTextContent('training_data_v3.json')
     expect(dialog).toHaveTextContent('原始视频不包含')
   })
@@ -650,7 +648,7 @@ describe('annotation task list view', () => {
     await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('0 个')
-    expect(dialog).toHaveTextContent('当前没有符合条件的 CaptureGroup 事件，暂时无法导出。')
+    expect(dialog).toHaveTextContent('当前没有符合条件的配药事件，暂时无法导出。')
     expect(within(dialog).getByRole('button', { name: '导出 training-data.v3' })).toBeDisabled()
   })
 

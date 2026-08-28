@@ -121,11 +121,11 @@ export default function AppShell() {
                 <Link
                   to={paths.captureGroups(projectId)}
                   aria-current={isCaptureGroupContext ? 'page' : undefined}
-                  aria-label="CaptureGroup 多机位"
-                  title="CaptureGroup 多机位"
+                  aria-label="配药事件"
+                  title="配药事件"
                 >
                   <Camera {...iconProps} />
-                  <span className="sidebar-label">CaptureGroup 多机位</span>
+                  <span className="sidebar-label">配药事件</span>
                 </Link>
               ) : null}
               {projectId ? (

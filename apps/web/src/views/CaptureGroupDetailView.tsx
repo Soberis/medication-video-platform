@@ -20,6 +20,7 @@ import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
+import { shortId } from '@/features/catalog/catalog-presentation'
 import {
   captureGroupFocusFromLocation,
   captureGroupReviewCleaningFallbackTargetId,
@@ -63,16 +64,16 @@ export default function CaptureGroupDetailView() {
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
-          CaptureGroup 多机位
+          配药事件
         </Link>
         <span aria-hidden="true">/</span>
-        <span>详情</span>
+        <span>{data.group?.capture_group_key ?? shortId(captureGroupId)}</span>
       </nav>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
-        eyebrow="V1.25 · CaptureGroup"
+        eyebrow="配药事件"
         titleId="capture-group-detail-title"
-        title={data.group?.capture_group_key ?? 'CaptureGroup 详情'}
+        title={data.group?.capture_group_key ?? '配药事件详情'}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
@@ -82,7 +83,7 @@ export default function CaptureGroupDetailView() {
                 loading={data.isFinalizingReceipt}
                 onClick={() => void data.finalizeReceipt()}
               >
-                关闭接收回执
+                结束接收
               </Button>
             ) : null}
             <Button
@@ -97,9 +98,7 @@ export default function CaptureGroupDetailView() {
         }
       />
       {data.groupLoadState === 'loading' ? (
-        <LoadingState>
-          {data.group ? '正在刷新 CaptureGroup…' : '正在读取 CaptureGroup…'}
-        </LoadingState>
+        <LoadingState>{data.group ? '正在刷新配药事件…' : '正在读取配药事件…'}</LoadingState>
       ) : null}
       {data.groupLoadState === 'error' ? (
         <ErrorState code={data.groupErrorCode} onRetry={() => void data.refresh()}>

@@ -18,7 +18,7 @@ export const receiptStateLabels: Record<CaptureGroup['receipt_state'], string> =
 export const groupQualityLabels: Record<CaptureGroupQualityResult, string> = {
   UNREVIEWED: '待判断',
   QUALIFIED: '合格',
-  QUALIFIED_WITH_EXCLUSIONS: '合格 · 排除部分视图',
+  QUALIFIED_WITH_EXCLUSIONS: '合格 · 排除部分机位',
   NEEDS_REVIEW: '需复核',
   REJECTED: '不合格',
 }
@@ -49,10 +49,10 @@ export const technicalQualityLabels: Record<string, string> = {
 }
 
 export const groupQualityReasons = [
-  '所有参与视图满足当前组准入要求。',
-  '部分视图被排除，但剩余视图足以支持人工标注。',
-  '视图事实或质量结论需要人工进一步确认。',
-  '当前组不满足人工标注准入要求。',
+  '所有参与机位满足当前事件准入要求。',
+  '部分机位被排除，但剩余机位足以支持人工标注。',
+  '机位事实或质量结论需要人工进一步确认。',
+  '当前事件不满足人工标注准入要求。',
 ] as const
 
 export function receiptTone(state: CaptureGroup['receipt_state']): StatusIndicatorTone {
@@ -88,7 +88,7 @@ export function streamTone(stream: CaptureGroupStream | null): StatusIndicatorTo
 
 export function formatViewQualitySummary(review: CaptureGroupQualityReview | null) {
   const views = review?.confirmed_view_set?.views ?? []
-  if (!views.length) return '未形成组质量快照'
+  if (!views.length) return '未形成事件质量快照'
   const counts = views.reduce(
     (summary, view) => {
       summary[view.quality_review_decision] += 1
@@ -137,19 +137,19 @@ export function captureGroupTaskDestination(
         task.annotation_revision?.review?.decision === 'REJECTED'
           ? '进入标注返工'
           : task.primary_clip_asset_id
-            ? '进入事件标注'
+            ? '进入配药动作标注'
             : '选择主视图',
     }
   }
 
   if (task.status === 'SUBMITTED' && task.can_review && task.annotation_revision) {
-    return { focus: 'review', actionLabel: '进入 Review' }
+    return { focus: 'review', actionLabel: '进入人工复核' }
   }
 
   // Completed task visibility is already authorized by the task list. The
   // recheck mutation remains guarded separately by can_recheck_post_cleaning.
   if (task.status === 'COMPLETED' && task.annotation_revision) {
-    return { focus: 'cleaning', actionLabel: '查看 Review / Cleaning 结果' }
+    return { focus: 'cleaning', actionLabel: '查看复核 / 训练资格检查结果' }
   }
 
   return null
@@ -225,13 +225,13 @@ export function syncSafety(stream: CaptureGroupStream) {
     return {
       label: '边端声明正常 · 参考',
       tone: 'information' as const,
-      detail: '当前契约未提供 validated RELIABLE 映射；支持视图不能按精确同步展示。',
+      detail: '当前契约未提供 validated RELIABLE 映射；参考视图不能按精确同步展示。',
       referenceOnly: true,
     }
   }
   if (stream.sync_status === 'WARNING') {
     return {
-      label: '同步需关注 · reference-only',
+      label: '同步需关注 · 仅供参考',
       tone: 'warning' as const,
       detail: '仅作人工视觉对照，不代表精确时间对齐。',
       referenceOnly: true,
@@ -239,16 +239,16 @@ export function syncSafety(stream: CaptureGroupStream) {
   }
   if (stream.sync_status === 'REJECT') {
     return {
-      label: '同步异常 · reference-only',
+      label: '同步异常 · 仅供参考',
       tone: 'destructive' as const,
-      detail: '不得依据该声明推导精确支持视图时间。',
+      detail: '不得依据该声明推导精确参考视图时间。',
       referenceOnly: true,
     }
   }
   return {
-    label: '同步未知 · reference-only',
+    label: '同步未知 · 仅供参考',
     tone: 'neutral' as const,
-    detail: '没有后端验证映射；支持视图仅供参考。',
+    detail: '没有后端验证映射；参考视图仅供参考。',
     referenceOnly: true,
   }
 }

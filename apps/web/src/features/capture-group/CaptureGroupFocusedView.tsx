@@ -56,18 +56,16 @@ export function CaptureGroupFocusedView({
     >
       <header className="capture-group-focused-heading">
         <div>
-          <p className="app-eyebrow">Focused workspace</p>
+          <p className="app-eyebrow">当前机位</p>
           <h2 id="capture-group-focused-title">
             {selectedStream
-              ? `Cam ${selectedStream.camera_number} · ${selectedStream.camera_role}`
-              : '等待选择视图'}
+              ? `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`
+              : '等待选择机位'}
           </h2>
         </div>
         {selectedStream ? (
           <StatusIndicator tone="information">
-            {task?.primary_clip_asset_id === selectedStream.clip_asset_id
-              ? 'Primary View'
-              : 'Supporting View'}
+            {task?.primary_clip_asset_id === selectedStream.clip_asset_id ? '主视图' : '参考视图'}
           </StatusIndicator>
         ) : null}
       </header>
@@ -78,8 +76,8 @@ export function CaptureGroupFocusedView({
           className="capture-group-supporting-warning"
           type="info"
           showIcon
-          title="当前为 Supporting View"
-          description="可用于人工视觉对照；正式 Annotation timeline 仍以 Primary View 为时间基准。"
+          title="当前为参考视图"
+          description="仅供人工视觉对照；正式标注时间基准仍以主视图为准。"
         />
       ) : null}
       <PlaybackCard
@@ -92,7 +90,7 @@ export function CaptureGroupFocusedView({
         isRequestingPlayback={isRequestingPlayback}
         mediaProbeMessage={
           selectedDetail?.status === 'INGEST_FAILED'
-            ? 'Media Probe failure 是媒体事实；不改变 Receipt，也不自动判定 View Quality。'
+            ? '媒体检测失败是媒体事实；不改变接收状态，也不自动判定机位质量。'
             : ''
         }
         playbackMessage={playbackMessage}
@@ -104,9 +102,9 @@ export function CaptureGroupFocusedView({
         onStartPlayback={() => void startPlayback()}
       />
       {selectedStream ? (
-        <div className="capture-group-compare-strip" aria-label="Supporting View 相机切换">
+        <div className="capture-group-compare-strip" aria-label="参考视图机位切换">
           <div className="capture-group-compare-heading">
-            <span className="app-eyebrow">Camera switcher</span>
+            <span className="app-eyebrow">机位切换</span>
             <span>只切换当前主播放器，不预加载其他完整视频。</span>
           </div>
           <div className="capture-group-compare-list">
@@ -127,7 +125,7 @@ export function CaptureGroupFocusedView({
                     <Video size={16} strokeWidth={1.7} />
                   </span>
                   <span>
-                    <strong>Cam {view.cameraNumber}</strong>
+                    <strong>机位 {view.cameraNumber}</strong>
                     <small>
                       {stream ? viewQualityLabels[decision?.decision ?? 'UNREVIEWED'] : '缺失'}
                       {stream && stream.stream_status !== 'INGESTED' ? ' · 媒体不可用' : ''}
@@ -150,17 +148,17 @@ export function CaptureGroupFocusedView({
       ) : null}
       {selectedDetail ? (
         <div className="capture-group-focused-facts">
-          <Section title="AI Candidate facts" titleId="capture-group-candidate-title">
+          <Section title="手部检测" titleId="capture-group-candidate-title">
             <div className="capture-group-candidate-facts capture-group-stack">
               <StatusIndicator tone={currentCandidateTone}>
                 {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
                   ? 'NO_HAND_DETECTED'
                   : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
-                    ? 'AI FAILED'
+                    ? '检测失败'
                     : candidateResponse?.job.status === 'SUCCEEDED'
-                      ? 'Candidate ready'
+                      ? '检测完成'
                       : candidateState === 'unavailable'
-                        ? '尚无 Candidate'
+                        ? '尚无检测结果'
                         : '读取中'}
               </StatusIndicator>
               <p>{currentCandidateDescription}</p>

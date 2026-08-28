@@ -100,12 +100,10 @@ export function CaptureGroupViewQualitySection({
         expected_version: selectedReview?.version ?? 0,
       })
       onReviewSaved(review)
-      void message.success(`相机 ${selectedStream.camera_number} 的 View Quality 已保存。`)
+      void message.success(`机位 ${selectedStream.camera_number} 的机位质量已保存。`)
       await onRefresh()
     } catch (error) {
-      void message.error(
-        error instanceof Error ? error.message : 'View Quality 暂未保存，请稍后重试。',
-      )
+      void message.error(error instanceof Error ? error.message : '机位质量暂未保存，请稍后重试。')
     } finally {
       setIsSaving(false)
     }
@@ -114,17 +112,17 @@ export function CaptureGroupViewQualitySection({
   return (
     <Section
       className="capture-group-view-quality-workspace"
-      title="View Quality"
+      title="机位质量"
       titleId="capture-group-view-quality-title"
       actions={<span className="capture-group-section-note">自动证据与人工决定分开保存</span>}
     >
       <div className="capture-group-quality-boundary">
         <div>
-          <strong>Automatic evidence</strong>
-          <span>Media Probe、技术质量和 MediaPipe Candidate 只作为事实展示。</span>
+          <strong>自动检测事实</strong>
+          <span>媒体检测、技术检测和手部检测只作为事实展示。</span>
         </div>
         <div>
-          <strong>Human decision</strong>
+          <strong>人工决定</strong>
           <span>QUALIFIED / NEEDS_REVIEW / REJECTED 由人工记录，REJECTED 仍保留。</span>
         </div>
       </div>
@@ -133,7 +131,7 @@ export function CaptureGroupViewQualitySection({
           assetStatus={selectedDetail.status}
           canReview={selectedDetail.status === 'INGESTED'}
           errorCode={qualityLoadState === 'error' ? 'VIEW_QUALITY_REQUEST_FAILED' : ''}
-          errorMessage={selectedQualityError || '当前 View Quality 暂时无法读取。'}
+          errorMessage={selectedQualityError || '当前机位质量暂时无法读取。'}
           isSaving={isSaving}
           loadState={qualityLoadState}
           review={selectedReview}
@@ -146,7 +144,7 @@ export function CaptureGroupViewQualitySection({
           }}
         />
       ) : (
-        <p className="form-hint">选择一路已接收视图后记录人工 View Quality。</p>
+        <p className="form-hint">选择一路已接收机位后记录人工机位质量。</p>
       )}
     </Section>
   )
@@ -208,19 +206,17 @@ export function CaptureGroupQualityPanel({
         groupReason,
         groupQuality.revision,
       )
-      void message.success('Group Quality 已记录，正在刷新任务与视图快照。')
+      void message.success('事件质量已记录，正在刷新任务与机位快照。')
       await onRefresh()
     } catch (error) {
-      void message.error(
-        error instanceof Error ? error.message : 'Group Quality 暂未保存，请稍后重试。',
-      )
+      void message.error(error instanceof Error ? error.message : '事件质量暂未保存，请稍后重试。')
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <InspectorSection title="Group Quality" titleId="capture-group-quality-inspector">
+    <InspectorSection title="事件质量" titleId="capture-group-quality-inspector">
       <div className="capture-group-inspector-status">
         <StatusIndicator tone={groupQualityTone(currentResult)}>
           {groupQualityLabels[currentResult]}
@@ -235,14 +231,14 @@ export function CaptureGroupQualityPanel({
         <Alert
           type="info"
           showIcon
-          title="回执仍在接收中"
+          title="接收仍在进行中"
           description="最终 QUALIFIED / QUALIFIED_WITH_EXCLUSIONS 操作已禁用；服务器只接受 NEEDS_REVIEW。"
         />
       ) : null}
       <label className="capture-group-decision-field">
-        <span>记录新的组质量结论</span>
+        <span>记录新的事件质量结论</span>
         <Select
-          aria-label="Group Quality 结论"
+          aria-label="事件质量结论"
           value={groupDecision}
           options={[
             {
@@ -280,19 +276,19 @@ export function CaptureGroupQualityPanel({
         disabled={saveDisabled}
         onClick={() => void saveGroupQuality()}
       >
-        保存 Group Quality
+        保存事件质量
       </Button>
       {groupQuality?.confirmed_view_set ? (
         <div className="capture-group-confirmed-view-set capture-group-stack">
-          <strong>本次结论使用的 View Set</strong>
+          <strong>本次结论使用的机位集合</strong>
           <span>
-            {groupQuality.confirmed_view_set.views.length} 路 · input version{' '}
+            {groupQuality.confirmed_view_set.views.length} 个机位 · input version{' '}
             {groupQuality.input_version ?? '未提供'}
           </span>
           <ul>
             {groupQuality.confirmed_view_set.views.map((view) => (
               <li key={view.camera_number}>
-                Cam {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
+                机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
                 {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
               </li>
             ))}

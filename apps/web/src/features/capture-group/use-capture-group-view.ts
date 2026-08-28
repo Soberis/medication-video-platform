@@ -105,7 +105,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       if (request.signal.aborted || selectedViewRequest.current !== request) return
       setSelectedMediaReportState('error')
       setSelectedMediaReportError(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取所选视图的媒体事实。',
+        error instanceof CatalogApiError ? error.message : '暂时无法读取所选机位的媒体事实。',
       )
     } finally {
       if (selectedViewRequest.current === request) selectedViewRequest.current = null
@@ -164,29 +164,29 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       ? selectedDetail.status === 'INGESTED'
         ? {
             title: '媒体已入库，可按需播放',
-            description: '播放授权只在点击后获取；播放器仍只加载当前选中的一路视图。',
+            description: '播放授权只在点击后获取；播放器仍只加载当前选中的一路机位。',
             type: 'success',
           }
         : selectedDetail.status === 'INGEST_FAILED'
           ? {
               title: '媒体检测失败',
               description:
-                '媒体 Probe 失败不会改变回执；若播放授权仍可用，可继续人工查看，但不能记录质量结论。',
+                '媒体检测失败不会改变接收状态；若播放授权仍可用，可继续人工查看，但不能记录机位质量。',
               type: 'error',
             }
           : {
               title: mediaStatusLabels[selectedDetail.status] ?? '媒体尚未就绪',
-              description: '媒体事实尚未完成；当前不允许记录 View Quality。',
+              description: '媒体事实尚未完成；当前不允许记录机位质量。',
               type: 'warning',
             }
       : {
-          title: '正在读取当前视图',
+          title: '正在读取当前机位',
           description: '读取完成后才会显示播放与媒体事实。',
           type: 'info',
         }
     : {
-        title: '选择一路已接收视图',
-        description: '缺失相机保留在列表中，但不会加载播放器。',
+        title: '选择一路已接收机位',
+        description: '缺失机位保留在列表中，但不会加载播放器。',
         type: 'info',
       }
 

@@ -34,7 +34,7 @@ import { captureGroupTaskDestination } from '@/features/capture-group-presentati
 
 const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  QUALITY_REVIEW_NOT_QUALIFIED: '当前人工质量结论不是“合格”',
+  QUALITY_REVIEW_NOT_QUALIFIED: '当前机位质量结论不是“合格”',
   ASSET_INPUT_DIGEST_INVALID: '视频输入摘要无效',
   ANNOTATION_DOCUMENT_DIGEST_INVALID: '标注文档摘要无效',
   ANNOTATION_DOCUMENT_DIGEST_MISMATCH: '标注文档内容与摘要不一致',
@@ -65,7 +65,10 @@ function taskNoActionLabel(task: AnnotationTask) {
   if (task.status === 'SUBMITTED') return '等待管理员复核'
   return '等待处理'
 }
-function postCleaningPresentation(task: AnnotationTask): {
+function postCleaningPresentation(
+  task: AnnotationTask,
+  isCaptureGroupTask = Boolean(task.capture_group_id),
+): {
   label: string
   tone: StatusIndicatorTone
   description: string
@@ -75,16 +78,19 @@ function postCleaningPresentation(task: AnnotationTask): {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
   const result = revision.capture_group_cleaning ?? revision.post_cleaning_result
-  const reasons = (result?.reason_codes ?? []).map(
-    (code) =>
+  const reasons = (result?.reason_codes ?? []).map((code) => {
+    const fallback = isCaptureGroupTask ? '其他训练资格检查原因' : '其他清洗原因'
+    return (
       postCleaningReasonLabels[code] ??
-      `其他清洗原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`,
-  )
+      `${fallback}（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
+    )
+  })
+  const eligibilityTerm = isCaptureGroupTask ? '训练资格检查' : '清洗'
   if (result?.outcome === 'PASS')
     return {
       label: cleaningStatusLabels.PASS,
       tone: 'success',
-      description: '当前规则检查通过；实际训练行数以服务端导出预览为准。',
+      description: `当前规则检查通过；实际训练行数以服务端导出预览为准。`,
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -92,7 +98,7 @@ function postCleaningPresentation(task: AnnotationTask): {
     return {
       label: cleaningStatusLabels.WARNING,
       tone: 'warning',
-      description: '当前数据暂不可用于训练，请补充事实后重新核对清洗。',
+      description: `当前数据暂不可用于训练，请补充事实后重新核对${eligibilityTerm}。`,
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -100,14 +106,14 @@ function postCleaningPresentation(task: AnnotationTask): {
     return {
       label: cleaningStatusLabels.REJECT,
       tone: 'destructive',
-      description: '当前数据未通过清洗，暂不可用于训练；视频资产未被删除。',
+      description: `当前数据未通过${eligibilityTerm}，暂不可用于训练；视频资产未被删除。`,
       reasons,
       evaluatedAt: result.evaluated_at,
     }
   return {
     label: cleaningStatusLabels.NOT_STARTED,
     tone: 'neutral',
-    description: '尚未形成可用于训练的清洗结论。',
+    description: `尚未形成可用于训练的${eligibilityTerm}结论。`,
     reasons,
     evaluatedAt: null,
   }
@@ -405,8 +411,8 @@ export default function AnnotationTaskListView() {
           <div className="annotation-task-project-tools-copy">
             <strong>项目训练数据</strong>
             <span>
-              V1.25 优先使用 training-data.v3；服务端只返回通过准入闸门的 CaptureGroup 事件。V1.24
-              training-data.v2 继续保留。
+              新版训练数据（training-data.v3）优先返回通过准入闸门的配药事件；历史格式
+              （training-data.v2）继续保留。
             </span>
           </div>
           <div className="annotation-task-project-tools-actions">
@@ -427,7 +433,7 @@ export default function AnnotationTaskListView() {
               size="small"
               loading={isTrainingPreviewLoading}
               disabled={isTrainingDownloadLoading || isTrainingDataV3PreviewLoading}
-              title="预览并导出 V1.24 training-data.v2"
+              title="预览并导出历史训练数据（training-data.v2）"
               onClick={() => void openTrainingExport()}
             >
               导出训练数据
@@ -449,10 +455,10 @@ export default function AnnotationTaskListView() {
             {items.map((row) => {
               const isGroupTask = Boolean(row.capture_group_id)
               const taskSubject = isGroupTask
-                ? `CaptureGroup ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
+                ? `配药事件 ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
                 : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`
               const revision = row.annotation_revision
-              const presentation = postCleaningPresentation(row)
+              const presentation = postCleaningPresentation(row, isGroupTask)
               const groupTaskDestination = isGroupTask ? captureGroupTaskDestination(row) : null
               const taskDetails = (
                 <details className="task-details">
@@ -539,7 +545,7 @@ export default function AnnotationTaskListView() {
                     ) : null}
                     {presentation ? (
                       <div className="task-details-block">
-                        <h3>清洗说明</h3>
+                        <h3>{isGroupTask ? '训练资格检查说明' : '清洗说明'}</h3>
                         <p>{presentation.description}</p>
                         {presentation.evaluatedAt ? (
                           <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
@@ -610,7 +616,7 @@ export default function AnnotationTaskListView() {
                         title={row.capture_group_id ?? row.clip_asset_id ?? row.annotation_task_id}
                       >
                         {isGroupTask
-                          ? `CaptureGroup ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
+                          ? `配药事件 ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
                           : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`}
                       </Link>
                     </div>
@@ -650,7 +656,7 @@ export default function AnnotationTaskListView() {
                             )}
                             {presentation ? (
                               <StatusIndicator tone={presentation.tone}>
-                                清洗 · {presentation.label}
+                                {isGroupTask ? '训练资格检查' : '清洗'} · {presentation.label}
                               </StatusIndicator>
                             ) : null}
                           </div>
@@ -722,7 +728,7 @@ export default function AnnotationTaskListView() {
               items={[
                 {
                   id: 'v3-eligible-group-count',
-                  label: '合格 CaptureGroup',
+                  label: '合格配药事件',
                   value: `${trainingDataV3Preview.eligible_group_count} 组`,
                 },
                 {
@@ -732,28 +738,28 @@ export default function AnnotationTaskListView() {
                 },
                 {
                   id: 'v3-included-views',
-                  label: '参与视图',
-                  value: 'participating_views（保留 camera_number 与 view quality）',
+                  label: '参与机位',
+                  value: 'participating_views（保留 camera_number 与机位质量）',
                 },
                 {
                   id: 'v3-excluded-views',
-                  label: '排除视图',
-                  value: 'excluded_views（保留原因与 provenance，不参与下游）',
+                  label: '排除机位',
+                  value: 'excluded_views（保留原因与来源，不参与下游）',
                 },
                 {
                   id: 'v3-revision-provenance',
-                  label: 'Revision provenance',
-                  value: 'annotation_revision_id + revision；Review = APPROVED',
+                  label: '修订来源',
+                  value: 'annotation_revision_id + revision；复核 = APPROVED',
                 },
                 {
                   id: 'v3-cleaning-provenance',
-                  label: 'Cleaning provenance',
+                  label: '训练资格检查来源',
                   value: 'capture_group_cleaning_id + rule set + input fingerprint；PASS',
                 },
                 {
                   id: 'v3-primary-interval',
-                  label: 'Primary View 时间基准',
-                  value: 'primary_interval 只归 Primary View；Supporting View 不生成动作对齐时间戳',
+                  label: '主视图时间基准',
+                  value: 'primary_interval 只归主视图；参考视图不生成动作对齐时间戳',
                 },
                 {
                   id: 'v3-format-version',
@@ -768,7 +774,7 @@ export default function AnnotationTaskListView() {
                 {
                   id: 'v3-split-unit',
                   label: 'Split 单位',
-                  value: 'CaptureGroup（同组视图不跨 train / validation / test）',
+                  value: '配药事件（同一事件的机位不跨 train / validation / test）',
                 },
                 {
                   id: 'v3-file',
@@ -784,12 +790,11 @@ export default function AnnotationTaskListView() {
             />
             {trainingDataV3Preview.event_count === 0 ? (
               <p className="training-data-export-empty" role="status">
-                当前没有符合条件的 CaptureGroup 事件，暂时无法导出。
+                当前没有符合条件的配药事件，暂时无法导出。
               </p>
             ) : null}
             <p className="form-hint">
-              eligibility 由服务端根据 Group Quality、正式 Revision、APPROVED Review 和 Cleaning
-              PASS 判定；本页不重新计算。
+              准入条件由服务端根据事件质量、正式修订、复核通过和训练资格检查通过判定；本页不重新计算。
             </p>
           </>
         ) : null}
@@ -836,7 +841,7 @@ export default function AnnotationTaskListView() {
               </p>
             ) : null}
             <p className="form-hint">
-              MediaPipe 手部检测结果仅作辅助，不是正式人工标注；动作标签来自人工正式标注。
+              手部检测结果仅供人工参考，不作为正式标注或质量结论。动作标签来自人工正式标注。
             </p>
           </>
         ) : null}
