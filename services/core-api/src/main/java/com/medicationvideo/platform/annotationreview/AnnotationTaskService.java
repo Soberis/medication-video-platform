@@ -106,11 +106,17 @@ class AnnotationTaskService {
 			.filter(revision -> tasksById.get(revision.getAnnotationTaskId()).isRevisionForCurrentGroupInput(revision))
 			.collect(java.util.stream.Collectors.toMap(AnnotationRevision::getAnnotationTaskId, revision -> revision,
 					(left, right) -> left.getRevisionNumber() >= right.getRevisionNumber() ? left : right));
-		var currentGroupQualityById = tasks.stream()
+		var captureGroupIds = tasks.stream()
 			.filter(AnnotationTask::isCaptureGroupTask)
-			.collect(java.util.stream.Collectors.toMap(AnnotationTask::getCaptureGroupId,
-					task -> this.captureGroupQualityQueryService.getCurrentDecision(projectId, task.getCaptureGroupId())
-						.isAdmitting()));
+			.map(AnnotationTask::getCaptureGroupId)
+			.distinct()
+			.toList();
+		var currentGroupQualityById = captureGroupIds.isEmpty() ? Map.<UUID, Boolean>of()
+				: this.captureGroupQualityQueryService.getCurrentDecisions(projectId, captureGroupIds)
+					.stream()
+					.collect(java.util.stream.Collectors.toUnmodifiableMap(
+							CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
+							CaptureGroupQualityQueryService.CurrentDecision::isAdmitting));
 		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty() ? Map.of() : this.reviewRepository
 			.findAllByAnnotationRevisionIdIn(
 					revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList())
