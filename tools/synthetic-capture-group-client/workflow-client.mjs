@@ -182,7 +182,31 @@ export class SyntheticCaptureGroupWorkflowClient {
   }
 
   async waitForMediaProbe(clipAssetId, { timeoutMs = 120_000, intervalMs = 1_000 } = {}) {
-    const queuedJob = await this.requestMediaProbe(clipAssetId)
+    const existingAsset = await this.getClipAsset(clipAssetId)
+    const existingTerminalResult = await this.#readCompletedMediaProbe(clipAssetId, existingAsset)
+    if (existingTerminalResult) {
+      return existingTerminalResult
+    }
+
+    let queuedJob
+    try {
+      queuedJob = await this.requestMediaProbe(clipAssetId)
+    }
+    catch (error) {
+      // Local service profiles may automatically enqueue a probe as upload
+      // completion commits. A multi-view upload can finish that probe before
+      // this acceptance client reaches the explicit request, so observe the
+      // authoritative asset state instead of treating it as a client failure.
+      if (!(error instanceof PlatformApiError) || error.errorCode !== 'CLIP_ASSET_NOT_PROBEABLE') {
+        throw error
+      }
+      const terminalAsset = await waitFor(
+        () => this.getClipAsset(clipAssetId),
+        (value) => value?.status === 'INGESTED' || value?.status === 'INGEST_FAILED',
+        { timeoutMs, intervalMs, description: `automatic Media Probe for ${clipAssetId}` },
+      )
+      return this.#readCompletedMediaProbe(clipAssetId, terminalAsset)
+    }
     if (!queuedJob?.media_job_id) {
       throw new Error('Media Probe response did not contain media_job_id')
     }
@@ -202,6 +226,17 @@ export class SyntheticCaptureGroupWorkflowClient {
       throw new Error(`Media Probe failed but ClipAsset status is ${asset.status}`)
     }
     return { job, asset }
+  }
+
+  async #readCompletedMediaProbe(clipAssetId, asset) {
+    if (asset?.status === 'INGESTED') {
+      await this.getMediaReport(clipAssetId)
+      return { job: { status: 'SUCCEEDED' }, asset }
+    }
+    if (asset?.status === 'INGEST_FAILED') {
+      return { job: { status: 'FAILED' }, asset }
+    }
+    return null
   }
 
   async waitForHandPose(clipAssetId, expectedStatus, {
