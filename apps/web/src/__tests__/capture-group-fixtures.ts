@@ -32,6 +32,29 @@ export function stubGroupList(
         jsonResponse({ items: groups.map(summaryFromGroup), next_cursor: null }),
       )
     }
+    if (path.endsWith('/capture-group-quality-reviews')) {
+      const requestedIds = new URL(url, 'http://localhost').searchParams.getAll('capture_group_id')
+      return Promise.resolve(
+        jsonResponse({
+          items: requestedIds.map((captureGroupId) => {
+            const qualityGroup = groups.find(
+              (candidate) => candidate.capture_group_id === captureGroupId,
+            )
+            return (
+              (qualityGroup && options.qualityByGroup?.[qualityGroup.capture_group_id]) ??
+              (qualityGroup
+                ? qualityFixture(
+                    qualityGroup,
+                    qualityGroup.missing_camera_numbers.length
+                      ? 'QUALIFIED_WITH_EXCLUSIONS'
+                      : 'QUALIFIED',
+                  )
+                : qualityFixture(groups[0]!, 'UNREVIEWED'))
+            )
+          }),
+        }),
+      )
+    }
     if (path.endsWith('/annotation-tasks')) {
       if (options.taskListError) return Promise.reject(new Error('TASK_LIST_UNAVAILABLE'))
       return Promise.resolve(jsonResponse(taskList(tasks, options.taskScope)))
@@ -74,6 +97,18 @@ export function stubPagedGroupList(
       const page = pages[Math.min(pageIndex++, pages.length - 1)]!
       return Promise.resolve(
         jsonResponse({ items: [summaryFromGroup(page.group)], next_cursor: page.nextCursor }),
+      )
+    }
+    if (path.endsWith('/capture-group-quality-reviews')) {
+      const requestedIds = new URL(url, 'http://localhost').searchParams.getAll('capture_group_id')
+      return Promise.resolve(
+        jsonResponse({
+          items: requestedIds.map((captureGroupId) => {
+            const page =
+              pages.find(({ group }) => group.capture_group_id === captureGroupId) ?? pages[0]!
+            return qualityFixture(page.group, 'QUALIFIED')
+          }),
+        }),
       )
     }
     if (path.endsWith('/annotation-tasks')) return Promise.resolve(jsonResponse(taskList(tasks)))

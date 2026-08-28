@@ -19,6 +19,9 @@ interface CaptureGroupQualityReviewRepository extends JpaRepository<CaptureGroup
 	Optional<CaptureGroupQualityReview> findTopByProjectIdAndCaptureGroupIdOrderByRevisionDesc(UUID projectId,
 			UUID captureGroupId);
 
+	List<CaptureGroupQualityReview> findAllByProjectIdAndCaptureGroupIdInOrderByCaptureGroupIdAscRevisionDesc(
+			UUID projectId, List<UUID> captureGroupIds);
+
 	List<CaptureGroupQualityReview> findAllByProjectIdAndCaptureGroupIdOrderByRevisionAsc(UUID projectId,
 			UUID captureGroupId);
 

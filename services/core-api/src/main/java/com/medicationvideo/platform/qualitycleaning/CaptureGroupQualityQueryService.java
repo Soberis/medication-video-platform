@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.qualitycleaning;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +26,22 @@ public class CaptureGroupQualityQueryService {
 		return this.repository.findTopByProjectIdAndCaptureGroupIdOrderByRevisionDesc(projectId, captureGroupId)
 			.map(CurrentDecision::from)
 			.orElseGet(() -> CurrentDecision.unreviewed(projectId, captureGroupId));
+	}
+
+	@Transactional(readOnly = true)
+	public List<CurrentDecision> getCurrentDecisions(UUID projectId, List<UUID> captureGroupIds) {
+		var distinctIds = captureGroupIds.stream().distinct().toList();
+		if (distinctIds.isEmpty()) {
+			return List.of();
+		}
+		var currentByGroup = new LinkedHashMap<UUID, CurrentDecision>();
+		this.repository
+			.findAllByProjectIdAndCaptureGroupIdInOrderByCaptureGroupIdAscRevisionDesc(projectId, distinctIds)
+			.forEach(review -> currentByGroup.putIfAbsent(review.getCaptureGroupId(), CurrentDecision.from(review)));
+		return distinctIds.stream()
+			.map(captureGroupId -> currentByGroup.getOrDefault(captureGroupId,
+					CurrentDecision.unreviewed(projectId, captureGroupId)))
+			.toList();
 	}
 
 	@Transactional

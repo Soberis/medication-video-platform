@@ -124,8 +124,16 @@ describe('CaptureGroup operational list and quality', () => {
     expect(qualifiedRow).toHaveTextContent('合格')
     expect(qualifiedRow).toHaveTextContent('任务 70000000…0001')
     expect(
-      fetchMock.mock.calls.filter(([input]) => String(input).includes('/quality-review')),
-    ).toHaveLength(5)
+      fetchMock.mock.calls.filter(([input]) =>
+        String(input).includes('/capture-group-quality-reviews'),
+      ),
+    ).toHaveLength(1)
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input]) =>
+          String(input).includes('/capture-groups/') && String(input).endsWith('/quality-review'),
+      ),
+    ).toHaveLength(0)
   })
 
   it('appends the next CaptureGroup cursor page and enriches only returned summaries', async () => {
@@ -167,7 +175,9 @@ describe('CaptureGroup operational list and quality', () => {
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
     expect(
-      fetchMock.mock.calls.filter(([input]) => String(input).includes('/quality-review')).length,
+      fetchMock.mock.calls.filter(([input]) =>
+        String(input).includes('/capture-group-quality-reviews'),
+      ).length,
     ).toBe(2)
   })
 

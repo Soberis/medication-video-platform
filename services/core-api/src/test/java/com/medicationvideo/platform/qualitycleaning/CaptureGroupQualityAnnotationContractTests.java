@@ -330,7 +330,11 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.events[0].capture_group_id").value(group.captureGroupId().toString()))
 			.andExpect(jsonPath("$.events[0].cleaning_outcome").value("PASS"))
 			.andExpect(jsonPath("$.events[0].primary_interval[0].start_ms").value(0))
-			.andExpect(jsonPath("$.events[0].excluded_views.length()").value(2));
+			.andExpect(jsonPath("$.events[0].excluded_views.length()").value(2))
+			.andExpect(jsonPath("$.events[0].mapping_provenance.length()").value(0))
+			.andExpect(jsonPath("$.events[0].participating_views[1].interval_source").value("EVENT_LEVEL_EVIDENCE"))
+			.andExpect(jsonPath("$.events[0].participating_views[1].action_aligned_interval").value(false))
+			.andExpect(jsonPath("$.events[0].participating_views[1].interval").doesNotExist());
 	}
 
 	@Test
@@ -363,7 +367,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void callerValidatedSupportMappingCannotCreateActionAlignedTime() throws Exception {
+	void callerValidatedSupportMappingIsRejectedAndCannotCreateActionAlignedTime() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("mapping-quality"))
 			.andExpect(status().isOk());
@@ -381,18 +385,31 @@ class CaptureGroupQualityAnnotationContractTests {
 					.content("{\"decision\":\"APPROVED\"}"))
 			.andExpect(status().isCreated());
 
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/capture-group-cleaning-rechecks",
+						PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("X-Request-Id", key("mapping-recheck-request"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{"support_mappings":[{"clip_asset_id":"%s","validated":true,
+							"mapping_version":"capture-map.v1","provenance":"synthetic-validated-mapping",
+							"intervals":[{"start_ms":120,"end_ms":420}]}]}
+							""".formatted(group.clipAssetIds().get(1))))
+			.andExpect(status().is(422))
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED"));
+
+		assertEquals(1,
+				count("SELECT count(*) FROM capture_group_cleaning WHERE annotation_revision_id = ?", revisionId));
+
 		this.mockMvc
 			.perform(post(
 					"/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/capture-group-cleaning-rechecks",
 					PROJECT_ID, revisionId)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
-				.header("X-Request-Id", key("mapping-recheck-request"))
+				.header("X-Request-Id", key("mapping-empty-recheck-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
-						{"support_mappings":[{"clip_asset_id":"%s","validated":true,
-						"mapping_version":"capture-map.v1","provenance":"synthetic-validated-mapping",
-						"intervals":[{"start_ms":120,"end_ms":420}]}]}
-						""".formatted(group.clipAssetIds().get(1))))
+				.content("{\"support_mappings\":[]}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.outcome").value("PASS"))
 			.andExpect(jsonPath("$.primary_interval[0].start_ms").value(0))
@@ -617,6 +634,28 @@ class CaptureGroupQualityAnnotationContractTests {
 					"Bearer " + MEMBER_TOKEN))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_NOT_FOUND"));
+	}
+
+	@Test
+	void batchQualityReadReturnsDistinctCurrentFactsInRequestedOrder() throws Exception {
+		var reviewedGroup = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		var unreviewedGroup = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(reviewedGroup, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("batch-quality-reviewed"))
+			.andExpect(status().isOk());
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-group-quality-reviews", PROJECT_ID)
+				.param("capture_group_id", unreviewedGroup.captureGroupId().toString())
+				.param("capture_group_id", reviewedGroup.captureGroupId().toString())
+				.param("capture_group_id", reviewedGroup.captureGroupId().toString())
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.items.length()").value(2))
+			.andExpect(jsonPath("$.items[0].capture_group_id").value(unreviewedGroup.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[0].result").value("UNREVIEWED"))
+			.andExpect(jsonPath("$.items[1].capture_group_id").value(reviewedGroup.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[1].result").value("QUALIFIED"));
 	}
 
 	private ResultActions recordGroup(GroupFixture group, String token, String result, String reason,

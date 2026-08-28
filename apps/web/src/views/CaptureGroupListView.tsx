@@ -5,8 +5,8 @@ import { Link, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
-  getCaptureGroupQualityReview,
   listCaptureGroups,
+  listCaptureGroupQualityReviews,
   type CaptureGroupSummary,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
@@ -64,38 +64,47 @@ export default function CaptureGroupListView() {
           return
         }
 
-        const taskResult = await listAnnotationTasks(projectId, request.signal)
-          .then((value) => ({ status: 'fulfilled' as const, value }))
-          .catch((error) => ({ status: 'rejected' as const, error }))
+        const [taskResult, qualityResult] = await Promise.all([
+          listAnnotationTasks(projectId, request.signal)
+            .then((value) => ({ status: 'fulfilled' as const, value }))
+            .catch((error) => ({ status: 'rejected' as const, error })),
+          listCaptureGroupQualityReviews(
+            projectId,
+            groupList.items.map((group) => group.capture_group_id),
+            request.signal,
+          )
+            .then((value) => ({ status: 'fulfilled' as const, value }))
+            .catch((error) => ({ status: 'rejected' as const, error })),
+        ])
         const indexedTasks =
           taskResult.status === 'fulfilled'
             ? taskResult.value.items.filter((task) => Boolean(task.capture_group_id))
             : []
+        const indexedQuality =
+          qualityResult.status === 'fulfilled'
+            ? new Map(
+                qualityResult.value.items.map((quality) => [quality.capture_group_id, quality]),
+              )
+            : new Map<string, CaptureGroupQualityReview>()
         const taskVisibility: CaptureGroupTaskVisibility =
           taskResult.status === 'rejected'
             ? 'unavailable'
             : taskResult.value.progress.scope === 'PROJECT'
               ? 'visible'
               : 'permission-limited'
-        const loadedRows = await Promise.all(
-          groupList.items.map(async (group): Promise<CaptureGroupListRow> => {
-            const quality = await getCaptureGroupQualityReview(
-              projectId,
-              group.capture_group_id,
-              request.signal,
-            ).catch(() => null)
-            const task =
-              indexedTasks.find(
-                (candidate) => candidate.capture_group_id === group.capture_group_id,
-              ) ?? null
-            return {
-              group,
-              quality,
-              task,
-              taskVisibility: task ? 'visible' : taskVisibility,
-            }
-          }),
-        )
+        const loadedRows = groupList.items.map((group): CaptureGroupListRow => {
+          const quality = indexedQuality.get(group.capture_group_id) ?? null
+          const task =
+            indexedTasks.find(
+              (candidate) => candidate.capture_group_id === group.capture_group_id,
+            ) ?? null
+          return {
+            group,
+            quality,
+            task,
+            taskVisibility: task ? 'visible' : taskVisibility,
+          }
+        })
         if (request.signal.aborted || activeRequest.current !== request) return
         const nextRows = append ? [...rowsRef.current, ...loadedRows] : loadedRows
         rowsRef.current = nextRows

@@ -36,6 +36,8 @@ class CaptureGroupQualityReviewService {
 
 	private final CaptureGroupViewQueryService captureGroupViewQueryService;
 
+	private final CaptureGroupQualityQueryService captureGroupQualityQueryService;
+
 	private final QualityReviewQueryService qualityReviewQueryService;
 
 	private final CaptureGroupQualityReviewRepository repository;
@@ -46,10 +48,12 @@ class CaptureGroupQualityReviewService {
 
 	CaptureGroupQualityReviewService(ProjectAccessService projectAccessService,
 			CaptureGroupViewQueryService captureGroupViewQueryService,
+			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			QualityReviewQueryService qualityReviewQueryService, CaptureGroupQualityReviewRepository repository,
 			AuditEventRecorder auditRecorder, ApplicationEventPublisher eventPublisher) {
 		this.projectAccessService = projectAccessService;
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
+		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.repository = repository;
 		this.auditRecorder = auditRecorder;
@@ -63,6 +67,16 @@ class CaptureGroupQualityReviewService {
 		return this.repository.findTopByProjectIdAndCaptureGroupIdOrderByRevisionDesc(projectId, captureGroupId)
 			.map(CaptureGroupQualityReviewResponse::from)
 			.orElseGet(() -> CaptureGroupQualityReviewResponse.unreviewed(projectId, captureGroupId));
+	}
+
+	@Transactional(readOnly = true)
+	CaptureGroupQualityReviewBatchResponse batch(UUID projectId, List<UUID> captureGroupIds, String actorId) {
+		this.projectAccessService.requireMember(projectId, actorId);
+		var items = this.captureGroupQualityQueryService.getCurrentDecisions(projectId, captureGroupIds)
+			.stream()
+			.map(CaptureGroupQualityReviewResponse::from)
+			.toList();
+		return new CaptureGroupQualityReviewBatchResponse(items);
 	}
 
 	@Transactional(readOnly = true)

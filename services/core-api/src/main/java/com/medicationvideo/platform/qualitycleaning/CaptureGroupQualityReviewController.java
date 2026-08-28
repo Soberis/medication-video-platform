@@ -78,7 +78,7 @@ class CaptureGroupQualityReviewController {
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
-	private static ProjectActor requireActor(Authentication authentication) {
+	static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new QualityReviewException("CAPTURE_GROUP_QUALITY_ACCESS_DENIED",
 					"An authenticated platform account is required for group quality review.", 403);
@@ -103,6 +103,13 @@ record CaptureGroupQualityReviewRequest(@NotNull CaptureGroupQualityResult resul
 record CaptureGroupQualityReviewResponse(UUID captureGroupQualityReviewId, UUID projectId, UUID captureGroupId,
 		String result, String reason, String reviewerActorId, long revision, long version, Instant decidedAt,
 		Map<String, Object> confirmedViewSet, String inputVersion, String confirmedViewSetSha256) {
+
+	static CaptureGroupQualityReviewResponse from(CaptureGroupQualityQueryService.CurrentDecision decision) {
+		return new CaptureGroupQualityReviewResponse(decision.captureGroupQualityReviewId(), decision.projectId(),
+				decision.captureGroupId(), decision.result(), decision.reason(), decision.reviewerActorId(),
+				decision.revision(), decision.revision(), decision.decidedAt(), decision.confirmedViewSet(),
+				decision.inputVersion(), decision.confirmedViewSetSha256());
+	}
 
 	static CaptureGroupQualityReviewResponse from(CaptureGroupQualityReview review) {
 		return new CaptureGroupQualityReviewResponse(review.getCaptureGroupQualityReviewId(), review.getProjectId(),
