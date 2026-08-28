@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -320,6 +321,60 @@ class CaptureSessionIngestContractTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items").isEmpty())
 			.andExpect(jsonPath("$.next_cursor", nullValue()));
+	}
+
+	@Test
+	void usesCaptureGroupIdAsStableTieBreakerWithoutDuplicatingRowsBetweenPages() throws Exception {
+		var first = createListGroup(PROJECT_ID, List.of(1), List.of(1));
+		var second = createListGroup(PROJECT_ID, List.of(1), List.of(1));
+		var third = createListGroup(PROJECT_ID, List.of(1), List.of(1));
+		var sameCreatedAt = Instant.parse("2026-07-20T01:00:00Z");
+		setCaptureGroupCreatedAt(first.captureGroupId(), sameCreatedAt);
+		setCaptureGroupCreatedAt(second.captureGroupId(), sameCreatedAt);
+		setCaptureGroupCreatedAt(third.captureGroupId(), sameCreatedAt);
+
+		var firstPage = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.next_cursor").isString())
+			.andReturn();
+		var firstId = com.jayway.jsonpath.JsonPath.<String>read(firstPage.getResponse().getContentAsString(),
+				"$.items[0].capture_group_id");
+		var cursor = com.jayway.jsonpath.JsonPath.<String>read(firstPage.getResponse().getContentAsString(),
+				"$.next_cursor");
+
+		var repeatedFirstPage = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+				.header("Authorization", "Bearer " + TOKEN))
+			.andExpect(status().isOk())
+			.andReturn();
+		assertEquals(firstId, com.jayway.jsonpath.JsonPath
+			.<String>read(repeatedFirstPage.getResponse().getContentAsString(), "$.items[0].capture_group_id"));
+
+		var seen = new java.util.LinkedHashSet<UUID>();
+		seen.add(UUID.fromString(firstId));
+		for (var expectedRemaining = 2; expectedRemaining > 0; expectedRemaining--) {
+			var page = this.mockMvc
+				.perform(get("/api/v1/projects/{projectId}/capture-groups", PROJECT_ID).param("limit", "1")
+					.param("cursor", cursor)
+					.header("Authorization", "Bearer " + TOKEN))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items.length()").value(1))
+				.andReturn();
+			var pageId = UUID.fromString(com.jayway.jsonpath.JsonPath
+				.<String>read(page.getResponse().getContentAsString(), "$.items[0].capture_group_id"));
+			assertFalse(seen.contains(pageId));
+			seen.add(pageId);
+			cursor = com.jayway.jsonpath.JsonPath.read(page.getResponse().getContentAsString(), "$.next_cursor");
+		}
+
+		assertEquals(java.util.Set.of(first.captureGroupId(), second.captureGroupId(), third.captureGroupId()), seen);
+		assertEquals(List.of(first.captureGroupId(), second.captureGroupId(), third.captureGroupId())
+			.stream()
+			.sorted(Comparator.comparing(UUID::toString).reversed())
+			.toList(), List.copyOf(seen));
 	}
 
 	@Test
