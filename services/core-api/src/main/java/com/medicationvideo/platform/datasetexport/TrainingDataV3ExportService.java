@@ -125,14 +125,18 @@ class TrainingDataV3ExportService {
 	private TrainingDataV3Event map(ResultSet resultSet, int rowNumber) throws SQLException {
 		var annotationDocument = readJson(resultSet, "annotation_document");
 		var labels = actionLabels(annotationDocument);
+		var primaryClipAssetId = resultSet.getObject("primary_clip_asset_id", UUID.class);
+		var primaryInterval = readJson(resultSet, "primary_interval");
+		var participatingViews = sanitizeViewEvidence(this.objectMapper, readJson(resultSet, "participating_views"),
+				primaryClipAssetId, primaryInterval);
+		var excludedViews = sanitizeViewEvidence(this.objectMapper, readJson(resultSet, "excluded_views"),
+				primaryClipAssetId, primaryInterval);
 		return new TrainingDataV3Event(resultSet.getObject("capture_group_id", UUID.class),
 				resultSet.getObject("annotation_revision_id", UUID.class), resultSet.getInt("revision_number"),
-				labels.isEmpty() ? null : labels.getFirst(), labels,
-				resultSet.getObject("primary_clip_asset_id", UUID.class), resultSet.getInt("primary_camera_number"),
-				readJson(resultSet, "primary_interval"), readJson(resultSet, "confirmed_view_set"),
-				resultSet.getString("input_version"), readJson(resultSet, "participating_views"),
-				readJson(resultSet, "excluded_views"), resultSet.getString("group_quality_result"),
-				resultSet.getLong("group_quality_revision"),
+				labels.isEmpty() ? null : labels.getFirst(), labels, primaryClipAssetId,
+				resultSet.getInt("primary_camera_number"), primaryInterval, readJson(resultSet, "confirmed_view_set"),
+				resultSet.getString("input_version"), participatingViews, excludedViews,
+				resultSet.getString("group_quality_result"), resultSet.getLong("group_quality_revision"),
 				resultSet.getObject("capture_group_quality_review_id", UUID.class),
 				resultSet.getString("group_quality_reviewed_by"), instant(resultSet, "group_quality_decided_at"),
 				resultSet.getObject("annotation_review_id", UUID.class), resultSet.getString("review_decision"),
@@ -144,7 +148,52 @@ class TrainingDataV3ExportService {
 				readJson(resultSet, "cleaning_reason_codes"), readJson(resultSet, "cleaning_executed_checks"),
 				resultSet.getString("cleaning_input_fingerprint"), resultSet.getString("cleaning_evaluated_by"),
 				resultSet.getString("cleaning_authorization_basis"), instant(resultSet, "cleaning_evaluated_at"),
-				readJson(resultSet, "mapping_provenance"), readJson(resultSet, "candidate_provenance"));
+				this.objectMapper.createArrayNode(), readJson(resultSet, "candidate_provenance"));
+	}
+
+	/**
+	 * Normalizes both current and legacy Cleaning projections to the V1.25 time rule.
+	 * Historical rows may have been produced while caller mappings were still accepted;
+	 * those rows must not make an action-aligned supporting timestamp appear in v3.
+	 */
+	static JsonNode sanitizeViewEvidence(ObjectMapper objectMapper, JsonNode views, UUID primaryClipAssetId,
+			JsonNode primaryInterval) {
+		if (views == null || !views.isArray()) {
+			return views;
+		}
+		var sanitized = objectMapper.createArrayNode();
+		for (var view : views) {
+			if (!view.isObject()) {
+				sanitized.add(view);
+				continue;
+			}
+			var copy = ((tools.jackson.databind.node.ObjectNode) view).deepCopy();
+			var isPrimary = primaryClipAssetId != null && copy.has("clip_asset_id")
+					&& primaryClipAssetId.toString().equals(copy.get("clip_asset_id").asText());
+			if (isPrimary) {
+				if (primaryInterval == null) {
+					copy.remove("interval");
+				}
+				else {
+					copy.set("interval", primaryInterval.deepCopy());
+				}
+				copy.put("interval_source", "PRIMARY_AUTHORITATIVE");
+				copy.put("action_aligned_interval", true);
+			}
+			else {
+				copy.remove("interval");
+				copy.remove("action_interval");
+				copy.remove("action_start_ms");
+				copy.remove("action_end_ms");
+				copy.remove("interval_source");
+				copy.remove("action_aligned_interval");
+				copy.remove("mapping_provenance");
+				copy.put("interval_source", "EVENT_LEVEL_EVIDENCE");
+				copy.put("action_aligned_interval", false);
+			}
+			sanitized.add(copy);
+		}
+		return sanitized;
 	}
 
 	private static Instant instant(ResultSet resultSet, String column) throws SQLException {
