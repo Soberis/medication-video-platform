@@ -9,6 +9,7 @@ import { paths } from '@/app/paths'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
+import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
 import {
   CaptureGroupOverview,
   CaptureGroupHeaderStatus,
@@ -134,6 +135,14 @@ export default function CaptureGroupDetailView() {
                 viewReviews={data.viewReviews}
                 refreshVersion={data.refreshVersion}
                 onTaskChange={(nextTask) => data.setTask(nextTask)}
+                onRefresh={data.refresh}
+              />
+              <CaptureGroupReviewCleaningPanel
+                projectId={projectId}
+                group={data.group}
+                groupQuality={data.groupQuality}
+                task={data.task}
+                schema={data.schema}
                 onRefresh={data.refresh}
               />
             </div>

@@ -363,7 +363,7 @@ export function CaptureGroupAnnotationPanel({
                   <span className="app-eyebrow">Revision submission</span>
                   <h3>新 Revision 暂不可提交</h3>
                 </div>
-                <span>保留既有 Revision、Review 和 Cleaning 历史；等待服务端恢复组级准入。</span>
+                <span>保留既有 Revision、Review 和训练资格检查历史；等待服务端恢复组级准入。</span>
               </div>
               <div className="capture-group-annotation-form-actions">
                 <Button type="primary" disabled>

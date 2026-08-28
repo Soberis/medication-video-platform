@@ -1,6 +1,12 @@
 import { vi } from 'vitest'
 
-import type { AnnotationTask } from '@/api/annotation'
+import type {
+  AnnotationReview,
+  AnnotationTask,
+  CaptureGroupCleaning,
+  CaptureGroupEvidence,
+  CaptureGroupViewSet,
+} from '@/api/annotation'
 import type {
   CaptureGroup,
   CaptureGroupQualityReview,
@@ -126,12 +132,17 @@ export function stubGroupDetail(
   group: CaptureGroup,
   options: {
     task: AnnotationTask | null
+    taskResponses?: Array<AnnotationTask | null>
     taskScope?: 'PROJECT' | 'ASSIGNEE'
     quality: CaptureGroupQualityReview
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
+    reviewResponse?: Partial<AnnotationReview>
+    reviewError?: { status: number; body: object }
+    cleaningRecheckResponse?: CaptureGroupCleaning
   },
 ) {
+  let taskResponseIndex = 0
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith(`/capture-groups/${group.capture_group_id}`)) {
@@ -146,8 +157,11 @@ export function stubGroupDetail(
       )
     }
     if (url.endsWith('/annotation-tasks')) {
+      const taskResponses = options.taskResponses ?? [options.task]
+      const taskResponse =
+        taskResponses[Math.min(taskResponseIndex++, taskResponses.length - 1)] ?? null
       return Promise.resolve(
-        jsonResponse(taskList(options.task ? [options.task] : [], options.taskScope)),
+        jsonResponse(taskList(taskResponse ? [taskResponse] : [], options.taskScope)),
       )
     }
     if (url.endsWith('/annotation-label-schema')) {
@@ -181,6 +195,42 @@ export function stubGroupDetail(
     }
     if (url.endsWith('/primary-view') && init?.method === 'PUT') {
       return Promise.resolve(jsonResponse(options.task ?? {}))
+    }
+    if (
+      url.includes('/annotation-revisions/') &&
+      url.endsWith('/review') &&
+      init?.method === 'POST'
+    ) {
+      if (options.reviewError) {
+        return Promise.resolve(
+          jsonResponse(options.reviewError.body, { status: options.reviewError.status }),
+        )
+      }
+      const request = JSON.parse(String(init.body ?? '{}')) as {
+        decision?: AnnotationReview['decision']
+        review_note?: string
+      }
+      const revision = options.task?.annotation_revision
+      const decision = request.decision ?? 'APPROVED'
+      return Promise.resolve(
+        jsonResponse({
+          ...captureGroupReviewFixture(
+            group,
+            revision?.annotation_revision_id ?? 'revision-1',
+            decision,
+            {
+              viewSet: revision?.confirmed_view_set ?? options.quality.confirmed_view_set,
+            },
+          ),
+          review_note: request.review_note ?? null,
+          ...options.reviewResponse,
+        }),
+      )
+    }
+    if (url.endsWith('/capture-group-cleaning-rechecks') && init?.method === 'POST') {
+      return Promise.resolve(
+        jsonResponse(options.cleaningRecheckResponse ?? captureGroupCleaningFixture(group)),
+      )
     }
     if (url.endsWith('/revisions') && init?.method === 'POST') {
       return Promise.resolve(
@@ -415,6 +465,256 @@ export function groupTask(
     updated_at: '2026-08-20T01:04:00Z',
     version: options.revision ? 2 : 0,
   }
+}
+
+export function captureGroupReviewFixture(
+  group: CaptureGroup,
+  annotationRevisionId: string,
+  decision: AnnotationReview['decision'],
+  options: {
+    viewSet?: CaptureGroupViewSet | null
+    reviewNote?: string | null
+  } = {},
+): AnnotationReview {
+  const viewSet =
+    options.viewSet ?? qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
+  return {
+    annotation_review_id: '48000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    annotation_revision_id: annotationRevisionId,
+    decision,
+    review_note: options.reviewNote ?? null,
+    reviewed_by: 'admin',
+    reviewed_at: '2026-08-20T01:04:00Z',
+    capture_group_id: group.capture_group_id,
+    revision: 1,
+    primary_clip_asset_id:
+      viewSet?.views.find((view) => view.camera_number === 1)?.clip_asset_id ??
+      group.streams[0]?.clip_asset_id ??
+      null,
+    primary_camera_number: 1,
+    confirmed_view_set: viewSet,
+    input_version: viewSet ? 'capture-group-view-set.v1:synthetic' : null,
+    qualified_views: qualifiedViewsFromViewSet(viewSet),
+    rejected_missing_views: rejectedViewsFromViewSet(viewSet),
+    candidate_evidence: [
+      {
+        camera_number: 1,
+        clip_asset_id:
+          viewSet?.views.find((view) => view.camera_number === 1)?.clip_asset_id ??
+          group.streams[0]?.clip_asset_id ??
+          null,
+        ai_job_id: '4b000000-0000-4000-8000-000000000001',
+        algorithm_key: 'MEDIAPIPE_HAND_LANDMARKER',
+        algorithm_version: 'v1',
+        model_sha256: 'd'.repeat(64),
+        profile_sha256: 'f'.repeat(64),
+        candidate_count: 2,
+      },
+    ],
+  }
+}
+
+export function captureGroupCleaningFixture(
+  group: CaptureGroup,
+  options: {
+    outcome?: CaptureGroupCleaning['outcome']
+    viewSet?: CaptureGroupViewSet | null
+    annotationRevisionId?: string
+  } = {},
+): CaptureGroupCleaning {
+  const outcome = options.outcome ?? 'PASS'
+  const viewSet =
+    options.viewSet ?? qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
+  const primaryCameraNumber = 1
+  const primaryClipAssetId =
+    viewSet?.views.find((view) => view.camera_number === primaryCameraNumber)?.clip_asset_id ??
+    group.streams[0]?.clip_asset_id ??
+    clipIds[0]!
+  const primaryInterval: CaptureGroupEvidence[] =
+    outcome === 'PASS' ? [{ start_ms: 100, end_ms: 900, label: 'PREPARE' }] : []
+  const participatingViews = qualifiedViewsFromViewSet(viewSet)
+  const excludedViews = rejectedViewsFromViewSet(viewSet)
+  const viewEvidence = participatingViews.map((view) => {
+    const isPrimary = numberValue(view, 'camera_number') === primaryCameraNumber
+    return {
+      ...view,
+      interval_source: isPrimary ? 'PRIMARY_AUTHORITATIVE' : 'EVENT_LEVEL_EVIDENCE',
+      action_aligned_interval: isPrimary,
+      ...(isPrimary ? { interval: primaryInterval } : {}),
+      evidence_scope: isPrimary ? 'FORMAL_ACTION_TIMELINE' : 'EVENT_LEVEL',
+    }
+  })
+  return {
+    capture_group_cleaning_id: '4c000000-0000-4000-8000-000000000001',
+    project_id: projectId,
+    capture_group_id: group.capture_group_id,
+    annotation_revision_id: options.annotationRevisionId ?? '47000000-0000-4000-8000-000000000001',
+    annotation_review_id: '48000000-0000-4000-8000-000000000001',
+    annotation_review_decision: 'APPROVED',
+    group_quality_result: 'QUALIFIED_WITH_EXCLUSIONS',
+    group_quality_revision: 1,
+    primary_clip_asset_id: primaryClipAssetId,
+    primary_camera_number: primaryCameraNumber,
+    primary_interval: primaryInterval,
+    view_evidence: viewEvidence,
+    participating_views: participatingViews,
+    excluded_views: excludedViews,
+    mapping_provenance: [],
+    candidate_provenance: [],
+    rule_set_key: 'capture-group-event-eligibility',
+    rule_set_version: 'v1',
+    rule_set_digest: 'b'.repeat(64),
+    outcome,
+    reason_codes: outcome === 'PASS' ? [] : ['GROUP_QUALITY_NOT_ADMITTING'],
+    executed_checks: [
+      'REVIEW_APPROVED',
+      'GROUP_QUALITY_ADMITTING',
+      'PRIMARY_VIEW_AUTHORITATIVE_INTERVAL',
+      'QUALIFIED_VIEWS_ONLY',
+      'SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE',
+      'RAW_MEDIA_RETAINED',
+    ],
+    input_fingerprint: 'c'.repeat(64),
+    evaluated_by: 'system',
+    authorization_basis: 'capture-group-cleaning-v1',
+    evaluated_at: '2026-08-20T01:05:00Z',
+  }
+}
+
+export function submittedGroupTask(
+  group: CaptureGroup,
+  options: {
+    canReview?: boolean
+    confirmedViewSet?: CaptureGroupViewSet | null
+    annotationRevisionId?: string
+    note?: string
+  } = {},
+): AnnotationTask {
+  const base = groupTask(group.capture_group_id, false, { revision: true })
+  const viewSet =
+    options.confirmedViewSet ??
+    qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
+  const revision = base.annotation_revision!
+  const annotationRevisionId = options.annotationRevisionId ?? revision.annotation_revision_id
+  return {
+    ...base,
+    status: 'SUBMITTED',
+    can_submit: false,
+    can_review: options.canReview ?? true,
+    can_recheck_post_cleaning: false,
+    confirmed_view_set: viewSet,
+    annotation_revision: {
+      ...revision,
+      annotation_revision_id: annotationRevisionId,
+      annotation_document: {
+        ...revision.annotation_document,
+        note: options.note ?? '本次正式动作 Revision 备注',
+      },
+      submitted_by: 'annotator',
+      submitted_at: '2026-08-20T01:03:00Z',
+      capture_group_id: group.capture_group_id,
+      primary_clip_asset_id: group.streams[0]?.clip_asset_id ?? null,
+      primary_camera_number: 1,
+      confirmed_view_set: viewSet,
+      input_version: viewSet ? 'capture-group-view-set.v1:synthetic' : null,
+      review: null,
+      post_cleaning_result: null,
+      capture_group_cleaning: null,
+    },
+    version: 1,
+  }
+}
+
+export function rejectedGroupTask(
+  group: CaptureGroup,
+  options: Parameters<typeof submittedGroupTask>[1] & { reviewNote?: string | null } = {},
+): AnnotationTask {
+  const submitted = submittedGroupTask(group, options)
+  const revision = submitted.annotation_revision!
+  const review = captureGroupReviewFixture(group, revision.annotation_revision_id, 'REJECTED', {
+    viewSet: revision.confirmed_view_set,
+    reviewNote: options.reviewNote,
+  })
+  return {
+    ...submitted,
+    status: 'ASSIGNED',
+    can_submit: true,
+    can_review: false,
+    annotation_revision: { ...revision, review },
+    version: 2,
+  }
+}
+
+export function approvedGroupTask(
+  group: CaptureGroup,
+  options: Parameters<typeof submittedGroupTask>[1] & {
+    cleaning?: CaptureGroupCleaning
+    canRecheck?: boolean
+  } = {},
+): AnnotationTask {
+  const submitted = submittedGroupTask(group, options)
+  const revision = submitted.annotation_revision!
+  const review = captureGroupReviewFixture(group, revision.annotation_revision_id, 'APPROVED', {
+    viewSet: revision.confirmed_view_set,
+  })
+  const cleaning =
+    options.cleaning ??
+    captureGroupCleaningFixture(group, {
+      viewSet: revision.confirmed_view_set,
+      annotationRevisionId: revision.annotation_revision_id,
+    })
+  return {
+    ...submitted,
+    status: 'COMPLETED',
+    can_submit: false,
+    can_review: false,
+    can_recheck_post_cleaning: options.canRecheck ?? false,
+    annotation_revision: { ...revision, review, capture_group_cleaning: cleaning },
+    version: 2,
+  }
+}
+
+function qualifiedViewsFromViewSet(viewSet: CaptureGroupViewSet | null | undefined) {
+  return (viewSet?.views ?? [])
+    .filter(
+      (view) =>
+        view.present &&
+        view.asset_available &&
+        view.media_status === 'INGESTED' &&
+        view.quality_review_decision === 'QUALIFIED',
+    )
+    .map((view) => ({
+      camera_number: view.camera_number,
+      clip_asset_id: view.clip_asset_id,
+      present: view.present,
+      media_status: view.media_status,
+      quality_decision: view.quality_review_decision,
+    }))
+}
+
+function rejectedViewsFromViewSet(viewSet: CaptureGroupViewSet | null | undefined) {
+  return (viewSet?.views ?? [])
+    .filter(
+      (view) =>
+        !view.present ||
+        !view.asset_available ||
+        view.media_status !== 'INGESTED' ||
+        view.quality_review_decision !== 'QUALIFIED',
+    )
+    .map((view) => ({
+      camera_number: view.camera_number,
+      clip_asset_id: view.clip_asset_id,
+      present: view.present,
+      media_status: view.media_status,
+      quality_decision: view.quality_review_decision,
+      rejection_reason: !view.present ? 'MISSING_VIEW' : 'VIEW_NOT_QUALIFIED',
+    }))
+}
+
+function numberValue(evidence: CaptureGroupEvidence, key: string) {
+  const value = evidence[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 export function taskList(items: AnnotationTask[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {

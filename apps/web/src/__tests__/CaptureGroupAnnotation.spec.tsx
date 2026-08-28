@@ -69,7 +69,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.getByText('首个正式 Revision 已存在；Primary View 已锁定。')).toBeInTheDocument()
     expect(screen.getByLabelText('Primary View')).toBeDisabled()
     expect(screen.getAllByText('Review · 已通过').length).toBeGreaterThan(0)
-    expect(screen.getByText('Cleaning · 已通过')).toBeInTheDocument()
+    expect(screen.getByText('训练资格检查 · 已通过')).toBeInTheDocument()
     const compareStrip = screen.getByLabelText('Supporting View 相机切换')
     expect(within(compareStrip).getAllByRole('button', { name: /Cam / })).toHaveLength(2)
   })

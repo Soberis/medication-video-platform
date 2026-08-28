@@ -4,6 +4,7 @@ import {
   createAnnotationTask,
   getAnnotationLabelSchema,
   listAnnotationTasks,
+  recheckCaptureGroupCleaning,
   recheckAnnotationPostCleaning,
   reviewAnnotationRevision,
   submitAnnotationRevision,
@@ -330,6 +331,45 @@ describe('annotation task API', () => {
     })
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/post-cleaning-rechecks`,
+      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
+    )
+  })
+
+  it('rechecks CaptureGroup training eligibility through the existing server operation', async () => {
+    const revisionId = '30000000-0000-4000-8000-000000000004'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        capture_group_cleaning_id: '82000000-0000-4000-8000-000000000002',
+        project_id: projectId,
+        capture_group_id: '60000000-0000-4000-8000-000000000001',
+        annotation_revision_id: revisionId,
+        annotation_review_id: '83000000-0000-4000-8000-000000000002',
+        annotation_review_decision: 'APPROVED',
+        group_quality_result: 'QUALIFIED',
+        group_quality_revision: 1,
+        primary_clip_asset_id: assetId,
+        primary_camera_number: 1,
+        primary_interval: [{ start_ms: 100, end_ms: 900, label: 'PREPARE' }],
+        view_evidence: [],
+        participating_views: [],
+        excluded_views: [],
+        rule_set_key: 'capture-group-event-eligibility',
+        rule_set_version: 'v1',
+        rule_set_digest: 'd'.repeat(64),
+        outcome: 'PASS',
+        reason_codes: [],
+        executed_checks: ['REVIEW_APPROVED'],
+        evaluated_at: '2026-07-27T01:00:00Z',
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(recheckCaptureGroupCleaning(projectId, revisionId)).resolves.toMatchObject({
+      outcome: 'PASS',
+      rule_set_key: 'capture-group-event-eligibility',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/capture-group-cleaning-rechecks`,
       expect.objectContaining({ method: 'POST', cache: 'no-store' }),
     )
   })

@@ -126,16 +126,30 @@ export interface CaptureGroupViewSet {
 
 export interface CaptureGroupCleaning {
   capture_group_cleaning_id: string
+  project_id?: string
+  capture_group_id?: string
+  annotation_revision_id?: string
+  annotation_review_id?: string
+  annotation_review_decision?: 'APPROVED' | 'REJECTED'
   group_quality_result: string
   group_quality_revision: number
   primary_clip_asset_id: string
   primary_camera_number: number
+  primary_interval?: CaptureGroupEvidence[]
+  view_evidence?: CaptureGroupEvidence[]
+  participating_views: CaptureGroupEvidence[]
+  excluded_views: CaptureGroupEvidence[]
+  mapping_provenance?: CaptureGroupEvidence[]
+  candidate_provenance?: CaptureGroupEvidence[]
+  rule_set_key?: string
+  rule_set_version?: string
+  rule_set_digest?: string
   outcome: 'PASS' | 'WARNING' | 'REJECT'
   reason_codes: string[]
   executed_checks: string[]
-  participating_views: Array<Record<string, unknown>>
-  excluded_views: Array<Record<string, unknown>>
-  mapping_provenance: Array<Record<string, unknown>>
+  input_fingerprint?: string
+  evaluated_by?: string
+  authorization_basis?: string
   evaluated_at: string
 }
 
@@ -159,7 +173,18 @@ export interface AnnotationReview {
   review_note: string | null
   reviewed_by: string
   reviewed_at: string
+  capture_group_id?: string | null
+  revision?: number | null
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
+  confirmed_view_set?: CaptureGroupViewSet | null
+  input_version?: string | null
+  qualified_views?: CaptureGroupEvidence[]
+  rejected_missing_views?: CaptureGroupEvidence[]
+  candidate_evidence?: CaptureGroupEvidence[]
 }
+
+export type CaptureGroupEvidence = Record<string, unknown>
 
 export class AnnotationTaskApiError extends Error {
   readonly errorCode: string
@@ -317,6 +342,22 @@ export async function recheckAnnotationPostCleaning(
   throw await annotationTaskApiError(response)
 }
 
+export async function recheckCaptureGroupCleaning(
+  projectId: string,
+  annotationRevisionId: string,
+): Promise<CaptureGroupCleaning> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-revisions/${encodeURIComponent(annotationRevisionId)}/capture-group-cleaning-rechecks`,
+    {
+      method: 'POST',
+      headers: { Accept: 'application/json', ...csrfHeaders() },
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as CaptureGroupCleaning
+  throw await annotationTaskApiError(response)
+}
+
 async function annotationTaskApiError(response: Response): Promise<AnnotationTaskApiError> {
   let errorCode = 'ANNOTATION_TASK_REQUEST_FAILED'
   try {
@@ -346,6 +387,10 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED: '本次复核请求与已有记录冲突，请刷新后重试。',
     ANNOTATION_REVISION_NOT_CURRENT: '当前修订已不是待复核版本，请刷新任务列表查看最新状态。',
     ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该视频已不再满足标注复核条件。',
+    ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY:
+      '当前 CaptureGroup 修订、Review 或任务状态不允许重新检查训练资格。',
+    ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
+      '训练资格检查不接受浏览器提供的视图映射；请刷新后重试。',
     ANNOTATION_POST_CLEANING_RECHECK_NOT_READY:
       '当前配药动作标注、任务或视频状态不允许重新核对清洗。',
     INVALID_ANNOTATION_TASK: '提交内容不符合当前标注规范，请检查后重试。',

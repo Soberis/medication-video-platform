@@ -201,7 +201,7 @@ export function CaptureGroupInspector({
                 <StatusBadge
                   tone={cleaningTone(task.annotation_revision.capture_group_cleaning.outcome)}
                 >
-                  Cleaning ·{' '}
+                  训练资格检查 ·{' '}
                   {cleaningLabel(task.annotation_revision.capture_group_cleaning.outcome)}
                 </StatusBadge>
                 <span>
@@ -218,18 +218,19 @@ export function CaptureGroupInspector({
                 <StatusBadge
                   tone={cleaningTone(task.annotation_revision.post_cleaning_result.outcome)}
                 >
-                  Cleaning · {cleaningLabel(task.annotation_revision.post_cleaning_result.outcome)}
+                  训练资格检查 ·{' '}
+                  {cleaningLabel(task.annotation_revision.post_cleaning_result.outcome)}
                 </StatusBadge>
                 <span>
                   {formatDateTime(task.annotation_revision.post_cleaning_result.evaluated_at)}
                 </span>
               </div>
             ) : (
-              <p className="form-hint">Review 通过后才会形成 Cleaning 事实。</p>
+              <p className="form-hint">Review 通过后才会形成训练资格检查事实。</p>
             )}
           </>
         ) : (
-          <p className="form-hint">尚无正式 Revision；Review / Cleaning 尚未开始。</p>
+          <p className="form-hint">尚无正式 Revision；Review / 训练资格检查尚未开始。</p>
         )}
         {task ? (
           <Link className="text-link" to={paths.annotationTask(projectId, task.annotation_task_id)}>
@@ -253,7 +254,7 @@ export function CaptureGroupInspector({
                     : task?.status === 'SUBMITTED'
                       ? '等待 Review'
                       : task?.annotation_revision?.review?.decision === 'APPROVED'
-                        ? '查看 Cleaning 事实'
+                        ? '查看训练资格检查事实'
                         : '继续 CaptureGroup Annotation'}
           </strong>
           <span>下一步只依据服务端返回的 Receipt、Quality 和 Task 状态。</span>
