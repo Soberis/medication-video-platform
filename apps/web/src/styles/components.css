@@ -834,6 +834,15 @@
   line-height: var(--app-line-height-metadata);
 }
 
+.annotation-task-project-tools-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-8);
+}
+
 .annotation-task-list-surface {
   display: grid;
   min-width: 0;
@@ -2144,6 +2153,12 @@
 
   .annotation-task-project-tools {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .annotation-task-project-tools-actions {
+    width: 100%;
+    align-items: stretch;
     flex-direction: column;
   }
 

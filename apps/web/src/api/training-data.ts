@@ -10,6 +10,16 @@ export interface TrainingDataExportPreview {
   includes_mp4: false
 }
 
+export interface TrainingDataV3ExportPreview {
+  schema_version: 'training-data.v3'
+  eligible_group_count: number
+  event_count: number
+  file_name: 'training_data_v3.json'
+  content_type: 'application/vnd.medication.training-data.v3+json'
+  split_unit: 'capture_group'
+  includes_mp4: false
+}
+
 export class TrainingDataExportApiError extends Error {
   readonly errorCode: string
 
@@ -50,6 +60,43 @@ export async function downloadTrainingData(projectId: string, signal?: AbortSign
   throw await trainingDataExportApiError(response, '训练数据暂未导出，请稍后重试。')
 }
 
+export async function getTrainingDataV3ExportPreview(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<TrainingDataV3ExportPreview> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/training-data/v3/preview`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return (await response.json()) as TrainingDataV3ExportPreview
+  throw await trainingDataExportApiError(
+    response,
+    '暂时无法读取 training-data.v3 导出信息，请稍后重试。',
+  )
+}
+
+export async function downloadTrainingDataV3(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/training-data/v3/download`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/vnd.medication.training-data.v3+json' },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (response.ok) return await response.blob()
+  throw await trainingDataExportApiError(response, 'training-data.v3 暂时无法导出，请稍后重试。')
+}
+
 async function trainingDataExportApiError(
   response: Response,
   fallbackMessage: string,
@@ -66,7 +113,9 @@ async function trainingDataExportApiError(
     PROJECT_NOT_FOUND: '未找到该项目，或当前身份无权访问。',
     TRAINING_DATA_EXPORT_UNAVAILABLE: '当前环境暂未开放训练数据导出。',
     TRAINING_DATA_EXPORT_EVIDENCE_INVALID: '当前可用数据证据不完整，暂时无法导出。',
+    TRAINING_DATA_V3_EVIDENCE_INVALID: '当前 CaptureGroup 导出证据不完整，暂时无法导出。',
     TRAINING_DATA_EXPORT_FAILED: '训练数据导出未完成，请稍后重试。',
+    TRAINING_DATA_V3_EXPORT_FAILED: 'training-data.v3 导出未完成，请稍后重试。',
   }
   return new TrainingDataExportApiError(messages[errorCode] ?? fallbackMessage, errorCode)
 }

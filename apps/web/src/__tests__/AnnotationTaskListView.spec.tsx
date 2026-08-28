@@ -109,6 +109,7 @@ describe('annotation task list view', () => {
       screen.getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '预览 training-data.v3' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
       'href',
       `/projects/${projectId}/assets/${assetId}`,
@@ -394,6 +395,101 @@ describe('annotation task list view', () => {
     ).toHaveLength(0)
   })
 
+  it('previews the V1.25 group manifest and shows its server-owned provenance boundaries', async () => {
+    const preview = trainingDataV3Preview(2)
+    const fetchMock = stubTrainingData(
+      [assignedTask],
+      labelSchema,
+      trainingDataPreview(3),
+      'PAR1 synthetic parquet',
+      preview,
+    )
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/training-data/v3/preview`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+    expect(dialog).toHaveTextContent('2 组')
+    expect(dialog).toHaveTextContent('2 个')
+    expect(dialog).toHaveTextContent('participating_views')
+    expect(dialog).toHaveTextContent('excluded_views')
+    expect(dialog).toHaveTextContent('annotation_revision_id + revision')
+    expect(dialog).toHaveTextContent('capture_group_cleaning_id + rule set + input fingerprint')
+    expect(dialog).toHaveTextContent('primary_interval 只归 Primary View')
+    expect(dialog).toHaveTextContent('Supporting View 不生成动作对齐时间戳')
+    expect(dialog).toHaveTextContent('training-data.v3')
+    expect(dialog).toHaveTextContent('application/vnd.medication.training-data.v3+json')
+    expect(dialog).toHaveTextContent('同组视图不跨 train / validation / test')
+    expect(dialog).toHaveTextContent('training_data_v3.json')
+    expect(dialog).toHaveTextContent('原始视频不包含')
+  })
+
+  it('downloads the confirmed V1.25 manifest through the v3 endpoint', async () => {
+    const fetchMock = stubTrainingData(
+      [assignedTask],
+      labelSchema,
+      trainingDataPreview(3),
+      '{"schema_version":"training-data.v3"}',
+      trainingDataV3Preview(1),
+    )
+    const createObjectUrl = vi.fn(() => 'blob:training-data-v3')
+    const revokeObjectUrl = vi.fn()
+    const NativeURL = globalThis.URL
+    class TestURL extends NativeURL {}
+    Object.assign(TestURL, { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl })
+    vi.stubGlobal('URL', TestURL)
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '导出 training-data.v3' }))
+
+    await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
+    const link = anchorClick.mock.instances[0] as HTMLAnchorElement
+    expect(link.download).toBe('training_data_v3.json')
+    expect(link.href).toBe('blob:training-data-v3')
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:training-data-v3')
+    expect(document.body.contains(link)).toBe(false)
+    expect(await screen.findByText('已开始下载 training_data_v3.json。')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/training-data/v3/download`,
+      expect.objectContaining({
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/vnd.medication.training-data.v3+json' },
+      }),
+    )
+    anchorClick.mockRestore()
+  })
+
+  it('disables V1.25 export when the server preview has no eligible events', async () => {
+    stubTrainingData(
+      [assignedTask],
+      labelSchema,
+      trainingDataPreview(3),
+      'PAR1 synthetic parquet',
+      trainingDataV3Preview(0),
+    )
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('0 个')
+    expect(dialog).toHaveTextContent('当前没有符合条件的 CaptureGroup 事件，暂时无法导出。')
+    expect(within(dialog).getByRole('button', { name: '导出 training-data.v3' })).toBeDisabled()
+  })
+
   it('downloads the confirmed Parquet blob with a fixed filename and revokes its object URL', async () => {
     const fetchMock = stubTrainingData([assignedTask], labelSchema, trainingDataPreview(3))
     const createObjectUrl = vi.fn(() => 'blob:training-data')
@@ -449,6 +545,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览 training-data.v3' })).not.toBeInTheDocument()
   })
 
   it('shows safe Chinese feedback when the preview request is rejected', async () => {
@@ -531,10 +628,18 @@ function stubTrainingData(
   schema: object,
   preview: object,
   downloadBody = 'PAR1 synthetic parquet',
+  v3Preview: object = trainingDataV3Preview(1),
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith('/annotation-label-schema')) return Promise.resolve(jsonResponse(schema))
+    if (url.endsWith('/training-data/v3/preview')) return Promise.resolve(jsonResponse(v3Preview))
+    if (url.endsWith('/training-data/v3/download')) {
+      return Promise.resolve({
+        ok: true,
+        blob: () => Promise.resolve(new Blob([downloadBody])),
+      } as Response)
+    }
     if (url.endsWith('/training-data/preview')) return Promise.resolve(jsonResponse(preview))
     if (url.endsWith('/training-data/download')) {
       return Promise.resolve({
@@ -585,6 +690,17 @@ function trainingDataPreview(trainingRowCount: number) {
       'one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)',
     file_name: 'training_data.parquet',
     content_type: 'application/vnd.apache.parquet',
+    includes_mp4: false,
+  }
+}
+function trainingDataV3Preview(eventCount: number) {
+  return {
+    schema_version: 'training-data.v3',
+    eligible_group_count: eventCount,
+    event_count: eventCount,
+    file_name: 'training_data_v3.json',
+    content_type: 'application/vnd.medication.training-data.v3+json',
+    split_unit: 'capture_group',
     includes_mp4: false,
   }
 }

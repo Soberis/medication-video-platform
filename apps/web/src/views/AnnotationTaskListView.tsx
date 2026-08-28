@@ -12,9 +12,12 @@ import {
 } from '@/api/annotation'
 import {
   downloadTrainingData,
+  downloadTrainingDataV3,
   getTrainingDataExportPreview,
+  getTrainingDataV3ExportPreview,
   TrainingDataExportApiError,
   type TrainingDataExportPreview,
+  type TrainingDataV3ExportPreview,
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
@@ -125,9 +128,14 @@ export default function AnnotationTaskListView() {
   const [errorMessage, setErrorMessage] = useState('')
   const [trainingExportPreview, setTrainingExportPreview] =
     useState<TrainingDataExportPreview | null>(null)
+  const [trainingDataV3Preview, setTrainingDataV3Preview] =
+    useState<TrainingDataV3ExportPreview | null>(null)
   const [isTrainingExportOpen, setIsTrainingExportOpen] = useState(false)
+  const [isTrainingDataV3ExportOpen, setIsTrainingDataV3ExportOpen] = useState(false)
   const [isTrainingPreviewLoading, setIsTrainingPreviewLoading] = useState(false)
   const [isTrainingDownloadLoading, setIsTrainingDownloadLoading] = useState(false)
+  const [isTrainingDataV3PreviewLoading, setIsTrainingDataV3PreviewLoading] = useState(false)
+  const [isTrainingDataV3DownloadLoading, setIsTrainingDataV3DownloadLoading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
   const trainingExportRequest = useRef<AbortController | null>(null)
 
@@ -177,7 +185,13 @@ export default function AnnotationTaskListView() {
   }, [loadTasks])
 
   const openTrainingExport = useCallback(async () => {
-    if (progress?.scope !== 'PROJECT' || isTrainingPreviewLoading || isTrainingDownloadLoading)
+    if (
+      progress?.scope !== 'PROJECT' ||
+      isTrainingPreviewLoading ||
+      isTrainingDownloadLoading ||
+      isTrainingDataV3PreviewLoading ||
+      isTrainingDataV3DownloadLoading
+    )
       return
     trainingExportRequest.current?.abort()
     const request = new AbortController()
@@ -201,13 +215,68 @@ export default function AnnotationTaskListView() {
         setIsTrainingPreviewLoading(false)
       }
     }
-  }, [isTrainingDownloadLoading, isTrainingPreviewLoading, message, progress?.scope, projectId])
+  }, [
+    isTrainingDataV3DownloadLoading,
+    isTrainingDataV3PreviewLoading,
+    isTrainingDownloadLoading,
+    isTrainingPreviewLoading,
+    message,
+    progress?.scope,
+    projectId,
+  ])
+
+  const openTrainingDataV3Export = useCallback(async () => {
+    if (
+      progress?.scope !== 'PROJECT' ||
+      isTrainingPreviewLoading ||
+      isTrainingDownloadLoading ||
+      isTrainingDataV3PreviewLoading ||
+      isTrainingDataV3DownloadLoading
+    )
+      return
+    trainingExportRequest.current?.abort()
+    const request = new AbortController()
+    trainingExportRequest.current = request
+    setIsTrainingDataV3PreviewLoading(true)
+    try {
+      const preview = await getTrainingDataV3ExportPreview(projectId, request.signal)
+      if (request.signal.aborted || trainingExportRequest.current !== request) return
+      setTrainingDataV3Preview(preview)
+      setIsTrainingDataV3ExportOpen(true)
+    } catch (error) {
+      if (request.signal.aborted || trainingExportRequest.current !== request) return
+      void message.error(
+        error instanceof TrainingDataExportApiError
+          ? error.message
+          : '暂时无法读取 training-data.v3 导出信息，请稍后重试。',
+      )
+    } finally {
+      if (trainingExportRequest.current === request) {
+        trainingExportRequest.current = null
+        setIsTrainingDataV3PreviewLoading(false)
+      }
+    }
+  }, [
+    isTrainingDataV3DownloadLoading,
+    isTrainingDataV3PreviewLoading,
+    isTrainingDownloadLoading,
+    isTrainingPreviewLoading,
+    message,
+    progress?.scope,
+    projectId,
+  ])
 
   const closeTrainingExport = useCallback(() => {
     if (isTrainingDownloadLoading) return
     setIsTrainingExportOpen(false)
     setTrainingExportPreview(null)
   }, [isTrainingDownloadLoading])
+
+  const closeTrainingDataV3Export = useCallback(() => {
+    if (isTrainingDataV3DownloadLoading) return
+    setIsTrainingDataV3ExportOpen(false)
+    setTrainingDataV3Preview(null)
+  }, [isTrainingDataV3DownloadLoading])
 
   const downloadTrainingDataFile = useCallback(async () => {
     if (
@@ -249,6 +318,47 @@ export default function AnnotationTaskListView() {
       setIsTrainingDownloadLoading(false)
     }
   }, [isTrainingDownloadLoading, message, projectId, trainingExportPreview])
+
+  const downloadTrainingDataV3File = useCallback(async () => {
+    if (
+      !trainingDataV3Preview ||
+      trainingDataV3Preview.event_count <= 0 ||
+      isTrainingDataV3DownloadLoading
+    )
+      return
+    const request = new AbortController()
+    trainingExportRequest.current = request
+    setIsTrainingDataV3DownloadLoading(true)
+    try {
+      const blob = await downloadTrainingDataV3(projectId, request.signal)
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = trainingDataV3Preview.file_name
+      link.rel = 'noopener'
+      link.hidden = true
+      document.body.append(link)
+      try {
+        link.click()
+      } finally {
+        URL.revokeObjectURL(objectUrl)
+        link.remove()
+      }
+      setIsTrainingDataV3ExportOpen(false)
+      setTrainingDataV3Preview(null)
+      void message.success(`已开始下载 ${trainingDataV3Preview.file_name}。`)
+    } catch (error) {
+      if (request.signal.aborted) return
+      void message.error(
+        error instanceof TrainingDataExportApiError
+          ? error.message
+          : 'training-data.v3 暂时无法导出，请稍后重试。',
+      )
+    } finally {
+      if (trainingExportRequest.current === request) trainingExportRequest.current = null
+      setIsTrainingDataV3DownloadLoading(false)
+    }
+  }, [isTrainingDataV3DownloadLoading, message, projectId, trainingDataV3Preview])
 
   return (
     <>
@@ -293,16 +403,35 @@ export default function AnnotationTaskListView() {
         <aside className="annotation-task-project-tools" aria-label="项目训练数据">
           <div className="annotation-task-project-tools-copy">
             <strong>项目训练数据</strong>
-            <span>导出前先查看当前可用训练行数，实际数量以服务端预览为准。</span>
+            <span>
+              V1.25 优先使用 training-data.v3；服务端只返回通过准入闸门的 CaptureGroup 事件。V1.24
+              training-data.v2 继续保留。
+            </span>
           </div>
-          <Button
-            size="small"
-            loading={isTrainingPreviewLoading}
-            disabled={isTrainingDownloadLoading}
-            onClick={() => void openTrainingExport()}
-          >
-            导出训练数据
-          </Button>
+          <div className="annotation-task-project-tools-actions">
+            <Button
+              type="primary"
+              size="small"
+              loading={isTrainingDataV3PreviewLoading}
+              disabled={
+                isTrainingDataV3DownloadLoading ||
+                isTrainingPreviewLoading ||
+                isTrainingDownloadLoading
+              }
+              onClick={() => void openTrainingDataV3Export()}
+            >
+              预览 training-data.v3
+            </Button>
+            <Button
+              size="small"
+              loading={isTrainingPreviewLoading}
+              disabled={isTrainingDownloadLoading || isTrainingDataV3PreviewLoading}
+              title="预览并导出 V1.24 training-data.v2"
+              onClick={() => void openTrainingExport()}
+            >
+              导出训练数据
+            </Button>
+          </div>
         </aside>
       ) : null}
       {loadState === 'success' && items.length ? (
@@ -552,6 +681,105 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && !items.length ? (
         <EmptyState description="当前没有待处理的配药动作标注任务。质量判断合格的视频会自动出现在这里。" />
       ) : null}
+      <Modal
+        open={isTrainingDataV3ExportOpen}
+        title="training-data.v3 导出预览"
+        okText="导出 v3"
+        cancelText="关闭"
+        confirmLoading={isTrainingDataV3DownloadLoading}
+        okButtonProps={{
+          disabled: !trainingDataV3Preview?.event_count,
+          'aria-label': '导出 training-data.v3',
+        }}
+        cancelButtonProps={{
+          disabled: isTrainingDataV3DownloadLoading,
+          'aria-label': '关闭 v3 预览',
+        }}
+        mask={{ closable: !isTrainingDataV3DownloadLoading }}
+        keyboard={!isTrainingDataV3DownloadLoading}
+        onCancel={closeTrainingDataV3Export}
+        onOk={() => void downloadTrainingDataV3File()}
+        destroyOnHidden
+      >
+        {trainingDataV3Preview ? (
+          <>
+            <MetadataList
+              className="training-data-export-summary training-data-v3-export-summary"
+              items={[
+                {
+                  id: 'v3-eligible-group-count',
+                  label: '合格 CaptureGroup',
+                  value: `${trainingDataV3Preview.eligible_group_count} 组`,
+                },
+                {
+                  id: 'v3-event-count',
+                  label: '事件数',
+                  value: `${trainingDataV3Preview.event_count} 个`,
+                },
+                {
+                  id: 'v3-included-views',
+                  label: '参与视图',
+                  value: 'participating_views（保留 camera_number 与 view quality）',
+                },
+                {
+                  id: 'v3-excluded-views',
+                  label: '排除视图',
+                  value: 'excluded_views（保留原因与 provenance，不参与下游）',
+                },
+                {
+                  id: 'v3-revision-provenance',
+                  label: 'Revision provenance',
+                  value: 'annotation_revision_id + revision；Review = APPROVED',
+                },
+                {
+                  id: 'v3-cleaning-provenance',
+                  label: 'Cleaning provenance',
+                  value: 'capture_group_cleaning_id + rule set + input fingerprint；PASS',
+                },
+                {
+                  id: 'v3-primary-interval',
+                  label: 'Primary View 时间基准',
+                  value: 'primary_interval 只归 Primary View；Supporting View 不生成动作对齐时间戳',
+                },
+                {
+                  id: 'v3-format-version',
+                  label: '格式 / 版本',
+                  value: (
+                    <>
+                      <code>{trainingDataV3Preview.schema_version}</code> ·{' '}
+                      <code>{trainingDataV3Preview.content_type}</code>
+                    </>
+                  ),
+                },
+                {
+                  id: 'v3-split-unit',
+                  label: 'Split 单位',
+                  value: 'CaptureGroup（同组视图不跨 train / validation / test）',
+                },
+                {
+                  id: 'v3-file',
+                  label: '文件',
+                  value: <code>{trainingDataV3Preview.file_name}</code>,
+                },
+                {
+                  id: 'v3-includes-mp4',
+                  label: '原始视频',
+                  value: trainingDataV3Preview.includes_mp4 ? '包含' : '不包含',
+                },
+              ]}
+            />
+            {trainingDataV3Preview.event_count === 0 ? (
+              <p className="training-data-export-empty" role="status">
+                当前没有符合条件的 CaptureGroup 事件，暂时无法导出。
+              </p>
+            ) : null}
+            <p className="form-hint">
+              eligibility 由服务端根据 Group Quality、正式 Revision、APPROVED Review 和 Cleaning
+              PASS 判定；本页不重新计算。
+            </p>
+          </>
+        ) : null}
+      </Modal>
       <Modal
         open={isTrainingExportOpen}
         title="训练数据导出"
