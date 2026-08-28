@@ -1,7 +1,7 @@
 # CaptureGroup 多机位接收与数据闭环最小技术设计（V1.25）
 
-> 状态：V1.25 当前多机位实现设计 — 实现待完成
-> 本文定义已批准的 V1.25 目标与实施顺序，不声称 V1.25 运行时已经实现；代码、迁移、OpenAPI、事件、Worker 和运行时变更须按实施计划单独交付。
+> 状态：V1.25 当前多机位实现设计 — 目标与实现证据见追踪矩阵
+> 本文定义已批准的 V1.25 目标、边界与实施顺序；不替代代码、迁移、OpenAPI、事件、Worker 和运行时的实际证据。当前实现状态以[当前需求追踪矩阵](requirements-traceability.md)、冻结记录和实际测试结果为准，真实 UAT 仍须单独执行。
 > V1.25 是当前正式需求基线；V1.24 代码和单视频事实仍是迁移起点与历史兼容参考。
 
 本文基于 [V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[V1.24 前一正式基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[V1.24 手部组件参考](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../contracts/schemas/external-video-ingest-v1.schema.json) 和 [最小训练数据导出说明](../../tools/minimal-export/README.md)。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
@@ -214,7 +214,7 @@ offset、不插帧、不自动对齐、不引入 CaptureSync。`camera_number` �
 - Review 以组任务的正式 `AnnotationRevision` 为对象，审阅组身份、主视图、参与合格视图、拒绝/缺失视图、动作区间和相关候选证据；Review 必须由人通过。
 - `CaptureGroupQualityReview` 是标注准入；Cleaning 是训练数据准入。只有正式修订和人工 Review 通过后，Cleaning 才在配药事件级检查组质量事实、参与视图、媒体完整性和拒绝/缺失原因。Cam2 `REJECTED` 时，Cam1/Cam3/Cam4 可在组为 `QUALIFIED_WITH_EXCLUSIONS` 且人工确认后参与；Cam2 保留但不下游。
 - 主视图区间是正式时间基准；支持视图只有在已验证的 `RELIABLE` 映射下才可推导对应区间并保留 provenance/version。`APPROXIMATE`、`UNRELIABLE` 或无映射的支持视图仅作事件级证据，Review/Cleaning 和未来导出不得为其伪造动作对齐时间戳。
-- 现有 V1.24 `training-data.v2` / `training_data.parquet` 继续服务单视频历史路径。V1.25 不强行复用会丢失组/视图关系的结构；如需多视图输出，未来另行冻结 `training-data.v3`，至少保留组 ID、修订 ID、主视图、参与视频/相机、逐视图质量、组质量、Candidate provenance 和 Cleaning provenance。
+- 现有 V1.24 `training-data.v2` / `training_data.parquet` 继续服务单视频历史路径。V1.25 使用已冻结的最小 `training-data.v3` 组 manifest，保留组 ID、修订 ID、主视图、参与视频/相机、逐视图质量、组质量、Candidate provenance 和 Cleaning provenance；它不是 DatasetVersion 平台。
 - 默认不复制 MP4，不创建 DatasetVersion 或数据集平台。所有同一 CaptureGroup 的训练行必须进入同一 train/validation/test split。
 
 ## 9. 与 V1.24 的兼容与实施前置
@@ -223,7 +223,7 @@ offset、不插帧、不自动对齐、不引入 CaptureSync。`camera_number` �
 以 CaptureGroup 进入本流程，`N=1` 只是一路视图；不按摄像头数量维护两条新流程。现有 V1.24
 单视频 Media Probe、MediaPipe Candidate、QualityReview、AnnotationTask/Revision、Review、Cleaning、权限和导出仅作为历史数据/兼容迁移路径保留，不改其运行语义。
 
-实施前只需冻结以下最小契约：
+当前实现所依据的最小契约为：
 
 1. 组完成/不完整的版本化接收信号；
 2. `capture_session_id` 到 `capture_group_id` 的只读映射和视图集合查询；
@@ -262,5 +262,4 @@ V1.22 三维多视角、CaptureSync runtime、相机标定/三角测量、跨相
 DatasetVersion/复杂导出、通用 AI Evaluation、工作流引擎和微服务扩张继续是历史/延后方向，不约束
 V1.25，也不因本文恢复。
 
-本文不实施 V1.25 生产代码、数据库、契约、Worker 或运行时；当前运行时仍主要是 V1.24-compatible 单视频流程。
-V1.25 实现应以本设计、需求基线和追踪矩阵为准，并在实现完成前保持未验收状态。
+本文不承载 V1.25 生产代码、数据库、契约、Worker 或运行时实现；这些工件的当前状态以仓库实际内容和冻结记录为准。V1.25 CaptureGroup 路径已经有自动化与本地 synthetic 证据，但不因此替代真实 UAT、生产部署或医院验收。

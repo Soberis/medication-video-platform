@@ -1,8 +1,8 @@
 # 固定多相机配药事件质量评审、标注与清洗用户流程
 
-> 状态：V1.25 当前产品/UX 工作流规范 — 实现待完成
+> 状态：V1.25 当前产品/UX 工作流规范 — 已实现，验收证据见追踪矩阵
 >
-> 本文描述已批准的 V1.25 多机位工作流用户体验和信息边界，不新增当前 React 页面、后端接口、数据库、状态机或导航入口，也不声称 V1.25 已实现。当前运行时仍主要是 V1.24-compatible 单视频闭环。示例使用 3–5 路固定相机；实际数量由服务端明确的归组事实动态决定。
+> 本文描述已批准的 V1.25 多机位工作流用户体验和信息边界；不替代当前 React 页面、后端接口、数据库和测试证据，也不把自动化/synthetic 证据表述为真实 UAT。当前运行时同时保留 V1.24-compatible 单视频路径，并提供 V1.25 CaptureGroup 入口。示例使用 3–5 路固定相机；实际数量由服务端明确的归组事实动态决定。
 
 `CaptureGroup` 表示一个真实配药事件，身份默认复用 `CaptureSession.capture_session_id`；前端只能读取服务端明确的组和视图，不能按文件名、上传顺序、接收时间或时间接近度猜测归组。
 
@@ -166,7 +166,7 @@ AnnotationRevision 只记录主视图时间轴上的正式区间；支持视图�
 重新提交 `CaptureGroupQualityReview`，并在同一组的唯一任务下按新输入版本追加修订；既有修订的
 主视图和时间基准保持不变。
 
-V1.24 冻结单视频路径仍是 `ClipAsset.QUALIFIED → 一个视频 AnnotationTask → 人工 AnnotationRevision`，不回写历史行为。V1.25 需要在实现前冻结组任务/修订关系、主视图引用、权限和审计契约，当前工作台不提前伪装支持它。
+V1.24 冻结单视频路径仍是 `ClipAsset.QUALIFIED → 一个视频 AnnotationTask → 人工 AnnotationRevision`，不回写历史行为。V1.25 的组任务/修订关系、主视图引用、权限和审计契约已经由当前代码、OpenAPI、迁移和回归测试实现；真实 UAT 仍按单独 runbook 执行。
 
 ## 7. 多视图查看与同步
 
@@ -203,11 +203,11 @@ Review 以组任务的正式 `AnnotationRevision` 为对象，审阅组身份、
 
 ## 9. 当前工作区边界
 
-本文不改变当前实现，也不声称 V1.25 已实现：
+本文不替代当前实现和验收证据：
 
-- 当前 `VideoManagementView`、`AssetDetailView` 和 Annotation Workbench 仍是 V1.24 单视频入口；不新增组页面或运行时。
-- 当前代码的 `QualityReview`、AnnotationTask/Revision、Review、Cleaning、权限、项目隔离和导出契约保持不变。
-- V1.25 组质量、组任务/修订和事件级 Cleaning 按已批准的版本化契约进入实现规划，运行时实现和验收仍待完成。
+- `VideoManagementView`、`AssetDetailView` 和 Annotation Workbench 继续服务 V1.24-compatible 单视频路径；`CaptureGroupListView` 与 `CaptureGroupDetailView` 提供 V1.25 组入口。
+- V1.24 的 `QualityReview`、AnnotationTask/Revision、Review、Cleaning、权限、项目隔离和导出契约保持兼容；V1.25 组质量、组任务/修订和事件级 Cleaning 通过独立的 CaptureGroup 路径接入。
+- V1.25 运行时已有自动化和本地 synthetic 验收证据；真实 UAT、生产部署与医院现场验收不由本文宣告完成。
 - 不新增 workflow engine、Worker、Queue、微服务、数据集平台、AI 动作识别或物理删除快捷路径。
 
 ## 10. V1.25 MVP 边界
