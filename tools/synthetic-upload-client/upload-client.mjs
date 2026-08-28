@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 
 export const DEFAULT_PART_SIZE_BYTES = 8 * 1024 * 1024
 
+const MAX_CAMERA_NUMBER = 64
+
 export function sha256Hex(value) {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -79,6 +81,75 @@ export function createSyntheticMetadata({
   }
 }
 
+export function normalizeCameraNumbers(cameraNumbers) {
+  if (!Array.isArray(cameraNumbers) || cameraNumbers.length === 0) {
+    throw new TypeError('Synthetic camera numbers must be a non-empty array')
+  }
+  const normalized = cameraNumbers.map((cameraNumber) => {
+    if (!Number.isInteger(cameraNumber) || cameraNumber < 1 || cameraNumber > MAX_CAMERA_NUMBER) {
+      throw new RangeError(`Synthetic camera number must be an integer from 1 to ${MAX_CAMERA_NUMBER}`)
+    }
+    return cameraNumber
+  })
+  if (new Set(normalized).size !== normalized.length) {
+    throw new RangeError('Synthetic camera numbers must be unique')
+  }
+  return [...normalized].sort((left, right) => left - right)
+}
+
+export function createSyntheticGroupMetadata({
+  cameraSetId,
+  captureSessionId,
+  deviceId,
+  recordedAt,
+  layoutVersion,
+  syncGroupId,
+  expectedCameraNumbers,
+  streams,
+}) {
+  const expected = normalizeCameraNumbers(expectedCameraNumbers)
+  if (!Array.isArray(streams) || streams.length === 0) {
+    throw new TypeError('A synthetic CaptureGroup must contain at least one generated stream')
+  }
+  return {
+    schema_version: 'capture-session-metadata-v1',
+    capture_session_id: captureSessionId,
+    device_id: deviceId,
+    camera_set_id: cameraSetId,
+    expected_camera_count: expected.length,
+    camera_layout_version: layoutVersion,
+    sync_group_id: syncGroupId,
+    device_time_utc: recordedAt,
+    device_timezone: 'Asia/Shanghai',
+    streams: [...streams]
+      .sort((left, right) => left.cameraNumber - right.cameraNumber)
+      .map((stream) => ({
+        client_file_id: stream.videoClientFileId,
+        camera_channel_id: stream.cameraChannelId,
+        camera_index: stream.cameraNumber - 1,
+        enabled: true,
+        record_start_utc: stream.recordStartAt,
+        time_offset_ms: stream.timeOffsetMs ?? 0,
+        sync_status: stream.syncStatus ?? 'UNKNOWN',
+      })),
+  }
+}
+
+export function createSyntheticEventLog({ captureGroupKey, captureSessionId, cameraNumbers, occurredAt }) {
+  return Buffer.from(
+    `${JSON.stringify({
+      schema_version: 'synthetic-capture-event-v1',
+      event_id: randomUUID(),
+      event_type: 'SYNTHETIC_MEDICATION_EVENT_COMPLETED',
+      occurred_at: occurredAt,
+      capture_session_id: captureSessionId,
+      capture_group_key: captureGroupKey,
+      camera_numbers: normalizeCameraNumbers(cameraNumbers),
+    })}\n`,
+    'utf8',
+  )
+}
+
 export class PlatformApiError extends Error {
   constructor(operation, status, problem) {
     const code = typeof problem?.error_code === 'string' ? problem.error_code : 'HTTP_ERROR'
@@ -133,6 +204,55 @@ export class SyntheticUploadClient {
     return {
       cameraChannelId: channel.camera_channel_id,
       cameraSetId: cameraSet.camera_set_id,
+    }
+  }
+
+  async provisionSyntheticCameraSet({
+    cameraNumbers,
+    cameraSetKey = 'synthetic-capture-group-client',
+    configurationVersion = 1,
+    layoutVersion = 'synthetic-capture-group-v1',
+  } = {}) {
+    const expected = normalizeCameraNumbers(cameraNumbers)
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(cameraSetKey)) {
+      throw new TypeError('Synthetic camera-set key is invalid')
+    }
+    if (!Number.isInteger(configurationVersion) || configurationVersion < 1) {
+      throw new RangeError('Synthetic camera-set configuration version must be positive')
+    }
+    const channels = []
+    for (const cameraNumber of expected) {
+      const channel = await this.#requestJson(
+        `provision synthetic camera ${cameraNumber}`,
+        `/projects/${this.projectId}/camera-channels/synthetic-capture-group-client.camera-${cameraNumber}`,
+        { method: 'PUT' },
+      )
+      channels.push({ cameraNumber, cameraChannelId: channel.camera_channel_id })
+    }
+    const cameraSet = await this.#requestJson(
+      'configure synthetic camera set',
+      `/projects/${this.projectId}/camera-sets/${cameraSetKey}/versions/${configurationVersion}`,
+      {
+        method: 'PUT',
+        body: {
+          layout_version: layoutVersion,
+          members: channels.map(({ cameraNumber, cameraChannelId }) => ({
+            camera_channel_id: cameraChannelId,
+            camera_index: cameraNumber - 1,
+            camera_role: cameraNumber === 1 ? 'OVERVIEW' : 'HANDS',
+            mount_position: `synthetic-camera-${cameraNumber}`,
+            enabled: true,
+            enabled_for_hand_detection: true,
+          })),
+        },
+      },
+    )
+    return {
+      cameraSetId: cameraSet.camera_set_id,
+      cameraSetKey,
+      configurationVersion,
+      layoutVersion,
+      channels,
     }
   }
 
@@ -230,6 +350,196 @@ export class SyntheticUploadClient {
       batch_id: batch.batch_id,
       capture_session_id: session.capture_session_id,
       clip_asset_ids: completion.clip_assets.map((asset) => asset.clip_asset_id),
+    }
+  }
+
+  async uploadSyntheticCaptureGroup({
+    cameraSet,
+    captureGroupKey,
+    expectedCameraNumbers,
+    presentCameraNumbers,
+    videoBytesByCamera,
+    capturedAt = new Date().toISOString(),
+    deviceId = 'synthetic-capture-group-client.device-01',
+    sourceBatchId = `synthetic-${randomUUID()}`,
+  }) {
+    const expected = normalizeCameraNumbers(expectedCameraNumbers)
+    const present = normalizeCameraNumbers(presentCameraNumbers ?? expected)
+    if (!present.every((cameraNumber) => expected.includes(cameraNumber))) {
+      throw new RangeError('Every uploaded synthetic camera must belong to the explicit expected camera set')
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(captureGroupKey)) {
+      throw new TypeError('Synthetic capture group key is invalid')
+    }
+    if (!cameraSet?.cameraSetId || !cameraSet.layoutVersion || !Array.isArray(cameraSet.channels)) {
+      throw new TypeError('A provisioned synthetic camera set is required')
+    }
+    const channelsByCamera = new Map(cameraSet.channels.map((channel) => [channel.cameraNumber, channel]))
+    if (expected.some((cameraNumber) => !channelsByCamera.has(cameraNumber))) {
+      throw new Error('The provisioned synthetic camera set does not match the expected camera numbers')
+    }
+    const capturedAtMs = Date.parse(capturedAt)
+    if (!Number.isFinite(capturedAtMs)) {
+      throw new TypeError('Synthetic capture time must be an ISO date-time')
+    }
+
+    const captureSessionId = randomUUID()
+    const videoFiles = present.map((cameraNumber) => {
+      const bytes = videoBytesByCamera instanceof Map
+        ? videoBytesByCamera.get(cameraNumber)
+        : videoBytesByCamera?.[cameraNumber]
+      if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+        throw new TypeError(`Synthetic camera ${cameraNumber} must have generated non-empty video bytes`)
+      }
+      const recordStartAt = new Date(capturedAtMs + cameraNumber * 37).toISOString()
+      const videoFile = createUploadFile(
+        'VIDEO',
+        'video/mp4',
+        bytes,
+        randomUUID(),
+        `synthetic-${captureGroupKey}-camera-${cameraNumber}.mp4`,
+      )
+      return { cameraNumber, recordStartAt, videoFile }
+    })
+    const metadata = createSyntheticGroupMetadata({
+      cameraSetId: cameraSet.cameraSetId,
+      captureSessionId,
+      deviceId,
+      recordedAt: capturedAt,
+      layoutVersion: cameraSet.layoutVersion,
+      syncGroupId: `synthetic-${captureGroupKey}`,
+      expectedCameraNumbers: expected,
+      streams: videoFiles.map(({ cameraNumber, recordStartAt, videoFile }) => ({
+        cameraNumber,
+        cameraChannelId: channelsByCamera.get(cameraNumber).cameraChannelId,
+        videoClientFileId: videoFile.clientFileId,
+        recordStartAt,
+        timeOffsetMs: 0,
+        syncStatus: 'UNKNOWN',
+      })),
+    })
+    const metadataFile = createUploadFile(
+      'METADATA',
+      'application/json',
+      Buffer.from(`${JSON.stringify(metadata)}\n`, 'utf8'),
+      randomUUID(),
+      `synthetic-${captureGroupKey}-metadata.json`,
+    )
+    const eventFile = createUploadFile(
+      'EVENT_LOG',
+      'application/x-ndjson',
+      createSyntheticEventLog({
+        captureGroupKey,
+        captureSessionId,
+        cameraNumbers: present,
+        occurredAt: capturedAt,
+      }),
+      randomUUID(),
+      `synthetic-${captureGroupKey}-event-log.ndjson`,
+    )
+    const files = [...videoFiles.map(({ videoFile }) => videoFile), metadataFile, eventFile]
+    const manifestSha256 = sha256Hex(buildManifest(files))
+    const totalSizeBytes = files.reduce((total, file) => total + file.bytes.length, 0)
+    const externalManifest = await this.#requestJson(
+      'accept synthetic capture group manifest',
+      `/projects/${this.projectId}/external-video-ingest-manifests/v2`,
+      {
+        method: 'POST',
+        body: {
+          schema_version: 'external-video-ingest-v2',
+          source_system: 'synthetic-capture-group-client',
+          source_device_id: deviceId,
+          source_batch_id: sourceBatchId,
+          capture_group: {
+            capture_group_key: captureGroupKey,
+            key_source: 'UPSTREAM_MANIFEST_KEY',
+            captured_at: capturedAt,
+            timezone: 'Asia/Shanghai',
+            expected_camera_numbers: expected,
+          },
+          videos: videoFiles.map(({ cameraNumber, recordStartAt, videoFile }) => ({
+            client_file_id: videoFile.clientFileId,
+            camera_number: cameraNumber,
+            file_name: videoFile.fileName,
+            declared_size_bytes: videoFile.bytes.length,
+            sha256: videoFile.sha256,
+            record_start_at: recordStartAt,
+          })),
+          upload_set_finalized: false,
+        },
+      },
+    )
+    const batch = await this.#requestJson('initialize synthetic group upload batch', '/upload/init', {
+      method: 'POST',
+      idempotencyKey: `synthetic-group-batch-${randomUUID()}`,
+      body: {
+        project_id: this.projectId,
+        device_id: deviceId,
+        file_count: files.length,
+        total_size_bytes: totalSizeBytes,
+        manifest_sha256: manifestSha256,
+        external_manifest_id: externalManifest.manifest_id,
+      },
+    })
+
+    for (const file of files) {
+      await this.#requestJson(
+        `register synthetic ${file.fileKind} file`,
+        `/upload/${batch.batch_id}/files/${file.clientFileId}`,
+        {
+          method: 'PUT',
+          idempotencyKey: `synthetic-group-file-${randomUUID()}`,
+          body: {
+            file_kind: file.fileKind,
+            content_type: file.contentType,
+            size_bytes: file.bytes.length,
+            sha256: file.sha256,
+            part_size_bytes: file.partSizeBytes,
+            file_name: file.fileName,
+          },
+        },
+      )
+    }
+    for (const file of files) {
+      await this.#uploadFile(batch.batch_id, file)
+    }
+
+    const completion = await this.#requestJson(
+      'complete synthetic group upload batch',
+      `/upload/${batch.batch_id}/completion`,
+      { method: 'PUT' },
+    )
+    const session = await this.#requestJson(
+      'assemble synthetic capture group session',
+      `/upload/${batch.batch_id}/capture-session`,
+      { method: 'PUT' },
+    )
+    const assetsByClientId = new Map(
+      completion.clip_assets.map((asset) => [asset.client_file_id, asset]),
+    )
+    const views = videoFiles.map(({ cameraNumber, recordStartAt, videoFile }) => {
+      const asset = assetsByClientId.get(videoFile.clientFileId)
+      if (!asset?.clip_asset_id) {
+        throw new Error(`The upload response did not return a ClipAsset for synthetic camera ${cameraNumber}`)
+      }
+      return {
+        cameraNumber,
+        clientFileId: videoFile.clientFileId,
+        clipAssetId: asset.clip_asset_id,
+        fileName: videoFile.fileName,
+        recordStartAt,
+      }
+    })
+    return {
+      batchId: batch.batch_id,
+      manifestId: externalManifest.manifest_id,
+      captureSessionId: session.capture_session_id,
+      captureGroupId: session.capture_group_id ?? session.capture_session_id,
+      captureGroupKey,
+      expectedCameraNumbers: expected,
+      presentCameraNumbers: present,
+      views,
+      session,
     }
   }
 
