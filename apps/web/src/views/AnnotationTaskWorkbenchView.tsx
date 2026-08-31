@@ -168,6 +168,7 @@ export default function AnnotationTaskWorkbenchView() {
   const candidateRequest = useRef<AbortController | null>(null)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const taskBreadcrumbIdentity = shortId(task?.annotation_task_id ?? taskId)
 
   const sortedLabels = useMemo(
     () =>
@@ -603,11 +604,9 @@ export default function AnnotationTaskWorkbenchView() {
     return (
       <>
         <nav className="breadcrumb" aria-label="面包屑导航">
-          <Link to={paths.videos(projectId)}>视频管理</Link>
-          <span aria-hidden="true">/</span>
           <Link to={paths.annotationTasks(projectId)}>配药动作标注</Link>
           <span aria-hidden="true">/</span>
-          <span>工作台</span>
+          <span>{taskBreadcrumbIdentity}</span>
         </nav>
         <PageHeader
           eyebrow="单任务人工工作台"
@@ -629,11 +628,9 @@ export default function AnnotationTaskWorkbenchView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={paths.videos(projectId)}>视频管理</Link>
-        <span aria-hidden="true">/</span>
         <Link to={paths.annotationTasks(projectId)}>配药动作标注</Link>
         <span aria-hidden="true">/</span>
-        <span>工作台</span>
+        <span>{taskBreadcrumbIdentity}</span>
       </nav>
       <PageHeader
         eyebrow="单任务人工工作台"

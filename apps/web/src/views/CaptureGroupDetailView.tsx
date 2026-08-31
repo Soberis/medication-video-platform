@@ -1,6 +1,6 @@
-import { Alert, Button } from 'antd'
+import { Alert, Button, Modal } from 'antd'
 import { RefreshCw } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -33,6 +33,10 @@ export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const location = useLocation()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
+  const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
+  const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
+  const receiptFinalizeRequest = useRef(false)
+  const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
   const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
   const fallbackFocusTargetId =
@@ -46,6 +50,26 @@ export default function CaptureGroupDetailView() {
   const selectedReview = viewState.selectedStream
     ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
     : null
+  const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
+
+  const confirmReceiptFinalization = async () => {
+    if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
+    receiptFinalizeRequest.current = true
+    setIsReceiptFinalizePending(true)
+    try {
+      await data.finalizeReceipt()
+      setIsReceiptConfirmationOpen(false)
+    } finally {
+      receiptFinalizeRequest.current = false
+      setIsReceiptFinalizePending(false)
+    }
+  }
+
+  const closeReceiptConfirmation = () => {
+    if (isReceiptFinalizationPending) return
+    setIsReceiptConfirmationOpen(false)
+    receiptFinalizeTrigger.current?.focus()
+  }
 
   useEffect(() => {
     if (!data.group || data.groupLoadState !== 'success' || !focusTargetId) return
@@ -79,9 +103,11 @@ export default function CaptureGroupDetailView() {
           <>
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
+                ref={receiptFinalizeTrigger}
                 size="small"
                 loading={data.isFinalizingReceipt}
-                onClick={() => void data.finalizeReceipt()}
+                disabled={isReceiptFinalizationPending}
+                onClick={() => setIsReceiptConfirmationOpen(true)}
               >
                 结束接收
               </Button>
@@ -187,6 +213,28 @@ export default function CaptureGroupDetailView() {
           </div>
         </>
       ) : null}
+      <Modal
+        open={isReceiptConfirmationOpen}
+        title="结束本次接收？"
+        okText="结束接收"
+        cancelText="取消"
+        confirmLoading={isReceiptFinalizationPending}
+        okButtonProps={{
+          disabled: isReceiptFinalizationPending,
+          'aria-label': '结束接收',
+        }}
+        cancelButtonProps={{
+          disabled: isReceiptFinalizationPending,
+          'aria-label': '取消',
+        }}
+        mask={{ closable: !isReceiptFinalizationPending }}
+        keyboard={!isReceiptFinalizationPending}
+        onCancel={closeReceiptConfirmation}
+        onOk={() => void confirmReceiptFinalization()}
+        destroyOnHidden
+      >
+        <p>系统将根据当前已收到的机位形成完整或有缺失的接收结果，并进入后续事件质量判断。</p>
+      </Modal>
     </>
   )
 }

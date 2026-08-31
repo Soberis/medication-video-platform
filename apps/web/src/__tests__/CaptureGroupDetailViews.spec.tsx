@@ -135,6 +135,115 @@ describe('CaptureGroup detail views', () => {
     )
   })
 
+  it('requires explicit confirmation before ending receipt', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'RECEIVING',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const finalizeButton = await screen.findByRole('button', { name: '结束接收' })
+    await user.click(finalizeButton)
+
+    const confirmationTitle = await screen.findByText('结束本次接收？')
+    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
+    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
+    expect(within(dialog).getByText('结束本次接收？')).toBeInTheDocument()
+    expect(dialog).toHaveTextContent(
+      '系统将根据当前已收到的机位形成完整或有缺失的接收结果，并进入后续事件质量判断。',
+    )
+    expect(screen.getByText('接收中')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(within(dialog).getByRole('button', { name: '取消' }))
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    await waitFor(() => expect(document.activeElement).toBe(finalizeButton))
+  })
+
+  it('confirms receipt once, disables duplicates, and refreshes authoritative facts', async () => {
+    const receivingGroup = captureGroupFixture(groupId, {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 2, 3, 4, 5],
+      receipt: 'RECEIVING',
+    })
+    const completedGroup = captureGroupFixture(groupId, {
+      expected: [1, 2, 3, 4, 5],
+      received: [1, 2, 3, 4, 5],
+      receipt: 'COMPLETE',
+    })
+    let releaseFinalize: () => void = () => undefined
+    const finalizeGate = new Promise<void>((resolve) => {
+      releaseFinalize = () => resolve()
+    })
+    const fetchMock = stubGroupDetail(receivingGroup, {
+      task: null,
+      groupResponses: [receivingGroup, completedGroup],
+      receiptFinalizeResponse: completedGroup,
+      receiptFinalizeGate: finalizeGate,
+      quality: qualityFixture(receivingGroup, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await user.click(await screen.findByRole('button', { name: '结束接收' }))
+    const confirmationTitle = await screen.findByText('结束本次接收？')
+    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
+    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
+    const confirmButton = within(dialog).getByRole('button', { name: '结束接收' })
+    await user.click(confirmButton)
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
+    expect(confirmButton).toBeDisabled()
+    await user.click(confirmButton)
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
+      ),
+    ).toHaveLength(1)
+
+    releaseFinalize()
+    await waitFor(() => expect(screen.getByText('已完整接收')).toBeInTheDocument())
+    expect(
+      within(screen.getByRole('toolbar', { name: '页面操作' })).queryByRole('button', {
+        name: '结束接收',
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
+      ),
+    ).toHaveLength(1)
+  })
+
   it('keeps a group-quality request failure unavailable instead of inventing UNREVIEWED', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

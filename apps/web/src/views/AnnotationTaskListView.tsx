@@ -370,8 +370,6 @@ export default function AnnotationTaskListView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={paths.videos(projectId)}>视频管理</Link>
-        <span aria-hidden="true">/</span>
         <span>配药动作标注</span>
       </nav>
       <PageHeader

@@ -184,9 +184,12 @@ export function stubGroupDetail(
   options: {
     task: AnnotationTask | null
     taskResponses?: Array<AnnotationTask | null>
+    groupResponses?: CaptureGroup[]
     taskScope?: 'PROJECT' | 'ASSIGNEE'
     quality: CaptureGroupQualityReview
     qualityError?: { status: number; errorCode?: string }
+    receiptFinalizeResponse?: CaptureGroup
+    receiptFinalizeGate?: Promise<void>
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
     reviewResponse?: Partial<AnnotationReview>
@@ -195,10 +198,22 @@ export function stubGroupDetail(
   },
 ) {
   let taskResponseIndex = 0
+  let groupResponseIndex = 0
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.endsWith(`/capture-groups/${group.capture_group_id}/receipt/finalize`)) {
+      if (options.receiptFinalizeGate) {
+        return options.receiptFinalizeGate.then(() =>
+          jsonResponse(options.receiptFinalizeResponse ?? group),
+        )
+      }
+      return Promise.resolve(jsonResponse(options.receiptFinalizeResponse ?? group))
+    }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}`)) {
-      return Promise.resolve(jsonResponse(group))
+      const groupResponses = options.groupResponses ?? [group]
+      const groupResponse =
+        groupResponses[Math.min(groupResponseIndex++, groupResponses.length - 1)] ?? group
+      return Promise.resolve(jsonResponse(groupResponse))
     }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/quality-review`)) {
       if (options.qualityError) {

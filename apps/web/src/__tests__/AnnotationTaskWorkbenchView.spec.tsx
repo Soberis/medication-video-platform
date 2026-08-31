@@ -173,6 +173,13 @@ describe('annotation task workbench', () => {
     renderWorkbench()
 
     expect(await screen.findByRole('heading', { name: '配药动作标注工作台' })).toBeInTheDocument()
+    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
+    expect(within(breadcrumb).getByRole('link', { name: '配药动作标注' })).toHaveAttribute(
+      'href',
+      paths.annotationTasks(projectId),
+    )
+    expect(breadcrumb).toHaveTextContent('a0000000…0001')
+    expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
     expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.queryByText('approved-synthetic-hand.mp4')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(

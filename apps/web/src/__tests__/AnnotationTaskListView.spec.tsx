@@ -96,7 +96,7 @@ const assignedGroupTask = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task list view', () => {
-  it('loads the task queue and label schema together, then links back to the video', async () => {
+  it('loads the task queue and keeps annotation navigation as a top-level context', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     const user = userEvent.setup()
     renderView()
@@ -109,10 +109,9 @@ describe('annotation task list view', () => {
     expect(
       screen.getByText('处理已分配的配药动作标注任务；提交后由管理员复核。'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '视频管理' })).toHaveAttribute(
-      'href',
-      `/projects/${projectId}/videos`,
-    )
+    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
+    expect(breadcrumb).toHaveTextContent('配药动作标注')
+    expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
