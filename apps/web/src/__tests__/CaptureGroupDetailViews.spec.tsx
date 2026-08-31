@@ -158,6 +158,43 @@ describe('CaptureGroup detail views', () => {
     )
   })
 
+  it('keeps a completed workflow compact and leaves full event identifiers in progressive details', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true, { revision: true }),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const user = userEvent.setup()
+    await screen.findByRole('button', { name: '查看结果' })
+    expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
+    const detailToggle = screen.getByRole('button', { name: '查看复核与训练资格详情' })
+    expect(detailToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('已确认输入与机位集合')).not.toBeInTheDocument()
+    await user.click(detailToggle)
+    expect(screen.getByRole('button', { name: '收起复核与训练资格详情' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByText('已确认输入与机位集合')).toBeInTheDocument()
+
+    const inspector = screen.getByRole('complementary', { name: '事实、历史与审计' })
+    const receiptDetails = within(inspector).getByText('接收与采集事实').closest('details')
+    if (!receiptDetails) throw new Error('Receipt progressive detail was not mounted.')
+    await user.click(within(receiptDetails).getByText('接收与采集事实'))
+    expect(within(receiptDetails).getByText(group.capture_group_id)).toBeInTheDocument()
+  })
+
   it('uses a compact camera selector for N=2 and supports keyboard switching', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],

@@ -59,6 +59,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
         ) && init?.method === 'POST',
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
+    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
     expect(await screen.findByText('训练资格检查通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
@@ -192,7 +193,10 @@ describe('CaptureGroup Review and training eligibility check', () => {
       quality,
       candidateStatus: 'NO_HAND_DETECTED',
     })
+    const user = userEvent.setup()
     renderCaptureGroup()
+
+    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
 
     const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
@@ -229,6 +233,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
+    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
     await user.click(await screen.findByRole('button', { name: '重新检查训练资格' }))
 
     await waitFor(() => {

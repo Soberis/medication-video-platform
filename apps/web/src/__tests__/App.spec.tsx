@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import AppShell from '@/App'
 import { renderRoute, renderRouter } from '@/test/render'
 import ProjectListView from '@/views/ProjectListView'
+import { paths } from '@/app/paths'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -390,7 +391,10 @@ describe('App', () => {
     renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
     expect(await screen.findByText('管理员项目')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /管理项目/ })).toHaveLength(1)
-    expect(screen.getByRole('link', { name: '进入项目：管理员项目' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '进入项目：管理员项目' })).toHaveAttribute(
+      'href',
+      paths.captureGroups('30000000-0000-4000-8000-000000000001'),
+    )
     expect(screen.getByRole('button', { name: '管理项目：管理员项目' })).toBeInTheDocument()
     expect(screen.queryByText('修改名称')).not.toBeInTheDocument()
     expect(screen.queryByText('归档项目')).not.toBeInTheDocument()

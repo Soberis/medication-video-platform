@@ -104,6 +104,9 @@ export default function CaptureGroupDetailView() {
       viewState.selectedDetail,
     ],
   )
+  const isReviewWorkflowAction =
+    workflow?.primaryAction?.target === 'review' ||
+    workflow?.primaryAction?.target === 'training-eligibility'
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -155,6 +158,35 @@ export default function CaptureGroupDetailView() {
     if (!target) return
     target.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
     if (target instanceof HTMLElement) target.focus({ preventScroll: true })
+  }
+
+  const renderActionForm = () => {
+    if (!data.group || !workflow?.primaryAction) return null
+    return (
+      <CaptureGroupActionForm
+        action={workflow.primaryAction}
+        projectId={projectId}
+        captureGroupId={captureGroupId}
+        group={data.group}
+        groupQuality={data.groupQuality}
+        groupQualityVisibility={data.groupQualityVisibility}
+        qualityHistory={data.qualityHistory}
+        refreshVersion={data.refreshVersion}
+        task={data.task}
+        taskVisibility={data.taskVisibility}
+        schema={data.schema}
+        viewRows={viewRows}
+        viewReviews={data.viewReviews}
+        viewReviewErrors={data.viewReviewErrors}
+        viewQualityLoading={data.viewQualityLoading}
+        selectedStream={viewState.selectedStream}
+        selectedDetail={viewState.selectedDetail}
+        selectedReview={selectedReview}
+        onReviewSaved={data.updateViewReview}
+        onTaskChange={(nextTask) => data.setTask(nextTask)}
+        onRefresh={data.refresh}
+      />
+    )
   }
 
   return (
@@ -244,34 +276,11 @@ export default function CaptureGroupDetailView() {
                   }
                   onPrimaryAction={handlePrimaryAction}
                 />
-                {workflow.primaryAction ? (
-                  <CaptureGroupActionForm
-                    action={workflow.primaryAction}
-                    projectId={projectId}
-                    captureGroupId={captureGroupId}
-                    group={data.group}
-                    groupQuality={data.groupQuality}
-                    groupQualityVisibility={data.groupQualityVisibility}
-                    qualityHistory={data.qualityHistory}
-                    refreshVersion={data.refreshVersion}
-                    task={data.task}
-                    taskVisibility={data.taskVisibility}
-                    schema={data.schema}
-                    viewRows={viewRows}
-                    viewReviews={data.viewReviews}
-                    viewReviewErrors={data.viewReviewErrors}
-                    viewQualityLoading={data.viewQualityLoading}
-                    selectedStream={viewState.selectedStream}
-                    selectedDetail={viewState.selectedDetail}
-                    selectedReview={selectedReview}
-                    onReviewSaved={data.updateViewReview}
-                    onTaskChange={(nextTask) => data.setTask(nextTask)}
-                    onRefresh={data.refresh}
-                  />
-                ) : null}
+                {!isReviewWorkflowAction ? renderActionForm() : null}
               </div>
             </div>
           ) : null}
+          {isReviewWorkflowAction ? renderActionForm() : null}
           <CaptureGroupInspector
             projectId={projectId}
             captureGroupId={captureGroupId}

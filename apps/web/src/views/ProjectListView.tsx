@@ -194,7 +194,7 @@ export default function ProjectListView() {
                 <div className="project-list-actions">
                   <Link
                     className="project-open-link"
-                    to={paths.videos(project.project_id)}
+                    to={paths.captureGroups(project.project_id)}
                     aria-label={`进入项目：${project.display_name}`}
                   >
                     进入项目

@@ -441,19 +441,26 @@
 .project-open-link {
   display: inline-flex;
   align-items: center;
-  min-height: var(--app-control-height-compact);
-  padding: 0 var(--app-space-4);
+  min-height: var(--app-control-height);
+  padding: 0 var(--app-space-12);
+  border: 1px solid var(--app-color-primary);
   border-radius: var(--app-radius-default);
   color: var(--app-color-primary);
-  background: transparent;
-  font-weight: var(--app-font-weight-medium);
+  background: var(--app-color-surface);
+  cursor: pointer;
+  font-weight: var(--app-font-weight-semibold);
   line-height: var(--app-line-height-control);
   text-decoration: none;
 }
 
 .project-open-link:hover {
   color: var(--app-color-primary-hover);
+  border-color: var(--app-color-primary-hover);
   background: var(--app-color-primary-subtle);
+}
+
+.project-open-link:active {
+  background: var(--app-color-surface-hover);
 }
 
 .project-open-link:focus-visible {

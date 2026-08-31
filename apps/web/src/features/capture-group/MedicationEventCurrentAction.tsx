@@ -55,6 +55,7 @@ export function MedicationEventCurrentAction({
 }: MedicationEventCurrentActionProps) {
   const primaryAction = workflow.primaryAction
   const message = actionMessage(workflow)
+  const isCompleted = workflow.steps.every((step) => step.state === 'completed')
 
   return (
     <Section
@@ -67,7 +68,13 @@ export function MedicationEventCurrentAction({
           <span className="app-eyebrow">当前阶段</span>
           <StatusIndicator
             tone={
-              workflow.blocker ? 'destructive' : workflow.waitingReason ? 'warning' : 'information'
+              workflow.blocker
+                ? 'destructive'
+                : workflow.waitingReason
+                  ? 'warning'
+                  : isCompleted
+                    ? 'success'
+                    : 'information'
             }
           >
             {medicationEventWorkflowStageLabels[workflow.stage]}
@@ -93,11 +100,13 @@ export function MedicationEventCurrentAction({
           </Button>
         ) : null}
       </div>
-      <ol className="capture-group-current-action-steps" aria-label="配药事件处理流程">
-        {workflow.steps.map((step) => (
-          <WorkflowStep key={step.stage} step={step} currentStage={workflow.stage} />
-        ))}
-      </ol>
+      {!isCompleted ? (
+        <ol className="capture-group-current-action-steps" aria-label="配药事件处理流程">
+          {workflow.steps.map((step) => (
+            <WorkflowStep key={step.stage} step={step} currentStage={workflow.stage} />
+          ))}
+        </ol>
+      ) : null}
     </Section>
   )
 }

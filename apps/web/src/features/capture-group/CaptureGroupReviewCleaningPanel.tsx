@@ -12,6 +12,7 @@ import {
   type CaptureGroupCleaning,
   type CaptureGroupEvidence,
   type CaptureGroupViewSet,
+  type PostCleaningResult,
 } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -29,6 +30,8 @@ import {
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
+
+type CleaningResult = CaptureGroupCleaning | PostCleaningResult
 
 interface CaptureGroupReviewCleaningPanelProps {
   projectId: string
@@ -58,13 +61,22 @@ export function CaptureGroupReviewCleaningPanel({
   const review = revision?.review ?? null
   const viewSet = revision?.confirmed_view_set ?? task?.confirmed_view_set ?? null
   const inputVersion = revision?.input_version ?? task?.group_input_version ?? null
-  const qualifiedViews = review?.qualified_views ?? qualifiedViewsFromViewSet(viewSet)
-  const rejectedMissingViews = review?.rejected_missing_views ?? rejectedViewsFromViewSet(viewSet)
-  const candidateEvidence = review?.candidate_evidence ?? []
+  const qualifiedViews = Array.isArray(review?.qualified_views)
+    ? review.qualified_views
+    : qualifiedViewsFromViewSet(viewSet)
+  const rejectedMissingViews = Array.isArray(review?.rejected_missing_views)
+    ? review.rejected_missing_views
+    : rejectedViewsFromViewSet(viewSet)
+  const candidateEvidence = Array.isArray(review?.candidate_evidence)
+    ? review.candidate_evidence
+    : []
   const canReview = Boolean(task?.can_review && revision)
-  const cleaning = revision?.capture_group_cleaning ?? null
+  const cleaning = revision?.capture_group_cleaning ?? revision?.post_cleaning_result ?? null
   const primaryClipAssetId = revision?.primary_clip_asset_id ?? task?.primary_clip_asset_id ?? null
   const primaryCameraNumber = revision?.primary_camera_number ?? task?.primary_camera_number ?? null
+  const hasCompletedReviewAndCleaning =
+    review?.decision === 'APPROVED' && cleaning?.outcome === 'PASS'
+  const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
 
   function openReview(decision: AnnotationReview['decision']) {
     if (!task || !revision || !task.can_review || reviewingDecision) return
@@ -140,14 +152,29 @@ export function CaptureGroupReviewCleaningPanel({
         <span className="capture-group-section-note">复核由人工完成 · 训练资格检查按规则执行</span>
       }
     >
+      {hasCompletedReviewAndCleaning ? (
+        <div className="capture-group-review-complete-summary" role="status">
+          <StatusIndicator tone="success">人工复核已通过 · 训练资格检查通过</StatusIndicator>
+          <p>当前事件已完成既定流程；完整修订、证据与规则事实已收起。</p>
+          <Button
+            type="link"
+            size="small"
+            aria-controls="capture-group-review-cleaning-details"
+            aria-expanded={isCompletedDetailOpen}
+            onClick={() => setIsCompletedDetailOpen((open) => !open)}
+          >
+            {isCompletedDetailOpen ? '收起复核与训练资格详情' : '查看复核与训练资格详情'}
+          </Button>
+        </div>
+      ) : null}
       {!task ? (
         <p className="form-hint">
           当前没有可见的配药事件任务，暂不能读取修订、复核或训练资格事实。
         </p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
-      ) : (
-        <>
+      ) : !hasCompletedReviewAndCleaning || isCompletedDetailOpen ? (
+        <div id="capture-group-review-cleaning-details">
           <div className="capture-group-review-boundary" role="status">
             <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
             <div>
@@ -164,19 +191,18 @@ export function CaptureGroupReviewCleaningPanel({
                   id: 'review-group',
                   label: '配药事件',
                   value: group.capture_group_key ?? group.capture_group_id,
-                  secondary: group.capture_group_id,
                 },
                 {
                   id: 'review-revision',
                   label: '修订',
                   value: `第 ${revision.revision_number} 次正式修订`,
-                  secondary: revision.annotation_revision_id,
+                  secondary: shortEvidenceId(revision.annotation_revision_id),
                 },
                 {
                   id: 'review-primary',
                   label: '主视图',
                   value: primaryCameraNumber ? `机位 ${primaryCameraNumber}` : '未提供',
-                  secondary: primaryClipAssetId ?? undefined,
+                  secondary: primaryClipAssetId ? shortEvidenceId(primaryClipAssetId) : undefined,
                 },
                 {
                   id: 'review-input-version',
@@ -335,8 +361,8 @@ export function CaptureGroupReviewCleaningPanel({
             isRechecking={isRechecking}
             onRecheck={() => void recheckCleaning()}
           />
-        </>
-      )}
+        </div>
+      ) : null}
     </Section>
   )
 }
@@ -386,7 +412,7 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
 
 interface EvidenceViewListProps {
   title: string
-  views: CaptureGroupEvidence[]
+  views: CaptureGroupEvidence[] | null | undefined
   emptyText: string
   tone: 'success' | 'warning'
 }
@@ -430,15 +456,16 @@ function FormalAnnotationIntervals({
 }
 
 function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListProps) {
+  const safeViews = Array.isArray(views) ? views : []
   return (
     <div className="capture-group-review-evidence-block">
       <div className="capture-group-review-subheading">
         <h3>{title}</h3>
-        <span>{views.length} 路</span>
+        <span>{safeViews.length} 路</span>
       </div>
-      {views.length ? (
+      {safeViews.length ? (
         <ul className="capture-group-evidence-list" aria-label={title}>
-          {views.map((view, index) => {
+          {safeViews.map((view, index) => {
             const decision = viewQualityDecision(view)
             return (
               <li key={evidenceKey(view, index)}>
@@ -463,7 +490,7 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
 }
 
 interface TrainingEligibilityCheckProps {
-  cleaning: CaptureGroupCleaning | null
+  cleaning: CleaningResult | null
   primaryCameraNumber: number | null
   schema: AnnotationLabelSchema | null
   review: AnnotationReview | null
@@ -481,6 +508,8 @@ function TrainingEligibilityCheck({
   isRechecking,
   onRecheck,
 }: TrainingEligibilityCheckProps) {
+  const captureGroupCleaning = cleaning && isCaptureGroupCleaning(cleaning) ? cleaning : null
+
   return (
     <div className="capture-group-training-check" aria-label="训练资格检查">
       <div className="capture-group-review-subheading">
@@ -501,7 +530,9 @@ function TrainingEligibilityCheck({
               {cleaning.outcome === 'PASS' ? '训练资格检查通过' : '训练资格检查未通过'}
             </StatusIndicator>
             <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
-            {cleaning.evaluated_by ? <span>评估人：{cleaning.evaluated_by}</span> : null}
+            {captureGroupCleaning?.evaluated_by ? (
+              <span>评估人：{captureGroupCleaning.evaluated_by}</span>
+            ) : null}
           </div>
           <MetadataList
             ariaLabel="训练资格检查规则来源"
@@ -527,12 +558,12 @@ function TrainingEligibilityCheck({
                     },
                   ]
                 : []),
-              ...(cleaning.authorization_basis
+              ...(captureGroupCleaning?.authorization_basis
                 ? [
                     {
                       id: 'cleaning-authorization',
                       label: '授权依据',
-                      value: cleaning.authorization_basis,
+                      value: captureGroupCleaning.authorization_basis,
                     },
                   ]
                 : []),
@@ -547,23 +578,23 @@ function TrainingEligibilityCheck({
           <div className="capture-group-cleaning-evidence-grid">
             <EvidenceViewList
               title="参与机位"
-              views={cleaning.participating_views}
+              views={captureGroupCleaning?.participating_views}
               emptyText="没有参与机位。"
               tone="success"
             />
             <EvidenceViewList
               title="排除机位"
-              views={cleaning.excluded_views}
+              views={captureGroupCleaning?.excluded_views}
               emptyText="没有排除机位。"
               tone="warning"
             />
           </div>
           <CleaningPrimaryInterval
             primaryCameraNumber={primaryCameraNumber}
-            primaryInterval={cleaning.primary_interval ?? []}
+            primaryInterval={captureGroupCleaning?.primary_interval ?? []}
             schema={schema}
           />
-          <EventLevelViewEvidence viewEvidence={cleaning.view_evidence ?? []} />
+          <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
           {canRecheck ? (
             <Button type="link" size="small" loading={isRechecking} onClick={onRecheck}>
               重新检查训练资格
@@ -587,15 +618,16 @@ function CleaningList({
   emptyText,
 }: {
   title: string
-  items: string[]
+  items: string[] | null | undefined
   emptyText: string
 }) {
+  const safeItems = Array.isArray(items) ? items : []
   return (
     <div className="capture-group-cleaning-list">
       <strong>{title}</strong>
-      {items.length ? (
+      {safeItems.length ? (
         <ul>
-          {items.map((item) => (
+          {safeItems.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
@@ -606,10 +638,14 @@ function CleaningList({
   )
 }
 
-function cleaningIndicatorTone(outcome: CaptureGroupCleaning['outcome']): StatusIndicatorTone {
+function cleaningIndicatorTone(outcome: CleaningResult['outcome']): StatusIndicatorTone {
   if (outcome === 'PASS') return 'success'
   if (outcome === 'REJECT') return 'destructive'
   return 'warning'
+}
+
+function isCaptureGroupCleaning(cleaning: CleaningResult): cleaning is CaptureGroupCleaning {
+  return 'capture_group_cleaning_id' in cleaning
 }
 
 function CleaningPrimaryInterval({
