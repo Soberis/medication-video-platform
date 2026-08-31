@@ -102,7 +102,13 @@
 }
 
 .capture-group-current-action-message.is-blocked {
-  color: var(--app-color-destructive);
+  color: var(--app-color-warning);
+}
+
+.capture-group-current-action-form-label {
+  color: var(--app-color-foreground);
+  font-size: var(--app-font-size-body);
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .capture-group-current-action-steps {
@@ -134,7 +140,7 @@
 }
 
 .capture-group-current-action-step.is-blocked {
-  color: var(--app-color-destructive);
+  color: var(--app-color-warning);
 }
 
 .capture-group-current-action-step-icon {

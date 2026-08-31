@@ -36,7 +36,9 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByRole('button', { name: '重新确认事件质量' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新确认事件质量' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('combobox', { name: '事件质量结论' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '保存事件质量' })).toBeInTheDocument()
     expect(screen.getAllByText('需复核').length).toBeGreaterThan(0)
     const auditDetails = screen.getByText('Revision、复核与训练资格').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
@@ -82,5 +84,28 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.getByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
     const compareStrip = screen.getByLabelText('配药事件机位选择')
     expect(within(compareStrip).getAllByRole('button', { name: /机位 / })).toHaveLength(2)
+  })
+
+  it('renders the colocated annotation form without a duplicate entry CTA', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'FAILED',
+    })
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByRole('button', { name: '提交修订' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '进入配药动作标注' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '继续配药动作标注' })).not.toBeInTheDocument()
+    expect(screen.getByText('进入配药动作标注')).toBeInTheDocument()
   })
 })

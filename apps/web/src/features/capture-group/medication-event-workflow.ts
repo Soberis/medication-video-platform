@@ -211,6 +211,13 @@ function deriveViewQualityWorkflow(
     })
   }
 
+  const loadingView = unresolvedViews.find((view) => view.visibility === 'loading')
+  if (loadingView) {
+    return buildWorkflow('VIEW_QUALITY', {
+      waitingReason: '机位质量正在读取；状态暂不可确认，请稍候刷新。',
+    })
+  }
+
   const malformedView = unresolvedViews.find((view) => !view.clip_asset_id)
   if (malformedView) {
     return buildWorkflow('VIEW_QUALITY', {
@@ -226,7 +233,7 @@ function deriveViewQualityWorkflow(
   const forbiddenView = unresolvedViews.find((view) => view.visibility === 'forbidden')
   if (forbiddenView) {
     return buildWorkflow('VIEW_QUALITY', {
-      blocker: `当前账号无权读取机位 ${forbiddenView.camera_number} 的机位质量；状态暂不可确认。`,
+      waitingReason: `当前账号无权读取机位 ${forbiddenView.camera_number} 的机位质量；等待有权限的人员处理。`,
     })
   }
 
@@ -234,13 +241,6 @@ function deriveViewQualityWorkflow(
   if (unavailableView) {
     return buildWorkflow('VIEW_QUALITY', {
       blocker: `机位 ${unavailableView.camera_number} 的机位质量暂不可用，请刷新后重试。`,
-    })
-  }
-
-  const loadingView = unresolvedViews.find((view) => view.visibility === 'loading')
-  if (loadingView) {
-    return buildWorkflow('VIEW_QUALITY', {
-      blocker: '机位质量正在读取；状态暂不可确认，请刷新后重试。',
     })
   }
 
@@ -255,7 +255,7 @@ function deriveGroupQualityWorkflow(
 ): MedicationEventWorkflowModel | null {
   if (facts.group_quality_visibility === 'forbidden') {
     return buildWorkflow('GROUP_QUALITY', {
-      blocker: '当前账号无权读取事件质量；状态暂不可确认。',
+      waitingReason: '当前账号无权读取事件质量；等待有权限的人员处理。',
     })
   }
   if (facts.group_quality_visibility === 'unavailable') {
@@ -265,7 +265,7 @@ function deriveGroupQualityWorkflow(
   }
   if (facts.group_quality_visibility === 'loading') {
     return buildWorkflow('GROUP_QUALITY', {
-      blocker: '事件质量正在读取；状态暂不可确认，请刷新后重试。',
+      waitingReason: '事件质量正在读取；状态暂不可确认，请稍候刷新。',
     })
   }
   if (!facts.group_quality) {
@@ -317,7 +317,7 @@ function deriveAnnotationWorkflow(
   }
   if (facts.task_visibility === 'permission-limited') {
     return buildWorkflow('ANNOTATION', {
-      blocker: '当前账号无权查看配药动作标注任务状态。',
+      waitingReason: '当前账号无权查看配药动作标注任务状态；等待有权限的人员处理。',
     })
   }
   if (!facts.task_status) {

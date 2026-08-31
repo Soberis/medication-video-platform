@@ -75,6 +75,7 @@ describe('CaptureGroup detail views', () => {
       await waitFor(() =>
         expect(document.activeElement).toHaveClass('capture-group-workflow-focus-target'),
       )
+      expect(await screen.findByRole('button', { name: '进入人工复核' })).toBeInTheDocument()
       const section = document.activeElement as HTMLElement
 
       expect(['capture-group-review-cleaning', 'capture-group-review-cleaning-context']).toContain(
@@ -252,9 +253,51 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '保存质量结论' }))
+    expect(screen.queryByRole('button', { name: '判断当前机位质量' })).not.toBeInTheDocument()
+    const saveQualityButton = await screen.findByRole('button', { name: '保存质量结论' })
+    expect(saveQualityButton).toBeInTheDocument()
+    await user.click(saveQualityButton)
 
     expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
+  })
+
+  it('treats a bound media stream as waiting instead of a workflow blocker', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const stream = group.streams[0]
+    if (!stream) throw new Error('Expected one stream fixture.')
+    stream.stream_status = 'BOUND'
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+      viewQualityByCamera: {
+        1: viewQualityRecord(stream.clip_asset_id, 'UNREVIEWED'),
+      },
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(
+      await screen.findByText('正在聚焦下一路未决机位，等待其媒体事实加载。'),
+    ).toBeInTheDocument()
+    const currentAction = screen
+      .getByRole('heading', { level: 2, name: '当前动作' })
+      .closest('section')
+    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
+      'data-tone',
+      'information',
+    )
+    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
+      'data-tone',
+      'destructive',
+    )
   })
 
   it('keeps technical and provenance facts behind progressive details', async () => {
@@ -472,6 +515,17 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText('事件质量暂不可用，请刷新后重试')).toBeInTheDocument()
     expect(screen.queryByText('待判断')).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
+    const currentAction = screen
+      .getByRole('heading', { level: 2, name: '当前动作' })
+      .closest('section')
+    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
+      'data-tone',
+      'warning',
+    )
+    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
+      'data-tone',
+      'destructive',
+    )
   })
 
   it('shows detail-quality permission denial only when the contract identifies 403', async () => {
@@ -498,6 +552,17 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText('事件质量按当前权限不可见')).toBeInTheDocument()
     expect(screen.queryByText('待判断')).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
+    const currentAction = screen
+      .getByRole('heading', { level: 2, name: '当前动作' })
+      .closest('section')
+    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
+      'data-tone',
+      'information',
+    )
+    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
+      'data-tone',
+      'destructive',
+    )
   })
 
   it('shows missing and rejected views, warns on sync, switches one main player context, and keeps AI failure non-blocking', async () => {

@@ -106,6 +106,10 @@ export default function CaptureGroupDetailView() {
   const isReviewWorkflowAction =
     workflow?.primaryAction?.target === 'review' ||
     workflow?.primaryAction?.target === 'training-eligibility'
+  const primaryActionHasForm =
+    workflow?.primaryAction?.target === 'view-quality' ||
+    workflow?.primaryAction?.target === 'group-quality' ||
+    workflow?.primaryAction?.target === 'annotation'
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -252,7 +256,7 @@ export default function CaptureGroupDetailView() {
               <div className="capture-group-action-column">
                 <MedicationEventCurrentAction
                   workflow={workflow}
-                  primaryActionHasForm={workflow.primaryAction?.target !== 'receipt'}
+                  primaryActionHasForm={primaryActionHasForm}
                   primaryActionDisabled={
                     workflow.primaryAction?.key === 'finalize-receipt' &&
                     isReceiptFinalizationPending
@@ -471,6 +475,11 @@ function createMedicationEventWorkflowFacts({
           selectedView?.stream?.clip_asset_id === stream.clip_asset_id &&
           selectedDetail?.status === 'INGESTED',
       )
+      const mediaUnavailable =
+        stream?.stream_status === 'INGEST_FAILED' || stream?.stream_status === 'UNAVAILABLE'
+      const mediaPending = Boolean(
+        stream && stream.stream_status !== 'INGESTED' && !mediaUnavailable,
+      )
       return {
         camera_number: view.cameraNumber,
         clip_asset_id: stream?.clip_asset_id ?? null,
@@ -478,11 +487,14 @@ function createMedicationEventWorkflowFacts({
         visibility,
         decision: review?.decision ?? 'UNREVIEWED',
         can_decide: canDecide,
-        blocker:
-          stream && stream.stream_status !== 'INGESTED'
-            ? `机位 ${view.cameraNumber} 的媒体尚未完成入库，暂不能判断机位质量。`
+        blocker: mediaUnavailable
+          ? `机位 ${view.cameraNumber} 的媒体不可用，暂不能判断机位质量。`
+          : undefined,
+        waiting_reason: mediaPending
+          ? `机位 ${view.cameraNumber} 的媒体正在处理，等待媒体事实完成。`
+          : stream && !canDecide
+            ? '等待当前机位进入可判断上下文。'
             : undefined,
-        waiting_reason: stream && !canDecide ? '等待当前机位进入可判断上下文。' : undefined,
       }
     }),
     group_quality_visibility: groupQualityVisibility,

@@ -36,9 +36,10 @@ function stepStateIcon(state: MedicationEventWorkflowStepState) {
   return null
 }
 
-function actionMessage(workflow: MedicationEventWorkflowModel) {
+function actionMessage(workflow: MedicationEventWorkflowModel, primaryActionHasForm: boolean) {
   if (workflow.blocker) return workflow.blocker
   if (workflow.waitingReason) return workflow.waitingReason
+  if (primaryActionHasForm && workflow.primaryAction) return '在下方直接完成当前动作。'
   if (workflow.primaryAction) return '根据当前服务端事实完成这一项处理。'
   return workflow.stage === 'TRAINING_ELIGIBILITY'
     ? '当前配药事件工作流已完成。'
@@ -54,7 +55,7 @@ export function MedicationEventCurrentAction({
   primaryActionRef,
 }: MedicationEventCurrentActionProps) {
   const primaryAction = workflow.primaryAction
-  const message = actionMessage(workflow)
+  const message = actionMessage(workflow, primaryActionHasForm)
   const isCompleted = workflow.steps.every((step) => step.state === 'completed')
 
   return (
@@ -69,9 +70,9 @@ export function MedicationEventCurrentAction({
           <StatusIndicator
             tone={
               workflow.blocker
-                ? 'destructive'
+                ? 'warning'
                 : workflow.waitingReason
-                  ? 'warning'
+                  ? 'information'
                   : isCompleted
                     ? 'success'
                     : 'information'
@@ -79,6 +80,11 @@ export function MedicationEventCurrentAction({
           >
             {medicationEventWorkflowStageLabels[workflow.stage]}
           </StatusIndicator>
+          {primaryActionHasForm && primaryAction ? (
+            <strong className="capture-group-current-action-form-label">
+              {primaryAction.label}
+            </strong>
+          ) : null}
           <p
             className={`capture-group-current-action-message${workflow.blocker ? ' is-blocked' : ''}`}
             role="status"
@@ -87,10 +93,10 @@ export function MedicationEventCurrentAction({
             {message}
           </p>
         </div>
-        {primaryAction && onPrimaryAction ? (
+        {primaryAction && onPrimaryAction && !primaryActionHasForm ? (
           <Button
             ref={primaryActionRef}
-            type={primaryActionHasForm ? 'default' : 'primary'}
+            type="primary"
             htmlType="button"
             loading={primaryActionLoading}
             disabled={primaryActionDisabled}

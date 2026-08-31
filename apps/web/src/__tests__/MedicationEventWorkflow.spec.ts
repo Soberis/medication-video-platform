@@ -169,7 +169,16 @@ describe('medication event workflow presentation', () => {
     expect(unavailable.primaryAction).toBeNull()
     expect(unavailable.blocker).toContain('暂不可用')
     expect(forbidden.primaryAction).toBeNull()
-    expect(forbidden.blocker).toContain('无权')
+    expect(forbidden.blocker).toBeNull()
+    expect(forbidden.waitingReason).toContain('无权')
+
+    const loading = deriveMedicationEventWorkflow(
+      facts({
+        view_quality: [viewQuality('UNREVIEWED', { visibility: 'loading' })],
+      }),
+    )
+    expect(loading.blocker).toBeNull()
+    expect(loading.waitingReason).toContain('正在读取')
   })
 
   it('continues with an available unresolved view when another view is unavailable', () => {
@@ -226,6 +235,18 @@ describe('medication event workflow presentation', () => {
     expect(waiting.primaryAction).toBeNull()
     expect(waiting.waitingReason).toContain('等待')
     expect(actionable.primaryAction?.key).toBe('decide-group-quality')
+  })
+
+  it('treats permission-limited task state as waiting rather than a destructive failure', () => {
+    const workflow = deriveMedicationEventWorkflow(
+      facts({
+        task_visibility: 'permission-limited',
+      }),
+    )
+
+    expect(workflow.primaryAction).toBeNull()
+    expect(workflow.blocker).toBeNull()
+    expect(workflow.waitingReason).toContain('无权')
   })
 
   it('maps assigned annotation and rejected-review rework to the same product stage', () => {
