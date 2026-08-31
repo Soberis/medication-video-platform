@@ -12,6 +12,7 @@ import {
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
+import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
@@ -40,6 +41,7 @@ type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
+  const { session } = useAuth()
   const [rows, setRows] = useState<CaptureGroupListRow[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
@@ -174,7 +176,9 @@ export default function CaptureGroupListView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <span>配药事件</span>
+        <span>视频管理</span>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">配药事件</span>
       </nav>
       <PageHeader
         className="capture-group-page-header"
@@ -212,7 +216,7 @@ export default function CaptureGroupListView() {
             </div>
           }
         >
-          <Link to={paths.videos(projectId)}>查看视频管理</Link>
+          {session?.role === 'ADMIN' ? <Link to={paths.localUpload}>上传视频</Link> : null}
         </EmptyState>
       ) : null}
       {rows.length ? (

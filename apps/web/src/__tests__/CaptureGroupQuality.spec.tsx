@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRoute } from '@/test/render'
+import { paths } from '@/app/paths'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 import CaptureGroupListView from '@/views/CaptureGroupListView'
 
@@ -498,17 +499,43 @@ describe('CaptureGroup operational list and quality', () => {
     renderRoute(<CaptureGroupListView />, {
       path: '/projects/:projectId/capture-groups',
       route: `/projects/${projectId}/capture-groups`,
+      session: { username: 'platform-admin', role: 'ADMIN' },
     })
 
     expect(await screen.findByText('还没有配药事件')).toBeInTheDocument()
     expect(screen.getByText(/完成明确归组的接收记录后，配药事件会显示在这里/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看视频管理' })).toHaveAttribute(
+    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
+    expect(breadcrumb).toHaveTextContent('视频管理')
+    expect(breadcrumb).toHaveTextContent('配药事件')
+    expect(screen.getByRole('link', { name: '上传视频' })).toHaveAttribute(
       'href',
-      `/projects/${projectId}/videos`,
+      paths.localUpload,
     )
+    expect(screen.queryByRole('link', { name: '查看视频管理' })).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(([input]) => String(input).endsWith('/annotation-tasks')),
     ).toBe(false)
+  })
+
+  it('does not show an upload CTA for a member without the authorized upload entry', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/capture-groups?')) {
+        return Promise.resolve(jsonResponse({ items: [], next_cursor: null }))
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+      session: { username: 'project-member', role: 'MEMBER' },
+    })
+
+    expect(await screen.findByText('还没有配药事件')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '上传视频' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '查看视频管理' })).not.toBeInTheDocument()
   })
 
   it('does not present a missing assignee-scoped task as proof that no group task exists', async () => {
