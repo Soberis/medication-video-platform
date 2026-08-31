@@ -36,11 +36,14 @@ interface CaptureGroupListRow {
   taskVisibility: CaptureGroupTaskVisibility
 }
 
+type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
+
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
   const [rows, setRows] = useState<CaptureGroupListRow[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
+  const [loadingMode, setLoadingMode] = useState<CaptureGroupListLoadingMode>('initial')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
@@ -53,6 +56,12 @@ export default function CaptureGroupListView() {
       activeRequest.current?.abort()
       const request = new AbortController()
       activeRequest.current = request
+      const requestMode: CaptureGroupListLoadingMode = append
+        ? 'more'
+        : rowsRef.current.length
+          ? 'refresh'
+          : 'initial'
+      setLoadingMode(requestMode)
       setLoadState('loading')
       setErrorCode('')
       setErrorMessage('')
@@ -144,7 +153,10 @@ export default function CaptureGroupListView() {
         )
         setErrorMessage('暂时无法读取配药事件，请稍后重试。')
       } finally {
-        if (activeRequest.current === request) activeRequest.current = null
+        if (activeRequest.current === request) {
+          activeRequest.current = null
+          setLoadingMode(null)
+        }
       }
     },
     [projectId],
@@ -173,14 +185,16 @@ export default function CaptureGroupListView() {
           <Button
             size="small"
             icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={loadState === 'loading'}
+            loading={loadingMode === 'refresh'}
             onClick={() => void loadGroups()}
           >
             刷新
           </Button>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在读取配药事件…</LoadingState> : null}
+      {loadState === 'loading' && !rows.length ? (
+        <LoadingState>正在读取配药事件…</LoadingState>
+      ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadGroups()}>
           {errorMessage}
@@ -292,7 +306,7 @@ export default function CaptureGroupListView() {
           {nextCursor ? (
             <div className="capture-group-list-pagination">
               <Button
-                loading={loadState === 'loading'}
+                loading={loadingMode === 'more'}
                 size="small"
                 onClick={() => void loadGroups(true, nextCursor)}
               >

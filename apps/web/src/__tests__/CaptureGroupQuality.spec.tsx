@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +12,7 @@ import {
   groupTask,
   projectId,
   qualityFixture,
+  summaryFromGroup,
   stubGroupDetail,
   stubGroupList,
   stubPagedGroupList,
@@ -20,7 +21,146 @@ import {
 
 afterEach(() => vi.unstubAllGlobals())
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('CaptureGroup operational list and quality', () => {
+  it('shows page loading feedback while the first CaptureGroup page is pending', async () => {
+    const firstPage = deferred<Response>()
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/capture-groups?')) return firstPage.promise
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('正在读取配药事件…')
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
+
+    firstPage.resolve(jsonResponse({ items: [], next_cursor: null }))
+    expect(await screen.findByText('还没有配药事件')).toBeInTheDocument()
+  })
+
+  it('keeps existing rows visible and scopes refresh feedback to the refresh button', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'refresh-stable',
+    })
+    const fetchMock = stubGroupList([group], [], { nextCursor: 'cursor-more' })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /refresh-stable/ })
+    const refreshRequest = deferred<Response>()
+    fetchMock.mockImplementationOnce(() => refreshRequest.promise)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    expect(row).toBeInTheDocument()
+    expect(screen.queryByText('正在读取配药事件…')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /刷新/ })).toHaveClass('ant-btn-loading')
+    expect(screen.getByRole('button', { name: /加载更多/ })).not.toHaveClass('ant-btn-loading')
+
+    refreshRequest.resolve(
+      jsonResponse({ items: [summaryFromGroup(group)], next_cursor: 'cursor-more' }),
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /刷新/ })).not.toHaveClass('ant-btn-loading')
+    })
+  })
+
+  it('keeps rows during load more, appends the page, and suppresses duplicate groups', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'page-one',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'page-two',
+    })
+    const fetchMock = stubGroupList([first], [], { nextCursor: 'cursor-page-2' })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const firstRow = await screen.findByRole('listitem', { name: /page-one/ })
+    const nextPage = deferred<Response>()
+    fetchMock.mockImplementationOnce(() => nextPage.promise)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    expect(firstRow).toBeInTheDocument()
+    expect(screen.queryByText('正在读取配药事件…')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /加载更多/ })).toHaveClass('ant-btn-loading')
+    expect(screen.getByRole('button', { name: /刷新/ })).not.toHaveClass('ant-btn-loading')
+
+    nextPage.resolve(
+      jsonResponse({
+        items: [summaryFromGroup(first), summaryFromGroup(second)],
+        next_cursor: null,
+      }),
+    )
+
+    expect(await screen.findByRole('listitem', { name: /page-two/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /加载更多/ })).not.toBeInTheDocument()
+    })
+  })
+
+  it('preserves authoritative rows and shows a technical error when load more fails', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'page-one-error',
+    })
+    const fetchMock = stubGroupList([group], [], { nextCursor: 'cursor-page-2' })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /page-one-error/ })
+    fetchMock.mockImplementationOnce(() =>
+      Promise.resolve(jsonResponse({ error_code: 'CAPTURE_GROUP_LIST_FAILED' }, { status: 500 })),
+    )
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+
+    expect(await screen.findByText('暂时无法读取配药事件，请稍后重试。')).toBeInTheDocument()
+    expect(row).toBeInTheDocument()
+    expect(screen.queryByText('还没有配药事件')).not.toBeInTheDocument()
+    expect(screen.queryByText('正在读取配药事件…')).not.toBeInTheDocument()
+  })
+
   it('renders an operational N=5 list with camera gaps and server-backed group facts', async () => {
     const groups = [1, 2, 3, 4, 5].map((index) =>
       captureGroupFixture(`60000000-0000-4000-8000-${String(index).padStart(12, '0')}`, {

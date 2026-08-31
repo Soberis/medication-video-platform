@@ -31,6 +31,7 @@ export function stubGroupList(
     qualityListError?: { status: number; errorCode?: string }
     groupListError?: { status: number; errorCode?: string }
     omitQualityFor?: string[]
+    nextCursor?: string | null
   } = {},
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -46,7 +47,10 @@ export function stubGroupList(
         )
       }
       return Promise.resolve(
-        jsonResponse({ items: groups.map(summaryFromGroup), next_cursor: null }),
+        jsonResponse({
+          items: groups.map(summaryFromGroup),
+          next_cursor: options.nextCursor ?? null,
+        }),
       )
     }
     if (path.endsWith('/capture-group-quality-reviews')) {
@@ -808,7 +812,7 @@ export function labelSchema() {
   }
 }
 
-function summaryFromGroup(group: CaptureGroup): CaptureGroupSummary {
+export function summaryFromGroup(group: CaptureGroup): CaptureGroupSummary {
   return {
     capture_group_id: group.capture_group_id,
     capture_group_key: group.capture_group_key,
