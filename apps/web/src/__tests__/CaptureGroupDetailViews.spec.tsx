@@ -138,7 +138,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText('应 1 个机位 · 已收 1 个机位 · 缺失 0 个机位')).toBeInTheDocument()
     expect(screen.getByText('接收状态')).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: '配药事件机位列表' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('配药事件机位选择')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: '当前动作' })).toBeInTheDocument()
     expect(screen.getByRole('list', { name: '配药事件处理流程' })).toBeInTheDocument()
     expect(document.querySelectorAll('h1')).toHaveLength(1)
@@ -213,16 +213,16 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    const rail = await screen.findByRole('list', { name: '配药事件机位列表' })
-    expect(within(rail).getAllByRole('listitem')).toHaveLength(2)
-    const cameraTwoButton = within(
-      within(rail).getByRole('listitem', { name: /机位 2/ }),
-    ).getByRole('button', { name: /机位 2/ })
+    const selector = await screen.findByLabelText('配药事件机位选择')
+    expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
+    expect(within(selector).getAllByRole('button')).toHaveLength(2)
+    const cameraTwoButton = within(selector).getByRole('button', { name: /机位 2/ })
     cameraTwoButton.focus()
     await user.keyboard('{Enter}')
 
     expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
     expect(cameraTwoButton).toHaveAttribute('aria-pressed', 'true')
+    expect(cameraTwoButton).toHaveAttribute('aria-current', 'true')
   })
 
   it('focuses the first unresolved view and advances only after a successful quality refresh', async () => {
@@ -506,6 +506,9 @@ describe('CaptureGroup detail views', () => {
       received: [1, 2, 4, 5],
       receipt: 'INCOMPLETE',
     })
+    const mediaFailedStream = group.streams.find((stream) => stream.camera_number === 4)
+    if (!mediaFailedStream) throw new Error('Expected camera 4 stream fixture.')
+    mediaFailedStream.stream_status = 'INGEST_FAILED'
     const fetchMock = stubGroupDetail(group, {
       task: groupTask(groupId, true),
       quality: qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS', { rejectedCamera: 5 }),
@@ -520,18 +523,37 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect((await screen.findAllByText('机位 3')).length).toBeGreaterThan(0)
-    expect(screen.getByText('缺失机位：机位 3')).toBeInTheDocument()
     expect(screen.getAllByText('合格（排除部分机位）').length).toBeGreaterThan(0)
     expect(await screen.findByText('检测失败')).toBeInTheDocument()
     expect(await screen.findByText(/手部检测失败/)).toBeInTheDocument()
     expect(screen.getAllByText(/同步需关注 · 仅供参考/).length).toBeGreaterThan(0)
-    const rejectedRow = screen.getByRole('listitem', { name: /机位 5/ })
-    expect(rejectedRow).toHaveTextContent('机位质量 · 不合格')
-    expect(rejectedRow).toHaveTextContent('不合格')
+    const selector = screen.getByLabelText('配药事件机位选择')
+    expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
+    expect(within(selector).getAllByRole('button')).toHaveLength(5)
+    expect(
+      within(selector)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual([
+      expect.stringContaining('机位 1'),
+      expect.stringContaining('机位 2'),
+      expect.stringContaining('机位 3'),
+      expect.stringContaining('机位 4'),
+      expect.stringContaining('机位 5'),
+    ])
+    expect(within(selector).getByRole('button', { name: /机位 3.*缺失/ })).toBeDisabled()
+    const rejectedButton = within(selector).getByRole('button', {
+      name: /机位 5.*机位质量 · 不合格/,
+    })
+    expect(rejectedButton).not.toBeDisabled()
+    expect(rejectedButton).toHaveTextContent('机位质量 · 不合格')
+    const mediaFailedButton = within(selector).getByRole('button', {
+      name: /机位 4.*媒体不可用/,
+    })
+    expect(mediaFailedButton).not.toBeDisabled()
     expect(screen.getAllByText(/不合格/).length).toBeGreaterThan(0)
 
-    const cameraTwoRow = screen.getByRole('listitem', { name: /机位 2/ })
-    await user.click(within(cameraTwoRow).getByRole('button', { name: /机位 2/ }))
+    await user.click(within(selector).getByRole('button', { name: /机位 2/ }))
     expect(await screen.findByRole('heading', { level: 2, name: /机位 2/ })).toBeInTheDocument()
     expect(await screen.findByText(/未检测到手部；这是检测事实/)).toBeInTheDocument()
     expect(screen.getAllByText(/参考视图/).length).toBeGreaterThan(0)

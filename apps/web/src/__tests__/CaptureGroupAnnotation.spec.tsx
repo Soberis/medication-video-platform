@@ -80,7 +80,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(within(auditDetails).getByText('机位 1')).toBeInTheDocument()
     expect(screen.getAllByText('人工复核 · 已通过').length).toBeGreaterThan(0)
     expect(screen.getByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
-    const compareStrip = screen.getByLabelText('参考视图机位切换')
+    const compareStrip = screen.getByLabelText('配药事件机位选择')
     expect(within(compareStrip).getAllByRole('button', { name: /机位 / })).toHaveLength(2)
   })
 })

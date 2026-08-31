@@ -18,7 +18,6 @@ import {
   CaptureGroupQualityPanel,
   CaptureGroupViewQualitySection,
 } from '@/features/capture-group/CaptureGroupQualityPanel'
-import { CaptureGroupViewRail } from '@/features/capture-group/CaptureGroupViewRail'
 import { MedicationEventCurrentAction } from '@/features/capture-group/MedicationEventCurrentAction'
 import {
   createGroupViewRows,
@@ -242,13 +241,6 @@ export default function CaptureGroupDetailView() {
           {workflow ? (
             <div className="capture-group-workspace">
               <div className="capture-group-video-column">
-                <CaptureGroupViewRail
-                  group={data.group}
-                  viewRows={viewRows}
-                  selectedClipAssetId={data.selectedClipAssetId}
-                  viewReviews={data.viewReviews}
-                  onSelectView={data.setSelectedClipAssetId}
-                />
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
                   task={data.task}

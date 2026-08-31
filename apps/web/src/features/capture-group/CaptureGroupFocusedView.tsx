@@ -83,6 +83,54 @@ export function CaptureGroupFocusedView({
           description="仅供人工视觉对照；正式标注时间基准仍以主视图为准。"
         />
       ) : null}
+      {viewRows.length > 1 ? (
+        <div className="capture-group-compare-strip" aria-label="配药事件机位选择">
+          <div className="capture-group-compare-heading">
+            <span className="app-eyebrow">机位切换</span>
+            <span>选择一路机位查看当前视频；缺失机位保留在原编号位置。</span>
+          </div>
+          <div className="capture-group-compare-list">
+            {viewRows.map((view) => {
+              const stream = view.stream
+              const isCurrent = Boolean(
+                stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
+              )
+              const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
+              const qualityLabel = stream
+                ? `机位质量 · ${viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
+                : '缺失'
+              const mediaLabel = stream
+                ? stream.stream_status === 'INGEST_FAILED' || stream.stream_status === 'UNAVAILABLE'
+                  ? '媒体不可用'
+                  : stream.stream_status === 'INGESTED'
+                    ? '已接收'
+                    : '已接收 · 媒体处理中'
+                : '缺失'
+              return (
+                <button
+                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}`}
+                  type="button"
+                  key={view.cameraNumber}
+                  disabled={!stream}
+                  aria-pressed={isCurrent}
+                  aria-current={isCurrent ? 'true' : undefined}
+                  aria-label={`机位 ${view.cameraNumber} · ${mediaLabel} · ${qualityLabel}`}
+                  onClick={() => stream && onSelectView(stream.clip_asset_id)}
+                >
+                  <span className="capture-group-compare-thumbnail" aria-hidden="true">
+                    <Video size={16} strokeWidth={1.7} />
+                  </span>
+                  <span>
+                    <strong>机位 {view.cameraNumber}</strong>
+                    <small>{mediaLabel}</small>
+                    <small>{qualityLabel}</small>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
       <PlaybackCard
         availability={playbackAvailability}
         candidateOverlay={candidateResponse?.candidates ?? []}
@@ -104,42 +152,6 @@ export function CaptureGroupFocusedView({
         onRecoverMissingMediaProbe={() => undefined}
         onStartPlayback={() => void startPlayback()}
       />
-      {selectedStream && viewRows.length > 1 ? (
-        <div className="capture-group-compare-strip" aria-label="参考视图机位切换">
-          <div className="capture-group-compare-heading">
-            <span className="app-eyebrow">机位切换</span>
-            <span>只切换当前主播放器，不预加载其他完整视频。</span>
-          </div>
-          <div className="capture-group-compare-list">
-            {viewRows.map((view) => {
-              const stream = view.stream
-              const isCurrent = stream?.clip_asset_id === selectedStream.clip_asset_id
-              const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
-              return (
-                <button
-                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}`}
-                  type="button"
-                  key={view.cameraNumber}
-                  disabled={!stream}
-                  aria-pressed={isCurrent}
-                  onClick={() => stream && onSelectView(stream.clip_asset_id)}
-                >
-                  <span className="capture-group-compare-thumbnail" aria-hidden="true">
-                    <Video size={16} strokeWidth={1.7} />
-                  </span>
-                  <span>
-                    <strong>机位 {view.cameraNumber}</strong>
-                    <small>
-                      {stream ? viewQualityLabels[decision?.decision ?? 'UNREVIEWED'] : '缺失'}
-                      {stream && stream.stream_status !== 'INGESTED' ? ' · 媒体不可用' : ''}
-                    </small>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
       {selectedDetail ? (
         <details className="capture-group-focused-details">
           <summary>查看机位技术与辅助证据</summary>
