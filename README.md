@@ -4,19 +4,22 @@
 
 当前需求基线：V1.25（多机位 CaptureGroup 运行时闭环已实现，并保留 V1.24-compatible 单视频路径）
 
-```text
-一次真实配药事件 → 一个 CaptureGroup → 动态 N 路视图 → 逐视图 Media Probe / MediaPipe Candidate
-→ 人工质量与组质量准入 → 一个组 AnnotationTask / Revision 修订链 → Review → 事件级 Cleaning → 版本化训练数据
-```
+当前同时支持：
 
-当前已实现运行时（V1.24-compatible 单视频流程）：
+V1.25 new-event mainline：
 
 ```text
-边端接收 → 视频/数据管理 → Media Probe → 单视频 MediaPipe Candidate
-→ 人工质量判断 → 合格后自动任务分配 → 人工配药动作标注复核 → 数据清洗 → 可用数据
+配药事件 / CaptureGroup → Receipt → View Quality → Group Quality
+→ one AnnotationTask → Revision → Review → Cleaning → training-data.v3
 ```
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe 候选作业；MediaPipe 只生成可追溯的候选和播放器 Overlay，不能自动成为正式标注或清洗结论。质量合格只会自动创建并分配人工标注任务，不能跳过人工 revision、复核、清洗或管理员导出确认。V1.25 CaptureGroup 路径已实现组质量、组任务/修订、人工 Review、事件级 Cleaning 和 training-data.v3-style 多视图导出；V1.24 的 training-data.v2 行为继续保留。批量 API 和可配置自动策略属于后续能力。
+V1.24-compatible historical single-video path：
+
+```text
+ClipAsset → existing single-video workflow → training-data.v2
+```
+
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe 候选作业；MediaPipe 只生成可追溯的候选和播放器 Overlay，不能自动成为正式标注或清洗结论。质量合格只会自动创建并分配人工标注任务，不能跳过人工 revision、复核、清洗或管理员导出确认。V1.25 CaptureGroup 路径已实现组质量、组任务/修订、人工 Review、事件级 Cleaning 和 training-data.v3 多视图导出；V1.24 的 training-data.v2 行为继续保留。批量 API 和可配置自动策略属于后续能力。
 
 当前规范：
 
@@ -24,7 +27,7 @@
 - [V1.25 多机位实现技术设计](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
 - [V1.25 多机位质量评审与清洗工作流](./docs/architecture/multi-camera-quality-review-workflow.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
-- [V1.24 前一正式基线与当前运行时参考](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
+- [V1.24 前一正式基线与兼容路径参考](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
 - [V1.24 单视频手部预标注组件设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
 
