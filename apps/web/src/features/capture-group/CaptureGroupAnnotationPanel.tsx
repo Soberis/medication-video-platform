@@ -34,6 +34,7 @@ import {
   viewQualityLabels,
   type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
+import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
 interface CaptureGroupAnnotationPanelProps {
   projectId: string
@@ -47,7 +48,7 @@ interface CaptureGroupAnnotationPanelProps {
   viewReviews: Record<string, QualityReview>
   refreshVersion: number
   onTaskChange: (task: AnnotationTask) => void
-  onRefresh: () => Promise<void>
+  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
 
 export function CaptureGroupAnnotationPanel({
@@ -85,7 +86,8 @@ export function CaptureGroupAnnotationPanel({
       task.primary_clip_asset_id &&
       groupQualityAdmitting &&
       !groupQualityDowngraded &&
-      !groupQualityReceiving,
+      !groupQualityReceiving &&
+      sortedLabels.length > 0,
   )
 
   useEffect(() => {
@@ -130,9 +132,11 @@ export function CaptureGroupAnnotationPanel({
               : '当前账号或任务状态不允许选择主视图；请等待任务执行人处理。'
             : !task.can_submit
               ? '当前账号或任务状态不允许提交；请查看服务端任务状态。'
-              : task.status !== 'ASSIGNED'
-                ? `当前任务状态：${formatTaskStatus(task)}。`
-                : ''
+              : !sortedLabels.length
+                ? '标签规范暂时无法读取，当前不能提交新的修订。'
+                : task.status !== 'ASSIGNED'
+                  ? `当前任务状态：${formatTaskStatus(task)}。`
+                  : ''
 
   async function choosePrimaryView(clipAssetId: string) {
     if (

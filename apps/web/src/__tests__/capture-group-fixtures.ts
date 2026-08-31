@@ -12,6 +12,7 @@ import type {
   CaptureGroupQualityReview,
   CaptureGroupSummary,
 } from '@/api/capture-groups'
+import type { QualityReview } from '@/api/quality'
 
 export const projectId = '30000000-0000-4000-8000-000000000001'
 export const groupId = '60000000-0000-4000-8000-000000000001'
@@ -193,6 +194,8 @@ export function stubGroupDetail(
     receiptFinalizeGate?: Promise<void>
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
+    viewQualityByCamera?: Record<number, QualityReview>
+    viewQualityAfterSaveByCamera?: Record<number, QualityReview>
     reviewResponse?: Partial<AnnotationReview>
     reviewError?: { status: number; body: object }
     cleaningRecheckResponse?: CaptureGroupCleaning
@@ -258,7 +261,38 @@ export function stubGroupDetail(
     }
     if (url.includes('/quality-review') && url.includes('/clip-assets/')) {
       const clipAssetId = url.split('/clip-assets/')[1]?.split('/')[0]
-      return Promise.resolve(jsonResponse(viewQuality(group, clipAssetId ?? '', options.quality)))
+      const cameraNumber = group.streams.find(
+        (stream) => stream.clip_asset_id === clipAssetId,
+      )?.camera_number
+      if (init?.method === 'PUT' && cameraNumber !== undefined) {
+        const current =
+          options.viewQualityByCamera?.[cameraNumber] ??
+          (viewQuality(group, clipAssetId ?? '', options.quality) as QualityReview)
+        const request = JSON.parse(String(init.body ?? '{}')) as {
+          decision?: QualityReview['decision']
+          reason_code?: QualityReview['reason_code']
+        }
+        const next =
+          options.viewQualityAfterSaveByCamera?.[cameraNumber] ??
+          ({
+            ...current,
+            decision: request.decision ?? 'QUALIFIED',
+            reason_code: request.reason_code ?? 'MEETS_REQUIREMENTS',
+            reviewed_by: 'reviewer',
+            reviewed_at: '2026-08-20T01:02:00Z',
+            version: current.version + 1,
+          } satisfies QualityReview)
+        if (options.viewQualityByCamera) options.viewQualityByCamera[cameraNumber] = next
+        return Promise.resolve(jsonResponse(next))
+      }
+      return Promise.resolve(
+        jsonResponse(
+          cameraNumber !== undefined
+            ? (options.viewQualityByCamera?.[cameraNumber] ??
+                (viewQuality(group, clipAssetId ?? '', options.quality) as QualityReview))
+            : viewQuality(group, clipAssetId ?? '', options.quality),
+        ),
+      )
     }
     if (
       url.includes('/clip-assets/') &&

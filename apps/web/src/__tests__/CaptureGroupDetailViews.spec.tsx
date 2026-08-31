@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
+import type { QualityReview } from '@/api/quality'
 
 import {
   captureGroupFixture,
@@ -14,6 +15,23 @@ import {
   qualityFixture,
   stubGroupDetail,
 } from './capture-group-fixtures'
+
+function viewQualityRecord(
+  clipAssetId: string,
+  decision: QualityReview['decision'],
+  version = 0,
+): QualityReview {
+  return {
+    quality_review_id: version ? `quality-${clipAssetId}` : null,
+    project_id: projectId,
+    clip_asset_id: clipAssetId,
+    decision,
+    reason_code: version ? 'MEETS_REQUIREMENTS' : null,
+    reviewed_by: version ? 'reviewer' : null,
+    reviewed_at: version ? '2026-08-20T01:02:00Z' : null,
+    version,
+  }
+}
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -119,6 +137,11 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
     expect(screen.getByText('应 1 个机位 · 已收 1 个机位 · 缺失 0 个机位')).toBeInTheDocument()
     expect(screen.getByText('接收状态')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '配药事件机位列表' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '当前动作' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '配药事件处理流程' })).toBeInTheDocument()
+    expect(document.querySelectorAll('h1')).toHaveLength(1)
     expect(screen.getAllByText('事件质量').length).toBeGreaterThan(0)
     expect(screen.getAllByText('拍摄时间').length).toBeGreaterThan(0)
     expect(screen.getByText('机位质量')).toBeInTheDocument()
@@ -133,6 +156,111 @@ describe('CaptureGroup detail views', () => {
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
       expect.anything(),
     )
+  })
+
+  it('uses a compact camera selector for N=2 and supports keyboard switching', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const rail = await screen.findByRole('list', { name: '配药事件机位列表' })
+    expect(within(rail).getAllByRole('listitem')).toHaveLength(2)
+    const cameraTwoButton = within(
+      within(rail).getByRole('listitem', { name: /机位 2/ }),
+    ).getByRole('button', { name: /机位 2/ })
+    cameraTwoButton.focus()
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
+    expect(cameraTwoButton).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('focuses the first unresolved view and advances only after a successful quality refresh', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const viewQualityByCamera: Record<number, QualityReview> = {
+      1: viewQualityRecord(clipIds[0]!, 'UNREVIEWED'),
+      2: viewQualityRecord(clipIds[1]!, 'UNREVIEWED'),
+    }
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+      viewQualityByCamera,
+      viewQualityAfterSaveByCamera: {
+        1: viewQualityRecord(clipIds[0]!, 'QUALIFIED', 1),
+      },
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '保存质量结论' }))
+
+    expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
+  })
+
+  it('keeps technical and provenance facts behind progressive details', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'FAILED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const inspector = await screen.findByRole('complementary', {
+      name: '事实、历史与审计',
+    })
+    const receiptSummary = within(inspector).getByText('接收与采集事实')
+    const receiptDetails = receiptSummary.closest('details')
+    if (!receiptDetails) throw new Error('Receipt progressive detail was not mounted.')
+    expect(receiptDetails).not.toHaveAttribute('open')
+    await user.click(receiptSummary)
+    expect(receiptDetails).toHaveAttribute('open')
+    expect(within(receiptDetails).getByText('配药事件 ID')).toBeInTheDocument()
+    expect(within(receiptDetails).getByText('服务端接收时间')).toBeInTheDocument()
+
+    const focusedDetails = screen.getByText('查看机位技术与辅助证据').closest('details')
+    if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
+    expect(focusedDetails).not.toHaveAttribute('open')
+    await user.click(screen.getByText('查看机位技术与辅助证据'))
+    expect(focusedDetails).toHaveAttribute('open')
+    expect(
+      within(focusedDetails).getByRole('heading', { level: 2, name: '手部检测' }),
+    ).toBeInTheDocument()
+    expect(
+      within(focusedDetails).getByRole('heading', { level: 3, name: '媒体检测报告' }),
+    ).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before ending receipt', async () => {

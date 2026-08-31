@@ -28,6 +28,7 @@ import {
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
+import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
 interface CaptureGroupReviewCleaningPanelProps {
   projectId: string
@@ -36,7 +37,7 @@ interface CaptureGroupReviewCleaningPanelProps {
   groupQualityVisibility: CaptureGroupQualityVisibility
   task: AnnotationTask | null
   schema: AnnotationLabelSchema | null
-  onRefresh: () => Promise<void>
+  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
 
 export function CaptureGroupReviewCleaningPanel({

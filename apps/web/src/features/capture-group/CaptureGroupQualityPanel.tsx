@@ -32,6 +32,7 @@ import {
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
+import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
 interface CaptureGroupViewQualitySectionProps {
   projectId: string
@@ -42,7 +43,7 @@ interface CaptureGroupViewQualitySectionProps {
   viewReviewErrors: Record<string, string>
   viewQualityLoading: boolean
   onReviewSaved: (review: QualityReview) => void
-  onRefresh: () => Promise<void>
+  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
 
 export function CaptureGroupViewQualitySection({
@@ -102,9 +103,11 @@ export function CaptureGroupViewQualitySection({
         reason_code: selectedReason,
         expected_version: selectedReview?.version ?? 0,
       })
-      onReviewSaved(review)
-      void message.success(`机位 ${selectedStream.camera_number} 的机位质量已保存。`)
-      await onRefresh()
+      const refreshed = await onRefresh({ focusNextPendingView: true })
+      if (refreshed) {
+        onReviewSaved(review)
+        void message.success(`机位 ${selectedStream.camera_number} 的机位质量已保存。`)
+      }
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '机位质量暂未保存，请稍后重试。')
     } finally {
@@ -115,6 +118,7 @@ export function CaptureGroupViewQualitySection({
   return (
     <Section
       className="capture-group-view-quality-workspace"
+      id="capture-group-view-quality"
       title="机位质量"
       titleId="capture-group-view-quality-title"
       actions={<span className="capture-group-section-note">自动证据与人工决定分开保存</span>}
@@ -161,7 +165,8 @@ interface CaptureGroupQualityPanelProps {
   groupQualityVisibility: CaptureGroupQualityVisibility
   qualityHistory: CaptureGroupQualityReview[]
   refreshVersion: number
-  onRefresh: () => Promise<void>
+  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
+  isSecondary?: boolean
 }
 
 export function CaptureGroupQualityPanel({
@@ -173,6 +178,7 @@ export function CaptureGroupQualityPanel({
   qualityHistory,
   refreshVersion,
   onRefresh,
+  isSecondary = false,
 }: CaptureGroupQualityPanelProps) {
   const { message } = AntdApp.useApp()
   const [groupDecision, setGroupDecision] =
@@ -221,7 +227,11 @@ export function CaptureGroupQualityPanel({
   }
 
   return (
-    <InspectorSection title="事件质量" titleId="capture-group-quality-inspector">
+    <InspectorSection
+      id="capture-group-group-quality"
+      title="事件质量"
+      titleId="capture-group-quality-inspector"
+    >
       <div className="capture-group-inspector-status">
         <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
           {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
@@ -299,7 +309,7 @@ export function CaptureGroupQualityPanel({
             />
           </label>
           <Button
-            type="primary"
+            type={isSecondary ? 'default' : 'primary'}
             loading={isSaving}
             disabled={saveDisabled}
             onClick={() => void saveGroupQuality()}

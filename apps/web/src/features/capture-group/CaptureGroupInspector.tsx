@@ -1,5 +1,5 @@
 import { Descriptions } from 'antd'
-import { Check } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
@@ -14,14 +14,18 @@ import {
   cleaningTone,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
-import { CaptureGroupQualityPanel } from '@/features/capture-group/CaptureGroupQualityPanel'
 import {
-  captureGroupReviewCleaningFallbackTargetId,
   captureGroupTaskDestination,
+  formatViewQualitySummary,
+  groupQualityDisplayLabel,
+  groupQualityDisplayTone,
+  groupQualityLabels,
+  groupQualityTone,
   mediaStatusLabels,
   syncSafety,
   technicalQualityLabels,
   type CaptureGroupQualityVisibility,
+  type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
@@ -32,10 +36,9 @@ interface CaptureGroupInspectorProps {
   groupQuality: CaptureGroupQualityReview | null
   groupQualityVisibility: CaptureGroupQualityVisibility
   qualityHistory: CaptureGroupQualityReview[]
-  refreshVersion: number
   selectedView: GroupViewRow | null
   task: AnnotationTask | null
-  onRefresh: () => Promise<void>
+  taskVisibility: CaptureGroupTaskVisibility
 }
 
 export function CaptureGroupInspector({
@@ -45,246 +48,332 @@ export function CaptureGroupInspector({
   groupQuality,
   groupQualityVisibility,
   qualityHistory,
-  refreshVersion,
   selectedView,
   task,
-  onRefresh,
+  taskVisibility,
 }: CaptureGroupInspectorProps) {
   const selectedStream = selectedView?.stream ?? null
   const selectedSync = selectedStream ? syncSafety(selectedStream) : null
-  const currentGroupResult = groupQuality?.result ?? null
-  const groupQualityDowngraded =
-    groupQuality?.result === 'NEEDS_REVIEW' || groupQuality?.result === 'REJECTED'
-  const nextAction =
-    group.receipt_state === 'RECEIVING'
-      ? '等待接收完成'
-      : groupQualityVisibility === 'unavailable'
-        ? '事件质量暂不可用，请刷新后重试'
-        : groupQualityVisibility === 'forbidden'
-          ? '事件质量按当前权限不可见'
-          : groupQualityVisibility === 'loading'
-            ? '正在读取事件质量'
-            : !groupQuality || currentGroupResult === 'UNREVIEWED'
-              ? '记录事件质量'
-              : groupQualityDowngraded
-                ? '先恢复事件质量准入'
-                : task && !task.primary_clip_asset_id
-                  ? '选择主视图'
-                  : task?.status === 'SUBMITTED'
-                    ? '等待人工复核'
-                    : task?.annotation_revision?.review?.decision === 'APPROVED'
-                      ? '查看训练资格检查事实'
-                      : '继续配药动作标注'
+  const revision = task?.annotation_revision ?? null
+  const review = revision?.review ?? null
+  const cleaning = revision?.capture_group_cleaning ?? revision?.post_cleaning_result ?? null
+  const taskFocus =
+    groupQuality &&
+    groupQuality.result !== 'QUALIFIED' &&
+    groupQuality.result !== 'QUALIFIED_WITH_EXCLUSIONS'
+      ? 'annotation'
+      : task
+        ? (captureGroupTaskDestination(task)?.focus ?? 'annotation')
+        : 'annotation'
 
   return (
-    <aside className="capture-group-inspector" aria-label="配药事件检查器">
-      <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
-        <MetadataList
-          ariaLabel="配药事件接收事实"
-          items={[
-            {
-              id: 'group-id',
-              label: '配药事件 ID',
-              value: <code>{group.capture_group_id}</code>,
-            },
-            { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
-            {
-              id: 'key-source',
-              label: '归组来源',
-              value: group.capture_group_key_source ?? '未提供',
-            },
-            {
-              id: 'capture-time',
-              label: '拍摄时间',
-              value: formatDateTime(group.device_time_utc),
-            },
-            {
-              id: 'receive-time',
-              label: '服务端接收时间',
-              value: formatDateTime(group.server_receive_time),
-            },
-            { id: 'batch', label: '上传批次', value: <code>{group.batch_id}</code> },
-            { id: 'device', label: '设备', value: group.device_id },
-          ]}
-        />
-        <Descriptions
-          column={1}
-          items={[
-            {
-              key: 'expected',
-              label: '机位集合',
-              children: `应 ${group.expected_camera_numbers.map((number) => `机位 ${number}`).join('、')}`,
-            },
-            {
-              key: 'received',
-              label: '已接收',
-              children: group.received_camera_numbers.length
-                ? group.received_camera_numbers.map((number) => `机位 ${number}`).join('、')
-                : '暂无',
-            },
-            {
-              key: 'missing',
-              label: '缺失',
-              children: group.missing_camera_numbers.length
-                ? group.missing_camera_numbers.map((number) => `机位 ${number}`).join('、')
-                : '无',
-            },
-          ]}
-        />
-      </InspectorSection>
+    <aside className="capture-group-inspector" aria-labelledby="capture-group-inspector-title">
+      <header className="capture-group-inspector-heading">
+        <p className="app-eyebrow">渐进详情</p>
+        <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
+        <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
+      </header>
 
-      <CaptureGroupQualityPanel
-        projectId={projectId}
-        captureGroupId={captureGroupId}
-        group={group}
-        groupQuality={groupQuality}
-        groupQualityVisibility={groupQualityVisibility}
-        qualityHistory={qualityHistory}
-        refreshVersion={refreshVersion}
-        onRefresh={onRefresh}
-      />
-
-      <InspectorSection title="当前机位事实" titleId="capture-group-selected-view-facts">
-        {selectedStream ? (
+      <ProgressiveDetail title="接收与采集事实" summary={group.receipt_state}>
+        <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
           <MetadataList
-            ariaLabel="当前机位事实"
+            ariaLabel="配药事件接收事实"
             items={[
               {
-                id: 'camera',
-                label: '机位',
-                value: `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`,
+                id: 'group-id',
+                label: '配药事件 ID',
+                value: <code>{group.capture_group_id}</code>,
               },
-              { id: 'mount', label: '安装位置', value: selectedStream.mount_position },
+              { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
               {
-                id: 'asset',
-                label: 'ClipAsset',
-                value: <code>{selectedStream.clip_asset_id}</code>,
-              },
-              {
-                id: 'record-start',
-                label: '拍摄开始',
-                value: formatDateTime(selectedStream.record_start_utc),
+                id: 'key-source',
+                label: '归组来源',
+                value: group.capture_group_key_source ?? '未提供',
               },
               {
-                id: 'stream-status',
-                label: '媒体流',
-                value:
-                  mediaStatusLabels[selectedStream.stream_status] ?? selectedStream.stream_status,
+                id: 'capture-time',
+                label: '拍摄时间',
+                value: formatDateTime(group.device_time_utc),
               },
               {
-                id: 'technical-quality',
-                label: '技术质量',
-                value:
-                  technicalQualityLabels[selectedStream.quality_status] ??
-                  selectedStream.quality_status,
+                id: 'receive-time',
+                label: '服务端接收时间',
+                value: formatDateTime(group.server_receive_time),
+              },
+              { id: 'batch', label: '上传批次', value: <code>{group.batch_id}</code> },
+              { id: 'device', label: '设备', value: group.device_id },
+            ]}
+          />
+          <Descriptions
+            column={1}
+            items={[
+              {
+                key: 'expected',
+                label: '机位集合',
+                children: `应 ${group.expected_camera_numbers.map((number) => `机位 ${number}`).join('、')}`,
               },
               {
-                id: 'hand-enabled',
-                label: '手部检测',
-                value: selectedStream.enabled_for_hand_detection ? '已启用' : '未启用',
+                key: 'received',
+                label: '已接收',
+                children: group.received_camera_numbers.length
+                  ? group.received_camera_numbers.map((number) => `机位 ${number}`).join('、')
+                  : '暂无',
+              },
+              {
+                key: 'missing',
+                label: '缺失',
+                children: group.missing_camera_numbers.length
+                  ? group.missing_camera_numbers.map((number) => `机位 ${number}`).join('、')
+                  : '无',
               },
             ]}
           />
-        ) : (
-          <p className="form-hint">当前没有选中的已接收机位。</p>
-        )}
-        {selectedSync ? (
-          <div className="capture-group-sync-inspector capture-group-stack">
-            <strong>同步参考</strong>
-            <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
-            <p>{selectedSync.detail}</p>
-            <span>
-              边端声明偏移：{selectedStream?.time_offset_ms ?? 0} ms（不等同于已验证的可靠时间映射）
-            </span>
-          </div>
-        ) : null}
-      </InspectorSection>
+        </InspectorSection>
+      </ProgressiveDetail>
 
-      <InspectorSection
-        className="capture-group-workflow-focus-target"
-        id={captureGroupReviewCleaningFallbackTargetId}
-        tabIndex={-1}
-        title="人工复核 / 训练资格检查"
-        titleId="review-cleaning-context"
+      <ProgressiveDetail
+        title="当前机位与媒体事实"
+        summary={selectedStream ? `机位 ${selectedStream.camera_number}` : '尚未选择'}
       >
-        {task?.annotation_revision ? (
-          <>
-            <StatusIndicator
-              tone={
-                task.annotation_revision.review
-                  ? task.annotation_revision.review.decision === 'APPROVED'
-                    ? 'success'
-                    : 'destructive'
-                  : 'information'
-              }
-            >
-              复核 ·{' '}
-              {task.annotation_revision.review
-                ? task.annotation_revision.review.decision === 'APPROVED'
-                  ? '已通过'
-                  : '已退回'
-                : '待复核'}
-            </StatusIndicator>
-            {task.annotation_revision.review?.review_note ? (
-              <p className="form-hint">复核意见：{task.annotation_revision.review.review_note}</p>
-            ) : null}
-            {task.annotation_revision.capture_group_cleaning ? (
-              <div className="capture-group-cleaning-fact capture-group-stack">
-                <StatusBadge
-                  tone={cleaningTone(task.annotation_revision.capture_group_cleaning.outcome)}
-                >
-                  训练资格检查 ·{' '}
-                  {cleaningLabel(task.annotation_revision.capture_group_cleaning.outcome)}
-                </StatusBadge>
-                <span>
-                  {formatDateTime(task.annotation_revision.capture_group_cleaning.evaluated_at)}
-                </span>
-                {task.annotation_revision.capture_group_cleaning.reason_codes.length ? (
-                  <p className="form-hint">
-                    原因：{task.annotation_revision.capture_group_cleaning.reason_codes.join('；')}
-                  </p>
-                ) : null}
-              </div>
-            ) : task.annotation_revision.post_cleaning_result ? (
-              <div className="capture-group-cleaning-fact capture-group-stack">
-                <StatusBadge
-                  tone={cleaningTone(task.annotation_revision.post_cleaning_result.outcome)}
-                >
-                  训练资格检查 ·{' '}
-                  {cleaningLabel(task.annotation_revision.post_cleaning_result.outcome)}
-                </StatusBadge>
-                <span>
-                  {formatDateTime(task.annotation_revision.post_cleaning_result.evaluated_at)}
-                </span>
-              </div>
-            ) : (
-              <p className="form-hint">复核通过后才会形成训练资格检查事实。</p>
-            )}
-          </>
-        ) : (
-          <p className="form-hint">尚无正式修订；人工复核 / 训练资格检查尚未开始。</p>
-        )}
-        {task ? (
-          <Link
-            className="text-link"
-            to={paths.captureGroupFocus(
-              projectId,
-              captureGroupId,
-              captureGroupTaskDestination(task)?.focus ?? 'annotation',
-            )}
-          >
-            打开配药事件任务上下文
-          </Link>
-        ) : null}
-      </InspectorSection>
+        <InspectorSection title="当前机位事实" titleId="capture-group-selected-view-facts">
+          {selectedStream ? (
+            <MetadataList
+              ariaLabel="当前机位事实"
+              items={[
+                {
+                  id: 'camera',
+                  label: '机位',
+                  value: `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`,
+                },
+                { id: 'mount', label: '安装位置', value: selectedStream.mount_position },
+                {
+                  id: 'asset',
+                  label: 'ClipAsset',
+                  value: <code>{selectedStream.clip_asset_id}</code>,
+                },
+                {
+                  id: 'record-start',
+                  label: '拍摄开始',
+                  value: formatDateTime(selectedStream.record_start_utc),
+                },
+                {
+                  id: 'stream-status',
+                  label: '媒体流',
+                  value:
+                    mediaStatusLabels[selectedStream.stream_status] ?? selectedStream.stream_status,
+                },
+                {
+                  id: 'technical-quality',
+                  label: '技术质量',
+                  value:
+                    technicalQualityLabels[selectedStream.quality_status] ??
+                    selectedStream.quality_status,
+                },
+                {
+                  id: 'hand-enabled',
+                  label: '手部检测',
+                  value: selectedStream.enabled_for_hand_detection ? '已启用' : '未启用',
+                },
+              ]}
+            />
+          ) : (
+            <p className="form-hint">当前没有选中的已接收机位。</p>
+          )}
+          {selectedSync ? (
+            <div className="capture-group-sync-inspector capture-group-stack">
+              <strong>同步声明</strong>
+              <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
+              <p>{selectedSync.detail}</p>
+              <span>
+                边端声明偏移：{selectedStream?.time_offset_ms ?? 0}{' '}
+                ms（不等同于已验证的可靠时间映射）
+              </span>
+            </div>
+          ) : null}
+        </InspectorSection>
+      </ProgressiveDetail>
 
-      <InspectorSection title="下一步" titleId="capture-group-next-action">
-        <div className="capture-group-next-action capture-group-stack">
-          <Check aria-hidden="true" size={16} strokeWidth={1.8} />
-          <strong>{nextAction}</strong>
-          <span>下一步只依据服务端返回的接收状态、质量和任务状态。</span>
-        </div>
-      </InspectorSection>
+      <ProgressiveDetail
+        title="事件质量事实"
+        summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
+      >
+        <InspectorSection title="事件质量事实" titleId="capture-group-quality-facts">
+          <p className="form-hint">人工记录的事件质量结论与自动检测事实分开保存。</p>
+          <div className="capture-group-inspector-status">
+            <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+              {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
+            </StatusIndicator>
+            {groupQuality?.reviewer_actor_id ? (
+              <span>记录人：{groupQuality.reviewer_actor_id}</span>
+            ) : null}
+            {groupQuality?.decided_at ? (
+              <span>{formatDateTime(groupQuality.decided_at)}</span>
+            ) : null}
+          </div>
+          {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
+          {groupQualityVisibility === 'unavailable' ? (
+            <div className="capture-group-inspector-status" role="status">
+              <strong>事件质量暂不可用</strong>
+              <span>事件质量暂不可用，请刷新后重试</span>
+            </div>
+          ) : null}
+          {groupQualityVisibility === 'forbidden' ? (
+            <div className="capture-group-inspector-status" role="status">
+              <strong>事件质量无权查看</strong>
+              <span>事件质量按当前权限不可见</span>
+              <span>当前账号不能读取或修改事件质量。</span>
+            </div>
+          ) : null}
+          {groupQuality?.confirmed_view_set ? (
+            <div className="capture-group-confirmed-view-set capture-group-stack">
+              <strong>本次结论使用的机位集合</strong>
+              <span>
+                {formatViewQualitySummary(groupQuality)} · 输入版本{' '}
+                {groupQuality.input_version ?? '未提供'}
+              </span>
+              <ul>
+                {groupQuality.confirmed_view_set.views.map((view) => (
+                  <li key={view.camera_number}>
+                    机位 {view.camera_number} · {view.quality_review_decision}
+                    {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {qualityHistory.length ? (
+            <details className="capture-group-quality-history capture-group-stack">
+              <summary>查看追加质量历史（{qualityHistory.length} 条）</summary>
+              <ol>
+                {qualityHistory.map((entry) => (
+                  <li key={entry.capture_group_quality_review_id ?? `revision-${entry.revision}`}>
+                    <StatusIndicator tone={groupQualityTone(entry.result)}>
+                      第 {entry.revision} 次 · {groupQualityLabels[entry.result]}
+                    </StatusIndicator>
+                    <span>{entry.reason ?? '未提供理由'}</span>
+                    <small>{formatDateTime(entry.decided_at)}</small>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          ) : null}
+        </InspectorSection>
+      </ProgressiveDetail>
+
+      <ProgressiveDetail
+        title="Revision、复核与训练资格"
+        summary={revision ? `第 ${revision.revision_number} 次正式修订` : '尚无正式修订'}
+      >
+        <InspectorSection
+          title="Revision、复核与训练资格详情"
+          titleId="capture-group-revision-facts"
+        >
+          {taskVisibility === 'permission-limited' ? (
+            <p className="form-hint" role="status">
+              当前账号不是该任务执行人；唯一配药事件任务状态按权限不可见。
+            </p>
+          ) : taskVisibility === 'unavailable' ? (
+            <p className="form-hint" role="status">
+              唯一配药事件任务状态暂不可读，请刷新后重试。
+            </p>
+          ) : task ? (
+            <>
+              <MetadataList
+                ariaLabel="配药事件任务事实"
+                items={[
+                  {
+                    id: 'task-id',
+                    label: '任务 ID',
+                    value: <code>{task.annotation_task_id}</code>,
+                  },
+                  { id: 'task-status', label: '任务状态', value: task.status },
+                  { id: 'task-assignee', label: '执行人', value: task.assignee_actor_id },
+                  { id: 'task-created-by', label: '创建人', value: task.created_by },
+                  {
+                    id: 'task-primary',
+                    label: '主视图',
+                    value: task.primary_camera_number
+                      ? `机位 ${task.primary_camera_number}`
+                      : '未选择',
+                    secondary: task.primary_clip_asset_id ?? undefined,
+                  },
+                  {
+                    id: 'task-input-version',
+                    label: '确认输入版本',
+                    value: task.group_input_version ?? '未提供',
+                  },
+                ]}
+              />
+              {revision ? (
+                <div className="capture-group-inspector-history capture-group-stack">
+                  <strong>正式 Revision</strong>
+                  <span>
+                    {revision.annotation_revision_id} · 第 {revision.revision_number} 次 ·{' '}
+                    {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
+                  </span>
+                  <span>输入版本：{revision.input_version ?? '未提供'}</span>
+                  {review ? (
+                    <StatusIndicator tone={review.decision === 'APPROVED' ? 'success' : 'warning'}>
+                      人工复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}
+                    </StatusIndicator>
+                  ) : (
+                    <StatusIndicator tone="information">人工复核 · 待复核</StatusIndicator>
+                  )}
+                  {review?.review_note ? <p>复核意见：{review.review_note}</p> : null}
+                  {cleaning ? (
+                    <StatusBadge tone={cleaningTone(cleaning.outcome)}>
+                      训练资格检查 · {cleaningLabel(cleaning.outcome)}
+                    </StatusBadge>
+                  ) : (
+                    <span>尚无训练资格检查结果。</span>
+                  )}
+                </div>
+              ) : (
+                <p className="form-hint">任务已存在，尚无正式 Revision。</p>
+              )}
+              <Link
+                className="text-link"
+                to={paths.captureGroupFocus(projectId, captureGroupId, taskFocus)}
+              >
+                打开配药事件任务上下文
+              </Link>
+            </>
+          ) : (
+            <p className="form-hint">尚无可见的配药事件任务、Revision 或复核事实。</p>
+          )}
+        </InspectorSection>
+      </ProgressiveDetail>
+
+      <ProgressiveDetail title="审计与受限操作" summary="保留原始事实">
+        <InspectorSection title="审计与受限操作" titleId="capture-group-audit-facts">
+          <p className="form-hint">
+            本页只展示已授权的服务端事实。删除、隐私放行、数据集冻结和导出等高风险操作不在此处隐式执行。
+          </p>
+          <p className="form-hint">
+            事件质量历史采用追加记录；被拒机位和旧版单视频任务不会因当前工作台展示而删除或改写。
+          </p>
+        </InspectorSection>
+      </ProgressiveDetail>
     </aside>
+  )
+}
+
+function ProgressiveDetail({
+  title,
+  summary,
+  children,
+}: {
+  title: string
+  summary: string
+  children: ReactNode
+}) {
+  return (
+    <details className="capture-group-progressive-detail">
+      <summary>
+        <span>{title}</span>
+        <small>{summary}</small>
+      </summary>
+      <div className="capture-group-progressive-detail-content">{children}</div>
+    </details>
   )
 }

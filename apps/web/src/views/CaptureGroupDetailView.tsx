@@ -14,8 +14,12 @@ import {
   CaptureGroupOverview,
   CaptureGroupHeaderStatus,
 } from '@/features/capture-group/CaptureGroupOverview'
-import { CaptureGroupViewQualitySection } from '@/features/capture-group/CaptureGroupQualityPanel'
+import {
+  CaptureGroupQualityPanel,
+  CaptureGroupViewQualitySection,
+} from '@/features/capture-group/CaptureGroupQualityPanel'
 import { CaptureGroupViewRail } from '@/features/capture-group/CaptureGroupViewRail'
+import { MedicationEventCurrentAction } from '@/features/capture-group/MedicationEventCurrentAction'
 import {
   createGroupViewRows,
   type GroupViewRow,
@@ -26,7 +30,21 @@ import {
   captureGroupReviewCleaningFallbackTargetId,
   captureGroupFocusTargetIds,
 } from '@/features/capture-group-presentation'
-import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
+import {
+  deriveMedicationEventWorkflow,
+  medicationEventWorkflowStageLabels,
+  type MedicationEventWorkflowFacts,
+  type MedicationEventWorkflowModel,
+  type MedicationEventWorkflowPrimaryAction,
+} from '@/features/capture-group/medication-event-workflow'
+import type { AnnotationTask } from '@/api/annotation'
+import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
+import type { ClipAssetRead } from '@/api/catalog'
+import type { QualityReview } from '@/api/quality'
+import {
+  useCaptureGroupDetailData,
+  type CaptureGroupDetailRefreshOptions,
+} from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 
 export default function CaptureGroupDetailView() {
@@ -51,6 +69,41 @@ export default function CaptureGroupDetailView() {
     ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
     : null
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
+  const workflow = useMemo<MedicationEventWorkflowModel | null>(
+    () =>
+      data.group
+        ? deriveMedicationEventWorkflow(
+            createMedicationEventWorkflowFacts({
+              group: data.group,
+              groupQuality: data.groupQuality,
+              groupQualityVisibility: data.groupQualityVisibility,
+              task: data.task,
+              taskVisibility: data.taskVisibility,
+              viewRows,
+              viewReviews: data.viewReviews,
+              viewReviewErrors: data.viewReviewErrors,
+              viewQualityLoading: data.viewQualityLoading,
+              annotationSchemaAvailable: Boolean(data.schema?.labels.length),
+              selectedView,
+              selectedDetail: viewState.selectedDetail,
+            }),
+          )
+        : null,
+    [
+      data.group,
+      data.groupQuality,
+      data.groupQualityVisibility,
+      data.task,
+      data.taskVisibility,
+      data.schema,
+      data.viewQualityLoading,
+      data.viewReviewErrors,
+      data.viewReviews,
+      selectedView,
+      viewRows,
+      viewState.selectedDetail,
+    ],
+  )
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -84,6 +137,26 @@ export default function CaptureGroupDetailView() {
     return () => window.clearTimeout(timer)
   }, [data.group, data.groupLoadState, data.refreshVersion, fallbackFocusTargetId, focusTargetId])
 
+  const handlePrimaryAction = (action: MedicationEventWorkflowPrimaryAction) => {
+    if (action.key === 'finalize-receipt') {
+      setIsReceiptConfirmationOpen(true)
+      return
+    }
+    const targetId = {
+      'view-quality': 'capture-group-view-quality',
+      'group-quality': 'capture-group-group-quality',
+      annotation: 'capture-group-annotation',
+      review: 'capture-group-review-cleaning',
+      'training-eligibility': 'capture-group-review-cleaning',
+      receipt: '',
+    }[action.target]
+    if (!targetId) return
+    const target = document.getElementById(targetId)
+    if (!target) return
+    target.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    if (target instanceof HTMLElement) target.focus({ preventScroll: true })
+  }
+
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
@@ -101,17 +174,6 @@ export default function CaptureGroupDetailView() {
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
-            {data.group?.receipt_state === 'RECEIVING' ? (
-              <Button
-                ref={receiptFinalizeTrigger}
-                size="small"
-                loading={data.isFinalizingReceipt}
-                disabled={isReceiptFinalizationPending}
-                onClick={() => setIsReceiptConfirmationOpen(true)}
-              >
-                结束接收
-              </Button>
-            ) : null}
             <Button
               size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
@@ -135,8 +197,9 @@ export default function CaptureGroupDetailView() {
         <>
           <CaptureGroupOverview
             group={data.group}
-            groupQuality={data.groupQuality}
-            groupQualityVisibility={data.groupQualityVisibility}
+            currentStageLabel={
+              workflow ? medicationEventWorkflowStageLabels[workflow.stage] : '状态暂不可确认'
+            }
           />
           {data.qualityErrorMessage ? (
             <Alert type="warning" showIcon title={data.qualityErrorMessage} />
@@ -144,73 +207,82 @@ export default function CaptureGroupDetailView() {
           {data.taskErrorMessage ? (
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
-          <div className="capture-group-workspace">
-            <div className="capture-group-main-column">
-              <CaptureGroupViewRail
-                group={data.group}
-                viewRows={viewRows}
-                selectedClipAssetId={data.selectedClipAssetId}
-                viewReviews={data.viewReviews}
-                candidateResponse={viewState.candidateResponse}
-                candidateState={viewState.candidateState}
-                candidateTone={viewState.candidateTone}
-                onSelectView={data.setSelectedClipAssetId}
-              />
-              <CaptureGroupFocusedView
-                viewRows={viewRows}
-                task={data.task}
-                viewReviews={data.viewReviews}
-                viewState={viewState}
-                onSelectView={data.setSelectedClipAssetId}
-              />
-              <CaptureGroupViewQualitySection
-                projectId={projectId}
-                selectedStream={viewState.selectedStream}
-                selectedDetail={viewState.selectedDetail}
-                selectedReview={selectedReview}
-                viewReviews={data.viewReviews}
-                viewReviewErrors={data.viewReviewErrors}
-                viewQualityLoading={data.viewQualityLoading}
-                onReviewSaved={data.updateViewReview}
-                onRefresh={data.refresh}
-              />
-              <CaptureGroupAnnotationPanel
-                projectId={projectId}
-                captureGroupId={captureGroupId}
-                group={data.group}
-                groupQuality={data.groupQuality}
-                task={data.task}
-                taskVisibility={data.taskVisibility}
-                schema={data.schema}
-                viewRows={viewRows}
-                viewReviews={data.viewReviews}
-                refreshVersion={data.refreshVersion}
-                onTaskChange={(nextTask) => data.setTask(nextTask)}
-                onRefresh={data.refresh}
-              />
-              <CaptureGroupReviewCleaningPanel
-                projectId={projectId}
-                group={data.group}
-                groupQuality={data.groupQuality}
-                groupQualityVisibility={data.groupQualityVisibility}
-                task={data.task}
-                schema={data.schema}
-                onRefresh={data.refresh}
-              />
+          {workflow ? (
+            <div className="capture-group-workspace">
+              <div className="capture-group-video-column">
+                <CaptureGroupViewRail
+                  group={data.group}
+                  viewRows={viewRows}
+                  selectedClipAssetId={data.selectedClipAssetId}
+                  viewReviews={data.viewReviews}
+                  onSelectView={data.setSelectedClipAssetId}
+                />
+                <CaptureGroupFocusedView
+                  viewRows={viewRows}
+                  task={data.task}
+                  viewReviews={data.viewReviews}
+                  viewState={viewState}
+                  onSelectView={data.setSelectedClipAssetId}
+                />
+              </div>
+              <div className="capture-group-action-column">
+                <MedicationEventCurrentAction
+                  workflow={workflow}
+                  primaryActionHasForm={workflow.primaryAction?.target !== 'receipt'}
+                  primaryActionDisabled={
+                    workflow.primaryAction?.key === 'finalize-receipt' &&
+                    isReceiptFinalizationPending
+                  }
+                  primaryActionLoading={
+                    workflow.primaryAction?.key === 'finalize-receipt' &&
+                    isReceiptFinalizationPending
+                  }
+                  primaryActionRef={
+                    workflow.primaryAction?.key === 'finalize-receipt'
+                      ? receiptFinalizeTrigger
+                      : undefined
+                  }
+                  onPrimaryAction={handlePrimaryAction}
+                />
+                {workflow.primaryAction ? (
+                  <CaptureGroupActionForm
+                    action={workflow.primaryAction}
+                    projectId={projectId}
+                    captureGroupId={captureGroupId}
+                    group={data.group}
+                    groupQuality={data.groupQuality}
+                    groupQualityVisibility={data.groupQualityVisibility}
+                    qualityHistory={data.qualityHistory}
+                    refreshVersion={data.refreshVersion}
+                    task={data.task}
+                    taskVisibility={data.taskVisibility}
+                    schema={data.schema}
+                    viewRows={viewRows}
+                    viewReviews={data.viewReviews}
+                    viewReviewErrors={data.viewReviewErrors}
+                    viewQualityLoading={data.viewQualityLoading}
+                    selectedStream={viewState.selectedStream}
+                    selectedDetail={viewState.selectedDetail}
+                    selectedReview={selectedReview}
+                    onReviewSaved={data.updateViewReview}
+                    onTaskChange={(nextTask) => data.setTask(nextTask)}
+                    onRefresh={data.refresh}
+                  />
+                ) : null}
+              </div>
             </div>
-            <CaptureGroupInspector
-              projectId={projectId}
-              captureGroupId={captureGroupId}
-              group={data.group}
-              groupQuality={data.groupQuality}
-              groupQualityVisibility={data.groupQualityVisibility}
-              qualityHistory={data.qualityHistory}
-              refreshVersion={data.refreshVersion}
-              selectedView={selectedView}
-              task={data.task}
-              onRefresh={data.refresh}
-            />
-          </div>
+          ) : null}
+          <CaptureGroupInspector
+            projectId={projectId}
+            captureGroupId={captureGroupId}
+            group={data.group}
+            groupQuality={data.groupQuality}
+            groupQualityVisibility={data.groupQualityVisibility}
+            qualityHistory={data.qualityHistory}
+            selectedView={selectedView}
+            task={data.task}
+            taskVisibility={data.taskVisibility}
+          />
         </>
       ) : null}
       <Modal
@@ -237,4 +309,203 @@ export default function CaptureGroupDetailView() {
       </Modal>
     </>
   )
+}
+
+interface CaptureGroupActionFormProps {
+  action: MedicationEventWorkflowPrimaryAction
+  projectId: string
+  captureGroupId: string
+  group: CaptureGroup
+  groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: MedicationEventWorkflowFacts['group_quality_visibility']
+  qualityHistory: CaptureGroupQualityReview[]
+  refreshVersion: number
+  task: AnnotationTask | null
+  taskVisibility: MedicationEventWorkflowFacts['task_visibility']
+  schema: ReturnType<typeof useCaptureGroupDetailData>['schema']
+  viewRows: GroupViewRow[]
+  viewReviews: Record<string, QualityReview>
+  viewReviewErrors: Record<string, string>
+  viewQualityLoading: boolean
+  selectedStream: GroupViewRow['stream']
+  selectedDetail: ClipAssetRead | null
+  selectedReview: QualityReview | null
+  onReviewSaved: (review: QualityReview) => void
+  onTaskChange: (task: AnnotationTask) => void
+  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
+}
+
+function CaptureGroupActionForm({
+  action,
+  projectId,
+  captureGroupId,
+  group,
+  groupQuality,
+  groupQualityVisibility,
+  qualityHistory,
+  refreshVersion,
+  task,
+  taskVisibility,
+  schema,
+  viewRows,
+  viewReviews,
+  viewReviewErrors,
+  viewQualityLoading,
+  selectedStream,
+  selectedDetail,
+  selectedReview,
+  onReviewSaved,
+  onTaskChange,
+  onRefresh,
+}: CaptureGroupActionFormProps) {
+  if (action.target === 'view-quality') {
+    return (
+      <CaptureGroupViewQualitySection
+        projectId={projectId}
+        selectedStream={selectedStream}
+        selectedDetail={selectedDetail}
+        selectedReview={selectedReview}
+        viewReviews={viewReviews}
+        viewReviewErrors={viewReviewErrors}
+        viewQualityLoading={viewQualityLoading}
+        onReviewSaved={onReviewSaved}
+        onRefresh={onRefresh}
+      />
+    )
+  }
+  if (action.target === 'group-quality' || action.target === 'receipt') {
+    return (
+      <CaptureGroupQualityPanel
+        projectId={projectId}
+        captureGroupId={captureGroupId}
+        group={group}
+        groupQuality={groupQuality}
+        groupQualityVisibility={groupQualityVisibility}
+        qualityHistory={qualityHistory}
+        refreshVersion={refreshVersion}
+        onRefresh={onRefresh}
+        isSecondary={action.target === 'receipt'}
+      />
+    )
+  }
+  if (action.target === 'annotation') {
+    return (
+      <CaptureGroupAnnotationPanel
+        projectId={projectId}
+        captureGroupId={captureGroupId}
+        group={group}
+        groupQuality={groupQuality}
+        task={task}
+        taskVisibility={taskVisibility}
+        schema={schema}
+        viewRows={viewRows}
+        viewReviews={viewReviews}
+        refreshVersion={refreshVersion}
+        onTaskChange={onTaskChange}
+        onRefresh={onRefresh}
+      />
+    )
+  }
+  if (action.target === 'review' || action.target === 'training-eligibility') {
+    return (
+      <CaptureGroupReviewCleaningPanel
+        projectId={projectId}
+        group={group}
+        groupQuality={groupQuality}
+        groupQualityVisibility={groupQualityVisibility}
+        task={task}
+        schema={schema}
+        onRefresh={onRefresh}
+      />
+    )
+  }
+  return null
+}
+
+interface WorkflowFactInput {
+  group: CaptureGroup
+  groupQuality: CaptureGroupQualityReview | null
+  groupQualityVisibility: MedicationEventWorkflowFacts['group_quality_visibility']
+  task: AnnotationTask | null
+  taskVisibility: MedicationEventWorkflowFacts['task_visibility']
+  viewRows: GroupViewRow[]
+  viewReviews: Record<string, QualityReview>
+  viewReviewErrors: Record<string, string>
+  viewQualityLoading: boolean
+  annotationSchemaAvailable: boolean
+  selectedView: GroupViewRow | null
+  selectedDetail: ClipAssetRead | null
+}
+
+function createMedicationEventWorkflowFacts({
+  group,
+  groupQuality,
+  groupQualityVisibility,
+  task,
+  taskVisibility,
+  viewRows,
+  viewReviews,
+  viewReviewErrors,
+  viewQualityLoading,
+  annotationSchemaAvailable,
+  selectedView,
+  selectedDetail,
+}: WorkflowFactInput): MedicationEventWorkflowFacts {
+  return {
+    receipt_state: group.receipt_state,
+    view_quality: viewRows.map((view) => {
+      const stream = view.stream
+      const review = stream ? viewReviews[stream.clip_asset_id] : null
+      const visibility = !stream
+        ? 'loaded'
+        : viewReviewErrors[stream.clip_asset_id]
+          ? 'unavailable'
+          : viewQualityLoading
+            ? 'loading'
+            : review
+              ? 'loaded'
+              : 'unavailable'
+      const canDecide = Boolean(
+        stream &&
+          selectedView?.stream?.clip_asset_id === stream.clip_asset_id &&
+          selectedDetail?.status === 'INGESTED',
+      )
+      return {
+        camera_number: view.cameraNumber,
+        clip_asset_id: stream?.clip_asset_id ?? null,
+        present: Boolean(stream),
+        visibility,
+        decision: review?.decision ?? 'UNREVIEWED',
+        can_decide: canDecide,
+        blocker:
+          stream && stream.stream_status !== 'INGESTED'
+            ? `机位 ${view.cameraNumber} 的媒体尚未完成入库，暂不能判断机位质量。`
+            : undefined,
+        waiting_reason: stream && !canDecide ? '等待当前机位进入可判断上下文。' : undefined,
+      }
+    }),
+    group_quality_visibility: groupQualityVisibility,
+    group_quality: groupQuality,
+    task_visibility: taskVisibility,
+    task_status: taskVisibility === 'visible' ? (task?.status ?? null) : null,
+    primary_view: task
+      ? {
+          clip_asset_id: task.primary_clip_asset_id ?? null,
+          camera_number: task.primary_camera_number ?? null,
+        }
+      : null,
+    annotation_revision: task?.annotation_revision ?? null,
+    review: task?.annotation_revision?.review ?? null,
+    cleaning:
+      task?.annotation_revision?.capture_group_cleaning ??
+      task?.annotation_revision?.post_cleaning_result ??
+      null,
+    can_select_primary: Boolean(task?.can_select_primary),
+    can_submit: Boolean(task?.can_submit),
+    can_review: Boolean(task?.can_review),
+    can_recheck_post_cleaning: Boolean(task?.can_recheck_post_cleaning),
+    can_finalize_receipt: group.receipt_state === 'RECEIVING',
+    can_decide_group_quality: groupQualityVisibility === 'loaded' && Boolean(groupQuality),
+    annotation_schema_available: annotationSchemaAvailable,
+  }
 }

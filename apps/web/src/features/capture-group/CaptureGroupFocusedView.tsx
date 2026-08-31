@@ -48,6 +48,10 @@ export function CaptureGroupFocusedView({
     onLoadedMetadata,
     onPlaybackError,
   } = viewState
+  const isPrimary = Boolean(
+    selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
+  )
+  const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
 
   return (
     <section
@@ -56,22 +60,21 @@ export function CaptureGroupFocusedView({
     >
       <header className="capture-group-focused-heading">
         <div>
-          <p className="app-eyebrow">当前机位</p>
+          <p className="app-eyebrow">当前视图</p>
           <h2 id="capture-group-focused-title">
-            {selectedStream
-              ? `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`
-              : '等待选择机位'}
+            {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
           </h2>
+          {selectedStream ? (
+            <span className="capture-group-focused-role">{selectedStream.camera_role}</span>
+          ) : null}
         </div>
-        {selectedStream ? (
+        {isPrimary || isSupporting ? (
           <StatusIndicator tone="information">
-            {task?.primary_clip_asset_id === selectedStream.clip_asset_id ? '主视图' : '参考视图'}
+            {isPrimary ? '主视图 · 正式时间基准' : '参考视图 · 事件级证据'}
           </StatusIndicator>
         ) : null}
       </header>
-      {selectedStream &&
-      task?.primary_clip_asset_id &&
-      task.primary_clip_asset_id !== selectedStream.clip_asset_id ? (
+      {isSupporting ? (
         <Alert
           className="capture-group-supporting-warning"
           type="info"
@@ -101,7 +104,7 @@ export function CaptureGroupFocusedView({
         onRecoverMissingMediaProbe={() => undefined}
         onStartPlayback={() => void startPlayback()}
       />
-      {selectedStream ? (
+      {selectedStream && viewRows.length > 1 ? (
         <div className="capture-group-compare-strip" aria-label="参考视图机位切换">
           <div className="capture-group-compare-heading">
             <span className="app-eyebrow">机位切换</span>
@@ -137,78 +140,83 @@ export function CaptureGroupFocusedView({
           </div>
         </div>
       ) : null}
-      {selectedSync ? (
-        <div className="capture-group-sync-note capture-group-stack" role="status">
-          <Clock3 aria-hidden="true" size={16} strokeWidth={1.8} />
-          <div>
-            <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
-            <p>{selectedSync.detail}</p>
-          </div>
-        </div>
-      ) : null}
       {selectedDetail ? (
-        <div className="capture-group-focused-facts">
-          <Section title="手部检测" titleId="capture-group-candidate-title">
-            <div className="capture-group-candidate-facts capture-group-stack">
-              <StatusIndicator tone={currentCandidateTone}>
-                {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
-                  ? '未检测到手部'
-                  : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
-                    ? '检测失败'
-                    : candidateResponse?.job.status === 'SUCCEEDED'
-                      ? '检测完成'
-                      : candidateState === 'unavailable'
-                        ? '尚无检测结果'
-                        : '读取中'}
-              </StatusIndicator>
-              <p>{currentCandidateDescription}</p>
-              {candidateResponse?.job.run_summary ? (
-                <Descriptions
-                  column={{ xs: 1, sm: 2 }}
-                  items={[
-                    {
-                      key: 'frames',
-                      label: '分析帧数',
-                      children: candidateResponse.job.run_summary.inference_frame_count,
-                    },
-                    {
-                      key: 'hands',
-                      label: '发现手部帧',
-                      children: candidateResponse.job.run_summary.frames_with_hand,
-                    },
-                    {
-                      key: 'left',
-                      label: '左手检测次数',
-                      children: candidateResponse.job.run_summary.left_hand_detection_count,
-                    },
-                    {
-                      key: 'right',
-                      label: '右手检测次数',
-                      children: candidateResponse.job.run_summary.right_hand_detection_count,
-                    },
-                    ...(candidateResponse.job.run_summary.failure_reason
-                      ? [
-                          {
-                            key: 'failure',
-                            label: '失败原因',
-                            children: candidateResponse.job.run_summary.failure_reason,
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              ) : null}
+        <details className="capture-group-focused-details">
+          <summary>查看机位技术与辅助证据</summary>
+          <div className="capture-group-focused-details-content">
+            {selectedSync ? (
+              <div className="capture-group-sync-note capture-group-stack" role="status">
+                <Clock3 aria-hidden="true" size={16} strokeWidth={1.8} />
+                <div>
+                  <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
+                  <p>{selectedSync.detail}</p>
+                </div>
+              </div>
+            ) : null}
+            <div className="capture-group-focused-facts">
+              <Section title="手部检测" titleId="capture-group-candidate-title">
+                <div className="capture-group-candidate-facts capture-group-stack">
+                  <StatusIndicator tone={currentCandidateTone}>
+                    {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
+                      ? '未检测到手部'
+                      : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
+                        ? '检测失败'
+                        : candidateResponse?.job.status === 'SUCCEEDED'
+                          ? '检测完成'
+                          : candidateState === 'unavailable'
+                            ? '尚无检测结果'
+                            : '读取中'}
+                  </StatusIndicator>
+                  <p>{currentCandidateDescription}</p>
+                  {candidateResponse?.job.run_summary ? (
+                    <Descriptions
+                      column={{ xs: 1, sm: 2 }}
+                      items={[
+                        {
+                          key: 'frames',
+                          label: '分析帧数',
+                          children: candidateResponse.job.run_summary.inference_frame_count,
+                        },
+                        {
+                          key: 'hands',
+                          label: '发现手部帧',
+                          children: candidateResponse.job.run_summary.frames_with_hand,
+                        },
+                        {
+                          key: 'left',
+                          label: '左手检测次数',
+                          children: candidateResponse.job.run_summary.left_hand_detection_count,
+                        },
+                        {
+                          key: 'right',
+                          label: '右手检测次数',
+                          children: candidateResponse.job.run_summary.right_hand_detection_count,
+                        },
+                        ...(candidateResponse.job.run_summary.failure_reason
+                          ? [
+                              {
+                                key: 'failure',
+                                label: '失败原因',
+                                children: candidateResponse.job.run_summary.failure_reason,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  ) : null}
+                </div>
+              </Section>
+              <MediaReportCard
+                detail={selectedDetail}
+                errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
+                errorMessage={selectedMediaReportError}
+                loadState={selectedMediaReportState}
+                onRetry={() => void loadSelectedView()}
+                report={selectedMediaReport}
+              />
             </div>
-          </Section>
-          <MediaReportCard
-            detail={selectedDetail}
-            errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
-            errorMessage={selectedMediaReportError}
-            loadState={selectedMediaReportState}
-            onRetry={() => void loadSelectedView()}
-            report={selectedMediaReport}
-          />
-        </div>
+          </div>
+        </details>
       ) : null}
     </section>
   )

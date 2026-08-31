@@ -1,46 +1,33 @@
-import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
+import type { CaptureGroup } from '@/api/capture-groups'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
-import {
-  groupQualityDisplayLabel,
-  groupQualityDisplayTone,
-  receiptStateLabels,
-  receiptTone,
-  type CaptureGroupQualityVisibility,
-} from '@/features/capture-group-presentation'
+import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
 interface CaptureGroupOverviewProps {
   group: CaptureGroup
-  groupQuality: CaptureGroupQualityReview | null
-  groupQualityVisibility: CaptureGroupQualityVisibility
+  currentStageLabel: string
 }
 
-export function CaptureGroupOverview({
-  group,
-  groupQuality,
-  groupQualityVisibility,
-}: CaptureGroupOverviewProps) {
+export function CaptureGroupOverview({ group, currentStageLabel }: CaptureGroupOverviewProps) {
   return (
-    <section className="capture-group-overview" aria-label="配药事件接收摘要">
+    <section className="capture-group-overview" aria-label="配药事件关键事实">
       <div className="capture-group-overview-card">
-        <span className="app-eyebrow">接收状态</span>
-        <strong>{receiptStateLabels[group.receipt_state]}</strong>
+        <span className="app-eyebrow">拍摄时间</span>
+        <strong>{formatDateTime(group.device_time_utc ?? group.created_at)}</strong>
+        <span>{group.device_timezone ?? '时区未提供'}</span>
+      </div>
+      <div className="capture-group-overview-card">
+        <span className="app-eyebrow">机位数量</span>
+        <strong>{group.expected_camera_count} 个机位</strong>
         <span>
           应 {group.expected_camera_count} 个机位 · 已收 {group.received_camera_numbers.length}{' '}
           个机位 · 缺失 {group.missing_camera_numbers.length} 个机位
         </span>
       </div>
       <div className="capture-group-overview-card">
-        <span className="app-eyebrow">事件质量</span>
-        <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
-          {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-        </StatusIndicator>
-        <span>人工记录的事件质量结论；页面仅展示已保存事实。</span>
-      </div>
-      <div className="capture-group-overview-card">
-        <span className="app-eyebrow">拍摄时间</span>
-        <strong>{formatDateTime(group.device_time_utc ?? group.created_at)}</strong>
-        <span>{group.device_timezone ?? '时区未提供'}</span>
+        <span className="app-eyebrow">当前阶段</span>
+        <StatusIndicator tone="information">{currentStageLabel}</StatusIndicator>
+        <span>阶段与可执行动作以当前服务端事实为准。</span>
       </div>
     </section>
   )
@@ -50,9 +37,12 @@ export function CaptureGroupHeaderStatus({ group }: { group: CaptureGroup }) {
   return (
     <span className="capture-group-header-status">
       <StatusIndicator tone={receiptTone(group.receipt_state)}>
-        接收状态 · {receiptStateLabels[group.receipt_state]}
+        <span>接收状态</span> · <span>{receiptStateLabels[group.receipt_state]}</span>
       </StatusIndicator>
-      <span>{group.capture_group_id}</span>
+      <span>
+        {formatDateTime(group.device_time_utc ?? group.created_at)} · {group.expected_camera_count}{' '}
+        个机位
+      </span>
     </span>
   )
 }

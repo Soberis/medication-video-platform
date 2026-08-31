@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { paths } from '@/app/paths'
@@ -29,20 +30,23 @@ describe('CaptureGroup annotation workflow', () => {
       quality: qualityFixture(group, 'NEEDS_REVIEW'),
       candidateStatus: 'NO_HAND_DETECTED',
     })
+    const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText(/当前事件质量为“需复核”/)).toBeInTheDocument()
-    expect(screen.getByText(/任务和既有修订历史仍可审计/)).toBeInTheDocument()
-    expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: '提交修订' })).toBeDisabled()
-    expect(screen.getByLabelText('主视图')).toBeDisabled()
-    expect(screen.getByRole('link', { name: '打开配药事件标注' })).toHaveAttribute(
-      'href',
-      paths.captureGroupFocus(projectId, groupId, 'annotation'),
-    )
+    expect(await screen.findByRole('button', { name: '重新确认事件质量' })).toBeInTheDocument()
+    expect(screen.getAllByText('需复核').length).toBeGreaterThan(0)
+    const auditDetails = screen.getByText('Revision、复核与训练资格').closest('details')
+    if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
+    await user.click(screen.getByText('Revision、复核与训练资格'))
+    expect(within(auditDetails).getByText('任务 ID')).toBeInTheDocument()
+    expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '提交修订' })).not.toBeInTheDocument()
+    expect(
+      within(auditDetails).getByRole('link', { name: '打开配药事件任务上下文' }),
+    ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/revisions')),
     ).toHaveLength(0)
@@ -60,15 +64,21 @@ describe('CaptureGroup annotation workflow', () => {
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
     })
+    const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText('唯一配药事件任务 · 已完成')).toBeInTheDocument()
-    expect(screen.getByText('首个正式修订已存在；主视图已锁定。')).toBeInTheDocument()
-    expect(screen.getByLabelText('主视图')).toBeDisabled()
-    expect(screen.getAllByText('复核 · 已通过').length).toBeGreaterThan(0)
+    expect(await screen.findByRole('button', { name: '查看结果' })).toBeInTheDocument()
+    const auditDetails = screen.getByText('Revision、复核与训练资格').closest('details')
+    if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
+    await user.click(screen.getByText('Revision、复核与训练资格'))
+    expect(within(auditDetails).getByText('COMPLETED')).toBeInTheDocument()
+    expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
+    expect(within(auditDetails).getByText('主视图')).toBeInTheDocument()
+    expect(within(auditDetails).getByText('机位 1')).toBeInTheDocument()
+    expect(screen.getAllByText('人工复核 · 已通过').length).toBeGreaterThan(0)
     expect(screen.getByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
     const compareStrip = screen.getByLabelText('参考视图机位切换')
     expect(within(compareStrip).getAllByRole('button', { name: /机位 / })).toHaveLength(2)
