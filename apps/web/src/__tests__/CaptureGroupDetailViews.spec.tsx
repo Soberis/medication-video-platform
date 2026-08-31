@@ -239,7 +239,7 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    const selector = await screen.findByLabelText('配药事件机位选择')
+    const selector = await screen.findByRole('group', { name: '配药事件机位选择' })
     expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
     expect(within(selector).getAllByRole('button')).toHaveLength(2)
     const cameraTwoButton = within(selector).getByRole('button', { name: /机位 2/ })
@@ -600,6 +600,9 @@ describe('CaptureGroup detail views', () => {
       received: [1, 2, 4, 5],
       receipt: 'INCOMPLETE',
     })
+    const boundStream = group.streams.find((stream) => stream.camera_number === 5)
+    if (!boundStream) throw new Error('Expected camera 5 stream fixture.')
+    boundStream.stream_status = 'BOUND'
     const mediaFailedStream = group.streams.find((stream) => stream.camera_number === 4)
     if (!mediaFailedStream) throw new Error('Expected camera 4 stream fixture.')
     mediaFailedStream.stream_status = 'INGEST_FAILED'
@@ -621,9 +624,12 @@ describe('CaptureGroup detail views', () => {
     expect(await screen.findByText('检测失败')).toBeInTheDocument()
     expect(await screen.findByText(/手部检测失败/)).toBeInTheDocument()
     expect(screen.getAllByText(/同步需关注 · 仅供参考/).length).toBeGreaterThan(0)
-    const selector = screen.getByLabelText('配药事件机位选择')
+    const selector = screen.getByRole('group', { name: '配药事件机位选择' })
     expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
     expect(within(selector).getAllByRole('button')).toHaveLength(5)
+    expect(
+      within(selector).getByRole('button', { name: /机位 5.*已绑定 · 待媒体入库/ }),
+    ).not.toHaveAccessibleName(/媒体处理中/)
     expect(
       within(selector)
         .getAllByRole('button')
@@ -635,14 +641,16 @@ describe('CaptureGroup detail views', () => {
       expect.stringContaining('机位 4'),
       expect.stringContaining('机位 5'),
     ])
-    expect(within(selector).getByRole('button', { name: /机位 3.*缺失/ })).toBeDisabled()
+    const missingButton = within(selector).getByRole('button', { name: '机位 3 · 缺失' })
+    expect(missingButton).toBeDisabled()
+    expect(missingButton.querySelectorAll('small')).toHaveLength(1)
     const rejectedButton = within(selector).getByRole('button', {
       name: /机位 5.*机位质量 · 不合格/,
     })
     expect(rejectedButton).not.toBeDisabled()
     expect(rejectedButton).toHaveTextContent('机位质量 · 不合格')
     const mediaFailedButton = within(selector).getByRole('button', {
-      name: /机位 4.*媒体不可用/,
+      name: /机位 4.*媒体入库失败/,
     })
     expect(mediaFailedButton).not.toBeDisabled()
     expect(screen.getAllByText(/不合格/).length).toBeGreaterThan(0)

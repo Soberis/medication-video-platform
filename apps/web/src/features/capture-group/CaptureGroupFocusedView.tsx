@@ -8,7 +8,7 @@ import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
 import type { GroupViewRow } from '@/features/capture-group/capture-group-detail-model'
 import type { CaptureGroupViewState } from '@/features/capture-group/use-capture-group-view'
-import { viewQualityLabels } from '@/features/capture-group-presentation'
+import { mediaStatusLabels, viewQualityLabels } from '@/features/capture-group-presentation'
 
 interface CaptureGroupFocusedViewProps {
   viewRows: GroupViewRow[]
@@ -84,7 +84,7 @@ export function CaptureGroupFocusedView({
         />
       ) : null}
       {viewRows.length > 1 ? (
-        <div className="capture-group-compare-strip" aria-label="配药事件机位选择">
+        <div className="capture-group-compare-strip" role="group" aria-label="配药事件机位选择">
           <div className="capture-group-compare-heading">
             <span className="app-eyebrow">机位切换</span>
             <span>选择一路机位查看当前视频；缺失机位保留在原编号位置。</span>
@@ -98,13 +98,9 @@ export function CaptureGroupFocusedView({
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
               const qualityLabel = stream
                 ? `机位质量 · ${viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
-                : '缺失'
+                : null
               const mediaLabel = stream
-                ? stream.stream_status === 'INGEST_FAILED' || stream.stream_status === 'UNAVAILABLE'
-                  ? '媒体不可用'
-                  : stream.stream_status === 'INGESTED'
-                    ? '已接收'
-                    : '已接收 · 媒体处理中'
+                ? (mediaStatusLabels[stream.stream_status] ?? '媒体状态暂不可用')
                 : '缺失'
               return (
                 <button
@@ -114,7 +110,9 @@ export function CaptureGroupFocusedView({
                   disabled={!stream}
                   aria-pressed={isCurrent}
                   aria-current={isCurrent ? 'true' : undefined}
-                  aria-label={`机位 ${view.cameraNumber} · ${mediaLabel} · ${qualityLabel}`}
+                  aria-label={[`机位 ${view.cameraNumber}`, mediaLabel, qualityLabel]
+                    .filter(Boolean)
+                    .join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
                 >
                   <span className="capture-group-compare-thumbnail" aria-hidden="true">
@@ -123,7 +121,7 @@ export function CaptureGroupFocusedView({
                   <span>
                     <strong>机位 {view.cameraNumber}</strong>
                     <small>{mediaLabel}</small>
-                    <small>{qualityLabel}</small>
+                    {qualityLabel ? <small>{qualityLabel}</small> : null}
                   </span>
                 </button>
               )
