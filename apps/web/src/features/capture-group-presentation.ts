@@ -144,6 +144,19 @@ export function formatViewQualitySummary(review: CaptureGroupQualityReview | nul
 
 export type CaptureGroupTaskVisibility = 'visible' | 'permission-limited' | 'unavailable'
 
+export interface CaptureGroupNextStep {
+  kind: 'action' | 'status'
+  label: string
+}
+
+function actionStep(label: string): CaptureGroupNextStep {
+  return { kind: 'action', label }
+}
+
+function statusStep(label: string): CaptureGroupNextStep {
+  return { kind: 'status', label }
+}
+
 export interface CaptureGroupTaskDestination {
   focus: CaptureGroupFocus
   actionLabel: string
@@ -217,40 +230,59 @@ export function taskNextAction(
   quality: CaptureGroupQualityReview | null,
   task: AnnotationTask | null,
   taskVisibility: CaptureGroupTaskVisibility = 'visible',
-) {
-  if (group.receipt_state === 'RECEIVING') return '等待接收完成后进行事件质量判断'
-  if (!quality || quality.result === 'UNREVIEWED') return '进行事件质量判断'
+): CaptureGroupNextStep {
+  if (group.receipt_state === 'RECEIVING') {
+    return statusStep('等待接收完成后进行事件质量判断')
+  }
+  if (!quality || quality.result === 'UNREVIEWED') return actionStep('进行事件质量判断')
   if (quality.result === 'NEEDS_REVIEW' || quality.result === 'REJECTED') {
-    if (!task && taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
-    if (!task && taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
-    return task ? '查看历史任务；事件质量恢复后再提交修订' : '补充机位事实并重新判断事件质量'
+    if (!task && taskVisibility === 'permission-limited') {
+      return statusStep('任务状态按当前权限不可见')
+    }
+    if (!task && taskVisibility === 'unavailable') {
+      return statusStep('任务状态暂不可用，请刷新后重试')
+    }
+    return actionStep(
+      task ? '查看历史任务；事件质量恢复后再提交修订' : '补充机位事实并重新判断事件质量',
+    )
   }
   if (!task) {
-    if (taskVisibility === 'permission-limited') return '任务状态按当前权限不可见'
-    if (taskVisibility === 'unavailable') return '任务状态暂不可用，请刷新后重试'
-    return '等待系统创建唯一配药事件任务'
+    if (taskVisibility === 'permission-limited') {
+      return statusStep('任务状态按当前权限不可见')
+    }
+    if (taskVisibility === 'unavailable') {
+      return statusStep('任务状态暂不可用，请刷新后重试')
+    }
+    return statusStep('等待系统创建唯一配药事件任务')
   }
   if (task.status === 'ASSIGNED') {
     if (!task.primary_clip_asset_id) {
-      return task.can_select_primary ? '选择主视图' : '等待任务执行人选择主视图'
+      return task.can_select_primary
+        ? actionStep('选择主视图')
+        : statusStep('等待任务执行人选择主视图')
     }
-    if (!task.can_submit) return '等待任务执行人处理'
+    if (!task.can_submit) return statusStep('等待任务执行人处理')
     if (task.annotation_revision?.review?.decision === 'REJECTED') {
-      return '根据复核意见修改'
+      return actionStep('根据复核意见修改')
     }
-    return '提交配药动作修订'
+    return actionStep('提交配药动作修订')
   }
   if (task.status === 'SUBMITTED') {
-    return task.can_review ? '进入人工复核' : '等待人工复核'
+    return task.can_review ? actionStep('进入人工复核') : statusStep('等待人工复核')
   }
-  if (!task.primary_clip_asset_id) return '选择主视图'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return '根据复核意见修改'
+  if (!task.primary_clip_asset_id) return actionStep('选择主视图')
+  if (task.annotation_revision?.review?.decision === 'REJECTED') {
+    return actionStep('根据复核意见修改')
+  }
   if (task.annotation_revision?.review?.decision === 'APPROVED') {
-    return task.annotation_revision.capture_group_cleaning?.outcome === 'PASS'
-      ? '训练资格检查已通过'
-      : '查看训练资格检查结果'
+    const cleaning =
+      task.annotation_revision.capture_group_cleaning ??
+      task.annotation_revision.post_cleaning_result
+    return cleaning?.outcome === 'PASS'
+      ? statusStep('训练资格检查已通过')
+      : actionStep('查看训练资格检查结果')
   }
-  return '查看任务历史'
+  return actionStep('查看任务历史')
 }
 
 export function syncSafety(stream: CaptureGroupStream) {

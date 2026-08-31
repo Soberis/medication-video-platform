@@ -17,35 +17,6 @@
   font-size: var(--app-font-size-helper);
 }
 
-.capture-group-overview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--app-space-12);
-  margin-top: var(--app-space-16);
-}
-
-.capture-group-overview-card {
-  display: grid;
-  gap: var(--app-space-4);
-  min-width: 0;
-  padding: var(--app-space-12) var(--app-space-16);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
-  background: var(--app-color-surface);
-}
-
-.capture-group-overview-card > strong {
-  color: var(--app-color-foreground);
-  font-size: var(--app-font-size-section-title);
-  line-height: var(--app-line-height-control);
-}
-
-.capture-group-overview-card > span:last-child {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-}
-
 .capture-group-workspace {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
@@ -965,8 +936,7 @@
   font-size: var(--app-font-size-heading-2);
 }
 
-.capture-group-list-count,
-.capture-group-list-id {
+.capture-group-list-count {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
@@ -1104,7 +1074,6 @@
 }
 
 @media (max-width: 720px) {
-  .capture-group-overview,
   .capture-group-quality-boundary,
   .capture-group-review-evidence-grid,
   .capture-group-cleaning-evidence-grid {

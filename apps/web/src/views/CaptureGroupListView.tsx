@@ -24,6 +24,7 @@ import {
   receiptStateLabels,
   receiptTone,
   taskNextAction,
+  type CaptureGroupNextStep,
   type CaptureGroupQualityVisibility,
   type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
@@ -223,89 +224,97 @@ export default function CaptureGroupListView() {
         <section className="capture-group-list-surface" aria-labelledby="capture-group-queue-title">
           <header className="capture-group-list-heading">
             <div>
-              <p className="app-eyebrow">操作队列</p>
+              <p className="app-eyebrow">事件列表</p>
               <h2 id="capture-group-queue-title">配药事件</h2>
             </div>
             <span className="capture-group-list-count">{rows.length} 个配药事件</span>
           </header>
-          <div className="capture-group-list" role="list" aria-label="配药事件操作列表">
-            {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => (
-              <article
-                className="capture-group-list-row"
-                key={group.capture_group_id}
-                role="listitem"
-                aria-label={`配药事件 ${group.capture_group_key ?? shortId(group.capture_group_id)}`}
-              >
-                <header className="capture-group-list-row-header">
-                  <div className="capture-group-list-identity">
-                    <Camera aria-hidden="true" size={18} strokeWidth={1.7} />
-                    <div>
-                      <Link
-                        className="text-link capture-group-list-title"
-                        to={paths.captureGroup(projectId, group.capture_group_id)}
-                      >
-                        {group.capture_group_key ?? `配药事件 ${shortId(group.capture_group_id)}`}
-                      </Link>
-                      <span className="capture-group-list-id" title={group.capture_group_id}>
-                        {shortId(group.capture_group_id)}
-                      </span>
+          <div className="capture-group-list" role="list" aria-label="配药事件列表">
+            {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => {
+              const identity =
+                group.capture_group_key ?? `配药事件 · ${shortId(group.capture_group_id)}`
+              const nextStep = listTaskNextAction(
+                qualityVisibility,
+                group,
+                quality,
+                task,
+                taskVisibility,
+              )
+
+              return (
+                <article
+                  className="capture-group-list-row"
+                  key={group.capture_group_id}
+                  role="listitem"
+                  aria-label={identity}
+                >
+                  <header className="capture-group-list-row-header">
+                    <div className="capture-group-list-identity">
+                      <Camera aria-hidden="true" size={18} strokeWidth={1.7} />
+                      <div>
+                        <Link
+                          className="text-link capture-group-list-title"
+                          to={paths.captureGroup(projectId, group.capture_group_id)}
+                        >
+                          {identity}
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                  <StatusIndicator tone={receiptTone(group.receipt_state)}>
-                    接收状态 · {receiptStateLabels[group.receipt_state]}
-                  </StatusIndicator>
-                </header>
-                <dl className="capture-group-list-facts">
-                  <div>
-                    <dt>拍摄时间</dt>
-                    <dd>{formatDateTime(group.device_time_utc ?? group.created_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>机位</dt>
-                    <dd>
-                      <span>
-                        应 {group.expected_camera_count} · 已收 {group.received_camera_count} · 缺失{' '}
-                        {group.missing_camera_numbers.length}
-                      </span>
-                      {group.missing_camera_numbers.length ? (
-                        <span className="capture-group-list-missing-views">
-                          缺失：
-                          {group.missing_camera_numbers
-                            .map((cameraNumber) => `机位 ${cameraNumber}`)
-                            .join('、')}
+                    <StatusIndicator tone={receiptTone(group.receipt_state)}>
+                      接收状态 · {receiptStateLabels[group.receipt_state]}
+                    </StatusIndicator>
+                  </header>
+                  <dl className="capture-group-list-facts">
+                    <div>
+                      <dt>拍摄时间</dt>
+                      <dd>{formatDateTime(group.device_time_utc ?? group.created_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>机位</dt>
+                      <dd>
+                        <span>
+                          应 {group.expected_camera_count} · 已收 {group.received_camera_count} ·
+                          缺失 {group.missing_camera_numbers.length}
                         </span>
-                      ) : null}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>机位质量</dt>
-                    <dd>{formatListViewQuality(qualityVisibility, quality)}</dd>
-                  </div>
-                  <div>
-                    <dt>事件质量</dt>
-                    <dd>
-                      <StatusIndicator tone={listGroupQualityTone(qualityVisibility, quality)}>
-                        {formatListGroupQuality(qualityVisibility, quality)}
-                      </StatusIndicator>
-                    </dd>
-                  </div>
-                </dl>
-                <footer className="capture-group-list-row-footer">
-                  <span>
-                    下一步：
-                    {listTaskNextAction(qualityVisibility, group, quality, task, taskVisibility)}
-                    {task ? ` · 任务 ${shortId(task.annotation_task_id)}` : ''}
-                  </span>
-                  <Link
-                    className="capture-group-list-open"
-                    to={paths.captureGroup(projectId, group.capture_group_id)}
-                    aria-label={`打开配药事件 ${group.capture_group_key ?? shortId(group.capture_group_id)}`}
-                  >
-                    打开详情 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
-                  </Link>
-                </footer>
-              </article>
-            ))}
+                        {group.missing_camera_numbers.length ? (
+                          <span className="capture-group-list-missing-views">
+                            缺失：
+                            {group.missing_camera_numbers
+                              .map((cameraNumber) => `机位 ${cameraNumber}`)
+                              .join('、')}
+                          </span>
+                        ) : null}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>机位质量</dt>
+                      <dd>{formatListViewQuality(qualityVisibility, quality)}</dd>
+                    </div>
+                    <div>
+                      <dt>事件质量</dt>
+                      <dd>
+                        <StatusIndicator tone={listGroupQualityTone(qualityVisibility, quality)}>
+                          {formatListGroupQuality(qualityVisibility, quality)}
+                        </StatusIndicator>
+                      </dd>
+                    </div>
+                  </dl>
+                  <footer className="capture-group-list-row-footer">
+                    <span>
+                      {nextStep.kind === 'action' ? '下一步：' : '当前状态：'}
+                      {nextStep.label}
+                      {task ? ` · 任务 ${shortId(task.annotation_task_id)}` : ''}
+                    </span>
+                    <Link
+                      className="capture-group-list-open"
+                      to={paths.captureGroup(projectId, group.capture_group_id)}
+                    >
+                      打开详情 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                    </Link>
+                  </footer>
+                </article>
+              )
+            })}
           </div>
           {nextCursor ? (
             <div className="capture-group-list-pagination">
@@ -378,8 +387,11 @@ function listTaskNextAction(
   quality: CaptureGroupQualityReview | null,
   task: AnnotationTask | null,
   taskVisibility: CaptureGroupTaskVisibility,
-) {
-  if (qualityVisibility === 'forbidden') return '事件质量按当前权限不可见'
-  if (qualityVisibility === 'unavailable') return '事件质量暂不可用，请刷新后重试'
+): CaptureGroupNextStep {
+  if (qualityVisibility === 'forbidden')
+    return { kind: 'status', label: '事件质量按当前权限不可见' }
+  if (qualityVisibility === 'unavailable') {
+    return { kind: 'status', label: '事件质量暂不可用，请刷新后重试' }
+  }
   return taskNextAction(group, quality, task, taskVisibility)
 }

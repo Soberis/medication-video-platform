@@ -76,7 +76,7 @@ describe('CaptureGroup annotation workflow', () => {
     const auditDetails = screen.getByText('Revision、复核与训练资格').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
     await user.click(screen.getByText('Revision、复核与训练资格'))
-    expect(within(auditDetails).getByText('COMPLETED')).toBeInTheDocument()
+    expect(within(auditDetails).getByText('已完成')).toBeInTheDocument()
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
     expect(within(auditDetails).getByText('主视图')).toBeInTheDocument()
     expect(within(auditDetails).getByText('机位 1')).toBeInTheDocument()

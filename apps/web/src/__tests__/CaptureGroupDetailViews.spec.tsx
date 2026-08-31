@@ -136,15 +136,22 @@ describe('CaptureGroup detail views', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
-    expect(screen.getByText('应 1 个机位 · 已收 1 个机位 · 缺失 0 个机位')).toBeInTheDocument()
-    expect(screen.getByText('接收状态')).toBeInTheDocument()
+    const headerStatus = document.querySelector<HTMLElement>('.capture-group-header-status')
+    if (!headerStatus) throw new Error('CaptureGroup header status was not mounted.')
+    expect(headerStatus).toHaveTextContent('已完整接收')
+    expect(headerStatus).toHaveTextContent('2026')
+    expect(headerStatus).toHaveTextContent('1 个机位')
     expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
     expect(screen.queryByLabelText('配药事件机位选择')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: '当前动作' })).toBeInTheDocument()
+    const currentAction = screen
+      .getByRole('heading', { level: 2, name: '当前动作' })
+      .closest('section')
+    if (!currentAction) throw new Error('Current Action section was not mounted.')
+    expect(currentAction).toHaveTextContent('当前阶段')
+    expect(currentAction).toHaveTextContent('配药动作标注')
     expect(screen.getByRole('list', { name: '配药事件处理流程' })).toBeInTheDocument()
     expect(document.querySelectorAll('h1')).toHaveLength(1)
     expect(screen.getAllByText('事件质量').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('拍摄时间').length).toBeGreaterThan(0)
     expect(screen.getByText('机位质量')).toBeInTheDocument()
     expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
     expect(await screen.findByText('未检测到手部')).toBeInTheDocument()
@@ -152,6 +159,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText(/人工记录的事件质量结论/)).toBeInTheDocument()
     expect(screen.queryByText(/NO_HAND_DETECTED/)).not.toBeInTheDocument()
     expect(screen.queryByText('CaptureGroup 多机位')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '配药事件关键事实' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
@@ -165,8 +173,9 @@ describe('CaptureGroup detail views', () => {
       received: [1],
       receipt: 'COMPLETE',
     })
+    const task = groupTask(groupId, true, { revision: true })
     stubGroupDetail(group, {
-      task: groupTask(groupId, true, { revision: true }),
+      task,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
     })
@@ -192,8 +201,24 @@ describe('CaptureGroup detail views', () => {
     const inspector = screen.getByRole('complementary', { name: '事实、历史与审计' })
     const receiptDetails = within(inspector).getByText('接收与采集事实').closest('details')
     if (!receiptDetails) throw new Error('Receipt progressive detail was not mounted.')
+    expect(receiptDetails.querySelector('summary')).toHaveTextContent('已完整接收')
+    expect(receiptDetails.querySelector('summary')).not.toHaveTextContent('COMPLETE')
     await user.click(within(receiptDetails).getByText('接收与采集事实'))
     expect(within(receiptDetails).getByText(group.capture_group_id)).toBeInTheDocument()
+
+    const revisionDetails = within(inspector)
+      .getByText('Revision、复核与训练资格')
+      .closest('details')
+    if (!revisionDetails) throw new Error('Revision progressive detail was not mounted.')
+    await user.click(within(revisionDetails).getByText('Revision、复核与训练资格'))
+    expect(within(revisionDetails).getByText(task.annotation_task_id)).toBeInTheDocument()
+    const revisionHistory = within(revisionDetails).getByText('正式 Revision').closest('div')
+    if (!revisionHistory) throw new Error('Revision history was not mounted.')
+    expect(revisionHistory).toHaveTextContent(task.annotation_revision!.annotation_revision_id)
+    expect(within(revisionDetails).getByText('已完成')).toBeInTheDocument()
+    expect(
+      within(revisionDetails).queryByText('COMPLETED', { exact: true }),
+    ).not.toBeInTheDocument()
   })
 
   it('uses a compact camera selector for N=2 and supports keyboard switching', async () => {
@@ -371,7 +396,7 @@ describe('CaptureGroup detail views', () => {
     expect(dialog).toHaveTextContent(
       '系统将根据当前已收到的机位形成完整或有缺失的接收结果，并进入后续事件质量判断。',
     )
-    expect(screen.getByText('接收中')).toBeInTheDocument()
+    expect(document.querySelector('.capture-group-header-status')).toHaveTextContent('接收中')
     expect(fetchMock).not.toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
       expect.objectContaining({ method: 'POST' }),
@@ -438,7 +463,11 @@ describe('CaptureGroup detail views', () => {
     ).toHaveLength(1)
 
     releaseFinalize()
-    await waitFor(() => expect(screen.getByText('已完整接收')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(document.querySelector('.capture-group-header-status')).toHaveTextContent(
+        '已完整接收',
+      ),
+    )
     expect(
       within(screen.getByRole('toolbar', { name: '页面操作' })).queryByRole('button', {
         name: '结束接收',
@@ -482,7 +511,7 @@ describe('CaptureGroup detail views', () => {
       expect(screen.getByText('配药事件操作暂未完成，请稍后重试。')).toBeInTheDocument(),
     )
     expect(screen.getByText('结束本次接收？')).toBeInTheDocument()
-    expect(screen.getByText('接收中')).toBeInTheDocument()
+    expect(document.querySelector('.capture-group-header-status')).toHaveTextContent('接收中')
     expect(
       fetchMock.mock.calls.filter(
         ([input, init]) =>

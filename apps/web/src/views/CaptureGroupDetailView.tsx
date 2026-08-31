@@ -10,10 +10,7 @@ import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGro
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
 import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
-import {
-  CaptureGroupOverview,
-  CaptureGroupHeaderStatus,
-} from '@/features/capture-group/CaptureGroupOverview'
+import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
   CaptureGroupQualityPanel,
   CaptureGroupViewQualitySection,
@@ -31,7 +28,6 @@ import {
 } from '@/features/capture-group-presentation'
 import {
   deriveMedicationEventWorkflow,
-  medicationEventWorkflowStageLabels,
   type MedicationEventWorkflowFacts,
   type MedicationEventWorkflowModel,
   type MedicationEventWorkflowPrimaryAction,
@@ -230,12 +226,6 @@ export default function CaptureGroupDetailView() {
       ) : null}
       {data.group ? (
         <>
-          <CaptureGroupOverview
-            group={data.group}
-            currentStageLabel={
-              workflow ? medicationEventWorkflowStageLabels[workflow.stage] : '状态暂不可确认'
-            }
-          />
           {data.qualityErrorMessage ? (
             <Alert type="warning" showIcon title={data.qualityErrorMessage} />
           ) : null}

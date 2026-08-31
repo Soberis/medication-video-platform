@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -180,6 +180,13 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: '配药事件' })).toBeInTheDocument()
+    expect(
+      await screen.findByText('事件列表', {
+        selector: '.capture-group-list-heading .app-eyebrow',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('操作队列')).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '配药事件列表' })).toBeInTheDocument()
     expect(await screen.findAllByRole('listitem')).toHaveLength(5)
     const firstRow = screen.getByRole('listitem', { name: /capture-1/ })
     expect(firstRow).toHaveTextContent('应 5 · 已收 4 · 缺失 1')
@@ -243,11 +250,14 @@ describe('CaptureGroup operational list and quality', () => {
     const receivingRow = await screen.findByRole('listitem', { name: /receiving-no-task/ })
     expect(receivingRow).toHaveTextContent('接收状态 · 接收中')
     expect(receivingRow).toHaveTextContent('应 1 · 已收 1 · 缺失 0')
+    expect(receivingRow).toHaveTextContent('当前状态：等待接收完成后进行事件质量判断')
+    expect(receivingRow).not.toHaveTextContent('下一步：等待接收完成后进行事件质量判断')
     expect(receivingRow).toHaveTextContent('等待接收完成后进行事件质量判断')
 
     const completeRow = screen.getByRole('listitem', { name: /complete-unreviewed/ })
     expect(completeRow).toHaveTextContent('应 5 · 已收 5 · 缺失 0')
     expect(completeRow).toHaveTextContent('待判断')
+    expect(completeRow).toHaveTextContent('下一步：进行事件质量判断')
     expect(completeRow).toHaveTextContent('进行事件质量判断')
 
     const incompleteRow = screen.getByRole('listitem', { name: /incomplete-gap/ })
@@ -273,6 +283,51 @@ describe('CaptureGroup operational list and quality', () => {
           String(input).includes('/capture-groups/') && String(input).endsWith('/quality-review'),
       ),
     ).toHaveLength(0)
+  })
+
+  it('shows a concise fallback identity without rendering the same short ID twice', async () => {
+    const group = captureGroupFixture('60000000-0000-4000-8000-000000000006', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    group.capture_group_key = null
+    stubGroupList([group], [], {
+      qualityByGroup: { [group.capture_group_id]: qualityFixture(group, 'UNREVIEWED') },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', {
+      name: '配药事件 · 60000000…0006',
+    })
+    expect(within(row).getByRole('link', { name: '配药事件 · 60000000…0006' })).toBeInTheDocument()
+    expect(within(row).queryByText('60000000…0006', { exact: true })).not.toBeInTheDocument()
+  })
+
+  it('labels actionable and terminal rows separately', async () => {
+    const group = captureGroupFixture('60000000-0000-4000-8000-000000000007', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'completed-training',
+    })
+    const task = groupTask(group.capture_group_id, true, { revision: true })
+    stubGroupList([group], [task], {
+      qualityByGroup: { [group.capture_group_id]: qualityFixture(group, 'QUALIFIED') },
+    })
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /completed-training/ })
+    expect(row).toHaveTextContent('当前状态：训练资格检查已通过')
+    expect(row).not.toHaveTextContent('下一步：训练资格检查已通过')
   })
 
   it('appends the next CaptureGroup cursor page and enriches only returned summaries', async () => {

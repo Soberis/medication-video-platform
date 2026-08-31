@@ -12,6 +12,7 @@ import { InspectorSection } from '@/components/workspace/InspectorSection'
 import {
   cleaningLabel,
   cleaningTone,
+  formatTaskStatus,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
 import {
@@ -22,8 +23,10 @@ import {
   groupQualityLabels,
   groupQualityTone,
   mediaStatusLabels,
+  receiptStateLabels,
   syncSafety,
   technicalQualityLabels,
+  viewQualityLabels,
   type CaptureGroupQualityVisibility,
   type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
@@ -74,7 +77,7 @@ export function CaptureGroupInspector({
         <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
       </header>
 
-      <ProgressiveDetail title="接收与采集事实" summary={group.receipt_state}>
+      <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>
         <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
           <MetadataList
             ariaLabel="配药事件接收事实"
@@ -234,7 +237,7 @@ export function CaptureGroupInspector({
               <ul>
                 {groupQuality.confirmed_view_set.views.map((view) => (
                   <li key={view.camera_number}>
-                    机位 {view.camera_number} · {view.quality_review_decision}
+                    机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
                     {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
                   </li>
                 ))}
@@ -286,7 +289,7 @@ export function CaptureGroupInspector({
                     label: '任务 ID',
                     value: <code>{task.annotation_task_id}</code>,
                   },
-                  { id: 'task-status', label: '任务状态', value: task.status },
+                  { id: 'task-status', label: '任务状态', value: formatTaskStatus(task) },
                   { id: 'task-assignee', label: '执行人', value: task.assignee_actor_id },
                   { id: 'task-created-by', label: '创建人', value: task.created_by },
                   {
