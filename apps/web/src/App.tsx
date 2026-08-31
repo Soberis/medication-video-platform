@@ -1,7 +1,6 @@
 import { App as AntdApp, Button } from 'antd'
 import {
   Activity,
-  Camera,
   Clapperboard,
   FolderKanban,
   ListChecks,
@@ -41,14 +40,12 @@ export default function AppShell() {
   )
   const isVideoManagementContext =
     Boolean(projectId) &&
-    [paths.videos(projectId), '/projects/:projectId/assets/:id'].some(
-      (path) => matchPath({ path, end: true }, location.pathname) !== null,
-    )
-  const isCaptureGroupContext =
-    Boolean(projectId) &&
-    [paths.captureGroups(projectId), '/projects/:projectId/capture-groups/:captureGroupId'].some(
-      (path) => matchPath({ path, end: true }, location.pathname) !== null,
-    )
+    [
+      paths.videos(projectId),
+      '/projects/:projectId/assets/:id',
+      paths.captureGroups(projectId),
+      '/projects/:projectId/capture-groups/:captureGroupId',
+    ].some((path) => matchPath({ path, end: true }, location.pathname) !== null)
 
   async function handleLogout() {
     try {
@@ -108,24 +105,13 @@ export default function AppShell() {
               </NavLink>
               {projectId ? (
                 <Link
-                  to={paths.videos(projectId)}
+                  to={paths.captureGroups(projectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
                   aria-label="视频管理"
                   title="视频管理"
                 >
                   <Video {...iconProps} />
                   <span className="sidebar-label">视频管理</span>
-                </Link>
-              ) : null}
-              {projectId ? (
-                <Link
-                  to={paths.captureGroups(projectId)}
-                  aria-current={isCaptureGroupContext ? 'page' : undefined}
-                  aria-label="配药事件"
-                  title="配药事件"
-                >
-                  <Camera {...iconProps} />
-                  <span className="sidebar-label">配药事件</span>
                 </Link>
               ) : null}
               {projectId ? (

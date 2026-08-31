@@ -684,9 +684,7 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     expect(await screen.findByText('接收仍在进行中')).toBeInTheDocument()
-    expect(
-      screen.getByText(/最终“合格”或“合格（排除部分机位）”操作已禁用/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/最终“合格”或“合格（排除部分机位）”操作已禁用/)).toBeInTheDocument()
     const qualitySelect = screen.getByRole('combobox', { name: '事件质量结论' })
     expect(qualitySelect).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '保存事件质量' })).toBeDisabled()

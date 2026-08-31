@@ -849,6 +849,15 @@ export default function AssetDetailView() {
     try {
       const response = await getClipAsset(projectId, assetId, request.signal)
       if (detailRequest.current !== request) return
+      if (
+        response.session_binding?.capture_group_workflow &&
+        response.session_binding.capture_group_id
+      ) {
+        await navigate(paths.captureGroup(projectId, response.session_binding.capture_group_id), {
+          replace: true,
+        })
+        return
+      }
       detailRef.current = response
       setDetail(response)
       setTransientRefreshError(false)
@@ -896,6 +905,7 @@ export default function AssetDetailView() {
     loadAnnotationTask,
     loadMediaReport,
     loadQualityReview,
+    navigate,
     projectId,
     resetMediaReport,
     resetPlayback,

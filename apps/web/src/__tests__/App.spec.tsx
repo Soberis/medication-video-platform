@@ -194,14 +194,15 @@ describe('App', () => {
     expect(
       within(navigation).queryByRole('link', { name: '本地上传（辅助）' }),
     ).not.toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).not.toHaveAttribute(
-      'aria-current',
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/capture-groups`,
     )
+    expect(within(navigation).queryByRole('link', { name: '配药事件' })).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
   })
 
-  it('treats medication events as a sibling workspace entry to video management', () => {
+  it('treats medication events as the canonical video-management workspace', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
       [
@@ -216,13 +217,15 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).not.toHaveAttribute(
-      'aria-current',
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/capture-groups`,
     )
+    expect(within(navigation).queryByRole('link', { name: '配药事件' })).not.toBeInTheDocument()
     expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
   })
 

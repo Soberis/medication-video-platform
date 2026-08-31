@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -68,6 +69,9 @@ class PlatformLocalCaptureSessionService {
 			throw new CaptureSessionIngestException("CAPTURE_SESSION_BATCH_NOT_COMPLETED",
 					"The upload batch must complete integrity verification before session ingest.");
 		}
+		if (batch.getCompletedAt() == null) {
+			throw new IllegalStateException("A completed platform-local upload batch has no completion timestamp.");
+		}
 		var assets = this.clipAssetRepository.findAllByBatchIdOrderByClientFileIdAsc(batchId);
 		if (assets.size() != 1) {
 			throw new CaptureSessionIngestException("PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED",
@@ -97,6 +101,8 @@ class PlatformLocalCaptureSessionService {
 		this.snapshotMemberRepository.saveAndFlush(snapshotMember);
 		var stream = CameraStream.importLocal(session.getCaptureSessionId(), snapshotMember, assets.getFirst(), now);
 		this.streamRepository.saveAndFlush(stream);
+		session.finalizeReceipt(Set.of(1), Set.of(1), batch.getCompletedAt(), now);
+		this.sessionRepository.saveAndFlush(session);
 		this.sessionProjection.refresh(projectId, session.getCaptureSessionId(), now);
 		return CaptureSessionResponse.from(session, snapshot, java.util.List.of(snapshotMember),
 				java.util.List.of(stream));

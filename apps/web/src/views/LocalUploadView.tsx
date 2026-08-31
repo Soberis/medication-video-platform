@@ -96,9 +96,9 @@ function taskDescription(task: UploadTask) {
     return message.includes('重新选择') ? message : `${message} 请重新选择该文件后开始新一轮上传。`
   }
   if (task.status === 'COMPLETED') {
-    return task.clipAssetId
-      ? '平台已确认上传完成，并建立单视角配药操作记录；可进入视频资产继续处理。'
-      : '平台已确认上传完成，并建立单视角配药操作记录。'
+    return task.captureSessionId
+      ? '平台已确认上传完成并建立配药事件；可直接进入事件工作台继续处理。'
+      : '平台已确认上传完成，并建立配药事件。'
   }
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
@@ -479,10 +479,13 @@ export default function LocalUploadView() {
                   />
                 </details>
               ) : null}
-              {task.clipAssetId ? (
+              {task.captureSessionId ? (
                 <div className="local-upload-task-actions">
-                  <Link className="text-link" to={paths.asset(selectedProjectId, task.clipAssetId)}>
-                    查看视频资产
+                  <Link
+                    className="text-link"
+                    to={paths.captureGroup(selectedProjectId, task.captureSessionId)}
+                  >
+                    打开配药事件
                   </Link>
                 </div>
               ) : null}

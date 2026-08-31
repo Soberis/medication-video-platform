@@ -14,6 +14,20 @@ afterEach(() => {
 })
 
 describe('catalog views', () => {
+  it('routes a CaptureGroup view into the event workbench instead of the legacy video flow', async () => {
+    const captureGroupId = '51000000-0000-4000-8000-000000000001'
+    stubAsset({ role: 'MEMBER', status: 'INGESTED', captureGroupId })
+
+    const { router } = renderAssetDetail({ username: 'reviewer', role: 'MEMBER' })
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(
+        `/projects/${projectId}/capture-groups/${captureGroupId}`,
+      ),
+    )
+    expect(screen.queryByText('待确认标注任务')).not.toBeInTheDocument()
+  })
+
   it('keeps a page heading and safe retry for an initial detail-load failure', async () => {
     const fetchMock = stubAsset({ role: 'MEMBER', status: 'UPLOADED', detailFailureOnce: true })
     const user = userEvent.setup()
@@ -650,6 +664,7 @@ function stubAsset(options: {
   autoAssignedAfterQuality?: boolean
   existingAnnotationTask?: object
   activity?: boolean
+  captureGroupId?: string
 }) {
   let qualitySaved = false
   let detailReads = 0
@@ -673,7 +688,7 @@ function stubAsset(options: {
         (options.detailFailureAfterFirst && detailReads > 1)
       )
         return Promise.resolve(jsonResponse({ error_code: 'CLIP_ASSET_TEMPORARY' }, 503))
-      return Promise.resolve(jsonResponse(assetDetail(options.status)))
+      return Promise.resolve(jsonResponse(assetDetail(options.status, options.captureGroupId)))
     }
     if (url.endsWith('/media-report')) {
       mediaReportReads += 1
@@ -815,12 +830,15 @@ function stubAsset(options: {
         }),
       )
     }
-    return Promise.resolve(jsonResponse(assetDetail(options.status)))
+    return Promise.resolve(jsonResponse(assetDetail(options.status, options.captureGroupId)))
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-function assetDetail(status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED') {
+function assetDetail(
+  status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED',
+  captureGroupId?: string,
+) {
   return {
     clip_asset_id: assetId,
     batch_id: '60000000-0000-4000-8000-000000000001',
@@ -830,7 +848,26 @@ function assetDetail(status: 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAI
     size_bytes: 8_388_608,
     sha256: 'a'.repeat(64),
     status,
-    session_binding: null,
+    session_binding: captureGroupId
+      ? {
+          capture_session_id: captureGroupId,
+          capture_group_id: captureGroupId,
+          capture_group_workflow: true,
+          receipt_state: 'COMPLETE',
+          camera_stream_id: '52000000-0000-4000-8000-000000000001',
+          camera_channel_id: '53000000-0000-4000-8000-000000000001',
+          camera_index: 0,
+          camera_number: 1,
+          camera_role: 'PLATFORM_LOCAL',
+          mount_position: 'PLATFORM_LOCAL',
+          record_start_utc: null,
+          time_offset_ms: 0,
+          declared_sync_status: 'UNKNOWN',
+          stream_status: 'INGESTED',
+          quality_status: 'PASS',
+          enabled_for_hand_detection: true,
+        }
+      : null,
     created_at: '2026-07-15T01:03:03Z',
     updated_at: '2026-07-15T01:03:03Z',
   }

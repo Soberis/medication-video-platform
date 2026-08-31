@@ -244,6 +244,45 @@ describe('CaptureGroup detail views', () => {
     ).toHaveLength(1)
   })
 
+  it('keeps receipt confirmation open when finalization fails', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'RECEIVING',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      receiptFinalizeError: { status: 500 },
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await user.click(await screen.findByRole('button', { name: '结束接收' }))
+    const confirmationTitle = await screen.findByText('结束本次接收？')
+    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
+    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
+
+    await user.click(within(dialog).getByRole('button', { name: '结束接收' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('配药事件操作暂未完成，请稍后重试。')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('结束本次接收？')).toBeInTheDocument()
+    expect(screen.getByText('接收中')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
+      ),
+    ).toHaveLength(1)
+  })
+
   it('keeps a group-quality request failure unavailable instead of inventing UNREVIEWED', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

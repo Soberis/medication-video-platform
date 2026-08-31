@@ -115,9 +115,9 @@ describe('LocalUploadView', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('broken.mp4')).toBeInTheDocument()
     expect(screen.getByText('confirmed.mp4')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看视频资产' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '打开配药事件' })).toHaveAttribute(
       'href',
-      paths.asset(project.project_id, '60000000-0000-4000-8000-000000000001'),
+      paths.captureGroup(project.project_id, '50000000-0000-4000-8000-000000000001'),
     )
   })
 
@@ -183,7 +183,7 @@ describe('LocalUploadView', () => {
     expect(screen.queryByText('本轮上传失败')).not.toBeInTheDocument()
   })
 
-  it('shows platform-confirmed completion and links to the created video asset', async () => {
+  it('shows platform-confirmed completion and links to the created medication event', async () => {
     vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockResolvedValue({
       batchId: '40000000-0000-4000-8000-000000000001',
       captureSessionId: '50000000-0000-4000-8000-000000000001',
@@ -202,9 +202,9 @@ describe('LocalUploadView', () => {
 
     expect(await screen.findByText('已确认完成')).toBeInTheDocument()
     expect(screen.getByText(/平台已确认上传完成/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看视频资产' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '打开配药事件' })).toHaveAttribute(
       'href',
-      paths.asset(project.project_id, '60000000-0000-4000-8000-000000000001'),
+      paths.captureGroup(project.project_id, '50000000-0000-4000-8000-000000000001'),
     )
   })
 

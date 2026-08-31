@@ -57,8 +57,8 @@ export default function CaptureGroupDetailView() {
     receiptFinalizeRequest.current = true
     setIsReceiptFinalizePending(true)
     try {
-      await data.finalizeReceipt()
-      setIsReceiptConfirmationOpen(false)
+      const finalized = await data.finalizeReceipt()
+      if (finalized) setIsReceiptConfirmationOpen(false)
     } finally {
       receiptFinalizeRequest.current = false
       setIsReceiptFinalizePending(false)

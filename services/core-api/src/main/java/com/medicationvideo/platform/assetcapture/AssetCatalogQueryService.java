@@ -13,12 +13,16 @@ public class AssetCatalogQueryService {
 
 	private final CameraStreamRepository streamRepository;
 
+	private final CaptureSessionRepository sessionRepository;
+
 	private final ClipAssetRepository clipAssetRepository;
 
 	public AssetCatalogQueryService(CameraSetSnapshotMemberRepository snapshotMemberRepository,
-			CameraStreamRepository streamRepository, ClipAssetRepository clipAssetRepository) {
+			CameraStreamRepository streamRepository, CaptureSessionRepository sessionRepository,
+			ClipAssetRepository clipAssetRepository) {
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
+		this.sessionRepository = sessionRepository;
 		this.clipAssetRepository = clipAssetRepository;
 	}
 
@@ -31,7 +35,9 @@ public class AssetCatalogQueryService {
 		var binding = this.streamRepository.findByClipAssetId(clipAssetId).map(stream -> {
 			var member = this.snapshotMemberRepository.findById(stream.getCameraSetSnapshotMemberId())
 				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching snapshot member."));
-			return binding(stream, member);
+			var session = this.sessionRepository.findById(stream.getCaptureSessionId())
+				.orElseThrow(() -> new IllegalStateException("A camera stream has no matching capture session."));
+			return binding(stream, member, session);
 		}).orElse(null);
 		return new ClipAssetReadResponse(asset.getClipAssetId(), asset.getBatchId(), asset.getSourceUploadFileId(),
 				asset.getClientFileId(), asset.getContentType(), asset.getSizeBytes(), asset.getSha256(),
@@ -59,8 +65,11 @@ public class AssetCatalogQueryService {
 				asset.getCreatedAt(), asset.getUpdatedAt());
 	}
 
-	private static ClipAssetSessionBindingResponse binding(CameraStream stream, CameraSetSnapshotMember member) {
-		return new ClipAssetSessionBindingResponse(stream.getCaptureSessionId(), stream.getCameraStreamId(),
+	private static ClipAssetSessionBindingResponse binding(CameraStream stream, CameraSetSnapshotMember member,
+			CaptureSession session) {
+		var captureGroupId = session.isCaptureGroupWorkflow() ? session.getCaptureSessionId() : null;
+		return new ClipAssetSessionBindingResponse(stream.getCaptureSessionId(), captureGroupId,
+				session.isCaptureGroupWorkflow(), session.getReceiptState(), stream.getCameraStreamId(),
 				stream.getCameraChannelId(), stream.getCameraIndex(), stream.getCameraIndex() + 1,
 				member.getCameraRole(), member.getMountPosition(), stream.getRecordStartUtc(), stream.getTimeOffsetMs(),
 				stream.getDeclaredSyncStatus(), stream.getStreamStatus(), stream.getQualityStatus(),

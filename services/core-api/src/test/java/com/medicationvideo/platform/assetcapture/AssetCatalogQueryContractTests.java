@@ -63,8 +63,17 @@ class AssetCatalogQueryContractTests {
 	@Test
 	void readsClipAssetsWithoutExposingStorageOrPreviewCredentials() throws Exception {
 		var unbound = insertUnboundAsset(PROJECT_ID, Instant.parse("2026-07-15T01:00:00Z"));
+		var grouped = insertSessionGraph(PROJECT_ID, "platform-local", "PLATFORM_LOCAL",
+				Instant.parse("2026-07-15T02:00:00Z"));
 		var hidden = insertSessionGraph(OTHER_PROJECT_ID, "device-hidden", "HANDS",
 				Instant.parse("2026-07-15T03:00:00Z"));
+		this.jdbcTemplate.update("""
+				UPDATE capture_session
+				SET capture_group_workflow = TRUE,
+				    receipt_state = 'COMPLETE',
+				    receipt_finalized_at = updated_at
+				WHERE capture_session_id = ?
+				""", grouped.captureSessionId());
 
 		authorizedProjectGet("/clip-assets/" + unbound).andExpect(status().isOk())
 			.andExpect(jsonPath("$.clip_asset_id").value(unbound.toString()))
@@ -76,6 +85,12 @@ class AssetCatalogQueryContractTests {
 
 		authorizedProjectGet("/clip-assets/" + hidden.clipAssetId()).andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error_code").value("CLIP_ASSET_NOT_FOUND"));
+
+		authorizedProjectGet("/clip-assets/" + grouped.clipAssetId()).andExpect(status().isOk())
+			.andExpect(jsonPath("$.session_binding.capture_session_id").value(grouped.captureSessionId().toString()))
+			.andExpect(jsonPath("$.session_binding.capture_group_id").value(grouped.captureSessionId().toString()))
+			.andExpect(jsonPath("$.session_binding.capture_group_workflow").value(true))
+			.andExpect(jsonPath("$.session_binding.receipt_state").value("COMPLETE"));
 	}
 
 	@Test

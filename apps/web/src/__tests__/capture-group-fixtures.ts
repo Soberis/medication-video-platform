@@ -189,6 +189,7 @@ export function stubGroupDetail(
     quality: CaptureGroupQualityReview
     qualityError?: { status: number; errorCode?: string }
     receiptFinalizeResponse?: CaptureGroup
+    receiptFinalizeError?: { status: number; errorCode?: string }
     receiptFinalizeGate?: Promise<void>
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
     candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
@@ -202,6 +203,17 @@ export function stubGroupDetail(
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/receipt/finalize`)) {
+      if (options.receiptFinalizeError) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code:
+                options.receiptFinalizeError.errorCode ?? 'CAPTURE_GROUP_RECEIPT_FINALIZE_FAILED',
+            },
+            { status: options.receiptFinalizeError.status },
+          ),
+        )
+      }
       if (options.receiptFinalizeGate) {
         return options.receiptFinalizeGate.then(() =>
           jsonResponse(options.receiptFinalizeResponse ?? group),

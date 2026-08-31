@@ -175,14 +175,16 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   }, [refresh])
 
   const finalizeReceipt = useCallback(async () => {
-    if (!group || group.receipt_state !== 'RECEIVING' || isFinalizingReceipt) return
+    if (!group || group.receipt_state !== 'RECEIVING' || isFinalizingReceipt) return false
     setIsFinalizingReceipt(true)
     try {
       await finalizeCaptureGroupReceipt(projectId, captureGroupId)
       void message.success('配药事件接收已结束，正在刷新服务端事实。')
       await refresh()
+      return true
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '结束接收未完成，请稍后重试。')
+      return false
     } finally {
       setIsFinalizingReceipt(false)
     }

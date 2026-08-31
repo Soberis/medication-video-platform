@@ -6926,6 +6926,9 @@ components:
       additionalProperties: false
       required:
         - capture_session_id
+        - capture_group_id
+        - capture_group_workflow
+        - receipt_state
         - camera_stream_id
         - camera_channel_id
         - camera_index
@@ -6942,6 +6945,15 @@ components:
         capture_session_id:
           type: string
           format: uuid
+        capture_group_id:
+          type: [string, "null"]
+          format: uuid
+          description: Canonical CaptureGroup id when this video belongs to the V1.25+ event workflow; otherwise null.
+        capture_group_workflow:
+          type: boolean
+          description: True when the video is a view of a CaptureGroup and event-level workflow is authoritative.
+        receipt_state:
+          $ref: "#/components/schemas/CaptureGroupReceiptState"
         camera_stream_id:
           type: string
           format: uuid

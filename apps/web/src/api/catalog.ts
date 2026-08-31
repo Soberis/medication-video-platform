@@ -42,6 +42,9 @@ export interface CameraStream {
 
 export interface ClipAssetSessionBinding {
   capture_session_id: string
+  capture_group_id: string | null
+  capture_group_workflow: boolean
+  receipt_state: 'RECEIVING' | 'COMPLETE' | 'INCOMPLETE'
   camera_stream_id: string
   camera_channel_id: string
   camera_index: number
