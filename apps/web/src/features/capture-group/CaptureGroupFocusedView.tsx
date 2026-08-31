@@ -152,7 +152,7 @@ export function CaptureGroupFocusedView({
             <div className="capture-group-candidate-facts capture-group-stack">
               <StatusIndicator tone={currentCandidateTone}>
                 {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
-                  ? '未检测到手部（NO_HAND_DETECTED）'
+                  ? '未检测到手部'
                   : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
                     ? '检测失败'
                     : candidateResponse?.job.status === 'SUCCEEDED'
@@ -178,12 +178,12 @@ export function CaptureGroupFocusedView({
                     },
                     {
                       key: 'left',
-                      label: '左手候选',
+                      label: '左手检测次数',
                       children: candidateResponse.job.run_summary.left_hand_detection_count,
                     },
                     {
                       key: 'right',
-                      label: '右手候选',
+                      label: '右手检测次数',
                       children: candidateResponse.job.run_summary.right_hand_detection_count,
                     },
                     ...(candidateResponse.job.run_summary.failure_reason

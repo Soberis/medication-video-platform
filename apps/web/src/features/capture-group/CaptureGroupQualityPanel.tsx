@@ -126,7 +126,7 @@ export function CaptureGroupViewQualitySection({
         </div>
         <div>
           <strong>人工决定</strong>
-          <span>QUALIFIED / NEEDS_REVIEW / REJECTED 由人工记录，REJECTED 仍保留。</span>
+          <span>合格、需复核或不合格由人工记录；不合格机位仍保留。</span>
         </div>
       </div>
       {selectedStream && selectedDetail ? (
@@ -260,7 +260,7 @@ export function CaptureGroupQualityPanel({
               type="info"
               showIcon
               title="接收仍在进行中"
-              description="最终 QUALIFIED / QUALIFIED_WITH_EXCLUSIONS 操作已禁用；服务器只接受 NEEDS_REVIEW。"
+              description="最终“合格”或“合格（排除部分机位）”操作已禁用；服务器只接受“需复核”。"
             />
           ) : null}
           <label className="capture-group-decision-field">

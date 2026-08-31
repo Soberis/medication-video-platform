@@ -35,7 +35,7 @@ export function CaptureGroupOverview({
         <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
           {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
         </StatusIndicator>
-        <span>服务端结论；页面不计算事件质量。</span>
+        <span>人工记录的事件质量结论；页面仅展示已保存事实。</span>
       </div>
       <div className="capture-group-overview-card">
         <span className="app-eyebrow">拍摄时间</span>

@@ -44,7 +44,7 @@ describe('CaptureGroup operational list and quality', () => {
     expect(firstRow).toHaveTextContent('应 5 · 已收 4 · 缺失 1')
     expect(firstRow).toHaveTextContent('缺失：机位 3')
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
-    expect(firstRow).toHaveTextContent('合格 · 排除部分机位')
+    expect(firstRow).toHaveTextContent('合格（排除部分机位）')
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups?limit=20`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
@@ -545,7 +545,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     expect(await screen.findByText('接收仍在进行中')).toBeInTheDocument()
     expect(
-      screen.getByText(/最终 QUALIFIED \/ QUALIFIED_WITH_EXCLUSIONS 操作已禁用/),
+      screen.getByText(/最终“合格”或“合格（排除部分机位）”操作已禁用/),
     ).toBeInTheDocument()
     const qualitySelect = screen.getByRole('combobox', { name: '事件质量结论' })
     expect(qualitySelect).toBeInTheDocument()

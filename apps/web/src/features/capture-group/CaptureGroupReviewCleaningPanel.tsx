@@ -23,6 +23,7 @@ import {
   groupQualityDisplayLabel,
   groupQualityDisplayTone,
   receiptStateLabels,
+  syncReliabilityDisplayLabel,
   type CaptureGroupQualityVisibility,
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
@@ -135,7 +136,7 @@ export function CaptureGroupReviewCleaningPanel({
       title="人工复核 / 训练资格检查"
       titleId="capture-group-review-cleaning-title"
       actions={
-        <span className="capture-group-section-note">复核由人工完成 · 检查由服务端执行</span>
+        <span className="capture-group-section-note">复核由人工完成 · 训练资格检查按规则执行</span>
       }
     >
       {!task ? (
@@ -446,7 +447,7 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
                 <span>
                   {decision ? (viewQualityLabels[decision] ?? decision) : '机位事实已固定'}
                   {stringValue(view, 'rejection_reason')
-                    ? ` · ${stringValue(view, 'rejection_reason')}`
+                    ? ` · ${viewRejectionReasonLabel(stringValue(view, 'rejection_reason')!)}`
                     : ''}
                 </span>
               </li>
@@ -488,7 +489,7 @@ function TrainingEligibilityCheck({
         </div>
         {cleaning ? (
           <StatusBadge tone={cleaningTone(cleaning.outcome)}>
-            {cleaning.outcome} · {cleaningLabel(cleaning.outcome)}
+            {cleaningLabel(cleaning.outcome)}
           </StatusBadge>
         ) : null}
       </div>
@@ -659,13 +660,14 @@ function EventLevelViewEvidence({ viewEvidence }: { viewEvidence: CaptureGroupEv
         <ul className="capture-group-evidence-list" aria-label="事件级参考视图证据">
           {viewEvidence.map((view, index) => {
             const primary = booleanValue(view, 'action_aligned_interval')
+            const syncReliability = stringValue(view, 'sync_reliability')
             return (
               <li key={evidenceKey(view, index)}>
                 <strong>{evidenceViewName(view, index)}</strong>
                 <span>{primary ? '主视图 · 正式标注时间基准' : '参考视图 · 仅供事件级参考'}</span>
                 <small>
-                  {stringValue(view, 'sync_reliability')
-                    ? `同步证据：${stringValue(view, 'sync_reliability')}`
+                  {syncReliability
+                    ? `同步声明：${syncReliabilityDisplayLabel(syncReliability)} · 仅供参考，不代表精确时间对齐`
                     : '不生成参考视图动作时间点'}
                 </small>
               </li>
@@ -731,6 +733,17 @@ function viewQualityDecision(evidence: CaptureGroupEvidence) {
   return decision && decision in viewQualityLabels
     ? (decision as keyof typeof viewQualityLabels)
     : null
+}
+
+const viewRejectionReasonLabels: Record<string, string> = {
+  MISSING_VIEW: '机位缺失',
+  VIEW_NOT_REVIEWABLE: '机位暂不可复核',
+  VIEW_NOT_QUALIFIED: '机位质量未合格',
+  VIEW_QUALITY_NOT_QUALIFIED: '机位质量未合格',
+}
+
+function viewRejectionReasonLabel(value: string) {
+  return viewRejectionReasonLabels[value] ?? '存在排除原因'
 }
 
 function stringValue(evidence: CaptureGroupEvidence, key: string) {

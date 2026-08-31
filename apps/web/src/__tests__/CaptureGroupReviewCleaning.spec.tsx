@@ -60,7 +60,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
     expect(await screen.findByText('训练资格检查通过')).toBeInTheDocument()
-    expect(screen.getByText('PASS · 当前规则检查通过')).toBeInTheDocument()
+    expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
     expect(screen.getByText('REVIEW_APPROVED')).toBeInTheDocument()
   })
@@ -196,7 +196,10 @@ describe('CaptureGroup Review and training eligibility check', () => {
 
     const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
-    expect(within(rejectedViews).getByText(/MISSING_VIEW|VIEW_NOT_QUALIFIED/)).toBeInTheDocument()
+    expect(within(rejectedViews).getByText(/机位缺失/)).toBeInTheDocument()
+    expect(
+      within(rejectedViews).queryByText(/MISSING_VIEW|VIEW_NOT_QUALIFIED/),
+    ).not.toBeInTheDocument()
 
     const eventEvidence = screen.getByRole('list', { name: '事件级参考视图证据' })
     const supportingItem = within(eventEvidence).getByText('机位 3').closest('li')

@@ -18,7 +18,7 @@ export const receiptStateLabels: Record<CaptureGroup['receipt_state'], string> =
 export const groupQualityLabels: Record<CaptureGroupQualityResult, string> = {
   UNREVIEWED: '待判断',
   QUALIFIED: '合格',
-  QUALIFIED_WITH_EXCLUSIONS: '合格 · 排除部分机位',
+  QUALIFIED_WITH_EXCLUSIONS: '合格（排除部分机位）',
   NEEDS_REVIEW: '需复核',
   REJECTED: '不合格',
 }
@@ -65,6 +65,20 @@ export const technicalQualityLabels: Record<string, string> = {
   PASS: '技术检测通过',
   WARNING: '技术检测需关注',
   REJECT: '技术检测未通过',
+}
+
+const syncReliabilityLabels: Record<string, string> = {
+  PASS: '可靠声明',
+  RELIABLE: '可靠声明',
+  WARNING: '近似声明',
+  APPROXIMATE: '近似声明',
+  REJECT: '不可靠声明',
+  UNRELIABLE: '不可靠声明',
+  UNKNOWN: '未知声明',
+}
+
+export function syncReliabilityDisplayLabel(value: string) {
+  return syncReliabilityLabels[value] ?? '未识别声明'
 }
 
 export const groupQualityReasons = [
@@ -242,9 +256,9 @@ export function taskNextAction(
 export function syncSafety(stream: CaptureGroupStream) {
   if (stream.sync_status === 'PASS') {
     return {
-      label: '边端声明正常 · 参考',
+      label: '边端同步声明正常 · 仅供参考',
       tone: 'information' as const,
-      detail: '当前契约未提供 validated RELIABLE 映射；参考视图不能按精确同步展示。',
+      detail: '边端声明仅作参考；当前没有已验证的可靠时间映射，参考视图不能按精确同步展示。',
       referenceOnly: true,
     }
   }
@@ -267,7 +281,7 @@ export function syncSafety(stream: CaptureGroupStream) {
   return {
     label: '同步未知 · 仅供参考',
     tone: 'neutral' as const,
-    detail: '没有后端验证映射；参考视图仅供参考。',
+    detail: '当前没有后端验证映射；参考视图仅供事件级人工参考。',
     referenceOnly: true,
   }
 }

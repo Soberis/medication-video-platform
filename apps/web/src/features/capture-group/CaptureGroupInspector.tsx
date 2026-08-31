@@ -194,7 +194,7 @@ export function CaptureGroupInspector({
             <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
             <p>{selectedSync.detail}</p>
             <span>
-              边端声明偏移：{selectedStream?.time_offset_ms ?? 0} ms（不等同于 validated mapping）
+              边端声明偏移：{selectedStream?.time_offset_ms ?? 0} ms（不等同于已验证的可靠时间映射）
             </span>
           </div>
         ) : null}
