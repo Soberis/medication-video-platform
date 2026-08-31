@@ -22,6 +22,7 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
+import { SummaryStrip } from '@/components/SummaryStrip'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -404,41 +405,6 @@ export default function AnnotationTaskListView() {
           </span>
         </section>
       ) : null}
-      {loadState === 'success' && progress?.scope === 'PROJECT' ? (
-        <aside className="annotation-task-project-tools" aria-label="项目训练数据">
-          <div className="annotation-task-project-tools-copy">
-            <strong>项目训练数据</strong>
-            <span>
-              新版训练数据（training-data.v3）优先返回通过准入闸门的配药事件；历史格式
-              （training-data.v2）继续保留。
-            </span>
-          </div>
-          <div className="annotation-task-project-tools-actions">
-            <Button
-              type="primary"
-              size="small"
-              loading={isTrainingDataV3PreviewLoading}
-              disabled={
-                isTrainingDataV3DownloadLoading ||
-                isTrainingPreviewLoading ||
-                isTrainingDownloadLoading
-              }
-              onClick={() => void openTrainingDataV3Export()}
-            >
-              预览 training-data.v3
-            </Button>
-            <Button
-              size="small"
-              loading={isTrainingPreviewLoading}
-              disabled={isTrainingDownloadLoading || isTrainingDataV3PreviewLoading}
-              title="预览并导出历史训练数据（training-data.v2）"
-              onClick={() => void openTrainingExport()}
-            >
-              导出训练数据
-            </Button>
-          </div>
-        </aside>
-      ) : null}
       {loadState === 'success' && items.length ? (
         <Section
           className="annotation-task-queue"
@@ -697,7 +663,48 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有待处理的配药动作标注任务。质量判断合格的视频会自动出现在这里。" />
+        <EmptyState description="当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
+      ) : null}
+      {loadState === 'success' && progress?.scope === 'PROJECT' ? (
+        <details className="detail-disclosure annotation-task-project-tools">
+          <summary>
+            <strong>更多项目操作</strong>
+            <span>训练数据导出</span>
+          </summary>
+          <div className="detail-disclosure-content">
+            <div className="annotation-task-project-tools-content">
+              <div className="annotation-task-project-tools-copy">
+                <strong>项目训练数据</strong>
+                <span>
+                  配药事件使用 training-data.v3；历史单视频数据继续保留 training-data.v2。
+                </span>
+              </div>
+              <div className="annotation-task-project-tools-actions">
+                <Button
+                  size="small"
+                  loading={isTrainingDataV3PreviewLoading}
+                  disabled={
+                    isTrainingDataV3DownloadLoading ||
+                    isTrainingPreviewLoading ||
+                    isTrainingDownloadLoading
+                  }
+                  onClick={() => void openTrainingDataV3Export()}
+                >
+                  预览 training-data.v3
+                </Button>
+                <Button
+                  size="small"
+                  loading={isTrainingPreviewLoading}
+                  disabled={isTrainingDownloadLoading || isTrainingDataV3PreviewLoading}
+                  title="预览并导出历史训练数据（training-data.v2）"
+                  onClick={() => void openTrainingExport()}
+                >
+                  导出训练数据
+                </Button>
+              </div>
+            </div>
+          </div>
+        </details>
       ) : null}
       <Modal
         open={isTrainingDataV3ExportOpen}
@@ -721,68 +728,32 @@ export default function AnnotationTaskListView() {
       >
         {trainingDataV3Preview ? (
           <>
-            <MetadataList
-              className="training-data-export-summary training-data-v3-export-summary"
+            <SummaryStrip
+              ariaLabel="training-data.v3 产品摘要"
               items={[
                 {
-                  id: 'v3-eligible-group-count',
                   label: '合格配药事件',
                   value: `${trainingDataV3Preview.eligible_group_count} 组`,
                 },
                 {
-                  id: 'v3-event-count',
-                  label: '事件数',
-                  value: `${trainingDataV3Preview.event_count} 个`,
-                },
-                {
-                  id: 'v3-included-views',
                   label: '参与机位',
-                  value: 'participating_views（保留 camera_number 与机位质量）',
+                  value: trainingDataV3Preview.event_count > 0 ? '随事件保留' : '暂无可导出事件',
+                  detail: '机位明细见技术详情',
                 },
                 {
-                  id: 'v3-excluded-views',
                   label: '排除机位',
-                  value: 'excluded_views（保留原因与来源，不参与下游）',
+                  value: trainingDataV3Preview.event_count > 0 ? '保留审计记录' : '暂无可导出事件',
+                  detail: '不参与下游训练',
                 },
                 {
-                  id: 'v3-revision-provenance',
-                  label: '修订来源',
-                  value: 'annotation_revision_id + revision；复核 = APPROVED',
+                  label: '正式标注',
+                  value:
+                    trainingDataV3Preview.event_count > 0 ? '已通过人工复核' : '暂无可导出事件',
                 },
                 {
-                  id: 'v3-cleaning-provenance',
-                  label: '训练资格检查来源',
-                  value: 'capture_group_cleaning_id + rule set + input fingerprint；PASS',
-                },
-                {
-                  id: 'v3-primary-interval',
-                  label: '主视图时间基准',
-                  value: 'primary_interval 只归主视图；参考视图不生成动作对齐时间戳',
-                },
-                {
-                  id: 'v3-format-version',
-                  label: '格式 / 版本',
-                  value: (
-                    <>
-                      <code>{trainingDataV3Preview.schema_version}</code> ·{' '}
-                      <code>{trainingDataV3Preview.content_type}</code>
-                    </>
-                  ),
-                },
-                {
-                  id: 'v3-split-unit',
-                  label: 'Split 单位',
-                  value: '配药事件（同一事件的机位不跨 train / validation / test）',
-                },
-                {
-                  id: 'v3-file',
-                  label: '文件',
-                  value: <code>{trainingDataV3Preview.file_name}</code>,
-                },
-                {
-                  id: 'v3-includes-mp4',
-                  label: '原始视频',
-                  value: trainingDataV3Preview.includes_mp4 ? '包含' : '不包含',
+                  label: '训练资格',
+                  value:
+                    trainingDataV3Preview.event_count > 0 ? '已通过当前规则' : '暂无可导出事件',
                 },
               ]}
             />
@@ -791,15 +762,97 @@ export default function AnnotationTaskListView() {
                 当前没有符合条件的配药事件，暂时无法导出。
               </p>
             ) : null}
-            <p className="form-hint">
-              准入条件由服务端根据事件质量、正式修订、复核通过和训练资格检查通过判定；本页不重新计算。
-            </p>
+            <details className="detail-disclosure training-data-v3-technical-details">
+              <summary>
+                <strong>查看技术与追溯信息</strong>
+                <span>版本、字段与时间基准</span>
+              </summary>
+              <div className="detail-disclosure-content">
+                <MetadataList
+                  className="training-data-export-summary training-data-v3-export-summary"
+                  items={[
+                    {
+                      id: 'v3-event-count',
+                      label: '事件数',
+                      value: `${trainingDataV3Preview.event_count} 个`,
+                    },
+                    {
+                      id: 'v3-action-labels',
+                      label: '动作标签',
+                      value: 'action_label + action_labels',
+                    },
+                    {
+                      id: 'v3-view-provenance',
+                      label: '视图与质量来源',
+                      value:
+                        'participating_views + excluded_views；group_quality + qualified_views + rejected_missing_views',
+                    },
+                    {
+                      id: 'v3-confirmed-view-set',
+                      label: '确认输入',
+                      value: 'confirmed_view_set + input_version',
+                    },
+                    {
+                      id: 'v3-revision-provenance',
+                      label: '修订与复核来源',
+                      value:
+                        'annotation_revision_id + revision；annotation_review_id + review_decision + reviewed_by',
+                    },
+                    {
+                      id: 'v3-cleaning-provenance',
+                      label: '训练资格检查来源',
+                      value:
+                        'capture_group_cleaning_id + rule set + input fingerprint + cleaning_evaluated_by；PASS',
+                    },
+                    {
+                      id: 'v3-candidate-provenance',
+                      label: '候选与映射来源',
+                      value: 'candidate_provenance + mapping_provenance',
+                    },
+                    {
+                      id: 'v3-primary-interval',
+                      label: '主视图时间基准',
+                      value:
+                        'primary_clip_asset_id + primary_camera_number + primary_interval；参考视图不生成动作对齐时间戳',
+                    },
+                    {
+                      id: 'v3-format-version',
+                      label: '格式 / 版本',
+                      value: (
+                        <>
+                          <code>{trainingDataV3Preview.schema_version}</code> ·{' '}
+                          <code>{trainingDataV3Preview.content_type}</code>
+                        </>
+                      ),
+                    },
+                    {
+                      id: 'v3-split-unit',
+                      label: 'Split 单位',
+                      value: '配药事件（同一事件的机位不跨 train / validation / test）',
+                    },
+                    {
+                      id: 'v3-file',
+                      label: '文件',
+                      value: <code>{trainingDataV3Preview.file_name}</code>,
+                    },
+                    {
+                      id: 'v3-includes-mp4',
+                      label: '原始视频',
+                      value: trainingDataV3Preview.includes_mp4 ? '包含' : '不包含',
+                    },
+                  ]}
+                />
+                <p className="form-hint">
+                  准入条件由服务端根据事件质量、正式修订、复核通过和训练资格检查通过判定；本页不重新计算。
+                </p>
+              </div>
+            </details>
           </>
         ) : null}
       </Modal>
       <Modal
         open={isTrainingExportOpen}
-        title="训练数据导出"
+        title="历史训练数据导出（training-data.v2）"
         okText="导出"
         cancelText="取消"
         confirmLoading={isTrainingDownloadLoading}
@@ -823,6 +876,11 @@ export default function AnnotationTaskListView() {
                   id: 'training-row-count',
                   label: '训练行数',
                   value: `${trainingExportPreview.training_row_count} 条`,
+                },
+                {
+                  id: 'schema-version',
+                  label: '版本',
+                  value: <code>{trainingExportPreview.schema_version}</code>,
                 },
                 { id: 'format', label: '格式', value: 'Parquet' },
                 { id: 'includes', label: '包含', value: '手部关键点 + 人工动作标签' },

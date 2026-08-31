@@ -118,6 +118,11 @@ describe('annotation task list view', () => {
     expect(
       screen.getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
     ).toBeInTheDocument()
+    const projectTools = screen.getByText('更多项目操作').closest('details')
+    if (!projectTools) throw new Error('Project tools disclosure was not mounted.')
+    expect(projectTools).not.toHaveAttribute('open')
+    await user.click(within(projectTools).getByText('更多项目操作'))
+    expect(projectTools).toHaveAttribute('open')
     expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '预览 training-data.v3' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
@@ -134,12 +139,12 @@ describe('annotation task list view', () => {
     )
   })
 
-  it('explains that qualified videos enter the annotation flow automatically when the queue is empty', async () => {
+  it('explains that qualified events enter the annotation flow automatically when the queue is empty', async () => {
     stubTasks([], labelSchema)
     renderView()
 
     const emptyState = await screen.findByText(
-      '当前没有待处理的配药动作标注任务。质量判断合格的视频会自动出现在这里。',
+      '当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。',
     )
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
@@ -526,6 +531,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     const dialog = await screen.findByRole('dialog')
 
@@ -533,6 +539,7 @@ describe('annotation task list view', () => {
       `/api/v1/projects/${projectId}/training-data/preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
+    expect(dialog).toHaveTextContent('training-data.v2')
     expect(dialog).toHaveTextContent('12 条')
     expect(dialog).toHaveTextContent('格式Parquet')
     expect(dialog).toHaveTextContent('包含手部关键点 + 人工动作标签')
@@ -547,6 +554,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: /取消/ }))
@@ -568,6 +576,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
     const dialog = await screen.findByRole('dialog')
 
@@ -576,18 +585,39 @@ describe('annotation task list view', () => {
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
     expect(dialog).toHaveTextContent('2 组')
-    expect(dialog).toHaveTextContent('2 个')
-    expect(dialog).toHaveTextContent('participating_views')
-    expect(dialog).toHaveTextContent('excluded_views')
-    expect(dialog).toHaveTextContent('annotation_revision_id + revision')
-    expect(dialog).toHaveTextContent('capture_group_cleaning_id + rule set + input fingerprint')
-    expect(dialog).toHaveTextContent('primary_interval 只归主视图')
-    expect(dialog).toHaveTextContent('参考视图不生成动作对齐时间戳')
-    expect(dialog).toHaveTextContent('training-data.v3')
-    expect(dialog).toHaveTextContent('application/vnd.medication.training-data.v3+json')
-    expect(dialog).toHaveTextContent('同一事件的机位不跨 train / validation / test')
-    expect(dialog).toHaveTextContent('training_data_v3.json')
-    expect(dialog).toHaveTextContent('原始视频不包含')
+    const productSummary = within(dialog).getByRole('region', {
+      name: 'training-data.v3 产品摘要',
+    })
+    expect(productSummary).toHaveTextContent('参与机位')
+    expect(productSummary).toHaveTextContent('随事件保留')
+    expect(productSummary).toHaveTextContent('排除机位')
+    expect(productSummary).toHaveTextContent('保留审计记录')
+    expect(productSummary).toHaveTextContent('正式标注')
+    expect(productSummary).toHaveTextContent('已通过人工复核')
+    expect(productSummary).toHaveTextContent('训练资格')
+    expect(productSummary).toHaveTextContent('已通过当前规则')
+    const technicalDetails = within(dialog).getByText('查看技术与追溯信息').closest('details')
+    if (!technicalDetails) throw new Error('V3 technical details were not mounted.')
+    expect(technicalDetails).not.toHaveAttribute('open')
+    await user.click(within(technicalDetails).getByText('查看技术与追溯信息'))
+    expect(technicalDetails).toHaveAttribute('open')
+    expect(technicalDetails).toHaveTextContent('2 个')
+    expect(technicalDetails).toHaveTextContent('participating_views')
+    expect(technicalDetails).toHaveTextContent('excluded_views')
+    expect(technicalDetails).toHaveTextContent('annotation_revision_id + revision')
+    expect(technicalDetails).toHaveTextContent(
+      'capture_group_cleaning_id + rule set + input fingerprint + cleaning_evaluated_by；PASS',
+    )
+    expect(technicalDetails).toHaveTextContent(
+      'primary_clip_asset_id + primary_camera_number + primary_interval；参考视图不生成动作对齐时间戳',
+    )
+    expect(technicalDetails).toHaveTextContent('training-data.v3')
+    expect(technicalDetails).toHaveTextContent('application/vnd.medication.training-data.v3+json')
+    expect(technicalDetails).toHaveTextContent(
+      '配药事件（同一事件的机位不跨 train / validation / test）',
+    )
+    expect(technicalDetails).toHaveTextContent('training_data_v3.json')
+    expect(technicalDetails).toHaveTextContent('不包含')
   })
 
   it('downloads the confirmed V1.25 manifest through the v3 endpoint', async () => {
@@ -610,6 +640,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '导出 training-data.v3' }))
@@ -644,6 +675,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('0 个')
@@ -665,6 +697,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '导出' }))
@@ -693,6 +726,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('0 条')
@@ -705,6 +739,7 @@ describe('annotation task list view', () => {
     renderView()
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
+    expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览 training-data.v3' })).not.toBeInTheDocument()
   })
@@ -731,6 +766,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
+    await user.click(await screen.findByText('更多项目操作'))
     await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
     expect(await screen.findByText('当前可用数据证据不完整，暂时无法导出。')).toBeInTheDocument()
     expect(screen.queryByText(/java\.lang|internal\.invalid/)).not.toBeInTheDocument()

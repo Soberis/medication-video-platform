@@ -810,15 +810,15 @@
 }
 
 .annotation-task-project-tools {
-  display: flex;
   width: min(100%, 1120px);
+  margin-top: var(--app-space-16);
+}
+
+.annotation-task-project-tools-content {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-16);
-  margin: 0 0 var(--app-space-16);
-  padding: var(--app-space-8) 0;
-  border-top: 1px solid var(--app-color-border-subtle);
-  border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
 .annotation-task-project-tools-copy {
@@ -2158,7 +2158,7 @@
     flex-direction: column;
   }
 
-  .annotation-task-project-tools {
+  .annotation-task-project-tools-content {
     align-items: flex-start;
     flex-direction: column;
   }
