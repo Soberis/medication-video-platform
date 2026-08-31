@@ -2,15 +2,15 @@
 
 平台对接医院边端采集系统接收固定舱内相机视频，在云端完成视频与数据管理、MediaPipe 手部预标注、配药动作标注、复核和数据清洗。
 
-当前需求基线：V1.25（多机位 CaptureGroup 运行时闭环已实现，并保留 V1.24-compatible 单视频路径）
+当前正式需求：V1.26（统一视频管理与配药事件工作台，并保留 V1.24-compatible 单视频历史路径）
 
 当前同时支持：
 
-V1.25 new-event mainline：
+V1.26 new-event mainline：
 
 ```text
-配药事件 / CaptureGroup → Receipt → View Quality → Group Quality
-→ one AnnotationTask → Revision → Review → Cleaning → training-data.v3
+视频管理 → 配药事件 / CaptureGroup → 机位质量 → 事件质量
+→ Annotation → Review → deterministic Cleaning → training-data.v3
 ```
 
 V1.24-compatible historical single-video path：
@@ -19,14 +19,17 @@ V1.24-compatible historical single-video path：
 ClipAsset → existing single-video workflow → training-data.v2
 ```
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe 候选作业；MediaPipe 只生成可追溯的候选和播放器 Overlay，不能自动成为正式标注或清洗结论。质量合格只会自动创建并分配人工标注任务，不能跳过人工 revision、复核、清洗或管理员导出确认。V1.25 CaptureGroup 路径已实现组质量、组任务/修订、人工 Review、事件级 Cleaning 和 training-data.v3 多视图导出；V1.24 的 training-data.v2 行为继续保留。批量 API 和可配置自动策略属于后续能力。
+V1.26 工作台信息架构已经冻结；`V26-FR-005` 的 React 实现状态仍为 `D1`，不因文档完成而宣称已交付或 UAT。
+
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。V1.25 CaptureGroup 领域闭环继续由 V1.26 继承；V1.24 的 `training-data.v2` 历史行为继续保留。
 
 当前规范：
 
-- [V1.25 当前正式需求基线（多机位 CaptureGroup）](./docs/requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)
-- [V1.25 多机位实现技术设计](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
-- [V1.25 多机位质量评审与清洗工作流](./docs/architecture/multi-camera-quality-review-workflow.md)
+- [V1.26 当前正式需求基线](./docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md)
+- [V1.26 配药事件工作台设计](./docs/architecture/v1.26-medication-event-workbench-design.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
+- [V1.25 继承的 CaptureGroup 技术参考](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
+- [V1.25 继承的多机位质量、Review 与 Cleaning 参考](./docs/architecture/multi-camera-quality-review-workflow.md)
 - [V1.24 前一正式基线与兼容路径参考](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
 - [V1.24 单视频手部预标注组件设计](./docs/architecture/video-hand-pose-mvp-technical-design.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)

@@ -1,15 +1,16 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.25 多机位 CaptureGroup 基线为准：一个真实配药事件统一进入 CaptureGroup，支持动态 N 路视图、逐视图 Media Probe/MediaPipe Candidate、人工质量与组质量准入、单组任务/修订链、主视图时间基准、Review、事件级 Cleaning 和保留组/视图关系的训练数据方向。当前已实现运行时仍主要是 V1.24-compatible 单视频闭环；V1.25 文档批准不等于功能已实现。Candidate、人工标注、复核、清洗、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已按独立 Physical Reduction 批次退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。DatasetVersion/legacy Export 与 AiEvaluation 的代码和 API 已退役，其未使用的数据库对象已由 V65/V66 前向迁移物理退役，历史 Flyway 文件和设计文档仅保留演进记录。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.26 为准：视频管理以配药事件（CaptureGroup）为对象，事件工作台采用 current-task-first 信息层级；V1.25 已实现的动态 N 路视图、人工机位/事件质量、单组任务与 Revision、人工 Review、确定性 Cleaning 和 `training-data.v3` 领域闭环继续继承。V1.24-compatible 单视频路径只保留历史兼容。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md) | V1.25 当前多机位目标、所有权、实施边界和顺序 |
-| [固定多相机配药事件质量评审、标注与清洗用户流程](./multi-camera-quality-review-workflow.md) | V1.25 当前产品/UX 工作流与人工闸门 |
-| [配药视频数据管理平台：手部预标注组件技术设计](./video-hand-pose-mvp-technical-design.md) | V1.24 已实现单视频组件与 V1.25 继承的 Media Probe/MediaPipe/Candidate 行为 |
-| [当前需求追踪矩阵](./requirements-traceability.md) | V1.25 当前需求到模块、契约、测试和状态；V1.24 实现证据保留 |
+| [V1.26 配药事件工作台设计](./v1.26-medication-event-workbench-design.md) | 当前产品 IA、六阶段业务 rail、Current Action 和展示推导边界 |
+| [CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md) | V1.25 冻结并由 V1.26 继承的领域所有权与实现边界 |
+| [固定多相机配药事件质量评审、标注与清洗用户流程](./multi-camera-quality-review-workflow.md) | V1.25 冻结并由 V1.26 继承的质量、Review 与 Cleaning 语义 |
+| [配药视频数据管理平台：手部预标注组件技术设计](./video-hand-pose-mvp-technical-design.md) | V1.24 已实现单视频组件与 V1.25/V1.26 继承的 Media Probe/MediaPipe/Candidate 行为 |
+| [当前需求追踪矩阵](./requirements-traceability.md) | V1.26 当前需求到模块、契约、测试和状态；V1.25/V1.24 证据保留 |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
 | [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
 | [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |
