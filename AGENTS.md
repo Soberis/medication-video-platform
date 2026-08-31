@@ -11,8 +11,8 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`：当前正式业务需求基线，统一“视频管理”与配药事件工作台，并冻结 current-task-first 信息层级和安全自动化边界。
-3. `docs/architecture/v1.26-medication-event-workbench-design.md`：当前 V1.26 产品信息架构与工作台展示设计；只定义展示推导，不新增领域状态机。
+2. `docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`：当前正式业务需求基线，统一“视频管理”与配药事件工作台，并冻结 current-task-first 信息层级、极简连续作业体验和可证自动化边界。
+3. `docs/architecture/v1.26-medication-event-workbench-design.md`：当前 V1.26 产品信息架构与工作台展示设计；允许在服务端成功后刷新并安全聚焦下一未决项，但只定义展示推导，不新增领域状态机或自动专业判断。
 4. `docs/requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md`、`docs/architecture/capture-group-multicamera-workflow-technical-design.md` 与 `docs/architecture/multi-camera-quality-review-workflow.md`：前一正式冻结基线及 V1.26 继承的 CaptureGroup 领域/工作流参考。`docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md` 继续作为 V1.24-compatible 历史运行时参考。
 5. `docs/adr/`：已经冻结的技术决策。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。

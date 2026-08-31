@@ -2,7 +2,7 @@
 
 平台对接医院边端采集系统接收固定舱内相机视频，在云端完成视频与数据管理、MediaPipe 手部预标注、配药动作标注、复核和数据清洗。
 
-当前正式需求：V1.26（统一视频管理与配药事件工作台，并保留 V1.24-compatible 单视频历史路径）
+当前正式需求：V1.26（统一视频管理、极简配药事件工作台与可证自动化，并保留 V1.24-compatible 单视频历史路径）
 
 当前同时支持：
 
@@ -19,14 +19,14 @@ V1.24-compatible historical single-video path：
 ClipAsset → existing single-video workflow → training-data.v2
 ```
 
-V1.26 工作台信息架构已经冻结；`V26-FR-005` 的 React 实现状态仍为 `D1`，不因文档完成而宣称已交付或 UAT。
+V1.26 工作台信息架构已经冻结；`V26-FR-005` 与 `V26-FR-006` 的 React 极简连续作业体验仍为 `D1`，不因文档完成而宣称已交付或 UAT。
 
 边端负责采集、缓存和上传策略；平台不控制相机或边端设备。当前运行时每个成功入库视频会自动提交一个幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。V1.25 CaptureGroup 领域闭环继续由 V1.26 继承；V1.24 的 `training-data.v2` 历史行为继续保留。
 
 当前规范：
 
 - [V1.26 当前正式需求基线](./docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md)
-- [V1.26 配药事件工作台设计](./docs/architecture/v1.26-medication-event-workbench-design.md)
+- [V1.26 极简配药事件工作台设计](./docs/architecture/v1.26-medication-event-workbench-design.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
 - [V1.25 继承的 CaptureGroup 技术参考](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
 - [V1.25 继承的多机位质量、Review 与 Cleaning 参考](./docs/architecture/multi-camera-quality-review-workflow.md)

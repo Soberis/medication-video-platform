@@ -1,12 +1,12 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.26 为准：视频管理以配药事件（CaptureGroup）为对象，事件工作台采用 current-task-first 信息层级；V1.25 已实现的动态 N 路视图、人工机位/事件质量、单组任务与 Revision、人工 Review、确定性 Cleaning 和 `training-data.v3` 领域闭环继续继承。V1.24-compatible 单视频路径只保留历史兼容。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.26 为准：视频管理以配药事件（CaptureGroup）为对象，事件工作台采用 current-task-first 信息层级、唯一主操作、最少重复选择和服务端成功后的安全连续处理；V1.25 已实现的动态 N 路视图、人工机位/事件质量、单组任务与 Revision、人工 Review、确定性 Cleaning 和 `training-data.v3` 领域闭环继续继承。V1.24-compatible 单视频路径只保留历史兼容。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [V1.26 配药事件工作台设计](./v1.26-medication-event-workbench-design.md) | 当前产品 IA、六阶段业务 rail、Current Action 和展示推导边界 |
+| [V1.26 极简配药事件工作台设计](./v1.26-medication-event-workbench-design.md) | 当前产品 IA、六阶段业务 rail、唯一 Current Action、连续机位处理和可证自动化边界 |
 | [CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md) | V1.25 冻结并由 V1.26 继承的领域所有权与实现边界 |
 | [固定多相机配药事件质量评审、标注与清洗用户流程](./multi-camera-quality-review-workflow.md) | V1.25 冻结并由 V1.26 继承的质量、Review 与 Cleaning 语义 |
 | [配药视频数据管理平台：手部预标注组件技术设计](./video-hand-pose-mvp-technical-design.md) | V1.24 已实现单视频组件与 V1.25/V1.26 继承的 Media Probe/MediaPipe/Candidate 行为 |
