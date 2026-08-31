@@ -77,7 +77,7 @@ const phaseLabels: Record<LocalUploadPhase, string> = {
   REGISTERING: '正在登记视频文件',
   UPLOADING: '正在传输视频分片',
   VERIFYING: '平台正在校验文件',
-  ASSEMBLING: '正在建立单视角配药操作记录',
+  ASSEMBLING: '正在建立单机位配药事件记录',
   COMPLETED: '平台已确认上传完成',
 }
 function taskPercent(task: UploadTask) {
@@ -377,8 +377,8 @@ export default function LocalUploadView() {
                     : `开始上传${selectedFiles.length > 1 ? `（${selectedFiles.length} 个视频）` : ''}`}
               </Button>
               {selectedProjectId ? (
-                <Link className="text-link" to={paths.videos(selectedProjectId)}>
-                  查看项目视频
+                <Link className="text-link" to={paths.captureGroups(selectedProjectId)}>
+                  进入视频管理
                 </Link>
               ) : null}
             </div>
@@ -470,7 +470,7 @@ export default function LocalUploadView() {
                         ? [
                             {
                               id: 'capture-session-id',
-                              label: '配药操作 ID',
+                              label: '配药事件 ID',
                               value: <code>{task.captureSessionId}</code>,
                             },
                           ]
