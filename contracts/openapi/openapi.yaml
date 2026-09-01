@@ -6323,8 +6323,7 @@ components:
         candidate_evidence:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/CandidateProvenanceEntry"
     QualityReviewDecision:
       type: string
       enum:
@@ -6787,8 +6786,7 @@ components:
         candidate_provenance:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/CandidateProvenanceEntry"
         rule_set_key:
           type: string
         rule_set_version:
@@ -6834,6 +6832,111 @@ components:
         label:
           type: string
           minLength: 1
+    CandidateProvenanceEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - clip_asset_id
+        - clip_asset_sha256
+        - provenance_valid
+        - execution_status
+        - candidate_count
+      properties:
+        clip_asset_id:
+          type: string
+          format: uuid
+        clip_asset_sha256:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        provenance_valid:
+          type: boolean
+        execution_status:
+          type: string
+          enum: [NO_JOB, QUEUED, RUNNING, FAILED, SUCCEEDED_NO_HAND, SUCCEEDED_WITH_CANDIDATES, INVALID_PROVENANCE]
+        provenance_failure_reason:
+          type:
+            - string
+            - "null"
+        ai_job_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        input_sha256:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        algorithm_key:
+          type:
+            - string
+            - "null"
+          const: MEDIAPIPE_HAND_LANDMARKER
+        algorithm_version:
+          type:
+            - string
+            - "null"
+        model_sha256:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        profile_sha256:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        ai_job_attempt_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        attempt:
+          type:
+            - integer
+            - "null"
+          format: int32
+          minimum: 1
+        message_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        result_sha256:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        hand_result:
+          type:
+            - string
+            - "null"
+          enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
+        candidate_count:
+          type: integer
+          format: int64
+          minimum: 0
+        first_timestamp_ms:
+          type:
+            - integer
+            - "null"
+          format: int64
+          minimum: 0
+        last_timestamp_ms:
+          type:
+            - integer
+            - "null"
+          format: int64
+          minimum: 0
+        candidate_set_digest:
+          type:
+            - string
+            - "null"
+          pattern: "^[a-f0-9]{64}$"
+        run_summary:
+          $ref: "#/components/schemas/HandPoseRunSummary"
     TrainingDataV3ExportPreview:
       type: object
       additionalProperties: false
@@ -6916,6 +7019,7 @@ components:
         - cleaning_evaluated_by
         - cleaning_evaluated_at
         - mapping_provenance
+        - candidate_evidence
         - candidate_provenance
       properties:
         capture_group_id:
@@ -7001,8 +7105,7 @@ components:
         candidate_evidence:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/CandidateProvenanceEntry"
         capture_group_cleaning_id:
           type: string
           format: uuid
@@ -7044,8 +7147,7 @@ components:
         candidate_provenance:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/CandidateProvenanceEntry"
     TrainingDataV3SplitValidationRequest:
       type: object
       additionalProperties: false

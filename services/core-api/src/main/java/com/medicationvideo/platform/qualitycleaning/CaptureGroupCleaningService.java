@@ -1,5 +1,6 @@
 package com.medicationvideo.platform.qualitycleaning;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,6 +25,8 @@ import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
+
+import tools.jackson.databind.JsonNode;
 
 /**
  * Event-level training eligibility for CaptureGroup AnnotationRevisions.
@@ -247,6 +250,7 @@ public class CaptureGroupCleaningService {
 			append(canonical, command.groupQualityRevision());
 			append(canonical, command.primaryClipAssetId());
 			append(canonical, command.primaryCameraNumber());
+			append(canonical, "candidate-evidence.v1");
 			append(canonical, "candidate_evidence");
 			command.candidateEvidence()
 				.stream()
@@ -288,11 +292,125 @@ public class CaptureGroupCleaningService {
 
 	private static String canonicalCandidateEvidence(Map<String, Object> evidence) {
 		var canonical = new StringBuilder();
-		evidence.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-			append(canonical, entry.getKey());
-			append(canonical, entry.getValue());
-		});
+		appendCanonicalValue(canonical, evidence);
 		return canonical.toString();
+	}
+
+	private static void appendCanonicalValue(StringBuilder target, Object value) {
+		if (value == null) {
+			target.append("null");
+		}
+		else if (value instanceof JsonNode node) {
+			appendCanonicalJson(target, node);
+		}
+		else if (value instanceof Map<?, ?> map) {
+			var entries = map.entrySet().stream().map(entry -> {
+				if (!(entry.getKey() instanceof String key)) {
+					throw new IllegalArgumentException("Candidate evidence map keys must be strings.");
+				}
+				return new java.util.AbstractMap.SimpleImmutableEntry<>(key, entry.getValue());
+			}).sorted(Map.Entry.comparingByKey()).toList();
+			target.append("map[").append(entries.size()).append("]{");
+			for (var entry : entries) {
+				appendCanonicalString(target, entry.getKey());
+				appendCanonicalValue(target, entry.getValue());
+			}
+			target.append('}');
+		}
+		else if (value instanceof Set<?> set) {
+			var values = set.stream().map(CaptureGroupCleaningService::canonicalValue).sorted().toList();
+			target.append("set[").append(values.size()).append("]{");
+			values.forEach(target::append);
+			target.append('}');
+		}
+		else if (value instanceof Iterable<?> iterable) {
+			var values = new ArrayList<String>();
+			for (var item : iterable) {
+				values.add(canonicalValue(item));
+			}
+			target.append("list[").append(values.size()).append("]{");
+			values.forEach(target::append);
+			target.append('}');
+		}
+		else if (value.getClass().isArray()) {
+			var length = java.lang.reflect.Array.getLength(value);
+			target.append("array[").append(length).append("]{");
+			for (var index = 0; index < length; index++) {
+				target.append(canonicalValue(java.lang.reflect.Array.get(value, index)));
+			}
+			target.append('}');
+		}
+		else {
+			appendCanonicalScalar(target, value);
+		}
+	}
+
+	private static String canonicalValue(Object value) {
+		var canonical = new StringBuilder();
+		appendCanonicalValue(canonical, value);
+		return canonical.toString();
+	}
+
+	private static void appendCanonicalJson(StringBuilder target, JsonNode node) {
+		if (node == null || node.isNull()) {
+			target.append("null");
+		}
+		else if (node.isObject()) {
+			var names = new ArrayList<String>();
+			node.propertyNames().forEach(names::add);
+			names.sort(String::compareTo);
+			target.append("map[").append(names.size()).append("]{");
+			for (var name : names) {
+				appendCanonicalString(target, name);
+				appendCanonicalJson(target, node.get(name));
+			}
+			target.append('}');
+		}
+		else if (node.isArray()) {
+			target.append("list[").append(node.size()).append("]{");
+			for (var child : node) {
+				appendCanonicalJson(target, child);
+			}
+			target.append('}');
+		}
+		else if (node.isNumber()) {
+			target.append("number[")
+				.append(new BigDecimal(node.asText()).stripTrailingZeros().toPlainString())
+				.append(']');
+		}
+		else if (node.isBoolean()) {
+			target.append(node.asBoolean() ? "boolean[true]" : "boolean[false]");
+		}
+		else {
+			appendCanonicalString(target, node.asText());
+		}
+	}
+
+	private static void appendCanonicalScalar(StringBuilder target, Object value) {
+		if (value instanceof BigDecimal decimal) {
+			target.append("number[").append(decimal.stripTrailingZeros().toPlainString()).append(']');
+		}
+		else if (value instanceof Number number) {
+			target.append("number[")
+				.append(new BigDecimal(number.toString()).stripTrailingZeros().toPlainString())
+				.append(']');
+		}
+		else if (value instanceof Boolean booleanValue) {
+			target.append(booleanValue ? "boolean[true]" : "boolean[false]");
+		}
+		else if (value instanceof UUID || value instanceof Character || value instanceof String) {
+			appendCanonicalString(target, value.toString());
+		}
+		else if (value instanceof Enum<?> enumValue) {
+			appendCanonicalString(target, enumValue.name());
+		}
+		else {
+			throw new IllegalArgumentException("Unsupported candidate evidence value: " + value.getClass().getName());
+		}
+	}
+
+	private static void appendCanonicalString(StringBuilder target, String value) {
+		target.append("string[").append(value.length()).append(':').append(value).append(']');
 	}
 
 	private static void append(StringBuilder target, Object value) {

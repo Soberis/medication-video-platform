@@ -309,7 +309,9 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getFirst().toString()))
 			.andExpect(jsonPath("$.qualified_views.length()").value(3))
 			.andExpect(jsonPath("$.rejected_missing_views.length()").value(2))
-			.andExpect(jsonPath("$.candidate_evidence.length()").value(0));
+			.andExpect(jsonPath("$.candidate_evidence.length()").value(3))
+			.andExpect(jsonPath("$.candidate_evidence[0].execution_status").value("NO_JOB"))
+			.andExpect(jsonPath("$.candidate_evidence[0].provenance_valid").value(true));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
 		assertEquals(1,

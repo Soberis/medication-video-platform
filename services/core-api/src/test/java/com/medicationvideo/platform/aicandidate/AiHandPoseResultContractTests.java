@@ -35,6 +35,8 @@ class AiHandPoseResultContractTests {
 
 	private UUID lastInsertedClipAssetId;
 
+	private UUID lastInsertedProjectId;
+
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
@@ -105,6 +107,7 @@ class AiHandPoseResultContractTests {
 		assertEquals(0,
 				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision WHERE clip_asset_id = ?",
 						Integer.class, this.lastInsertedClipAssetId));
+		assertNoFormalWorkflowWrites();
 	}
 
 	@Test
@@ -182,6 +185,7 @@ class AiHandPoseResultContractTests {
 		assertEquals(0,
 				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision WHERE clip_asset_id = ?",
 						Integer.class, this.lastInsertedClipAssetId));
+		assertNoFormalWorkflowWrites();
 	}
 
 	@Test
@@ -260,6 +264,7 @@ class AiHandPoseResultContractTests {
 				"SELECT retryable FROM ai_job_attempt WHERE ai_job_attempt_id = ?", Boolean.class, attempt));
 		assertEquals(0, this.jdbcTemplate
 			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+		assertNoFormalWorkflowWrites();
 	}
 
 	@Test
@@ -565,8 +570,26 @@ class AiHandPoseResultContractTests {
 			.collect(Collectors.joining(","));
 	}
 
+	private void assertNoFormalWorkflowWrites() {
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM quality_review WHERE project_id = ?",
+				Integer.class, this.lastInsertedProjectId));
+		assertEquals(0,
+				this.jdbcTemplate.queryForObject(
+						"SELECT count(*) FROM capture_group_quality_review WHERE project_id = ?", Integer.class,
+						this.lastInsertedProjectId));
+		assertEquals(0,
+				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision WHERE project_id = ?",
+						Integer.class, this.lastInsertedProjectId));
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_review WHERE project_id = ?",
+				Integer.class, this.lastInsertedProjectId));
+		assertEquals(0,
+				this.jdbcTemplate.queryForObject("SELECT count(*) FROM capture_group_cleaning WHERE project_id = ?",
+						Integer.class, this.lastInsertedProjectId));
+	}
+
 	private void insertRunningJob(UUID jobId, UUID attemptId, UUID messageId, String leaseHash, Instant now) {
 		var projectId = UUID.randomUUID();
+		this.lastInsertedProjectId = projectId;
 		var clipAssetId = UUID.randomUUID();
 		this.lastInsertedClipAssetId = clipAssetId;
 		var batchId = UUID.randomUUID();

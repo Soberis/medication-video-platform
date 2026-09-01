@@ -84,4 +84,87 @@ class TrainingDataV3ExportServiceTests {
 		assertEquals(3, sanitized.get(1).get("quality_review_version").asInt());
 	}
 
+	@Test
+	void v3AcceptsNoJobFailedAndSuccessfulCandidateExecutionStates() throws Exception {
+		TrainingDataV3ExportService.validateCandidateProvenance(this.objectMapper.readTree("""
+				[{"clip_asset_id":"d0000000-0000-4000-8000-000000000020",
+				  "clip_asset_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				  "provenance_valid":true,"execution_status":"NO_JOB","candidate_count":0}]
+				"""), "candidate_evidence");
+		TrainingDataV3ExportService.validateCandidateProvenance(this.objectMapper.readTree("""
+				[{"clip_asset_id":"d0000000-0000-4000-8000-000000000021",
+				  "clip_asset_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				  "provenance_valid":true,"execution_status":"FAILED",
+				  "provenance_failure_reason":"TRANSIENT",
+				  "ai_job_id":"d0000000-0000-4000-8000-000000000022",
+				  "input_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				  "algorithm_key":"MEDIAPIPE_HAND_LANDMARKER","algorithm_version":"v1",
+				  "model_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				  "profile_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				  "ai_job_attempt_id":"d0000000-0000-4000-8000-000000000023","attempt":1,
+				  "message_id":"d0000000-0000-4000-8000-000000000024","hand_result":"UNKNOWN",
+				  "candidate_count":0}]
+				"""), "candidate_provenance");
+		TrainingDataV3ExportService.validateCandidateProvenance(this.objectMapper.readTree("""
+				[{"clip_asset_id":"d0000000-0000-4000-8000-000000000025",
+				  "clip_asset_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				  "provenance_valid":true,"execution_status":"SUCCEEDED_WITH_CANDIDATES",
+				  "ai_job_id":"d0000000-0000-4000-8000-000000000026",
+				  "input_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				  "algorithm_key":"MEDIAPIPE_HAND_LANDMARKER","algorithm_version":"v1",
+				  "model_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				  "profile_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				  "ai_job_attempt_id":"d0000000-0000-4000-8000-000000000027","attempt":2,
+				  "message_id":"d0000000-0000-4000-8000-000000000028",
+				  "result_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+				  "hand_result":"HAND_DETECTED","candidate_count":1,
+				  "first_timestamp_ms":10,"last_timestamp_ms":10,
+				  "candidate_set_digest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+				  "run_summary":{"analysis_complete":true,"hand_result":"HAND_DETECTED",
+				    "total_video_frames":6,"inference_frame_count":3,"frames_with_hand":1,
+				    "frames_without_hand":2,"left_hand_detection_count":1,"right_hand_detection_count":0,
+				    "invalid_landmark_count":0,"processing_duration_ms":17,
+				    "started_at":"2026-08-01T01:00:00Z","completed_at":"2026-08-01T01:00:01Z",
+				    "failure_reason":null,"retryable":false}}]
+				"""), "candidate_provenance");
+	}
+
+	@Test
+	void v3BlocksCandidateInputMismatchAndIncompleteSuccessfulEvidence() throws Exception {
+		var inputMismatch = assertThrows(TrainingDataExportException.class,
+				() -> TrainingDataV3ExportService.validateCandidateProvenance(this.objectMapper.readTree("""
+						[{"clip_asset_id":"d0000000-0000-4000-8000-000000000030",
+						  "clip_asset_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+						  "provenance_valid":true,"execution_status":"FAILED",
+						  "ai_job_id":"d0000000-0000-4000-8000-000000000031",
+						  "input_sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+						  "algorithm_key":"MEDIAPIPE_HAND_LANDMARKER","algorithm_version":"v1",
+						  "model_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+						  "profile_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+						  "ai_job_attempt_id":"d0000000-0000-4000-8000-000000000032","attempt":1,
+						  "message_id":"d0000000-0000-4000-8000-000000000033","hand_result":"UNKNOWN",
+						  "candidate_count":0}]
+						"""), "candidate_provenance"));
+		assertEquals("TRAINING_DATA_V3_CANDIDATE_PROVENANCE_INVALID", inputMismatch.getErrorCode());
+
+		var missingResult = assertThrows(TrainingDataExportException.class,
+				() -> TrainingDataV3ExportService.validateCandidateProvenance(
+						this.objectMapper.readTree(
+								"""
+										[{"clip_asset_id":"d0000000-0000-4000-8000-000000000034",
+										  "clip_asset_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+										  "provenance_valid":true,"execution_status":"SUCCEEDED_NO_HAND",
+										  "ai_job_id":"d0000000-0000-4000-8000-000000000035",
+										  "input_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+										  "algorithm_key":"MEDIAPIPE_HAND_LANDMARKER","algorithm_version":"v1",
+										  "model_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+										  "profile_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+										  "ai_job_attempt_id":"d0000000-0000-4000-8000-000000000036","attempt":1,
+										  "message_id":"d0000000-0000-4000-8000-000000000037","hand_result":"NO_HAND_DETECTED",
+										  "candidate_count":0,"candidate_set_digest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}]
+										"""),
+						"candidate_provenance"));
+		assertEquals("TRAINING_DATA_V3_CANDIDATE_PROVENANCE_INVALID", missingResult.getErrorCode());
+	}
+
 }

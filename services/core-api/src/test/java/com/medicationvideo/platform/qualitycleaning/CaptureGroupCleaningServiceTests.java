@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -137,6 +138,35 @@ class CaptureGroupCleaningServiceTests {
 		verify(repository, times(2)).saveAndFlush(any(CaptureGroupCleaning.class));
 	}
 
+	@Test
+	void nestedCandidateEvidenceUsesStableCanonicalSerialization() {
+		var repository = mock(CaptureGroupCleaningRepository.class);
+		var auditRecorder = mock(AuditEventRecorder.class);
+		when(repository.findByAnnotationRevisionIdAndInputFingerprint(any(), any())).thenReturn(Optional.empty());
+		when(repository.saveAndFlush(any(CaptureGroupCleaning.class)))
+			.thenAnswer(invocation -> invocation.getArgument(0));
+		var service = new CaptureGroupCleaningService(repository, auditRecorder);
+
+		var firstNested = new LinkedHashMap<String, Object>();
+		firstNested.put("z", List.of(1, 2));
+		firstNested.put("a", Map.of("value", 1.0));
+		var firstEvidence = new LinkedHashMap<String, Object>();
+		firstEvidence.put("nested", firstNested);
+		firstEvidence.put("candidate_count", 1);
+
+		var secondNested = new LinkedHashMap<String, Object>();
+		secondNested.put("a", Map.of("value", 1.00));
+		secondNested.put("z", List.of(1L, 2L));
+		var secondEvidence = new LinkedHashMap<String, Object>();
+		secondEvidence.put("candidate_count", 1L);
+		secondEvidence.put("nested", secondNested);
+
+		var first = service.evaluate(commandWithCandidateMap(firstEvidence), "request-1", "trace-1");
+		var second = service.evaluate(commandWithCandidateMap(secondEvidence), "request-2", "trace-2");
+
+		assertEquals(first.inputFingerprint(), second.inputFingerprint());
+	}
+
 	private static EvaluationCommand command(boolean approvedReview, String groupQualityResult, int viewCount,
 			Set<Integer> rejectedCameraNumbers) {
 		var views = IntStream.rangeClosed(1, viewCount)
@@ -155,6 +185,10 @@ class CaptureGroupCleaningServiceTests {
 		return commandWithViews(true, "QUALIFIED", List.of(primary()),
 				List.of(Map.of("clip_asset_id", clipAsset(1).toString(), "ai_job_id", aiJobId, "algorithm_key",
 						"MEDIAPIPE_HAND_LANDMARKER", "model_sha256", modelSha256)));
+	}
+
+	private static EvaluationCommand commandWithCandidateMap(Map<String, Object> candidateEvidence) {
+		return commandWithViews(true, "QUALIFIED", List.of(primary()), List.of(candidateEvidence));
 	}
 
 	private static EvaluationCommand commandWithViews(boolean approvedReview, String groupQualityResult,

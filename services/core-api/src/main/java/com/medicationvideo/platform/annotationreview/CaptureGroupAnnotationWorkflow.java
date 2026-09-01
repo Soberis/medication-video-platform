@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.CandidateEvidence;
+import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.RunSummary;
 import com.medicationvideo.platform.assetcapture.ClipAssetReviewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupFacts;
@@ -362,7 +363,7 @@ class CaptureGroupAnnotationWorkflow {
 					"The primary view must remain present, reviewable and qualified for Review.", 409);
 		}
 		var candidateEvidence = this.candidateEvidenceQueryService
-			.findLatestSuccessfulByClipAssets(projectId,
+			.findByClipAssets(projectId,
 					facts.views().stream().map(CaptureGroupView::clipAssetId).filter(Objects::nonNull).toList())
 			.stream()
 			.map(CaptureGroupAnnotationWorkflow::candidateEvidenceDetails)
@@ -512,11 +513,45 @@ class CaptureGroupAnnotationWorkflow {
 	private static Map<String, Object> candidateEvidenceDetails(CandidateEvidence evidence) {
 		var details = new LinkedHashMap<String, Object>();
 		details.put("clip_asset_id", evidence.clipAssetId().toString());
-		details.put("ai_job_id", evidence.aiJobId().toString());
-		details.put("algorithm_key", evidence.algorithmKey());
-		details.put("algorithm_version", evidence.algorithmVersion());
-		details.put("model_sha256", evidence.modelSha256());
-		details.put("profile_sha256", evidence.profileSha256());
+		details.put("clip_asset_sha256", evidence.clipAssetSha256());
+		details.put("provenance_valid", evidence.provenanceValid());
+		details.put("execution_status", evidence.executionStatus());
+		if (evidence.provenanceFailureReason() != null) {
+			details.put("provenance_failure_reason", evidence.provenanceFailureReason());
+		}
+		if (evidence.aiJobId() != null) {
+			details.put("ai_job_id", evidence.aiJobId().toString());
+		}
+		if (evidence.inputSha256() != null) {
+			details.put("input_sha256", evidence.inputSha256());
+		}
+		if (evidence.algorithmKey() != null) {
+			details.put("algorithm_key", evidence.algorithmKey());
+		}
+		if (evidence.algorithmVersion() != null) {
+			details.put("algorithm_version", evidence.algorithmVersion());
+		}
+		if (evidence.modelSha256() != null) {
+			details.put("model_sha256", evidence.modelSha256());
+		}
+		if (evidence.profileSha256() != null) {
+			details.put("profile_sha256", evidence.profileSha256());
+		}
+		if (evidence.aiJobAttemptId() != null) {
+			details.put("ai_job_attempt_id", evidence.aiJobAttemptId().toString());
+		}
+		if (evidence.attempt() != null) {
+			details.put("attempt", evidence.attempt());
+		}
+		if (evidence.messageId() != null) {
+			details.put("message_id", evidence.messageId().toString());
+		}
+		if (evidence.resultSha256() != null) {
+			details.put("result_sha256", evidence.resultSha256());
+		}
+		if (evidence.handResult() != null) {
+			details.put("hand_result", evidence.handResult());
+		}
 		details.put("candidate_count", evidence.candidateCount());
 		if (evidence.firstTimestampMs() != null) {
 			details.put("first_timestamp_ms", evidence.firstTimestampMs());
@@ -524,7 +559,32 @@ class CaptureGroupAnnotationWorkflow {
 		if (evidence.lastTimestampMs() != null) {
 			details.put("last_timestamp_ms", evidence.lastTimestampMs());
 		}
-		return Map.copyOf(details);
+		if (evidence.candidateSetDigest() != null) {
+			details.put("candidate_set_digest", evidence.candidateSetDigest());
+		}
+		if (evidence.runSummary() != null) {
+			details.put("run_summary", runSummaryDetails(evidence.runSummary()));
+		}
+		return Collections.unmodifiableMap(new LinkedHashMap<>(details));
+	}
+
+	private static Map<String, Object> runSummaryDetails(RunSummary summary) {
+		var details = new LinkedHashMap<String, Object>();
+		details.put("analysis_complete", summary.analysisComplete());
+		details.put("hand_result", summary.handResult());
+		details.put("total_video_frames", summary.totalVideoFrames());
+		details.put("inference_frame_count", summary.inferenceFrameCount());
+		details.put("frames_with_hand", summary.framesWithHand());
+		details.put("frames_without_hand", summary.framesWithoutHand());
+		details.put("left_hand_detection_count", summary.leftHandDetectionCount());
+		details.put("right_hand_detection_count", summary.rightHandDetectionCount());
+		details.put("invalid_landmark_count", summary.invalidLandmarkCount());
+		details.put("processing_duration_ms", summary.processingDurationMs());
+		details.put("started_at", summary.startedAt().toString());
+		details.put("completed_at", summary.completedAt().toString());
+		details.put("failure_reason", summary.failureReason());
+		details.put("retryable", summary.retryable());
+		return Collections.unmodifiableMap(new LinkedHashMap<>(details));
 	}
 
 	private static boolean numberEquals(Object value, long expected) {

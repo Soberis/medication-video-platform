@@ -6,9 +6,11 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -64,6 +66,20 @@ class TrainingDataV3ExportService {
 			        OR eligible_revision_count <> 1)
 			 ORDER BY capture_group_id, annotation_revision_id
 			""";
+
+	private static final Set<String> CANDIDATE_PROVENANCE_FIELDS = Set.of("clip_asset_id", "clip_asset_sha256",
+			"provenance_valid", "execution_status", "provenance_failure_reason", "ai_job_id", "input_sha256",
+			"algorithm_key", "algorithm_version", "model_sha256", "profile_sha256", "ai_job_attempt_id", "attempt",
+			"message_id", "result_sha256", "hand_result", "candidate_count", "first_timestamp_ms", "last_timestamp_ms",
+			"candidate_set_digest", "run_summary");
+
+	private static final Set<String> RUN_SUMMARY_FIELDS = Set.of("analysis_complete", "hand_result",
+			"total_video_frames", "inference_frame_count", "frames_with_hand", "frames_without_hand",
+			"left_hand_detection_count", "right_hand_detection_count", "invalid_landmark_count",
+			"processing_duration_ms", "started_at", "completed_at", "failure_reason", "retryable");
+
+	private static final Set<String> CANDIDATE_EXECUTION_STATUSES = Set.of("NO_JOB", "QUEUED", "RUNNING", "FAILED",
+			"SUCCEEDED_NO_HAND", "SUCCEEDED_WITH_CANDIDATES");
 
 	private final JdbcTemplate jdbcTemplate;
 
@@ -171,6 +187,13 @@ class TrainingDataV3ExportService {
 				primaryClipAssetId, primaryInterval);
 		var excludedViews = sanitizeViewEvidence(this.objectMapper, readJson(resultSet, "excluded_views"),
 				primaryClipAssetId, primaryInterval);
+		var candidateEvidence = readJson(resultSet, "candidate_evidence");
+		var candidateProvenance = readJson(resultSet, "candidate_provenance");
+		validateCandidateProvenance(candidateEvidence, "candidate_evidence");
+		validateCandidateProvenance(candidateProvenance, "candidate_provenance");
+		if (!candidateEvidence.equals(candidateProvenance)) {
+			throw candidateProvenanceInvalid("candidate_evidence and candidate_provenance must be identical snapshots");
+		}
 		return new TrainingDataV3Event(resultSet.getObject("capture_group_id", UUID.class),
 				resultSet.getObject("annotation_revision_id", UUID.class), resultSet.getInt("revision_number"),
 				labels.isEmpty() ? null : labels.getFirst(), labels, primaryClipAssetId,
@@ -182,13 +205,250 @@ class TrainingDataV3ExportService {
 				resultSet.getObject("annotation_review_id", UUID.class), resultSet.getString("review_decision"),
 				resultSet.getString("reviewed_by"), instant(resultSet, "reviewed_at"),
 				readJson(resultSet, "qualified_views"), readJson(resultSet, "rejected_missing_views"),
-				readJson(resultSet, "candidate_evidence"), resultSet.getObject("capture_group_cleaning_id", UUID.class),
+				candidateEvidence, resultSet.getObject("capture_group_cleaning_id", UUID.class),
 				resultSet.getString("rule_set_key"), resultSet.getString("rule_set_version"),
 				resultSet.getString("rule_set_digest"), resultSet.getString("cleaning_outcome"),
 				readJson(resultSet, "cleaning_reason_codes"), readJson(resultSet, "cleaning_executed_checks"),
 				resultSet.getString("cleaning_input_fingerprint"), resultSet.getString("cleaning_evaluated_by"),
 				resultSet.getString("cleaning_authorization_basis"), instant(resultSet, "cleaning_evaluated_at"),
-				this.objectMapper.createArrayNode(), readJson(resultSet, "candidate_provenance"));
+				this.objectMapper.createArrayNode(), candidateProvenance);
+	}
+
+	/**
+	 * Validates the compact, non-geometric candidate evidence that is allowed into v3. A
+	 * valid no-job/failed state is retained as advisory evidence; only missing or invalid
+	 * provenance blocks export.
+	 */
+	static void validateCandidateProvenance(JsonNode provenance, String fieldName) {
+		if (provenance == null || !provenance.isArray() || provenance.isEmpty()) {
+			throw candidateProvenanceInvalid(fieldName + " must be a non-empty array");
+		}
+		for (var entry : provenance) {
+			if (entry == null || !entry.isObject()) {
+				throw candidateProvenanceInvalid(fieldName + " entries must be objects");
+			}
+			var names = new HashSet<String>();
+			entry.propertyNames().forEach(names::add);
+			if (!CANDIDATE_PROVENANCE_FIELDS.containsAll(names)) {
+				throw candidateProvenanceInvalid(fieldName + " contains an unsupported field");
+			}
+			var clipAssetSha256 = requiredSha(entry, "clip_asset_sha256", fieldName);
+			requiredUuid(entry, "clip_asset_id", fieldName);
+			requiredBooleanTrue(entry, "provenance_valid", fieldName);
+			var executionStatus = requiredText(entry, "execution_status", fieldName);
+			if (!CANDIDATE_EXECUTION_STATUSES.contains(executionStatus)) {
+				throw candidateProvenanceInvalid(fieldName + " has an unsupported execution_status");
+			}
+			var candidateCount = requiredNonNegativeLong(entry, "candidate_count", fieldName);
+			switch (executionStatus) {
+				case "NO_JOB" -> validateNoJob(entry, fieldName, candidateCount);
+				case "QUEUED", "RUNNING" -> validateNonTerminal(entry, fieldName, clipAssetSha256, candidateCount);
+				case "FAILED" -> validateFailed(entry, fieldName, clipAssetSha256, candidateCount);
+				case "SUCCEEDED_NO_HAND" -> validateSuccessfulNoHand(entry, fieldName, clipAssetSha256, candidateCount);
+				case "SUCCEEDED_WITH_CANDIDATES" ->
+					validateSuccessfulCandidates(entry, fieldName, clipAssetSha256, candidateCount);
+				default -> throw candidateProvenanceInvalid(fieldName + " has an unsupported execution_status");
+			}
+		}
+	}
+
+	private static void validateNoJob(JsonNode entry, String fieldName, long candidateCount) {
+		if (candidateCount != 0) {
+			throw candidateProvenanceInvalid(fieldName + " NO_JOB must have zero candidates");
+		}
+		rejectPresent(entry, fieldName, "ai_job_id", "input_sha256", "algorithm_key", "algorithm_version",
+				"model_sha256", "profile_sha256", "ai_job_attempt_id", "attempt", "message_id", "result_sha256",
+				"hand_result", "first_timestamp_ms", "last_timestamp_ms", "candidate_set_digest", "run_summary");
+	}
+
+	private static void validateNonTerminal(JsonNode entry, String fieldName, String clipAssetSha256,
+			long candidateCount) {
+		validateSuccessfulIdentity(entry, fieldName, clipAssetSha256);
+		validateHandResult(entry, fieldName, "UNKNOWN");
+		if (candidateCount != 0) {
+			throw candidateProvenanceInvalid(fieldName + " non-terminal execution must have zero candidates");
+		}
+		rejectPresent(entry, fieldName, "result_sha256", "first_timestamp_ms", "last_timestamp_ms",
+				"candidate_set_digest", "run_summary");
+	}
+
+	private static void validateFailed(JsonNode entry, String fieldName, String clipAssetSha256, long candidateCount) {
+		validateSuccessfulIdentity(entry, fieldName, clipAssetSha256);
+		validateHandResult(entry, fieldName, "UNKNOWN");
+		if (candidateCount != 0) {
+			throw candidateProvenanceInvalid(fieldName + " FAILED execution must have zero candidates");
+		}
+		rejectPresent(entry, fieldName, "first_timestamp_ms", "last_timestamp_ms", "candidate_set_digest");
+		if (entry.has("result_sha256")) {
+			requiredSha(entry, "result_sha256", fieldName);
+		}
+		if (entry.has("run_summary")) {
+			validateRunSummary(entry.get("run_summary"), fieldName, "UNKNOWN", false);
+		}
+	}
+
+	private static void validateSuccessfulNoHand(JsonNode entry, String fieldName, String clipAssetSha256,
+			long candidateCount) {
+		validateSuccessfulIdentity(entry, fieldName, clipAssetSha256);
+		validateHandResult(entry, fieldName, "NO_HAND_DETECTED");
+		if (candidateCount != 0) {
+			throw candidateProvenanceInvalid(fieldName + " SUCCEEDED_NO_HAND must have zero candidates");
+		}
+		requiredSha(entry, "result_sha256", fieldName);
+		requiredSha(entry, "candidate_set_digest", fieldName);
+		validateRunSummary(entry.get("run_summary"), fieldName, "NO_HAND_DETECTED", true);
+		rejectPresent(entry, fieldName, "first_timestamp_ms", "last_timestamp_ms");
+	}
+
+	private static void validateSuccessfulCandidates(JsonNode entry, String fieldName, String clipAssetSha256,
+			long candidateCount) {
+		validateSuccessfulIdentity(entry, fieldName, clipAssetSha256);
+		validateHandResult(entry, fieldName, "HAND_DETECTED");
+		if (candidateCount <= 0) {
+			throw candidateProvenanceInvalid(fieldName + " SUCCEEDED_WITH_CANDIDATES must have candidates");
+		}
+		requiredSha(entry, "result_sha256", fieldName);
+		requiredSha(entry, "candidate_set_digest", fieldName);
+		validateRunSummary(entry.get("run_summary"), fieldName, "HAND_DETECTED", true);
+		var first = requiredNonNegativeLong(entry, "first_timestamp_ms", fieldName);
+		var last = requiredNonNegativeLong(entry, "last_timestamp_ms", fieldName);
+		if (first > last) {
+			throw candidateProvenanceInvalid(fieldName + " candidate timestamps are not ordered");
+		}
+	}
+
+	private static void validateSuccessfulIdentity(JsonNode entry, String fieldName, String clipAssetSha256) {
+		validateJobIdentity(entry, fieldName);
+		if (!clipAssetSha256.equals(requiredSha(entry, "input_sha256", fieldName))) {
+			throw candidateProvenanceInvalid(fieldName + " input_sha256 does not match clip_asset_sha256");
+		}
+	}
+
+	private static void validateJobIdentity(JsonNode entry, String fieldName) {
+		requiredUuid(entry, "ai_job_id", fieldName);
+		requiredSha(entry, "input_sha256", fieldName);
+		if (!"MEDIAPIPE_HAND_LANDMARKER".equals(requiredText(entry, "algorithm_key", fieldName))) {
+			throw candidateProvenanceInvalid(fieldName + " algorithm_key is not the approved MediaPipe algorithm");
+		}
+		requiredText(entry, "algorithm_version", fieldName);
+		requiredSha(entry, "model_sha256", fieldName);
+		requiredSha(entry, "profile_sha256", fieldName);
+		requiredUuid(entry, "ai_job_attempt_id", fieldName);
+		if (requiredNonNegativeLong(entry, "attempt", fieldName) < 1) {
+			throw candidateProvenanceInvalid(fieldName + " attempt must be positive");
+		}
+		requiredUuid(entry, "message_id", fieldName);
+	}
+
+	private static void validateHandResult(JsonNode entry, String fieldName, String expected) {
+		if (!expected.equals(requiredText(entry, "hand_result", fieldName))) {
+			throw candidateProvenanceInvalid(fieldName + " hand_result does not match execution_status");
+		}
+	}
+
+	private static void validateRunSummary(JsonNode summary, String fieldName, String expectedHandResult,
+			boolean expectedAnalysisComplete) {
+		if (summary == null || !summary.isObject()) {
+			throw candidateProvenanceInvalid(fieldName + " run_summary must be an object");
+		}
+		var names = new HashSet<String>();
+		summary.propertyNames().forEach(names::add);
+		if (!RUN_SUMMARY_FIELDS.equals(names)) {
+			throw candidateProvenanceInvalid(fieldName + " run_summary fields are incomplete or unsupported");
+		}
+		if (requiredBoolean(summary, "analysis_complete", fieldName) != expectedAnalysisComplete
+				|| !expectedHandResult.equals(requiredText(summary, "hand_result", fieldName))) {
+			throw candidateProvenanceInvalid(fieldName + " run_summary outcome does not match execution status");
+		}
+		for (var name : List.of("total_video_frames", "inference_frame_count", "frames_with_hand",
+				"frames_without_hand", "left_hand_detection_count", "right_hand_detection_count",
+				"invalid_landmark_count", "processing_duration_ms")) {
+			requiredNonNegativeLong(summary, name, fieldName + ".run_summary");
+		}
+		requiredInstant(summary, "started_at", fieldName);
+		requiredInstant(summary, "completed_at", fieldName);
+		var failureReason = summary.get("failure_reason");
+		if (failureReason == null
+				|| !(failureReason.isNull() || (failureReason.isTextual() && !failureReason.asText().isBlank()))) {
+			throw candidateProvenanceInvalid(fieldName + " run_summary failure_reason must be null or non-empty text");
+		}
+		if (requiredBoolean(summary, "retryable", fieldName) && expectedAnalysisComplete) {
+			throw candidateProvenanceInvalid(fieldName + " successful run_summary cannot be retryable");
+		}
+	}
+
+	private static String requiredSha(JsonNode entry, String name, String fieldName) {
+		var value = requiredText(entry, name, fieldName);
+		if (!value.matches("^[a-f0-9]{64}$")) {
+			throw candidateProvenanceInvalid(fieldName + " " + name + " must be a lowercase SHA-256 digest");
+		}
+		return value;
+	}
+
+	private static UUID requiredUuid(JsonNode entry, String name, String fieldName) {
+		var value = requiredText(entry, name, fieldName);
+		try {
+			return UUID.fromString(value);
+		}
+		catch (IllegalArgumentException exception) {
+			throw candidateProvenanceInvalid(fieldName + " " + name + " must be a UUID");
+		}
+	}
+
+	private static String requiredText(JsonNode entry, String name, String fieldName) {
+		var value = entry.get(name);
+		if (value == null || !value.isTextual() || value.asText().isBlank()) {
+			throw candidateProvenanceInvalid(fieldName + " is missing non-empty " + name);
+		}
+		return value.asText();
+	}
+
+	private static boolean requiredBoolean(JsonNode entry, String name, String fieldName) {
+		var value = entry.get(name);
+		if (value == null || !value.isBoolean()) {
+			throw candidateProvenanceInvalid(fieldName + " is missing boolean " + name);
+		}
+		return value.asBoolean();
+	}
+
+	private static void requiredInstant(JsonNode entry, String name, String fieldName) {
+		var value = requiredText(entry, name, fieldName);
+		try {
+			Instant.parse(value);
+		}
+		catch (RuntimeException exception) {
+			throw candidateProvenanceInvalid(fieldName + " " + name + " must be an ISO-8601 instant");
+		}
+	}
+
+	private static long requiredNonNegativeLong(JsonNode entry, String name, String fieldName) {
+		var value = entry.get(name);
+		if (value == null || !value.isIntegralNumber() || value.longValue() < 0) {
+			throw candidateProvenanceInvalid(fieldName + " " + name + " must be a non-negative integer");
+		}
+		return value.longValue();
+	}
+
+	private static void requiredBooleanTrue(JsonNode entry, String name, String fieldName) {
+		var value = entry.get(name);
+		if (value == null || !value.isBoolean() || !value.asBoolean()) {
+			throw candidateProvenanceInvalid(fieldName + " " + name + " must be true");
+		}
+	}
+
+	private static void rejectPresent(JsonNode entry, String fieldName, String... names) {
+		for (var name : names) {
+			if (entry.has(name)) {
+				throw candidateProvenanceInvalid(fieldName + " must not contain " + name + " for this execution state");
+			}
+		}
+	}
+
+	private static TrainingDataExportException candidateProvenanceInvalid(String detail) {
+		return new TrainingDataExportException("TRAINING_DATA_V3_CANDIDATE_PROVENANCE_INVALID",
+				"The V1.27 candidate evidence/provenance is incomplete or mismatched (" + detail
+						+ "); export is blocked.",
+				422);
 	}
 
 	/**
