@@ -3,6 +3,7 @@ package com.medicationvideo.platform.aicandidate;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
@@ -152,6 +153,7 @@ class CandidateEvidenceProvenanceContractTests {
 		assertTrue(evidence.get(1).provenanceValid());
 		assertEquals("AI_HAND_POSE_INVALID_OUTPUT", evidence.get(1).provenanceFailureReason());
 		assertEquals(0, evidence.get(1).candidateCount());
+		assertNull(evidence.get(1).candidateSetDigest());
 		assertNotNull(evidence.get(1).runSummary());
 	}
 

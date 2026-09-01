@@ -164,7 +164,7 @@ public class CandidateEvidenceQueryService {
 							requestedClipAssetId, asset.sha256(), job, "CANDIDATES_WITH_NON_TERMINAL_JOB", candidates);
 			case "FAILED" -> candidateCount == 0
 					? validJob(job, asset, EXECUTION_STATUS_FAILED, job.failureReason(), candidateCount, null, null,
-							job.resultSha256())
+							null)
 					: invalid(requestedClipAssetId, asset.sha256(), job, "CANDIDATES_ON_FAILED_JOB", candidates);
 			case "SUCCEEDED" -> successfulEvidence(job, asset, candidateCount, candidateSetDigest);
 			default -> invalid(requestedClipAssetId, asset.sha256(), job, "JOB_STATUS_INVALID", candidates);
