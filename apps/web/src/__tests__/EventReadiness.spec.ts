@@ -20,94 +20,103 @@ function view(overrides: Partial<EventReadinessViewFact> = {}): EventReadinessVi
 function facts(overrides: Partial<EventReadinessFacts> = {}): EventReadinessFacts {
   return {
     views: [view()],
-    group_quality: 'QUALIFIED',
-    task_status: 'ASSIGNED',
-    primary_view_id: 'clip-1',
-    annotation_revision_id: null,
-    annotation_schema_available: true,
-    can_submit: true,
-    can_review: false,
     ...overrides,
   }
 }
 
 describe('event readiness presentation', () => {
-  it('reports a normal single-view event as ready for annotation', () => {
+  it('reports a normal single-view event as media-ready and usable', () => {
     const readiness = deriveEventReadiness(facts())
 
-    expect(readiness.mediaReady).toBe(true)
-    expect(readiness.handDetection).toMatchObject({
-      status: 'HAND_DETECTED',
-      confidence: 0.93,
+    expect(readiness).toEqual({
+      mediaReady: true,
+      handDetection: {
+        status: 'HAND_DETECTED',
+      },
+      usableViews: [{ view_id: 'clip-1', camera_number: 1 }],
+      excludedViews: [],
+      manualConfirmationRequired: false,
+      blockers: [],
     })
-    expect(readiness.annotationReady).toBe(true)
-    expect(readiness.reviewReady).toBe(false)
-    expect(readiness.blockers).toEqual([])
   })
 
-  it('keeps a missing AI result informational when the human path is ready', () => {
+  it('keeps NO_HAND_DETECTED usable but requires human confirmation', () => {
     const readiness = deriveEventReadiness(
       facts({
-        views: [view({ hand_detection: { status: 'UNKNOWN' } })],
+        views: [view({ hand_detection: { status: 'NO_HAND_DETECTED' } })],
       }),
     )
 
-    expect(readiness.handDetection.status).toBe('UNKNOWN')
-    expect(readiness.handDetection.confidence).toBeNull()
-    expect(readiness.annotationReady).toBe(true)
+    expect(readiness.handDetection).toEqual({
+      status: 'NO_HAND_DETECTED',
+    })
+    expect(readiness.usableViews).toEqual([{ view_id: 'clip-1', camera_number: 1 }])
+    expect(readiness.excludedViews).toEqual([])
+    expect(readiness.manualConfirmationRequired).toBe(true)
     expect(readiness.blockers).toEqual([])
   })
 
-  it('keeps failed AI detection separate from media and annotation readiness', () => {
+  it('keeps FAILED distinct from no-hand and does not block a ready view', () => {
     const readiness = deriveEventReadiness(
       facts({
         views: [view({ hand_detection: { status: 'FAILED' } })],
       }),
     )
 
-    expect(readiness.handDetection.status).toBe('FAILED')
+    expect(readiness.handDetection).toEqual({
+      status: 'FAILED',
+    })
     expect(readiness.mediaReady).toBe(true)
-    expect(readiness.annotationReady).toBe(true)
+    expect(readiness.usableViews).toEqual([{ view_id: 'clip-1', camera_number: 1 }])
+    expect(readiness.excludedViews).toEqual([])
+    expect(readiness.manualConfirmationRequired).toBe(false)
     expect(readiness.blockers).toEqual([])
   })
 
-  it('preserves per-view facts for a multi-camera event without inventing group confidence', () => {
+  it('keeps mixed multi-camera evidence per view and only honors explicit human exclusion', () => {
     const readiness = deriveEventReadiness(
       facts({
-        group_quality: 'QUALIFIED_WITH_EXCLUSIONS',
         views: [
           view(),
           view({
             view_id: 'clip-2',
             camera_number: 2,
             hand_detection: { status: 'NO_HAND_DETECTED' },
+            quality_decision: 'REJECTED',
+          }),
+          view({
+            view_id: 'clip-3',
+            camera_number: 3,
+            hand_detection: { status: 'FAILED' },
           }),
         ],
       }),
     )
 
     expect(readiness.mediaReady).toBe(true)
-    expect(readiness.handDetection.status).toBe('HAND_DETECTED')
-    expect(readiness.handDetection.confidence).toBeNull()
-    expect(readiness.handDetection.byView.map((item) => item.status)).toEqual([
-      'HAND_DETECTED',
-      'NO_HAND_DETECTED',
+    expect(readiness.handDetection).toEqual({
+      status: 'HAND_DETECTED',
+    })
+    expect(readiness.usableViews).toEqual([
+      { view_id: 'clip-1', camera_number: 1 },
+      { view_id: 'clip-3', camera_number: 3 },
     ])
-    expect(readiness.annotationReady).toBe(true)
+    expect(readiness.excludedViews).toEqual([{ view_id: 'clip-2', camera_number: 2 }])
+    expect(readiness.manualConfirmationRequired).toBe(false)
     expect(readiness.blockers).toEqual([])
   })
 
-  it('does not advertise an action for an already completed event', () => {
+  it('does not add readiness blockers for a completed event', () => {
     const readiness = deriveEventReadiness(
       facts({
         task_status: 'COMPLETED',
-        annotation_revision_id: 'revision-1',
-        can_submit: false,
+        views: [view({ quality_decision: 'QUALIFIED' })],
       }),
     )
 
-    expect(readiness.annotationReady).toBe(false)
-    expect(readiness.reviewReady).toBe(false)
+    expect(readiness.usableViews).toEqual([{ view_id: 'clip-1', camera_number: 1 }])
+    expect(readiness.excludedViews).toEqual([])
+    expect(readiness.manualConfirmationRequired).toBe(false)
     expect(readiness.blockers).toEqual([])
   })
 })
