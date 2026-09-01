@@ -17,7 +17,7 @@ Local Upload / External Ingest
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。`training-data.v2`、单视频任务和单视频 Cleaning 已从 V1.27 当前产品范围退役；历史运行时代码和迁移不在本次文档变更中删除。
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。`training-data.v2`、单视频任务和单视频 Cleaning 已从 V1.27 当前产品范围退役；本次 Task C 同步移除对应运行时、公开契约、旧读模型和最小导出工具，Flyway 历史迁移、历史数据列与历史文档继续保留。
 
 当前规范：
 

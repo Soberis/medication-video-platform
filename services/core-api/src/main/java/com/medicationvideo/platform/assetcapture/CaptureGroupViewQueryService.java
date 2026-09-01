@@ -55,18 +55,6 @@ public class CaptureGroupViewQueryService {
 		return project(session, true);
 	}
 
-	/**
-	 * Used by the V1.24 quality listener to avoid creating a video-owned task for a view
-	 * that belongs to the V1.25 group path.
-	 */
-	@Transactional(readOnly = true)
-	public boolean isViewOfCaptureGroup(UUID projectId, UUID clipAssetId) {
-		return this.streamRepository.findByClipAssetId(clipAssetId)
-			.flatMap(stream -> this.sessionRepository
-				.findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(stream.getCaptureSessionId(), projectId))
-			.isPresent();
-	}
-
 	private CaptureGroupFacts project(CaptureSession session, boolean locked) {
 		var snapshot = this.snapshotRepository.findByCaptureSessionId(session.getCaptureSessionId())
 			.orElseThrow(() -> new IllegalStateException("Capture session has no frozen camera set snapshot."));

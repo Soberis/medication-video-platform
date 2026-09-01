@@ -77,7 +77,7 @@ const assignedTask = {
   can_submit: true,
   can_select_primary: false,
   can_review: false,
-  can_recheck_post_cleaning: false,
+  can_recheck_capture_group_cleaning: false,
   annotation_revision: null,
   created_at: '2026-07-23T01:00:00Z',
   updated_at: '2026-07-23T01:00:00Z',
@@ -316,7 +316,7 @@ describe('annotation task list view', () => {
     )
   })
 
-  it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
+  it('shows the completed state and each CaptureGroup cleaning outcome without adding another page', async () => {
     const outcomes = [
       { outcome: 'PASS', expected: '训练资格检查 · 当前规则检查通过' },
       { outcome: 'WARNING', expected: '训练资格检查 · 需处理' },
@@ -328,7 +328,7 @@ describe('annotation task list view', () => {
       annotation_task_id: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
       status: 'COMPLETED',
       can_submit: false,
-      can_recheck_post_cleaning: true,
+      can_recheck_capture_group_cleaning: true,
       annotation_revision: {
         ...completedRevision,
         annotation_revision_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
@@ -340,9 +340,9 @@ describe('annotation task list view', () => {
                 outcome,
                 reason_codes:
                   outcome === 'WARNING'
-                    ? ['VERIFIED_MEDIA_DURATION_UNAVAILABLE', 'FUTURE_RULE_CHECK']
+                    ? ['PRIMARY_INTERVAL_MISSING', 'FUTURE_RULE_CHECK']
                     : outcome === 'REJECT'
-                      ? ['PRIMARY_STEP_OVERLAP']
+                      ? ['PRIMARY_INTERVAL_OVERLAP']
                       : [],
               },
       },
@@ -364,13 +364,13 @@ describe('annotation task list view', () => {
     expect(within(completedRow).getByText('提交人')).toBeInTheDocument()
     expect(within(completedRow).getByText('复核人')).toBeInTheDocument()
     expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
-    expect(screen.getByText(/缺少已确认的视频时长/)).toBeInTheDocument()
+    expect(screen.getByText(/缺少主视图正式时间段/)).toBeInTheDocument()
     expect(screen.getByText(/其他训练资格检查原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
     await user.click(evidenceDetails[2]!)
     expect(
       await screen.findByText(/当前数据未通过训练资格检查，暂不可用于训练；视频资产未被删除/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/主流程时间段存在重叠/)).toBeInTheDocument()
+    expect(screen.getByText(/主视图正式时间段存在重叠/)).toBeInTheDocument()
     expect(
       screen.getAllByRole('button', {
         name: /进入配药事件 .*查看复核 \/ 训练资格检查结果/,
@@ -387,13 +387,13 @@ describe('annotation task list view', () => {
       ...assignedTask,
       status: 'COMPLETED',
       can_submit: false,
-      can_recheck_post_cleaning: true,
+      can_recheck_capture_group_cleaning: true,
       annotation_revision: {
         ...completedRevision,
         capture_group_cleaning: {
           ...completedRevision.capture_group_cleaning,
           outcome: 'WARNING',
-          reason_codes: ['VERIFIED_MEDIA_DURATION_UNAVAILABLE'],
+          reason_codes: ['PRIMARY_INTERVAL_MISSING'],
         },
       },
     }
@@ -453,7 +453,7 @@ describe('annotation task list view', () => {
           assignee_actor_id: 'local-synthetic-admin',
           status: 'COMPLETED',
           can_submit: false,
-          can_recheck_post_cleaning: true,
+          can_recheck_capture_group_cleaning: true,
           annotation_revision: {
             ...completedRevision,
             submitted_by: 'local-synthetic-admin',

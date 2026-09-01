@@ -27,9 +27,6 @@ class AnnotationTask {
 	@Column(name = "project_id", nullable = false, updatable = false)
 	private UUID projectId;
 
-	@Column(name = "clip_asset_id", updatable = false)
-	private UUID clipAssetId;
-
 	@Column(name = "capture_group_id", updatable = false)
 	private UUID captureGroupId;
 
@@ -84,19 +81,12 @@ class AnnotationTask {
 	protected AnnotationTask() {
 	}
 
-	private AnnotationTask(UUID projectId, UUID clipAssetId, String assigneeActorId, String createdBy,
-			String idempotencyKey, AnnotationLabelSchemaBinding labelSchema, Instant now) {
-		this(projectId, clipAssetId, null, null, null, null, null, null, null, assigneeActorId, createdBy,
-				idempotencyKey, labelSchema, now);
-	}
-
-	private AnnotationTask(UUID projectId, UUID clipAssetId, UUID captureGroupId, UUID primaryClipAssetId,
-			Integer primaryCameraNumber, UUID captureGroupQualityReviewId, Long groupQualityRevision,
-			Map<String, Object> confirmedViewSet, String groupInputVersion, String assigneeActorId, String createdBy,
-			String idempotencyKey, AnnotationLabelSchemaBinding labelSchema, Instant now) {
+	private AnnotationTask(UUID projectId, UUID captureGroupId, UUID primaryClipAssetId, Integer primaryCameraNumber,
+			UUID captureGroupQualityReviewId, Long groupQualityRevision, Map<String, Object> confirmedViewSet,
+			String groupInputVersion, String assigneeActorId, String createdBy, String idempotencyKey,
+			AnnotationLabelSchemaBinding labelSchema, Instant now) {
 		this.annotationTaskId = UUID.randomUUID();
 		this.projectId = projectId;
-		this.clipAssetId = clipAssetId;
 		this.captureGroupId = captureGroupId;
 		this.primaryClipAssetId = primaryClipAssetId;
 		this.primaryCameraNumber = primaryCameraNumber;
@@ -114,22 +104,13 @@ class AnnotationTask {
 		this.updatedAt = now;
 	}
 
-	static AnnotationTask create(UUID projectId, UUID clipAssetId, String assigneeActorId, String createdBy,
-			String idempotencyKey, AnnotationLabelSchemaBinding labelSchema, Instant now) {
-		return new AnnotationTask(projectId, clipAssetId, assigneeActorId, createdBy, idempotencyKey, labelSchema, now);
-	}
-
 	static AnnotationTask createForCaptureGroup(UUID projectId, UUID captureGroupId, String assigneeActorId,
 			String createdBy, String idempotencyKey, AnnotationLabelSchemaBinding labelSchema,
 			UUID captureGroupQualityReviewId, long groupQualityRevision, Map<String, Object> confirmedViewSet,
 			String groupInputVersion, Instant now) {
-		return new AnnotationTask(projectId, null, captureGroupId, null, null, captureGroupQualityReviewId,
+		return new AnnotationTask(projectId, captureGroupId, null, null, captureGroupQualityReviewId,
 				groupQualityRevision, confirmedViewSet, groupInputVersion, assigneeActorId, createdBy, idempotencyKey,
 				labelSchema, now);
-	}
-
-	boolean matchesCreationRequest(UUID clipAssetId, String assigneeActorId) {
-		return Objects.equals(this.clipAssetId, clipAssetId) && this.assigneeActorId.equals(assigneeActorId);
 	}
 
 	UUID getAnnotationTaskId() {
@@ -138,10 +119,6 @@ class AnnotationTask {
 
 	UUID getProjectId() {
 		return this.projectId;
-	}
-
-	UUID getClipAssetId() {
-		return this.clipAssetId;
 	}
 
 	UUID getCaptureGroupId() {
@@ -174,10 +151,6 @@ class AnnotationTask {
 
 	boolean isCaptureGroupTask() {
 		return this.captureGroupId != null;
-	}
-
-	UUID getAnnotationTimebaseClipAssetId() {
-		return this.isCaptureGroupTask() ? this.primaryClipAssetId : this.clipAssetId;
 	}
 
 	boolean hasPrimaryView() {

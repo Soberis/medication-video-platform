@@ -30,22 +30,19 @@ import {
 } from '@/features/catalog/catalog-presentation'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 
-const postCleaningReasonLabels: Readonly<Record<string, string>> = {
+const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  QUALITY_REVIEW_NOT_QUALIFIED: '当前机位质量结论不是“合格”',
-  ASSET_INPUT_DIGEST_INVALID: '视频输入摘要无效',
-  ANNOTATION_DOCUMENT_DIGEST_INVALID: '标注文档摘要无效',
-  ANNOTATION_DOCUMENT_DIGEST_MISMATCH: '标注文档内容与摘要不一致',
-  LABEL_SCHEMA_MISMATCH: '任务与修订绑定的标签规范不一致',
-  ANNOTATION_SEGMENTS_MISSING: '缺少主流程时间段',
-  SEGMENT_TIME_RANGE_INVALID: '存在无效的时间范围',
-  PRIMARY_STEP_LABEL_NOT_ALLOWED: '存在标签规范未允许的主流程标签',
-  PRIMARY_STEP_OVERLAP: '主流程时间段存在重叠',
-  VERIFIED_MEDIA_DURATION_UNAVAILABLE: '缺少已确认的视频时长',
-  VERIFIED_MEDIA_DURATION_INVALID: '已确认的视频时长无效',
-  VERIFIED_MEDIA_FACT_INCOMPLETE: '媒体检测事实不完整',
-  VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体检测输入摘要与视频资产不一致',
-  SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间段超出已确认的视频时长',
+  GROUP_QUALITY_NOT_ADMITTING: '当前事件质量结论不允许进入训练资格检查',
+  PRIMARY_VIEW_MISSING: '缺少主视图',
+  PRIMARY_VIEW_NOT_QUALIFIED: '主视图当前未通过机位质量准入',
+  PRIMARY_INTERVAL_MISSING: '缺少主视图正式时间段',
+  PRIMARY_INTERVAL_INVALID: '主视图存在无效的正式时间段',
+  PRIMARY_INTERVAL_OVERLAP: '主视图正式时间段存在重叠',
+  NO_QUALIFIED_VIEWS: '事件没有可参与的合格机位',
+  VIEW_SET_DUPLICATE_CAMERA_NUMBER: '事件机位集合存在重复机位编号',
+  MISSING_VIEW: '事件机位缺失',
+  VIEW_NOT_REVIEWABLE: '事件机位当前不可复核',
+  VIEW_QUALITY_NOT_QUALIFIED: '事件机位质量未通过',
 }
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
@@ -62,7 +59,7 @@ function taskNoActionLabel(task: AnnotationTask) {
   if (task.status === 'SUBMITTED') return '等待管理员复核'
   return '等待处理'
 }
-function postCleaningPresentation(task: AnnotationTask): {
+function captureGroupCleaningPresentation(task: AnnotationTask): {
   label: string
   tone: StatusIndicatorTone
   description: string
@@ -74,7 +71,7 @@ function postCleaningPresentation(task: AnnotationTask): {
   const result = revision.capture_group_cleaning
   const reasons = (result?.reason_codes ?? []).map((code) => {
     return (
-      postCleaningReasonLabels[code] ??
+      captureGroupCleaningReasonLabels[code] ??
       `其他训练资格检查原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
     )
   })
@@ -316,7 +313,7 @@ export default function AnnotationTaskListView() {
               if (!captureGroupId) return null
               const taskSubject = `配药事件 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
-              const presentation = postCleaningPresentation(row)
+              const presentation = captureGroupCleaningPresentation(row)
               const taskDestination = captureGroupTaskDestination(row)
               const taskDetails = (
                 <details className="task-details">

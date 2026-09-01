@@ -537,7 +537,6 @@ export function groupTask(
   return {
     annotation_task_id: taskId,
     project_id: projectId,
-    clip_asset_id: null,
     capture_group_id: captureGroupId,
     primary_clip_asset_id: clipIds[0] ?? null,
     primary_camera_number: 1,
@@ -553,7 +552,7 @@ export function groupTask(
     can_submit: options.revision ? false : canSubmit,
     can_select_primary: options.revision ? false : true,
     can_review: false,
-    can_recheck_post_cleaning: Boolean(options.revision),
+    can_recheck_capture_group_cleaning: Boolean(options.revision),
     annotation_revision: options.revision
       ? {
           annotation_revision_id: '47000000-0000-4000-8000-000000000001',
@@ -575,7 +574,6 @@ export function groupTask(
             reviewed_by: 'admin',
             reviewed_at: '2026-08-20T01:04:00Z',
           },
-          post_cleaning_result: null,
           capture_group_cleaning: {
             capture_group_cleaning_id: '49000000-0000-4000-8000-000000000001',
             project_id: projectId,
@@ -739,7 +737,7 @@ export function submittedGroupTask(
     status: 'SUBMITTED',
     can_submit: false,
     can_review: options.canReview ?? true,
-    can_recheck_post_cleaning: false,
+    can_recheck_capture_group_cleaning: false,
     confirmed_view_set: viewSet,
     annotation_revision: {
       ...revision,
@@ -756,7 +754,6 @@ export function submittedGroupTask(
       confirmed_view_set: viewSet,
       input_version: viewSet ? 'capture-group-view-set.v1:synthetic' : null,
       review: null,
-      post_cleaning_result: null,
       capture_group_cleaning: null,
     },
     version: 1,
@@ -806,7 +803,7 @@ export function approvedGroupTask(
     status: 'COMPLETED',
     can_submit: false,
     can_review: false,
-    can_recheck_post_cleaning: options.canRecheck ?? false,
+    can_recheck_capture_group_cleaning: options.canRecheck ?? false,
     annotation_revision: { ...revision, review, capture_group_cleaning: cleaning },
     version: 2,
   }

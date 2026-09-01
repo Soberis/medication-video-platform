@@ -6,9 +6,9 @@ info:
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, manage project memberships,
     initialize verified uploads, assemble CaptureSession/CameraSet/CameraStream facts, expose
-    project-scoped videos and ClipAsset detail, run Media Probe and MediaPipe hand candidates,
+    expose CaptureGroup workflows with ClipAsset evidence detail, run Media Probe and MediaPipe hand candidates,
     record human quality, annotation, Review and event-level CaptureGroup Cleaning facts, and synchronously
-    preview or download training-data.v2 and the minimal training-data.v3 group manifest from authoritative
+    preview, validate and download the training-data.v3 group manifest from authoritative
     read-only projections. The API never proxies upload bytes through the
     Core API, exposes storage locations through catalog reads, controls or probes edge hardware,
     or performs media processing synchronously inside a user request.
@@ -47,9 +47,8 @@ tags:
       and training. The current fact is versioned and every change is append-only audited.
   - name: Annotation Tasks
     description: >-
-      Minimal project-scoped human annotation queue. A project administrator assigns one task only
-      after a ClipAsset is INGESTED and its current human quality conclusion is QUALIFIED. Members
-      can read only tasks assigned to themselves.
+      Project-scoped human annotation queue containing exactly one task per admitted CaptureGroup.
+      Members can read only tasks assigned to themselves; ClipAsset remains evidence inside the group.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -58,9 +57,8 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Training Data Export
     description: >-
-      Explicit, synchronous, read-only P0 export. training-data.v2 remains the compatible Parquet
-      contract for single-video data. training-data.v3 is the minimal CaptureGroup event manifest and
-      preserves group/view, Review, Cleaning and Candidate provenance; CaptureGroup is the split unit.
+      Explicit, synchronous, read-only P0 export. training-data.v3 is the only supported output and
+      preserves CaptureGroup/view, Review, Cleaning and Candidate provenance; CaptureGroup is the split unit.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -73,94 +71,12 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
-  /projects/{project_id}/training-data/preview:
-    get:
-      operationId: getTrainingDataExportPreview
-      tags:
-        - Training Data Export
-      summary: Preview the project-level minimal training-data export
-      description: >-
-        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership in the project. The preview is
-        computed from the same read-only training_data_eligibility and
-        training_data_candidate_observations projections used by the download and tools/minimal-export.
-        training_row_count is the number of output rows: one MediaPipe Candidate hand observation inside
-        one current APPROVED human action interval [start_ms, end_ms). It is not a video count. Candidate
-        handedness and handedness_score are metadata only and do not act as a gate. Each row carries
-        action_start_ms and action_end_ms copied from the current human AnnotationRevision segment, with
-        timestamp_ms in [action_start_ms, action_end_ms), plus required Candidate provenance
-        algorithm_key, algorithm_version, model_sha256 and profile_sha256. There is no generic confidence
-        field; handedness_score remains Candidate metadata only.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      responses:
-        "200":
-          description: Current project-level training-data export preview.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TrainingDataExportPreview"
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422":
-          description: Current evidence cannot be serialized safely.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/training-data/download:
-    get:
-      operationId: downloadTrainingData
-      tags:
-        - Training Data Export
-      summary: Download the project-level minimal training-data Parquet
-      description: >-
-        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership in the project. This synchronous
-        read-only response includes only Parquet training rows and never proxies or packages MP4 bytes.
-        Action labels and action_start_ms/action_end_ms come from the current human AnnotationRevision
-        after APPROVED Review; each timestamp_ms satisfies the half-open interval
-        [action_start_ms, action_end_ms). Candidate geometry is admitted only when the current asset,
-        quality, review and Cleaning evidence passes the authoritative eligibility projection. Required
-        row provenance includes algorithm_key, algorithm_version, model_sha256 and profile_sha256;
-        handedness and handedness_score are Candidate metadata only and there is no generic confidence
-        field. Parquet metadata fixes hand_geometry_is_ground_truth=false and
-        coordinate_system=normalized_image_xy_and_mediapipe_relative_z.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      responses:
-        "200":
-          description: Minimal hand-observation training data.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-            Content-Disposition:
-              description: Fixed attachment name for the generated Parquet.
-              schema:
-                type: string
-                const: 'attachment; filename="training_data.parquet"'
-          content:
-            application/vnd.apache.parquet:
-              schema:
-                type: string
-                format: binary
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422":
-          description: Current evidence cannot be serialized safely.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/training-data/v3/preview:
     get:
       operationId: getTrainingDataV3ExportPreview
       tags:
         - Training Data Export
-      summary: Preview the minimal V1.25 CaptureGroup training-data manifest
+      summary: Preview the minimal V1.27 CaptureGroup training-data manifest
       description: >-
         Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. Only event-level Cleaning PASS
         rows with APPROVED human Review and a current admitting CaptureGroup quality revision are read.
@@ -171,7 +87,7 @@ paths:
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Current V1.25 group/event manifest preview.
+          description: Current V1.27 group/event manifest preview.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -192,7 +108,7 @@ paths:
       operationId: downloadTrainingDataV3
       tags:
         - Training Data Export
-      summary: Download the minimal V1.25 CaptureGroup training-data manifest
+      summary: Download the minimal V1.27 CaptureGroup training-data manifest
       description: >-
         Returns training-data.v3 JSON events. Each event retains the submitted AnnotationRevision,
         primary authoritative interval, participating and excluded views, confirmed View Set, current
@@ -205,7 +121,7 @@ paths:
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Minimal V1.25 group/event manifest.
+          description: Minimal V1.27 group/event manifest.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -1181,7 +1097,7 @@ paths:
         CameraStreams are created in one database transaction. Edge-reported synchronization data
         is retained as an observation and does not override server configuration or become a
         verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. For the legacy
-        V1.24 single-video projection, received_camera_count is the media-INGESTED count; the V1.25
+        V1.24 single-video projection, received_camera_count is the media-INGESTED count; the V1.27
         CaptureGroup projection uses the actual bound stream count. A natural-resource replay returns
         the original assembly without rereading object storage. The operation does not control the
         RK3588 device or accept video bytes through the Core API. For PLATFORM_LOCAL batches,
@@ -2018,7 +1934,7 @@ paths:
         - Asset Catalog
       summary: Read one CaptureGroup and its receipt/view facts
       description: >-
-        Returns the V1.25 CaptureGroup read model. capture_group_id is the same stable identifier as
+        Returns the V1.27 CaptureGroup read model. capture_group_id is the same stable identifier as
         capture_session_id. Expected, received and missing camera numbers come from the frozen
         CameraSetSnapshot and bound CameraStreams; camera gaps are preserved. Receipt is independent
         of media probing and quality state, and the response does not expose storage locations.
@@ -2238,142 +2154,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
-  /projects/{project_id}/videos:
-    get:
-      operationId: listVideoSummaries
-      tags:
-        - Video Management
-      summary: List one server-side summary row per video
-      description: >-
-        Returns a single bounded read model for the ordinary V1.18 video-management page. The
-        ordering is received_at descending and clip_asset_id descending; the opaque cursor encodes
-        exactly those two fields. Downstream hand, annotation, cleaning and retention facts are
-        read in this page query, so clients do not need one request per video.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: source
-          in: query
-          schema: { $ref: "#/components/schemas/UploadSourceType" }
-        - name: media_status
-          in: query
-          schema: { $ref: "#/components/schemas/ClipAssetStatus" }
-        - name: hand_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_REQUESTED, QUEUED, RUNNING, SUCCEEDED, FAILED]
-        - name: hand_result
-          in: query
-          schema:
-            type: string
-            enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
-        - name: annotation_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
-        - name: cleaning_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_STARTED, PASS, WARNING, REJECT]
-        - name: camera_number
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 64 }
-        - name: captured_from
-          in: query
-          schema: { type: string, format: date-time }
-        - name: captured_before
-          in: query
-          schema: { type: string, format: date-time }
-        - name: received_from
-          in: query
-          schema: { type: string, format: date-time }
-        - name: received_before
-          in: query
-          schema: { type: string, format: date-time }
-        - name: cursor
-          in: query
-          schema: { type: string, maxLength: 512 }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
-      responses:
-        "200":
-          description: Project-scoped video summary page.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/VideoSummaryPage" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-  /projects/{project_id}/video-data/summary:
-    get:
-      operationId: getVideoDataSummary
-      tags:
-        - Video Management
-      summary: Get aggregate video-management counters for one project
-      description: >-
-        Returns duration in microseconds and storage in bytes. Counts are computed from the same
-        project-scoped, non-deleted video population used by the video-management read model.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: source
-          in: query
-          schema: { $ref: "#/components/schemas/UploadSourceType" }
-        - name: media_status
-          in: query
-          schema: { $ref: "#/components/schemas/ClipAssetStatus" }
-        - name: hand_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_REQUESTED, QUEUED, RUNNING, SUCCEEDED, FAILED]
-        - name: hand_result
-          in: query
-          schema:
-            type: string
-            enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
-        - name: annotation_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
-        - name: cleaning_status
-          in: query
-          schema:
-            type: string
-            enum: [NOT_STARTED, PASS, WARNING, REJECT]
-        - name: camera_number
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 64 }
-        - name: captured_from
-          in: query
-          schema: { type: string, format: date-time }
-        - name: captured_before
-          in: query
-          schema: { type: string, format: date-time }
-        - name: received_from
-          in: query
-          schema: { type: string, format: date-time }
-        - name: received_before
-          in: query
-          schema: { type: string, format: date-time }
-      responses:
-        "200":
-          description: Project-scoped data-management summary.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/DataManagementSummary" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{project_id}/clip-assets/{clip_asset_id}:
     get:
       operationId: getClipAsset
@@ -3058,74 +2838,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/clip-assets/{clip_asset_id}/annotation-tasks:
-    post:
-      operationId: createAnnotationTask
-      tags:
-        - Annotation Tasks
-      summary: Create and assign the first annotation task for a qualified video
-      description: >-
-        Requires an ACTIVE ADMIN membership. The asset must be undeleted, INGESTED and currently
-        QUALIFIED by human review; the assignee must hold an ACTIVE membership in the same project.
-        The idempotency key safely replays the identical creation request. One current task exists
-        per project video.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/ClipAssetId"
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnnotationTaskRequest"
-      responses:
-        "201":
-          description: The new task, or the identical idempotent replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-            Location:
-              schema:
-                type: string
-                format: uri-reference
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnnotationTask"
-        "400":
-          description: The request or assignee identifier is invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: No authenticated platform session exists.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project, assignee or undeleted ClipAsset is not visible in the requested scope.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The asset is not ready or qualified, the key conflicts, or a task already exists.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-tasks/{annotation_task_id}/revisions:
     post:
       operationId: submitAnnotationRevision
@@ -3211,12 +2923,12 @@ paths:
       summary: Record one administrator decision for a submitted annotation revision
       description: >-
         Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The same administrator may
-        review their own revision and the audit records SELF_ADMIN_APPROVAL; the video must remain
-        undeleted, INGESTED and human-qualified. P0 records one immutable
-        APPROVED or REJECTED decision. A rejection returns the task to its assignee; their next
-        immutable revision receives the next revision number. An approval completes the task and
-        persists the deterministic post-cleaning result for that exact immutable revision. Older
-        revisions, reviews and cleaning results remain immutable.
+        review their own revision and the audit records SELF_ADMIN_APPROVAL. The CaptureGroup quality
+        admission and confirmed View Set must remain current. P0 records one immutable APPROVED or
+        REJECTED decision. A rejection returns the task to its assignee; their next immutable revision
+        receives the next revision number. An approval completes the task and persists the deterministic
+        CaptureGroup Cleaning result for that exact immutable revision. Older revisions, reviews and
+        cleaning results remain immutable.
       security:
         - sessionCookie: []
       parameters:
@@ -3274,70 +2986,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "409":
-          description: The revision was already reviewed or its video is no longer eligible.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/annotation-revisions/{annotation_revision_id}/post-cleaning-rechecks:
-    post:
-      operationId: recheckAnnotationPostCleaning
-      tags:
-        - Annotation Tasks
-      summary: Re-evaluate an approved annotation revision against current training facts
-      description: >-
-        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The revision must remain APPROVED, its
-        task COMPLETED and its video undeleted and INGESTED. The service re-evaluates the immutable
-        revision using the current human-quality version and current verified media fact. An unchanged
-        input fingerprint returns the existing immutable result; a changed input creates a new run and
-        result without overwriting history. A non-qualified current quality fact is recorded as REJECT.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - name: annotation_revision_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - $ref: "#/components/parameters/OptionalRequestId"
-      responses:
-        "200":
-          description: Current-facts post-cleaning result, including a safe idempotent replay.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PostCleaningResult"
-        "400":
-          description: The identifiers are invalid.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "401":
-          description: No authenticated platform session exists.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An ACTIVE ADMIN membership is required.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "404":
-          description: The project or revision is not visible to the caller.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The revision, task or video is no longer eligible for controlled rechecking.
+          description: The revision was already reviewed or its CaptureGroup is no longer eligible.
           content:
             application/problem+json:
               schema:
@@ -3387,7 +3036,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
-          description: Caller-supplied supporting-view mappings are unsupported in the V1.25 MVP.
+          description: Caller-supplied supporting-view mappings are unsupported in the V1.27 MVP.
           content:
             application/problem+json:
               schema:
@@ -5346,7 +4995,7 @@ components:
         capture_group_id:
           type: string
           format: uuid
-          description: V1.25 business identity; exactly the same UUID as capture_session_id.
+          description: V1.27 business identity; exactly the same UUID as capture_session_id.
         project_id:
           type: string
           format: uuid
@@ -5381,7 +5030,7 @@ components:
           maximum: 64
           description: >-
             Legacy V1.24 single-video responses count unique bound streams whose ClipAsset has reached
-            INGESTED; V1.25 CaptureGroup responses count unique streams actually bound to the frozen
+            INGESTED; V1.27 CaptureGroup responses count unique streams actually bound to the frozen
             snapshot. The CaptureGroup receipt count is independent of media probe status.
         sync_group_id:
           type: [string, "null"]
@@ -5876,94 +5525,6 @@ components:
           maxItems: 100
           items:
             $ref: "#/components/schemas/CaptureGroupQualityReview"
-    VideoSummaryPage:
-      type: object
-      additionalProperties: false
-      required: [items, next_cursor]
-      properties:
-        items:
-          type: array
-          maxItems: 100
-          items: { $ref: "#/components/schemas/VideoSummary" }
-        next_cursor:
-          anyOf:
-            - type: string
-              maxLength: 512
-            - type: "null"
-    VideoSummary:
-      type: object
-      additionalProperties: false
-      required:
-        - video_id
-        - display_name
-        - source_name
-        - camera_number
-        - captured_at
-        - received_at
-        - media_status
-        - quality_decision
-        - hand_status
-        - hand_result
-        - hand_retryable
-        - annotation_status
-        - cleaning_status
-        - retention_status
-      properties:
-        video_id: { type: string, format: uuid }
-        display_name: { type: string, minLength: 1, maxLength: 255 }
-        source_name: { $ref: "#/components/schemas/UploadSourceType" }
-        camera_number: { type: [integer, "null"], minimum: 1, maximum: 64 }
-        captured_at: { type: [string, "null"], format: date-time }
-        received_at: { type: string, format: date-time }
-        media_status: { $ref: "#/components/schemas/ClipAssetStatus" }
-        quality_decision:
-          type: string
-          enum: [UNREVIEWED, QUALIFIED, REJECTED, NEEDS_REVIEW]
-        hand_status:
-          type: string
-          enum: [NOT_REQUESTED, QUEUED, RUNNING, SUCCEEDED, FAILED]
-        hand_result:
-          type: string
-          enum: [UNKNOWN, HAND_DETECTED, NO_HAND_DETECTED]
-        hand_retryable: { type: boolean }
-        annotation_status:
-          type: string
-          enum: [NOT_STARTED, ASSIGNED, SUBMITTED, COMPLETED]
-        cleaning_status:
-          type: string
-          enum: [NOT_STARTED, PASS, WARNING, REJECT]
-        retention_status: { type: string, minLength: 1, maxLength: 64 }
-    DataManagementSummary:
-      type: object
-      additionalProperties: false
-      required:
-        - total_videos
-        - total_duration
-        - storage_bytes
-        - counts_by_source
-        - counts_by_camera
-        - counts_by_status
-        - pending_annotation
-        - pending_review
-        - pending_cleaning
-        - usable_count
-      properties:
-        total_videos: { type: integer, format: int64, minimum: 0 }
-        total_duration: { type: integer, format: int64, minimum: 0, description: Total duration in microseconds. }
-        storage_bytes: { type: integer, format: int64, minimum: 0 }
-        counts_by_source:
-          type: object
-          additionalProperties: { type: integer, format: int64, minimum: 0 }
-        counts_by_camera:
-          type: object
-          additionalProperties: { type: integer, format: int64, minimum: 0 }
-        counts_by_status:
-          type: object
-          additionalProperties: { type: integer, format: int64, minimum: 0 }
-        pending_annotation: { type: integer, format: int64, minimum: 0 }
-        pending_review: { type: integer, format: int64, minimum: 0 }
-        pending_cleaning: { type: integer, format: int64, minimum: 0 }
-        usable_count: { type: integer, format: int64, minimum: 0 }
     ExternalVideoIngestManifestAccepted:
       type: object
       additionalProperties: false
@@ -6281,24 +5842,12 @@ components:
           maxItems: 5
           items:
             $ref: "#/components/schemas/AnnotationLabelDefinition"
-    AnnotationTaskRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - assignee_actor_id
-      properties:
-        assignee_actor_id:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
     AnnotationTask:
       type: object
       additionalProperties: false
       required:
         - annotation_task_id
         - project_id
-        - clip_asset_id
         - capture_group_id
         - primary_clip_asset_id
         - primary_camera_number
@@ -6314,7 +5863,7 @@ components:
         - can_submit
         - can_select_primary
         - can_review
-        - can_recheck_post_cleaning
+        - can_recheck_capture_group_cleaning
         - annotation_revision
         - created_at
         - updated_at
@@ -6326,14 +5875,10 @@ components:
         project_id:
           type: string
           format: uuid
-        clip_asset_id:
-          type: [string, "null"]
-          format: uuid
-          description: V1.24 video owner; null for a V1.25 CaptureGroup-owned task.
         capture_group_id:
-          type: [string, "null"]
+          type: string
           format: uuid
-          description: V1.25 task owner; null for historical V1.24 video-owned tasks.
+          description: The CaptureGroup owns the task; ClipAsset remains evidence inside the group.
         primary_clip_asset_id:
           type: [string, "null"]
           format: uuid
@@ -6383,9 +5928,9 @@ components:
         can_review:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to independently review its submitted revision.
-        can_recheck_post_cleaning:
+        can_recheck_capture_group_cleaning:
           type: boolean
-          description: Server-evaluated capability for an administrator to re-evaluate a completed approved revision against current facts.
+          description: Server-evaluated capability for an administrator to re-evaluate CaptureGroup training eligibility against current facts.
         annotation_revision:
           anyOf:
             - $ref: "#/components/schemas/AnnotationRevisionSummary"
@@ -6558,7 +6103,7 @@ components:
         clip_asset_id:
           type: string
           format: uuid
-          description: The formal timebase clip for group revisions; legacy rows retain their video owner.
+          description: The primary ClipAsset that supplies the formal annotation timebase for this CaptureGroup revision.
         capture_group_id:
           type: [string, "null"]
           format: uuid
@@ -6609,7 +6154,7 @@ components:
         - submitted_by
         - submitted_at
         - review
-        - post_cleaning_result
+        - capture_group_cleaning
       properties:
         annotation_revision_id:
           type: string
@@ -6668,75 +6213,13 @@ components:
           anyOf:
             - $ref: "#/components/schemas/AnnotationReview"
             - type: "null"
-        post_cleaning_result:
+        capture_group_cleaning:
           description: >-
-            Immutable post-cleaning result for this exact approved revision. It is null before
-            approval, for rejected revisions, and for historical approved revisions that have not
-            been evaluated.
+            Immutable CaptureGroup training-eligibility result for this exact approved revision. It
+            is null before approval, for rejected revisions, and when no result has been evaluated.
           anyOf:
-            - $ref: "#/components/schemas/PostCleaningResult"
+            - $ref: "#/components/schemas/CaptureGroupCleaning"
             - type: "null"
-    PostCleaningResult:
-      type: object
-      additionalProperties: false
-      required:
-        - cleaning_result_id
-        - cleaning_run_id
-        - rule_set_key
-        - rule_set_version
-        - rule_set_digest
-        - outcome
-        - reason_codes
-        - executed_checks
-        - evaluated_at
-      properties:
-        cleaning_result_id:
-          type: string
-          format: uuid
-        cleaning_run_id:
-          type: string
-          format: uuid
-        rule_set_key:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[a-z][a-z0-9._-]{0,63}$
-        rule_set_version:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[a-z0-9][a-z0-9._-]{0,63}$
-        rule_set_digest:
-          type: string
-          pattern: ^[a-f0-9]{64}$
-        outcome:
-          type: string
-          enum:
-            - PASS
-            - WARNING
-            - REJECT
-        reason_codes:
-          type: array
-          maxItems: 64
-          uniqueItems: true
-          items:
-            type: string
-            minLength: 1
-            maxLength: 64
-            pattern: ^[A-Z][A-Z0-9_]{0,63}$
-        executed_checks:
-          type: array
-          minItems: 1
-          maxItems: 64
-          uniqueItems: true
-          items:
-            type: string
-            minLength: 1
-            maxLength: 64
-            pattern: ^[A-Z][A-Z0-9_]{0,63}$
-        evaluated_at:
-          type: string
-          format: date-time
     AnnotationReviewDecision:
       type: string
       enum:
@@ -6948,7 +6431,7 @@ components:
         capture_group_id:
           type: [string, "null"]
           format: uuid
-          description: Canonical CaptureGroup id when this video belongs to the V1.25+ event workflow; otherwise null.
+          description: Canonical CaptureGroup id when this video belongs to the V1.27 event workflow; otherwise null.
         capture_group_workflow:
           type: boolean
           description: True when the video is a view of a CaptureGroup and event-level workflow is authoritative.
@@ -7151,7 +6634,7 @@ components:
       deprecated: true
       description: >-
         Deprecated compatibility request. Omit this body or send an empty support_mappings array.
-        Non-empty caller-provided mappings are rejected; V1.25 has no authoritative supporting-view
+        Non-empty caller-provided mappings are rejected; V1.27 has no authoritative supporting-view
         time mapping system.
       additionalProperties: false
       properties:
@@ -7177,7 +6660,7 @@ components:
           format: uuid
         validated:
           type: boolean
-          description: Not accepted as scientific proof in V1.25.
+          description: Not accepted as scientific proof in V1.27.
         mapping_version:
           type: string
           minLength: 1
@@ -7296,7 +6779,7 @@ components:
             additionalProperties: true
         mapping_provenance:
           deprecated: true
-          description: Always an empty array in the V1.25 MVP; retained for projection compatibility.
+          description: Always an empty array in the V1.27 MVP; retained for projection compatibility.
           type: array
           items:
             type: object
@@ -7553,7 +7036,7 @@ components:
           format: date-time
         mapping_provenance:
           deprecated: true
-          description: Always an empty array in the V1.25 MVP; retained for projection compatibility.
+          description: Always an empty array in the V1.27 MVP; retained for projection compatibility.
           type: array
           items:
             type: object
@@ -7604,54 +7087,6 @@ components:
           minimum: 0
         valid:
           type: boolean
-    TrainingDataExportPreview:
-      type: object
-      additionalProperties: false
-      required:
-        - schema_version
-        - eligible_video_count
-        - candidate_observation_count
-        - training_row_count
-        - unlabeled_candidate_observation_count
-        - training_row_definition
-        - file_name
-        - content_type
-        - includes_mp4
-      properties:
-        schema_version:
-          type: string
-          const: training-data.v2
-        eligible_video_count:
-          type: integer
-          format: int64
-          minimum: 0
-        candidate_observation_count:
-          type: integer
-          format: int64
-          minimum: 0
-        training_row_count:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Number of Parquet rows, not the number of videos.
-        unlabeled_candidate_observation_count:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Candidate observations outside every current human action interval.
-        training_row_definition:
-          type: string
-          const: one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)
-          description: Each row includes action_start_ms and action_end_ms copied from the current human AnnotationRevision segment; timestamp_ms is in the half-open interval [action_start_ms, action_end_ms). It also includes Candidate provenance algorithm_key, algorithm_version, model_sha256 and profile_sha256, handedness and handedness_score metadata, and no generic confidence field.
-        file_name:
-          type: string
-          const: training_data.parquet
-        content_type:
-          type: string
-          const: application/vnd.apache.parquet
-        includes_mp4:
-          type: boolean
-          const: false
     ApiError:
       type: object
       additionalProperties: false

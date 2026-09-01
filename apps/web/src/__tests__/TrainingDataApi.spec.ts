@@ -7,7 +7,7 @@ const projectId = '30000000-0000-4000-8000-000000000001'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('training data export API', () => {
-  it('reads the V1.25 training-data.v3 preview from the existing project endpoint', async () => {
+  it('reads the V1.27 training-data.v3 preview from the existing project endpoint', async () => {
     const preview = {
       schema_version: 'training-data.v3',
       eligible_group_count: 2,
@@ -32,7 +32,7 @@ describe('training data export API', () => {
     )
   })
 
-  it('downloads the V1.25 manifest through the v3 endpoint', async () => {
+  it('downloads the V1.27 manifest through the v3 endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('v3-json'))
     vi.stubGlobal('fetch', fetchMock)
 

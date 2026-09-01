@@ -61,23 +61,6 @@ class AnnotationTaskController {
 					isPlatformAdministrator(authentication)));
 	}
 
-	@PostMapping("/clip-assets/{clipAssetId}/annotation-tasks")
-	ResponseEntity<AnnotationTaskResponse> create(@PathVariable UUID projectId, @PathVariable UUID clipAssetId,
-			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
-					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
-			@RequestHeader(name = "X-Request-Id",
-					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody AnnotationTaskRequest request, Authentication authentication) {
-		var response = this.service.create(projectId, clipAssetId,
-				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
-				new AnnotationTaskCreateRequest(request.assigneeActorId()));
-		return ResponseEntity.status(HttpStatus.CREATED)
-			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + response.annotationTaskId()))
-			.cacheControl(CacheControl.noStore())
-			.body(response);
-	}
-
 	@PostMapping("/annotation-tasks/{annotationTaskId}/revisions")
 	ResponseEntity<AnnotationRevisionResponse> submitRevision(@PathVariable UUID projectId,
 			@PathVariable UUID annotationTaskId,
@@ -131,18 +114,6 @@ class AnnotationTaskController {
 			.body(response);
 	}
 
-	@PostMapping("/annotation-revisions/{annotationRevisionId}/post-cleaning-rechecks")
-	ResponseEntity<PostCleaningResultResponse> recheckPostCleaning(@PathVariable UUID projectId,
-			@PathVariable UUID annotationRevisionId,
-			@RequestHeader(name = "X-Request-Id",
-					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			Authentication authentication) {
-		var response = this.service.recheckPostCleaning(projectId, annotationRevisionId,
-				requirePlatformAdministrator(authentication).actorId(),
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
 	@PostMapping("/annotation-revisions/{annotationRevisionId}/capture-group-cleaning-rechecks")
 	ResponseEntity<CaptureGroupCleaningResponse> recheckCaptureGroupCleaning(@PathVariable UUID projectId,
 			@PathVariable UUID annotationRevisionId,
@@ -152,7 +123,7 @@ class AnnotationTaskController {
 		var actor = requirePlatformAdministrator(authentication);
 		if (request != null && request.hasCallerMappings()) {
 			throw new AnnotationTaskException("ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED",
-					"Caller-provided supporting-view mappings are unsupported in V1.25; omit support_mappings or send an empty list. Declared synchronization is evidence only.",
+					"Caller-provided supporting-view mappings are unsupported in V1.27; omit support_mappings or send an empty list. Declared synchronization is evidence only.",
 					422);
 		}
 		var response = this.service.recheckCaptureGroupCleaning(projectId, annotationRevisionId, actor.actorId(),
@@ -185,10 +156,6 @@ class AnnotationTaskController {
 
 }
 
-record AnnotationTaskRequest(
-		@NotNull @NotBlank @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
-}
-
 record AnnotationPrimaryViewRequest(@NotNull UUID clipAssetId) {
 }
 
@@ -209,7 +176,7 @@ record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
 
 /**
  * Deprecated compatibility input for the removed caller-authoritative mapping contract.
- * V1.25 accepts an omitted or empty list only; non-empty mappings are rejected by the
+ * V1.27 accepts an omitted or empty list only; non-empty mappings are rejected by the
  * controller before Cleaning is evaluated.
  */
 record CaptureGroupCleaningRequest(@Size(max = 64) List<Map<String, Object>> supportMappings) {
@@ -253,7 +220,7 @@ class AnnotationTaskExceptionHandler {
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	ResponseEntity<AnnotationTaskErrorResponse> conflict(DataIntegrityViolationException exception) {
 		return error(HttpStatus.CONFLICT, "ANNOTATION_TASK_ALREADY_EXISTS",
-				"The clip asset already has an annotation task in this project.");
+				"The CaptureGroup already has an annotation task in this project.");
 	}
 
 	private static ResponseEntity<AnnotationTaskErrorResponse> error(HttpStatus status, String errorCode,

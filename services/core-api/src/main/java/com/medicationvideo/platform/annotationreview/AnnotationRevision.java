@@ -76,14 +76,6 @@ class AnnotationRevision {
 	protected AnnotationRevision() {
 	}
 
-	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, int revisionNumber,
-			UUID labelSchemaId, String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
-			String submittedBy, String idempotencyKey, Instant submittedAt) {
-		this(projectId, annotationTaskId, clipAssetId, null, null, null, revisionNumber, labelSchemaId,
-				labelSchemaDigest, annotationDocument, documentSha256, null, null, submittedBy, idempotencyKey,
-				submittedAt);
-	}
-
 	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, UUID captureGroupId,
 			UUID primaryClipAssetId, Integer primaryCameraNumber, int revisionNumber, UUID labelSchemaId,
 			String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
@@ -107,13 +99,6 @@ class AnnotationRevision {
 		this.submittedBy = submittedBy;
 		this.idempotencyKey = idempotencyKey;
 		this.submittedAt = submittedAt;
-	}
-
-	static AnnotationRevision submit(AnnotationTask task, int revisionNumber, Map<String, Object> annotationDocument,
-			String documentSha256, String submittedBy, String idempotencyKey, Instant submittedAt) {
-		return new AnnotationRevision(task.getProjectId(), task.getAnnotationTaskId(), task.getClipAssetId(),
-				revisionNumber, task.getLabelSchemaId(), task.getLabelSchemaDigest(), annotationDocument,
-				documentSha256, submittedBy, idempotencyKey, submittedAt);
 	}
 
 	static AnnotationRevision submitForCaptureGroup(AnnotationTask task, int revisionNumber,

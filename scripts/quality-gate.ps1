@@ -397,7 +397,6 @@ else {
 $pythonSearchRoots = @(
     (Join-Path $root 'workers'),
     (Join-Path $root 'plugins'),
-    (Join-Path $root 'tools/minimal-export'),
     (Join-Path $root 'tools/hand-pose-evaluation'),
     (Join-Path $root 'tools/candidate-capacity-review')
 ) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }

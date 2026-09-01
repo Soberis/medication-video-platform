@@ -13,15 +13,6 @@ import jakarta.persistence.LockModeType;
 
 interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 
-	Optional<AnnotationTask> findByProjectIdAndCreatedByAndIdempotencyKey(UUID projectId, String createdBy,
-			String idempotencyKey);
-
-	boolean existsByProjectIdAndClipAssetId(UUID projectId, UUID clipAssetId);
-
-	boolean existsByProjectIdAndCaptureGroupId(UUID projectId, UUID captureGroupId);
-
-	Optional<AnnotationTask> findByProjectIdAndCaptureGroupId(UUID projectId, UUID captureGroupId);
-
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select task from AnnotationTask task
@@ -29,8 +20,6 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 			""")
 	Optional<AnnotationTask> findForUpdateByProjectIdAndCaptureGroupId(@Param("projectId") UUID projectId,
 			@Param("captureGroupId") UUID captureGroupId);
-
-	List<AnnotationTask> findAllByProjectIdAndClipAssetIdIn(UUID projectId, List<UUID> clipAssetIds);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
@@ -40,9 +29,10 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 	Optional<AnnotationTask> findForUpdate(@Param("projectId") UUID projectId,
 			@Param("annotationTaskId") UUID annotationTaskId);
 
-	List<AnnotationTask> findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId);
+	List<AnnotationTask> findAllByProjectIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(
+			UUID projectId);
 
-	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId,
-			String assigneeActorId);
+	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(
+			UUID projectId, String assigneeActorId);
 
 }

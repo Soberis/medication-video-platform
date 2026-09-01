@@ -3,7 +3,6 @@ import type {
   AnnotationRevisionSummary,
   AnnotationTask,
   CaptureGroupCleaning,
-  PostCleaningResult,
 } from '@/api/annotation'
 import type { CaptureGroupQualityReview, CaptureGroupReceiptState } from '@/api/capture-groups'
 import type { QualityReviewDecision } from '@/api/quality'
@@ -56,9 +55,7 @@ export interface MedicationEventPrimaryViewFact {
   camera_number: number | null
 }
 
-export type MedicationEventCleaningFact =
-  | Pick<CaptureGroupCleaning, 'outcome'>
-  | Pick<PostCleaningResult, 'outcome'>
+export type MedicationEventCleaningFact = Pick<CaptureGroupCleaning, 'outcome'>
 
 export interface MedicationEventWorkflowFacts {
   receipt_state: CaptureGroupReceiptState
@@ -74,7 +71,7 @@ export interface MedicationEventWorkflowFacts {
   can_select_primary: boolean
   can_submit: boolean
   can_review: boolean
-  can_recheck_post_cleaning: boolean
+  can_recheck_capture_group_cleaning: boolean
   can_finalize_receipt: boolean
   can_decide_group_quality: boolean
   annotation_schema_available: boolean

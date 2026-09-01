@@ -238,7 +238,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		selectPrimary(taskId, group.clipAssetIds().get(1), MEMBER_TOKEN).andExpect(status().isOk())
 			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
 			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().get(1).toString()))
-			.andExpect(jsonPath("$.clip_asset_id").isEmpty());
+			.andExpect(jsonPath("$.clip_asset_id").doesNotExist());
 
 		var first = submit(group, taskId, MEMBER_TOKEN, key("revision-first"), 10).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1))

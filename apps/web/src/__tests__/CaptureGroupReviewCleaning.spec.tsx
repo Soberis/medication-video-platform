@@ -165,7 +165,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
-    expect(await screen.findByText('该视频已不再满足标注复核条件。')).toBeInTheDocument()
+    expect(await screen.findByText('该 CaptureGroup 已不再满足标注复核条件。')).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.filter(
         ([input, init]) =>

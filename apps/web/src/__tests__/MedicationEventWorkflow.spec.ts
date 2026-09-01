@@ -67,7 +67,6 @@ function revision(
     confirmed_view_set: null,
     input_version: 'input-1',
     review,
-    post_cleaning_result: null,
     capture_group_cleaning: cleaning,
   }
 }
@@ -107,7 +106,7 @@ function facts(
     can_select_primary: false,
     can_submit: false,
     can_review: false,
-    can_recheck_post_cleaning: false,
+    can_recheck_capture_group_cleaning: false,
     can_finalize_receipt: false,
     can_decide_group_quality: false,
     annotation_schema_available: true,

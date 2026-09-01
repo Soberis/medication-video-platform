@@ -12,7 +12,6 @@ import {
   type CaptureGroupCleaning,
   type CaptureGroupEvidence,
   type CaptureGroupViewSet,
-  type PostCleaningResult,
 } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -31,7 +30,7 @@ import {
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
-type CleaningResult = CaptureGroupCleaning | PostCleaningResult
+type CleaningResult = CaptureGroupCleaning
 
 interface CaptureGroupReviewCleaningPanelProps {
   projectId: string
@@ -126,7 +125,7 @@ export function CaptureGroupReviewCleaningPanel({
   }
 
   async function recheckCleaning() {
-    if (!revision || !task?.can_recheck_post_cleaning || isRechecking) return
+    if (!revision || !task?.can_recheck_capture_group_cleaning || isRechecking) return
     setIsRechecking(true)
     try {
       await recheckCaptureGroupCleaning(projectId, revision.annotation_revision_id)
@@ -357,7 +356,9 @@ export function CaptureGroupReviewCleaningPanel({
             primaryCameraNumber={primaryCameraNumber}
             schema={schema}
             review={review}
-            canRecheck={Boolean(task.can_recheck_post_cleaning && review?.decision === 'APPROVED')}
+            canRecheck={Boolean(
+              task.can_recheck_capture_group_cleaning && review?.decision === 'APPROVED',
+            )}
             isRechecking={isRechecking}
             onRecheck={() => void recheckCleaning()}
           />
@@ -508,7 +509,7 @@ function TrainingEligibilityCheck({
   isRechecking,
   onRecheck,
 }: TrainingEligibilityCheckProps) {
-  const captureGroupCleaning = cleaning && isCaptureGroupCleaning(cleaning) ? cleaning : null
+  const captureGroupCleaning = cleaning
 
   return (
     <div className="capture-group-training-check" aria-label="训练资格检查">
@@ -642,10 +643,6 @@ function cleaningIndicatorTone(outcome: CleaningResult['outcome']): StatusIndica
   if (outcome === 'PASS') return 'success'
   if (outcome === 'REJECT') return 'destructive'
   return 'warning'
-}
-
-function isCaptureGroupCleaning(cleaning: CleaningResult): cleaning is CaptureGroupCleaning {
-  return 'capture_group_cleaning_id' in cleaning
 }
 
 function CleaningPrimaryInterval({

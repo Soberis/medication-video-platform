@@ -22,7 +22,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Minimal V1.25 group/event manifest. It is a read-only, versioned JSON contract and does
+ * Minimal V1.27 group/event manifest. It is a read-only, versioned JSON contract and does
  * not create a DatasetVersion or copy media.
  */
 @Service
@@ -81,7 +81,7 @@ class TrainingDataV3ExportService {
 		}
 		catch (JacksonException exception) {
 			throw new TrainingDataExportException("TRAINING_DATA_V3_EXPORT_FAILED",
-					"The V1.25 training-data manifest could not be generated.", 500);
+					"The V1.27 training-data manifest could not be generated.", 500);
 		}
 	}
 
@@ -91,7 +91,7 @@ class TrainingDataV3ExportService {
 		}
 		catch (JacksonException exception) {
 			throw new TrainingDataExportException("TRAINING_DATA_V3_READBACK_INVALID",
-					"The V1.25 training-data manifest could not be read back.", 422);
+					"The V1.27 training-data manifest could not be read back.", 422);
 		}
 	}
 
@@ -152,7 +152,7 @@ class TrainingDataV3ExportService {
 	}
 
 	/**
-	 * Normalizes both current and legacy Cleaning projections to the V1.25 time rule.
+	 * Normalizes current and historical Cleaning projections to the V1.27 time rule.
 	 * Historical rows may have been produced while caller mappings were still accepted;
 	 * those rows must not make an action-aligned supporting timestamp appear in v3.
 	 */
@@ -207,7 +207,7 @@ class TrainingDataV3ExportService {
 		}
 		catch (JacksonException exception) {
 			throw new TrainingDataExportException("TRAINING_DATA_V3_EVIDENCE_INVALID",
-					"The V1.25 training-data projection contains invalid JSON.", 422);
+					"The V1.27 training-data projection contains invalid JSON.", 422);
 		}
 	}
 

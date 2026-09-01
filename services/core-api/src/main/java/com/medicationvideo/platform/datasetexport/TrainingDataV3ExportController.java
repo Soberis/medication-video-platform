@@ -98,3 +98,31 @@ record TrainingDataV3SplitAssignmentRequest(@NotNull UUID captureGroupId,
 
 record TrainingDataV3SplitValidationResponse(String splitUnit, long assignmentCount, boolean valid) {
 }
+
+record TrainingDataExportErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
+}
+
+@RestControllerAdvice(assignableTypes = TrainingDataV3ExportController.class)
+class TrainingDataExportExceptionHandler {
+
+	@ExceptionHandler(ProjectAccessException.class)
+	ResponseEntity<TrainingDataExportErrorResponse> projectAccess(ProjectAccessException exception) {
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
+				false);
+	}
+
+	@ExceptionHandler(TrainingDataExportException.class)
+	ResponseEntity<TrainingDataExportErrorResponse> export(TrainingDataExportException exception) {
+		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
+				exception.getStatusCode() >= 500);
+	}
+
+	private static ResponseEntity<TrainingDataExportErrorResponse> error(HttpStatus status, String errorCode,
+			String message, boolean retryable) {
+		return ResponseEntity.status(status)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.cacheControl(CacheControl.noStore())
+			.body(new TrainingDataExportErrorResponse(errorCode, message, retryable, UUID.randomUUID().toString()));
+	}
+
+}

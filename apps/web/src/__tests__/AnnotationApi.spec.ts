@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  createAnnotationTask,
   getAnnotationLabelSchema,
   listAnnotationTasks,
   recheckCaptureGroupCleaning,
-  recheckAnnotationPostCleaning,
   reviewAnnotationRevision,
   submitAnnotationRevision,
 } from '@/api/annotation'
@@ -26,43 +24,7 @@ const emptyProgress = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task API', () => {
-  it('creates an assigned task with an idempotency key and CSRF header', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          {
-            annotation_task_id: 'a0000000-0000-4000-8000-000000000001',
-            project_id: projectId,
-            clip_asset_id: assetId,
-            label_schema_id: labelSchemaId,
-            label_schema_digest: labelSchemaDigest,
-            assignee_actor_id: 'local-synthetic-uploader',
-            created_by: 'local-synthetic-admin',
-            status: 'ASSIGNED',
-            created_at: '2026-07-23T01:00:00Z',
-            updated_at: '2026-07-23T01:00:00Z',
-            version: 0,
-          },
-          { status: 201 },
-        ),
-      ),
-    )
-
-    const task = await createAnnotationTask(projectId, assetId, 'local-synthetic-uploader')
-
-    expect(task.status).toBe('ASSIGNED')
-    expect(fetch).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${assetId}/annotation-tasks`,
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ assignee_actor_id: 'local-synthetic-uploader' }),
-        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
-      }),
-    )
-  })
-
-  it('lists the visible task queue and explains a qualified-state rejection', async () => {
+  it('lists the visible CaptureGroup task queue and explains a qualified-state rejection', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ items: [], progress: emptyProgress }))
@@ -75,26 +37,13 @@ describe('annotation task API', () => {
       items: [],
       progress: emptyProgress,
     })
-    await expect(
-      createAnnotationTask(projectId, assetId, 'local-synthetic-uploader'),
-    ).rejects.toMatchObject({
+    await expect(listAnnotationTasks(projectId)).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
-      message: '只有质量结论为“合格”的视频才能创建配药动作标注。',
+      message: '只有事件质量结论为“合格”的 CaptureGroup 才能进入配药动作标注。',
     })
   })
 
-  it('keeps the completed task and immutable post-cleaning result in the list response', async () => {
-    const cleaningResult = {
-      cleaning_result_id: '82000000-0000-4000-8000-000000000001',
-      cleaning_run_id: '83000000-0000-4000-8000-000000000001',
-      rule_set_key: 'p0-post-annotation',
-      rule_set_version: 'p0-post-annotation.v1',
-      rule_set_digest: 'd'.repeat(64),
-      outcome: 'PASS',
-      reason_codes: [],
-      executed_checks: ['PRIMARY_STEP_LABEL_ALLOWED', 'PRIMARY_STEP_NO_OVERLAP'],
-      evaluated_at: '2026-07-26T01:10:00Z',
-    }
+  it('keeps the completed CaptureGroup task and cleaning result in the list response', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -109,7 +58,9 @@ describe('annotation task API', () => {
             {
               annotation_task_id: 'a0000000-0000-4000-8000-000000000001',
               project_id: projectId,
-              clip_asset_id: assetId,
+              capture_group_id: '60000000-0000-4000-8000-000000000001',
+              primary_clip_asset_id: assetId,
+              primary_camera_number: 1,
               label_schema_id: labelSchemaId,
               label_schema_digest: labelSchemaDigest,
               assignee_actor_id: 'local-synthetic-uploader',
@@ -117,7 +68,7 @@ describe('annotation task API', () => {
               status: 'COMPLETED',
               can_submit: false,
               can_review: false,
-              can_recheck_post_cleaning: true,
+              can_recheck_capture_group_cleaning: true,
               annotation_revision: {
                 annotation_revision_id: '80000000-0000-4000-8000-000000000001',
                 label_schema_id: labelSchemaId,
@@ -138,7 +89,24 @@ describe('annotation task API', () => {
                   reviewed_by: 'local-synthetic-admin',
                   reviewed_at: '2026-07-26T01:10:00Z',
                 },
-                post_cleaning_result: cleaningResult,
+                capture_group_cleaning: {
+                  capture_group_cleaning_id: '82000000-0000-4000-8000-000000000001',
+                  project_id: projectId,
+                  capture_group_id: '60000000-0000-4000-8000-000000000001',
+                  annotation_revision_id: '80000000-0000-4000-8000-000000000001',
+                  annotation_review_id: '81000000-0000-4000-8000-000000000001',
+                  annotation_review_decision: 'APPROVED',
+                  group_quality_result: 'QUALIFIED',
+                  group_quality_revision: 1,
+                  primary_clip_asset_id: assetId,
+                  primary_camera_number: 1,
+                  participating_views: [],
+                  excluded_views: [],
+                  outcome: 'PASS',
+                  reason_codes: [],
+                  executed_checks: ['REVIEW_APPROVED'],
+                  evaluated_at: '2026-07-26T01:10:00Z',
+                },
               },
               created_at: '2026-07-26T00:00:00Z',
               updated_at: '2026-07-26T01:10:00Z',
@@ -154,7 +122,7 @@ describe('annotation task API', () => {
       items: [
         {
           status: 'COMPLETED',
-          annotation_revision: { post_cleaning_result: cleaningResult },
+          annotation_revision: { capture_group_cleaning: { outcome: 'PASS' } },
         },
       ],
     })
@@ -306,32 +274,6 @@ describe('annotation task API', () => {
         method: 'POST',
         body: JSON.stringify({ decision: 'REJECTED', review_note: '请补充时间段。' }),
       }),
-    )
-  })
-
-  it('rechecks post-cleaning with the current facts without a browser-side idempotency model', async () => {
-    const revisionId = '30000000-0000-4000-8000-000000000004'
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        cleaning_result_id: '82000000-0000-4000-8000-000000000001',
-        cleaning_run_id: '83000000-0000-4000-8000-000000000001',
-        rule_set_key: 'p0-post-annotation',
-        rule_set_version: 'p0-post-annotation.v1',
-        rule_set_digest: 'd'.repeat(64),
-        outcome: 'PASS',
-        reason_codes: [],
-        executed_checks: ['PRIMARY_STEP_NO_OVERLAP'],
-        evaluated_at: '2026-07-27T01:00:00Z',
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(recheckAnnotationPostCleaning(projectId, revisionId)).resolves.toMatchObject({
-      outcome: 'PASS',
-    })
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/post-cleaning-rechecks`,
-      expect.objectContaining({ method: 'POST', cache: 'no-store' }),
     )
   })
 

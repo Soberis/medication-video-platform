@@ -5,7 +5,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,16 +26,12 @@ class QualityReviewService {
 
 	private final AuditEventRecorder auditRecorder;
 
-	private final ApplicationEventPublisher eventPublisher;
-
 	QualityReviewService(ProjectAccessService projectAccessService, ClipAssetReviewQueryService assetQueryService,
-			QualityReviewRepository repository, AuditEventRecorder auditRecorder,
-			ApplicationEventPublisher eventPublisher) {
+			QualityReviewRepository repository, AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.assetQueryService = assetQueryService;
 		this.repository = repository;
 		this.auditRecorder = auditRecorder;
-		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional(readOnly = true)
@@ -85,10 +80,6 @@ class QualityReviewService {
 				Long.toString(saved.getVersion()), AuditOutcome.SUCCEEDED, saved.getReasonCode().name(), requestId,
 				traceId, "PROJECT_MEMBERSHIP_" + projectRole.name(), Map.of("clip_asset_id", clipAssetId.toString(),
 						"decision", saved.getDecision().name(), "reason_code", saved.getReasonCode().name())));
-		if (saved.getDecision() == QualityReviewDecision.QUALIFIED) {
-			this.eventPublisher.publishEvent(new QualityReviewQualifiedEvent(projectId, clipAssetId,
-					saved.getQualityReviewId(), saved.getVersion(), actorId, projectRole, now, requestId, traceId));
-		}
 		return QualityReviewResult.from(saved);
 	}
 

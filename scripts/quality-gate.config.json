@@ -22,7 +22,6 @@
     "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
     "contracts/events/capture-group-quality-qualified-v1.schema.json",
     "contracts/profiles/media-probe-baseline-v1.json",
-    "contracts/profiles/p0-post-annotation-cleaning-v1.json",
     "tools/synthetic-upload-client/index.mjs",
     "tools/synthetic-upload-client/upload-client.mjs",
     "tools/synthetic-upload-client/synthetic-video.mjs",
@@ -131,13 +130,6 @@
       "expectedDigest": "8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765",
       "digestSuccess": "Media probe baseline profile digest matches the server contract",
       "digestFailure": "Media probe baseline profile digest changed unexpectedly"
-    },
-    {
-      "path": "contracts/profiles/p0-post-annotation-cleaning-v1.json",
-      "name": "P0 post-annotation cleaning profile",
-      "expectedDigest": "7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a",
-      "digestSuccess": "P0 post-annotation cleaning profile digest matches the server contract",
-      "digestFailure": "P0 post-annotation cleaning profile digest changed unexpectedly"
     }
   ],
   "brunoRequests": [

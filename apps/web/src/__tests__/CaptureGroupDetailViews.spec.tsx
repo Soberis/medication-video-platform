@@ -48,11 +48,10 @@ describe('CaptureGroup detail views', () => {
       status: 'SUBMITTED' as const,
       can_submit: false,
       can_review: true,
-      can_recheck_post_cleaning: false,
+      can_recheck_capture_group_cleaning: false,
       annotation_revision: {
         ...completedTask.annotation_revision!,
         review: null,
-        post_cleaning_result: null,
       },
     }
     stubGroupDetail(group, {

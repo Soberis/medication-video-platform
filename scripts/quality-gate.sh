@@ -463,7 +463,6 @@ python_projects=()
 for python_search_root in \
     "$PROJECT_ROOT/workers" \
     "$PROJECT_ROOT/plugins" \
-    "$PROJECT_ROOT/tools/minimal-export" \
     "$PROJECT_ROOT/tools/hand-pose-evaluation" \
     "$PROJECT_ROOT/tools/candidate-capacity-review"; do
     [[ -d "$python_search_root" ]] || continue

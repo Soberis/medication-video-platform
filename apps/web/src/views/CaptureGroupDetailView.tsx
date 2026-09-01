@@ -503,7 +503,7 @@ function createMedicationEventWorkflowFacts({
     can_select_primary: Boolean(task?.can_select_primary),
     can_submit: Boolean(task?.can_submit),
     can_review: Boolean(task?.can_review),
-    can_recheck_post_cleaning: Boolean(task?.can_recheck_post_cleaning),
+    can_recheck_capture_group_cleaning: Boolean(task?.can_recheck_capture_group_cleaning),
     can_finalize_receipt: group.receipt_state === 'RECEIVING',
     can_decide_group_quality: groupQualityVisibility === 'loaded' && Boolean(groupQuality),
     annotation_schema_available: annotationSchemaAvailable,

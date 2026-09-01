@@ -22,7 +22,7 @@
 | Media Worker | 是（上传/Media Probe 路径） | `uv run --directory workers/media-worker media-worker` | 不写数据库；使用 Core API 的短期授权和 RabbitMQ；需要 Python 3.12、FFmpeg、FFprobe、批准的软件摘要 |
 | AI Worker | 可选 | `uv run --directory workers/ai-worker ai-worker`；`AI_HAND_POSE_ENABLED=true` 且模型配置完整时启动 | 仅产生 Candidate；需要外部批准模型文件、SHA-256、profile digest 和唯一 token 来源；AI 未启用时不阻断基础 CaptureGroup smoke |
 | Web | 用户 smoke 需要 | `apps/web` 下 `pnpm dev`（`pnpm run web:dev`） | 当前仓库提供前端源代码和 Vite 启动方式，不提供受支持的生产 Web supervisor/镜像 |
-| model/profile files | 按路径需要 | Media/Cleaning profiles 在 `contracts/profiles/`；AI 模型在仓库外 | profile 和模型摘要必须与 Core API、Worker、job 及契约一致；不把模型文件提交到 Git |
+| model/profile files | 按路径需要 | Media Probe profile 在 `contracts/profiles/`；CaptureGroup Cleaning 规则集由 Core API 固定；AI 模型在仓库外 | profile、规则集和模型摘要必须与 Core API、Worker、job 及契约一致；不把模型文件提交到 Git |
 
 V1.27 的 v3 导出目前由 Core API 同步生成；仓库没有当前在用的 Export Worker，也不创建 `DatasetVersion`、`CaptureSync` 或通用 workflow engine。
 
@@ -67,12 +67,12 @@ Node 运行时必须保持在仓库声明的 >=22.12.0 <23 范围内；同时核
 - `DEV_PROJECT_ID` 必须同时匹配 Core API 启动配置、合成工具进程环境和目标项目。`LOCAL_SYNTHETIC_PROJECT_ENABLED=true` 只允许 local synthetic；其他环境关闭并使用显式创建、授权的项目。
 - 非 synthetic 环境必须使用 HTTPS API/Worker 端点、AMQPS 和 `PLATFORM_SESSION_COOKIE_SECURE=true`；Worker 使用 `*_TOKEN_FILE` 或受控短期身份，不把 token 放在参数中。
 - `AI_HAND_POSE_MODEL_PATH` 必须是仓库外的批准模型绝对路径，`AI_HAND_POSE_MODEL_SHA256` 必须等于该文件字节摘要，也必须匹配 job 冻结的 `model_sha256`。当前 AI Worker README 的本地批准示例摘要为 `fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1`；这只是示例配置，不能证明目标机器已安装模型。
-- 当前 profile/软件摘要基线如下。质量门禁对 JSON profile 先去掉 BOM 和结尾换行后计算 SHA-256，因此不能直接把带换行文件的 `Get-FileHash` 结果当作 profile digest：
+- 当前 profile/规则集/软件摘要基线如下。质量门禁对 JSON profile 先去掉 BOM 和结尾换行后计算 SHA-256，因此不能直接把带换行文件的 `Get-FileHash` 结果当作 profile digest：
 
   | 事实 | 值 |
   | --- | --- |
   | `media-probe-baseline-v1.json` normalized digest | `8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765` |
-  | `p0-post-annotation-cleaning-v1.json` normalized digest | `7c1aa3606467412b84964a3455af8695bd73c85cd9b5d08ce079061ed840fa0a` |
+  | CaptureGroup Cleaning ruleset (`capture-group-event-eligibility`, `v1`) digest | `9b0f46e8e6a0a4a2f2d31ef6c2cb2b7d0b7fca0a20a7e6b3f6f4a9d4b7f0a61c` |
   | AI hand-pose profile digest | `3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626` |
   | local Core API approved Media Worker software digest | `sha256:5b038769e2d8e0a100786acf2eb50114466542d45ae1cf24b65c12fd8fb2ec90` |
 
