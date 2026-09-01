@@ -5,7 +5,11 @@ import type {
   CaptureGroupCleaning,
   PostCleaningResult,
 } from '@/api/annotation'
-import type { CaptureGroupQualityReview, CaptureGroupReceiptState } from '@/api/capture-groups'
+import type {
+  CaptureGroupQualityResult,
+  CaptureGroupQualityReview,
+  CaptureGroupReceiptState,
+} from '@/api/capture-groups'
 import type { QualityReviewDecision } from '@/api/quality'
 import type {
   CaptureGroupQualityVisibility,
@@ -125,6 +129,64 @@ export interface MedicationEventWorkflowModel {
   blocker: string | null
   waitingReason: string | null
   focusedViewId: string | null
+}
+
+export type EventReadinessHandDetectionStatus =
+  | 'HAND_DETECTED'
+  | 'NO_HAND_DETECTED'
+  | 'UNKNOWN'
+  | 'FAILED'
+
+export type EventReadinessMediaStatus =
+  | 'MISSING'
+  | 'BOUND'
+  | 'UPLOADED'
+  | 'INGESTING'
+  | 'INGESTED'
+  | 'INGEST_FAILED'
+  | 'UNAVAILABLE'
+
+export interface EventReadinessViewFact {
+  view_id: string | null
+  camera_number: number
+  present: boolean
+  media_status: EventReadinessMediaStatus
+  hand_detection: {
+    status: EventReadinessHandDetectionStatus
+    confidence?: number | null
+  }
+}
+
+export interface EventReadinessFacts {
+  views: readonly EventReadinessViewFact[]
+  group_quality: CaptureGroupQualityResult | null
+  task_status: AnnotationTask['status'] | null
+  primary_view_id: string | null
+  annotation_revision_id: string | null
+  annotation_schema_available: boolean
+  can_submit: boolean
+  can_review: boolean
+}
+
+export interface EventReadinessHandDetectionByView {
+  view_id: string | null
+  camera_number: number
+  status: EventReadinessHandDetectionStatus
+  confidence: number | null
+}
+
+export interface EventReadinessModel {
+  mediaReady: boolean
+  handDetection: {
+    /** Positive evidence wins; per-view states remain available in byView. */
+    status: EventReadinessHandDetectionStatus
+    /** Only a single-view confidence is exposed as an event summary. */
+    confidence: number | null
+    byView: readonly EventReadinessHandDetectionByView[]
+  }
+  annotationReady: boolean
+  reviewReady: boolean
+  blockers: string[]
 }
 
 interface WorkflowBuildOptions {
@@ -429,4 +491,103 @@ export function deriveMedicationEventWorkflow(
   if (groupQualityWorkflow) return groupQualityWorkflow
 
   return deriveAnnotationWorkflow(facts)
+}
+
+function normalizedConfidence(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : null
+}
+
+function summarizeHandDetection(
+  views: readonly EventReadinessViewFact[],
+): EventReadinessModel['handDetection'] {
+  const byView = views.map((view) => ({
+    view_id: view.view_id,
+    camera_number: view.camera_number,
+    status: view.hand_detection.status,
+    confidence:
+      view.hand_detection.status === 'HAND_DETECTED'
+        ? normalizedConfidence(view.hand_detection.confidence)
+        : null,
+  }))
+  const presentStatuses = views
+    .filter((view) => view.present)
+    .map((view) => view.hand_detection.status)
+  const status = presentStatuses.includes('HAND_DETECTED')
+    ? 'HAND_DETECTED'
+    : presentStatuses.length > 0 && presentStatuses.every((value) => value === 'NO_HAND_DETECTED')
+      ? 'NO_HAND_DETECTED'
+      : presentStatuses.length > 0 && presentStatuses.every((value) => value === 'FAILED')
+        ? 'FAILED'
+        : 'UNKNOWN'
+  const presentDetections = byView.filter(
+    (view) => view.status === 'HAND_DETECTED' && view.confidence !== null,
+  )
+
+  return {
+    status,
+    confidence: presentStatuses.length === 1 ? (presentDetections[0]?.confidence ?? null) : null,
+    byView,
+  }
+}
+
+/**
+ * Derives preparation facts without creating a second workflow or business state machine.
+ * AI status is informational only: missing, failed, and no-hand evidence never becomes a
+ * blocker by itself. Formal readiness still depends on the server-authorized task facts.
+ */
+export function deriveEventReadiness(facts: EventReadinessFacts): EventReadinessModel {
+  const mediaReady =
+    facts.views.length > 0 &&
+    facts.views.every((view) => view.present && view.media_status === 'INGESTED')
+  const groupQualityAdmitting =
+    facts.group_quality === 'QUALIFIED' || facts.group_quality === 'QUALIFIED_WITH_EXCLUSIONS'
+  const primaryView = facts.views.find(
+    (view) => view.present && view.view_id !== null && view.view_id === facts.primary_view_id,
+  )
+  const annotationReady =
+    groupQualityAdmitting &&
+    facts.task_status === 'ASSIGNED' &&
+    primaryView?.media_status === 'INGESTED' &&
+    facts.annotation_schema_available &&
+    facts.can_submit
+  const reviewReady =
+    groupQualityAdmitting &&
+    facts.task_status === 'SUBMITTED' &&
+    facts.annotation_revision_id !== null &&
+    facts.can_review
+  const blockers: string[] = []
+
+  if (!facts.views.some((view) => view.present)) {
+    blockers.push('没有已收到的视图。')
+  }
+  if (facts.task_status === null && !groupQualityAdmitting) {
+    blockers.push('事件质量尚未达到标注准入。')
+  }
+  if (facts.task_status === 'ASSIGNED') {
+    if (!facts.primary_view_id) {
+      blockers.push('尚未选择主视图。')
+    } else if (!primaryView) {
+      blockers.push('主视图不在当前事件视图集合中。')
+    } else if (primaryView.media_status !== 'INGESTED') {
+      blockers.push('主视图媒体尚未就绪。')
+    }
+    if (!facts.annotation_schema_available) {
+      blockers.push('标注规范暂不可用。')
+    } else if (!facts.can_submit && primaryView?.media_status === 'INGESTED') {
+      blockers.push('当前任务暂不可提交。')
+    }
+  }
+  if (facts.task_status === 'SUBMITTED' && facts.annotation_revision_id === null) {
+    blockers.push('已提交任务缺少正式修订事实。')
+  }
+
+  return {
+    mediaReady,
+    handDetection: summarizeHandDetection(facts.views),
+    annotationReady,
+    reviewReady,
+    blockers,
+  }
 }
