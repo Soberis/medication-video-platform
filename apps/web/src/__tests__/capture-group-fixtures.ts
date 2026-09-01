@@ -192,8 +192,11 @@ export function stubGroupDetail(
     receiptFinalizeResponse?: CaptureGroup
     receiptFinalizeError?: { status: number; errorCode?: string }
     receiptFinalizeGate?: Promise<void>
-    candidateStatus: 'FAILED' | 'NO_HAND_DETECTED'
-    candidateStatusByCamera?: Record<number, 'FAILED' | 'NO_HAND_DETECTED'>
+    candidateStatus: 'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN'
+    candidateStatusByCamera?: Record<
+      number,
+      'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN'
+    >
     viewQualityByCamera?: Record<number, QualityReview>
     viewQualityAfterSaveByCamera?: Record<number, QualityReview>
     reviewResponse?: Partial<AnnotationReview>
@@ -906,8 +909,15 @@ function clipAsset(group: CaptureGroup, clipAssetId: string) {
 function handPoseResponse(
   group: CaptureGroup,
   clipAssetId: string,
-  status: 'FAILED' | 'NO_HAND_DETECTED',
+  status: 'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN',
 ) {
+  const jobStatus = status === 'HAND_DETECTED' || status === 'UNKNOWN' ? 'SUCCEEDED' : status
+  const handResult =
+    status === 'HAND_DETECTED'
+      ? 'HAND_DETECTED'
+      : status === 'NO_HAND_DETECTED'
+        ? 'NO_HAND_DETECTED'
+        : 'UNKNOWN'
   return {
     job: {
       ai_job_id: '4b000000-0000-4000-8000-000000000001',
@@ -920,17 +930,17 @@ function handPoseResponse(
       input_size_bytes: 1024,
       sampling_fps: 10,
       profile_sha256: 'f'.repeat(64),
-      status,
-      hand_result: status === 'NO_HAND_DETECTED' ? 'NO_HAND_DETECTED' : 'UNKNOWN',
+      status: jobStatus,
+      hand_result: handResult,
       run_summary: {
-        analysis_complete: status === 'NO_HAND_DETECTED',
-        hand_result: status === 'NO_HAND_DETECTED' ? 'NO_HAND_DETECTED' : 'UNKNOWN',
+        analysis_complete: status !== 'FAILED',
+        hand_result: handResult,
         total_video_frames: 10,
         inference_frame_count: 10,
-        frames_with_hand: 0,
-        frames_without_hand: 10,
-        left_hand_detection_count: 0,
-        right_hand_detection_count: 0,
+        frames_with_hand: handResult === 'HAND_DETECTED' ? 10 : 0,
+        frames_without_hand: handResult === 'HAND_DETECTED' ? 0 : 10,
+        left_hand_detection_count: handResult === 'HAND_DETECTED' ? 5 : 0,
+        right_hand_detection_count: handResult === 'HAND_DETECTED' ? 5 : 0,
         invalid_landmark_count: 0,
         processing_duration_ms: 10,
         started_at: group.created_at,

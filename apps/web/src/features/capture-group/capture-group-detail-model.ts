@@ -85,6 +85,9 @@ export function candidateDescription(
   if (response.job.hand_result === 'NO_HAND_DETECTED') {
     return '未检测到手部；这是检测事实，不阻止人工流程。检测结果仅供人工参考，不作为正式标注或质量结论。'
   }
+  if (response.job.hand_result === 'UNKNOWN') {
+    return '检测结果未知；这是 AI 证据状态，不阻止人工流程。请人工判断视频是否可用。'
+  }
   return `${response.candidates.length} 组手部关键点；检测结果仅供人工参考，不作为正式标注或质量结论。`
 }
 
@@ -94,6 +97,7 @@ export function candidateTone(
 ): StatusIndicatorTone {
   if (state === 'error' || response?.job.status === 'FAILED') return 'warning'
   if (response?.job.hand_result === 'NO_HAND_DETECTED') return 'neutral'
+  if (response?.job.hand_result === 'UNKNOWN') return 'neutral'
   if (state === 'success' && response?.job.status === 'SUCCEEDED') return 'success'
   return 'information'
 }

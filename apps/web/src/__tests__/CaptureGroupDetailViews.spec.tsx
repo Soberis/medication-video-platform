@@ -167,6 +167,50 @@ describe('CaptureGroup detail views', () => {
     )
   })
 
+  it('labels a successful hand result as AI evidence without making it a quality decision', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByText('检测到手部')).toBeInTheDocument()
+    expect(
+      screen.getByText('AI 证据仅供人工参考，不自动决定机位质量或事件准入。'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps a successful unknown hand result distinct from hand detection', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'UNKNOWN',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByText('检测结果未知')).toBeInTheDocument()
+    expect(screen.getByText(/检测结果未知；这是 AI 证据状态/)).toBeInTheDocument()
+  })
+
   it('keeps a completed workflow compact and leaves full event identifiers in progressive details', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

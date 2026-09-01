@@ -5,11 +5,7 @@ import type {
   CaptureGroupCleaning,
   PostCleaningResult,
 } from '@/api/annotation'
-import type {
-  CaptureGroupQualityResult,
-  CaptureGroupQualityReview,
-  CaptureGroupReceiptState,
-} from '@/api/capture-groups'
+import type { CaptureGroupQualityReview, CaptureGroupReceiptState } from '@/api/capture-groups'
 import type { QualityReviewDecision } from '@/api/quality'
 import type {
   CaptureGroupQualityVisibility,
@@ -152,7 +148,7 @@ export interface EventReadinessViewFact {
   present: boolean
   media_status: EventReadinessMediaStatus
   /** A human quality decision, when one has already been recorded. */
-  quality_decision?: 'UNREVIEWED' | 'QUALIFIED' | 'NEEDS_REVIEW' | 'REJECTED'
+  quality_decision?: QualityReviewDecision
   hand_detection: {
     status: EventReadinessHandDetectionStatus
     confidence?: number | null
@@ -161,18 +157,6 @@ export interface EventReadinessViewFact {
 
 export interface EventReadinessFacts {
   views: readonly EventReadinessViewFact[]
-  /**
-   * Workflow facts are accepted for source compatibility but deliberately do
-   * not participate in this preparation-only projection. Use
-   * deriveMedicationEventWorkflow() for current actions and stage decisions.
-   */
-  group_quality?: CaptureGroupQualityResult | null
-  task_status?: AnnotationTask['status'] | null
-  primary_view_id?: string | null
-  annotation_revision_id?: string | null
-  annotation_schema_available?: boolean
-  can_submit?: boolean
-  can_review?: boolean
 }
 
 export interface EventReadinessViewSummary {
@@ -181,16 +165,28 @@ export interface EventReadinessViewSummary {
 }
 
 export interface EventReadinessModel {
+  /** True only when every declared view has ingested media; usableViews is the partial view set. */
   mediaReady: boolean
   handDetection: {
+    /** A reliable event summary only exists for one present view; multi-view is UNKNOWN. */
     status: EventReadinessHandDetectionStatus
   }
   /** Views currently available to the human workflow, not AI-approved views. */
   usableViews: readonly EventReadinessViewSummary[]
   /** Views explicitly excluded by a human quality decision. */
   excludedViews: readonly EventReadinessViewSummary[]
+  /** True when at least one present view still needs a human quality decision. */
   manualConfirmationRequired: boolean
-  blockers: readonly string[]
+  /** View-scoped facts; these do not grant or deny group-level business eligibility. */
+  blockers: readonly EventReadinessBlocker[]
+}
+
+export type EventReadinessBlockerReason = 'NO_VIEWS' | 'VIEW_NOT_RECEIVED' | 'MEDIA_NOT_READY'
+
+export interface EventReadinessBlocker {
+  view_id: string | null
+  camera_number: number | null
+  reason: EventReadinessBlockerReason
 }
 
 interface WorkflowBuildOptions {
@@ -500,14 +496,10 @@ export function deriveMedicationEventWorkflow(
 function summarizeHandDetection(
   views: readonly EventReadinessViewFact[],
 ): EventReadinessHandDetectionStatus {
-  const presentStatuses = views
-    .filter((view) => view.present)
-    .map((view) => view.hand_detection.status)
-  if (presentStatuses.includes('HAND_DETECTED')) return 'HAND_DETECTED'
-  if (presentStatuses.length === 0) return 'UNKNOWN'
-  if (presentStatuses.every((value) => value === 'NO_HAND_DETECTED')) return 'NO_HAND_DETECTED'
-  if (presentStatuses.every((value) => value === 'FAILED')) return 'FAILED'
-  return 'UNKNOWN'
+  const presentViews = views.filter((view) => view.present)
+  return views.length === 1 && presentViews.length === 1
+    ? (presentViews[0]?.hand_detection.status ?? 'UNKNOWN')
+    : 'UNKNOWN'
 }
 
 /**
@@ -526,16 +518,24 @@ export function deriveEventReadiness(facts: EventReadinessFacts): EventReadiness
     .filter((view) => view.quality_decision !== 'REJECTED')
     .map(toViewSummary)
   const excludedViews = explicitlyExcludedViews.map(toViewSummary)
-  const blockers: string[] = []
+  const blockers: EventReadinessBlocker[] = []
 
   if (facts.views.length === 0) {
-    blockers.push('事件没有可用视图。')
+    blockers.push({ view_id: null, camera_number: null, reason: 'NO_VIEWS' })
   }
   for (const view of facts.views) {
     if (!view.present) {
-      blockers.push(`机位 ${view.camera_number} 尚未收到媒体。`)
+      blockers.push({
+        view_id: view.view_id,
+        camera_number: view.camera_number,
+        reason: 'VIEW_NOT_RECEIVED',
+      })
     } else if (view.media_status !== 'INGESTED') {
-      blockers.push(`机位 ${view.camera_number} 的媒体尚未就绪。`)
+      blockers.push({
+        view_id: view.view_id,
+        camera_number: view.camera_number,
+        reason: 'MEDIA_NOT_READY',
+      })
     }
   }
 
@@ -545,10 +545,7 @@ export function deriveEventReadiness(facts: EventReadinessFacts): EventReadiness
     usableViews,
     excludedViews,
     manualConfirmationRequired: presentViews.some(
-      (view) =>
-        view.hand_detection.status === 'NO_HAND_DETECTED' &&
-        view.quality_decision !== 'QUALIFIED' &&
-        view.quality_decision !== 'REJECTED',
+      (view) => view.quality_decision !== 'QUALIFIED' && view.quality_decision !== 'REJECTED',
     ),
     blockers,
   }

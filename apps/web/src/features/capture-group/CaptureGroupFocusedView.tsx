@@ -171,12 +171,19 @@ export function CaptureGroupFocusedView({
                       ? '未检测到手部'
                       : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
                         ? '检测失败'
-                        : candidateResponse?.job.status === 'SUCCEEDED'
-                          ? '检测完成'
-                          : candidateState === 'unavailable'
-                            ? '尚无检测结果'
-                            : '读取中'}
+                        : candidateResponse?.job.status === 'SUCCEEDED' &&
+                            candidateResponse.job.hand_result === 'HAND_DETECTED'
+                          ? '检测到手部'
+                          : candidateResponse?.job.status === 'SUCCEEDED' &&
+                              candidateResponse.job.hand_result === 'UNKNOWN'
+                            ? '检测结果未知'
+                            : candidateResponse?.job.status === 'SUCCEEDED'
+                              ? '检测完成'
+                              : candidateState === 'unavailable'
+                                ? '尚无检测结果'
+                                : '读取中'}
                   </StatusIndicator>
+                  <p>AI 证据仅供人工参考，不自动决定机位质量或事件准入。</p>
                   <p>{currentCandidateDescription}</p>
                   {candidateResponse?.job.run_summary ? (
                     <Descriptions

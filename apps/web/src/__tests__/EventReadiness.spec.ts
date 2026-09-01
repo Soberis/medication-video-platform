@@ -12,6 +12,7 @@ function view(overrides: Partial<EventReadinessViewFact> = {}): EventReadinessVi
     camera_number: 1,
     present: true,
     media_status: 'INGESTED',
+    quality_decision: 'QUALIFIED',
     hand_detection: { status: 'HAND_DETECTED', confidence: 0.93 },
     ...overrides,
   }
@@ -43,7 +44,9 @@ describe('event readiness presentation', () => {
   it('keeps NO_HAND_DETECTED usable but requires human confirmation', () => {
     const readiness = deriveEventReadiness(
       facts({
-        views: [view({ hand_detection: { status: 'NO_HAND_DETECTED' } })],
+        views: [
+          view({ hand_detection: { status: 'NO_HAND_DETECTED' }, quality_decision: 'UNREVIEWED' }),
+        ],
       }),
     )
 
@@ -88,6 +91,7 @@ describe('event readiness presentation', () => {
             view_id: 'clip-3',
             camera_number: 3,
             hand_detection: { status: 'FAILED' },
+            quality_decision: 'QUALIFIED',
           }),
         ],
       }),
@@ -95,7 +99,7 @@ describe('event readiness presentation', () => {
 
     expect(readiness.mediaReady).toBe(true)
     expect(readiness.handDetection).toEqual({
-      status: 'HAND_DETECTED',
+      status: 'UNKNOWN',
     })
     expect(readiness.usableViews).toEqual([
       { view_id: 'clip-1', camera_number: 1 },
@@ -109,7 +113,6 @@ describe('event readiness presentation', () => {
   it('does not add readiness blockers for a completed event', () => {
     const readiness = deriveEventReadiness(
       facts({
-        task_status: 'COMPLETED',
         views: [view({ quality_decision: 'QUALIFIED' })],
       }),
     )
@@ -118,5 +121,27 @@ describe('event readiness presentation', () => {
     expect(readiness.excludedViews).toEqual([])
     expect(readiness.manualConfirmationRequired).toBe(false)
     expect(readiness.blockers).toEqual([])
+  })
+
+  it('keeps a missing or unready view local to that view', () => {
+    const readiness = deriveEventReadiness(
+      facts({
+        views: [
+          view(),
+          view({
+            view_id: 'clip-2',
+            camera_number: 2,
+            present: false,
+            media_status: 'MISSING',
+          }),
+        ],
+      }),
+    )
+
+    expect(readiness.mediaReady).toBe(false)
+    expect(readiness.usableViews).toEqual([{ view_id: 'clip-1', camera_number: 1 }])
+    expect(readiness.blockers).toEqual([
+      { view_id: 'clip-2', camera_number: 2, reason: 'VIEW_NOT_RECEIVED' },
+    ])
   })
 })
