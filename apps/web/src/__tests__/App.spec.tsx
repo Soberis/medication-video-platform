@@ -162,47 +162,6 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('keeps the ordinary project workflow in the primary navigation', () => {
-    const projectId = '30000000-0000-4000-8000-000000000001'
-    renderRouter(
-      [
-        {
-          path: `/projects/:projectId/videos`,
-          element: <AppShell />,
-          children: [{ index: true, element: <div>视频管理页面</div> }],
-        },
-      ],
-      [`/projects/${projectId}/videos`],
-      { username: 'project-member', role: 'MEMBER' },
-    )
-
-    const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
-    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
-    expect(within(navigation).queryByRole('link', { name: '多相机查看' })).not.toBeInTheDocument()
-    expect(within(navigation).queryByRole('link', { name: '文件夹' })).not.toBeInTheDocument()
-    expect(
-      within(navigation).queryByRole('link', { name: '数据集版本（后续）' }),
-    ).not.toBeInTheDocument()
-    expect(
-      within(navigation).queryByRole('link', { name: '视频资产（高级）' }),
-    ).not.toBeInTheDocument()
-    expect(within(navigation).queryByRole('link', { name: '采集事件日志' })).not.toBeInTheDocument()
-    expect(within(navigation).queryByRole('link', { name: '上传排障' })).not.toBeInTheDocument()
-    expect(
-      within(navigation).queryByRole('link', { name: '本地上传（辅助）' }),
-    ).not.toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
-      'href',
-      `/projects/${projectId}/capture-groups`,
-    )
-    expect(within(navigation).queryByRole('link', { name: '配药事件' })).not.toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Ego|第一视角|wearable camera/i)
-  })
-
   it('treats medication events as the canonical video-management workspace', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
@@ -230,18 +189,23 @@ describe('App', () => {
     expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
   })
 
-  it('keeps a video detail in the video-management navigation context', () => {
+  it('keeps a CaptureGroup detail in the video-management navigation context', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
-    const assetId = '50000000-0000-4000-8000-000000000001'
+    const captureGroupId = '60000000-0000-4000-8000-000000000001'
     renderRouter(
       [
         {
           path: '/',
           element: <AppShell />,
-          children: [{ path: 'projects/:projectId/assets/:id', element: <div>视频详情页面</div> }],
+          children: [
+            {
+              path: 'projects/:projectId/capture-groups/:captureGroupId',
+              element: <div>配药事件详情页面</div>,
+            },
+          ],
         },
       ],
-      [`/projects/${projectId}/assets/${assetId}`],
+      [`/projects/${projectId}/capture-groups/${captureGroupId}`],
       { username: 'project-member', role: 'MEMBER' },
     )
 
@@ -255,9 +219,9 @@ describe('App', () => {
     )
   })
 
-  it('keeps the nested annotation workbench in the annotation navigation context', () => {
+  it('keeps CaptureGroup annotation focus in the video-management navigation context', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
-    const taskId = '60000000-0000-4000-8000-000000000001'
+    const captureGroupId = '60000000-0000-4000-8000-000000000001'
     renderRouter(
       [
         {
@@ -265,23 +229,23 @@ describe('App', () => {
           element: <AppShell />,
           children: [
             {
-              path: 'projects/:projectId/annotation-tasks/:taskId',
+              path: 'projects/:projectId/capture-groups/:captureGroupId',
               element: <div>配药动作标注工作台</div>,
             },
           ],
         },
       ],
-      [`/projects/${projectId}/annotation-tasks/${taskId}`],
+      [`/projects/${projectId}/capture-groups/${captureGroupId}?focus=annotation`],
       { username: 'project-member', role: 'MEMBER' },
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).not.toHaveAttribute(
+      'aria-current',
+    )
+    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
       'aria-current',
       'page',
-    )
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).not.toHaveAttribute(
-      'aria-current',
     )
     expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).not.toHaveAttribute(
       'data-active',

@@ -71,7 +71,7 @@ export function CaptureGroupReviewCleaningPanel({
     ? review.candidate_evidence
     : []
   const canReview = Boolean(task?.can_review && revision)
-  const cleaning = revision?.capture_group_cleaning ?? revision?.post_cleaning_result ?? null
+  const cleaning = revision?.capture_group_cleaning ?? null
   const primaryClipAssetId = revision?.primary_clip_asset_id ?? task?.primary_clip_asset_id ?? null
   const primaryCameraNumber = revision?.primary_camera_number ?? task?.primary_camera_number ?? null
   const hasCompletedReviewAndCleaning =

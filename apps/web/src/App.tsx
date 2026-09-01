@@ -40,12 +40,9 @@ export default function AppShell() {
   )
   const isVideoManagementContext =
     Boolean(projectId) &&
-    [
-      paths.videos(projectId),
-      '/projects/:projectId/assets/:id',
-      paths.captureGroups(projectId),
-      '/projects/:projectId/capture-groups/:captureGroupId',
-    ].some((path) => matchPath({ path, end: true }, location.pathname) !== null)
+    [paths.captureGroups(projectId), '/projects/:projectId/capture-groups/:captureGroupId'].some(
+      (path) => matchPath({ path, end: true }, location.pathname) !== null,
+    )
 
   async function handleLogout() {
     try {

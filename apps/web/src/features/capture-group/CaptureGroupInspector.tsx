@@ -59,7 +59,7 @@ export function CaptureGroupInspector({
   const selectedSync = selectedStream ? syncSafety(selectedStream) : null
   const revision = task?.annotation_revision ?? null
   const review = revision?.review ?? null
-  const cleaning = revision?.capture_group_cleaning ?? revision?.post_cleaning_result ?? null
+  const cleaning = revision?.capture_group_cleaning ?? null
   const taskFocus =
     groupQuality &&
     groupQuality.result !== 'QUALIFIED' &&
@@ -353,7 +353,7 @@ export function CaptureGroupInspector({
             本页只展示已授权的服务端事实。删除、隐私放行、数据集冻结和导出等高风险操作不在此处隐式执行。
           </p>
           <p className="form-hint">
-            事件质量历史采用追加记录；被拒机位和旧版单视频任务不会因当前工作台展示而删除或改写。
+            事件质量历史采用追加记录；当前页面不会因工作台展示而删除或改写历史事实。
           </p>
         </InspectorSection>
       </ProgressiveDetail>

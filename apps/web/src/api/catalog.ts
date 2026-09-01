@@ -155,58 +155,6 @@ export interface HandPoseCandidateResponse {
   candidates: HandPoseCandidate[]
 }
 
-export type VideoSummaryMediaStatus = ClipAssetStatus
-export type VideoSummaryHandStatus = 'NOT_REQUESTED' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
-export type VideoSummaryHandResult = 'UNKNOWN' | 'HAND_DETECTED' | 'NO_HAND_DETECTED'
-export type VideoSummarySource = 'HOSPITAL_REMOTE' | 'PLATFORM_LOCAL'
-export type VideoSummaryQualityDecision = 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
-export type VideoSummaryAnnotationStatus = 'NOT_STARTED' | 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
-export type VideoSummaryCleaningStatus = 'NOT_STARTED' | 'PASS' | 'WARNING' | 'REJECT'
-
-export interface VideoSummary {
-  video_id: string
-  display_name: string
-  source_name: string
-  camera_number: number | null
-  captured_at: string | null
-  received_at: string
-  media_status: VideoSummaryMediaStatus
-  quality_decision: VideoSummaryQualityDecision
-  hand_status: VideoSummaryHandStatus
-  hand_result: VideoSummaryHandResult
-  hand_retryable: boolean
-  annotation_status: VideoSummaryAnnotationStatus
-  cleaning_status: VideoSummaryCleaningStatus
-  retention_status: string
-}
-
-export interface DataManagementSummary {
-  total_videos: number
-  total_duration: number
-  storage_bytes: number
-  counts_by_source: Record<string, number>
-  counts_by_camera: Record<string, number>
-  counts_by_status: Record<string, number>
-  pending_annotation: number
-  pending_review: number
-  pending_cleaning: number
-  usable_count: number
-}
-
-export interface VideoSummaryFilters {
-  source?: VideoSummarySource
-  mediaStatus?: VideoSummaryMediaStatus
-  handStatus?: VideoSummaryHandStatus
-  handResult?: VideoSummaryHandResult
-  annotationStatus?: VideoSummaryAnnotationStatus
-  cleaningStatus?: VideoSummaryCleaningStatus
-  cameraNumber?: number
-  capturedFrom?: string
-  capturedBefore?: string
-  receivedFrom?: string
-  receivedBefore?: string
-}
-
 export interface MediaJobDeliveryRecovery {
   recovery_id: string
   media_job_id: string
@@ -306,55 +254,6 @@ export class CatalogApiError extends Error {
     this.requestId = requestId
     this.status = status
   }
-}
-
-export function listVideoSummaries(
-  projectId: string,
-  filters: VideoSummaryFilters,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '50' })
-  add(query, 'source', filters.source)
-  add(query, 'media_status', filters.mediaStatus)
-  add(query, 'hand_status', filters.handStatus)
-  add(query, 'hand_result', filters.handResult)
-  add(query, 'annotation_status', filters.annotationStatus)
-  add(query, 'cleaning_status', filters.cleaningStatus)
-  add(query, 'camera_number', filters.cameraNumber?.toString())
-  add(query, 'captured_from', filters.capturedFrom)
-  add(query, 'captured_before', filters.capturedBefore)
-  add(query, 'received_from', filters.receivedFrom)
-  add(query, 'received_before', filters.receivedBefore)
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<VideoSummary>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/videos?${query.toString()}`,
-    signal,
-  )
-}
-
-export function getDataManagementSummary(
-  projectId: string,
-  filters: VideoSummaryFilters,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams()
-  add(query, 'source', filters.source)
-  add(query, 'media_status', filters.mediaStatus)
-  add(query, 'hand_status', filters.handStatus)
-  add(query, 'hand_result', filters.handResult)
-  add(query, 'annotation_status', filters.annotationStatus)
-  add(query, 'cleaning_status', filters.cleaningStatus)
-  add(query, 'camera_number', filters.cameraNumber?.toString())
-  add(query, 'captured_from', filters.capturedFrom)
-  add(query, 'captured_before', filters.capturedBefore)
-  add(query, 'received_from', filters.receivedFrom)
-  add(query, 'received_before', filters.receivedBefore)
-  const suffix = query.size === 0 ? '' : `?${query.toString()}`
-  return readJson<DataManagementSummary>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/video-data/summary${suffix}`,
-    signal,
-  )
 }
 
 export function getClipAsset(projectId: string, clipAssetId: string, signal?: AbortSignal) {

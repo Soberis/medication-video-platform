@@ -32,16 +32,13 @@ const completedRevision = {
     reviewed_by: 'local-synthetic-admin',
     reviewed_at: '2026-07-26T01:10:00Z',
   },
-  post_cleaning_result: {
-    cleaning_result_id: '82000000-0000-4000-8000-000000000001',
-    cleaning_run_id: '83000000-0000-4000-8000-000000000001',
-    rule_set_key: 'p0-post-annotation',
-    rule_set_version: 'p0-post-annotation.v1',
-    rule_set_digest: 'd'.repeat(64),
+  capture_group_cleaning: {
+    capture_group_cleaning_id: '82000000-0000-4000-8000-000000000001',
     outcome: 'PASS',
     reason_codes: [],
-    executed_checks: ['PRIMARY_STEP_LABEL_ALLOWED', 'PRIMARY_STEP_NO_OVERLAP'],
     evaluated_at: '2026-07-26T01:10:00Z',
+    participating_views: [],
+    excluded_views: [],
   },
 }
 const labelSchema = {
@@ -68,7 +65,10 @@ const labelSchema = {
 const assignedTask = {
   annotation_task_id: taskId,
   project_id: projectId,
-  clip_asset_id: assetId,
+  clip_asset_id: null,
+  capture_group_id: captureGroupId,
+  primary_clip_asset_id: assetId,
+  primary_camera_number: 1,
   label_schema_id: labelSchemaId,
   label_schema_digest: labelSchemaDigest,
   assignee_actor_id: 'local-synthetic-uploader',
@@ -88,8 +88,6 @@ const assignedGroupTask = {
   ...assignedTask,
   annotation_task_id: 'a0000000-0000-4000-8000-000000000010',
   clip_asset_id: null,
-  capture_group_id: captureGroupId,
-  primary_clip_asset_id: assetId,
   can_select_primary: true,
 }
 
@@ -116,18 +114,17 @@ describe('annotation task list view', () => {
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+      screen.getByRole('button', { name: /进入配药事件 .*进入配药动作标注/ }),
     ).toBeInTheDocument()
     const projectTools = screen.getByText('更多项目操作').closest('details')
     if (!projectTools) throw new Error('Project tools disclosure was not mounted.')
     expect(projectTools).not.toHaveAttribute('open')
     await user.click(within(projectTools).getByText('更多项目操作'))
     expect(projectTools).toHaveAttribute('open')
-    expect(screen.getByRole('button', { name: '导出训练数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '预览 training-data.v3' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /视频 50000000.*0001/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /配药事件 60000000.*0001/ })).toHaveAttribute(
       'href',
-      `/projects/${projectId}/assets/${assetId}`,
+      `/projects/${projectId}/capture-groups/${captureGroupId}`,
     )
     expect(screen.getByRole('list', { name: '配药动作标注任务列表' })).toHaveClass(
       'annotation-task-list-surface',
@@ -150,18 +147,19 @@ describe('annotation task list view', () => {
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
   })
 
-  it('makes the workbench the only primary action for an assigned task', async () => {
+  it('routes the only primary action for an assigned task into the CaptureGroup workbench', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     const { router } = renderView()
     const user = userEvent.setup()
     const action = await screen.findByRole('button', {
-      name: /进入视频 .*配药动作标注工作台/,
+      name: /进入配药事件 .*进入配药动作标注/,
     })
     expect(action).toBeInTheDocument()
     await user.click(action)
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
+    expect(router.state.location.search).toBe('?focus=annotation')
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining('/revisions'),
       expect.objectContaining({ method: 'POST' }),
@@ -211,7 +209,7 @@ describe('annotation task list view', () => {
       status: 'SUBMITTED',
       can_submit: false,
       can_review: true,
-      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+      annotation_revision: { ...completedRevision, review: null, capture_group_cleaning: null },
     }
     stubTasks([reviewableGroupTask], labelSchema)
     const { router } = renderView()
@@ -237,7 +235,7 @@ describe('annotation task list view', () => {
           decision: 'REJECTED',
           review_note: '请补充动作时间段。',
         },
-        post_cleaning_result: null,
+        capture_group_cleaning: null,
       },
     }
     stubTasks([returnedGroupTask], labelSchema)
@@ -284,7 +282,6 @@ describe('annotation task list view', () => {
       annotation_revision: {
         ...completedRevision,
         capture_group_id: captureGroupId,
-        post_cleaning_result: null,
         capture_group_cleaning: {
           capture_group_cleaning_id: '82000000-0000-4000-8000-000000000016',
           outcome: 'PASS',
@@ -321,10 +318,10 @@ describe('annotation task list view', () => {
 
   it('shows the completed state and each post-cleaning outcome without adding another page', async () => {
     const outcomes = [
-      { outcome: 'PASS', expected: '清洗 · 当前规则检查通过' },
-      { outcome: 'WARNING', expected: '清洗 · 需处理' },
-      { outcome: 'REJECT', expected: '清洗 · 清洗未通过' },
-      { outcome: null, expected: '清洗 · 待清洗' },
+      { outcome: 'PASS', expected: '训练资格检查 · 当前规则检查通过' },
+      { outcome: 'WARNING', expected: '训练资格检查 · 需处理' },
+      { outcome: 'REJECT', expected: '训练资格检查 · 清洗未通过' },
+      { outcome: null, expected: '训练资格检查 · 待清洗' },
     ] as const
     const tasks = outcomes.map(({ outcome }, index) => ({
       ...assignedTask,
@@ -335,11 +332,11 @@ describe('annotation task list view', () => {
       annotation_revision: {
         ...completedRevision,
         annotation_revision_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
-        post_cleaning_result:
+        capture_group_cleaning:
           outcome === null
             ? null
             : {
-                ...completedRevision.post_cleaning_result,
+                ...completedRevision.capture_group_cleaning,
                 outcome,
                 reason_codes:
                   outcome === 'WARNING'
@@ -353,7 +350,7 @@ describe('annotation task list view', () => {
     stubTasks(tasks, labelSchema)
     const user = userEvent.setup()
     renderView()
-    expect(await screen.findByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
+    expect(await screen.findByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
     const completedRow = screen.getAllByRole('article')[0]!
     const annotationDetails = within(completedRow).getByText('查看详情')
@@ -368,13 +365,17 @@ describe('annotation task list view', () => {
     expect(within(completedRow).getByText('复核人')).toBeInTheDocument()
     expect(await screen.findByText(/当前数据暂不可用于训练/)).toBeInTheDocument()
     expect(screen.getByText(/缺少已确认的视频时长/)).toBeInTheDocument()
-    expect(screen.getByText(/其他清洗原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
+    expect(screen.getByText(/其他训练资格检查原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
     await user.click(evidenceDetails[2]!)
     expect(
-      await screen.findByText(/当前数据未通过清洗，暂不可用于训练；视频资产未被删除/),
+      await screen.findByText(/当前数据未通过训练资格检查，暂不可用于训练；视频资产未被删除/),
     ).toBeInTheDocument()
     expect(screen.getByText(/主流程时间段存在重叠/)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /进入视频 .*配药动作标注工作台/ })).toHaveLength(2)
+    expect(
+      screen.getAllByRole('button', {
+        name: /进入配药事件 .*查看复核 \/ 训练资格检查结果/,
+      }),
+    ).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
@@ -389,8 +390,8 @@ describe('annotation task list view', () => {
       can_recheck_post_cleaning: true,
       annotation_revision: {
         ...completedRevision,
-        post_cleaning_result: {
-          ...completedRevision.post_cleaning_result,
+        capture_group_cleaning: {
+          ...completedRevision.capture_group_cleaning,
           outcome: 'WARNING',
           reason_codes: ['VERIFIED_MEDIA_DURATION_UNAVAILABLE'],
         },
@@ -402,13 +403,14 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('article', { name: /标注完成/ })
     const action = within(taskRow).getByRole('button', {
-      name: /进入视频 .*配药动作标注工作台/,
+      name: /进入配药事件 .*查看复核 \/ 训练资格检查结果/,
     })
     expect(within(taskRow).queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
     await user.click(action)
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
+    expect(router.state.location.search).toBe('?focus=cleaning')
   })
 
   it('reloads the current task state from the server when the page is re-entered', async () => {
@@ -416,7 +418,7 @@ describe('annotation task list view', () => {
       ...assignedTask,
       status: 'SUBMITTED',
       can_submit: false,
-      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+      annotation_revision: { ...completedRevision, review: null, capture_group_cleaning: null },
     }
     const responses = [taskList([assignedTask]), taskList([submittedTask])]
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -465,7 +467,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByText('复核 · 已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
-    expect(screen.getByText('清洗 · 当前规则检查通过')).toBeInTheDocument()
+    expect(screen.getByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
     const taskRow = screen.getByRole('article', { name: /标注完成/ })
     const user = userEvent.setup()
     await user.click(within(taskRow).getByText('查看详情'))
@@ -486,7 +488,7 @@ describe('annotation task list view', () => {
           decision: 'REJECTED',
           review_note: '请补充完整的拿取药品时间段。',
         },
-        post_cleaning_result: null,
+        capture_group_cleaning: null,
       },
     }
     stubTasks([rejectedTask], labelSchema)
@@ -495,10 +497,11 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('article', { name: /待修改/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
-    await user.click(within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }))
+    await user.click(within(taskRow).getByRole('button', { name: /进入配药事件 .*进入标注返工/ }))
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
+    expect(router.state.location.search).toBe('?focus=annotation')
   })
 
   it('routes a reviewable submitted task to the workbench without direct review controls', async () => {
@@ -507,7 +510,7 @@ describe('annotation task list view', () => {
       status: 'SUBMITTED',
       can_submit: false,
       can_review: true,
-      annotation_revision: { ...completedRevision, review: null, post_cleaning_result: null },
+      annotation_revision: { ...completedRevision, review: null, capture_group_cleaning: null },
     }
     stubTasks([reviewableTask], labelSchema)
     const { router } = renderView()
@@ -515,64 +518,20 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('article', { name: /待复核/ })
     expect(
-      within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }),
+      within(taskRow).getByRole('button', { name: /进入配药事件 .*进入人工复核/ }),
     ).toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
-    await user.click(within(taskRow).getByRole('button', { name: /进入视频 .*配药动作标注工作台/ }))
+    await user.click(within(taskRow).getByRole('button', { name: /进入配药事件 .*进入人工复核/ }))
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe(paths.annotationTask(projectId, taskId)),
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
+    expect(router.state.location.search).toBe('?focus=review')
   })
 
-  it('loads a project export preview only after the administrator requests it', async () => {
-    const preview = trainingDataPreview(12)
-    const fetchMock = stubTrainingData([assignedTask], labelSchema, preview)
-    const user = userEvent.setup()
-    renderView()
-
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
-    const dialog = await screen.findByRole('dialog')
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/training-data/preview`,
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
-    )
-    expect(dialog).toHaveTextContent('training-data.v2')
-    expect(dialog).toHaveTextContent('12 条')
-    expect(dialog).toHaveTextContent('格式Parquet')
-    expect(dialog).toHaveTextContent('包含手部关键点 + 人工动作标签')
-    expect(dialog).toHaveTextContent('原始视频不包含')
-    expect(dialog).toHaveTextContent(
-      '手部检测结果仅供人工参考，不作为正式标注或质量结论。动作标签来自人工正式标注。',
-    )
-  })
-
-  it('cancels the preview without requesting a download', async () => {
-    const fetchMock = stubTrainingData([assignedTask], labelSchema, trainingDataPreview(3))
-    const user = userEvent.setup()
-    renderView()
-
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: /取消/ }))
-
-    expect(
-      fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/training-data/download')),
-    ).toHaveLength(0)
-  })
-
-  it('previews the V1.25 group manifest and shows its server-owned provenance boundaries', async () => {
+  it('previews the CaptureGroup training-data.v3 manifest and shows its server-owned provenance boundaries', async () => {
     const preview = trainingDataV3Preview(2)
-    const fetchMock = stubTrainingData(
-      [assignedTask],
-      labelSchema,
-      trainingDataPreview(3),
-      'PAR1 synthetic parquet',
-      preview,
-    )
+    const fetchMock = stubTrainingData([assignedTask], labelSchema, preview)
     const user = userEvent.setup()
     renderView()
 
@@ -620,13 +579,12 @@ describe('annotation task list view', () => {
     expect(technicalDetails).toHaveTextContent('不包含')
   })
 
-  it('downloads the confirmed V1.25 manifest through the v3 endpoint', async () => {
+  it('downloads the confirmed CaptureGroup manifest through the v3 endpoint', async () => {
     const fetchMock = stubTrainingData(
       [assignedTask],
       labelSchema,
-      trainingDataPreview(3),
-      '{"schema_version":"training-data.v3"}',
       trainingDataV3Preview(1),
+      '{"schema_version":"training-data.v3"}',
     )
     const createObjectUrl = vi.fn(() => 'blob:training-data-v3')
     const revokeObjectUrl = vi.fn()
@@ -664,14 +622,8 @@ describe('annotation task list view', () => {
     anchorClick.mockRestore()
   })
 
-  it('disables V1.25 export when the server preview has no eligible events', async () => {
-    stubTrainingData(
-      [assignedTask],
-      labelSchema,
-      trainingDataPreview(3),
-      'PAR1 synthetic parquet',
-      trainingDataV3Preview(0),
-    )
+  it('disables CaptureGroup export when the server preview has no eligible events', async () => {
+    stubTrainingData([assignedTask], labelSchema, trainingDataV3Preview(0))
     const user = userEvent.setup()
     renderView()
 
@@ -683,94 +635,13 @@ describe('annotation task list view', () => {
     expect(within(dialog).getByRole('button', { name: '导出 training-data.v3' })).toBeDisabled()
   })
 
-  it('downloads the confirmed Parquet blob with a fixed filename and revokes its object URL', async () => {
-    const fetchMock = stubTrainingData([assignedTask], labelSchema, trainingDataPreview(3))
-    const createObjectUrl = vi.fn(() => 'blob:training-data')
-    const revokeObjectUrl = vi.fn()
-    const NativeURL = globalThis.URL
-    class TestURL extends NativeURL {}
-    Object.assign(TestURL, { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl })
-    vi.stubGlobal('URL', TestURL)
-    const anchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => undefined)
-    const user = userEvent.setup()
-    renderView()
-
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '导出' }))
-
-    await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
-    const link = anchorClick.mock.instances[0] as HTMLAnchorElement
-    expect(link.download).toBe('training_data.parquet')
-    expect(link.href).toBe('blob:training-data')
-    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
-    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:training-data')
-    expect(document.body.contains(link)).toBe(false)
-    expect(await screen.findByText('已开始下载 training_data.parquet。')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/training-data/download`,
-      expect.objectContaining({
-        method: 'GET',
-        cache: 'no-store',
-        headers: { Accept: 'application/vnd.apache.parquet' },
-      }),
-    )
-    anchorClick.mockRestore()
-  })
-
-  it('disables export confirmation and explains when no training rows are eligible', async () => {
-    stubTrainingData([assignedTask], labelSchema, trainingDataPreview(0))
-    const user = userEvent.setup()
-    renderView()
-
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('0 条')
-    expect(dialog).toHaveTextContent('当前没有符合条件的训练行，暂时无法导出。')
-    expect(within(dialog).getByRole('button', { name: /导出/ })).toBeDisabled()
-  })
-
   it('does not show the export action for an assignee-scoped member queue', async () => {
     stubTasks([assignedTask], labelSchema, 'ASSIGNEE')
     renderView()
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览 training-data.v3' })).not.toBeInTheDocument()
-  })
-
-  it('shows safe Chinese feedback when the preview request is rejected', async () => {
-    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url.endsWith('/annotation-label-schema'))
-        return Promise.resolve(jsonResponse(labelSchema))
-      if (url.endsWith('/training-data/preview')) {
-        return Promise.resolve(
-          jsonResponse(
-            {
-              error_code: 'TRAINING_DATA_EXPORT_EVIDENCE_INVALID',
-              error_message: 'java.lang.IllegalStateException https://internal.invalid/stack',
-            },
-            { status: 422 },
-          ),
-        )
-      }
-      return Promise.resolve(jsonResponse(taskList([assignedTask])))
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    const user = userEvent.setup()
-    renderView()
-
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '导出训练数据' }))
-    expect(await screen.findByText('当前可用数据证据不完整，暂时无法导出。')).toBeInTheDocument()
-    expect(screen.queryByText(/java\.lang|internal\.invalid/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
@@ -800,10 +671,6 @@ function renderView() {
         element: <AnnotationTaskListView />,
       },
       {
-        path: '/projects/:projectId/annotation-tasks/:taskId',
-        element: <div aria-label="标注工作台路由占位" />,
-      },
-      {
         path: '/projects/:projectId/capture-groups/:captureGroupId',
         element: <div aria-label="CaptureGroup 路由占位" />,
       },
@@ -827,22 +694,14 @@ function stubTasks(tasks: object[], schema: object, scope: 'PROJECT' | 'ASSIGNEE
 function stubTrainingData(
   tasks: object[],
   schema: object,
-  preview: object,
-  downloadBody = 'PAR1 synthetic parquet',
   v3Preview: object = trainingDataV3Preview(1),
+  downloadBody = '{"schema_version":"training-data.v3"}',
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith('/annotation-label-schema')) return Promise.resolve(jsonResponse(schema))
     if (url.endsWith('/training-data/v3/preview')) return Promise.resolve(jsonResponse(v3Preview))
     if (url.endsWith('/training-data/v3/download')) {
-      return Promise.resolve({
-        ok: true,
-        blob: () => Promise.resolve(new Blob([downloadBody])),
-      } as Response)
-    }
-    if (url.endsWith('/training-data/preview')) return Promise.resolve(jsonResponse(preview))
-    if (url.endsWith('/training-data/download')) {
       return Promise.resolve({
         ok: true,
         blob: () => Promise.resolve(new Blob([downloadBody])),
@@ -878,20 +737,6 @@ function taskList(tasks: object[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
       awaiting_review: queue.filter((task) => task.status === 'SUBMITTED').length,
       completed: queue.filter((task) => task.status === 'COMPLETED').length,
     },
-  }
-}
-function trainingDataPreview(trainingRowCount: number) {
-  return {
-    schema_version: 'training-data.v2',
-    eligible_video_count: 2,
-    candidate_observation_count: 14,
-    training_row_count: trainingRowCount,
-    unlabeled_candidate_observation_count: 2,
-    training_row_definition:
-      'one MediaPipe Candidate hand observation inside one APPROVED human action interval [start_ms, end_ms)',
-    file_name: 'training_data.parquet',
-    content_type: 'application/vnd.apache.parquet',
-    includes_mp4: false,
   }
 }
 function trainingDataV3Preview(eventCount: number) {

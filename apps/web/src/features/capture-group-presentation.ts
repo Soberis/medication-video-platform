@@ -275,9 +275,7 @@ export function taskNextAction(
     return actionStep('根据复核意见修改')
   }
   if (task.annotation_revision?.review?.decision === 'APPROVED') {
-    const cleaning =
-      task.annotation_revision.capture_group_cleaning ??
-      task.annotation_revision.post_cleaning_result
+    const cleaning = task.annotation_revision.capture_group_cleaning
     return cleaning?.outcome === 'PASS'
       ? statusStep('训练资格检查已通过')
       : actionStep('查看训练资格检查结果')

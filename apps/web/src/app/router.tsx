@@ -56,12 +56,6 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/views/ProjectListView')).default }),
           },
           {
-            path: '/projects/:projectId/videos',
-            lazy: async () => ({
-              Component: (await import('@/views/VideoManagementView')).default,
-            }),
-          },
-          {
             path: '/projects/:projectId/capture-groups',
             lazy: async () => ({
               Component: (await import('@/views/CaptureGroupListView')).default,
@@ -74,19 +68,9 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: '/projects/:projectId/assets/:id',
-            lazy: async () => ({ Component: (await import('@/views/AssetDetailView')).default }),
-          },
-          {
             path: '/projects/:projectId/annotation-tasks',
             lazy: async () => ({
               Component: (await import('@/views/AnnotationTaskListView')).default,
-            }),
-          },
-          {
-            path: '/projects/:projectId/annotation-tasks/:taskId',
-            lazy: async () => ({
-              Component: (await import('@/views/AnnotationTaskWorkbenchView')).default,
             }),
           },
           {

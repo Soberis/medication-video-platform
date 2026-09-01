@@ -11,12 +11,9 @@ import {
   type AnnotationTaskProgress,
 } from '@/api/annotation'
 import {
-  downloadTrainingData,
   downloadTrainingDataV3,
-  getTrainingDataExportPreview,
   getTrainingDataV3ExportPreview,
   TrainingDataExportApiError,
-  type TrainingDataExportPreview,
   type TrainingDataV3ExportPreview,
 } from '@/api/training-data'
 import { paths } from '@/app/paths'
@@ -49,7 +46,6 @@ const postCleaningReasonLabels: Readonly<Record<string, string>> = {
   VERIFIED_MEDIA_FACT_INCOMPLETE: '媒体检测事实不完整',
   VERIFIED_MEDIA_INPUT_DIGEST_MISMATCH: '媒体检测输入摘要与视频资产不一致',
   SEGMENT_EXCEEDS_VERIFIED_MEDIA_DURATION: '时间段超出已确认的视频时长',
-  LEGACY_APPROVED_REVISION_REQUIRES_REVALIDATION: '历史通过记录需要按当前规则重新验证',
 }
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
@@ -66,10 +62,7 @@ function taskNoActionLabel(task: AnnotationTask) {
   if (task.status === 'SUBMITTED') return '等待管理员复核'
   return '等待处理'
 }
-function postCleaningPresentation(
-  task: AnnotationTask,
-  isCaptureGroupTask = Boolean(task.capture_group_id),
-): {
+function postCleaningPresentation(task: AnnotationTask): {
   label: string
   tone: StatusIndicatorTone
   description: string
@@ -78,15 +71,14 @@ function postCleaningPresentation(
 } | null {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
-  const result = revision.capture_group_cleaning ?? revision.post_cleaning_result
+  const result = revision.capture_group_cleaning
   const reasons = (result?.reason_codes ?? []).map((code) => {
-    const fallback = isCaptureGroupTask ? '其他训练资格检查原因' : '其他清洗原因'
     return (
       postCleaningReasonLabels[code] ??
-      `${fallback}（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
+      `其他训练资格检查原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
     )
   })
-  const eligibilityTerm = isCaptureGroupTask ? '训练资格检查' : '清洗'
+  const eligibilityTerm = '训练资格检查'
   if (result?.outcome === 'PASS')
     return {
       label: cleaningStatusLabels.PASS,
@@ -134,14 +126,9 @@ export default function AnnotationTaskListView() {
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [trainingExportPreview, setTrainingExportPreview] =
-    useState<TrainingDataExportPreview | null>(null)
   const [trainingDataV3Preview, setTrainingDataV3Preview] =
     useState<TrainingDataV3ExportPreview | null>(null)
-  const [isTrainingExportOpen, setIsTrainingExportOpen] = useState(false)
   const [isTrainingDataV3ExportOpen, setIsTrainingDataV3ExportOpen] = useState(false)
-  const [isTrainingPreviewLoading, setIsTrainingPreviewLoading] = useState(false)
-  const [isTrainingDownloadLoading, setIsTrainingDownloadLoading] = useState(false)
   const [isTrainingDataV3PreviewLoading, setIsTrainingDataV3PreviewLoading] = useState(false)
   const [isTrainingDataV3DownloadLoading, setIsTrainingDataV3DownloadLoading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
@@ -162,7 +149,7 @@ export default function AnnotationTaskListView() {
         getAnnotationLabelSchema(projectId, request.signal),
       ])
       if (activeRequest.current !== request) return
-      setItems(taskList.items)
+      setItems(taskList.items.filter((task) => Boolean(task.capture_group_id)))
       setProgress(taskList.progress)
       setLabelSchema(schema)
       setLoadState('success')
@@ -192,52 +179,9 @@ export default function AnnotationTaskListView() {
     }
   }, [loadTasks])
 
-  const openTrainingExport = useCallback(async () => {
-    if (
-      progress?.scope !== 'PROJECT' ||
-      isTrainingPreviewLoading ||
-      isTrainingDownloadLoading ||
-      isTrainingDataV3PreviewLoading ||
-      isTrainingDataV3DownloadLoading
-    )
-      return
-    trainingExportRequest.current?.abort()
-    const request = new AbortController()
-    trainingExportRequest.current = request
-    setIsTrainingPreviewLoading(true)
-    try {
-      const preview = await getTrainingDataExportPreview(projectId, request.signal)
-      if (request.signal.aborted || trainingExportRequest.current !== request) return
-      setTrainingExportPreview(preview)
-      setIsTrainingExportOpen(true)
-    } catch (error) {
-      if (request.signal.aborted || trainingExportRequest.current !== request) return
-      void message.error(
-        error instanceof TrainingDataExportApiError
-          ? error.message
-          : '暂时无法读取训练数据导出信息，请稍后重试。',
-      )
-    } finally {
-      if (trainingExportRequest.current === request) {
-        trainingExportRequest.current = null
-        setIsTrainingPreviewLoading(false)
-      }
-    }
-  }, [
-    isTrainingDataV3DownloadLoading,
-    isTrainingDataV3PreviewLoading,
-    isTrainingDownloadLoading,
-    isTrainingPreviewLoading,
-    message,
-    progress?.scope,
-    projectId,
-  ])
-
   const openTrainingDataV3Export = useCallback(async () => {
     if (
       progress?.scope !== 'PROJECT' ||
-      isTrainingPreviewLoading ||
-      isTrainingDownloadLoading ||
       isTrainingDataV3PreviewLoading ||
       isTrainingDataV3DownloadLoading
     )
@@ -267,65 +211,16 @@ export default function AnnotationTaskListView() {
   }, [
     isTrainingDataV3DownloadLoading,
     isTrainingDataV3PreviewLoading,
-    isTrainingDownloadLoading,
-    isTrainingPreviewLoading,
     message,
     progress?.scope,
     projectId,
   ])
-
-  const closeTrainingExport = useCallback(() => {
-    if (isTrainingDownloadLoading) return
-    setIsTrainingExportOpen(false)
-    setTrainingExportPreview(null)
-  }, [isTrainingDownloadLoading])
 
   const closeTrainingDataV3Export = useCallback(() => {
     if (isTrainingDataV3DownloadLoading) return
     setIsTrainingDataV3ExportOpen(false)
     setTrainingDataV3Preview(null)
   }, [isTrainingDataV3DownloadLoading])
-
-  const downloadTrainingDataFile = useCallback(async () => {
-    if (
-      !trainingExportPreview ||
-      trainingExportPreview.training_row_count <= 0 ||
-      isTrainingDownloadLoading
-    )
-      return
-    const request = new AbortController()
-    trainingExportRequest.current = request
-    setIsTrainingDownloadLoading(true)
-    try {
-      const blob = await downloadTrainingData(projectId, request.signal)
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = 'training_data.parquet'
-      link.rel = 'noopener'
-      link.hidden = true
-      document.body.append(link)
-      try {
-        link.click()
-      } finally {
-        URL.revokeObjectURL(objectUrl)
-        link.remove()
-      }
-      setIsTrainingExportOpen(false)
-      setTrainingExportPreview(null)
-      void message.success('已开始下载 training_data.parquet。')
-    } catch (error) {
-      if (request.signal.aborted) return
-      void message.error(
-        error instanceof TrainingDataExportApiError
-          ? error.message
-          : '训练数据暂未导出，请稍后重试。',
-      )
-    } finally {
-      if (trainingExportRequest.current === request) trainingExportRequest.current = null
-      setIsTrainingDownloadLoading(false)
-    }
-  }, [isTrainingDownloadLoading, message, projectId, trainingExportPreview])
 
   const downloadTrainingDataV3File = useCallback(async () => {
     if (
@@ -417,13 +312,12 @@ export default function AnnotationTaskListView() {
             aria-label="配药动作标注任务列表"
           >
             {items.map((row) => {
-              const isGroupTask = Boolean(row.capture_group_id)
-              const taskSubject = isGroupTask
-                ? `配药事件 ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
-                : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`
+              const captureGroupId = row.capture_group_id
+              if (!captureGroupId) return null
+              const taskSubject = `配药事件 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
-              const presentation = postCleaningPresentation(row, isGroupTask)
-              const groupTaskDestination = isGroupTask ? captureGroupTaskDestination(row) : null
+              const presentation = postCleaningPresentation(row)
+              const taskDestination = captureGroupTaskDestination(row)
               const taskDetails = (
                 <details className="task-details">
                   <summary>查看详情</summary>
@@ -509,7 +403,7 @@ export default function AnnotationTaskListView() {
                     ) : null}
                     {presentation ? (
                       <div className="task-details-block">
-                        <h3>{isGroupTask ? '训练资格检查说明' : '清洗说明'}</h3>
+                        <h3>训练资格检查说明</h3>
                         <p>{presentation.description}</p>
                         {presentation.evaluatedAt ? (
                           <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
@@ -522,41 +416,18 @@ export default function AnnotationTaskListView() {
                   </div>
                 </details>
               )
-              const postCleaningOutcome = revision?.post_cleaning_result?.outcome
-              const canOpenLegacyWorkbench =
-                (row.can_submit && row.status === 'ASSIGNED') ||
-                (row.can_review && Boolean(revision)) ||
-                (row.can_recheck_post_cleaning &&
-                  (postCleaningOutcome === 'WARNING' || postCleaningOutcome === 'REJECT'))
-              const taskAction = isGroupTask ? (
-                groupTaskDestination ? (
-                  <Button
-                    type="primary"
-                    size="small"
-                    aria-label={`进入${taskSubject}的${groupTaskDestination.actionLabel}`}
-                    onClick={() =>
-                      void navigate(
-                        paths.captureGroupFocus(
-                          projectId,
-                          row.capture_group_id ?? row.annotation_task_id,
-                          groupTaskDestination.focus,
-                        ),
-                      )
-                    }
-                  >
-                    {groupTaskDestination.actionLabel}
-                  </Button>
-                ) : null
-              ) : canOpenLegacyWorkbench ? (
+              const taskAction = taskDestination ? (
                 <Button
                   type="primary"
                   size="small"
-                  aria-label={`进入${taskSubject}的配药动作标注工作台`}
+                  aria-label={`进入${taskSubject}的${taskDestination.actionLabel}`}
                   onClick={() =>
-                    void navigate(paths.annotationTask(projectId, row.annotation_task_id))
+                    void navigate(
+                      paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus),
+                    )
                   }
                 >
-                  进入工作台
+                  {taskDestination.actionLabel}
                 </Button>
               ) : null
               return (
@@ -569,19 +440,10 @@ export default function AnnotationTaskListView() {
                     <div className="annotation-task-identity">
                       <Link
                         className="text-link mono-wrap"
-                        to={
-                          isGroupTask
-                            ? paths.captureGroup(
-                                projectId,
-                                row.capture_group_id ?? row.annotation_task_id,
-                              )
-                            : paths.asset(projectId, row.clip_asset_id ?? row.annotation_task_id)
-                        }
-                        title={row.capture_group_id ?? row.clip_asset_id ?? row.annotation_task_id}
+                        to={paths.captureGroup(projectId, captureGroupId)}
+                        title={captureGroupId}
                       >
-                        {isGroupTask
-                          ? `配药事件 ${shortId(row.capture_group_id ?? row.annotation_task_id)}`
-                          : `视频 ${shortId(row.clip_asset_id ?? row.annotation_task_id)}`}
+                        {taskSubject}
                       </Link>
                     </div>
                     <StatusIndicator
@@ -620,7 +482,7 @@ export default function AnnotationTaskListView() {
                             )}
                             {presentation ? (
                               <StatusIndicator tone={presentation.tone}>
-                                {isGroupTask ? '训练资格检查' : '清洗'} · {presentation.label}
+                                训练资格检查 · {presentation.label}
                               </StatusIndicator>
                             ) : null}
                           </div>
@@ -675,31 +537,16 @@ export default function AnnotationTaskListView() {
             <div className="annotation-task-project-tools-content">
               <div className="annotation-task-project-tools-copy">
                 <strong>项目训练数据</strong>
-                <span>
-                  配药事件使用 training-data.v3；历史单视频数据继续保留 training-data.v2。
-                </span>
+                <span>项目训练数据使用 training-data.v3；导出前由服务端确认事件级准入。</span>
               </div>
               <div className="annotation-task-project-tools-actions">
                 <Button
                   size="small"
                   loading={isTrainingDataV3PreviewLoading}
-                  disabled={
-                    isTrainingDataV3DownloadLoading ||
-                    isTrainingPreviewLoading ||
-                    isTrainingDownloadLoading
-                  }
+                  disabled={isTrainingDataV3DownloadLoading}
                   onClick={() => void openTrainingDataV3Export()}
                 >
                   预览 training-data.v3
-                </Button>
-                <Button
-                  size="small"
-                  loading={isTrainingPreviewLoading}
-                  disabled={isTrainingDownloadLoading || isTrainingDataV3PreviewLoading}
-                  title="预览并导出历史训练数据（training-data.v2）"
-                  onClick={() => void openTrainingExport()}
-                >
-                  导出训练数据
                 </Button>
               </div>
             </div>
@@ -847,58 +694,6 @@ export default function AnnotationTaskListView() {
                 </p>
               </div>
             </details>
-          </>
-        ) : null}
-      </Modal>
-      <Modal
-        open={isTrainingExportOpen}
-        title="历史训练数据导出（training-data.v2）"
-        okText="导出"
-        cancelText="取消"
-        confirmLoading={isTrainingDownloadLoading}
-        okButtonProps={{
-          disabled: !trainingExportPreview?.training_row_count,
-          'aria-label': '导出',
-        }}
-        cancelButtonProps={{ disabled: isTrainingDownloadLoading, 'aria-label': '取消' }}
-        mask={{ closable: !isTrainingDownloadLoading }}
-        keyboard={!isTrainingDownloadLoading}
-        onCancel={closeTrainingExport}
-        onOk={() => void downloadTrainingDataFile()}
-        destroyOnHidden
-      >
-        {trainingExportPreview ? (
-          <>
-            <MetadataList
-              className="training-data-export-summary"
-              items={[
-                {
-                  id: 'training-row-count',
-                  label: '训练行数',
-                  value: `${trainingExportPreview.training_row_count} 条`,
-                },
-                {
-                  id: 'schema-version',
-                  label: '版本',
-                  value: <code>{trainingExportPreview.schema_version}</code>,
-                },
-                { id: 'format', label: '格式', value: 'Parquet' },
-                { id: 'includes', label: '包含', value: '手部关键点 + 人工动作标签' },
-                {
-                  id: 'includes-mp4',
-                  label: '原始视频',
-                  value: trainingExportPreview.includes_mp4 ? '包含' : '不包含',
-                },
-              ]}
-            />
-            {trainingExportPreview.training_row_count === 0 ? (
-              <p className="training-data-export-empty" role="status">
-                当前没有符合条件的训练行，暂时无法导出。
-              </p>
-            ) : null}
-            <p className="form-hint">
-              手部检测结果仅供人工参考，不作为正式标注或质量结论。动作标签来自人工正式标注。
-            </p>
           </>
         ) : null}
       </Modal>

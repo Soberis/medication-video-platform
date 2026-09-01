@@ -451,10 +451,7 @@ function deriveAnnotationWorkflow(
     })
   }
 
-  const cleaning =
-    facts.cleaning ??
-    facts.annotation_revision.capture_group_cleaning ??
-    facts.annotation_revision.post_cleaning_result
+  const cleaning = facts.cleaning ?? facts.annotation_revision.capture_group_cleaning
   if (cleaning?.outcome === 'PASS') {
     return buildWorkflow('TRAINING_ELIGIBILITY', {
       primaryAction: action('view-result', '查看结果', 'training-eligibility'),

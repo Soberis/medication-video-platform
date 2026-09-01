@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  downloadTrainingData,
-  downloadTrainingDataV3,
-  getTrainingDataV3ExportPreview,
-} from '@/api/training-data'
+import { downloadTrainingDataV3, getTrainingDataV3ExportPreview } from '@/api/training-data'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 
@@ -36,33 +32,18 @@ describe('training data export API', () => {
     )
   })
 
-  it('downloads the V1.25 manifest without changing the existing v2 endpoint', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('v3-json'))
-      .mockResolvedValueOnce(new Response('v2-parquet'))
+  it('downloads the V1.25 manifest through the v3 endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('v3-json'))
     vi.stubGlobal('fetch', fetchMock)
 
     const v3Blob = await downloadTrainingDataV3(projectId)
-    const v2Blob = await downloadTrainingData(projectId)
     expect(v3Blob.size).toBe(7)
-    expect(v2Blob.size).toBe(10)
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/training-data/v3/download`,
       expect.objectContaining({
         method: 'GET',
         headers: { Accept: 'application/vnd.medication.training-data.v3+json' },
-        cache: 'no-store',
-      }),
-    )
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `/api/v1/projects/${projectId}/training-data/download`,
-      expect.objectContaining({
-        method: 'GET',
-        headers: { Accept: 'application/vnd.apache.parquet' },
         cache: 'no-store',
       }),
     )

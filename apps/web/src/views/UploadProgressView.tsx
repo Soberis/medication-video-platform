@@ -256,8 +256,8 @@ export default function UploadProgressView() {
               ]}
               footer={
                 batch.status === 'COMPLETED' ? (
-                  <Link className="text-link" to={paths.videos(batch.project_id)}>
-                    查看项目视频
+                  <Link className="text-link" to={paths.captureGroups(batch.project_id)}>
+                    进入视频管理
                   </Link>
                 ) : null
               }

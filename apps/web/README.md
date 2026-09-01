@@ -2,7 +2,7 @@
 
 所有前端 UI 变更开始前必须阅读 [`docs/DESIGN_SYSTEM.md`](../../docs/DESIGN_SYSTEM.md)。不得在页面中引入第二套视觉语言、任意设计 Token 或一次性布局系统。
 
-React 管理端。当前激活的纵向功能包括上传排障、视频管理、单路视频资产详情、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、Cleaning，以及 `training-data.v2` 预览和 Parquet 下载。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
+React 管理端。当前激活的纵向功能包括上传排障、CaptureGroup 视频管理、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、事件级 Cleaning，以及 `training-data.v3` 预览和下载。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
 
 ## Commands
 
@@ -18,12 +18,12 @@ pnpm run web:build
 
 开发服务器默认监听 `http://127.0.0.1:5173`（可由 `WEB_PORT` 覆盖），并把 `/api` 代理到 `http://127.0.0.1:${PLATFORM_API_PORT:-8080}`。Web 使用平台内部账号登录；密码不进入浏览器存储，服务端仅保存 BCrypt 哈希，浏览器通过 HttpOnly 会话 Cookie 与 CSRF Header 调用 API。项目可见性和 ADMIN/MEMBER 仍由后端 Membership 在每次请求中校验，前端从不自行授予权限。医院边端使用独立上传凭据，不使用 Web 登录页。
 
-根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。项目 ADMIN 可以修改项目显示名称或归档项目；归档会停止后续项目访问并从日常列表移除，但不物理删除项目、视频、对象或审计。进入项目后，`/projects/:projectId/videos` 是当前视频管理入口，`/projects/:projectId/assets/:id` 展示单路视频详情；`/projects/:projectId/annotation-tasks` 承载人工标注、复核和 Cleaning。详情路由保持同一项目上下文。`/uploads` 继续只读展示批次和文件进度，`/uploads/new` 用于平台本地上传。
+根路径重定向到 `/projects`，只列出当前用户具有 ACTIVE Membership 的项目。项目 ADMIN 可以修改项目显示名称或归档项目；归档会停止后续项目访问并从日常列表移除，但不物理删除项目、视频、对象或审计。进入项目后，`/projects/:projectId/capture-groups` 是当前视频管理入口；每个 CaptureGroup 详情页统一承载各路视频事实、Media Probe、MediaPipe 候选、逐视图质量、事件级质量、动作标注、复核和 Cleaning。`/projects/:projectId/annotation-tasks` 只承载 CaptureGroup 标注任务入口。`/uploads` 继续只读展示批次和文件进度，`/uploads/new` 用于平台本地上传。
 
 `/uploads/new` 已启用平台本地上传：用户选择已加入的项目和一个或多个本机视频；每个视频使用独立 `PLATFORM_LOCAL` 批次，浏览器先在 Web Worker 中分块计算 SHA-256，再复用 Upload/Multipart/Complete/CaptureSession 协议直传对象存储。页面只显示运行期批次 ID，不记录或输出预签名 URL；多视频按顺序执行，避免误组装为同一次多相机拍摄。
 
 CaptureSession、CameraSet 和 CameraStream 仍由上传接收协议记录为领域事实；它们不再作为独立的历史 Session 管理页面暴露。
 
-当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。合格视频可由拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 创建并分配标注任务；受分配成员提交主 Step 时间段后，同一合格管理员可记录一次通过/不通过复核，且同人决定显示 `SELF_ADMIN_APPROVAL`。复核不通过会退回任务，下一次提交产生新的不可变 revision。Cleaning 通过后，`training-data.v2` 页面只读展示当前准入事实，并支持最小 Parquet 下载；它不依赖旧 DatasetVersion、Admission、Build、Freeze 或异步 Export Worker 流程。
+当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。CaptureGroup 通过事件级质量准入后生成一个标注任务；受分配成员提交主 Step 时间段后，同一合格管理员可记录一次通过/不通过复核，且同人决定显示 `SELF_ADMIN_APPROVAL`。复核不通过会退回任务，下一次提交产生新的不可变 revision。事件级 Cleaning 通过后，`training-data.v3` 页面只读展示当前准入事实并支持下载；它不依赖旧 DatasetVersion、Admission、Build、Freeze 或异步 Export Worker 流程。
 
 认证会话使用 React Context；批次、资产、标注和训练导出等服务端对象继续使用页面局部状态，不复制为客户端业务真值。

@@ -89,14 +89,16 @@ describe('LoginView', () => {
       vi.fn().mockResolvedValue(jsonResponse({ username: 'platform-admin', role: 'ADMIN' })),
     )
     const user = userEvent.setup()
-    const { router } = renderLogin('/login?redirect=%2Fprojects%2Fproject-1%2Fvideos')
+    const { router } = renderLogin('/login?redirect=%2Fprojects%2Fproject-1%2Fcapture-groups')
 
     await user.type(screen.getByLabelText('账号'), 'platform-admin')
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
     await user.click(screen.getByRole('button', { name: /登\s*录/ }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/projects/project-1/videos'))
-    expect(await screen.findByText('Videos')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/projects/project-1/capture-groups'),
+    )
+    expect(await screen.findByText('CaptureGroups')).toBeInTheDocument()
   })
 })
 
@@ -105,7 +107,7 @@ function renderLogin(entry = '/login') {
     [
       { path: '/login', element: <LoginView /> },
       { path: '/projects', element: <div>Projects</div> },
-      { path: '/projects/:projectId/videos', element: <div>Videos</div> },
+      { path: '/projects/:projectId/capture-groups', element: <div>CaptureGroups</div> },
     ],
     [entry],
   )

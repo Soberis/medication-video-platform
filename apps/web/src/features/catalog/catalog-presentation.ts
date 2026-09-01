@@ -1,15 +1,4 @@
-import type {
-  CameraStreamStatus,
-  CaptureQualityStatus,
-  ClipAssetStatus,
-  DeclaredSyncStatus,
-  VideoSummaryAnnotationStatus,
-  VideoSummaryCleaningStatus,
-  VideoSummaryHandResult,
-  VideoSummaryHandStatus,
-  VideoSummaryMediaStatus,
-  VideoSummarySource,
-} from '@/api/catalog'
+import type { CameraStreamStatus, CaptureQualityStatus, DeclaredSyncStatus } from '@/api/catalog'
 
 export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
   PENDING: '待检测',
@@ -32,51 +21,12 @@ export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
   REJECT: '边端声明异常',
 }
 
-export const assetStatusLabels: Record<ClipAssetStatus, string> = {
-  UPLOADED: '待媒体检测',
-  INGESTING: '媒体检测中',
-  INGESTED: '媒体检测完成',
-  INGEST_FAILED: '媒体检测失败',
-}
-
-/** Shared vocabulary for the compact Videos workspace and its filters. */
-export const videoMediaStatusLabels: Record<VideoSummaryMediaStatus, string> = assetStatusLabels
-
-export const videoHandStatusLabels: Record<VideoSummaryHandStatus, string> = {
-  NOT_REQUESTED: '未发起',
-  QUEUED: '排队中',
-  RUNNING: '检测中',
-  SUCCEEDED: '检测完成',
-  FAILED: '检测失败',
-}
-
-export const videoHandResultLabels: Record<VideoSummaryHandResult, string> = {
-  UNKNOWN: '未判定',
-  HAND_DETECTED: '发现手部',
-  NO_HAND_DETECTED: '未发现手部',
-}
-
-export const videoSourceLabels: Record<VideoSummarySource, string> = {
-  HOSPITAL_REMOTE: '医院边端',
-  PLATFORM_LOCAL: '平台本地上传',
-}
-
-export const videoAnnotationStatusLabels: Record<VideoSummaryAnnotationStatus, string> = {
-  NOT_STARTED: '待创建',
-  ASSIGNED: '待标注',
-  SUBMITTED: '待复核',
-  COMPLETED: '标注完成',
-}
-
 export const cleaningStatusLabels = {
   NOT_STARTED: '待清洗',
   PASS: '当前规则检查通过',
   WARNING: '需处理',
   REJECT: '清洗未通过',
 } as const
-
-export const videoCleaningStatusLabels: Record<VideoSummaryCleaningStatus, string> =
-  cleaningStatusLabels
 
 export function statusTone(
   status: string,

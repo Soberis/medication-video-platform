@@ -174,9 +174,6 @@ describe('LocalUploadView', () => {
     const videoManagementLink = screen.getByRole('link', { name: '进入视频管理' })
     expect(videoManagementLink).toHaveAttribute('href', paths.captureGroups(project.project_id))
     expect(screen.queryByRole('link', { name: '查看项目视频' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).not.toContain(
-      paths.videos(project.project_id),
-    )
   })
 
   it('uses current event terminology for the confirmed event identity', async () => {

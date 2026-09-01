@@ -499,10 +499,7 @@ function createMedicationEventWorkflowFacts({
       : null,
     annotation_revision: task?.annotation_revision ?? null,
     review: task?.annotation_revision?.review ?? null,
-    cleaning:
-      task?.annotation_revision?.capture_group_cleaning ??
-      task?.annotation_revision?.post_cleaning_result ??
-      null,
+    cleaning: task?.annotation_revision?.capture_group_cleaning ?? null,
     can_select_primary: Boolean(task?.can_select_primary),
     can_submit: Boolean(task?.can_submit),
     can_review: Boolean(task?.can_review),

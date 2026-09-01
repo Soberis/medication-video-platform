@@ -147,9 +147,9 @@ describe('UploadProgressView', () => {
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
 
-    expect(await screen.findByRole('link', { name: '查看项目视频' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '进入视频管理' })).toHaveAttribute(
       'href',
-      '/projects/00000000-0000-4000-8000-000000000001/videos',
+      '/projects/00000000-0000-4000-8000-000000000001/capture-groups',
     )
     const batchIdDetails = screen.getByText(batchId)
     expect(batchIdDetails.closest('details')).not.toHaveAttribute('open')
