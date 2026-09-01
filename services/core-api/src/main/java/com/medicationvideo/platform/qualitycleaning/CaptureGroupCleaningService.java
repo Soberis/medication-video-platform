@@ -244,6 +244,13 @@ public class CaptureGroupCleaningService {
 			append(canonical, command.groupQualityRevision());
 			append(canonical, command.primaryClipAssetId());
 			append(canonical, command.primaryCameraNumber());
+			append(canonical, "candidate_evidence");
+			command.candidateEvidence()
+				.stream()
+				.map(CaptureGroupCleaningService::canonicalCandidateEvidence)
+				.sorted()
+				.forEach(value -> append(canonical, value));
+			append(canonical, "candidate_evidence_end");
 			for (var segment : command.primarySegments()) {
 				append(canonical, segment.startMs());
 				append(canonical, segment.endMs());
@@ -273,6 +280,15 @@ public class CaptureGroupCleaningService {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable.", exception);
 		}
+	}
+
+	private static String canonicalCandidateEvidence(Map<String, Object> evidence) {
+		var canonical = new StringBuilder();
+		evidence.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+			append(canonical, entry.getKey());
+			append(canonical, entry.getValue());
+		});
+		return canonical.toString();
 	}
 
 	private static void append(StringBuilder target, Object value) {

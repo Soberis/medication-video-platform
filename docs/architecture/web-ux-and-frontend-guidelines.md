@@ -119,7 +119,7 @@ P0 非目标：
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
 | `/projects/:projectId/sessions`、详情子路由 | 历史多相机配药操作视图 | CaptureSession 事实和后端契约继续保留 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；CaptureSession 后端仍是 REQUIRED 的接入事实。 |
 | `/annotation-projects` | 标注项目和标签/指南版本 | 待 AnnotationProject/Guideline 契约、权限与测试冻结 | 未启用 |
-| `/projects/:projectId/annotation-tasks/:taskId` | 单任务视频辅助人工标注工作台；查看 Skeleton/Candidate 辅助证据，提交不可变 revision，执行管理员复核、退回返工，以及查看 post-cleaning 事实并按权限重新核对清洗 | 自动任务、项目权限、质量守卫、LabelSchema、授权播放、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；该路由是任务级动作的唯一处理入口，权限和状态均使用服务端返回的 `can_submit`、`can_select_primary`、`can_review`、`can_recheck_post_cleaning` 事实，不新增画框工具、批量行为或数据集页面 |
+| `/projects/:projectId/annotation-tasks/:taskId` | 历史单任务视频辅助标注工作台（仅迁移参考） | 历史任务、候选证据和修订事实保留用于审计；当前任务入口回到 CaptureGroup 事件工作台 | 已退役；当前入口为 `/projects/:projectId/annotation-tasks`，具体动作深链回 `/projects/:projectId/capture-groups/:captureGroupId`，不作为当前路由或兼容承诺 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
 | `/cleaning` | 跨事件的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前 CaptureGroup Cleaning 只随事件/组任务展示结果，不为它新建清洗页 |
 | `/projects/:projectId/datasets`、详情子路由 | 历史 DatasetVersion/Export 产品视图 | 历史文档和迁移记录仅作演进参考 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；V66 已退役对应旧数据库对象。 |

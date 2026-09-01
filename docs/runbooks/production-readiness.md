@@ -15,7 +15,7 @@
 
 | 组件 | 完整路径是否需要 | 当前实现与本地启动方式 | 启动/事实边界 |
 | --- | --- | --- | --- |
-| PostgreSQL | 是 | Compose `postgres`，宿主机默认 `localhost:15432` | Core API 的权威关系型事实库；Flyway 当前迁移序列到 V70，不能用手工 SQL 代替发布迁移 |
+| PostgreSQL | 是 | Compose `postgres`，宿主机默认 `localhost:15432` | Core API 的权威关系型事实库；Flyway 当前迁移序列到 V72，不能用手工 SQL 代替发布迁移 |
 | S3-compatible object storage | 是 | Compose `s3`（SeaweedFS，仅本地），S3 API 默认 `http://localhost:9000` | 保存原始媒体及派生对象；应用只依赖 S3 API，不依赖 SeaweedFS 专有接口 |
 | RabbitMQ | 是（完整异步路径） | Compose `rabbitmq`，AMQP 默认 `localhost:5672`，管理界面 `localhost:15672` | 只负责投递；Outbox、job、attempt、lease 和 DLQ 业务事实仍由 Core API/数据库拥有 |
 | Core API | 是 | `services/core-api/mvnw ... spring-boot:run`，默认 `http://localhost:8080` | 启动后通过 `/actuator/health` 检查；承载同步查询、Review/Cleaning 和当前 v3 read-only export |
@@ -120,7 +120,7 @@ docker compose --env-file .env.example -f infra/docker-compose/compose.yaml conf
 
 1. 使用批准身份和受控目标执行 `pg_dump --format=custom` 或等价的产品快照；备份文件进入受控位置，不进入 Git 或工单附件。
 2. 恢复到隔离数据库/实例，用 `pg_restore --exit-on-error` 或产品等价操作；禁止先删除生产库来验证恢复。
-3. 让匹配制品执行 Flyway，确认迁移历史到发布要求（当前仓库迁移最高为 V70），再对账 `capture_session`、`camera_stream`、`annotation_revision`、`annotation_review`、`capture_group_cleaning`、`audit_event`、`outbox_event` 和相关 job/attempt 的行数、ID/摘要及权限。
+3. 让匹配制品执行 Flyway，确认迁移历史到发布要求（当前仓库迁移最高为 V72），再对账 `capture_session`、`camera_stream`、`annotation_revision`、`annotation_review`、`capture_group_cleaning`、`audit_event`、`outbox_event` 和相关 job/attempt 的行数、ID/摘要及权限。
 4. 隔离恢复通过后，才由负责人决定是否切换；应用回滚不能覆盖 append-only Revision、Review、Cleaning、审计和 Outbox 事实。
 
 ### S3-compatible object storage
