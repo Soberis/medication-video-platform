@@ -263,7 +263,7 @@ flowchart LR
 | CaptureGroupQualityReview | capture_group_quality_review | 保存 CaptureGroup 事件级人工质量准入、固定原因、评审人和版本 |
 | CleaningRuleSet | cleaning_rule_set、cleaning_rule | 版本化规则、阈值和适用范围 |
 | CaptureGroupCleaning | capture_group_cleaning | 对 CaptureGroup 冻结输入执行的不可变事件级 Cleaning；绑定组质量、AnnotationRevision、Review、参与视图和规则事实 |
-| CleaningRun | cleaning_run、cleaning_result | 保留的低层/历史清洗运行事实；不重新定义为独立单视频产品工作流 |
+| CleaningRun | cleaning_run、cleaning_result（V72 后仅在历史行阻断清理时保留） | 低层/历史清洗运行事实；不重新定义为独立单视频产品工作流 |
 | DuplicateGroup | duplicate_group、duplicate_member | 完全重复和近重复证据 |
 | Quarantine（后置） | quarantine_record | 历史迁移保留；P0 无运行接口 |
 | AdmissionOverride | admission_override | warning/例外准入的批准人、理由、期限和版本范围 |
@@ -283,7 +283,7 @@ flowchart LR
 
 ## 9. `datasetexport`（当前最小 `training-data.v3` 导出；历史 DatasetVersion/Export 设计参考）
 
-V1.27 当前公开导出只有以 CaptureGroup 为单位的 `training-data.v3` preview/download JSON event manifest；它只读当前组质量、AnnotationRevision、Review、CaptureGroupCleaning、视图和候选证据投影，不复制 MP4、不创建 DatasetVersion。既有 `training_data_eligibility`、`training_data_candidate_observations` 以及 v2 Parquet 只作为历史迁移/审计事实保留。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
+V1.27 当前公开导出只有以 CaptureGroup 为单位的 `training-data.v3` preview/download JSON event manifest；它只读当前组质量、AnnotationRevision、Review、CaptureGroupCleaning、视图和候选证据投影，不复制 MP4、不创建 DatasetVersion。V64 的 `training_data_eligibility`、`training_data_candidate_observations` 以及 v2 Parquet 只属于历史迁移/审计路径；V72 在无历史清洗或单视频任务行时移除旧视图和旧清洗表，存在历史行则 fail closed 并保留对象等待单独的数据保留与迁移决策。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
 
 ### 9.1 所有权
 

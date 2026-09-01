@@ -86,7 +86,6 @@ class QualityReviewContractTests {
 			.andExpect(jsonPath("$.version").value(0));
 
 		assertEquals(1, count("SELECT count(*) FROM quality_review WHERE clip_asset_id = ?", clipAssetId));
-		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE clip_asset_id = ?", clipAssetId));
 		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE project_id = ? AND capture_group_id IS NULL",
 				PROJECT_ID));
 		assertEquals(1, count("""

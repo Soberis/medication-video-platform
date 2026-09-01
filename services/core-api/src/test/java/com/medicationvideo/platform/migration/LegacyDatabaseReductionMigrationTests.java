@@ -26,8 +26,14 @@ class LegacyDatabaseReductionMigrationTests {
 
 	private static final String ADMIN_ACTOR = "synthetic-migration-admin";
 
+	private static final String SHA256 = "a".repeat(64);
+
+	private static final String LABEL_SCHEMA_ID = "10000000-0000-0000-0000-000000000001";
+
+	private static final String LABEL_SCHEMA_DIGEST = "305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
+
 	@Test
-	void migratesFreshDatabaseToV66AndPreservesP0Schema() {
+	void migratesFreshDatabaseToV72AndPreservesP0Schema() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
 			var dataSource = dataSource(postgres);
@@ -39,6 +45,7 @@ class LegacyDatabaseReductionMigrationTests {
 
 			assertEquals(1, migrationCount(jdbc, "65"));
 			assertEquals(1, migrationCount(jdbc, "66"));
+			assertEquals(1, migrationCount(jdbc, "72"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
@@ -46,7 +53,7 @@ class LegacyDatabaseReductionMigrationTests {
 	}
 
 	@Test
-	void upgradesExistingV64DatabaseToV66WithoutCascade() {
+	void upgradesExistingV64DatabaseToV72WithoutCascade() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
 			var dataSource = dataSource(postgres);
@@ -64,9 +71,42 @@ class LegacyDatabaseReductionMigrationTests {
 
 			assertEquals(1, migrationCount(jdbc, "65"));
 			assertEquals(1, migrationCount(jdbc, "66"));
+			assertEquals(1, migrationCount(jdbc, "72"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
+		}
+	}
+
+	@Test
+	void refusesToRetireSingleVideoPersistenceWhenHistoricalRowsExist() {
+		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
+			postgres.start();
+			var dataSource = dataSource(postgres);
+			var jdbc = new JdbcTemplate(dataSource);
+
+			configure(dataSource, "64").migrate();
+			ProjectMembershipTestData.ensureProject(jdbc, PROJECT_ID);
+			var clipAssetId = insertLegacyClipAsset(jdbc);
+			var taskId = UUID.randomUUID();
+			var now = Timestamp.from(Instant.parse("2026-07-25T02:00:00Z"));
+			jdbc.update("""
+					INSERT INTO annotation_task (
+					    annotation_task_id, project_id, clip_asset_id, label_schema_id,
+					    label_schema_digest, assignee_actor_id, created_by, idempotency_key,
+					    task_status, created_at, updated_at, version)
+					VALUES (?, ?, ?, ?::uuid, ?, ?, ?, ?, 'ASSIGNED', ?, ?, 0)
+					""", taskId, PROJECT_ID, clipAssetId, LABEL_SCHEMA_ID, LABEL_SCHEMA_DIGEST, ADMIN_ACTOR,
+					ADMIN_ACTOR, "legacy-task-" + taskId, now, now);
+
+			assertThrows(FlywayException.class, () -> configure(dataSource).migrate());
+			assertEquals(0, migrationCount(jdbc, "72"));
+			assertEquals(1, jdbc.queryForObject(
+					"SELECT count(*) FROM annotation_task WHERE annotation_task_id = ? AND capture_group_id IS NULL",
+					Integer.class, taskId));
+			assertTrue(columnExists(jdbc, "annotation_task", "clip_asset_id"));
+			assertTrue(tableExists(jdbc, "cleaning_run"));
+			assertTrue(tableExists(jdbc, "training_data_eligibility"));
 		}
 	}
 
@@ -182,6 +222,11 @@ class LegacyDatabaseReductionMigrationTests {
 		assertFalse(tableExists(jdbc, "dataset_export_attempt"));
 		assertFalse(tableExists(jdbc, "export_artifact"));
 		assertFalse(tableExists(jdbc, "dataset_export_manual_replay"));
+		assertFalse(tableExists(jdbc, "cleaning_run"));
+		assertFalse(tableExists(jdbc, "cleaning_result"));
+		assertFalse(tableExists(jdbc, "training_data_eligibility"));
+		assertFalse(tableExists(jdbc, "training_data_candidate_observations"));
+		assertFalse(columnExists(jdbc, "annotation_task", "clip_asset_id"));
 	}
 
 	private static void assertCurrentQueueContracts(JdbcTemplate jdbc) {
@@ -207,16 +252,60 @@ class LegacyDatabaseReductionMigrationTests {
 	private static void assertP0ObjectsPresent(JdbcTemplate jdbc) {
 		assertTrue(tableExists(jdbc, "clip_asset"));
 		assertTrue(tableExists(jdbc, "capture_session"));
+		assertTrue(tableExists(jdbc, "camera_set_snapshot"));
+		assertTrue(tableExists(jdbc, "camera_stream"));
 		assertTrue(tableExists(jdbc, "ai_job"));
+		assertTrue(tableExists(jdbc, "ai_job_attempt"));
 		assertTrue(tableExists(jdbc, "candidate_annotation"));
 		assertTrue(tableExists(jdbc, "quality_review"));
 		assertTrue(tableExists(jdbc, "annotation_revision"));
-		assertTrue(tableExists(jdbc, "cleaning_run"));
-		assertTrue(tableExists(jdbc, "cleaning_result"));
-		assertTrue(tableExists(jdbc, "training_data_eligibility"));
-		assertTrue(tableExists(jdbc, "training_data_candidate_observations"));
+		assertTrue(tableExists(jdbc, "capture_group_quality_review"));
+		assertTrue(tableExists(jdbc, "annotation_task"));
+		assertTrue(tableExists(jdbc, "annotation_review"));
+		assertTrue(tableExists(jdbc, "capture_group_cleaning"));
+		assertTrue(tableExists(jdbc, "training_data_group_eligibility_v3"));
+		assertTrue(columnExists(jdbc, "annotation_revision", "clip_asset_id"));
 		assertTrue(tableExists(jdbc, "inbox_message"));
 		assertTrue(tableExists(jdbc, "outbox_event"));
+	}
+
+	private static UUID insertLegacyClipAsset(JdbcTemplate jdbc) {
+		var batchId = UUID.randomUUID();
+		var uploadFileId = UUID.randomUUID();
+		var clientFileId = UUID.randomUUID();
+		var clipAssetId = UUID.randomUUID();
+		var now = Timestamp.from(Instant.parse("2026-07-25T02:00:00Z"));
+
+		jdbc.update("""
+				INSERT INTO upload_batch (
+				    batch_id, project_id, idempotency_key, request_fingerprint, device_id,
+				    initiated_by_actor_id, file_count, total_size_bytes, manifest_sha256,
+				    status, expires_at, created_at, updated_at, verified_manifest_sha256, completed_at)
+				VALUES (?, ?, ?, ?, 'synthetic-migration-device', ?, 1, 1234, ?,
+				        'COMPLETED', ?, ?, ?, ?, ?)
+				""", batchId, PROJECT_ID, "legacy-batch-" + batchId, SHA256, ADMIN_ACTOR, SHA256,
+				Timestamp.from(now.toInstant().plusSeconds(3600)), now, now, SHA256, now);
+		jdbc.update("""
+				INSERT INTO upload_file (
+				    upload_file_id, batch_id, client_file_id, idempotency_key, request_fingerprint,
+				    file_kind, content_type, size_bytes, sha256, part_size_bytes, total_parts,
+				    status, created_at, updated_at, storage_bucket, object_key, storage_upload_id,
+				    multipart_created_at, completion_started_at, completion_finished_at,
+				    verified_sha256, completed_storage_etag)
+				VALUES (?, ?, ?, ?, ?, 'VIDEO', 'video/mp4', 1234, ?, 8388608, 1,
+				        'UPLOADED', ?, ?, 'synthetic-bucket', ?, ?, ?, ?, ?, ?, 'synthetic-etag')
+				""", uploadFileId, batchId, clientFileId, "legacy-file-" + uploadFileId, SHA256, SHA256, now, now,
+				"objects/" + uploadFileId, "multipart-" + uploadFileId, now, now, now, SHA256);
+		jdbc.update("""
+				INSERT INTO clip_asset (
+				    clip_asset_id, project_id, batch_id, source_upload_file_id, client_file_id,
+				    content_type, size_bytes, sha256, storage_bucket, object_key, storage_etag,
+				    asset_status, created_at, updated_at, version)
+				VALUES (?, ?, ?, ?, ?, 'video/mp4', 1234, ?, 'synthetic-bucket', ?,
+				        'synthetic-etag', 'INGESTED', ?, ?, 0)
+				""", clipAssetId, PROJECT_ID, batchId, uploadFileId, clientFileId, SHA256, "objects/" + clipAssetId,
+				now, now);
+		return clipAssetId;
 	}
 
 	private static boolean tableExists(JdbcTemplate jdbc, String relationName) {

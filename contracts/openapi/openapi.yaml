@@ -1096,8 +1096,7 @@ paths:
         batch to be bound exactly once. CaptureSession, CameraSetSnapshot, snapshot members and
         CameraStreams are created in one database transaction. Edge-reported synchronization data
         is retained as an observation and does not override server configuration or become a
-        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. For the legacy
-        V1.24 single-video projection, received_camera_count is the media-INGESTED count; the V1.27
+        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. The V1.27
         CaptureGroup projection uses the actual bound stream count. A natural-resource replay returns
         the original assembly without rereading object storage. The operation does not control the
         RK3588 device or accept video bytes through the Core API. For PLATFORM_LOCAL batches,
@@ -5029,9 +5028,8 @@ components:
           minimum: 0
           maximum: 64
           description: >-
-            Legacy V1.24 single-video responses count unique bound streams whose ClipAsset has reached
-            INGESTED; V1.27 CaptureGroup responses count unique streams actually bound to the frozen
-            snapshot. The CaptureGroup receipt count is independent of media probe status.
+            V1.27 CaptureGroup responses count unique streams actually bound to the frozen snapshot.
+            The CaptureGroup receipt count is independent of media probe status.
         sync_group_id:
           type: [string, "null"]
           minLength: 1

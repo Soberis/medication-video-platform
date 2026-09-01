@@ -109,12 +109,11 @@ class CaptureGroupQualityAnnotationContractTests {
 		assertEquals(0, count("SELECT count(*) FROM annotation_task WHERE project_id = ? AND capture_group_id IS NULL",
 				PROJECT_ID));
 		var task = this.jdbcTemplate.queryForMap("""
-				SELECT clip_asset_id, capture_group_id, assignee_actor_id, created_by,
-				       primary_clip_asset_id, group_quality_revision
+				SELECT capture_group_id, assignee_actor_id, created_by, primary_clip_asset_id,
+				       group_quality_revision
 				FROM annotation_task
 				WHERE annotation_task_id = ?
 				""", taskId);
-		assertEquals(null, task.get("clip_asset_id"));
 		assertEquals(group.captureGroupId(), task.get("capture_group_id"));
 		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, task.get("assignee_actor_id"));
 		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, task.get("created_by"));
