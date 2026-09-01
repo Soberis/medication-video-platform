@@ -3,13 +3,13 @@ import { csrfHeaders } from '@/api/http'
 export interface AnnotationTask {
   annotation_task_id: string
   project_id: string
-  capture_group_id?: string | null
+  capture_group_id: string
   primary_clip_asset_id?: string | null
   primary_camera_number?: number | null
-  capture_group_quality_review_id?: string | null
-  group_quality_revision?: number | null
-  confirmed_view_set?: CaptureGroupViewSet | null
-  group_input_version?: string | null
+  capture_group_quality_review_id: string
+  group_quality_revision: number
+  confirmed_view_set: CaptureGroupViewSet
+  group_input_version: string
   label_schema_id: string
   label_schema_digest: string
   assignee_actor_id: string
@@ -73,11 +73,11 @@ export interface AnnotationRevision {
   document_sha256: string
   submitted_by: string
   submitted_at: string
-  capture_group_id?: string | null
-  primary_clip_asset_id?: string | null
-  primary_camera_number?: number | null
-  confirmed_view_set?: CaptureGroupViewSet | null
-  input_version?: string | null
+  capture_group_id: string
+  primary_clip_asset_id: string
+  primary_camera_number: number
+  confirmed_view_set: CaptureGroupViewSet
+  input_version: string
 }
 
 export interface AnnotationRevisionSummary {
@@ -92,11 +92,11 @@ export interface AnnotationRevisionSummary {
   }
   submitted_by: string
   submitted_at: string
-  capture_group_id?: string | null
-  primary_clip_asset_id?: string | null
-  primary_camera_number?: number | null
-  confirmed_view_set?: CaptureGroupViewSet | null
-  input_version?: string | null
+  capture_group_id: string
+  primary_clip_asset_id: string
+  primary_camera_number: number
+  confirmed_view_set: CaptureGroupViewSet
+  input_version: string
   review: AnnotationReview | null
   capture_group_cleaning?: CaptureGroupCleaning | null
 }
@@ -160,15 +160,15 @@ export interface AnnotationReview {
   review_note: string | null
   reviewed_by: string
   reviewed_at: string
-  capture_group_id?: string | null
-  revision?: number | null
-  primary_clip_asset_id?: string | null
-  primary_camera_number?: number | null
-  confirmed_view_set?: CaptureGroupViewSet | null
-  input_version?: string | null
-  qualified_views?: CaptureGroupEvidence[]
-  rejected_missing_views?: CaptureGroupEvidence[]
-  candidate_evidence?: CaptureGroupEvidence[]
+  capture_group_id: string
+  revision: number
+  primary_clip_asset_id: string
+  primary_camera_number: number
+  confirmed_view_set: CaptureGroupViewSet
+  input_version: string
+  qualified_views: CaptureGroupEvidence[]
+  rejected_missing_views: CaptureGroupEvidence[]
+  candidate_evidence: CaptureGroupEvidence[]
 }
 
 export type CaptureGroupEvidence = Record<string, unknown>

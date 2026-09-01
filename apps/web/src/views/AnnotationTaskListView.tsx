@@ -146,7 +146,7 @@ export default function AnnotationTaskListView() {
         getAnnotationLabelSchema(projectId, request.signal),
       ])
       if (activeRequest.current !== request) return
-      setItems(taskList.items.filter((task) => Boolean(task.capture_group_id)))
+      setItems(taskList.items)
       setProgress(taskList.progress)
       setLabelSchema(schema)
       setLoadState('success')
@@ -310,7 +310,6 @@ export default function AnnotationTaskListView() {
           >
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
-              if (!captureGroupId) return null
               const taskSubject = `配药事件 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
               const presentation = captureGroupCleaningPresentation(row)

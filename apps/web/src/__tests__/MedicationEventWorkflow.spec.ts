@@ -4,6 +4,7 @@ import type {
   AnnotationRevisionSummary,
   AnnotationReview,
   CaptureGroupCleaning,
+  CaptureGroupViewSet,
 } from '@/api/annotation'
 import type { CaptureGroupQualityReview } from '@/api/capture-groups'
 import {
@@ -14,7 +15,17 @@ import {
 
 const groupId = 'group-workflow-test'
 
+const confirmedViewSet: CaptureGroupViewSet = {
+  schema_version: 'capture-group-view-set.v1',
+  capture_group_id: groupId,
+  capture_group_version: 1,
+  camera_set_snapshot_id: 'camera-set-1',
+  receipt_state: 'COMPLETE',
+  views: [],
+}
+
 function qualityReview(result: CaptureGroupQualityReview['result']): CaptureGroupQualityReview {
+  const admitting = result === 'QUALIFIED' || result === 'QUALIFIED_WITH_EXCLUSIONS'
   return {
     capture_group_quality_review_id: 'group-quality-review-1',
     project_id: 'project-1',
@@ -25,8 +36,8 @@ function qualityReview(result: CaptureGroupQualityReview['result']): CaptureGrou
     revision: 1,
     version: 1,
     decided_at: '2026-08-20T01:00:00Z',
-    confirmed_view_set: null,
-    input_version: null,
+    confirmed_view_set: admitting ? confirmedViewSet : null,
+    input_version: admitting ? 'input-1' : null,
     confirmed_view_set_sha256: null,
   }
 }
@@ -64,7 +75,7 @@ function revision(
     capture_group_id: groupId,
     primary_clip_asset_id: 'clip-1',
     primary_camera_number: 1,
-    confirmed_view_set: null,
+    confirmed_view_set: confirmedViewSet,
     input_version: 'input-1',
     review,
     capture_group_cleaning: cleaning,
@@ -84,8 +95,11 @@ function review(decision: AnnotationReview['decision']): AnnotationReview {
     revision: 1,
     primary_clip_asset_id: 'clip-1',
     primary_camera_number: 1,
-    confirmed_view_set: null,
+    confirmed_view_set: confirmedViewSet,
     input_version: 'input-1',
+    qualified_views: [],
+    rejected_missing_views: [],
+    candidate_evidence: [],
   }
 }
 

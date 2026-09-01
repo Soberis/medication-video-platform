@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
@@ -47,43 +48,38 @@ class AnnotationReview {
 	@Column(name = "reviewed_at", nullable = false, updatable = false)
 	private Instant reviewedAt;
 
-	@Column(name = "capture_group_id", updatable = false)
+	@Column(name = "capture_group_id", nullable = false, updatable = false)
 	private UUID captureGroupId;
 
-	@Column(name = "annotation_revision_number", updatable = false)
-	private Integer revisionNumber;
+	@Column(name = "annotation_revision_number", nullable = false, updatable = false)
+	private int revisionNumber;
 
-	@Column(name = "primary_clip_asset_id", updatable = false)
+	@Column(name = "primary_clip_asset_id", nullable = false, updatable = false)
 	private UUID primaryClipAssetId;
 
-	@Column(name = "primary_camera_number", updatable = false)
-	private Integer primaryCameraNumber;
+	@Column(name = "primary_camera_number", nullable = false, updatable = false)
+	private int primaryCameraNumber;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "confirmed_view_set", updatable = false, columnDefinition = "jsonb")
+	@Column(name = "confirmed_view_set", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private java.util.Map<String, Object> confirmedViewSet;
 
-	@Column(name = "input_version", updatable = false, length = 128)
+	@Column(name = "input_version", nullable = false, updatable = false, length = 128)
 	private String inputVersion;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "qualified_views", updatable = false, columnDefinition = "jsonb")
+	@Column(name = "qualified_views", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private List<java.util.Map<String, Object>> qualifiedViews;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "rejected_missing_views", updatable = false, columnDefinition = "jsonb")
+	@Column(name = "rejected_missing_views", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private List<java.util.Map<String, Object>> rejectedMissingViews;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "candidate_evidence", updatable = false, columnDefinition = "jsonb")
+	@Column(name = "candidate_evidence", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private List<java.util.Map<String, Object>> candidateEvidence;
 
 	protected AnnotationReview() {
-	}
-
-	private AnnotationReview(UUID projectId, UUID annotationRevisionId, AnnotationReviewDecision decision,
-			String reviewNote, String reviewedBy, String idempotencyKey, Instant reviewedAt) {
-		this(projectId, annotationRevisionId, decision, reviewNote, reviewedBy, idempotencyKey, reviewedAt, null);
 	}
 
 	private AnnotationReview(UUID projectId, UUID annotationRevisionId, AnnotationReviewDecision decision,
@@ -97,17 +93,15 @@ class AnnotationReview {
 		this.reviewedBy = reviewedBy;
 		this.idempotencyKey = idempotencyKey;
 		this.reviewedAt = reviewedAt;
-		if (context != null) {
-			this.captureGroupId = context.captureGroupId();
-			this.revisionNumber = context.revisionNumber();
-			this.primaryClipAssetId = context.primaryClipAssetId();
-			this.primaryCameraNumber = context.primaryCameraNumber();
-			this.confirmedViewSet = copyMapPreservingNulls(context.confirmedViewSet());
-			this.inputVersion = context.inputVersion();
-			this.qualifiedViews = copyListPreservingNulls(context.qualifiedViews());
-			this.rejectedMissingViews = copyListPreservingNulls(context.rejectedMissingViews());
-			this.candidateEvidence = copyListPreservingNulls(context.candidateEvidence());
-		}
+		this.captureGroupId = Objects.requireNonNull(context.captureGroupId(), "captureGroupId");
+		this.revisionNumber = context.revisionNumber();
+		this.primaryClipAssetId = Objects.requireNonNull(context.primaryClipAssetId(), "primaryClipAssetId");
+		this.primaryCameraNumber = context.primaryCameraNumber();
+		this.confirmedViewSet = copyMapPreservingNulls(context.confirmedViewSet());
+		this.inputVersion = Objects.requireNonNull(context.inputVersion(), "inputVersion");
+		this.qualifiedViews = copyListPreservingNulls(context.qualifiedViews());
+		this.rejectedMissingViews = copyListPreservingNulls(context.rejectedMissingViews());
+		this.candidateEvidence = copyListPreservingNulls(context.candidateEvidence());
 	}
 
 	private static Map<String, Object> copyMapPreservingNulls(Map<String, Object> value) {
@@ -116,12 +110,6 @@ class AnnotationReview {
 
 	private static List<Map<String, Object>> copyListPreservingNulls(List<Map<String, Object>> values) {
 		return values.stream().map(AnnotationReview::copyMapPreservingNulls).toList();
-	}
-
-	static AnnotationReview record(AnnotationRevision revision, AnnotationReviewDecision decision, String reviewNote,
-			String reviewedBy, String idempotencyKey, Instant reviewedAt) {
-		return new AnnotationReview(revision.getProjectId(), revision.getAnnotationRevisionId(), decision, reviewNote,
-				reviewedBy, idempotencyKey, reviewedAt);
 	}
 
 	static AnnotationReview record(AnnotationRevision revision, AnnotationReviewDecision decision, String reviewNote,
@@ -162,7 +150,7 @@ class AnnotationReview {
 		return this.captureGroupId;
 	}
 
-	Integer getRevisionNumber() {
+	int getRevisionNumber() {
 		return this.revisionNumber;
 	}
 
@@ -170,7 +158,7 @@ class AnnotationReview {
 		return this.primaryClipAssetId;
 	}
 
-	Integer getPrimaryCameraNumber() {
+	int getPrimaryCameraNumber() {
 		return this.primaryCameraNumber;
 	}
 

@@ -534,15 +534,17 @@ export function groupTask(
   canSubmit: boolean,
   options: { revision?: boolean } = {},
 ): AnnotationTask {
+  const primaryClipAssetId = clipIds[0] ?? '50000000-0000-4000-8000-000000000001'
+  const confirmedViewSet = taskViewSet(captureGroupId)
   return {
     annotation_task_id: taskId,
     project_id: projectId,
     capture_group_id: captureGroupId,
-    primary_clip_asset_id: clipIds[0] ?? null,
+    primary_clip_asset_id: primaryClipAssetId,
     primary_camera_number: 1,
     capture_group_quality_review_id: '45000000-0000-4000-8000-000000000001',
     group_quality_revision: 1,
-    confirmed_view_set: null,
+    confirmed_view_set: confirmedViewSet,
     group_input_version: 'capture-group-view-set.v1:synthetic',
     label_schema_id: schemaId,
     label_schema_digest: 'a'.repeat(64),
@@ -565,6 +567,11 @@ export function groupTask(
           },
           submitted_by: 'reviewer',
           submitted_at: '2026-08-20T01:03:00Z',
+          capture_group_id: captureGroupId,
+          primary_clip_asset_id: primaryClipAssetId,
+          primary_camera_number: 1,
+          confirmed_view_set: confirmedViewSet,
+          input_version: 'capture-group-view-set.v1:synthetic',
           review: {
             annotation_review_id: '48000000-0000-4000-8000-000000000001',
             project_id: projectId,
@@ -573,6 +580,15 @@ export function groupTask(
             review_note: null,
             reviewed_by: 'admin',
             reviewed_at: '2026-08-20T01:04:00Z',
+            capture_group_id: captureGroupId,
+            revision: 1,
+            primary_clip_asset_id: primaryClipAssetId,
+            primary_camera_number: 1,
+            confirmed_view_set: confirmedViewSet,
+            input_version: 'capture-group-view-set.v1:synthetic',
+            qualified_views: [],
+            rejected_missing_views: [],
+            candidate_evidence: [],
           },
           capture_group_cleaning: {
             capture_group_cleaning_id: '49000000-0000-4000-8000-000000000001',
@@ -613,6 +629,7 @@ export function captureGroupReviewFixture(
 ): AnnotationReview {
   const viewSet =
     options.viewSet ?? qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
+  if (!viewSet) throw new Error('The synthetic CaptureGroup review fixture requires a View Set.')
   return {
     annotation_review_id: '48000000-0000-4000-8000-000000000001',
     project_id: projectId,
@@ -626,10 +643,10 @@ export function captureGroupReviewFixture(
     primary_clip_asset_id:
       viewSet?.views.find((view) => view.camera_number === 1)?.clip_asset_id ??
       group.streams[0]?.clip_asset_id ??
-      null,
+      clipIds[0]!,
     primary_camera_number: 1,
     confirmed_view_set: viewSet,
-    input_version: viewSet ? 'capture-group-view-set.v1:synthetic' : null,
+    input_version: 'capture-group-view-set.v1:synthetic',
     qualified_views: qualifiedViewsFromViewSet(viewSet),
     rejected_missing_views: rejectedViewsFromViewSet(viewSet),
     candidate_evidence: [
@@ -730,6 +747,7 @@ export function submittedGroupTask(
   const viewSet =
     options.confirmedViewSet ??
     qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
+  if (!viewSet) throw new Error('The synthetic CaptureGroup task fixture requires a View Set.')
   const revision = base.annotation_revision!
   const annotationRevisionId = options.annotationRevisionId ?? revision.annotation_revision_id
   return {
@@ -749,14 +767,25 @@ export function submittedGroupTask(
       submitted_by: 'annotator',
       submitted_at: '2026-08-20T01:03:00Z',
       capture_group_id: group.capture_group_id,
-      primary_clip_asset_id: group.streams[0]?.clip_asset_id ?? null,
+      primary_clip_asset_id: group.streams[0]?.clip_asset_id ?? clipIds[0]!,
       primary_camera_number: 1,
       confirmed_view_set: viewSet,
-      input_version: viewSet ? 'capture-group-view-set.v1:synthetic' : null,
+      input_version: 'capture-group-view-set.v1:synthetic',
       review: null,
       capture_group_cleaning: null,
     },
     version: 1,
+  }
+}
+
+function taskViewSet(captureGroupId: string): CaptureGroupViewSet {
+  return {
+    schema_version: 'capture-group-view-set.v1',
+    capture_group_id: captureGroupId,
+    capture_group_version: 1,
+    camera_set_snapshot_id: '43000000-0000-4000-8000-000000000001',
+    receipt_state: 'COMPLETE',
+    views: [],
   }
 }
 

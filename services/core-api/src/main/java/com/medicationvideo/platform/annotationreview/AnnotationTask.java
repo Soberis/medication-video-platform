@@ -27,7 +27,7 @@ class AnnotationTask {
 	@Column(name = "project_id", nullable = false, updatable = false)
 	private UUID projectId;
 
-	@Column(name = "capture_group_id", updatable = false)
+	@Column(name = "capture_group_id", nullable = false, updatable = false)
 	private UUID captureGroupId;
 
 	@Column(name = "primary_clip_asset_id")
@@ -36,17 +36,17 @@ class AnnotationTask {
 	@Column(name = "primary_camera_number")
 	private Integer primaryCameraNumber;
 
-	@Column(name = "capture_group_quality_review_id")
+	@Column(name = "capture_group_quality_review_id", nullable = false)
 	private UUID captureGroupQualityReviewId;
 
-	@Column(name = "group_quality_revision")
-	private Long groupQualityRevision;
+	@Column(name = "group_quality_revision", nullable = false)
+	private long groupQualityRevision;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "confirmed_view_set", columnDefinition = "jsonb")
+	@Column(name = "confirmed_view_set", nullable = false, columnDefinition = "jsonb")
 	private Map<String, Object> confirmedViewSet;
 
-	@Column(name = "group_input_version", length = 128)
+	@Column(name = "group_input_version", nullable = false, length = 128)
 	private String groupInputVersion;
 
 	@Column(name = "label_schema_id", nullable = false, updatable = false)
@@ -82,18 +82,19 @@ class AnnotationTask {
 	}
 
 	private AnnotationTask(UUID projectId, UUID captureGroupId, UUID primaryClipAssetId, Integer primaryCameraNumber,
-			UUID captureGroupQualityReviewId, Long groupQualityRevision, Map<String, Object> confirmedViewSet,
+			UUID captureGroupQualityReviewId, long groupQualityRevision, Map<String, Object> confirmedViewSet,
 			String groupInputVersion, String assigneeActorId, String createdBy, String idempotencyKey,
 			AnnotationLabelSchemaBinding labelSchema, Instant now) {
 		this.annotationTaskId = UUID.randomUUID();
 		this.projectId = projectId;
-		this.captureGroupId = captureGroupId;
+		this.captureGroupId = Objects.requireNonNull(captureGroupId, "captureGroupId");
 		this.primaryClipAssetId = primaryClipAssetId;
 		this.primaryCameraNumber = primaryCameraNumber;
-		this.captureGroupQualityReviewId = captureGroupQualityReviewId;
+		this.captureGroupQualityReviewId = Objects.requireNonNull(captureGroupQualityReviewId,
+				"captureGroupQualityReviewId");
 		this.groupQualityRevision = groupQualityRevision;
-		this.confirmedViewSet = confirmedViewSet == null ? null : Map.copyOf(confirmedViewSet);
-		this.groupInputVersion = groupInputVersion;
+		this.confirmedViewSet = Map.copyOf(Objects.requireNonNull(confirmedViewSet, "confirmedViewSet"));
+		this.groupInputVersion = Objects.requireNonNull(groupInputVersion, "groupInputVersion");
 		this.labelSchemaId = labelSchema.labelSchemaId();
 		this.labelSchemaDigest = labelSchema.schemaDigest();
 		this.assigneeActorId = assigneeActorId;
@@ -137,7 +138,7 @@ class AnnotationTask {
 		return this.captureGroupQualityReviewId;
 	}
 
-	Long getGroupQualityRevision() {
+	long getGroupQualityRevision() {
 		return this.groupQualityRevision;
 	}
 
@@ -149,24 +150,16 @@ class AnnotationTask {
 		return this.groupInputVersion;
 	}
 
-	boolean isCaptureGroupTask() {
-		return this.captureGroupId != null;
-	}
-
 	boolean hasPrimaryView() {
 		return this.primaryClipAssetId != null && this.primaryCameraNumber != null;
 	}
 
 	boolean isRevisionForCurrentGroupInput(AnnotationRevision revision) {
-		return !this.isCaptureGroupTask() || (Objects.equals(this.groupInputVersion, revision.getInputVersion())
-				&& Objects.equals(this.confirmedViewSet, revision.getConfirmedViewSet()));
+		return Objects.equals(this.groupInputVersion, revision.getInputVersion())
+				&& Objects.equals(this.confirmedViewSet, revision.getConfirmedViewSet());
 	}
 
 	void selectPrimaryView(UUID clipAssetId, int cameraNumber, Instant now) {
-		if (!this.isCaptureGroupTask()) {
-			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_NOT_SUPPORTED",
-					"A primary view can only be selected for a CaptureGroup annotation task.", 409);
-		}
 		this.primaryClipAssetId = clipAssetId;
 		this.primaryCameraNumber = cameraNumber;
 		this.updatedAt = now;
@@ -174,19 +167,17 @@ class AnnotationTask {
 
 	boolean refreshGroupQualitySnapshot(UUID captureGroupQualityReviewId, long groupQualityRevision,
 			Map<String, Object> confirmedViewSet, String groupInputVersion, Instant now) {
-		if (!this.isCaptureGroupTask()) {
-			return false;
-		}
 		var inputChanged = !Objects.equals(this.confirmedViewSet, confirmedViewSet)
 				|| !Objects.equals(this.groupInputVersion, groupInputVersion);
 		if (!inputChanged && Objects.equals(this.captureGroupQualityReviewId, captureGroupQualityReviewId)
 				&& Objects.equals(this.groupQualityRevision, groupQualityRevision)) {
 			return false;
 		}
-		this.captureGroupQualityReviewId = captureGroupQualityReviewId;
+		this.captureGroupQualityReviewId = Objects.requireNonNull(captureGroupQualityReviewId,
+				"captureGroupQualityReviewId");
 		this.groupQualityRevision = groupQualityRevision;
-		this.confirmedViewSet = Map.copyOf(confirmedViewSet);
-		this.groupInputVersion = groupInputVersion;
+		this.confirmedViewSet = Map.copyOf(Objects.requireNonNull(confirmedViewSet, "confirmedViewSet"));
+		this.groupInputVersion = Objects.requireNonNull(groupInputVersion, "groupInputVersion");
 		if (inputChanged) {
 			this.status = AnnotationTaskStatus.ASSIGNED;
 		}

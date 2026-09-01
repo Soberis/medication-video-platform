@@ -5886,18 +5886,16 @@ components:
           minimum: 1
           maximum: 64
         capture_group_quality_review_id:
-          type: [string, "null"]
+          type: string
           format: uuid
         group_quality_revision:
-          type: [integer, "null"]
+          type: integer
           format: int64
           minimum: 1
         confirmed_view_set:
-          anyOf:
-            - $ref: "#/components/schemas/CaptureGroupViewSet"
-            - type: "null"
+          $ref: "#/components/schemas/CaptureGroupViewSet"
         group_input_version:
-          type: [string, "null"]
+          type: string
           maxLength: 128
         label_schema_id:
           type: string
@@ -6081,6 +6079,11 @@ components:
         - project_id
         - annotation_task_id
         - clip_asset_id
+        - capture_group_id
+        - primary_clip_asset_id
+        - primary_camera_number
+        - confirmed_view_set
+        - input_version
         - revision_number
         - annotation_schema_version
         - label_schema_id
@@ -6103,21 +6106,19 @@ components:
           format: uuid
           description: The primary ClipAsset that supplies the formal annotation timebase for this CaptureGroup revision.
         capture_group_id:
-          type: [string, "null"]
+          type: string
           format: uuid
         primary_clip_asset_id:
-          type: [string, "null"]
+          type: string
           format: uuid
         primary_camera_number:
-          type: [integer, "null"]
+          type: integer
           minimum: 1
           maximum: 64
         confirmed_view_set:
-          anyOf:
-            - $ref: "#/components/schemas/CaptureGroupViewSet"
-            - type: "null"
+          $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
-          type: [string, "null"]
+          type: string
           maxLength: 128
         revision_number:
           type: integer
@@ -6151,6 +6152,11 @@ components:
         - annotation_document
         - submitted_by
         - submitted_at
+        - capture_group_id
+        - primary_clip_asset_id
+        - primary_camera_number
+        - confirmed_view_set
+        - input_version
         - review
         - capture_group_cleaning
       properties:
@@ -6191,21 +6197,19 @@ components:
           type: string
           format: date-time
         capture_group_id:
-          type: [string, "null"]
+          type: string
           format: uuid
         primary_clip_asset_id:
-          type: [string, "null"]
+          type: string
           format: uuid
         primary_camera_number:
-          type: [integer, "null"]
+          type: integer
           minimum: 1
           maximum: 64
         confirmed_view_set:
-          anyOf:
-            - $ref: "#/components/schemas/CaptureGroupViewSet"
-            - type: "null"
+          $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
-          type: [string, "null"]
+          type: string
           maxLength: 128
         review:
           anyOf:
@@ -6246,6 +6250,15 @@ components:
         - review_note
         - reviewed_by
         - reviewed_at
+        - capture_group_id
+        - revision
+        - primary_clip_asset_id
+        - primary_camera_number
+        - confirmed_view_set
+        - input_version
+        - qualified_views
+        - rejected_missing_views
+        - candidate_evidence
       properties:
         annotation_review_id:
           type: string
@@ -6270,56 +6283,37 @@ components:
           type: string
           format: date-time
         capture_group_id:
-          type:
-            - string
-            - "null"
+          type: string
           format: uuid
         revision:
-          type:
-            - integer
-            - "null"
+          type: integer
           format: int32
           minimum: 1
         primary_clip_asset_id:
-          type:
-            - string
-            - "null"
+          type: string
           format: uuid
         primary_camera_number:
-          type:
-            - integer
-            - "null"
+          type: integer
           format: int32
           minimum: 1
           maximum: 64
         confirmed_view_set:
-          type:
-            - object
-            - "null"
-          additionalProperties: true
+          $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
-          type:
-            - string
-            - "null"
+          type: string
           maxLength: 128
         qualified_views:
-          type:
-            - array
-            - "null"
+          type: array
           items:
             type: object
             additionalProperties: true
         rejected_missing_views:
-          type:
-            - array
-            - "null"
+          type: array
           items:
             type: object
             additionalProperties: true
         candidate_evidence:
-          type:
-            - array
-            - "null"
+          type: array
           items:
             type: object
             additionalProperties: true

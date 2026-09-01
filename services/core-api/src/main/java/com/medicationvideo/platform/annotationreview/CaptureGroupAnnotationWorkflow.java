@@ -181,10 +181,6 @@ class CaptureGroupAnnotationWorkflow {
 		this.projectAccessService.lockAndRequireMember(projectId, actorId);
 		var task = this.taskRepository.findForUpdate(projectId, annotationTaskId)
 			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
-		if (!task.isCaptureGroupTask()) {
-			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_NOT_SUPPORTED",
-					"A primary view can only be selected for a CaptureGroup annotation task.", 409);
-		}
 		if (!task.getAssigneeActorId().equals(actorId)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_ASSIGNEE",
 					"Only the assigned project member can select the primary view.", 403);
@@ -284,7 +280,7 @@ class CaptureGroupAnnotationWorkflow {
 		}
 		var task = this.taskRepository.findForUpdate(projectId, revision.getAnnotationTaskId())
 			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
-		if (!revision.isCaptureGroupRevision() || task.getStatus() != AnnotationTaskStatus.COMPLETED) {
+		if (task.getStatus() != AnnotationTaskStatus.COMPLETED) {
 			throw groupCleaningRecheckNotReady();
 		}
 		this.requireGroupReviewContext(projectId, revision, task);

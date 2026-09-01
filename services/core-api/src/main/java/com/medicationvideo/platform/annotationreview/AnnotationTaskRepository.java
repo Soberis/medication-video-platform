@@ -29,10 +29,9 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 	Optional<AnnotationTask> findForUpdate(@Param("projectId") UUID projectId,
 			@Param("annotationTaskId") UUID annotationTaskId);
 
-	List<AnnotationTask> findAllByProjectIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(
-			UUID projectId);
+	List<AnnotationTask> findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId);
 
-	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(
-			UUID projectId, String assigneeActorId);
+	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId,
+			String assigneeActorId);
 
 }

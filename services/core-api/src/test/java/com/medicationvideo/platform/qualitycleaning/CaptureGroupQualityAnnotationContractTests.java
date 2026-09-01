@@ -124,6 +124,11 @@ class CaptureGroupQualityAnnotationContractTests {
 			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
 					"Bearer " + MEMBER_TOKEN))
 			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].capture_group_id").value(group.captureGroupId().toString()))
+			.andExpect(jsonPath("$.items[0].capture_group_quality_review_id").value(reviewId))
+			.andExpect(jsonPath("$.items[0].group_quality_revision").value(1))
+			.andExpect(jsonPath("$.items[0].confirmed_view_set.schema_version").value("capture-group-view-set.v1"))
+			.andExpect(jsonPath("$.items[0].group_input_version").value(startsWith("capture-group-view-set.v1:")))
 			.andExpect(jsonPath("$.items[0].can_submit").value(false))
 			.andExpect(jsonPath("$.items[0].can_select_primary").value(true));
 		this.mockMvc

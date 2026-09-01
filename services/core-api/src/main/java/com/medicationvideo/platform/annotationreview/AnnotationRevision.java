@@ -2,6 +2,7 @@ package com.medicationvideo.platform.annotationreview;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
@@ -29,14 +30,14 @@ class AnnotationRevision {
 	@Column(name = "clip_asset_id", nullable = false, updatable = false)
 	private UUID clipAssetId;
 
-	@Column(name = "capture_group_id", updatable = false)
+	@Column(name = "capture_group_id", nullable = false, updatable = false)
 	private UUID captureGroupId;
 
-	@Column(name = "primary_clip_asset_id", updatable = false)
+	@Column(name = "primary_clip_asset_id", nullable = false, updatable = false)
 	private UUID primaryClipAssetId;
 
-	@Column(name = "primary_camera_number", updatable = false)
-	private Integer primaryCameraNumber;
+	@Column(name = "primary_camera_number", nullable = false, updatable = false)
+	private int primaryCameraNumber;
 
 	@Column(name = "revision_number", nullable = false, updatable = false)
 	private int revisionNumber;
@@ -58,10 +59,10 @@ class AnnotationRevision {
 	private String documentSha256;
 
 	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "confirmed_view_set", updatable = false, columnDefinition = "jsonb")
+	@Column(name = "confirmed_view_set", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private Map<String, Object> confirmedViewSet;
 
-	@Column(name = "input_version", updatable = false, length = 128)
+	@Column(name = "input_version", nullable = false, updatable = false, length = 128)
 	private String inputVersion;
 
 	@Column(name = "submitted_by", nullable = false, updatable = false, length = 128)
@@ -77,7 +78,7 @@ class AnnotationRevision {
 	}
 
 	private AnnotationRevision(UUID projectId, UUID annotationTaskId, UUID clipAssetId, UUID captureGroupId,
-			UUID primaryClipAssetId, Integer primaryCameraNumber, int revisionNumber, UUID labelSchemaId,
+			UUID primaryClipAssetId, int primaryCameraNumber, int revisionNumber, UUID labelSchemaId,
 			String labelSchemaDigest, Map<String, Object> annotationDocument, String documentSha256,
 			Map<String, Object> confirmedViewSet, String inputVersion, String submittedBy, String idempotencyKey,
 			Instant submittedAt) {
@@ -85,8 +86,8 @@ class AnnotationRevision {
 		this.projectId = projectId;
 		this.annotationTaskId = annotationTaskId;
 		this.clipAssetId = clipAssetId;
-		this.captureGroupId = captureGroupId;
-		this.primaryClipAssetId = primaryClipAssetId;
+		this.captureGroupId = Objects.requireNonNull(captureGroupId, "captureGroupId");
+		this.primaryClipAssetId = Objects.requireNonNull(primaryClipAssetId, "primaryClipAssetId");
 		this.primaryCameraNumber = primaryCameraNumber;
 		this.revisionNumber = revisionNumber;
 		this.annotationSchemaVersion = "annotation-document.v1";
@@ -94,8 +95,8 @@ class AnnotationRevision {
 		this.labelSchemaDigest = labelSchemaDigest;
 		this.annotationDocument = Map.copyOf(annotationDocument);
 		this.documentSha256 = documentSha256;
-		this.confirmedViewSet = confirmedViewSet == null ? null : Map.copyOf(confirmedViewSet);
-		this.inputVersion = inputVersion;
+		this.confirmedViewSet = Map.copyOf(Objects.requireNonNull(confirmedViewSet, "confirmedViewSet"));
+		this.inputVersion = Objects.requireNonNull(inputVersion, "inputVersion");
 		this.submittedBy = submittedBy;
 		this.idempotencyKey = idempotencyKey;
 		this.submittedAt = submittedAt;
@@ -130,15 +131,11 @@ class AnnotationRevision {
 		return this.captureGroupId;
 	}
 
-	boolean isCaptureGroupRevision() {
-		return this.captureGroupId != null;
-	}
-
 	UUID getPrimaryClipAssetId() {
 		return this.primaryClipAssetId;
 	}
 
-	Integer getPrimaryCameraNumber() {
+	int getPrimaryCameraNumber() {
 		return this.primaryCameraNumber;
 	}
 

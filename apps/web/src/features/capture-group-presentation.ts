@@ -174,8 +174,6 @@ export function captureGroupTaskDestination(
     | 'annotation_revision'
   >,
 ): CaptureGroupTaskDestination | null {
-  if (!task.capture_group_id) return null
-
   if (task.status === 'ASSIGNED' && (task.can_submit || task.can_select_primary)) {
     return {
       focus: 'annotation',

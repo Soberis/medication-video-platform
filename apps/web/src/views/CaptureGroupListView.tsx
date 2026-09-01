@@ -93,10 +93,7 @@ export default function CaptureGroupListView() {
             .then((value) => ({ status: 'fulfilled' as const, value }))
             .catch((error) => ({ status: 'rejected' as const, error })),
         ])
-        const indexedTasks =
-          taskResult.status === 'fulfilled'
-            ? taskResult.value.items.filter((task) => Boolean(task.capture_group_id))
-            : []
+        const indexedTasks = taskResult.status === 'fulfilled' ? taskResult.value.items : []
         const qualityItems =
           qualityResult.status === 'fulfilled' && Array.isArray(qualityResult.value.items)
             ? qualityResult.value.items

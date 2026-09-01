@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -59,11 +60,9 @@ class AnnotationTaskService {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
 		List<AnnotationTask> tasks = projectAdministrator
-				? this.repository
-					.findAllByProjectIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(projectId)
+				? this.repository.findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId)
 				: this.repository
-					.findAllByProjectIdAndAssigneeActorIdAndCaptureGroupIdIsNotNullOrderByCreatedAtDescAnnotationTaskIdDesc(
-							projectId, actorId);
+					.findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId, actorId);
 		if (tasks.isEmpty()) {
 			var items = List.<AnnotationTaskResponse>of();
 			return new AnnotationTaskListResponse(items,
@@ -77,23 +76,20 @@ class AnnotationTaskService {
 			.collect(java.util.stream.Collectors.toMap(AnnotationRevision::getAnnotationTaskId, revision -> revision,
 					(left, right) -> left.getRevisionNumber() >= right.getRevisionNumber() ? left : right));
 		var captureGroupIds = tasks.stream().map(AnnotationTask::getCaptureGroupId).distinct().toList();
-		var currentGroupQualityById = captureGroupIds.isEmpty() ? Map.<UUID, Boolean>of()
-				: this.captureGroupQualityQueryService.getCurrentDecisions(projectId, captureGroupIds)
-					.stream()
-					.collect(java.util.stream.Collectors.toUnmodifiableMap(
-							CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
-							CaptureGroupQualityQueryService.CurrentDecision::isAdmitting));
+		var currentGroupQualityById = this.captureGroupQualityQueryService
+			.getCurrentDecisions(projectId, captureGroupIds)
+			.stream()
+			.collect(java.util.stream.Collectors.toUnmodifiableMap(
+					CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
+					CaptureGroupQualityQueryService.CurrentDecision::isAdmitting));
 		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty() ? Map.of() : this.reviewRepository
 			.findAllByAnnotationRevisionIdIn(
 					revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList())
 			.stream()
 			.collect(java.util.stream.Collectors.toMap(AnnotationReview::getAnnotationRevisionId, review -> review));
 		var captureGroupCleaningByRevisionId = revisionsByTaskId.isEmpty() ? Map.<UUID, CaptureGroupCleaningSummary>of()
-				: this.captureGroupCleaningQueryService.findLatestByAnnotationRevisionIds(revisionsByTaskId.values()
-					.stream()
-					.filter(revision -> revision.getCaptureGroupId() != null)
-					.map(AnnotationRevision::getAnnotationRevisionId)
-					.toList());
+				: this.captureGroupCleaningQueryService.findLatestByAnnotationRevisionIds(
+						revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList());
 		var items = tasks.stream().map(task -> {
 			var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
 			return AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision,
@@ -113,9 +109,6 @@ class AnnotationTaskService {
 		if (!task.getAssigneeActorId().equals(actorId)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_ASSIGNEE",
 					"Only the assigned project member can submit this annotation task.", 403);
-		}
-		if (!task.isCaptureGroupTask()) {
-			throw captureGroupTaskRequired();
 		}
 		var document = toAnnotationDocument(request);
 		var documentSha256 = digest(document);
@@ -153,9 +146,6 @@ class AnnotationTaskService {
 		if (selfAdminApproval && !selfAdminApprovalAllowed) {
 			throw new AnnotationTaskException("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN",
 					"The submitting member cannot independently review this annotation revision.", 403);
-		}
-		if (!revision.isCaptureGroupRevision()) {
-			throw captureGroupTaskRequired();
 		}
 		var existing = this.reviewRepository.findByAnnotationRevisionId(annotationRevisionId);
 		if (existing.isPresent()) {
@@ -278,11 +268,6 @@ class AnnotationTaskService {
 				"The annotation revision was not found in the current project.", 404);
 	}
 
-	private static AnnotationTaskException captureGroupTaskRequired() {
-		return new AnnotationTaskException("ANNOTATION_CAPTURE_GROUP_TASK_REQUIRED",
-				"Only a CaptureGroup annotation task is supported in V1.27.", 409);
-	}
-
 }
 
 record GroupSubmissionContext(UUID primaryClipAssetId, Map<String, Object> confirmedViewSet, String inputVersion) {
@@ -294,14 +279,20 @@ record GroupReviewContext(UUID captureGroupId, int revisionNumber, UUID primaryC
 		List<Map<String, Object>> rejectedMissingViews, List<Map<String, Object>> candidateEvidence) {
 
 	GroupReviewContext {
-		confirmedViewSet = Map.copyOf(confirmedViewSet);
-		qualifiedViews = qualifiedViews.stream()
+		captureGroupId = Objects.requireNonNull(captureGroupId, "captureGroupId");
+		primaryClipAssetId = Objects.requireNonNull(primaryClipAssetId, "primaryClipAssetId");
+		confirmedViewSet = Map.copyOf(Objects.requireNonNull(confirmedViewSet, "confirmedViewSet"));
+		inputVersion = Objects.requireNonNull(inputVersion, "inputVersion");
+		qualifiedViews = Objects.requireNonNull(qualifiedViews, "qualifiedViews")
+			.stream()
 			.map(value -> java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(value)))
 			.toList();
-		rejectedMissingViews = rejectedMissingViews.stream()
+		rejectedMissingViews = Objects.requireNonNull(rejectedMissingViews, "rejectedMissingViews")
+			.stream()
 			.map(value -> java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(value)))
 			.toList();
-		candidateEvidence = candidateEvidence.stream()
+		candidateEvidence = Objects.requireNonNull(candidateEvidence, "candidateEvidence")
+			.stream()
 			.map(value -> java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(value)))
 			.toList();
 	}
@@ -317,11 +308,18 @@ record AnnotationReviewCommand(AnnotationReviewDecision decision, String reviewN
 }
 
 record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captureGroupId, UUID primaryClipAssetId,
-		Integer primaryCameraNumber, UUID captureGroupQualityReviewId, Long groupQualityRevision,
+		Integer primaryCameraNumber, UUID captureGroupQualityReviewId, long groupQualityRevision,
 		Map<String, Object> confirmedViewSet, String groupInputVersion, UUID labelSchemaId, String labelSchemaDigest,
 		String assigneeActorId, String createdBy, String status, boolean canSubmit, boolean canSelectPrimary,
 		boolean canReview, boolean canRecheckCaptureGroupCleaning, AnnotationRevisionSummary annotationRevision,
 		Instant createdAt, Instant updatedAt, long version) {
+
+	AnnotationTaskResponse {
+		Objects.requireNonNull(captureGroupId, "captureGroupId");
+		Objects.requireNonNull(captureGroupQualityReviewId, "captureGroupQualityReviewId");
+		Objects.requireNonNull(confirmedViewSet, "confirmedViewSet");
+		Objects.requireNonNull(groupInputVersion, "groupInputVersion");
+	}
 
 	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning) {
@@ -346,26 +344,26 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 
 	private static boolean canSubmit(AnnotationTask task, String actorId, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
-				&& (!task.isCaptureGroupTask() || (task.hasPrimaryView() && captureGroupQualityAdmitting));
+				&& task.hasPrimaryView() && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canSelectPrimary(AnnotationTask task, String actorId, AnnotationRevision revision,
 			boolean captureGroupQualityAdmitting) {
-		return task.isCaptureGroupTask() && task.getStatus() == AnnotationTaskStatus.ASSIGNED
-				&& task.getAssigneeActorId().equals(actorId) && revision == null && captureGroupQualityAdmitting;
+		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
+				&& revision == null && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
 			AnnotationReview review, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
-				&& review == null && (!task.isCaptureGroupTask() || captureGroupQualityAdmitting);
+				&& review == null && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canRecheckCaptureGroupCleaning(AnnotationTask task, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null
 				&& review != null && review.getDecision() == AnnotationReviewDecision.APPROVED
-				&& (!task.isCaptureGroupTask() || captureGroupQualityAdmitting);
+				&& captureGroupQualityAdmitting;
 	}
 }
 
@@ -404,8 +402,15 @@ record AnnotationTaskProgressResponse(String scope, long total, long awaitingSub
 
 record AnnotationRevisionSummary(UUID annotationRevisionId, int revisionNumber, UUID labelSchemaId,
 		String labelSchemaDigest, Map<String, Object> annotationDocument, String submittedBy, Instant submittedAt,
-		UUID captureGroupId, UUID primaryClipAssetId, Integer primaryCameraNumber, Map<String, Object> confirmedViewSet,
+		UUID captureGroupId, UUID primaryClipAssetId, int primaryCameraNumber, Map<String, Object> confirmedViewSet,
 		String inputVersion, AnnotationReviewResponse review, CaptureGroupCleaningResponse captureGroupCleaning) {
+
+	AnnotationRevisionSummary {
+		Objects.requireNonNull(captureGroupId, "captureGroupId");
+		Objects.requireNonNull(primaryClipAssetId, "primaryClipAssetId");
+		Objects.requireNonNull(confirmedViewSet, "confirmedViewSet");
+		Objects.requireNonNull(inputVersion, "inputVersion");
+	}
 
 	static AnnotationRevisionSummary from(AnnotationRevision revision, AnnotationReview review,
 			CaptureGroupCleaningSummary captureGroupCleaning) {
@@ -422,9 +427,16 @@ record AnnotationRevisionSummary(UUID annotationRevisionId, int revisionNumber, 
 }
 
 record AnnotationRevisionResponse(UUID annotationRevisionId, UUID projectId, UUID annotationTaskId, UUID clipAssetId,
-		UUID captureGroupId, UUID primaryClipAssetId, Integer primaryCameraNumber, Map<String, Object> confirmedViewSet,
+		UUID captureGroupId, UUID primaryClipAssetId, int primaryCameraNumber, Map<String, Object> confirmedViewSet,
 		String inputVersion, int revisionNumber, String annotationSchemaVersion, UUID labelSchemaId,
 		String labelSchemaDigest, String documentSha256, String submittedBy, Instant submittedAt) {
+
+	AnnotationRevisionResponse {
+		Objects.requireNonNull(captureGroupId, "captureGroupId");
+		Objects.requireNonNull(primaryClipAssetId, "primaryClipAssetId");
+		Objects.requireNonNull(confirmedViewSet, "confirmedViewSet");
+		Objects.requireNonNull(inputVersion, "inputVersion");
+	}
 
 	static AnnotationRevisionResponse from(AnnotationRevision revision) {
 		return new AnnotationRevisionResponse(revision.getAnnotationRevisionId(), revision.getProjectId(),
@@ -437,10 +449,20 @@ record AnnotationRevisionResponse(UUID annotationRevisionId, UUID projectId, UUI
 }
 
 record AnnotationReviewResponse(UUID annotationReviewId, UUID projectId, UUID annotationRevisionId, String decision,
-		String reviewNote, String reviewedBy, Instant reviewedAt, UUID captureGroupId, Integer revision,
-		UUID primaryClipAssetId, Integer primaryCameraNumber, Map<String, Object> confirmedViewSet, String inputVersion,
+		String reviewNote, String reviewedBy, Instant reviewedAt, UUID captureGroupId, int revision,
+		UUID primaryClipAssetId, int primaryCameraNumber, Map<String, Object> confirmedViewSet, String inputVersion,
 		List<Map<String, Object>> qualifiedViews, List<Map<String, Object>> rejectedMissingViews,
 		List<Map<String, Object>> candidateEvidence) {
+
+	AnnotationReviewResponse {
+		Objects.requireNonNull(captureGroupId, "captureGroupId");
+		Objects.requireNonNull(primaryClipAssetId, "primaryClipAssetId");
+		Objects.requireNonNull(confirmedViewSet, "confirmedViewSet");
+		Objects.requireNonNull(inputVersion, "inputVersion");
+		Objects.requireNonNull(qualifiedViews, "qualifiedViews");
+		Objects.requireNonNull(rejectedMissingViews, "rejectedMissingViews");
+		Objects.requireNonNull(candidateEvidence, "candidateEvidence");
+	}
 
 	static AnnotationReviewResponse from(AnnotationReview review) {
 		if (review == null) {

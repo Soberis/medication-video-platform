@@ -10,8 +10,18 @@ import {
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
+const captureGroupId = '60000000-0000-4000-8000-000000000001'
 const labelSchemaId = '70000000-0000-4000-8000-000000000001'
 const labelSchemaDigest = 'b'.repeat(64)
+const groupInputVersion = 'capture-group-view-set.v1:synthetic'
+const confirmedViewSet = {
+  schema_version: 'capture-group-view-set.v1',
+  capture_group_id: captureGroupId,
+  capture_group_version: 1,
+  camera_set_snapshot_id: '43000000-0000-4000-8000-000000000001',
+  receipt_state: 'COMPLETE',
+  views: [],
+}
 const emptyProgress = {
   scope: 'ASSIGNEE',
   total: 0,
@@ -58,9 +68,13 @@ describe('annotation task API', () => {
             {
               annotation_task_id: 'a0000000-0000-4000-8000-000000000001',
               project_id: projectId,
-              capture_group_id: '60000000-0000-4000-8000-000000000001',
+              capture_group_id: captureGroupId,
               primary_clip_asset_id: assetId,
               primary_camera_number: 1,
+              capture_group_quality_review_id: '45000000-0000-4000-8000-000000000001',
+              group_quality_revision: 1,
+              confirmed_view_set: confirmedViewSet,
+              group_input_version: groupInputVersion,
               label_schema_id: labelSchemaId,
               label_schema_digest: labelSchemaDigest,
               assignee_actor_id: 'local-synthetic-uploader',
@@ -80,6 +94,11 @@ describe('annotation task API', () => {
                 },
                 submitted_by: 'local-synthetic-uploader',
                 submitted_at: '2026-07-26T01:00:00Z',
+                capture_group_id: captureGroupId,
+                primary_clip_asset_id: assetId,
+                primary_camera_number: 1,
+                confirmed_view_set: confirmedViewSet,
+                input_version: groupInputVersion,
                 review: {
                   annotation_review_id: '81000000-0000-4000-8000-000000000001',
                   project_id: projectId,
@@ -88,6 +107,15 @@ describe('annotation task API', () => {
                   review_note: null,
                   reviewed_by: 'local-synthetic-admin',
                   reviewed_at: '2026-07-26T01:10:00Z',
+                  capture_group_id: captureGroupId,
+                  revision: 1,
+                  primary_clip_asset_id: assetId,
+                  primary_camera_number: 1,
+                  confirmed_view_set: confirmedViewSet,
+                  input_version: groupInputVersion,
+                  qualified_views: [],
+                  rejected_missing_views: [],
+                  candidate_evidence: [],
                 },
                 capture_group_cleaning: {
                   capture_group_cleaning_id: '82000000-0000-4000-8000-000000000001',
@@ -168,6 +196,11 @@ describe('annotation task API', () => {
         project_id: projectId,
         annotation_task_id: taskId,
         clip_asset_id: assetId,
+        capture_group_id: captureGroupId,
+        primary_clip_asset_id: assetId,
+        primary_camera_number: 1,
+        confirmed_view_set: confirmedViewSet,
+        input_version: groupInputVersion,
         label_schema_id: labelSchemaId,
         label_schema_digest: labelSchemaDigest,
         revision_number: 1,
@@ -217,6 +250,15 @@ describe('annotation task API', () => {
         review_note: null,
         reviewed_by: 'local-synthetic-admin',
         reviewed_at: '2026-07-24T00:00:00Z',
+        capture_group_id: captureGroupId,
+        revision: 1,
+        primary_clip_asset_id: assetId,
+        primary_camera_number: 1,
+        confirmed_view_set: confirmedViewSet,
+        input_version: groupInputVersion,
+        qualified_views: [],
+        rejected_missing_views: [],
+        candidate_evidence: [],
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
@@ -254,6 +296,15 @@ describe('annotation task API', () => {
         review_note: '请补充时间段。',
         reviewed_by: 'local-synthetic-admin',
         reviewed_at: '2026-07-24T00:00:00Z',
+        capture_group_id: captureGroupId,
+        revision: 1,
+        primary_clip_asset_id: assetId,
+        primary_camera_number: 1,
+        confirmed_view_set: confirmedViewSet,
+        input_version: groupInputVersion,
+        qualified_views: [],
+        rejected_missing_views: [],
+        candidate_evidence: [],
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
