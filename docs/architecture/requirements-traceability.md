@@ -1,15 +1,33 @@
-# 当前需求追踪矩阵（V1.26）
+# 当前需求追踪矩阵（V1.27）
 
-> 当前需求基线：[V1.26 统一视频管理、极简工作台与可证自动化](../requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md)<br>
-> 当前技术设计：[V1.26 极简配药事件工作台设计](./v1.26-medication-event-workbench-design.md)<br>
-> V1.25 继承基线与技术参考：[V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)与[CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md)<br>
-> V1.24 实现/历史参考：[V1.24 需求基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md) 与 [V1.24 手部组件设计](./video-hand-pose-mvp-technical-design.md)<br>
+> 当前需求基线：[V1.27 单一 CaptureGroup 产品路径与 training-data.v3](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)<br>
+> 当前技术设计：[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md)<br>
+> 当前证据审计：[V1.27 AI evidence pipeline audit](./v1.27-ai-evidence-audit.md)与[training traceability audit](./v1.27-training-traceability.md)<br>
+> V1.26 前一基线与历史参考：[V1.26 需求基线](../requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md) 与 [V1.26 工作台设计](./v1.26-medication-event-workbench-design.md)<br>
+> V1.25/V1.24 历史实现参考：[V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[CaptureGroup 多机位技术设计](./capture-group-multicamera-workflow-technical-design.md) 与 [V1.24 手部组件设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-08-31
+> 最后更新：2026-09-01
 
-本文件区分 CURRENT REQUIREMENTS 与 CURRENT IMPLEMENTATION STATUS。V1.26 是当前正式需求基线，继承 V1.25 的 CaptureGroup 领域闭环并收敛产品入口、极简连续作业体验与可证自动化；批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
+本文件区分 CURRENT REQUIREMENTS 与 CURRENT IMPLEMENTATION STATUS。V1.27 是当前正式需求基线，唯一支持的业务对象和流程是 `CaptureGroup` 事件路径，当前唯一训练数据输出是 `training-data.v3`。V1.26 及更早版本的行保留为历史实现证据，不重新定义当前产品范围；批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.24-compatible 运行时继续保留 V1.23 的 V1.21 / V1.18 FR 事实链，将 handedness 保持为辅助元数据，并在 Cleaning PASS 后提供独立最小 Parquet 导出。每个成功入库的视频自动提交一个幂等 MediaPipe Candidate 作业；人工质量结论新建或变更为 `QUALIFIED` 时，在同一事务创建且分配唯一 `AnnotationTask`，但不替代人工 revision、人工 Review、确定性 Cleaning 训练资格检查或管理员导出确认。CaptureSync / V1.19 多机位同步当前不属于已实现 V1.24-compatible runtime；其 Core API、外围同步 artifact worker、消息/Frame schema 和 G0 tooling 已在独立零生产者批次退役，CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍保留。V1.22 多视角方向继续为 DRAFT / DEFERRED；未来能力不得回写当前运行时。DatasetVersion/复杂 Export、LeRobot 和 AI Evaluation 平台化均为 DEFERRED；相关旧代码和公开 API 已从当前 active surface 退役，历史 Flyway 文件和版本化文档只作为演进记录，不代表当前产品入口。V18-FR-006 的离线手部评估证据工具已实现并通过合成校验，但尚无授权样本实测，因此保持 `PI`，不代表效果已验收。
+V1.27 保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Media Probe、MediaPipe Candidate、权限、审计和 provenance 等低层事实，但不再把旧单视频任务、单视频 Cleaning 或 `training-data.v2` 作为当前业务流程。V1.27 的实现状态必须区分“现有代码仍可读取的历史表面”和“当前产品承诺”；前者不自动转化为兼容要求。
+
+## V1.27 当前需求
+
+| 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 实现/证据状态 |
+| --- | --- | --- | --- | --- | --- |
+| V27-FR-001 Local Upload / External Ingest 统一进入 CaptureGroup | P0 | `assetcapture` | `CaptureSession`、`CameraSetSnapshot`、`CameraStream`、ingest manifest | 显式事件/机位/ClipAsset 绑定、SHA 校验、N=1 与 N>1 使用同一模型 | PI |
+| V27-FR-002 逐视图 Media Probe 与 MediaPipe Candidate | P0 | `mediaprivacy`、`aicandidate` | `MediaReport`、`ai_job`、`ai_job_attempt`、`CandidateAnnotation` | 逐视图媒体验证、候选隔离、幂等、租约恢复、失败保留 | I |
+| V27-FR-003 逐视图 Quality 与 CaptureGroup Quality | P0 | `assetcapture`、`qualitycleaning` | `QualityReview`、`CaptureGroupQualityReview` | 人工提交、局部失败不扩大、事件准入不由 AI 自动生成 | I |
+| V27-FR-004 一个 CaptureGroup AnnotationTask 与 Revision 链 | P0 | `annotationreview`、`qualitycleaning` | 组任务、append-only `AnnotationRevision`、View Set/input version | 每组唯一任务、主视图时间基准、重试不重复/不改派 | I |
+| V27-FR-005 人工 Review 后确定性 CaptureGroup Cleaning | P0 | `annotationreview`、`qualitycleaning` | `AnnotationReview`、`CaptureGroupCleaning`、audit/provenance | Review `APPROVED` 后执行；管理员 recheck 不选择结果；非通过事件不导出 | I |
+| V27-FR-006 唯一训练数据输出为 training-data.v3 | P0 | `datasetexport`、`governance` | `training_data_group_eligibility_v3`、`training-data.v3` | 以组为单元、保留 Review/Cleaning/provenance、不复制 MP4；v2 不作为当前输出 | PI |
+| V27-FR-007 保留低层视频事实与安全边界 | P0 | `assetcapture`、`mediaprivacy`、`governance` | 对象存储引用、SHA-256、播放授权、权限、软删除、审计 | 物理视频事实可回溯；不新增 CaptureGroupView；不把 ClipAsset 当独立业务工作流 | I |
+| V27-FR-008 退役单视频业务路径与兼容性承诺 | P0 | 全模块 / product scope | V1.27 baseline、当前入口和导出说明 | 文档不再承诺 `/videos`、独立 `/assets/:id`、单视频任务/Cleaning、v2 或 V1.24 runtime compatibility | D1 |
+
+## 历史/继承实现证据（不构成 V1.27 产品承诺）
+
+以下 V1.18、V1.21、V1.24、V1.25 和 V1.26 行及其后续验收记录保留为历史实现、迁移和测试证据。它们不表示旧单视频路径、`training-data.v2` 或 V1.24-compatible runtime behavior 仍属于当前产品范围。
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 实现/证据状态 |
 | --- | --- | --- | --- | --- | --- |

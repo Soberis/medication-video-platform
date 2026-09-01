@@ -1,8 +1,8 @@
 # CaptureGroup 多机位接收与数据闭环最小技术设计（V1.25）
 
-> 状态：V1.25 冻结并由 V1.26 继承的多机位领域实现设计 — 目标与实现证据见追踪矩阵
-> 本文保留已批准的 V1.25 领域目标、边界与实施顺序；V1.26 产品信息架构和工作台展示以[V1.26 配药事件工作台设计](v1.26-medication-event-workbench-design.md)为准。本文不替代代码、迁移、OpenAPI、事件、Worker 和运行时的实际证据。
-> V1.26 是当前正式需求基线；V1.25 业务与科学语义继续继承，V1.24 代码和单视频事实仍是历史兼容参考。
+> 状态：V1.25 历史多机位领域实现设计 — 目标与实现证据见追踪矩阵
+> 本文保留已批准的 V1.25 领域目标、边界与实施顺序；V1.27 当前产品信息架构和工作台展示以[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)为准。本文不替代代码、迁移、OpenAPI、事件、Worker 和运行时的实际证据。
+> V1.27 是当前正式需求基线；V1.25 业务与科学语义作为历史领域参考，V1.24 代码和单视频事实不再构成当前兼容承诺。
 
 本文基于 [V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[V1.24 前一正式基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[V1.24 手部组件参考](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../contracts/schemas/external-video-ingest-v1.schema.json) 和 [最小训练数据导出说明](../../tools/minimal-export/README.md)。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
 

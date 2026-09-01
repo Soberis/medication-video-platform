@@ -1,12 +1,15 @@
-# V1.25 部署就绪检查与部署边界
+# V1.27 部署就绪检查与部署边界
 
 ## 目的与结论边界
 
 本手册描述仓库当前实际提供的运行时拓扑、可重复的本地 synthetic smoke、配置与秘密边界，以及上线前必须由目标环境责任人补齐的证据。它不把本地 Docker Compose 当作生产部署，也不授权使用真实患者数据、生产凭据或生产队列。
 
-当前仓库可以重复验证 V1.25 CaptureGroup 的合成闭环；V1.24 的 `training-data.v2` 路径仍保留。真实生产发布目前仍应标为 `NOT READY`，除非目标环境另行提供并演练生产制品监督、TLS/入口保护、数据库与对象存储备份恢复、值班/告警和批准的 RPO/RTO。
+当前仓库可以重复验证 V1.27 CaptureGroup 的合成闭环；旧单视频和 `training-data.v2` 仅作为历史运行/迁移事实保留。真实生产发布目前仍应标为 `NOT READY`，除非目标环境另行提供并演练生产制品监督、TLS/入口保护、数据库与对象存储备份恢复、值班/告警和批准的 RPO/RTO。
 
 本轮是部署与 smoke 就绪检查，不是 UAT，也不改变产品业务语义。
+
+当前产品范围以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和
+[V1.27 单一 CaptureGroup 产品路径](../architecture/v1.27-single-capture-group-workflow.md) 为准。
 
 ## 运行时拓扑（以当前代码为准）
 
@@ -15,13 +18,13 @@
 | PostgreSQL | 是 | Compose `postgres`，宿主机默认 `localhost:15432` | Core API 的权威关系型事实库；Flyway 当前迁移序列到 V70，不能用手工 SQL 代替发布迁移 |
 | S3-compatible object storage | 是 | Compose `s3`（SeaweedFS，仅本地），S3 API 默认 `http://localhost:9000` | 保存原始媒体及派生对象；应用只依赖 S3 API，不依赖 SeaweedFS 专有接口 |
 | RabbitMQ | 是（完整异步路径） | Compose `rabbitmq`，AMQP 默认 `localhost:5672`，管理界面 `localhost:15672` | 只负责投递；Outbox、job、attempt、lease 和 DLQ 业务事实仍由 Core API/数据库拥有 |
-| Core API | 是 | `services/core-api/mvnw ... spring-boot:run`，默认 `http://localhost:8080` | 启动后通过 `/actuator/health` 检查；承载同步查询、Review/Cleaning 和 v2/v3 read-only export |
+| Core API | 是 | `services/core-api/mvnw ... spring-boot:run`，默认 `http://localhost:8080` | 启动后通过 `/actuator/health` 检查；承载同步查询、Review/Cleaning 和当前 v3 read-only export |
 | Media Worker | 是（上传/Media Probe 路径） | `uv run --directory workers/media-worker media-worker` | 不写数据库；使用 Core API 的短期授权和 RabbitMQ；需要 Python 3.12、FFmpeg、FFprobe、批准的软件摘要 |
 | AI Worker | 可选 | `uv run --directory workers/ai-worker ai-worker`；`AI_HAND_POSE_ENABLED=true` 且模型配置完整时启动 | 仅产生 Candidate；需要外部批准模型文件、SHA-256、profile digest 和唯一 token 来源；AI 未启用时不阻断基础 CaptureGroup smoke |
 | Web | 用户 smoke 需要 | `apps/web` 下 `pnpm dev`（`pnpm run web:dev`） | 当前仓库提供前端源代码和 Vite 启动方式，不提供受支持的生产 Web supervisor/镜像 |
 | model/profile files | 按路径需要 | Media/Cleaning profiles 在 `contracts/profiles/`；AI 模型在仓库外 | profile 和模型摘要必须与 Core API、Worker、job 及契约一致；不把模型文件提交到 Git |
 
-V1.25 的 v2/v3 导出目前由 Core API 同步生成；仓库没有当前在用的 Export Worker，也不创建 `DatasetVersion`、`CaptureSync` 或通用 workflow engine。
+V1.27 的 v3 导出目前由 Core API 同步生成；仓库没有当前在用的 Export Worker，也不创建 `DatasetVersion`、`CaptureSync` 或通用 workflow engine。
 
 ## 最小部署就绪清单
 
@@ -164,12 +167,12 @@ pnpm run synthetic-capture-group -- --scenario n1-complete
 
 1. 登录 Web，或使用 local bearer 进行 API smoke；确认 `POST /api/v1/auth/login`、`GET /api/v1/auth/session` 和项目请求不越权。
 2. 读取 `GET /api/v1/projects` 和 `GET /api/v1/projects/{project_id}`，确认项目 ID 与工具/服务配置一致。
-3. 读取事件/视频列表：V1.25 使用 `GET /api/v1/projects/{project_id}/capture-groups`；V1.24-compatible 路径仍可读 `GET /api/v1/projects/{project_id}/videos`。没有 AnnotationTask 的 CaptureGroup 也必须显示。
+3. 读取事件列表：V1.27 使用 `GET /api/v1/projects/{project_id}/capture-groups`。旧 `/videos` 表面不属于当前业务验收；没有 AnnotationTask 的 CaptureGroup 也必须显示。
 4. 打开 `GET /api/v1/projects/{project_id}/capture-groups/{capture_group_id}`，核对 Receipt、expected/present/missing camera numbers、CameraStream 和 CaptureSession 事实；检查 `RECEIVING`、`INCOMPLETE`、`REJECTED`、`QUALIFIED` 等状态没有被 task 过滤。
 5. 读取 `GET /api/v1/projects/{project_id}/clip-assets/{clip_asset_id}/media-report`，必要时申请短期 playback grant；确认媒体可读，绝不把 grant URL 写入证据。
 6. 分别读取 view quality `.../clip-assets/{clip_asset_id}/quality-review` 和 group quality `.../capture-groups/{capture_group_id}/quality-review`，确认两者不是同一事实。
 7. 读取 `GET /api/v1/projects/{project_id}/annotation-tasks`，确认合格组至多进入一个组 task，task/revision/review 的当前状态可见；Review 只由人工管理员操作。
-8. 仅对已 `APPROVED` Review 且 event-level Cleaning 为 `PASS` 的事件调用 `GET /api/v1/projects/{project_id}/training-data/v3/preview`，再按需读取 v3 download/readback；核对 `capture_group_id`、revision、Primary interval、参与/排除 views、quality、Review/Cleaning/Candidate provenance 和 `split_unit=capture_group`。V1.24-compatible 样本另核对 `training-data.v2` preview/download。
+8. 仅对已 `APPROVED` Review 且 event-level Cleaning 为 `PASS` 的事件调用 `GET /api/v1/projects/{project_id}/training-data/v3/preview`，再按需读取 v3 download/readback；核对 `capture_group_id`、revision、Primary interval、参与/排除 views、quality、Review/Cleaning/Candidate provenance 和 `split_unit=capture_group`。不把历史 v2 预览/下载列为 V1.27 验收目标。
 
 建议至少运行 `n1-complete`、`n5-complete`、`n5-missing-camera`、`n5-rejected-view` 和 `receiving-before-finalize`；`no-hand-detected`/`candidate-failure` 只有在 AI 模型和受控 fixture 就绪时才运行。`candidate-failure` 未运行不能解释为 UAT 通过。
 
@@ -212,4 +215,4 @@ pnpm run synthetic-capture-group -- --scenario n1-complete
 
 - 本地 synthetic：具备 Compose、Core API、Media Worker、可选 AI Worker、Web 和合成验收入口；可按本手册执行 smoke。
 - 生产部署：`NOT READY`，除非目标环境补齐生产制品监督、TLS/入口保护、秘密管理、PostgreSQL/S3 备份恢复、日志/告警 owner、RPO/RTO 和回滚演练证据。
-- UAT：不由本手册或 synthetic smoke 宣告；请使用 [`V1.25 UAT Readiness Runbook`](./v1.25-uat-readiness.md) 并由现场责任人填写结果。
+- UAT：不由本手册或 synthetic smoke 宣告；按 V1.27 需求基线的验收条款由现场责任人形成独立记录并填写结果。

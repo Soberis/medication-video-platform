@@ -3,6 +3,9 @@
 > 文档状态：P0 运行设计（评审稿）  
 > 最后更新：2026-07-21
 
+当前产品边界以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和
+[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) 为准；本文件只描述部署、容量与恢复边界。
+
 ## 1. 决策边界
 
 - 需要本地基础设施时使用一个小型 Docker Compose；服务增多且存在可选组合后再引入 profile。
@@ -10,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.24 当前不部署 Dataset Export Worker；最小 `training-data.v2` preview/download 在 Core API 内以只读事务完成。
+- V1.27 当前不部署 Dataset Export Worker；最小 `training-data.v3` CaptureGroup event manifest preview/download 在 Core API 内以只读事务完成。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载
@@ -24,7 +27,7 @@
 | Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
-| Training Data Export | `training-data.v2` preview/download | 否，只读投影并返回受控 Parquet |
+| Training Data Export | `training-data.v3` CaptureGroup event manifest preview/download | 否，只读投影并返回受控 JSON |
 | PostgreSQL | 关系业务真值、Outbox/Inbox 和审计索引 | 是 |
 | S3 兼容存储 | raw、variant、frames、reports、exports | 保存字节事实，不保存关系状态 |
 | RabbitMQ | 作业和事件传递 | 否 |
@@ -41,7 +44,7 @@
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
 | 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
-| training-data.v2 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
+| training-data.v3 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
 | 手部预标注 | AI Worker、RabbitMQ、获批准的本地模型 | 批量与自动预标注策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。
@@ -248,7 +251,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 | --- | --- | --- | --- | --- |
 | 上传接收 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
 | 标注/复核 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
-| training-data.v2 preview/download | 待确认 | 待确认 | 待确认 | 投影重建和摘要校验 |
+| training-data.v3 preview/download | 待确认 | 待确认 | 待确认 | 投影重建和摘要校验 |
 | 权限/审计 | 待确认 | 待确认 | 待确认 | PITR 和审计链校验 |
 
 冻结数值后反推 WAL、快照、对象备份频率、异地副本、HA 和值班要求。

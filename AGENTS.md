@@ -11,9 +11,9 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`：当前正式业务需求基线，统一“视频管理”与配药事件工作台，并冻结 current-task-first 信息层级、极简连续作业体验和可证自动化边界。
-3. `docs/architecture/v1.26-medication-event-workbench-design.md`：当前 V1.26 产品信息架构与工作台展示设计；允许在服务端成功后刷新并安全聚焦下一未决项，但只定义展示推导，不新增领域状态机或自动专业判断。
-4. `docs/requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md`、`docs/architecture/capture-group-multicamera-workflow-technical-design.md` 与 `docs/architecture/multi-camera-quality-review-workflow.md`：前一正式冻结基线及 V1.26 继承的 CaptureGroup 领域/工作流参考。`docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md` 继续作为 V1.24-compatible 历史运行时参考。
+2. `docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md`：当前正式业务需求基线，冻结唯一的 CaptureGroup 产品路径、N=1 统一模型、保留的低层视频事实、人工闸门和 `training-data.v3` 输出边界。
+3. `docs/architecture/v1.27-single-capture-group-workflow.md`：当前 V1.27 产品信息架构与单一 CaptureGroup 工作流设计；V1.27 的入口、视图、任务、Review、Cleaning 和导出语义以本文为准。
+4. `docs/architecture/v1.27-hand-detection-policy.md`、`docs/architecture/v1.27-ai-evidence-audit.md` 与 `docs/architecture/v1.27-training-traceability.md`：当前 V1.27 的手部检测边界和证据/追溯审计。`docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`、`docs/architecture/v1.26-medication-event-workbench-design.md`、V1.25 CaptureGroup 文档和 V1.24 文档均为历史/迁移参考，不构成当前兼容性承诺。
 5. `docs/adr/`：已经冻结的技术决策。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
 7. 真实代码、数据库迁移和测试结果。
@@ -91,7 +91,7 @@ MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 每次优先交付一个可运行、可测试、可回退的纵向切片；完成后再选择下一项，不并行铺开多个未闭环模块。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
-- V1.26 MVP 不恢复未接线的 CaptureSync runtime，不新增持久化 `next_action` / `blockers` 或通用工作流引擎；V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
+- V1.27 MVP 不恢复未接线的 CaptureSync runtime，不新增 `CaptureGroupView`、持久化 `next_action` / `blockers` 或通用工作流引擎；不再支持独立单视频任务、单视频 Cleaning 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
 
 ## Data And Safety
 

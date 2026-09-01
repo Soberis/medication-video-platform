@@ -1,7 +1,10 @@
 # 状态机与领域守卫
 
 > 文档状态：P0 详细设计（评审稿）  
-> 最后更新：2026-07-30
+> 最后更新：2026-09-01
+
+当前状态机口径以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和
+[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) 为准。本文保留旧状态、迁移和候选实现事实时，明确标为历史；不把单视频任务或 `training-data.v2` 重新定义为当前产品流程。
 
 ## 1. 原则
 
@@ -198,12 +201,12 @@ PENDING → ASSIGNED → IN_PROGRESS → SUBMITTED → COMPLETED
              └→ PENDING    （回收）
 ```
 
-当前 P0 切片启用 `ASSIGNED → SUBMITTED → COMPLETED` 和 `SUBMITTED → ASSIGNED` 返工分支：当 ACTIVE 项目成员在同一事务把 `INGESTED`、未删除视频的当前质量结论变为 `QUALIFIED` 时，系统立即创建一个直接分配给该质量确认人的任务；受分配人提交不可变 revision，独立管理员通过后任务完成，不通过则退回原受分配人。已有任务不会被自动覆盖或改派。管理员手动创建接口仅保留为受控恢复入口，不是普通主路径。`PENDING`、`IN_PROGRESS`、`ABANDONED` 和重新分配仍未启用，不能由前端提前伪造。
+当前 V1.27 P0 切片启用 `ASSIGNED → SUBMITTED → COMPLETED` 和 `SUBMITTED → ASSIGNED` 返工分支：当 CaptureGroup 的事件级人工质量结论为有效准入时，系统只创建一个 CaptureGroup 任务并分配给质量确认人；受分配人提交不可变 revision，独立管理员通过后任务完成，不通过则退回原受分配人。已有任务不会被自动覆盖或改派。管理员手动创建接口仅保留为受控恢复入口，不是普通主路径。`PENDING`、`IN_PROGRESS`、`ABANDONED` 和重新分配仍未启用，不能由前端提前伪造。
 
 | 迁移 | 角色与守卫 |
 | --- | --- |
-| PENDING → ASSIGNED | 系统与 `QUALIFIED` 质量结论在同一事务内完成；assignee 是当前质量确认人且具有 ACTIVE 项目权限；视频、质量事实和任务范围均被锁定。管理员恢复仅可在当前事实仍满足且尚无任务时创建。 |
-| ASSIGNED → SUBMITTED | 当前 assignee；创建不可变 revision；schema digest 与任务一致；基础校验通过 |
+| PENDING → ASSIGNED | 系统与 CaptureGroup 事件级质量准入在同一事务内完成；assignee 是当前质量确认人且具有 ACTIVE 项目权限；组、视图质量事实和任务范围均被锁定。管理员恢复仅可在当前事实仍满足且尚无任务时创建。 |
+| ASSIGNED → SUBMITTED | 当前 assignee；创建绑定 CaptureGroup 的不可变 revision；schema digest 与任务一致；基础校验通过 |
 | SUBMITTED → COMPLETED | 当前 revision 获独立 `APPROVED`；同一事务生成绑定该 revision 的不可变 post-clean run/result |
 | SUBMITTED → ASSIGNED | 当前 revision 获 `REJECTED`；保留决定和旧 revision，下一次提交递增 revision number |
 
@@ -225,22 +228,22 @@ NOT_SUBMITTED → PENDING → PASS
 
 ```text
 APPROVED revision
-→ 创建 CleaningRun
+→ 创建 CaptureGroupCleaning
 → 同事务完成为 Result(PASS | WARNING | REJECT)
 ```
 
-- 结果绑定 CleaningRun、输入指纹、输入摘要、所选 MediaReport 证据和 rule set digest。
+- 结果绑定 CaptureGroup、AnnotationRevision、组质量、参与/排除视图、输入指纹、输入摘要、所选 MediaReport 证据和 rule set digest。
 - run/result 创建后不可原地改写；相同输入指纹幂等复用，规则或输入变化时允许创建新 run。
   当前切片只在首次 `APPROVED` 时触发，不暴露人工重跑入口。P0 不提供独立 AdmissionOverride；WARNING
-  仍不能直接进入 `training-data.v2`。
+  仍不能直接进入 `training-data.v3`。
 - REJECT 表示默认不准入，不表示删除。
 - 当前主 Step 纵向切片不建立通用异步清洗入口：`APPROVED` review 在 Core API 的同一数据库事务中把任务推进为 `COMPLETED`，并创建一个版本化、不可变的 post-clean run/result；不新增 Worker、队列或调度状态。
 - 当前规则从持久化文档重新计算 revision 文档摘要，重验 LabelSchema 摘要、标签集合、主 Step
   左闭右开时间范围、互斥关系，以及按 `created_at + media_report_id` 稳定选出的最新已验证媒体
   时长和输入摘要。缺少可用于边界复核的已验证媒体时长时结果为 `WARNING`；已经持久化的标签、
   摘要或时间事实非法时结果为 `REJECT`；全部规则通过时结果为 `PASS`。
-- post-clean `PASS` 只证明该 revision 通过当前规则版本，不自动创建 DatasetVersion 或数据集成员；`training-data.v2`
-  preview/download 通过只读 `training_data_eligibility` 和 `training_data_candidate_observations` 投影验证当前资产、质量、Review、Cleaning 和摘要事实。
+- CaptureGroup Cleaning `PASS` 只证明该事件通过当前规则版本，不自动创建 DatasetVersion 或数据集成员；`training-data.v3`
+  preview/download 通过只读事件资格投影验证当前组、视图、质量、Review、Cleaning 和摘要事实。
 
 ### 7.2 Quarantine（P0 后置）
 
@@ -248,27 +251,22 @@ V1.6 不暴露隔离命令或查询。历史 `quarantine_record` 仅为不可改
 
 ### 7.3 当前训练数据准入
 
-V1.24 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
+V1.27 不提供 DatasetVersion、DatasetAdmission、冻结审批或 legacy Export Worker 的运行状态机。
 旧代码和公开 API 已退役，未使用的旧表已由 V65/V66 forward migration 物理退役；旧状态机仅保留为历史设计说明。
 
-Cleaning PASS 后，`MinimalTrainingDataExportService` 与 `tools/minimal-export` 在只读事务中读取
-`training_data_eligibility` 和 `training_data_candidate_observations`。准入事实必须同时满足：视频仍为
-`INGESTED`、人工质量为 `QUALIFIED`、正式 `AnnotationRevision` 已被 `Review` 批准、Cleaning 结果为
-`PASS/SUCCEEDED`，并且 Candidate 的输入摘要和 provenance 与当前事实一致。Candidate 只能提供手部几何
-和辅助 handedness，不能替代人工标签、Review 或 Cleaning。
+CaptureGroup Cleaning PASS 后，V1.27 的 `training-data.v3` preview/download 在只读事务中读取事件资格投影。准入事实必须同时满足：CaptureGroup 和参与视图仍满足状态/删除/摘要守卫、组质量有效、正式 `AnnotationRevision` 已被 `Review` 批准、事件级 Cleaning 结果为 `PASS`，并且 Candidate 的输入摘要和 provenance 与当前事实一致。Candidate 只能提供手部几何和辅助 handedness，不能替代人工标签、Review 或 Cleaning。
 
 ## 8. 训练数据导出
 
-### 8.1 Minimal training-data.v2
+### 8.1 Current training-data.v3
 
 ```text
-eligible facts → preview/download → training_data.parquet
+CaptureGroup eligible facts → preview/download → training_data_v3.json
 ```
 
 - API 和本地工具都是显式、同步、只读的 preview/download；不创建 DatasetVersion、ExportJob、Worker
   或队列，不代理 MP4，也不写入新的业务事实。
-- 输出固定为 `training-data.v2`，每行保留人工动作区间、Candidate 的 `algorithm_key`、
-  `algorithm_version`、`model_sha256`、`profile_sha256`、`handedness` 和 `handedness_score`。
+- 输出固定为 `training-data.v3` CaptureGroup event manifest；它保留事件、主视图、视图集合、人工 Revision、Review、Cleaning 和 Candidate provenance 事实，不把 event row 解释为 frame/hand/sample 行。
 - 生成过程在数据库 `REPEATABLE READ` 快照中完成；权限、项目隔离、审计、对象摘要和下载 `no-store`
   约束继续由现有 Core API 负责。
 
@@ -428,7 +426,7 @@ GENERATED/PENDING_REVIEW → EXPIRED
 - `CandidateAnnotation.status` 与正式 `Review.status` 是不同概念，数据库字段不得都模糊命名为 `review_status`。
 - 候选过期条件包括输入摘要变化、schema 不兼容、算法撤销或隐私放行撤销。
 
-### 11.1 V1.18 单视频手部预标注状态
+### 11.1 V1.18 MediaPipe 逐视图候选状态（历史实现事实）
 
 当前 P0 的手部预标注与候选人工处置正交。正式状态分三层，禁止折叠为同一 `status`：
 
@@ -438,19 +436,19 @@ GENERATED/PENDING_REVIEW → EXPIRED
 | Hand job | `NOT_REQUESTED`、`QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED` | `NOT_REQUESTED` 是无 AIJob 的查询投影；其余值映射 AIJob。 |
 | Hand result | `UNKNOWN`、`HAND_DETECTED`、`NO_HAND_DETECTED` | 仅 `SUCCEEDED` job 可写终态结果；未发现手不等于失败。 |
 
-每个有权访问、未删除的 `INGESTED` 视频会在媒体入库提交后自动提交一条幂等单视频 MediaPipe 请求；项目 `MEMBER` 或 `ADMIN` 仍可发起同一单视频受控恢复请求。P0 不定义 batch job 或可配置自动策略。Worker 回传只能写 `CandidateAnnotation` 与 run summary，不能推进正式标注、复核或清洗状态。
+每个有权访问、未删除的 `INGESTED` `ClipAsset` 视图会在媒体入库提交后自动提交一条幂等 MediaPipe 请求；项目 `MEMBER` 或 `ADMIN` 可按既有权限发起同一视图的受控恢复请求。P0 不定义 batch job 或可配置自动策略。Worker 回传只能写 `CandidateAnnotation` 与 run summary，不能推进正式标注、复核或清洗状态；这项逐视图候选事实不构成独立单视频产品工作流。
 
-## 12. 关键兼容性守卫
+## 12. 关键工作流守卫
 
 | 操作 | 必须满足 |
 | --- | --- |
-| 自动创建标注任务 | 质量结论在同一事务新建或变更为 `QUALIFIED`；asset `INGESTED`、未删除；当前质量版本与事件一致；项目与任务范围有效且尚无任务；受理人为作出该结论的 ACTIVE 项目成员 |
+| 自动创建标注任务 | CaptureGroupQualityReview 在同一事务确认有效准入；组内参与视图满足状态/删除事实；组质量版本与事件一致；项目与任务范围有效且尚无任务；受理人为作出该结论的 ACTIVE 项目成员 |
 | 播放视频 | 显式 `DATA_REVIEW` 请求；ACTIVE 项目 ADMIN/MEMBER；已完成上传完整性校验的 MP4、`deleted_at IS NULL`；媒体检测状态不阻断人工查看；短期 URL 与签发审计；不等于质量合格、标注批准或导出授权 |
 | 发现异常敏感内容 | 当前 P0 记录质量 `REJECTED` 与固定原因，管理员按审计流程软删除；不运行专用隔离状态机 |
 | 提交 revision | task `ASSIGNED` 且由受分配人提交；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；时间段终点晚于起点 |
 | 复核 revision | 项目 ADMIN 且不等于提交者；asset 仍为 `INGESTED`、未删除且人工质量 `QUALIFIED`；每 revision 只有一次决定 |
-| 后置清洗 | 当前 revision review `APPROVED`；文档、LabelSchema、ClipAsset 输入摘要和规则版本被当前 run/result 冻结；缺媒体时长为 WARNING，非法事实为 REJECT |
-| training-data.v2 preview/download | 视频仍为 `INGESTED`；人工质量为 `QUALIFIED`；AnnotationRevision 已被 Review 批准；Cleaning 为 `PASS/SUCCEEDED`；Candidate provenance 与当前事实一致；项目权限和审计守卫通过 |
+| 后置清洗 | 当前 CaptureGroup revision review `APPROVED`；文档、LabelSchema、组质量、参与视图输入摘要和规则版本被 CaptureGroupCleaning 冻结；缺媒体时长为 WARNING，非法事实为 REJECT |
+| training-data.v3 preview/download | CaptureGroup 和参与视图满足状态/删除/摘要守卫；组质量有效；AnnotationRevision 已被 Review 批准；事件级 Cleaning 为 `PASS`；Candidate provenance 与当前事实一致；项目权限和审计守卫通过 |
 | AI 作业 | P1 已启用；DEIDENTIFIED variant；privacy ALLOWED_ANNOTATION；quarantine NONE；算法版本已批准 |
 | 物理销毁 | retention 到期或批准请求；无 legal hold；影响分析和双人审批完成 |
 | 移动项目内文件夹 | folder 与 asset 同 project；只更新 `folder_id` |

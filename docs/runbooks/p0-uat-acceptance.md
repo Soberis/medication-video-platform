@@ -1,5 +1,7 @@
 # P0 Web 与数据闭环 UAT
 
+> 状态：HISTORICAL / V1.11 运行手册。本文保留旧版本 UAT 证据口径，不是 V1.27 当前验收基线；V1.27 当前业务链、事件级验收和 `training-data.v3` 边界以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 与 [V1.27 单一 CaptureGroup 产品路径](../architecture/v1.27-single-capture-group-workflow.md) 为准。
+
 ## 目的与边界
 
 本手册把 V1.11 的 P0 主 Step 闭环转化为可记录的 UAT；未变更能力继承 V1.10：

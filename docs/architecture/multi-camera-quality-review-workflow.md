@@ -1,8 +1,8 @@
 # 固定多相机配药事件质量评审、标注与清洗用户流程
 
-> 状态：V1.25 冻结并由 V1.26 继承的领域工作流参考 — 已实现，验收证据见追踪矩阵
+> 状态：V1.25 历史领域工作流参考 — 已实现，验收证据见追踪矩阵
 >
-> 本文保留已批准的 V1.25 多机位业务与科学语义；V1.26 产品 IA 和 current-task-first 工作台展示以[V1.26 配药事件工作台设计](v1.26-medication-event-workbench-design.md)为准。本文不替代当前 React 页面、后端接口、数据库和测试证据，也不把自动化/synthetic 证据表述为真实 UAT。当前运行时同时保留 V1.24-compatible 单视频路径。示例使用 3–5 路固定相机；实际数量由服务端明确的归组事实动态决定。
+> 本文保留已批准的 V1.25 多机位业务与科学语义；V1.27 当前产品 IA 和 current-task-first 工作台展示以[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)为准。本文不替代当前 React 页面、后端接口、数据库和测试证据，也不把自动化/synthetic 证据表述为真实 UAT。V1.24-compatible 单视频路径在本文中仅作为历史迁移参考。示例使用 3–5 路固定相机；实际数量由服务端明确的归组事实动态决定。
 
 `CaptureGroup` 表示一个真实配药事件，身份默认复用 `CaptureSession.capture_session_id`；前端只能读取服务端明确的组和视图，不能按文件名、上传顺序、接收时间或时间接近度猜测归组。
 

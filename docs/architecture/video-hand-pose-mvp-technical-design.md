@@ -1,11 +1,11 @@
-# 配药视频数据管理平台：手部预标注组件技术设计（V1.24 单视频基线 / V1.25-V1.26 继承参考）
+# 配药视频数据管理平台：手部预标注组件技术设计（V1.24 单视频历史基线 / V1.25-V1.27 继承参考）
 
 > 版本：TD-VIDEO-DATA-V1<br>
-> 状态：V1.24 已实现单视频技术基线 / V1.25-V1.26 继承组件参考<br>
+> 状态：历史组件参考；V1.24 已实现单视频技术基线，V1.25-V1.27 仅继承候选边界<br>
 > 日期：2026-08-20<br>
-> 对齐需求：[V1.26 当前需求基线](../requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md)；[V1.25 冻结基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)继承本文组件边界，本文继续保留[V1.24 基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)的单视频实现参考
+> 当前对齐需求：[V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)和[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)；本文继续保留[V1.24 基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)的单视频实现参考
 
-本文保留 V1.24-compatible 单视频闭环的已实现组件事实。Media Probe、MediaPipe 和 `CandidateAnnotation` 的候选隔离、人工边界及 provenance 行为继续作为 V1.25/V1.26 的继承组件；V1.24 的“单视频质量合格后自动创建并分配任务”仅是冻结单视频运行时的历史所有权规则。CaptureGroup 任务/修订归属与事件级 Cleaning 以 [V1.25 多机位技术设计](capture-group-multicamera-workflow-technical-design.md)为领域参考，当前产品展示以[V1.26 配药事件工作台设计](v1.26-medication-event-workbench-design.md)为准。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 已按独立 Physical Reduction 批次退役。V1.19 多机位同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED。
+本文保留 V1.24-compatible 单视频闭环的已实现组件事实。Media Probe、MediaPipe 和 `CandidateAnnotation` 的候选隔离、人工边界及 provenance 行为作为 V1.27 的继承组件；V1.24 的“单视频质量合格后自动创建并分配任务”仅是冻结单视频运行时的历史所有权规则。CaptureGroup 任务/修订归属与事件级 Cleaning 以 [V1.25 多机位技术设计](capture-group-multicamera-workflow-technical-design.md)为历史领域参考，当前产品路径以[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)为准。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 已按独立 Physical Reduction 批次退役。V1.19 多机位同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED。
 
 ## 1. 设计目标与系统边界
 

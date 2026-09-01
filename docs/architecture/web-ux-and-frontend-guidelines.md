@@ -90,7 +90,9 @@ P0 非目标：
 - AI Candidate 是辅助证据，不是人工标签、审批、质量结论或训练准入结论。`NO_HAND_DETECTED` 是正常结果；当正式人工流程允许继续时，AI `FAILED` 不得被表现为主链 blocked。
 - “当前规则检查通过”只表示可参与训练数据导出；实际训练行数以导出预览为准。没有相应权限或页面上下文时，只显示结果事实，不展示假导出按钮。
 
-### 3.6 V1.26 配药事件工作台边界
+### 3.6 V1.27 配药事件工作台边界
+
+本节的当前语义由 [V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) 和 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 冻结；V1.26 工作台文档仅保留为历史设计。
 
 - 事件页按“事件身份与当前阶段 → 聚焦视频与唯一 Current Action → 渐进详情”组织，优先回答对象、阶段和当前动作。
 - 主业务 rail 只有接收、机位质量、事件质量、配药动作标注、人工复核、训练资格检查六个节点。Media Probe、media status、technical quality、MediaPipe 和 Candidate 作为辅助证据展示，不扩充主流程节点。
@@ -108,10 +110,10 @@ P0 非目标：
 | 路由 | 页面职责 | 启用条件 | 当前阶段 |
 | --- | --- | --- | --- |
 | `/projects` | 仅列出当前身份具有 ACTIVE Membership 的数据项目并显示角色；管理员可改名、归档项目和管理成员 | 项目/成员契约、权限与测试具备 | 已启用；归档不物理删除数据。AssetFolder 不属于当前产品面，相关旧表和字段已由 V65 退役。 |
-| `/projects/:projectId/assets/:id` | 查看历史或诊断所需的单路视频事实；组内资产进入事件工作台 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | V1.24-compatible 兼容/管理表面；不作为新事件主链。管理员诊断/恢复入口不放入普通用户主界面。 |
+| `/projects/:projectId/assets/:id` | 仅供受控历史或诊断读取单路视频事实；当前组内资产进入事件工作台 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 退役的单视频产品表面；不属于 V1.27 当前业务入口或独立工作台。管理员诊断/恢复入口不放入普通用户主界面。 |
 | `/projects/:projectId/capture-groups` | 按事件查询 CaptureGroup，并进入多视图事件工作台 | 服务端显式归组、项目隔离、收件与质量事实分离 | 当前“视频管理”默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
-| `/projects/:projectId/videos` | 查询历史单路视频，并兼容 V1.24 单视频路径 | 稳定游标、同条件汇总、项目隔离 | 保留为可直接访问的兼容入口，不在侧边栏重复展示。 |
-| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的标注任务队列、进度和状态；视频质量保存为合格时系统自动创建并分配任务给质量确认人；在项目权限允许时提供项目级训练数据导出，并为需要处理的任务进入单任务工作台 | 自动任务、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。CaptureGroup 首个正式 Revision 前的 Primary View 入口使用服务端 `can_select_primary`，不从 `can_submit` 推断。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注 |
+| `/projects/:projectId/videos` | 仅供历史单路视频数据或迁移诊断读取 | 稳定游标、同条件汇总、项目隔离 | 退役的单视频产品表面；不属于 V1.27 当前导航、业务验收或兼容承诺。 |
+| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的 CaptureGroup 任务队列、进度和状态；组质量保存为合格时系统自动创建并分配唯一组任务；在项目权限允许时提供项目级训练数据导出，并为需要处理的事件进入组任务工作台 | 自动任务、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。CaptureGroup 首个正式 Revision 前的 Primary View 入口使用服务端 `can_select_primary`，不从 `can_submit` 推断。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注 |
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
 | `/uploads/new` | 从平台页面上传本机视频并展示真实上传进度 | 后端具备角色、项目和文件规则守卫 | 已启用；仅合成数据开发验证，不展示文件夹选择 |
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
@@ -119,22 +121,22 @@ P0 非目标：
 | `/annotation-projects` | 标注项目和标签/指南版本 | 待 AnnotationProject/Guideline 契约、权限与测试冻结 | 未启用 |
 | `/projects/:projectId/annotation-tasks/:taskId` | 单任务视频辅助人工标注工作台；查看 Skeleton/Candidate 辅助证据，提交不可变 revision，执行管理员复核、退回返工，以及查看 post-cleaning 事实并按权限重新核对清洗 | 自动任务、项目权限、质量守卫、LabelSchema、授权播放、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；该路由是任务级动作的唯一处理入口，权限和状态均使用服务端返回的 `can_submit`、`can_select_primary`、`can_review`、`can_recheck_post_cleaning` 事实，不新增画框工具、批量行为或数据集页面 |
 | `/admin/users` | 创建/启停普通用户；全局 ADMIN 进入项目后可管理项目成员 | 正式身份、成员管理、审计和测试具备 | 已启用 |
-| `/cleaning` | 跨资产的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前单 revision post-clean 只随标注任务展示结果，不为它新建清洗页 |
+| `/cleaning` | 跨事件的质量结果汇总、批量清洗任务和准入例外 | 清洗状态机和批量任务契约 | 待启用；当前 CaptureGroup Cleaning 只随事件/组任务展示结果，不为它新建清洗页 |
 | `/projects/:projectId/datasets`、详情子路由 | 历史 DatasetVersion/Export 产品视图 | 历史文档和迁移记录仅作演进参考 | **DEFERRED / HIDDEN**：当前 Web 路由已退出，不进入产品导航；V66 已退役对应旧数据库对象。 |
 
 新页面只能在对应纵向能力已有 OpenAPI、权限边界、状态语义和可执行测试后启用。
 
-### 4.1 视频主链与冻结兼容页面
+### 4.1 视频主链与历史页面
 
 - `/projects/:projectId/capture-groups` 是当前“视频管理”默认业务入口；事件列表和详情以服务端 CaptureGroup 事实为准，不自动播放或预加载视频；
-- `/projects/:projectId/videos` 是历史单视频兼容入口；打开属于 CaptureGroup 工作流的资产时自动替换跳转到事件工作台；
+- `/projects/:projectId/videos` 是退役的历史单视频表面；不得把它作为 V1.27 兼容入口、当前导航或新事件跳转目标；
 - `/projects/:projectId/sessions` 与详情仅保留历史兼容路由和测试，不进入当前导航；不得继续增加同步、批量检测或 Dataset 草稿动作；
 - 每个单个已入库视频自动提交一个幂等的 MediaPipe 手部姿态检测；不提供一键批量检测或可配置自动策略。Candidate/handedness 不得阻断人工标注；
 - AssetFolder 管理 API 和页面已退出；旧 folder ID、`clip_asset.folder_id` 与上传字段已由 V65 退役，不进入 LEAN-P0 页面；
-- `/assets/:id` 详情只服务 V1.24-compatible 历史单视频或管理/诊断；属于 CaptureGroup 的资产进入事件工作台；
+- `/assets/:id` 详情只服务历史单视频数据或受控管理/诊断；属于 CaptureGroup 的资产必须进入事件工作台，不恢复独立资产工作流；
 - `/assets/:id` 只展示当前已持久化且获准返回的元数据。播放器、缩略图、下载和对象存储定位在授权契约完成前不得出现；
 - 工作台所需的异常数、待办数和状态汇总必须来自专用服务端查询，不得通过浏览器拉取多页列表后自行汇总。
-- 顶部导航的上下文归属固定为：`/projects` 属于“项目”，`/projects/:projectId/capture-groups`、事件详情、历史 `/videos` 与 `/assets/:id` 均属于“视频管理”，`/projects/:projectId/annotation-tasks` 属于“配药动作标注”。管理菜单只承担真实管理和诊断入口，视频详情不得高亮“管理”。
+- 顶部导航的上下文归属固定为：`/projects` 属于“项目”，`/projects/:projectId/capture-groups` 与事件详情属于“视频管理”，`/projects/:projectId/annotation-tasks` 属于“配药动作标注”。历史 `/videos` 与 `/assets/:id` 不进入当前导航；管理菜单只承担真实管理和诊断入口，视频详情不得高亮“管理”。
 
 ### 4.2 当前可用筛选与渐进披露
 
@@ -257,7 +259,7 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
 
 - 资产详情只有在服务端确认项目 Membership 和媒体状态并签发短期授权后才创建 `<video>`；页面初始不得预加载对象内容。
 - 当前 P0 在资产为未删除、上传完整性校验完成的 MP4 时向 ACTIVE 项目成员显示“播放视频”。点击后才签发 `DATA_REVIEW` 地址，地址只保存在组件局部状态；显示次要的到期时间、失败重试和关闭按钮，不自动播放，也不把播放当作质量结论。播放器在普通笔记本保持约 `60–65vh` 的工作台上限；全屏目标是同时包含 `<video>` 与 Skeleton Overlay 的共同容器。Overlay 渲染 bbox、21 点和骨架，只显示最近候选帧；Left/Right 以低权重辅助信息显示，不作为流程判断。媒体技术检查补充时长、编码和完整解码事实，但不阻断人工查看。
-- 播放与质量判断相邻但彼此独立：项目成员查看视频后选择合格、不合格或需复核；不合格与需复核必须选择固定原因，保存时显示服务端当前版本冲突并允许刷新后重试。结论保存为合格时，详情页只展示服务端确认的“任务已自动分配”事实和受理人，不显示正常路径的手动受理人选择器；任务查询未完成或失败时如实显示确认中或可重试错误。
+- 播放与质量判断相邻但彼此独立：项目成员查看视图后选择合格、不合格或需复核；不合格与需复核必须选择固定原因，保存时显示服务端当前版本冲突并允许刷新后重试。事件级质量结论保存为有效准入时，详情页只展示服务端确认的“组任务已自动分配”事实和受理人，不显示正常路径的手动受理人选择器；任务查询未完成或失败时如实显示确认中或可重试错误。
 - P0 播放器验证首帧、时长、Range seek、授权过期、加载失败和重试；多相机切换保持 Session 上下文，多路同步播放另行评审。
 - 尚未就绪、处理中、无权播放和处理失败使用不同文案，不用黑色视频框伪装为正在加载。
 - 视频列表和详情页提供删除入口；确认框明确显示视频名称、项目和影响。
@@ -267,14 +269,14 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
 
 - 标注任务状态必须来自服务端：`ASSIGNED` 显示待标注/待修改，`SUBMITTED` 显示等待管理员复核，
   `COMPLETED` 显示复核和当前 post-clean 结果；前端不得仅根据点击“通过”本地推断完成。
-- 当前 P0 的默认任务入口是质量结论变为 `QUALIFIED` 后的同事务自动分配；自动分配仅确定受理人，不自动写入任何动作标签、revision 或 review。管理员手动创建只作为受控恢复入口，普通详情页不展示它。
+- 当前 V1.27 的默认任务入口是 `CaptureGroupQualityReview` 确认有效事件质量后的同事务自动分配；自动分配仅确定受理人，不自动写入任何动作标签、revision 或 review。管理员手动创建只作为受控恢复入口，普通详情页不展示它。
 - `APPROVED`、任务 `COMPLETED` 和 post-clean run/result 在同一服务端事务完成。请求失败时页面
   保留原状态并重新加载，不显示一半成功的“复核通过”。
 - post-clean `PASS/WARNING/REJECT` 必须同时显示中文含义和稳定原因。缺少已验证媒体时长导致的
   `WARNING` 应说明仍需处理或批准例外且不会自动准入；`REJECT` 应说明当前 revision 不具备后续
   准入条件，但视频资产未被删除。
 - post-clean `PASS` 的界面文案只能是“当前规则检查通过”，不得写成“已进入训练集”或自动跳转
-  `/datasets`。V1.24 只允许管理员显式运行独立只读工具生成最小 Parquet；DatasetVersion UI、复杂 Export 和自动导出继续 DEFERRED。
+  `/datasets`。V1.27 只允许管理员显式运行当前 `training-data.v3` CaptureGroup event manifest 的只读导出；历史 `training-data.v2`、DatasetVersion UI、复杂 Export 和自动导出不属于当前产品。
 - 管理员可对已完成且 `APPROVED` 的 revision 点击“重新核对清洗”。服务端按当前人工质量版本、视频事实和
   不可变标注文档决定是否产生新 run/result；输入未变化时返回既有结果，前端不得伪造新结果或把该操作写成
   “已进入训练集”。
