@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -51,6 +52,17 @@ class TrainingDataV3ExportService {
 			  FROM training_data_group_eligibility_v3
 			 WHERE project_id = ?
 			 ORDER BY capture_group_id, revision_number, annotation_revision_id
+			""";
+
+	private static final String ELIGIBILITY_VALIDATION_QUERY = """
+			SELECT capture_group_id, annotation_revision_id
+			  FROM training_data_group_eligibility_v3_integrity
+			 WHERE project_id = ?
+			   AND cleaning_outcome = 'PASS'
+			   AND (context_consistent IS NOT TRUE
+			        OR source_media_valid IS NOT TRUE
+			        OR eligible_revision_count <> 1)
+			 ORDER BY capture_group_id, annotation_revision_id
 			""";
 
 	private final JdbcTemplate jdbcTemplate;
@@ -118,8 +130,36 @@ class TrainingDataV3ExportService {
 
 	private TrainingDataV3Document snapshot(UUID projectId) {
 		requireSyntheticProfile();
-		var events = this.jdbcTemplate.query(QUERY, this::map, projectId);
+		validateEligibility(projectId);
+		List<TrainingDataV3Event> events;
+		try {
+			events = this.jdbcTemplate.query(QUERY, this::map, projectId);
+		}
+		catch (DataAccessException exception) {
+			throw eligibilityProjectionInvalid();
+		}
 		return new TrainingDataV3Document(SCHEMA_VERSION, SPLIT_UNIT, events);
+	}
+
+	private void validateEligibility(UUID projectId) {
+		List<Map<String, Object>> invalidRows;
+		try {
+			invalidRows = this.jdbcTemplate.queryForList(ELIGIBILITY_VALIDATION_QUERY, projectId);
+		}
+		catch (DataAccessException exception) {
+			throw eligibilityProjectionInvalid();
+		}
+		if (!invalidRows.isEmpty()) {
+			throw new TrainingDataExportException("TRAINING_DATA_V3_ELIGIBILITY_INVALID",
+					"The current CaptureGroup source media or approved revision evidence is invalid or ambiguous; export is blocked.",
+					422);
+		}
+	}
+
+	private static TrainingDataExportException eligibilityProjectionInvalid() {
+		return new TrainingDataExportException("TRAINING_DATA_V3_ELIGIBILITY_INVALID",
+				"The V1.27 training-data eligibility projection could not prove a valid current source; export is blocked.",
+				422);
 	}
 
 	private TrainingDataV3Event map(ResultSet resultSet, int rowNumber) throws SQLException {

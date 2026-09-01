@@ -80,7 +80,9 @@ paths:
       description: >-
         Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. Only event-level Cleaning PASS
         rows with APPROVED human Review and a current admitting CaptureGroup quality revision are read.
-        The manifest is read-only, contains no MP4 bytes, and uses CaptureGroup as the minimum split unit.
+        Before a row is exposed, the service verifies the unique current AnnotationRevision and the
+        current participating source media against the Cleaning snapshot. The manifest is read-only,
+        contains no MP4 bytes, and uses CaptureGroup as the minimum split unit.
       security:
         - sessionCookie: []
       parameters:
@@ -98,7 +100,10 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422":
-          description: Current group evidence cannot be serialized safely.
+          description: >-
+            Current CaptureGroup eligibility or source evidence cannot be proven safely, including
+            a stale or ambiguous Revision, a cross-entity context mismatch, a deleted or changed
+            participating ClipAsset, or a source digest mismatch.
           content:
             application/problem+json:
               schema:
@@ -136,7 +141,10 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422":
-          description: Current group evidence cannot be serialized safely.
+          description: >-
+            Current CaptureGroup eligibility or source evidence cannot be proven safely, including
+            a stale or ambiguous Revision, a cross-entity context mismatch, a deleted or changed
+            participating ClipAsset, or a source digest mismatch.
           content:
             application/problem+json:
               schema:

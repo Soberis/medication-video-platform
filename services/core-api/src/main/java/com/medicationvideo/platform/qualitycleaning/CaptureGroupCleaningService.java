@@ -206,6 +206,9 @@ public class CaptureGroupCleaningService {
 		value.put("sync_reliability", normalizeReliability(view.declaredSyncStatus()));
 		value.put("stream_version", view.streamVersion());
 		value.put("clip_asset_version", view.clipAssetVersion());
+		if (view.clipAssetSha256() != null) {
+			value.put("clip_asset_sha256", view.clipAssetSha256());
+		}
 		return value;
 	}
 
@@ -270,6 +273,7 @@ public class CaptureGroupCleaningService {
 				append(canonical, view.qualityDecision());
 				append(canonical, view.qualityReviewVersion());
 				append(canonical, view.declaredSyncStatus());
+				append(canonical, view.clipAssetSha256());
 				append(canonical, view.streamVersion());
 				append(canonical, view.clipAssetVersion());
 			}
@@ -329,7 +333,15 @@ public class CaptureGroupCleaningService {
 
 	public record ViewInput(UUID cameraStreamId, UUID clipAssetId, int cameraNumber, boolean present,
 			String mediaStatus, String technicalQualityStatus, long streamVersion, long clipAssetVersion,
-			boolean assetAvailable, String qualityDecision, long qualityReviewVersion, String declaredSyncStatus) {
+			boolean assetAvailable, String qualityDecision, long qualityReviewVersion, String declaredSyncStatus,
+			String clipAssetSha256) {
+
+		public ViewInput(UUID cameraStreamId, UUID clipAssetId, int cameraNumber, boolean present, String mediaStatus,
+				String technicalQualityStatus, long streamVersion, long clipAssetVersion, boolean assetAvailable,
+				String qualityDecision, long qualityReviewVersion, String declaredSyncStatus) {
+			this(cameraStreamId, clipAssetId, cameraNumber, present, mediaStatus, technicalQualityStatus, streamVersion,
+					clipAssetVersion, assetAvailable, qualityDecision, qualityReviewVersion, declaredSyncStatus, null);
+		}
 
 		public boolean reviewable() {
 			return "INGESTED".equals(mediaStatus);

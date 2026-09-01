@@ -417,7 +417,7 @@ class CaptureGroupAnnotationWorkflow {
 					view.cameraNumber(), view.present(), view.mediaStatus(), view.technicalQualityStatus(),
 					view.streamVersion(), view.clipAssetVersion(), view.assetAvailable(),
 					quality == null ? "UNREVIEWED" : quality.decision(), quality == null ? 0 : quality.version(),
-					view.declaredSyncStatus());
+					view.declaredSyncStatus(), view.clipAssetSha256());
 		}).toList();
 	}
 
