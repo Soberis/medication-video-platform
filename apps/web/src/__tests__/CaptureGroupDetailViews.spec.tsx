@@ -248,6 +248,8 @@ describe('CaptureGroup detail views', () => {
     expect(document.querySelector('.page-heading .app-eyebrow')).toBeNull()
     const videoDetails = screen.getByText('视频与辅助证据').closest('details')
     if (!videoDetails) throw new Error('Completed video progressive detail was not mounted.')
+    expect(videoDetails).not.toHaveAttribute('open')
+    await user.click(within(videoDetails).getByText('视频与辅助证据'))
     expect(videoDetails).toHaveAttribute('open')
     expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: '播放视频' })).toBeInTheDocument()

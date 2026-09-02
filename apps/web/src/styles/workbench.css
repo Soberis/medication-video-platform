@@ -21,12 +21,13 @@
   justify-items: center;
   gap: var(--app-space-16);
   width: 100%;
-  min-height: 0;
+  /* An unauthorised player is an invitation to inspect, not the main work surface.
+   * Keep it compact while retaining enough room for the state and action copy. */
+  min-height: clamp(240px, 36vh, 360px);
   padding: var(--app-space-24);
   border: 1px solid var(--app-color-border);
   border-radius: var(--app-radius-small);
   background: var(--app-color-surface-muted);
-  aspect-ratio: 16 / 9;
   text-align: center;
 }
 
@@ -212,7 +213,7 @@
 
 @media (max-width: 720px) {
   .playback-idle-stage {
-    min-height: 280px;
+    min-height: 240px;
     padding: var(--app-space-16);
   }
 
