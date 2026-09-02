@@ -11,11 +11,12 @@ import {
   type AnnotationTaskProgress,
 } from '@/api/annotation'
 import {
-  downloadTrainingDataV3,
-  getTrainingDataV3ExportPreview,
-  TrainingDataExportApiError,
-  type TrainingDataV3ExportPreview,
-} from '@/api/training-data'
+  downloadHandLandmarkExport,
+  getHandLandmarkExportPreview,
+  HandLandmarkExportApiError,
+  type HandLandmarkExportPreview,
+  type HandLandmarkExportReasonCode,
+} from '@/api/hand-landmarks'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -113,6 +114,33 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
   return decision === 'APPROVED' ? 'success' : 'destructive'
 }
 
+const handLandmarkReasonLabels: Readonly<Record<HandLandmarkExportReasonCode, string>> = {
+  MEDIAPIPE_NOT_FINISHED: '手部检测尚未完成',
+  NO_HAND_DETECTED: '未检测到手部关键点',
+  MEDIAPIPE_FAILED: '手部检测失败',
+  NO_VALID_21_POINT_SAMPLE: '没有完整的 21 点样本',
+}
+
+const handLandmarkReasonOrder: readonly HandLandmarkExportReasonCode[] = [
+  'MEDIAPIPE_NOT_FINISHED',
+  'NO_HAND_DETECTED',
+  'MEDIAPIPE_FAILED',
+  'NO_VALID_21_POINT_SAMPLE',
+]
+
+function formatTrainingCount(value: number) {
+  return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function getHandLandmarkReasonItems(preview: HandLandmarkExportPreview) {
+  return handLandmarkReasonOrder.flatMap((reasonCode) => {
+    const count = preview.reason_counts?.[reasonCode]
+    return typeof count === 'number' && count > 0
+      ? [{ label: handLandmarkReasonLabels[reasonCode], count }]
+      : []
+  })
+}
+
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -123,11 +151,12 @@ export default function AnnotationTaskListView() {
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [trainingDataV3Preview, setTrainingDataV3Preview] =
-    useState<TrainingDataV3ExportPreview | null>(null)
-  const [isTrainingDataV3ExportOpen, setIsTrainingDataV3ExportOpen] = useState(false)
-  const [isTrainingDataV3PreviewLoading, setIsTrainingDataV3PreviewLoading] = useState(false)
-  const [isTrainingDataV3DownloadLoading, setIsTrainingDataV3DownloadLoading] = useState(false)
+  const [handLandmarkPreview, setHandLandmarkPreview] = useState<HandLandmarkExportPreview | null>(
+    null,
+  )
+  const [isHandLandmarkExportOpen, setIsHandLandmarkExportOpen] = useState(false)
+  const [isHandLandmarkPreviewLoading, setIsHandLandmarkPreviewLoading] = useState(false)
+  const [isHandLandmarkDownloadLoading, setIsHandLandmarkDownloadLoading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
   const trainingExportRequest = useRef<AbortController | null>(null)
 
@@ -176,65 +205,65 @@ export default function AnnotationTaskListView() {
     }
   }, [loadTasks])
 
-  const openTrainingDataV3Export = useCallback(async () => {
+  const openHandLandmarkExport = useCallback(async () => {
     if (
       progress?.scope !== 'PROJECT' ||
-      isTrainingDataV3PreviewLoading ||
-      isTrainingDataV3DownloadLoading
+      isHandLandmarkPreviewLoading ||
+      isHandLandmarkDownloadLoading
     )
       return
     trainingExportRequest.current?.abort()
     const request = new AbortController()
     trainingExportRequest.current = request
-    setIsTrainingDataV3PreviewLoading(true)
+    setIsHandLandmarkPreviewLoading(true)
     try {
-      const preview = await getTrainingDataV3ExportPreview(projectId, request.signal)
+      const preview = await getHandLandmarkExportPreview(projectId, request.signal)
       if (request.signal.aborted || trainingExportRequest.current !== request) return
-      setTrainingDataV3Preview(preview)
-      setIsTrainingDataV3ExportOpen(true)
+      setHandLandmarkPreview(preview)
+      setIsHandLandmarkExportOpen(true)
     } catch (error) {
       if (request.signal.aborted || trainingExportRequest.current !== request) return
       void message.error(
-        error instanceof TrainingDataExportApiError
+        error instanceof HandLandmarkExportApiError
           ? error.message
-          : '暂时无法读取 training-data.v3 导出信息，请稍后重试。',
+          : '暂时无法读取手部训练数据，请稍后重试。',
       )
     } finally {
       if (trainingExportRequest.current === request) {
         trainingExportRequest.current = null
-        setIsTrainingDataV3PreviewLoading(false)
+        setIsHandLandmarkPreviewLoading(false)
       }
     }
   }, [
-    isTrainingDataV3DownloadLoading,
-    isTrainingDataV3PreviewLoading,
+    isHandLandmarkDownloadLoading,
+    isHandLandmarkPreviewLoading,
     message,
     progress?.scope,
     projectId,
   ])
 
-  const closeTrainingDataV3Export = useCallback(() => {
-    if (isTrainingDataV3DownloadLoading) return
-    setIsTrainingDataV3ExportOpen(false)
-    setTrainingDataV3Preview(null)
-  }, [isTrainingDataV3DownloadLoading])
+  const closeHandLandmarkExport = useCallback(() => {
+    if (isHandLandmarkDownloadLoading) return
+    setIsHandLandmarkExportOpen(false)
+    setHandLandmarkPreview(null)
+  }, [isHandLandmarkDownloadLoading])
 
-  const downloadTrainingDataV3File = useCallback(async () => {
+  const downloadHandLandmarkFile = useCallback(async () => {
     if (
-      !trainingDataV3Preview ||
-      trainingDataV3Preview.event_count <= 0 ||
-      isTrainingDataV3DownloadLoading
+      !handLandmarkPreview ||
+      handLandmarkPreview.sample_count <= 0 ||
+      isHandLandmarkDownloadLoading
     )
       return
     const request = new AbortController()
     trainingExportRequest.current = request
-    setIsTrainingDataV3DownloadLoading(true)
+    setIsHandLandmarkDownloadLoading(true)
     try {
-      const blob = await downloadTrainingDataV3(projectId, request.signal)
+      const blob = await downloadHandLandmarkExport(projectId, request.signal)
       const objectUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = objectUrl
-      link.download = trainingDataV3Preview.file_name
+      link.download = handLandmarkPreview.file_name
       link.rel = 'noopener'
       link.hidden = true
       document.body.append(link)
@@ -244,21 +273,25 @@ export default function AnnotationTaskListView() {
         URL.revokeObjectURL(objectUrl)
         link.remove()
       }
-      setIsTrainingDataV3ExportOpen(false)
-      setTrainingDataV3Preview(null)
-      void message.success(`已开始下载 ${trainingDataV3Preview.file_name}。`)
+      setIsHandLandmarkExportOpen(false)
+      setHandLandmarkPreview(null)
+      void message.success(`已开始下载 ${handLandmarkPreview.file_name}。`)
     } catch (error) {
       if (request.signal.aborted) return
       void message.error(
-        error instanceof TrainingDataExportApiError
+        error instanceof HandLandmarkExportApiError
           ? error.message
-          : 'training-data.v3 暂时无法导出，请稍后重试。',
+          : '手部训练数据暂时无法导出，请稍后重试。',
       )
     } finally {
       if (trainingExportRequest.current === request) trainingExportRequest.current = null
-      setIsTrainingDataV3DownloadLoading(false)
+      setIsHandLandmarkDownloadLoading(false)
     }
-  }, [isTrainingDataV3DownloadLoading, message, projectId, trainingDataV3Preview])
+  }, [handLandmarkPreview, isHandLandmarkDownloadLoading, message, projectId])
+
+  const handLandmarkReasonItems = handLandmarkPreview
+    ? getHandLandmarkReasonItems(handLandmarkPreview)
+    : []
 
   return (
     <>
@@ -274,11 +307,11 @@ export default function AnnotationTaskListView() {
             {progress?.scope === 'PROJECT' ? (
               <Button
                 size="small"
-                loading={isTrainingDataV3PreviewLoading}
-                disabled={isTrainingDataV3DownloadLoading}
-                onClick={() => void openTrainingDataV3Export()}
+                loading={isHandLandmarkPreviewLoading}
+                disabled={isHandLandmarkDownloadLoading}
+                onClick={() => void openHandLandmarkExport()}
               >
-                预览训练数据
+                预览手部训练数据
               </Button>
             ) : null}
             <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
@@ -560,146 +593,77 @@ export default function AnnotationTaskListView() {
         <EmptyState description="当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
       ) : null}
       <Modal
-        open={isTrainingDataV3ExportOpen}
-        title="训练数据预览"
-        okText="导出训练数据"
+        open={isHandLandmarkExportOpen}
+        title="手部训练数据"
+        okText="导出 CSV"
         cancelText="关闭"
-        confirmLoading={isTrainingDataV3DownloadLoading}
+        confirmLoading={isHandLandmarkDownloadLoading}
         okButtonProps={{
-          disabled: !trainingDataV3Preview?.event_count,
-          'aria-label': '导出训练数据',
+          disabled: !handLandmarkPreview?.sample_count,
+          'aria-label': '导出 CSV',
         }}
         cancelButtonProps={{
-          disabled: isTrainingDataV3DownloadLoading,
-          'aria-label': '关闭训练数据预览',
+          disabled: isHandLandmarkDownloadLoading,
+          'aria-label': '关闭手部训练数据预览',
         }}
-        mask={{ closable: !isTrainingDataV3DownloadLoading }}
-        keyboard={!isTrainingDataV3DownloadLoading}
-        onCancel={closeTrainingDataV3Export}
-        onOk={() => void downloadTrainingDataV3File()}
+        mask={{ closable: !isHandLandmarkDownloadLoading }}
+        keyboard={!isHandLandmarkDownloadLoading}
+        onCancel={closeHandLandmarkExport}
+        onOk={() => void downloadHandLandmarkFile()}
         destroyOnHidden
       >
-        {trainingDataV3Preview ? (
+        {handLandmarkPreview ? (
           <>
             <SummaryStrip
-              ariaLabel="训练数据摘要"
+              ariaLabel="手部训练数据摘要"
               items={[
                 {
-                  label: '符合条件的事件',
-                  value: `${trainingDataV3Preview.eligible_group_count} 组`,
+                  label: '可用于训练的配药事件',
+                  value: `${formatTrainingCount(handLandmarkPreview.eligible_event_count)} 个`,
                 },
                 {
-                  label: '参与机位',
-                  value: trainingDataV3Preview.event_count > 0 ? '随事件保留' : '暂无可导出事件',
-                  detail: '机位明细见技术详情',
+                  label: '有手部关键点的事件',
+                  value: `${formatTrainingCount(handLandmarkPreview.events_with_landmarks)} 个`,
                 },
                 {
-                  label: '排除机位',
-                  value: trainingDataV3Preview.event_count > 0 ? '保留审计记录' : '暂无可导出事件',
-                  detail: '不参与下游训练',
+                  label: '手部样本数',
+                  value: formatTrainingCount(handLandmarkPreview.sample_count),
                 },
                 {
-                  label: '正式标注',
-                  value:
-                    trainingDataV3Preview.event_count > 0 ? '已通过人工复核' : '暂无可导出事件',
-                },
-                {
-                  label: '训练资格',
-                  value:
-                    trainingDataV3Preview.event_count > 0 ? '已通过当前规则' : '暂无可导出事件',
+                  label: '无可用关键点的事件',
+                  value: `${formatTrainingCount(handLandmarkPreview.events_without_landmarks)} 个`,
                 },
               ]}
             />
-            {trainingDataV3Preview.event_count === 0 ? (
-              <p className="training-data-export-empty" role="status">
-                当前暂无符合条件的配药事件，暂时无法导出。
+            <p className="hand-landmark-export-description">
+              MediaPipe 手部关键点；每一行代表一个采样帧中的一只手和完整的 21 点样本。
+            </p>
+            {handLandmarkPreview.events_without_landmarks > 0 ? (
+              <p className="hand-landmark-export-not-ready" role="status">
+                {formatTrainingCount(handLandmarkPreview.events_without_landmarks)}{' '}
+                个已完成事件尚未产生可用手部关键点。
+              </p>
+            ) : handLandmarkPreview.sample_count === 0 ? (
+              <p className="hand-landmark-export-not-ready" role="status">
+                当前没有可用的手部关键点样本，暂时无法导出。
               </p>
             ) : null}
-            <details className="detail-disclosure training-data-v3-technical-details">
-              <summary>
-                <strong>查看技术与追溯信息</strong>
-                <span>版本、字段与时间基准</span>
-              </summary>
-              <div className="detail-disclosure-content">
-                <MetadataList
-                  className="training-data-export-summary training-data-v3-export-summary"
-                  items={[
-                    {
-                      id: 'v3-event-count',
-                      label: '事件数',
-                      value: `${trainingDataV3Preview.event_count} 个`,
-                    },
-                    {
-                      id: 'v3-action-labels',
-                      label: '动作标签',
-                      value: 'action_label + action_labels',
-                    },
-                    {
-                      id: 'v3-view-provenance',
-                      label: '视图与质量来源',
-                      value:
-                        'participating_views + excluded_views；group_quality + qualified_views + rejected_missing_views',
-                    },
-                    {
-                      id: 'v3-confirmed-view-set',
-                      label: '确认输入',
-                      value: 'confirmed_view_set + input_version',
-                    },
-                    {
-                      id: 'v3-revision-provenance',
-                      label: '修订与复核来源',
-                      value:
-                        'annotation_revision_id + revision；annotation_review_id + review_decision + reviewed_by',
-                    },
-                    {
-                      id: 'v3-cleaning-provenance',
-                      label: '训练资格检查来源',
-                      value:
-                        'capture_group_cleaning_id + rule set + input fingerprint + cleaning_evaluated_by；PASS',
-                    },
-                    {
-                      id: 'v3-candidate-provenance',
-                      label: '候选与映射来源',
-                      value: 'candidate_provenance + mapping_provenance',
-                    },
-                    {
-                      id: 'v3-primary-interval',
-                      label: '主视图时间基准',
-                      value:
-                        'primary_clip_asset_id + primary_camera_number + primary_interval；参考视图不生成动作对齐时间戳',
-                    },
-                    {
-                      id: 'v3-format-version',
-                      label: '格式 / 版本',
-                      value: (
-                        <>
-                          <code>{trainingDataV3Preview.schema_version}</code> ·{' '}
-                          <code>{trainingDataV3Preview.content_type}</code>
-                        </>
-                      ),
-                    },
-                    {
-                      id: 'v3-split-unit',
-                      label: 'Split 单位',
-                      value: '配药事件（同一事件的机位不跨 train / validation / test）',
-                    },
-                    {
-                      id: 'v3-file',
-                      label: '文件',
-                      value: <code>{trainingDataV3Preview.file_name}</code>,
-                    },
-                    {
-                      id: 'v3-includes-mp4',
-                      label: '原始视频',
-                      value: trainingDataV3Preview.includes_mp4 ? '包含' : '不包含',
-                    },
-                  ]}
-                />
-                <p className="form-hint">
-                  准入条件由服务端根据事件质量、正式修订、复核通过和训练资格检查通过判定；本页不重新计算。
-                </p>
-              </div>
-            </details>
+            {handLandmarkReasonItems.length ? (
+              <section className="hand-landmark-export-reasons" aria-label="手部检测状态说明">
+                <h3>未产生样本的原因</h3>
+                <ul>
+                  {handLandmarkReasonItems.map((item) => (
+                    <li key={item.label}>
+                      <span>{item.label}</span>
+                      <strong>{formatTrainingCount(item.count)} 个事件</strong>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <p className="hand-landmark-export-file">
+              文件：<code>{handLandmarkPreview.file_name}</code>
+            </p>
           </>
         ) : null}
       </Modal>

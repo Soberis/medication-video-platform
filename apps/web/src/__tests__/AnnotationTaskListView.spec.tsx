@@ -107,7 +107,7 @@ describe('annotation task list view', () => {
     expect(
       screen.getByText('处理已分配的配药动作标注任务；提交后由管理员复核。'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '预览训练数据' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '预览手部训练数据' })).toBeInTheDocument()
     const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
     expect(breadcrumb).toHaveTextContent('配药动作标注')
     expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
@@ -143,7 +143,7 @@ describe('annotation task list view', () => {
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
   })
 
-  it('keeps the project preview action available while the visible queue is partially complete', async () => {
+  it('keeps the project hand landmark preview action available while the visible queue is partially complete', async () => {
     const completedTask = {
       ...assignedTask,
       annotation_task_id: 'a0000000-0000-4000-8000-000000000020',
@@ -157,17 +157,21 @@ describe('annotation task list view', () => {
       capture_group_id: '60000000-0000-4000-8000-000000000002',
       primary_clip_asset_id: '50000000-0000-4000-8000-000000000002',
     }
-    const preview = trainingDataV3Preview(1)
-    const fetchMock = stubTrainingData([completedTask, pendingTask], labelSchema, preview)
+    const preview = handLandmarkPreview({
+      eligible_event_count: 1,
+      events_with_landmarks: 1,
+      sample_count: 2,
+    })
+    const fetchMock = stubHandLandmarkData([completedTask, pendingTask], labelSchema, preview)
     const user = userEvent.setup()
     renderView()
 
     const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
     expect(progressSummary).toHaveTextContent('1 个已完成 · 1 个待处理')
-    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/training-data/v3/preview`,
+      `/api/v1/projects/${projectId}/hand-landmarks/v1/preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
   })
@@ -567,65 +571,57 @@ describe('annotation task list view', () => {
     expect(router.state.location.search).toBe('?focus=review')
   })
 
-  it('previews the CaptureGroup training-data.v3 manifest and shows its server-owned provenance boundaries', async () => {
-    const preview = trainingDataV3Preview(2)
-    const fetchMock = stubTrainingData([assignedTask], labelSchema, preview)
+  it('previews MediaPipe hand landmark samples and shows server-owned counts', async () => {
+    const preview = handLandmarkPreview({
+      eligible_event_count: 2,
+      events_with_landmarks: 1,
+      sample_count: 8421,
+      events_without_landmarks: 1,
+      reason_counts: {
+        MEDIAPIPE_NOT_FINISHED: 1,
+        NO_HAND_DETECTED: 0,
+        MEDIAPIPE_FAILED: 0,
+        NO_VALID_21_POINT_SAMPLE: 0,
+      },
+    })
+    const fetchMock = stubHandLandmarkData([assignedTask], labelSchema, preview)
     const user = userEvent.setup()
     renderView()
 
-    expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
+    expect(screen.queryByRole('button', { name: '导出 CSV' })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
     const dialog = await screen.findByRole('dialog')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/training-data/v3/preview`,
+      `/api/v1/projects/${projectId}/hand-landmarks/v1/preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
-    expect(dialog).toHaveTextContent('2 组')
-    expect(within(dialog).getByRole('button', { name: '导出训练数据' })).not.toBeDisabled()
+    expect(dialog).toHaveTextContent('手部训练数据')
+    expect(within(dialog).getByRole('button', { name: '导出 CSV' })).not.toBeDisabled()
     const productSummary = within(dialog).getByRole('region', {
-      name: '训练数据摘要',
+      name: '手部训练数据摘要',
     })
-    expect(productSummary).toHaveTextContent('参与机位')
-    expect(productSummary).toHaveTextContent('随事件保留')
-    expect(productSummary).toHaveTextContent('排除机位')
-    expect(productSummary).toHaveTextContent('保留审计记录')
-    expect(productSummary).toHaveTextContent('正式标注')
-    expect(productSummary).toHaveTextContent('已通过人工复核')
-    expect(productSummary).toHaveTextContent('训练资格')
-    expect(productSummary).toHaveTextContent('已通过当前规则')
-    const technicalDetails = within(dialog).getByText('查看技术与追溯信息').closest('details')
-    if (!technicalDetails) throw new Error('V3 technical details were not mounted.')
-    expect(technicalDetails).not.toHaveAttribute('open')
-    await user.click(within(technicalDetails).getByText('查看技术与追溯信息'))
-    expect(technicalDetails).toHaveAttribute('open')
-    expect(technicalDetails).toHaveTextContent('2 个')
-    expect(technicalDetails).toHaveTextContent('participating_views')
-    expect(technicalDetails).toHaveTextContent('excluded_views')
-    expect(technicalDetails).toHaveTextContent('annotation_revision_id + revision')
-    expect(technicalDetails).toHaveTextContent(
-      'capture_group_cleaning_id + rule set + input fingerprint + cleaning_evaluated_by；PASS',
-    )
-    expect(technicalDetails).toHaveTextContent(
-      'primary_clip_asset_id + primary_camera_number + primary_interval；参考视图不生成动作对齐时间戳',
-    )
-    expect(technicalDetails).toHaveTextContent('training-data.v3')
-    expect(technicalDetails).toHaveTextContent('application/vnd.medication.training-data.v3+json')
-    expect(technicalDetails).toHaveTextContent(
-      '配药事件（同一事件的机位不跨 train / validation / test）',
-    )
-    expect(technicalDetails).toHaveTextContent('training_data_v3.json')
-    expect(technicalDetails).toHaveTextContent('不包含')
+    expect(productSummary).toHaveTextContent('可用于训练的配药事件')
+    expect(productSummary).toHaveTextContent('2 个')
+    expect(productSummary).toHaveTextContent('有手部关键点的事件')
+    expect(productSummary).toHaveTextContent('1 个')
+    expect(productSummary).toHaveTextContent('手部样本数')
+    expect(productSummary).toHaveTextContent('8,421')
+    expect(productSummary).toHaveTextContent('无可用关键点的事件')
+    expect(screen.getByText('1 个已完成事件尚未产生可用手部关键点。')).toBeInTheDocument()
+    expect(screen.getByText('手部检测尚未完成')).toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent('training-data.v3')
+    expect(dialog).not.toHaveTextContent('训练资格不通过')
   })
 
-  it('downloads the confirmed CaptureGroup manifest through the v3 endpoint', async () => {
-    const fetchMock = stubTrainingData(
+  it('downloads the server-returned hand landmark CSV filename without rebuilding the Blob', async () => {
+    const fetchMock = stubHandLandmarkData(
       [assignedTask],
       labelSchema,
-      trainingDataV3Preview(1),
-      '{"schema_version":"training-data.v3"}',
+      handLandmarkPreview({ sample_count: 1 }),
+      'capture_group_id,frame_timestamp_ms,landmark_00_x\nsynthetic,0,0.1\n',
     )
-    const createObjectUrl = vi.fn(() => 'blob:training-data-v3')
+    const createObjectUrl = vi.fn(() => 'blob:hand-landmarks')
     const revokeObjectUrl = vi.fn()
     const NativeURL = globalThis.URL
     class TestURL extends NativeURL {}
@@ -637,39 +633,124 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '导出训练数据' }))
+    await user.click(within(dialog).getByRole('button', { name: '导出 CSV' }))
 
     await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
     const link = anchorClick.mock.instances[0] as HTMLAnchorElement
-    expect(link.download).toBe('training_data_v3.json')
-    expect(link.href).toBe('blob:training-data-v3')
+    expect(link.download).toBe('mediapipe_hand_landmarks_v1.csv')
+    expect(link.href).toBe('blob:hand-landmarks')
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob))
-    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:training-data-v3')
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:hand-landmarks')
     expect(document.body.contains(link)).toBe(false)
-    expect(await screen.findByText('已开始下载 training_data_v3.json。')).toBeInTheDocument()
+    expect(
+      await screen.findByText('已开始下载 mediapipe_hand_landmarks_v1.csv。'),
+    ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/training-data/v3/download`,
+      `/api/v1/projects/${projectId}/hand-landmarks/v1/download`,
       expect.objectContaining({
         method: 'GET',
         cache: 'no-store',
-        headers: { Accept: 'application/vnd.medication.training-data.v3+json' },
+        headers: { Accept: 'text/csv; charset=UTF-8' },
       }),
     )
     anchorClick.mockRestore()
   })
 
-  it('disables CaptureGroup export when the server preview has no eligible events', async () => {
-    stubTrainingData([assignedTask], labelSchema, trainingDataV3Preview(0))
+  it('shows the zero-sample state and disables CSV export', async () => {
+    stubHandLandmarkData(
+      [assignedTask],
+      labelSchema,
+      handLandmarkPreview({
+        eligible_event_count: 1,
+        events_with_landmarks: 0,
+        sample_count: 0,
+        events_without_landmarks: 1,
+        reason_counts: { MEDIAPIPE_NOT_FINISHED: 1 },
+      }),
+    )
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
     const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('0 个')
-    expect(dialog).toHaveTextContent('当前暂无符合条件的配药事件，暂时无法导出。')
-    expect(within(dialog).getByRole('button', { name: '导出训练数据' })).toBeDisabled()
+    expect(within(dialog).getByRole('region', { name: '手部训练数据摘要' })).toHaveTextContent(
+      '手部样本数0',
+    )
+    expect(dialog).toHaveTextContent('1 个已完成事件尚未产生可用手部关键点。')
+    expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
+  })
+
+  it('shows a no-sample explanation when no business-complete event has usable landmarks', async () => {
+    stubHandLandmarkData(
+      [assignedTask],
+      labelSchema,
+      handLandmarkPreview({
+        eligible_event_count: 0,
+        events_with_landmarks: 0,
+        sample_count: 0,
+        events_without_landmarks: 0,
+      }),
+    )
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('当前没有可用的手部关键点样本，暂时无法导出。')
+    expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
+  })
+
+  it('maps all server-provided MediaPipe readiness reasons to product language', async () => {
+    stubHandLandmarkData(
+      [assignedTask],
+      labelSchema,
+      handLandmarkPreview({
+        eligible_event_count: 4,
+        events_with_landmarks: 0,
+        sample_count: 0,
+        events_without_landmarks: 4,
+        reason_counts: {
+          MEDIAPIPE_NOT_FINISHED: 1,
+          NO_HAND_DETECTED: 1,
+          MEDIAPIPE_FAILED: 1,
+          NO_VALID_21_POINT_SAMPLE: 1,
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('手部检测尚未完成')
+    expect(dialog).toHaveTextContent('未检测到手部关键点')
+    expect(dialog).toHaveTextContent('手部检测失败')
+    expect(dialog).toHaveTextContent('没有完整的 21 点样本')
+  })
+
+  it('shows a preview failure without presenting an export action', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/annotation-label-schema'))
+        return Promise.resolve(jsonResponse(labelSchema))
+      if (url.endsWith('/hand-landmarks/v1/preview')) {
+        return Promise.resolve(
+          jsonResponse({ error_code: 'HAND_LANDMARK_EXPORT_UNAVAILABLE' }, { status: 503 }),
+        )
+      }
+      if (url.endsWith('/annotation-tasks'))
+        return Promise.resolve(jsonResponse(taskList([assignedTask])))
+      return Promise.reject(new Error(`Unexpected fetch ${url}`))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderView()
+
+    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    expect(await screen.findByText('当前环境暂未开放手部训练数据导出。')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('does not show the export action for an assignee-scoped member queue', async () => {
@@ -678,7 +759,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '预览训练数据' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览手部训练数据' })).not.toBeInTheDocument()
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
@@ -728,17 +809,17 @@ function stubTasks(tasks: object[], schema: object, scope: 'PROJECT' | 'ASSIGNEE
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-function stubTrainingData(
+function stubHandLandmarkData(
   tasks: object[],
   schema: object,
-  v3Preview: object = trainingDataV3Preview(1),
-  downloadBody = '{"schema_version":"training-data.v3"}',
+  preview: object = handLandmarkPreview(),
+  downloadBody = 'capture_group_id,frame_timestamp_ms\n',
 ) {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith('/annotation-label-schema')) return Promise.resolve(jsonResponse(schema))
-    if (url.endsWith('/training-data/v3/preview')) return Promise.resolve(jsonResponse(v3Preview))
-    if (url.endsWith('/training-data/v3/download')) {
+    if (url.endsWith('/hand-landmarks/v1/preview')) return Promise.resolve(jsonResponse(preview))
+    if (url.endsWith('/hand-landmarks/v1/download')) {
       return Promise.resolve({
         ok: true,
         blob: () => Promise.resolve(new Blob([downloadBody])),
@@ -776,15 +857,18 @@ function taskList(tasks: object[], scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {
     },
   }
 }
-function trainingDataV3Preview(eventCount: number) {
+function handLandmarkPreview(
+  overrides: Partial<import('@/api/hand-landmarks').HandLandmarkExportPreview> = {},
+) {
   return {
-    schema_version: 'training-data.v3',
-    eligible_group_count: eventCount,
-    event_count: eventCount,
-    file_name: 'training_data_v3.json',
-    content_type: 'application/vnd.medication.training-data.v3+json',
-    split_unit: 'capture_group',
-    includes_mp4: false,
+    schema_version: 'hand-landmarks.v1' as const,
+    eligible_event_count: 1,
+    events_with_landmarks: 1,
+    sample_count: 1,
+    events_without_landmarks: 0,
+    file_name: 'mediapipe_hand_landmarks_v1.csv',
+    content_type: 'text/csv; charset=UTF-8',
+    ...overrides,
   }
 }
 function jsonResponse(body: object, init?: ResponseInit) {

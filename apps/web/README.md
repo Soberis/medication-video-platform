@@ -2,7 +2,7 @@
 
 所有前端 UI 变更开始前必须阅读 [`docs/DESIGN_SYSTEM.md`](../../docs/DESIGN_SYSTEM.md)。不得在页面中引入第二套视觉语言、任意设计 Token 或一次性布局系统。
 
-React 管理端。当前激活的纵向功能包括上传排障、CaptureGroup 视频管理、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、事件级 Cleaning，以及 `training-data.v3` 预览和下载。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
+React 管理端。当前激活的纵向功能包括上传排障、CaptureGroup 视频管理、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、事件级 Cleaning，以及 MediaPipe 手部训练数据预览和 CSV 下载。事件资格与追溯 manifest 仍由服务端内部能力维护，不作为用户侧的手部训练数据下载入口。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
 
 ## Commands
 
@@ -24,6 +24,6 @@ pnpm run web:build
 
 CaptureSession、CameraSet 和 CameraStream 仍由上传接收协议记录为领域事实；它们不再作为独立的历史 Session 管理页面暴露。
 
-当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。CaptureGroup 通过事件级质量准入后生成一个标注任务；受分配成员提交主 Step 时间段后，同一合格管理员可记录一次通过/不通过复核，且同人决定显示 `SELF_ADMIN_APPROVAL`。复核不通过会退回任务，下一次提交产生新的不可变 revision。事件级 Cleaning 通过后，`training-data.v3` 页面只读展示当前准入事实并支持下载；它不依赖旧 DatasetVersion、Admission、Build、Freeze 或异步 Export Worker 流程。
+当前已支持项目成员在媒体检测完成后显式点击播放；播放地址短期有效、`no-store` 且不落库。CaptureGroup 通过事件级质量准入后生成一个标注任务；受分配成员提交主 Step 时间段后，同一合格管理员可记录一次通过/不通过复核，且同人决定显示 `SELF_ADMIN_APPROVAL`。复核不通过会退回任务，下一次提交产生新的不可变 revision。管理员可在项目标注入口预览服务端统计的 MediaPipe 手部关键点样本，并在有样本时下载服务端生成的 CSV；事件资格与追溯 manifest 不依赖旧 DatasetVersion、Admission、Build、Freeze 或异步 Export Worker 流程。
 
 认证会话使用 React Context；批次、资产、标注和训练导出等服务端对象继续使用页面局部状态，不复制为客户端业务真值。
