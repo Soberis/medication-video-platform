@@ -60,7 +60,7 @@ export function MedicationEventCurrentAction({
 
   return (
     <Section
-      className="capture-group-current-action"
+      className={`capture-group-current-action${isCompleted ? ' is-completed' : ''}`}
       title={isCompleted ? '当前结果' : '当前动作'}
       titleId="capture-group-current-action-title"
     >

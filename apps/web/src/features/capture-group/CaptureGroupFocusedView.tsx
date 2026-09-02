@@ -136,6 +136,7 @@ export function CaptureGroupFocusedView({
         candidateOverlay={candidateResponse?.candidates ?? []}
         canPlay={Boolean(canPlay)}
         canRecoverMissingMediaProbe={false}
+        expandToWorkspace={isCompleted}
         grant={playbackGrant}
         isRecoveringMediaProbe={false}
         isRequestingPlayback={isRequestingPlayback}
@@ -240,14 +241,5 @@ export function CaptureGroupFocusedView({
     </section>
   )
 
-  return isCompleted ? (
-    <details className="detail-disclosure capture-group-completed-video-details">
-      <summary>视频与辅助证据</summary>
-      <div className="detail-disclosure-content capture-group-completed-video-content">
-        {focusedView}
-      </div>
-    </details>
-  ) : (
-    focusedView
-  )
+  return isCompleted ? <section aria-label="视频与辅助证据">{focusedView}</section> : focusedView
 }

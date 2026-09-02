@@ -3,7 +3,7 @@
 .playback-panel {
   display: grid;
   gap: var(--app-space-12);
-  width: min(100%, 960px);
+  width: 100%;
 }
 
 .playback-surface-heading {

@@ -220,6 +220,7 @@ export default function CaptureGroupListView() {
       {rows.length ? (
         <section className="capture-group-list-surface" aria-label="配药事件结果">
           <div className="capture-group-list-heading">
+            <h2>配药事件</h2>
             <span className="capture-group-list-count">
               {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
             </span>
@@ -262,7 +263,7 @@ export default function CaptureGroupListView() {
                   </header>
                   <dl className="capture-group-list-facts">
                     <div>
-                      <dt>接收与机位</dt>
+                      <dt>接收状态</dt>
                       <dd className="capture-group-list-receipt">
                         <StatusIndicator tone={receiptTone(group.receipt_state)}>
                           {formatListReceipt(group)}
@@ -307,7 +308,7 @@ export default function CaptureGroupListView() {
                       className="capture-group-list-open"
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
-                      打开详情 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                      进入工作台 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
                   </footer>
                 </article>

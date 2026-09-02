@@ -139,6 +139,90 @@ export function CaptureGroupReviewCleaningPanel({
     }
   }
 
+  const evidenceAndHistory = revision ? (
+    <>
+      <ViewSetSummary viewSet={viewSet} />
+
+      <div className="capture-group-review-evidence-grid">
+        <EvidenceViewList
+          title="参与的合格机位"
+          views={qualifiedViews}
+          emptyText="当前没有已确认的参与机位。"
+          tone="success"
+        />
+        <EvidenceViewList
+          title="拒绝 / 缺失机位"
+          views={rejectedMissingViews}
+          emptyText="没有拒绝或缺失机位。"
+          tone="warning"
+        />
+      </div>
+
+      <div className="capture-group-review-evidence-block">
+        <div className="capture-group-review-subheading">
+          <div>
+            <span className="app-eyebrow">手部检测证据</span>
+            <h3>相关手部检测证据</h3>
+          </div>
+          <span>{candidateEvidence.length} 条已固定证据</span>
+        </div>
+        {candidateEvidence.length ? (
+          <ul className="capture-group-evidence-list" aria-label="相关手部检测证据">
+            {candidateEvidence.map((evidence, index) => (
+              <li key={evidenceKey(evidence, index)}>
+                <strong>{evidenceViewName(evidence, index)}</strong>
+                <span>
+                  检测结果 {numberValue(evidence, 'candidate_count') ?? 0} 组
+                  {stringValue(evidence, 'algorithm_key')
+                    ? ` · ${stringValue(evidence, 'algorithm_key')}`
+                    : ''}
+                </span>
+                <small>
+                  {stringValue(evidence, 'algorithm_version') ?? '算法版本未提供'}
+                  {stringValue(evidence, 'model_sha256')
+                    ? ` · model ${shortEvidenceId(stringValue(evidence, 'model_sha256')!)}`
+                    : ''}
+                </small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="form-hint">
+            当前修订尚无已固定的手部检测证据；机位工作区中的检测结果仅供人工参考，不作为正式标注或质量结论。
+          </p>
+        )}
+      </div>
+
+      <div className="capture-group-review-annotation-history">
+        <div className="capture-group-review-subheading">
+          <div>
+            <span className="app-eyebrow">修订历史</span>
+            <h3>标注备注与历史</h3>
+          </div>
+          <History aria-hidden="true" size={16} strokeWidth={1.8} />
+        </div>
+        <ol aria-label="配药动作修订与复核历史">
+          <li>
+            <strong>修订 {revision.revision_number} · 已提交</strong>
+            <span>
+              {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
+            </span>
+            <p>{revision.annotation_document.note ?? '未提供修订备注。'}</p>
+          </li>
+          {review ? (
+            <li>
+              <strong>复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
+              <span>
+                {review.reviewed_by} · {formatDateTime(review.reviewed_at)}
+              </span>
+              <p>{review.review_note ?? '未提供复核备注。'}</p>
+            </li>
+          ) : null}
+        </ol>
+      </div>
+    </>
+  ) : null
+
   return (
     <Section
       className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
@@ -227,91 +311,20 @@ export function CaptureGroupReviewCleaningPanel({
             </div>
           </div>
 
-          <ViewSetSummary viewSet={viewSet} />
-
           <FormalAnnotationIntervals
             primaryCameraNumber={primaryCameraNumber}
             schema={schema}
             segments={revision.annotation_document.segments}
           />
 
-          <div className="capture-group-review-evidence-grid">
-            <EvidenceViewList
-              title="参与的合格机位"
-              views={qualifiedViews}
-              emptyText="当前没有已确认的参与机位。"
-              tone="success"
-            />
-            <EvidenceViewList
-              title="拒绝 / 缺失机位"
-              views={rejectedMissingViews}
-              emptyText="没有拒绝或缺失机位。"
-              tone="warning"
-            />
-          </div>
-
-          <div className="capture-group-review-evidence-block">
-            <div className="capture-group-review-subheading">
-              <div>
-                <span className="app-eyebrow">手部检测证据</span>
-                <h3>相关手部检测证据</h3>
-              </div>
-              <span>{candidateEvidence.length} 条已固定证据</span>
-            </div>
-            {candidateEvidence.length ? (
-              <ul className="capture-group-evidence-list" aria-label="相关手部检测证据">
-                {candidateEvidence.map((evidence, index) => (
-                  <li key={evidenceKey(evidence, index)}>
-                    <strong>{evidenceViewName(evidence, index)}</strong>
-                    <span>
-                      检测结果 {numberValue(evidence, 'candidate_count') ?? 0} 组
-                      {stringValue(evidence, 'algorithm_key')
-                        ? ` · ${stringValue(evidence, 'algorithm_key')}`
-                        : ''}
-                    </span>
-                    <small>
-                      {stringValue(evidence, 'algorithm_version') ?? '算法版本未提供'}
-                      {stringValue(evidence, 'model_sha256')
-                        ? ` · model ${shortEvidenceId(stringValue(evidence, 'model_sha256')!)}`
-                        : ''}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="form-hint">
-                当前修订尚无已固定的手部检测证据；机位工作区中的检测结果仅供人工参考，不作为正式标注或质量结论。
-              </p>
-            )}
-          </div>
-
-          <div className="capture-group-review-annotation-history">
-            <div className="capture-group-review-subheading">
-              <div>
-                <span className="app-eyebrow">修订历史</span>
-                <h3>标注备注与历史</h3>
-              </div>
-              <History aria-hidden="true" size={16} strokeWidth={1.8} />
-            </div>
-            <ol aria-label="配药动作修订与复核历史">
-              <li>
-                <strong>修订 {revision.revision_number} · 已提交</strong>
-                <span>
-                  {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
-                </span>
-                <p>{revision.annotation_document.note ?? '未提供修订备注。'}</p>
-              </li>
-              {review ? (
-                <li>
-                  <strong>复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
-                  <span>
-                    {review.reviewed_by} · {formatDateTime(review.reviewed_at)}
-                  </span>
-                  <p>{review.review_note ?? '未提供复核备注。'}</p>
-                </li>
-              ) : null}
-            </ol>
-          </div>
+          {hasCompletedReviewAndCleaning ? (
+            <details className="capture-group-review-detail-disclosure">
+              <summary>查看已确认机位、检测证据与修订历史</summary>
+              <div className="capture-group-review-detail-content">{evidenceAndHistory}</div>
+            </details>
+          ) : (
+            evidenceAndHistory
+          )}
 
           {canReview ? (
             <div className="capture-group-review-actions" aria-label="配药事件复核操作">

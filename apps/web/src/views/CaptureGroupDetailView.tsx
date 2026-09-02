@@ -48,6 +48,7 @@ export default function CaptureGroupDetailView() {
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
+  const [isCompletedAuditOpen, setIsCompletedAuditOpen] = useState(false)
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
@@ -223,7 +224,11 @@ export default function CaptureGroupDetailView() {
       />
     )
     return isCompletedWorkflow ? (
-      <details className="detail-disclosure capture-group-completed-inspector-details">
+      <details
+        className="detail-disclosure capture-group-completed-inspector-details"
+        open={isCompletedAuditOpen}
+        onToggle={(event) => setIsCompletedAuditOpen(event.currentTarget.open)}
+      >
         <summary>事实、历史与审计</summary>
         <div className="detail-disclosure-content">{inspector}</div>
       </details>
@@ -279,7 +284,6 @@ export default function CaptureGroupDetailView() {
             isCompletedWorkflow ? (
               <div className="capture-group-completed-workspace">
                 <MedicationEventCurrentAction workflow={workflow} />
-                {renderReviewCleaningPanel()}
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
                   task={data.task}
@@ -288,6 +292,7 @@ export default function CaptureGroupDetailView() {
                   onSelectView={data.setSelectedClipAssetId}
                   isCompleted
                 />
+                {renderReviewCleaningPanel()}
               </div>
             ) : (
               <div className="capture-group-workspace">
