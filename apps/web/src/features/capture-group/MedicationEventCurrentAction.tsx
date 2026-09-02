@@ -8,7 +8,6 @@ import {
   medicationEventWorkflowStageLabels,
   type MedicationEventWorkflowModel,
   type MedicationEventWorkflowPrimaryAction,
-  type MedicationEventWorkflowStep,
   type MedicationEventWorkflowStepState,
 } from '@/features/capture-group/medication-event-workflow'
 
@@ -34,6 +33,49 @@ function stepStateIcon(state: MedicationEventWorkflowStepState) {
   if (state === 'waiting') return <Clock3 aria-hidden="true" size={14} strokeWidth={1.8} />
   if (state === 'blocked') return <CircleAlert aria-hidden="true" size={14} strokeWidth={1.8} />
   return null
+}
+
+/**
+ * The workflow is an informational progress rail, not a second navigation
+ * surface. Stage changes still come from the server-backed workflow model.
+ */
+export function MedicationEventWorkflowRail({
+  workflow,
+}: {
+  workflow: MedicationEventWorkflowModel
+}) {
+  return (
+    <section className="capture-group-workflow-rail" aria-labelledby="capture-group-workflow-title">
+      <div className="capture-group-workflow-rail-heading">
+        <span id="capture-group-workflow-title" className="app-eyebrow">
+          处理进度
+        </span>
+        <span>当前阶段：{medicationEventWorkflowStageLabels[workflow.stage]}</span>
+      </div>
+      <ol className="capture-group-workflow-rail-list" aria-label="配药事件处理流程">
+        {workflow.steps.map((step) => (
+          <li
+            className={`capture-group-workflow-rail-step is-${step.state}`}
+            data-state={step.state}
+            key={step.stage}
+            aria-current={step.stage === workflow.stage ? 'step' : undefined}
+          >
+            <span
+              className="capture-group-workflow-rail-marker"
+              data-state={step.state}
+              aria-hidden="true"
+            >
+              {stepStateIcon(step.state)}
+            </span>
+            <span className="capture-group-workflow-rail-copy">
+              <strong>{step.label}</strong>
+              <small>{stepStateLabels[step.state]}</small>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
 }
 
 function actionMessage(workflow: MedicationEventWorkflowModel, primaryActionHasForm: boolean) {
@@ -100,13 +142,6 @@ export function MedicationEventCurrentAction({
           ) : null}
         </div>
       )}
-      {!isCompleted ? (
-        <ol className="capture-group-current-action-steps" aria-label="配药事件处理流程">
-          {workflow.steps.map((step) => (
-            <WorkflowStep key={step.stage} step={step} currentStage={workflow.stage} />
-          ))}
-        </ol>
-      ) : null}
     </Section>
   )
 }
@@ -126,27 +161,5 @@ function CompletedResultSummary() {
         查看复核与训练资格详情 →
       </a>
     </div>
-  )
-}
-
-function WorkflowStep({
-  step,
-  currentStage,
-}: {
-  step: MedicationEventWorkflowStep
-  currentStage: MedicationEventWorkflowModel['stage']
-}) {
-  return (
-    <li
-      className={`capture-group-current-action-step is-${step.state}`}
-      data-state={step.state}
-      aria-current={step.stage === currentStage ? 'step' : undefined}
-    >
-      <span className="capture-group-current-action-step-icon">{stepStateIcon(step.state)}</span>
-      <span className="capture-group-current-action-step-copy">
-        <strong>{step.label}</strong>
-        <small>{stepStateLabels[step.state]}</small>
-      </span>
-    </li>
   )
 }

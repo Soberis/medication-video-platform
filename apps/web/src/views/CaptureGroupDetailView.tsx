@@ -15,7 +15,10 @@ import {
   CaptureGroupQualityPanel,
   CaptureGroupViewQualitySection,
 } from '@/features/capture-group/CaptureGroupQualityPanel'
-import { MedicationEventCurrentAction } from '@/features/capture-group/MedicationEventCurrentAction'
+import {
+  MedicationEventCurrentAction,
+  MedicationEventWorkflowRail,
+} from '@/features/capture-group/MedicationEventCurrentAction'
 import {
   createGroupViewRows,
   type GroupViewRow,
@@ -240,6 +243,8 @@ export default function CaptureGroupDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
+        <span>视频管理</span>
+        <span aria-hidden="true">/</span>
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
           配药事件
         </Link>
@@ -264,6 +269,7 @@ export default function CaptureGroupDetailView() {
           </>
         }
       />
+      {workflow ? <MedicationEventWorkflowRail workflow={workflow} /> : null}
       {data.groupLoadState === 'loading' ? (
         <LoadingState>{data.group ? '正在刷新配药事件…' : '正在读取配药事件…'}</LoadingState>
       ) : null}
@@ -295,7 +301,10 @@ export default function CaptureGroupDetailView() {
                 {renderReviewCleaningPanel()}
               </div>
             ) : (
-              <div className="capture-group-workspace">
+              <div
+                className={`capture-group-workspace capture-group-workspace-${workflow.stage.toLowerCase().replace(/_/g, '-')}`}
+                data-stage={workflow.stage}
+              >
                 <div className="capture-group-video-column">
                   <CaptureGroupFocusedView
                     viewRows={viewRows}
