@@ -220,15 +220,15 @@ export default function CaptureGroupListView() {
       {rows.length ? (
         <section className="capture-group-list-surface" aria-label="配药事件结果">
           <div className="capture-group-list-heading">
-            <h2>配药事件</h2>
+            <h2>事件记录</h2>
             <span className="capture-group-list-count">
               {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
             </span>
           </div>
           <div className="capture-group-list" role="list" aria-label="配药事件列表">
             {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => {
-              const identity =
-                group.capture_group_key ?? `配药事件 · ${shortId(group.capture_group_id)}`
+              const identity = group.capture_group_key ?? shortId(group.capture_group_id)
+              const identityLabel = `配药事件 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
               const nextStep = taskNextAction(
                 group,
@@ -243,27 +243,24 @@ export default function CaptureGroupListView() {
                   className="capture-group-list-row"
                   key={group.capture_group_id}
                   role="listitem"
-                  aria-label={identity}
+                  aria-label={identityLabel}
                 >
                   <header className="capture-group-list-row-header">
                     <div className="capture-group-list-identity">
                       <Camera aria-hidden="true" size={18} strokeWidth={1.7} />
                       <div>
-                        <Link
-                          className="text-link capture-group-list-title"
-                          to={paths.captureGroup(projectId, group.capture_group_id)}
-                        >
-                          {identity}
-                        </Link>
+                        <span className="capture-group-list-eyebrow">配药事件</span>
+                        <strong className="capture-group-list-title">{identity}</strong>
                       </div>
                     </div>
                     <time className="capture-group-list-time" dateTime={eventTime}>
-                      {formatDateTime(eventTime)}
+                      <span>拍摄时间</span>
+                      <strong>{formatDateTime(eventTime)}</strong>
                     </time>
                   </header>
                   <dl className="capture-group-list-facts">
                     <div>
-                      <dt>接收状态</dt>
+                      <dt>接收 / 机位</dt>
                       <dd className="capture-group-list-receipt">
                         <StatusIndicator tone={receiptTone(group.receipt_state)}>
                           {formatListReceipt(group)}
@@ -279,33 +276,32 @@ export default function CaptureGroupListView() {
                       </dd>
                     </div>
                     <div>
-                      <dt>质量</dt>
-                      <dd className="capture-group-list-quality">
-                        <span className="capture-group-list-quality-label">事件质量</span>
+                      <dt>事件质量</dt>
+                      <dd>
                         <StatusIndicator tone={groupQualityDisplayTone(qualityVisibility, quality)}>
                           {groupQualityDisplayLabel(qualityVisibility, quality)}
                         </StatusIndicator>
-                        <span className="capture-group-list-quality-label">机位质量</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>机位质量</dt>
+                      <dd>
                         <span className="capture-group-list-view-quality">
                           {formatListViewQuality(qualityVisibility, quality)}
                         </span>
                       </dd>
                     </div>
                   </dl>
-                  <footer className="capture-group-list-row-footer">
-                    <span>
+                  <footer className="capture-group-list-row-footer" data-kind={nextStep.kind}>
+                    <span className="capture-group-list-next-step">
                       <span className="capture-group-list-row-footer-label">
                         {nextStep.kind === 'action' ? '下一步：' : '当前状态：'}
                       </span>
                       {nextStep.label}
-                      {task ? (
-                        <span className="capture-group-list-task">
-                          {' · '}任务 {shortId(task.annotation_task_id)}
-                        </span>
-                      ) : null}
                     </span>
                     <Link
                       className="capture-group-list-open"
+                      aria-label={`进入${identityLabel}工作台`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
                       进入工作台 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />

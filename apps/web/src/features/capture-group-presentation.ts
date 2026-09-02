@@ -258,7 +258,7 @@ export function taskNextAction(
     if (taskVisibility === 'unavailable') {
       return statusStep('任务状态暂不可用，请刷新后重试')
     }
-    return statusStep('等待系统创建唯一配药事件任务')
+    return statusStep('等待配药事件任务准备完成')
   }
   if (task.status === 'ASSIGNED') {
     if (!task.primary_clip_asset_id) {

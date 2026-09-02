@@ -20,7 +20,6 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
-import { SummaryStrip } from '@/components/SummaryStrip'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -48,7 +47,7 @@ const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '标注完成'
   if (task.status === 'SUBMITTED') return '待复核'
-  return task.annotation_revision?.review?.decision === 'REJECTED' ? '待修改' : '待标注'
+  return '待标注'
 }
 function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
   if (task.status === 'COMPLETED') return 'success'
@@ -139,6 +138,20 @@ function getHandLandmarkReasonItems(preview: HandLandmarkExportPreview) {
       ? [{ label: handLandmarkReasonLabels[reasonCode], count }]
       : []
   })
+}
+
+function handLandmarkEmptyMessage(preview: HandLandmarkExportPreview) {
+  const notFinishedCount = preview.reason_counts?.MEDIAPIPE_NOT_FINISHED ?? 0
+  if (notFinishedCount > 0) {
+    return `${formatTrainingCount(notFinishedCount)} 个事件的手部检测尚未完成。检测完成后，这里会显示可导出的样本数量。`
+  }
+  if (preview.events_without_landmarks > 0) {
+    return `${formatTrainingCount(preview.events_without_landmarks)} 个符合资格的事件尚未产生可用的手部关键点。完成检测后，这里会显示可导出的样本数量。`
+  }
+  if (preview.eligible_event_count > 0) {
+    return `${formatTrainingCount(preview.eligible_event_count)} 个符合资格的事件暂无可用的手部关键点。请先完成手部检测，再回来预览。`
+  }
+  return '当前没有符合导出资格的配药事件。完成事件质量、标注复核和训练资格检查后，这里会显示可导出的样本数量。'
 }
 
 export default function AnnotationTaskListView() {
@@ -301,7 +314,7 @@ export default function AnnotationTaskListView() {
       <PageHeader
         titleId="annotation-task-title"
         title="配药动作标注"
-        description="处理已分配的配药动作标注任务；提交后由管理员复核。"
+        description="在这里处理配药事件的动作标注；提交后由管理员复核。"
         actions={
           <>
             {progress?.scope === 'PROJECT' ? (
@@ -311,7 +324,7 @@ export default function AnnotationTaskListView() {
                 disabled={isHandLandmarkDownloadLoading}
                 onClick={() => void openHandLandmarkExport()}
               >
-                预览手部训练数据
+                预览手部关键点导出
               </Button>
             ) : null}
             <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
@@ -345,11 +358,11 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && items.length ? (
         <Section
           className="annotation-task-queue"
-          title="任务队列"
+          title="配药事件任务"
           titleId="annotation-task-queue-title"
         >
           <div
-            className="annotation-task-list-surface working-surface"
+            className="annotation-task-list-surface"
             role="list"
             aria-label="配药动作标注任务列表"
           >
@@ -382,13 +395,13 @@ export default function AnnotationTaskListView() {
                           label: '创建时间',
                           value: formatDateTime(row.created_at),
                         },
+                        {
+                          id: 'assignee',
+                          label: '执行人',
+                          value: row.assignee_actor_id,
+                        },
                         ...(revision
                           ? [
-                              {
-                                id: 'assignee',
-                                label: '执行人',
-                                value: row.assignee_actor_id,
-                              },
                               {
                                 id: 'submitted-by',
                                 label: '提交人',
@@ -509,8 +522,7 @@ export default function AnnotationTaskListView() {
                       {revision ? (
                         <div className="task-evidence-summary">
                           <strong>
-                            第 {revision.revision_number} 次提交 ·{' '}
-                            {revision.annotation_document.segments.length} 个时间段
+                            已提交 · {revision.annotation_document.segments.length} 个时间段
                           </strong>
                           <div className="task-evidence-statuses">
                             {revision.review ? (
@@ -546,11 +558,7 @@ export default function AnnotationTaskListView() {
                         </div>
                       ) : (
                         <div className="task-evidence-summary">
-                          <span className="muted-text">尚未提交</span>
-                          <span className="cell-secondary">
-                            执行人{' '}
-                            <span className="task-assignee-name">{row.assignee_actor_id}</span>
-                          </span>
+                          <span className="muted-text">尚未提交标注</span>
                           {taskDetails}
                         </div>
                       )}
@@ -594,7 +602,7 @@ export default function AnnotationTaskListView() {
       ) : null}
       <Modal
         open={isHandLandmarkExportOpen}
-        title="手部训练数据"
+        title="手部关键点导出预览"
         okText="导出 CSV"
         cancelText="关闭"
         confirmLoading={isHandLandmarkDownloadLoading}
@@ -604,7 +612,7 @@ export default function AnnotationTaskListView() {
         }}
         cancelButtonProps={{
           disabled: isHandLandmarkDownloadLoading,
-          'aria-label': '关闭手部训练数据预览',
+          'aria-label': '关闭手部关键点导出预览',
         }}
         mask={{ closable: !isHandLandmarkDownloadLoading }}
         keyboard={!isHandLandmarkDownloadLoading}
@@ -613,58 +621,89 @@ export default function AnnotationTaskListView() {
         destroyOnHidden
       >
         {handLandmarkPreview ? (
-          <>
-            <SummaryStrip
-              ariaLabel="手部训练数据摘要"
-              items={[
-                {
-                  label: '可用于训练的配药事件',
-                  value: `${formatTrainingCount(handLandmarkPreview.eligible_event_count)} 个`,
-                },
-                {
-                  label: '有手部关键点的事件',
-                  value: `${formatTrainingCount(handLandmarkPreview.events_with_landmarks)} 个`,
-                },
-                {
-                  label: '手部样本数',
-                  value: formatTrainingCount(handLandmarkPreview.sample_count),
-                },
-                {
-                  label: '无可用关键点的事件',
-                  value: `${formatTrainingCount(handLandmarkPreview.events_without_landmarks)} 个`,
-                },
-              ]}
-            />
-            <p className="hand-landmark-export-description">
-              MediaPipe 手部关键点；每一行代表一个采样帧中的一只手和完整的 21 点样本。
-            </p>
-            {handLandmarkPreview.events_without_landmarks > 0 ? (
-              <p className="hand-landmark-export-not-ready" role="status">
-                {formatTrainingCount(handLandmarkPreview.events_without_landmarks)}{' '}
-                个已完成事件尚未产生可用手部关键点。
-              </p>
-            ) : handLandmarkPreview.sample_count === 0 ? (
-              <p className="hand-landmark-export-not-ready" role="status">
-                当前没有可用的手部关键点样本，暂时无法导出。
-              </p>
-            ) : null}
+          <div className="hand-landmark-export-content">
+            {handLandmarkPreview.sample_count > 0 ? (
+              <>
+                <div className="hand-landmark-export-readiness" role="status" aria-live="polite">
+                  <StatusIndicator tone="success">可以导出</StatusIndicator>
+                  <p>当前已有可导出的手部关键点样本。</p>
+                </div>
+                <section className="hand-landmark-export-facts" aria-label="手部关键点导出摘要">
+                  <dl className="hand-landmark-export-facts-list">
+                    <div>
+                      <dt>符合资格的事件</dt>
+                      <dd>{formatTrainingCount(handLandmarkPreview.eligible_event_count)} 个</dd>
+                    </div>
+                    <div>
+                      <dt>可导出手部样本</dt>
+                      <dd>{formatTrainingCount(handLandmarkPreview.sample_count)}</dd>
+                    </div>
+                  </dl>
+                </section>
+                {handLandmarkPreview.events_without_landmarks > 0 ? (
+                  <p className="hand-landmark-export-partial" role="status">
+                    {formatTrainingCount(handLandmarkPreview.events_without_landmarks)}{' '}
+                    个符合资格的事件尚未产生可导出样本；本次仍可导出已有样本。
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <div
+                className="hand-landmark-export-readiness hand-landmark-export-empty"
+                role="status"
+                aria-live="polite"
+              >
+                <StatusIndicator tone="warning">暂不可导出</StatusIndicator>
+                <strong>暂无可导出的手部关键点</strong>
+                <p>{handLandmarkEmptyMessage(handLandmarkPreview)}</p>
+              </div>
+            )}
+
             {handLandmarkReasonItems.length ? (
-              <section className="hand-landmark-export-reasons" aria-label="手部检测状态说明">
-                <h3>未产生样本的原因</h3>
-                <ul>
-                  {handLandmarkReasonItems.map((item) => (
-                    <li key={item.label}>
-                      <span>{item.label}</span>
-                      <strong>{formatTrainingCount(item.count)} 个事件</strong>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <details className="hand-landmark-export-disclosure">
+                <summary>查看未产生样本的原因</summary>
+                <section className="hand-landmark-export-reasons" aria-label="手部检测状态说明">
+                  <ul>
+                    {handLandmarkReasonItems.map((item) => (
+                      <li key={item.label}>
+                        <span>{item.label}</span>
+                        <strong>{formatTrainingCount(item.count)} 个事件</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </details>
             ) : null}
-            <p className="hand-landmark-export-file">
-              文件：<code>{handLandmarkPreview.file_name}</code>
-            </p>
-          </>
+            <details className="hand-landmark-export-disclosure">
+              <summary>查看文件与来源</summary>
+              <dl className="hand-landmark-export-technical">
+                <div>
+                  <dt>导出产物</dt>
+                  <dd>
+                    <code>{handLandmarkPreview.schema_version}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>文件名</dt>
+                  <dd>
+                    <code>{handLandmarkPreview.file_name}</code>
+                  </dd>
+                </div>
+                {handLandmarkPreview.content_type ? (
+                  <div>
+                    <dt>文件格式</dt>
+                    <dd>
+                      <code>{handLandmarkPreview.content_type}</code>
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>样本范围</dt>
+                  <dd>Primary View 中经人工复核通过的时间段内，实际检测到的手部关键点样本。</dd>
+                </div>
+              </dl>
+            </details>
+          </div>
         ) : null}
       </Modal>
     </>

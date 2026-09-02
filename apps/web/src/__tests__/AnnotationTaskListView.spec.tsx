@@ -98,21 +98,23 @@ describe('annotation task list view', () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     const user = userEvent.setup()
     renderView()
-    expect(await screen.findByText('local-synthetic-uploader')).toBeInTheDocument()
+    expect(await screen.findByText('尚未提交标注')).toBeInTheDocument()
     const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent('0 个已完成 · 1 个待处理')
     expect(screen.getByText('待标注')).toBeInTheDocument()
     expect(screen.getByText('下一步')).toBeInTheDocument()
+    expect(screen.queryByText(/唯一配药事件任务/)).not.toBeInTheDocument()
     expect(
-      screen.getByText('处理已分配的配药动作标注任务；提交后由管理员复核。'),
+      screen.getByText('在这里处理配药事件的动作标注；提交后由管理员复核。'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '预览手部训练数据' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '预览手部关键点导出' })).toBeInTheDocument()
     const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
     expect(breadcrumb).toHaveTextContent('配药动作标注')
     expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '配药事件任务' })).toBeInTheDocument()
     await user.click(screen.getByText('查看详情'))
+    expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /进入配药事件 .*进入配药动作标注/ }),
@@ -168,7 +170,7 @@ describe('annotation task list view', () => {
 
     const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
     expect(progressSummary).toHaveTextContent('1 个已完成 · 1 个待处理')
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/hand-landmarks/v1/preview`,
@@ -287,7 +289,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待修改/ })
+    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
     await user.click(within(taskRow).getByRole('button', { name: /进入标注返工/ }))
 
     await waitFor(() => {
@@ -537,7 +539,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /待修改/ })
+    const taskRow = await screen.findByRole('article', { name: /待标注/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
     await user.click(within(taskRow).getByRole('button', { name: /进入配药事件 .*进入标注返工/ }))
     await waitFor(() =>
@@ -589,26 +591,26 @@ describe('annotation task list view', () => {
     renderView()
 
     expect(screen.queryByRole('button', { name: '导出 CSV' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
 
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/hand-landmarks/v1/preview`,
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
-    expect(dialog).toHaveTextContent('手部训练数据')
+    expect(dialog).toHaveTextContent('手部关键点导出预览')
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).not.toBeDisabled()
     const productSummary = within(dialog).getByRole('region', {
-      name: '手部训练数据摘要',
+      name: '手部关键点导出摘要',
     })
-    expect(productSummary).toHaveTextContent('可用于训练的配药事件')
+    expect(productSummary).toHaveTextContent('符合资格的事件')
     expect(productSummary).toHaveTextContent('2 个')
-    expect(productSummary).toHaveTextContent('有手部关键点的事件')
-    expect(productSummary).toHaveTextContent('1 个')
-    expect(productSummary).toHaveTextContent('手部样本数')
+    expect(productSummary).toHaveTextContent('可导出手部样本')
     expect(productSummary).toHaveTextContent('8,421')
-    expect(productSummary).toHaveTextContent('无可用关键点的事件')
-    expect(screen.getByText('1 个已完成事件尚未产生可用手部关键点。')).toBeInTheDocument()
+    expect(
+      screen.getByText('1 个符合资格的事件尚未产生可导出样本；本次仍可导出已有样本。'),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByText('查看未产生样本的原因'))
     expect(screen.getByText('手部检测尚未完成')).toBeInTheDocument()
     expect(dialog).not.toHaveTextContent('training-data.v3')
     expect(dialog).not.toHaveTextContent('训练资格不通过')
@@ -633,7 +635,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '导出 CSV' }))
 
@@ -658,6 +660,25 @@ describe('annotation task list view', () => {
     anchorClick.mockRestore()
   })
 
+  it('closes the export preview with Escape and returns focus to its trigger', async () => {
+    stubHandLandmarkData([assignedTask], labelSchema, handLandmarkPreview({ sample_count: 2 }))
+    const user = userEvent.setup()
+    renderView()
+
+    const trigger = await screen.findByRole('button', { name: '预览手部关键点导出' })
+    await user.click(trigger)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('手部关键点导出预览')).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: '关闭手部关键点导出预览' }),
+    ).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(trigger).toHaveFocus(), { timeout: 3000 })
+    expect(screen.getByRole('dialog')).toHaveClass('ant-zoom-leave')
+  })
+
   it('shows the zero-sample state and disables CSV export', async () => {
     stubHandLandmarkData(
       [assignedTask],
@@ -673,12 +694,15 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('region', { name: '手部训练数据摘要' })).toHaveTextContent(
-      '手部样本数0',
+    expect(
+      within(dialog).queryByRole('region', { name: '手部关键点导出摘要' }),
+    ).not.toBeInTheDocument()
+    expect(dialog).toHaveTextContent('暂无可导出的手部关键点')
+    expect(dialog).toHaveTextContent(
+      '1 个事件的手部检测尚未完成。检测完成后，这里会显示可导出的样本数量。',
     )
-    expect(dialog).toHaveTextContent('1 个已完成事件尚未产生可用手部关键点。')
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
   })
 
@@ -696,9 +720,12 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent('当前没有可用的手部关键点样本，暂时无法导出。')
+    expect(dialog).toHaveTextContent('暂无可导出的手部关键点')
+    expect(dialog).toHaveTextContent(
+      '当前没有符合导出资格的配药事件。完成事件质量、标注复核和训练资格检查后，这里会显示可导出的样本数量。',
+    )
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
   })
 
@@ -722,8 +749,9 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByText('查看未产生样本的原因'))
     expect(dialog).toHaveTextContent('手部检测尚未完成')
     expect(dialog).toHaveTextContent('未检测到手部关键点')
     expect(dialog).toHaveTextContent('手部检测失败')
@@ -748,7 +776,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByRole('button', { name: '预览手部训练数据' }))
+    await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     expect(await screen.findByText('当前环境暂未开放手部训练数据导出。')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
@@ -759,7 +787,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '预览手部训练数据' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {

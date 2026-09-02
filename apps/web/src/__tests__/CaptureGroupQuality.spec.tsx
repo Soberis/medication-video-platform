@@ -188,6 +188,14 @@ describe('CaptureGroup operational list and quality', () => {
     expect(screen.getByRole('list', { name: '配药事件列表' })).toBeInTheDocument()
     expect(await screen.findAllByRole('listitem')).toHaveLength(5)
     const firstRow = screen.getByRole('listitem', { name: /capture-1/ })
+    expect(firstRow).toHaveTextContent('配药事件')
+    expect(firstRow).toHaveTextContent('拍摄时间')
+    expect(firstRow).toHaveTextContent('接收 / 机位')
+    expect(firstRow).toHaveTextContent('事件质量')
+    expect(firstRow).toHaveTextContent('机位质量')
+    expect(
+      within(firstRow).getByRole('link', { name: /进入配药事件 .*工作台/ }),
+    ).toBeInTheDocument()
     expect(firstRow).toHaveTextContent('4/5 机位已收')
     expect(firstRow).toHaveTextContent('缺失：机位 3')
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
@@ -269,7 +277,7 @@ describe('CaptureGroup operational list and quality', () => {
     const qualifiedRow = screen.getByRole('listitem', { name: /qualified-task/ })
     expect(qualifiedRow).toHaveTextContent('合格')
     expect(qualifiedRow).toHaveTextContent('下一步：提交配药动作修订')
-    expect(qualifiedRow).toHaveTextContent('任务 70000000…0001')
+    expect(qualifiedRow).not.toHaveTextContent('任务 70000000…0001')
     expect(
       fetchMock.mock.calls.filter(([input]) =>
         String(input).includes('/capture-group-quality-reviews'),
@@ -302,8 +310,13 @@ describe('CaptureGroup operational list and quality', () => {
     const row = await screen.findByRole('listitem', {
       name: '配药事件 · 60000000…0006',
     })
-    expect(within(row).getByRole('link', { name: '配药事件 · 60000000…0006' })).toBeInTheDocument()
-    expect(within(row).queryByText('60000000…0006', { exact: true })).not.toBeInTheDocument()
+    expect(
+      within(row).getByRole('link', { name: '进入配药事件 · 60000000…0006工作台' }),
+    ).toBeInTheDocument()
+    expect(
+      within(row).queryByRole('link', { name: '配药事件 · 60000000…0006' }),
+    ).not.toBeInTheDocument()
+    expect(within(row).getByText('60000000…0006', { exact: true })).toBeInTheDocument()
   })
 
   it('labels actionable and terminal rows separately', async () => {
@@ -530,12 +543,12 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const firstRow = await screen.findByRole('listitem', { name: /task-page-1-loaded/ })
-    expect(firstRow).toHaveTextContent('任务 70000000…0001')
+    expect(firstRow).not.toHaveTextContent('任务 70000000…0001')
     expect(firstRow).not.toHaveTextContent('任务状态暂不可用，请刷新后重试')
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
     const secondRow = await screen.findByRole('listitem', { name: /task-page-2-unavailable/ })
-    expect(firstRow).toHaveTextContent('任务 70000000…0001')
+    expect(firstRow).not.toHaveTextContent('任务 70000000…0001')
     expect(firstRow).not.toHaveTextContent('任务状态暂不可用，请刷新后重试')
     expect(secondRow).toHaveTextContent('任务状态暂不可用，请刷新后重试')
     expect(await screen.findByText('部分任务状态不可直接确认')).toBeInTheDocument()
