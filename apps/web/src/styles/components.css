@@ -962,10 +962,7 @@
 .playback-meta {
   justify-self: start;
   margin-top: 0;
-  padding: var(--app-space-4) var(--app-space-8);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: 999px;
-  background: var(--app-color-surface-muted);
+  padding: 0;
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-control);

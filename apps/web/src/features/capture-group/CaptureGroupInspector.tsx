@@ -6,7 +6,6 @@ import type { AnnotationTask } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import { paths } from '@/app/paths'
 import { MetadataList } from '@/components/data/MetadataList'
-import { StatusBadge } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { InspectorSection } from '@/components/workspace/InspectorSection'
 import {
@@ -329,9 +328,9 @@ export function CaptureGroupInspector({
                   )}
                   {review?.review_note ? <p>复核意见：{review.review_note}</p> : null}
                   {cleaning ? (
-                    <StatusBadge tone={cleaningTone(cleaning.outcome)}>
+                    <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
                       训练资格检查 · {cleaningLabel(cleaning.outcome)}
-                    </StatusBadge>
+                    </StatusIndicator>
                   ) : (
                     <span>尚无训练资格检查结果。</span>
                   )}

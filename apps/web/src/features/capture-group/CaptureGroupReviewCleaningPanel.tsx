@@ -14,8 +14,7 @@ import {
   type CaptureGroupViewSet,
 } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
-import { StatusBadge } from '@/components/StatusBadge'
-import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
+import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { MetadataList } from '@/components/data/MetadataList'
 import { Section } from '@/components/workspace/Section'
 import { cleaningLabel, cleaningTone } from '@/features/capture-group/capture-group-detail-model'
@@ -523,15 +522,15 @@ function TrainingEligibilityCheck({
           <h3>训练资格检查</h3>
         </div>
         {cleaning ? (
-          <StatusBadge tone={cleaningTone(cleaning.outcome)}>
+          <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
             {cleaningLabel(cleaning.outcome)}
-          </StatusBadge>
+          </StatusIndicator>
         ) : null}
       </div>
       {cleaning ? (
         <>
           <div className="capture-group-cleaning-summary">
-            <StatusIndicator tone={cleaningIndicatorTone(cleaning.outcome)}>
+            <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
               {cleaning.outcome === 'PASS' ? '训练资格检查通过' : '训练资格检查未通过'}
             </StatusIndicator>
             <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
@@ -641,12 +640,6 @@ function CleaningList({
       )}
     </div>
   )
-}
-
-function cleaningIndicatorTone(outcome: CleaningResult['outcome']): StatusIndicatorTone {
-  if (outcome === 'PASS') return 'success'
-  if (outcome === 'REJECT') return 'destructive'
-  return 'warning'
 }
 
 function CleaningPrimaryInterval({

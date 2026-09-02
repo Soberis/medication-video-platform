@@ -17,7 +17,7 @@ import type {
   MediaReport,
 } from '@/api/catalog'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
-import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { LoadingState } from '@/components/WorkspaceFeedback'
 import {
   qualityDecisionLabels,
@@ -370,7 +370,7 @@ export function MediaReportCard({
     content = (
       <>
         <div className="media-report-summary">
-          <StatusBadge tone="success">完整解码已验证</StatusBadge>
+          <StatusIndicator tone="success">完整解码已验证</StatusIndicator>
           <span className="form-hint">完成时间：{formatDateTime(report.created_at)}</span>
         </div>
         <Descriptions
@@ -495,14 +495,14 @@ export function QualityReviewCard({
   onSelectionChange,
 }: QualityReviewCardProps) {
   const reasonOptions = reasonsByDecision[selectedDecision]
-  const tagTone: StatusBadgeTone =
+  const reviewTone: StatusIndicatorTone =
     review?.decision === 'QUALIFIED'
       ? 'success'
       : review?.decision === 'REJECTED'
-        ? 'error'
+        ? 'destructive'
         : review?.decision === 'NEEDS_REVIEW'
           ? 'warning'
-          : 'default'
+          : 'neutral'
   const showEditorInline =
     !review || review.decision === 'UNREVIEWED' || review.decision === 'NEEDS_REVIEW'
   const reviewEditor = (
@@ -550,9 +550,9 @@ export function QualityReviewCard({
       {loadState === 'success' && review ? (
         <>
           <div className="quality-review-summary">
-            <StatusBadge tone={assetStatus === 'INGESTED' ? tagTone : 'default'}>
+            <StatusIndicator tone={assetStatus === 'INGESTED' ? reviewTone : 'neutral'}>
               {assetStatus === 'INGESTED' ? qualityDecisionLabels[review.decision] : '待媒体检测'}
-            </StatusBadge>
+            </StatusIndicator>
             {assetStatus === 'INGESTED' && review.reason_code ? (
               <span>{qualityReasonLabels[review.reason_code]}</span>
             ) : null}
@@ -596,7 +596,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
       {createdTask ? (
         <>
           <div className="annotation-task-created">
-            <StatusBadge tone="success">已创建并分配</StatusBadge>
+            <StatusIndicator tone="success">已创建并分配</StatusIndicator>
             <span>执行人：{createdTask.assignee_actor_id}</span>
           </div>
           <p className="form-hint">

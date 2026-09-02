@@ -4,12 +4,6 @@
   display: grid;
   gap: var(--app-space-12);
   width: min(100%, 960px);
-  padding: var(--app-space-16);
-  overflow: hidden;
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
-  background: var(--app-color-surface);
-  justify-items: start;
 }
 
 .playback-surface-heading {

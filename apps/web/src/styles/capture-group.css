@@ -137,6 +137,15 @@
   margin-top: 0;
 }
 
+/* The completed disclosure already supplies the surface; avoid a nested card
+ * around the same video workspace. */
+.capture-group-completed-video-content .capture-group-focused-workspace {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .capture-group-completed-inspector-details .capture-group-inspector {
   margin-top: 0;
 }
@@ -183,7 +192,7 @@
   height: var(--app-control-height-icon);
   place-items: center;
   border: 1px solid currentColor;
-  border-radius: 50%;
+  border-radius: var(--app-radius-xs);
 }
 
 .capture-group-current-action-step-copy {
@@ -209,7 +218,7 @@
 .capture-group-current-action-step.is-current .capture-group-current-action-step-icon {
   border-color: var(--app-color-primary);
   color: var(--app-color-primary);
-  box-shadow: 0 0 0 3px var(--app-color-primary-subtle);
+  background: var(--app-color-primary-subtle);
 }
 
 .capture-group-section-note {
@@ -297,10 +306,8 @@
 .capture-group-compare-strip {
   display: grid;
   gap: var(--app-space-8);
-  padding: var(--app-space-12);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-surface-muted);
+  padding: var(--app-space-12) 0 0;
+  border-top: 1px solid var(--app-color-border-subtle);
 }
 
 .capture-group-compare-heading {

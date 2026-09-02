@@ -10,7 +10,6 @@ import type {
   QualityReviewCommandDecision,
   QualityReviewReasonCode,
 } from '@/api/quality'
-import type { StatusBadgeTone } from '@/components/StatusBadge'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-state'
 
@@ -189,9 +188,9 @@ export function cleaningLabel(outcome: 'PASS' | 'WARNING' | 'REJECT') {
   return '训练资格检查未通过'
 }
 
-export function cleaningTone(outcome: 'PASS' | 'WARNING' | 'REJECT'): StatusBadgeTone {
+export function cleaningTone(outcome: 'PASS' | 'WARNING' | 'REJECT'): StatusIndicatorTone {
   if (outcome === 'PASS') return 'success'
-  return outcome === 'WARNING' ? 'warning' : 'error'
+  return outcome === 'WARNING' ? 'warning' : 'destructive'
 }
 
 export function sortedSchemaLabels(schema: AnnotationLabelSchema | null) {
