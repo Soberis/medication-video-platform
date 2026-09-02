@@ -320,7 +320,7 @@ export function CaptureGroupQualityPanel({
             <div className="capture-group-confirmed-view-set capture-group-stack">
               <strong>本次结论使用的机位集合</strong>
               <span>
-                {groupQuality.confirmed_view_set.views.length} 个机位 · 输入版本{' '}
+                {groupQuality.confirmed_view_set.views.length} 个机位 · 确认输入版本{' '}
                 {groupQuality.input_version ?? '未提供'}
               </span>
               <ul>

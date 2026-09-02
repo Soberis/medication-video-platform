@@ -84,4 +84,33 @@ describe('MedicationEventCurrentAction', () => {
       'destructive',
     )
   })
+
+  it('shows a completed result summary without a primary action', () => {
+    render(
+      <MedicationEventCurrentAction
+        workflow={workflow({
+          stage: 'TRAINING_ELIGIBILITY',
+          steps: [
+            {
+              stage: 'TRAINING_ELIGIBILITY',
+              label: '训练资格检查',
+              state: 'completed',
+            },
+          ],
+          primaryAction: null,
+        })}
+        onPrimaryAction={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
+    expect(screen.getByText('流程已完成')).toBeInTheDocument()
+    expect(screen.getByText('人工复核：已通过')).toBeInTheDocument()
+    expect(screen.getByText('训练资格检查：已通过')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看复核与训练资格详情 →' })).toHaveAttribute(
+      'href',
+      '#capture-group-review-cleaning',
+    )
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
 })

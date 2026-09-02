@@ -42,6 +42,7 @@ interface CaptureGroupInspectorProps {
   selectedView: GroupViewRow | null
   task: AnnotationTask | null
   taskVisibility: CaptureGroupTaskVisibility
+  isCompleted?: boolean
 }
 
 export function CaptureGroupInspector({
@@ -54,6 +55,7 @@ export function CaptureGroupInspector({
   selectedView,
   task,
   taskVisibility,
+  isCompleted = false,
 }: CaptureGroupInspectorProps) {
   const selectedStream = selectedView?.stream ?? null
   const selectedSync = selectedStream ? syncSafety(selectedStream) : null
@@ -70,12 +72,18 @@ export function CaptureGroupInspector({
         : 'annotation'
 
   return (
-    <aside className="capture-group-inspector" aria-labelledby="capture-group-inspector-title">
-      <header className="capture-group-inspector-heading">
-        <p className="app-eyebrow">渐进详情</p>
-        <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
-        <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
-      </header>
+    <aside
+      className={`capture-group-inspector${isCompleted ? ' is-completed' : ''}`}
+      aria-label={isCompleted ? '事实、历史与审计' : undefined}
+      aria-labelledby={isCompleted ? undefined : 'capture-group-inspector-title'}
+    >
+      {!isCompleted ? (
+        <header className="capture-group-inspector-heading">
+          <p className="app-eyebrow">渐进详情</p>
+          <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
+          <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
+        </header>
+      ) : null}
 
       <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>
         <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
@@ -151,7 +159,7 @@ export function CaptureGroupInspector({
                 { id: 'mount', label: '安装位置', value: selectedStream.mount_position },
                 {
                   id: 'asset',
-                  label: 'ClipAsset',
+                  label: '视频资产',
                   value: <code>{selectedStream.clip_asset_id}</code>,
                 },
                 {
@@ -231,7 +239,7 @@ export function CaptureGroupInspector({
             <div className="capture-group-confirmed-view-set capture-group-stack">
               <strong>本次结论使用的机位集合</strong>
               <span>
-                {formatViewQualitySummary(groupQuality)} · 输入版本{' '}
+                {formatViewQualitySummary(groupQuality)} · 确认输入版本{' '}
                 {groupQuality.input_version ?? '未提供'}
               </span>
               <ul>
@@ -264,13 +272,10 @@ export function CaptureGroupInspector({
       </ProgressiveDetail>
 
       <ProgressiveDetail
-        title="Revision、复核与训练资格"
+        title="修订、复核与训练资格"
         summary={revision ? `第 ${revision.revision_number} 次正式修订` : '尚无正式修订'}
       >
-        <InspectorSection
-          title="Revision、复核与训练资格详情"
-          titleId="capture-group-revision-facts"
-        >
+        <InspectorSection title="修订、复核与训练资格详情" titleId="capture-group-revision-facts">
           {taskVisibility === 'permission-limited' ? (
             <p className="form-hint" role="status">
               当前账号不是该任务执行人；唯一配药事件任务状态按权限不可见。
@@ -309,12 +314,12 @@ export function CaptureGroupInspector({
               />
               {revision ? (
                 <div className="capture-group-inspector-history capture-group-stack">
-                  <strong>正式 Revision</strong>
+                  <strong>正式修订</strong>
                   <span>
                     {revision.annotation_revision_id} · 第 {revision.revision_number} 次 ·{' '}
                     {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
                   </span>
-                  <span>输入版本：{revision.input_version ?? '未提供'}</span>
+                  <span>确认输入版本：{revision.input_version ?? '未提供'}</span>
                   {review ? (
                     <StatusIndicator tone={review.decision === 'APPROVED' ? 'success' : 'warning'}>
                       人工复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}
@@ -332,7 +337,7 @@ export function CaptureGroupInspector({
                   )}
                 </div>
               ) : (
-                <p className="form-hint">任务已存在，尚无正式 Revision。</p>
+                <p className="form-hint">任务已存在，尚无正式修订。</p>
               )}
               <Link
                 className="text-link"
@@ -342,7 +347,7 @@ export function CaptureGroupInspector({
               </Link>
             </>
           ) : (
-            <p className="form-hint">尚无可见的配药事件任务、Revision 或复核事实。</p>
+            <p className="form-hint">尚无可见的配药事件任务、修订或复核事实。</p>
           )}
         </InspectorSection>
       </ProgressiveDetail>

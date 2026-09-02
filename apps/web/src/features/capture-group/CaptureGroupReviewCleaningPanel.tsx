@@ -205,7 +205,7 @@ export function CaptureGroupReviewCleaningPanel({
                 },
                 {
                   id: 'review-input-version',
-                  label: '冻结 input_version',
+                  label: '确认输入版本',
                   value: inputVersion ?? '未提供',
                 },
                 {
@@ -386,7 +386,11 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
         <MetadataList
           ariaLabel="已确认机位集合摘要"
           items={[
-            { id: 'view-set-schema', label: 'schema', value: viewSet.schema_version },
+            {
+              id: 'view-set-schema',
+              label: '标注结构版本',
+              value: viewSet.schema_version,
+            },
             {
               id: 'view-set-group-version',
               label: '配药事件版本',

@@ -16,6 +16,7 @@ interface CaptureGroupFocusedViewProps {
   viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
+  isCompleted?: boolean
 }
 
 export function CaptureGroupFocusedView({
@@ -24,6 +25,7 @@ export function CaptureGroupFocusedView({
   viewReviews,
   viewState,
   onSelectView,
+  isCompleted = false,
 }: CaptureGroupFocusedViewProps) {
   const {
     selectedStream,
@@ -53,7 +55,7 @@ export function CaptureGroupFocusedView({
   )
   const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
 
-  return (
+  const focusedView = (
     <section
       className="capture-group-focused-workspace"
       aria-labelledby="capture-group-focused-title"
@@ -236,5 +238,16 @@ export function CaptureGroupFocusedView({
         </details>
       ) : null}
     </section>
+  )
+
+  return isCompleted ? (
+    <details className="detail-disclosure capture-group-completed-video-details">
+      <summary>查看视频与辅助证据</summary>
+      <div className="detail-disclosure-content capture-group-completed-video-content">
+        {focusedView}
+      </div>
+    </details>
+  ) : (
+    focusedView
   )
 }

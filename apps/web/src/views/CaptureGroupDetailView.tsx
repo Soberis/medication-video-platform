@@ -106,6 +106,9 @@ export default function CaptureGroupDetailView() {
     workflow?.primaryAction?.target === 'view-quality' ||
     workflow?.primaryAction?.target === 'group-quality' ||
     workflow?.primaryAction?.target === 'annotation'
+  const isCompletedWorkflow = Boolean(
+    workflow?.steps.length && workflow.steps.every((step) => step.state === 'completed'),
+  )
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -188,6 +191,47 @@ export default function CaptureGroupDetailView() {
     )
   }
 
+  const renderReviewCleaningPanel = () => {
+    if (!data.group) return null
+    return (
+      <CaptureGroupReviewCleaningPanel
+        projectId={projectId}
+        group={data.group}
+        groupQuality={data.groupQuality}
+        groupQualityVisibility={data.groupQualityVisibility}
+        task={data.task}
+        schema={data.schema}
+        onRefresh={data.refresh}
+      />
+    )
+  }
+
+  const renderInspector = () => {
+    if (!data.group) return null
+    const inspector = (
+      <CaptureGroupInspector
+        projectId={projectId}
+        captureGroupId={captureGroupId}
+        group={data.group}
+        groupQuality={data.groupQuality}
+        groupQualityVisibility={data.groupQualityVisibility}
+        qualityHistory={data.qualityHistory}
+        selectedView={selectedView}
+        task={data.task}
+        taskVisibility={data.taskVisibility}
+        isCompleted={isCompletedWorkflow}
+      />
+    )
+    return isCompletedWorkflow ? (
+      <details className="detail-disclosure capture-group-completed-inspector-details">
+        <summary>事实、历史与审计</summary>
+        <div className="detail-disclosure-content">{inspector}</div>
+      </details>
+    ) : (
+      inspector
+    )
+  }
+
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
@@ -233,51 +277,56 @@ export default function CaptureGroupDetailView() {
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
           {workflow ? (
-            <div className="capture-group-workspace">
-              <div className="capture-group-video-column">
+            isCompletedWorkflow ? (
+              <div className="capture-group-completed-workspace">
+                <MedicationEventCurrentAction workflow={workflow} />
+                {renderReviewCleaningPanel()}
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
                   task={data.task}
                   viewReviews={data.viewReviews}
                   viewState={viewState}
                   onSelectView={data.setSelectedClipAssetId}
+                  isCompleted
                 />
               </div>
-              <div className="capture-group-action-column">
-                <MedicationEventCurrentAction
-                  workflow={workflow}
-                  primaryActionHasForm={primaryActionHasForm}
-                  primaryActionDisabled={
-                    workflow.primaryAction?.key === 'finalize-receipt' &&
-                    isReceiptFinalizationPending
-                  }
-                  primaryActionLoading={
-                    workflow.primaryAction?.key === 'finalize-receipt' &&
-                    isReceiptFinalizationPending
-                  }
-                  primaryActionRef={
-                    workflow.primaryAction?.key === 'finalize-receipt'
-                      ? receiptFinalizeTrigger
-                      : undefined
-                  }
-                  onPrimaryAction={handlePrimaryAction}
-                />
-                {!isReviewWorkflowAction ? renderActionForm() : null}
+            ) : (
+              <div className="capture-group-workspace">
+                <div className="capture-group-video-column">
+                  <CaptureGroupFocusedView
+                    viewRows={viewRows}
+                    task={data.task}
+                    viewReviews={data.viewReviews}
+                    viewState={viewState}
+                    onSelectView={data.setSelectedClipAssetId}
+                  />
+                </div>
+                <div className="capture-group-action-column">
+                  <MedicationEventCurrentAction
+                    workflow={workflow}
+                    primaryActionHasForm={primaryActionHasForm}
+                    primaryActionDisabled={
+                      workflow.primaryAction?.key === 'finalize-receipt' &&
+                      isReceiptFinalizationPending
+                    }
+                    primaryActionLoading={
+                      workflow.primaryAction?.key === 'finalize-receipt' &&
+                      isReceiptFinalizationPending
+                    }
+                    primaryActionRef={
+                      workflow.primaryAction?.key === 'finalize-receipt'
+                        ? receiptFinalizeTrigger
+                        : undefined
+                    }
+                    onPrimaryAction={handlePrimaryAction}
+                  />
+                  {!isReviewWorkflowAction ? renderActionForm() : null}
+                </div>
               </div>
-            </div>
+            )
           ) : null}
-          {isReviewWorkflowAction ? renderActionForm() : null}
-          <CaptureGroupInspector
-            projectId={projectId}
-            captureGroupId={captureGroupId}
-            group={data.group}
-            groupQuality={data.groupQuality}
-            groupQualityVisibility={data.groupQualityVisibility}
-            qualityHistory={data.qualityHistory}
-            selectedView={selectedView}
-            task={data.task}
-            taskVisibility={data.taskVisibility}
-          />
+          {!isCompletedWorkflow && isReviewWorkflowAction ? renderActionForm() : null}
+          {renderInspector()}
         </>
       ) : null}
       <Modal

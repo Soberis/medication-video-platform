@@ -61,51 +61,45 @@ export function MedicationEventCurrentAction({
   return (
     <Section
       className="capture-group-current-action"
-      title="当前动作"
+      title={isCompleted ? '当前结果' : '当前动作'}
       titleId="capture-group-current-action-title"
     >
-      <div className="capture-group-current-action-summary">
-        <div className="capture-group-current-action-copy">
-          <span className="app-eyebrow">当前阶段</span>
-          <StatusIndicator
-            tone={
-              workflow.blocker
-                ? 'warning'
-                : workflow.waitingReason
-                  ? 'information'
-                  : isCompleted
-                    ? 'success'
-                    : 'information'
-            }
-          >
-            {medicationEventWorkflowStageLabels[workflow.stage]}
-          </StatusIndicator>
-          {primaryActionHasForm && primaryAction ? (
-            <strong className="capture-group-current-action-form-label">
+      {isCompleted ? (
+        <CompletedResultSummary />
+      ) : (
+        <div className="capture-group-current-action-summary">
+          <div className="capture-group-current-action-copy">
+            <span className="app-eyebrow">当前阶段</span>
+            <StatusIndicator tone={workflow.blocker ? 'warning' : 'information'}>
+              {medicationEventWorkflowStageLabels[workflow.stage]}
+            </StatusIndicator>
+            {primaryActionHasForm && primaryAction ? (
+              <strong className="capture-group-current-action-form-label">
+                {primaryAction.label}
+              </strong>
+            ) : null}
+            <p
+              className={`capture-group-current-action-message${workflow.blocker ? ' is-blocked' : ''}`}
+              role="status"
+              aria-live="polite"
+            >
+              {message}
+            </p>
+          </div>
+          {primaryAction && onPrimaryAction && !primaryActionHasForm ? (
+            <Button
+              ref={primaryActionRef}
+              type="primary"
+              htmlType="button"
+              loading={primaryActionLoading}
+              disabled={primaryActionDisabled}
+              onClick={() => onPrimaryAction(primaryAction)}
+            >
               {primaryAction.label}
-            </strong>
+            </Button>
           ) : null}
-          <p
-            className={`capture-group-current-action-message${workflow.blocker ? ' is-blocked' : ''}`}
-            role="status"
-            aria-live="polite"
-          >
-            {message}
-          </p>
         </div>
-        {primaryAction && onPrimaryAction && !primaryActionHasForm ? (
-          <Button
-            ref={primaryActionRef}
-            type="primary"
-            htmlType="button"
-            loading={primaryActionLoading}
-            disabled={primaryActionDisabled}
-            onClick={() => onPrimaryAction(primaryAction)}
-          >
-            {primaryAction.label}
-          </Button>
-        ) : null}
-      </div>
+      )}
       {!isCompleted ? (
         <ol className="capture-group-current-action-steps" aria-label="配药事件处理流程">
           {workflow.steps.map((step) => (
@@ -114,6 +108,24 @@ export function MedicationEventCurrentAction({
         </ol>
       ) : null}
     </Section>
+  )
+}
+
+function CompletedResultSummary() {
+  return (
+    <div className="capture-group-current-result" role="status" aria-live="polite">
+      <div className="capture-group-current-result-heading">
+        <CircleCheck aria-hidden="true" size={18} strokeWidth={1.9} />
+        <strong>流程已完成</strong>
+      </div>
+      <ul className="capture-group-current-result-facts" aria-label="配药事件完成结果">
+        <li>人工复核：已通过</li>
+        <li>训练资格检查：已通过</li>
+      </ul>
+      <a className="capture-group-current-result-link" href="#capture-group-review-cleaning">
+        查看复核与训练资格详情 →
+      </a>
+    </div>
   )
 }
 

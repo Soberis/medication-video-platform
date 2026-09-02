@@ -349,7 +349,7 @@ describe('medication event workflow presentation', () => {
     })
   })
 
-  it('marks a completed PASS result as complete and keeps a result action', () => {
+  it('marks a completed PASS result as complete without a next action', () => {
     const cleaning = {
       capture_group_cleaning_id: 'cleaning-1',
       outcome: 'PASS' as const,
@@ -366,7 +366,7 @@ describe('medication event workflow presentation', () => {
 
     expect(completed.stage).toBe('TRAINING_ELIGIBILITY')
     expect(completed.steps.at(-1)?.state).toBe('completed')
-    expect(completed.primaryAction?.key).toBe('view-result')
+    expect(completed.primaryAction).toBeNull()
   })
 
   it('does not let Candidate failure or NO_HAND_DETECTED block a human annotation path', () => {
