@@ -57,8 +57,9 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Training Data Export
     description: >-
-      Explicit, synchronous, read-only P0 export. training-data.v3 is the only supported output and
-      preserves CaptureGroup/view, Review, Cleaning and Candidate provenance; CaptureGroup is the split unit.
+      Explicit, synchronous, read-only P0 exports. training-data.v3 remains the CaptureGroup event manifest,
+      while hand-landmarks.v1 is the MediaPipe frame/hand CSV joined to approved Primary View action labels.
+      Both preserve the current administrator and synthetic-data security boundary.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -71,6 +72,83 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
+  /projects/{project_id}/hand-landmarks/v1/preview:
+    get:
+      operationId: getHandLandmarkTrainingExportPreview
+      tags:
+        - Training Data Export
+      summary: Preview MediaPipe hand-landmark training samples
+      description: >-
+        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. The event eligibility gate is the
+        current V1.27 CaptureGroup projection: valid current source media, one current eligible
+        AnnotationRevision, APPROVED Review and PASS CaptureGroup Cleaning. Only the approved Primary View
+        timebase is used for action-label association. Events without finished or valid Primary View
+        MediaPipe candidates remain eligible events but produce zero landmark samples.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Current hand-landmark training export preview.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandLandmarkTrainingExportPreview"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: >-
+            Current CaptureGroup eligibility, frozen AI evidence or selected CandidateAnnotation data
+            cannot be proven safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /projects/{project_id}/hand-landmarks/v1/download:
+    get:
+      operationId: downloadHandLandmarkTrainingData
+      tags:
+        - Training Data Export
+      summary: Download MediaPipe hand-landmark training samples as CSV
+      description: >-
+        Returns one row per valid 21-point MediaPipe hand candidate whose source-local timestamp is inside
+        an approved Primary View AnnotationRevision interval. Human action labels are never inferred from
+        MediaPipe. Supporting camera views are not assigned Primary View timestamps without a verified
+        mapping. The response contains no MP4 bytes and is restricted to the synthetic data profile until
+        a non-synthetic authorization model is defined.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Deterministic hand-landmark CSV.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              schema:
+                type: string
+                const: 'attachment; filename="mediapipe_hand_landmarks_v1.csv"'
+          content:
+            "text/csv; charset=UTF-8":
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: >-
+            Current CaptureGroup eligibility, frozen AI evidence or selected CandidateAnnotation data
+            cannot be proven safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/training-data/v3/preview:
     get:
       operationId: getTrainingDataV3ExportPreview
@@ -6937,6 +7015,56 @@ components:
           pattern: "^[a-f0-9]{64}$"
         run_summary:
           $ref: "#/components/schemas/HandPoseRunSummary"
+    HandLandmarkTrainingExportPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - eligible_event_count
+        - events_with_landmarks
+        - sample_count
+        - events_without_landmarks
+        - file_name
+        - content_type
+        - reason_counts
+      properties:
+        schema_version:
+          type: string
+          const: hand-landmarks.v1
+        eligible_event_count:
+          type: integer
+          format: int64
+          minimum: 0
+        events_with_landmarks:
+          type: integer
+          format: int64
+          minimum: 0
+        sample_count:
+          type: integer
+          format: int64
+          minimum: 0
+        events_without_landmarks:
+          type: integer
+          format: int64
+          minimum: 0
+        file_name:
+          type: string
+          const: mediapipe_hand_landmarks_v1.csv
+        content_type:
+          type: string
+          const: text/csv; charset=UTF-8
+        reason_counts:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+          propertyNames:
+            enum:
+              - MEDIAPIPE_NOT_FINISHED
+              - NO_HAND_DETECTED
+              - MEDIAPIPE_FAILED
+              - NO_VALID_21_POINT_SAMPLE
     TrainingDataV3ExportPreview:
       type: object
       additionalProperties: false

@@ -56,6 +56,14 @@ class TrainingDataV3ExportService {
 			 ORDER BY capture_group_id, revision_number, annotation_revision_id
 			""";
 
+	private static final String ANNOTATION_DOCUMENT_QUERY = """
+			SELECT annotation_document
+			  FROM annotation_revision
+			 WHERE project_id = ?
+			   AND capture_group_id = ?
+			   AND annotation_revision_id = ?
+			""";
+
 	private static final String ELIGIBILITY_VALIDATION_QUERY = """
 			SELECT capture_group_id, annotation_revision_id
 			  FROM training_data_group_eligibility_v3_integrity
@@ -155,6 +163,37 @@ class TrainingDataV3ExportService {
 			throw eligibilityProjectionInvalid();
 		}
 		return new TrainingDataV3Document(SCHEMA_VERSION, SPLIT_UNIT, events);
+	}
+
+	/**
+	 * Shares the authoritative V1.27 event eligibility snapshot with other exports in
+	 * this module. The caller must keep its read operation in the same transaction when
+	 * it also reads the selected candidate facts.
+	 */
+	TrainingDataV3Document readEligibleDocument(UUID projectId) {
+		return snapshot(projectId);
+	}
+
+	/**
+	 * Reads the immutable annotation document identified by an eligible event. The
+	 * hand-landmark export uses this source for labels and intervals instead of trusting
+	 * a derived Cleaning interval projection.
+	 */
+	JsonNode readApprovedAnnotationDocument(UUID projectId, UUID captureGroupId, UUID annotationRevisionId) {
+		try {
+			var documents = this.jdbcTemplate.query(ANNOTATION_DOCUMENT_QUERY,
+					(resultSet, rowNumber) -> readJson(resultSet, "annotation_document"), projectId, captureGroupId,
+					annotationRevisionId);
+			if (documents.size() != 1 || documents.getFirst() == null) {
+				throw new TrainingDataExportException("TRAINING_DATA_V3_EVIDENCE_INVALID",
+						"The eligible event annotation document could not be identified.", 422);
+			}
+			return documents.getFirst();
+		}
+		catch (DataAccessException exception) {
+			throw new TrainingDataExportException("TRAINING_DATA_V3_EVIDENCE_INVALID",
+					"The eligible event annotation document could not be read safely.", 422);
+		}
 	}
 
 	private void validateEligibility(UUID projectId) {

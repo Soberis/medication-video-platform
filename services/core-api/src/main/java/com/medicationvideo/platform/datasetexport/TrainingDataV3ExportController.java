@@ -102,7 +102,8 @@ record TrainingDataV3SplitValidationResponse(String splitUnit, long assignmentCo
 record TrainingDataExportErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = TrainingDataV3ExportController.class)
+@RestControllerAdvice(
+		assignableTypes = { TrainingDataV3ExportController.class, HandLandmarkTrainingExportController.class })
 class TrainingDataExportExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

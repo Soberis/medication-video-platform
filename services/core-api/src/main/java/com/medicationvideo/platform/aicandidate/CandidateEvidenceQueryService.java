@@ -34,17 +34,17 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class CandidateEvidenceQueryService {
 
-	static final String EXECUTION_STATUS_NO_JOB = "NO_JOB";
+	public static final String EXECUTION_STATUS_NO_JOB = "NO_JOB";
 
-	static final String EXECUTION_STATUS_QUEUED = "QUEUED";
+	public static final String EXECUTION_STATUS_QUEUED = "QUEUED";
 
-	static final String EXECUTION_STATUS_RUNNING = "RUNNING";
+	public static final String EXECUTION_STATUS_RUNNING = "RUNNING";
 
-	static final String EXECUTION_STATUS_FAILED = "FAILED";
+	public static final String EXECUTION_STATUS_FAILED = "FAILED";
 
-	static final String EXECUTION_STATUS_SUCCEEDED_NO_HAND = "SUCCEEDED_NO_HAND";
+	public static final String EXECUTION_STATUS_SUCCEEDED_NO_HAND = "SUCCEEDED_NO_HAND";
 
-	static final String EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES = "SUCCEEDED_WITH_CANDIDATES";
+	public static final String EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES = "SUCCEEDED_WITH_CANDIDATES";
 
 	static final String EXECUTION_STATUS_INVALID_PROVENANCE = "INVALID_PROVENANCE";
 
@@ -95,6 +95,40 @@ public class CandidateEvidenceQueryService {
 	@Transactional(readOnly = true)
 	public List<CandidateEvidence> findLatestSuccessfulByClipAssets(UUID projectId, Collection<UUID> clipAssetIds) {
 		return findByClipAssets(projectId, clipAssetIds);
+	}
+
+	/**
+	 * Reads the exact AI execution identified by an approved evidence snapshot. This
+	 * method intentionally does not select a latest job; callers supply the immutable job
+	 * and attempt identity that was approved for their downstream read.
+	 */
+	@Transactional(readOnly = true)
+	public FrozenExecutionSnapshot findFrozenExecution(UUID aiJobId, UUID aiJobAttemptId, int attempt, UUID messageId) {
+		Objects.requireNonNull(aiJobId);
+		Objects.requireNonNull(aiJobAttemptId);
+		Objects.requireNonNull(messageId);
+		var executions = this.jdbcTemplate.query(frozenExecutionQuery(), this::mapFrozenExecution, aiJobAttemptId,
+				attempt, messageId, aiJobId);
+		if (executions.isEmpty()) {
+			return null;
+		}
+		var execution = executions.getFirst();
+		var candidates = this.jdbcTemplate.query(candidateQuery(List.of(aiJobId)), this::mapCandidate, aiJobId)
+			.stream()
+			.map(CandidateAnnotationFact::snapshot)
+			.toList();
+		var runSummary = execution.analysisComplete() == null || execution.attemptHandResult() == null ? null
+				: new RunSummary(execution.analysisComplete(), execution.attemptHandResult(),
+						execution.totalVideoFrames(), execution.inferenceFrameCount(), execution.framesWithHand(),
+						execution.framesWithoutHand(), execution.leftHandDetectionCount(),
+						execution.rightHandDetectionCount(), execution.invalidLandmarkCount(),
+						execution.processingDurationMs(), execution.startedAt(), execution.completedAt(),
+						execution.failureReason(), execution.retryable());
+		return new FrozenExecutionSnapshot(execution.aiJobId(), execution.projectId(), execution.clipAssetId(),
+				execution.algorithmKey(), execution.algorithmVersion(), execution.modelSha256(),
+				execution.inputSha256(), execution.profileSha256(), execution.status(), execution.handResult(),
+				execution.aiJobAttemptId(), execution.attempt(), execution.messageId(), execution.attemptStatus(),
+				execution.resultSha256(), candidates, runSummary);
 	}
 
 	private Map<UUID, List<CandidateAnnotationSnapshot>> loadCandidates(Collection<JobFact> jobs) {
@@ -287,6 +321,28 @@ public class CandidateEvidenceQueryService {
 				resultSet.getObject("last_timestamp_ms", Long.class));
 	}
 
+	private FrozenExecutionFact mapFrozenExecution(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new FrozenExecutionFact(resultSet.getObject("ai_job_id", UUID.class),
+				resultSet.getObject("project_id", UUID.class), resultSet.getObject("clip_asset_id", UUID.class),
+				resultSet.getString("algorithm_key"), resultSet.getString("algorithm_version"),
+				resultSet.getString("model_sha256"), resultSet.getString("input_sha256"),
+				resultSet.getString("profile_sha256"), resultSet.getString("status"),
+				resultSet.getString("hand_result"), resultSet.getObject("ai_job_attempt_id", UUID.class),
+				resultSet.getInt("attempt"), resultSet.getObject("message_id", UUID.class),
+				resultSet.getString("attempt_status"), resultSet.getString("result_sha256"),
+				resultSet.getObject("analysis_complete", Boolean.class), resultSet.getString("attempt_hand_result"),
+				instant(resultSet, "started_at"), instant(resultSet, "completed_at"),
+				resultSet.getObject("total_video_frames", Long.class),
+				resultSet.getObject("inference_frame_count", Long.class),
+				resultSet.getObject("frames_with_hand", Long.class),
+				resultSet.getObject("frames_without_hand", Long.class),
+				resultSet.getObject("left_hand_detection_count", Long.class),
+				resultSet.getObject("right_hand_detection_count", Long.class),
+				resultSet.getObject("invalid_landmark_count", Long.class),
+				resultSet.getObject("processing_duration_ms", Long.class), resultSet.getString("failure_reason"),
+				resultSet.getObject("retryable", Boolean.class));
+	}
+
 	private static Instant instant(ResultSet resultSet, String column) throws SQLException {
 		var value = resultSet.getObject(column, OffsetDateTime.class);
 		return value == null ? null : value.toInstant();
@@ -304,7 +360,7 @@ public class CandidateEvidenceQueryService {
 		}
 	}
 
-	static String candidateSetDigest(List<CandidateAnnotationSnapshot> candidates) {
+	public static String candidateSetDigest(List<CandidateAnnotationSnapshot> candidates) {
 		var sorted = candidates.stream()
 			.sorted(Comparator.comparingLong(CandidateAnnotationSnapshot::frameTimestampMs)
 				.thenComparingInt(CandidateAnnotationSnapshot::handIndex)
@@ -460,6 +516,32 @@ public class CandidateEvidenceQueryService {
 				""".formatted(placeholders(jobIds));
 	}
 
+	private static String frozenExecutionQuery() {
+		return """
+				SELECT job.ai_job_id, job.project_id, job.clip_asset_id, job.algorithm_key,
+				       job.algorithm_version, job.model_sha256, job.input_sha256, job.profile_sha256,
+				       job.status, job.hand_result, attempt.ai_job_attempt_id, attempt.attempt,
+				       attempt.message_id, attempt.status AS attempt_status, inbox.result_sha256,
+				       attempt.analysis_complete, attempt.hand_result AS attempt_hand_result,
+				       attempt.started_at, attempt.completed_at, attempt.total_video_frames,
+				       attempt.inference_frame_count, attempt.frames_with_hand, attempt.frames_without_hand,
+				       attempt.left_hand_detection_count, attempt.right_hand_detection_count,
+				       attempt.invalid_landmark_count, attempt.processing_duration_ms, attempt.failure_reason,
+				       attempt.retryable
+				  FROM ai_job job
+				  JOIN ai_job_attempt attempt
+				    ON attempt.ai_job_id = job.ai_job_id
+				   AND attempt.ai_job_attempt_id = ?
+				   AND attempt.attempt = ?
+				   AND attempt.message_id = ?
+				  LEFT JOIN ai_job_result_inbox inbox
+				    ON inbox.ai_job_id = job.ai_job_id
+				   AND inbox.attempt = attempt.attempt
+				   AND inbox.message_id = attempt.message_id
+				 WHERE job.ai_job_id = ?
+				""";
+	}
+
 	private static String placeholders(Collection<?> values) {
 		return values.stream().map(ignored -> "?").collect(Collectors.joining(", "));
 	}
@@ -487,9 +569,28 @@ public class CandidateEvidenceQueryService {
 		}
 	}
 
-	static record CandidateAnnotationSnapshot(UUID candidateAnnotationId, UUID aiJobId, UUID projectId,
+	private record FrozenExecutionFact(UUID aiJobId, UUID projectId, UUID clipAssetId, String algorithmKey,
+			String algorithmVersion, String modelSha256, String inputSha256, String profileSha256, String status,
+			String handResult, UUID aiJobAttemptId, int attempt, UUID messageId, String attemptStatus,
+			String resultSha256, Boolean analysisComplete, String attemptHandResult, Instant startedAt,
+			Instant completedAt, Long totalVideoFrames, Long inferenceFrameCount, Long framesWithHand,
+			Long framesWithoutHand, Long leftHandDetectionCount, Long rightHandDetectionCount,
+			Long invalidLandmarkCount, Long processingDurationMs, String failureReason, Boolean retryable) {
+	}
+
+	public static record CandidateAnnotationSnapshot(UUID candidateAnnotationId, UUID aiJobId, UUID projectId,
 			UUID clipAssetId, long frameTimestampMs, int imageWidth, int imageHeight, int handIndex, String handedness,
 			BigDecimal handednessScore, JsonNode boundingBox, JsonNode landmarks, int validLandmarkCount) {
+	}
+
+	public record FrozenExecutionSnapshot(UUID aiJobId, UUID projectId, UUID clipAssetId, String algorithmKey,
+			String algorithmVersion, String modelSha256, String inputSha256, String profileSha256, String status,
+			String handResult, UUID aiJobAttemptId, int attempt, UUID messageId, String attemptStatus,
+			String resultSha256, List<CandidateAnnotationSnapshot> candidates, RunSummary runSummary) {
+
+		public FrozenExecutionSnapshot {
+			candidates = List.copyOf(candidates);
+		}
 	}
 
 	public record CandidateEvidence(UUID clipAssetId, String clipAssetSha256, boolean provenanceValid,
