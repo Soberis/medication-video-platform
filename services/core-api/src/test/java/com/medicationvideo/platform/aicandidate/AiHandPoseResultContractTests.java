@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -23,6 +24,8 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.medicationvideo.platform.support.AiHandPoseResultFixture;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -450,6 +453,156 @@ class AiHandPoseResultContractTests {
 	}
 
 	@Test
+	void persistsCompleteCandidatesAcrossThreeTimestampsAndBothHands() throws Exception {
+		var jobId = UUID.randomUUID();
+		var attempt = UUID.randomUUID();
+		var messageId = UUID.randomUUID();
+		var lease = "A".repeat(43);
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		insertRunningJob(jobId, attempt, messageId, AiLeaseCapabilityFactory.sha256(lease), now);
+
+		var result = AiHandPoseResultFixture.handDetectedResult(messageId, jobId, 1, lease, INPUT_SHA256, MODEL_SHA256,
+				now, now);
+		submitResult(jobId, 1, lease, result);
+
+		var rows = this.jdbcTemplate.queryForList("""
+				SELECT frame_timestamp_ms, hand_index, handedness, handedness_score,
+				       image_width, image_height, valid_landmark_count,
+				       jsonb_array_length(landmarks) AS landmark_count,
+				       landmarks -> 0 ->> 'x' AS first_landmark_x,
+				       landmarks -> 0 ->> 'y' AS first_landmark_y,
+				       landmarks -> 0 ->> 'z' AS first_landmark_z,
+				       bounding_box ->> 'x' AS bounding_box_x,
+				       bounding_box ->> 'y' AS bounding_box_y,
+				       bounding_box ->> 'width' AS bounding_box_width,
+				       bounding_box ->> 'height' AS bounding_box_height
+				  FROM candidate_annotation
+				 WHERE ai_job_id = ?
+				 ORDER BY frame_timestamp_ms, hand_index
+				""", jobId);
+
+		assertEquals(4, rows.size());
+		assertEquals(List.of(100L, 200L, 300L, 300L),
+				rows.stream().map(row -> ((Number) row.get("frame_timestamp_ms")).longValue()).toList());
+		assertEquals(List.of(0, 0, 0, 1),
+				rows.stream().map(row -> ((Number) row.get("hand_index")).intValue()).toList());
+		assertEquals(List.of("RIGHT", "LEFT", "LEFT", "RIGHT"),
+				rows.stream().map(row -> (String) row.get("handedness")).toList());
+		assertEquals(List.of(0.91, 0.92, 0.93, 0.94),
+				rows.stream().map(row -> ((Number) row.get("handedness_score")).doubleValue()).toList());
+		assertEquals(List.of(1280, 1280, 1280, 1280),
+				rows.stream().map(row -> ((Number) row.get("image_width")).intValue()).toList());
+		assertEquals(List.of(720, 720, 720, 720),
+				rows.stream().map(row -> ((Number) row.get("image_height")).intValue()).toList());
+		assertEquals(List.of(21, 21, 21, 21),
+				rows.stream().map(row -> ((Number) row.get("valid_landmark_count")).intValue()).toList());
+		assertEquals(List.of(21, 21, 21, 21),
+				rows.stream().map(row -> ((Number) row.get("landmark_count")).intValue()).toList());
+		assertEquals(List.of(0.1, 0.11, 0.12, 0.13),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("first_landmark_x"))).toList());
+		assertEquals(List.of(0.2, 0.21, 0.22, 0.23),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("first_landmark_y"))).toList());
+		assertEquals(List.of(-0.01, -0.011, -0.012, -0.013),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("first_landmark_z"))).toList());
+		assertEquals(List.of(0.1, 0.11, 0.12, 0.13),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("bounding_box_x"))).toList());
+		assertEquals(List.of(0.2, 0.21, 0.22, 0.23),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("bounding_box_y"))).toList());
+		assertEquals(List.of(0.02, 0.02, 0.02, 0.02),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("bounding_box_width"))).toList());
+		assertEquals(List.of(0.04, 0.04, 0.04, 0.04),
+				rows.stream().map(row -> Double.parseDouble((String) row.get("bounding_box_height"))).toList());
+		assertEquals(4, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ? AND project_id = ? AND clip_asset_id = ?",
+				Integer.class, jobId, this.lastInsertedProjectId, this.lastInsertedClipAssetId));
+		assertEquals(0, this.jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				  FROM candidate_annotation candidate
+				 CROSS JOIN LATERAL jsonb_array_elements(candidate.landmarks) point
+				 WHERE candidate.ai_job_id = ?
+				   AND NOT (jsonb_typeof(point) = 'object'
+				            AND jsonb_exists(point, 'x') AND jsonb_exists(point, 'y')
+				            AND jsonb_exists(point, 'z')
+				            AND jsonb_typeof(point -> 'x') = 'number'
+				            AND jsonb_typeof(point -> 'y') = 'number'
+				            AND jsonb_typeof(point -> 'z') = 'number')
+				""", Integer.class, jobId));
+	}
+
+	@Test
+	void replayingTheSameResultDoesNotDuplicateLogicalCandidates() throws Exception {
+		var jobId = UUID.randomUUID();
+		var attempt = UUID.randomUUID();
+		var messageId = UUID.randomUUID();
+		var lease = "A".repeat(43);
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		insertRunningJob(jobId, attempt, messageId, AiLeaseCapabilityFactory.sha256(lease), now);
+		var result = AiHandPoseResultFixture.handDetectedResult(messageId, jobId, 1, lease, INPUT_SHA256, MODEL_SHA256,
+				now, now);
+
+		submitResult(jobId, 1, lease, result);
+		submitResult(jobId, 1, lease, result);
+
+		assertEquals(4, this.jdbcTemplate
+			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+		assertEquals(4, this.jdbcTemplate.queryForObject(
+				"SELECT count(DISTINCT (frame_timestamp_ms, hand_index)) FROM candidate_annotation WHERE ai_job_id = ?",
+				Integer.class, jobId));
+		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM ai_job_result_inbox WHERE ai_job_id = ?",
+				Integer.class, jobId));
+	}
+
+	@Test
+	void failedAttemptRemainsDistinctWhenTheSecondAttemptPersistsCandidates() throws Exception {
+		var jobId = UUID.randomUUID();
+		var firstAttemptId = UUID.randomUUID();
+		var firstMessageId = UUID.randomUUID();
+		var firstLease = "A".repeat(43);
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		insertRunningJob(jobId, firstAttemptId, firstMessageId, AiLeaseCapabilityFactory.sha256(firstLease), now);
+
+		var firstResult = AiHandPoseResultFixture.failedResult(firstMessageId, jobId, 1, firstLease, INPUT_SHA256,
+				MODEL_SHA256, now, now, "AI_HAND_POSE_INVALID_OUTPUT");
+		submitResult(jobId, 1, firstLease, firstResult);
+		assertEquals("FAILED",
+				this.jdbcTemplate.queryForObject("SELECT status FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
+		assertEquals("FAILED", this.jdbcTemplate.queryForObject(
+				"SELECT status FROM ai_job_attempt WHERE ai_job_attempt_id = ?", String.class, firstAttemptId));
+		assertEquals(0, this.jdbcTemplate
+			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+
+		var secondAttemptId = UUID.randomUUID();
+		var secondMessageId = UUID.randomUUID();
+		var secondLease = "B".repeat(43);
+		var retryAt = now.plusSeconds(1);
+		this.jdbcTemplate.update(
+				"UPDATE ai_job SET status = 'RUNNING', hand_result = 'UNKNOWN', updated_at = ? WHERE ai_job_id = ?",
+				Timestamp.from(retryAt), jobId);
+		insertRunningAttempt(jobId, 2, secondAttemptId, secondMessageId, AiLeaseCapabilityFactory.sha256(secondLease),
+				retryAt);
+
+		var secondResult = AiHandPoseResultFixture.handDetectedResult(secondMessageId, jobId, 2, secondLease,
+				INPUT_SHA256, MODEL_SHA256, retryAt, retryAt);
+		submitResult(jobId, 2, secondLease, secondResult);
+
+		assertEquals("SUCCEEDED",
+				this.jdbcTemplate.queryForObject("SELECT status FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
+		assertEquals("HAND_DETECTED", this.jdbcTemplate
+			.queryForObject("SELECT hand_result FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
+		assertEquals("FAILED", this.jdbcTemplate.queryForObject(
+				"SELECT status FROM ai_job_attempt WHERE ai_job_attempt_id = ?", String.class, firstAttemptId));
+		assertEquals("SUCCEEDED", this.jdbcTemplate.queryForObject(
+				"SELECT status FROM ai_job_attempt WHERE ai_job_attempt_id = ?", String.class, secondAttemptId));
+		assertEquals(4, this.jdbcTemplate
+			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
+		var inboxRows = this.jdbcTemplate.queryForList(
+				"SELECT attempt, message_id FROM ai_job_result_inbox WHERE ai_job_id = ? ORDER BY attempt", jobId);
+		assertEquals(List.of(1, 2), inboxRows.stream().map(row -> ((Number) row.get("attempt")).intValue()).toList());
+		assertEquals(List.of(firstMessageId, secondMessageId),
+				inboxRows.stream().map(row -> (UUID) row.get("message_id")).toList());
+	}
+
+	@Test
 	void rejectsDuplicateHandSlotsWithinTheSameSampledFrame() throws Exception {
 		var jobId = UUID.randomUUID();
 		var attempt = UUID.randomUUID();
@@ -608,6 +761,16 @@ class AiHandPoseResultContractTests {
 			.queryForObject("SELECT count(*) FROM candidate_annotation WHERE ai_job_id = ?", Integer.class, jobId));
 	}
 
+	private void submitResult(UUID jobId, int attempt, String lease, String result) throws Exception {
+		this.mockMvc
+			.perform(put("/api/v1/internal/ai-jobs/{jobId}/attempts/{attempt}/result", jobId, attempt)
+				.header("Authorization", "Bearer " + AI_TOKEN)
+				.header("X-AI-Lease-Token", lease)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(result))
+			.andExpect(status().isNoContent());
+	}
+
 	private static String landmarksJson() {
 		return IntStream.range(0, 21)
 			.mapToObj(index -> "{\"x\":" + (0.1 + index * 0.001) + ",\"y\":0.2,\"z\":-0.01}")
@@ -687,6 +850,16 @@ class AiHandPoseResultContractTests {
 				VALUES (?, ?, 1, ?, ?, 'RUNNING', 'synthetic-ai-worker', ?, ?, ?)
 				""", attemptId, jobId, messageId, leaseHash, Timestamp.from(now.plusSeconds(30)), Timestamp.from(now),
 				Timestamp.from(now));
+	}
+
+	private void insertRunningAttempt(UUID jobId, int attemptNumber, UUID attemptId, UUID messageId, String leaseHash,
+			Instant now) {
+		this.jdbcTemplate.update("""
+				INSERT INTO ai_job_attempt (ai_job_attempt_id, ai_job_id, attempt, message_id, lease_token_hash,
+				 status, worker_id, lease_until, updated_at, created_at)
+				VALUES (?, ?, ?, ?, ?, 'RUNNING', 'synthetic-ai-worker', ?, ?, ?)
+				""", attemptId, jobId, attemptNumber, messageId, leaseHash, Timestamp.from(now.plusSeconds(30)),
+				Timestamp.from(now), Timestamp.from(now));
 	}
 
 }

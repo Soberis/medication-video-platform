@@ -261,6 +261,104 @@ def test_valid_hand_emits_exactly_21_finite_landmarks_and_bounded_metadata(
     assert all(math.isfinite(value) for value in candidate_box.values())
 
 
+def test_three_timestamp_fixture_preserves_both_hands_and_all_landmark_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def hand(seed: int, label: str, score: float) -> SimpleNamespace:
+        points = [
+            SimpleNamespace(
+                x=0.1 + seed * 0.01 + index * 0.001,
+                y=0.2 + seed * 0.01 + index * 0.002,
+                z=-0.01 - seed * 0.001 - index * 0.001,
+            )
+            for index in range(21)
+        ]
+        return SimpleNamespace(
+            landmarks=points,
+            category=SimpleNamespace(category_name=label, score=score),
+        )
+
+    observed_hands = [hand(0, "Right", 0.91), hand(1, "Left", 0.92)]
+    results = iter(
+        (
+            SimpleNamespace(
+                hand_landmarks=[observed_hands[0].landmarks],
+                handedness=[[observed_hands[0].category]],
+            ),
+            SimpleNamespace(
+                hand_landmarks=[observed_hands[1].landmarks],
+                handedness=[[observed_hands[1].category]],
+            ),
+            SimpleNamespace(
+                hand_landmarks=[
+                    hand(2, "Left", 0.93).landmarks,
+                    hand(3, "Right", 0.94).landmarks,
+                ],
+                handedness=[
+                    [hand(2, "Left", 0.93).category],
+                    [hand(3, "Right", 0.94).category],
+                ],
+            ),
+        )
+    )
+    frames = [
+        SimpleNamespace(pts=100, width=1280, height=720, to_ndarray=lambda format: object()),
+        SimpleNamespace(pts=200, width=1280, height=720, to_ndarray=lambda format: object()),
+        SimpleNamespace(pts=300, width=1280, height=720, to_ndarray=lambda format: object()),
+    ]
+    detector = SimpleNamespace(detect_for_video=lambda image, timestamp: next(results))
+    monkeypatch.setattr(landmarker, "av", SimpleNamespace(open=lambda path: _FakeContainer(frames)))
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+
+    candidates: list[dict[str, object]] = []
+    summary = _detect_all(Path("synthetic.mp4"), detector, 10, candidates)
+
+    assert summary.inference_frame_count == 3
+    assert summary.frames_with_hand == 3
+    assert summary.frames_without_hand == 0
+    assert summary.left_hand_detection_count == 2
+    assert summary.right_hand_detection_count == 2
+    assert summary.invalid_landmark_count == 0
+    assert summary.invalid_hand_frame_count == 0
+    assert [
+        (candidate["frame_timestamp_ms"], candidate["hand_index"], candidate["handedness"])
+        for candidate in candidates
+    ] == [(100, 0, "RIGHT"), (200, 0, "LEFT"), (300, 0, "LEFT"), (300, 1, "RIGHT")]
+    assert [candidate["handedness_score"] for candidate in candidates] == [0.91, 0.92, 0.93, 0.94]
+
+    expected_keys = {
+        "frame_timestamp_ms",
+        "image_width",
+        "image_height",
+        "hand_index",
+        "handedness",
+        "handedness_score",
+        "bounding_box",
+        "landmarks",
+        "valid_landmark_count",
+    }
+    for candidate in candidates:
+        assert set(candidate) == expected_keys
+        assert candidate["image_width"] == 1280
+        assert candidate["image_height"] == 720
+        assert candidate["valid_landmark_count"] == 21
+        candidate_box = cast(dict[str, float], candidate["bounding_box"])
+        assert set(candidate_box) == {"x", "y", "width", "height"}
+        assert candidate_box["width"] > 0
+        assert candidate_box["height"] > 0
+        assert all(math.isfinite(value) for value in candidate_box.values())
+        candidate_landmarks = cast(list[dict[str, float]], candidate["landmarks"])
+        assert len(candidate_landmarks) == 21
+        assert all(set(point) == {"x", "y", "z"} for point in candidate_landmarks)
+        assert all(
+            math.isfinite(value) for point in candidate_landmarks for value in point.values()
+        )
+
+
 def test_valid_no_hand_observation_counts_as_a_valid_no_hand_frame(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
