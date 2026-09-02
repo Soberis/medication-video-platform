@@ -57,6 +57,7 @@ interface PlaybackCardProps {
   candidateOverlay: HandPoseCandidate[]
   canPlay: boolean
   canRecoverMissingMediaProbe: boolean
+  expandToWorkspace?: boolean
   grant: ClipAssetPlaybackGrant | null
   isRecoveringMediaProbe: boolean
   isRequestingPlayback: boolean
@@ -77,6 +78,7 @@ export function PlaybackCard({
   candidateOverlay,
   canPlay,
   canRecoverMissingMediaProbe,
+  expandToWorkspace = false,
   grant,
   isRecoveringMediaProbe,
   isRequestingPlayback,
@@ -107,11 +109,14 @@ export function PlaybackCard({
     // The video and overlay both use `contain`, so the source stays proportional
     // and is letterboxed inside the same coordinate system.
     const aspectRatio = 16 / 9
-    const maxWidth = Math.min(960, Math.max(320, viewportSize.width - 80))
+    // The stage should use the available work-column width. Active annotation
+    // keeps a viewport-height cap so the editor remains close at hand; completed
+    // read-only evidence can expand to the full workspace width.
+    const maxWidth = Math.max(320, viewportSize.width - 80)
     const maxHeight = Math.min(600, Math.max(280, viewportSize.height - 240))
     let width = maxWidth
     let height = width / aspectRatio
-    if (height > maxHeight) {
+    if (!expandToWorkspace && height > maxHeight) {
       height = maxHeight
       width = height * aspectRatio
     }
@@ -120,7 +125,7 @@ export function PlaybackCard({
       height: Math.round(height),
       width: Math.round(width),
     }
-  }, [viewportSize])
+  }, [expandToWorkspace, viewportSize])
 
   useEffect(() => {
     const video = videoRef.current
@@ -235,7 +240,7 @@ export function PlaybackCard({
           {!playbackFailed ? (
             <div
               ref={videoStageRef}
-              className="video-stage"
+              className={`video-stage${expandToWorkspace ? ' video-stage-fill' : ''}`}
               style={
                 {
                   '--video-stage-height': `${stageSize.height}px`,
@@ -284,6 +289,9 @@ export function PlaybackCard({
               </div>
             </div>
           ) : null}
+          <p className="form-hint playback-fullscreen-hint" role="note">
+            全屏仅用于查看；退出后返回工作台继续操作。
+          </p>
           {candidateOverlay.length > 0 ? (
             <div className="playback-supporting-note" aria-label="骨架叠加说明">
               <span>
