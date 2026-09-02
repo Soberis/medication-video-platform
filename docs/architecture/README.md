@@ -1,6 +1,6 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.27 为准：产品只有一条以 `CaptureGroup` 为对象的业务路径，Local Upload 和 External Ingest 都通过 `CameraStream / ClipAsset` 进入事件工作台，`N=1` 只是一路视图；`training-data.v3` 是 CaptureGroup eligibility / provenance event manifest，实际 ML feature export 定义为 Primary View-only 的 `hand-landmarks.v1`。V1.26/V1.25 的事件事实、人工质量、单组任务与 Revision、人工 Review、确定性 Cleaning、权限、审计和 provenance 中仍适用的部分由 V1.27 继承，但旧单视频工作流和 `training-data.v2` 不再是当前产品承诺。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.27 为准：产品只有一条以 `CaptureGroup` 为对象的业务路径，Local Upload 和 External Ingest 都通过 `CameraStream / ClipAsset` 进入事件工作台，`N=1` 只是一路视图；`training-data.v3` 是 CaptureGroup eligibility / provenance event manifest，独立的 `hand-landmarks.v1` 是按当前启用且可用 CameraStream 生成的 MediaPipe detection evidence CSV，不依赖人工质量、Annotation、Review 或 Cleaning。V1.26/V1.25 的事件事实、人工质量、单组任务与 Revision、人工 Review、确定性 Cleaning、权限、审计和 provenance 中仍适用的部分由 V1.27 继承，但旧单视频工作流和 `training-data.v2` 不再是当前产品承诺。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
 
 ## 当前规范
 

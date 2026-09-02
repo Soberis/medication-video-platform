@@ -13,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.27 当前不部署 Dataset Export Worker；最小 `training-data.v3` CaptureGroup eligibility/provenance event manifest 与 `hand-landmarks.v1` Primary View feature CSV preview/download 均在 Core API 内以只读事务完成，不构成独立 Worker 工作负载。
+- V1.27 当前不部署 Dataset Export Worker；最小 `training-data.v3` CaptureGroup eligibility/provenance event manifest 与独立的 `hand-landmarks.v1` current CameraStream detection evidence CSV preview/download 均在 Core API 内以只读事务完成，不构成独立 Worker 工作负载。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载

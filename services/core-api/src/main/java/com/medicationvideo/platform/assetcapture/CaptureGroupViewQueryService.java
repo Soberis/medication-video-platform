@@ -48,6 +48,15 @@ public class CaptureGroupViewQueryService {
 		return project(session, false);
 	}
 
+	@Transactional(readOnly = true)
+	public List<CaptureGroupFacts> findAll(UUID projectId) {
+		return this.sessionRepository
+			.findAllByProjectIdAndCaptureGroupWorkflowTrueOrderByCreatedAtDescCaptureSessionIdDesc(projectId)
+			.stream()
+			.map(session -> project(session, false))
+			.toList();
+	}
+
 	@Transactional
 	public CaptureGroupFacts lockAndGet(UUID projectId, UUID captureGroupId) {
 		var session = this.sessionRepository.findForGroupView(captureGroupId, projectId)
@@ -83,14 +92,16 @@ public class CaptureGroupViewQueryService {
 			Map<UUID, ClipAsset> assetsById) {
 		if (stream == null) {
 			return new CaptureGroupView(null, null, member.getCameraChannelId(), member.getCameraIndex() + 1,
-					member.getCameraRole(), member.getMountPosition(), "MISSING", null, 0, 0, false, "UNKNOWN", null);
+					member.getCameraRole(), member.getMountPosition(), "MISSING", null, 0, 0, false, "UNKNOWN", null,
+					member.isEnabledForHandDetection());
 		}
 		var asset = assetsById.get(stream.getClipAssetId());
 		return new CaptureGroupView(stream.getCameraStreamId(), stream.getClipAssetId(), stream.getCameraChannelId(),
 				member.getCameraIndex() + 1, member.getCameraRole(), member.getMountPosition(),
 				stream.getStreamStatus().name(), stream.getQualityStatus().name(), stream.getVersion(),
 				asset == null ? 0 : asset.getVersion(), asset != null && !asset.isDeleted(),
-				stream.getDeclaredSyncStatus().name(), asset == null ? null : asset.getSha256());
+				stream.getDeclaredSyncStatus().name(), asset == null ? null : asset.getSha256(),
+				member.isEnabledForHandDetection());
 	}
 
 	private static AssetCatalogQueryException groupNotFound() {
@@ -109,20 +120,30 @@ public class CaptureGroupViewQueryService {
 	public record CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
 			String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
 			long streamVersion, long clipAssetVersion, boolean assetAvailable, String declaredSyncStatus,
-			String clipAssetSha256) {
+			String clipAssetSha256, boolean enabledForHandDetection) {
+
+		public CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
+				String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
+				long streamVersion, long clipAssetVersion, boolean assetAvailable, String declaredSyncStatus,
+				String clipAssetSha256) {
+			this(cameraStreamId, clipAssetId, cameraChannelId, cameraNumber, cameraRole, mountPosition, mediaStatus,
+					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, declaredSyncStatus,
+					clipAssetSha256, true);
+		}
 
 		public CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
 				String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
 				long streamVersion, long clipAssetVersion, boolean assetAvailable, String declaredSyncStatus) {
 			this(cameraStreamId, clipAssetId, cameraChannelId, cameraNumber, cameraRole, mountPosition, mediaStatus,
-					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, declaredSyncStatus, null);
+					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, declaredSyncStatus, null,
+					true);
 		}
 
 		public CaptureGroupView(UUID cameraStreamId, UUID clipAssetId, UUID cameraChannelId, int cameraNumber,
 				String cameraRole, String mountPosition, String mediaStatus, String technicalQualityStatus,
 				long streamVersion, long clipAssetVersion, boolean assetAvailable) {
 			this(cameraStreamId, clipAssetId, cameraChannelId, cameraNumber, cameraRole, mountPosition, mediaStatus,
-					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, "UNKNOWN", null);
+					technicalQualityStatus, streamVersion, clipAssetVersion, assetAvailable, "UNKNOWN", null, true);
 		}
 
 		public boolean present() {

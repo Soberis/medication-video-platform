@@ -10,13 +10,17 @@ describe('MediaPipe hand landmark export API', () => {
   it('reads the server-owned hand-landmarks.v1 preview', async () => {
     const preview = {
       schema_version: 'hand-landmarks.v1',
-      eligible_event_count: 2,
-      events_with_landmarks: 1,
+      hand_detection_view_count: 3,
+      completed_view_count: 1,
+      views_with_hand: 1,
       sample_count: 12,
-      events_without_landmarks: 1,
+      no_job_view_count: 0,
+      queued_view_count: 0,
+      running_view_count: 1,
+      failed_view_count: 0,
+      no_hand_view_count: 1,
       file_name: 'mediapipe_hand_landmarks_v1.csv',
-      content_type: 'text/csv; charset=UTF-8',
-      reason_counts: { MEDIAPIPE_NOT_FINISHED: 1 },
+      media_type: 'text/csv; charset=UTF-8',
     }
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview))
     vi.stubGlobal('fetch', fetchMock)
@@ -63,7 +67,7 @@ describe('MediaPipe hand landmark export API', () => {
 
     await expect(getHandLandmarkExportPreview(projectId)).rejects.toMatchObject({
       errorCode: 'PROJECT_ACCESS_DENIED',
-      message: '当前身份没有项目手部训练数据导出的权限。',
+      message: '当前身份没有项目手部检测关键点导出的权限。',
     })
   })
 })

@@ -57,9 +57,10 @@ tags:
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
   - name: Training Data Export
     description: >-
-      Explicit, synchronous, read-only P0 exports. training-data.v3 remains the CaptureGroup event manifest,
-      while hand-landmarks.v1 is the MediaPipe frame/hand CSV joined to approved Primary View action labels.
-      Both preserve the current administrator and synthetic-data security boundary.
+      Explicit, synchronous, read-only P0 exports. training-data.v3 remains the CaptureGroup eligibility and
+      provenance event manifest, while hand-landmarks.v1 is an independent current MediaPipe frame/hand
+      evidence CSV. The landmark export never imports human annotation, Review or Cleaning decisions and
+      preserves the current administrator and synthetic-data security boundary.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -77,20 +78,23 @@ paths:
       operationId: getHandLandmarkTrainingExportPreview
       tags:
         - Training Data Export
-      summary: Preview MediaPipe hand-landmark training samples
+      summary: Preview current MediaPipe hand-landmark detection samples
       description: >-
-        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. The event eligibility gate is the
-        current V1.27 CaptureGroup projection: valid current source media, one current eligible
-        AnnotationRevision, APPROVED Review and PASS CaptureGroup Cleaning. Only the approved Primary View
-        timebase is used for action-label association. Events without finished or valid Primary View
-        MediaPipe candidates remain eligible events but produce zero landmark samples.
+        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. The preview enumerates current enabled
+        and available camera streams for every current CaptureGroup and reads the current MediaPipe job and
+        CandidateAnnotation evidence for each ClipAsset. It has no dependency on View or Group Quality,
+        AnnotationRevision, Review, Cleaning or training-data.v3 eligibility. Only a current
+        SUCCEEDED_WITH_CANDIDATES job contributes rows; NO_JOB, QUEUED, RUNNING, FAILED and
+        SUCCEEDED_NO_HAND views contribute no rows and are represented by the corresponding detection-state
+        counts (`no_job_view_count`, `queued_view_count`, `running_view_count`, `failed_view_count` and
+        `no_hand_view_count`).
       security:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Current hand-landmark training export preview.
+          description: Current MediaPipe hand-landmark detection export preview.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -113,20 +117,27 @@ paths:
       operationId: downloadHandLandmarkTrainingData
       tags:
         - Training Data Export
-      summary: Download MediaPipe hand-landmark training samples as CSV
+      summary: Download current MediaPipe hand-landmark detection samples as CSV
       description: >-
-        Returns one row per valid 21-point MediaPipe hand candidate whose source-local timestamp is inside
-        an approved Primary View AnnotationRevision interval. Human action labels are never inferred from
-        MediaPipe. Supporting camera views are not assigned Primary View timestamps without a verified
-        mapping. The response contains no MP4 bytes and is restricted to the synthetic data profile until
-        a non-synthetic authorization model is defined.
+        Returns one row per valid 21-point MediaPipe hand candidate from the current
+        SUCCEEDED_WITH_CANDIDATES job for every current enabled and available camera stream. The export
+        preserves each ClipAsset's source-local frame timestamp and camera stream identity; it does not
+        select a Primary View or align timestamps across cameras, and contains no human labels, annotation,
+        Review or Cleaning fields. The response contains no MP4 bytes and is restricted to the synthetic
+        data profile until a non-synthetic authorization model is defined. CSV columns are emitted in this
+        exact order: capture_group_id, camera_stream_id, camera_number, clip_asset_id, clip_asset_sha256,
+        candidate_annotation_id, frame_timestamp_ms, hand_index, handedness, handedness_score, image_width,
+        image_height, valid_landmark_count, bounding_box_x, bounding_box_y, bounding_box_width,
+        bounding_box_height, landmark_00_x, landmark_00_y, landmark_00_z through landmark_20_x,
+        landmark_20_y, landmark_20_z, ai_job_id, ai_job_attempt_id, attempt, algorithm_key,
+        algorithm_version, model_sha256, profile_sha256, input_sha256, result_sha256.
       security:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
         "200":
-          description: Deterministic hand-landmark CSV.
+          description: Deterministic current MediaPipe hand-landmark detection CSV; no MP4 bytes.
           headers:
             Cache-Control:
               $ref: "#/components/headers/NoStore"
@@ -143,8 +154,9 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422":
           description: >-
-            Current CaptureGroup eligibility, frozen AI evidence or selected CandidateAnnotation data
-            cannot be proven safely.
+            Current CaptureGroup camera-stream or MediaPipe candidate evidence cannot be proven safely,
+            including a missing or changed current ClipAsset, a source digest mismatch, or malformed
+            candidate provenance.
           content:
             application/problem+json:
               schema:
@@ -7020,22 +7032,30 @@ components:
       additionalProperties: false
       required:
         - schema_version
-        - eligible_event_count
-        - events_with_landmarks
+        - hand_detection_view_count
+        - completed_view_count
+        - views_with_hand
         - sample_count
-        - events_without_landmarks
+        - no_job_view_count
+        - queued_view_count
+        - running_view_count
+        - failed_view_count
+        - no_hand_view_count
         - file_name
-        - content_type
-        - reason_counts
+        - media_type
       properties:
         schema_version:
           type: string
           const: hand-landmarks.v1
-        eligible_event_count:
+        hand_detection_view_count:
           type: integer
           format: int64
           minimum: 0
-        events_with_landmarks:
+        completed_view_count:
+          type: integer
+          format: int64
+          minimum: 0
+        views_with_hand:
           type: integer
           format: int64
           minimum: 0
@@ -7043,28 +7063,32 @@ components:
           type: integer
           format: int64
           minimum: 0
-        events_without_landmarks:
+        no_job_view_count:
+          type: integer
+          format: int64
+          minimum: 0
+        queued_view_count:
+          type: integer
+          format: int64
+          minimum: 0
+        running_view_count:
+          type: integer
+          format: int64
+          minimum: 0
+        failed_view_count:
+          type: integer
+          format: int64
+          minimum: 0
+        no_hand_view_count:
           type: integer
           format: int64
           minimum: 0
         file_name:
           type: string
           const: mediapipe_hand_landmarks_v1.csv
-        content_type:
+        media_type:
           type: string
           const: text/csv; charset=UTF-8
-        reason_counts:
-          type: object
-          additionalProperties:
-            type: integer
-            format: int64
-            minimum: 0
-          propertyNames:
-            enum:
-              - MEDIAPIPE_NOT_FINISHED
-              - NO_HAND_DETECTED
-              - MEDIAPIPE_FAILED
-              - NO_VALID_21_POINT_SAMPLE
     TrainingDataV3ExportPreview:
       type: object
       additionalProperties: false

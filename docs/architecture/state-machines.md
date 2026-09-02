@@ -469,8 +469,9 @@ DatasetExportAvailableV1
 ```
 
 事件名称只是设计候选，只有进入 `contracts/events/` 并通过兼容性测试后才是正式契约。当前 P0 的最小
-`training-data.v3` CaptureGroup eligibility/provenance manifest 与 `hand-landmarks.v1` feature CSV
-preview/download 都是同步只读操作；它们不改变业务状态，因此不新增 DatasetFrozen 或 DatasetExportAvailable 事件。
+`training-data.v3` CaptureGroup eligibility/provenance manifest 与独立的 `hand-landmarks.v1` current
+MediaPipe detection evidence CSV preview/download 都是同步只读操作；它们不改变业务状态，因此不新增
+DatasetFrozen 或 DatasetExportAvailable 事件。前者受 Review/Cleaning eligibility 约束，后者不依赖人工工作流。
 
 每个状态机至少测试：
 

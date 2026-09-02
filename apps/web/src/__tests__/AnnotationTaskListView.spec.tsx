@@ -160,8 +160,9 @@ describe('annotation task list view', () => {
       primary_clip_asset_id: '50000000-0000-4000-8000-000000000002',
     }
     const preview = handLandmarkPreview({
-      eligible_event_count: 1,
-      events_with_landmarks: 1,
+      hand_detection_view_count: 1,
+      completed_view_count: 1,
+      views_with_hand: 1,
       sample_count: 2,
     })
     const fetchMock = stubHandLandmarkData([completedTask, pendingTask], labelSchema, preview)
@@ -575,16 +576,11 @@ describe('annotation task list view', () => {
 
   it('previews MediaPipe hand landmark samples and shows server-owned counts', async () => {
     const preview = handLandmarkPreview({
-      eligible_event_count: 2,
-      events_with_landmarks: 1,
+      hand_detection_view_count: 2,
+      completed_view_count: 1,
+      views_with_hand: 1,
       sample_count: 8421,
-      events_without_landmarks: 1,
-      reason_counts: {
-        MEDIAPIPE_NOT_FINISHED: 1,
-        NO_HAND_DETECTED: 0,
-        MEDIAPIPE_FAILED: 0,
-        NO_VALID_21_POINT_SAMPLE: 0,
-      },
+      running_view_count: 1,
     })
     const fetchMock = stubHandLandmarkData([assignedTask], labelSchema, preview)
     const user = userEvent.setup()
@@ -601,17 +597,17 @@ describe('annotation task list view', () => {
     expect(dialog).toHaveTextContent('手部关键点导出预览')
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).not.toBeDisabled()
     const productSummary = within(dialog).getByRole('region', {
-      name: '手部关键点导出摘要',
+      name: '手部检测关键点导出摘要',
     })
-    expect(productSummary).toHaveTextContent('符合资格的事件')
+    expect(productSummary).toHaveTextContent('检测视图')
     expect(productSummary).toHaveTextContent('2 个')
-    expect(productSummary).toHaveTextContent('可导出手部样本')
+    expect(productSummary).toHaveTextContent('可导出样本')
     expect(productSummary).toHaveTextContent('8,421')
     expect(
-      screen.getByText('1 个符合资格的事件尚未产生可导出样本；本次仍可导出已有样本。'),
+      screen.getByText(
+        '仍有视图尚未开始、已排队、处于运行中、检测失败或未检测到手部；本次仍可导出已有样本。',
+      ),
     ).toBeInTheDocument()
-    await user.click(within(dialog).getByText('查看未产生样本的原因'))
-    expect(screen.getByText('手部检测尚未完成')).toBeInTheDocument()
     expect(dialog).not.toHaveTextContent('training-data.v3')
     expect(dialog).not.toHaveTextContent('训练资格不通过')
   })
@@ -684,11 +680,13 @@ describe('annotation task list view', () => {
       [assignedTask],
       labelSchema,
       handLandmarkPreview({
-        eligible_event_count: 1,
-        events_with_landmarks: 0,
+        hand_detection_view_count: 1,
+        completed_view_count: 0,
+        views_with_hand: 0,
         sample_count: 0,
-        events_without_landmarks: 1,
-        reason_counts: { MEDIAPIPE_NOT_FINISHED: 1 },
+        no_job_view_count: 0,
+        queued_view_count: 0,
+        running_view_count: 1,
       }),
     )
     const user = userEvent.setup()
@@ -697,24 +695,27 @@ describe('annotation task list view', () => {
     await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
     expect(
-      within(dialog).queryByRole('region', { name: '手部关键点导出摘要' }),
-    ).not.toBeInTheDocument()
+      within(dialog).getByRole('region', { name: '手部检测关键点导出摘要' }),
+    ).toBeInTheDocument()
     expect(dialog).toHaveTextContent('暂无可导出的手部关键点')
     expect(dialog).toHaveTextContent(
-      '1 个事件的手部检测尚未完成。检测完成后，这里会显示可导出的样本数量。',
+      '1 个视图的手部检测仍在运行。检测完成后，这里会显示可导出的样本数量。',
     )
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
   })
 
-  it('shows a no-sample explanation when no business-complete event has usable landmarks', async () => {
+  it('shows a no-sample explanation when there are no enabled current views', async () => {
     stubHandLandmarkData(
       [assignedTask],
       labelSchema,
       handLandmarkPreview({
-        eligible_event_count: 0,
-        events_with_landmarks: 0,
+        hand_detection_view_count: 0,
+        completed_view_count: 0,
+        views_with_hand: 0,
         sample_count: 0,
-        events_without_landmarks: 0,
+        running_view_count: 0,
+        failed_view_count: 0,
+        no_hand_view_count: 0,
       }),
     )
     const user = userEvent.setup()
@@ -723,27 +724,22 @@ describe('annotation task list view', () => {
     await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('暂无可导出的手部关键点')
-    expect(dialog).toHaveTextContent(
-      '当前没有符合导出资格的配药事件。完成事件质量、标注复核和训练资格检查后，这里会显示可导出的样本数量。',
-    )
+    expect(dialog).toHaveTextContent('当前没有启用且可用的 CameraStream 可供手部检测关键点导出。')
     expect(within(dialog).getByRole('button', { name: '导出 CSV' })).toBeDisabled()
   })
 
-  it('maps all server-provided MediaPipe readiness reasons to product language', async () => {
+  it('shows current MediaPipe detection state counts in product language', async () => {
     stubHandLandmarkData(
       [assignedTask],
       labelSchema,
       handLandmarkPreview({
-        eligible_event_count: 4,
-        events_with_landmarks: 0,
-        sample_count: 0,
-        events_without_landmarks: 4,
-        reason_counts: {
-          MEDIAPIPE_NOT_FINISHED: 1,
-          NO_HAND_DETECTED: 1,
-          MEDIAPIPE_FAILED: 1,
-          NO_VALID_21_POINT_SAMPLE: 1,
-        },
+        hand_detection_view_count: 4,
+        completed_view_count: 3,
+        views_with_hand: 1,
+        sample_count: 1,
+        running_view_count: 1,
+        failed_view_count: 1,
+        no_hand_view_count: 1,
       }),
     )
     const user = userEvent.setup()
@@ -751,11 +747,17 @@ describe('annotation task list view', () => {
 
     await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByText('查看未产生样本的原因'))
-    expect(dialog).toHaveTextContent('手部检测尚未完成')
-    expect(dialog).toHaveTextContent('未检测到手部关键点')
-    expect(dialog).toHaveTextContent('手部检测失败')
-    expect(dialog).toHaveTextContent('没有完整的 21 点样本')
+    const productSummary = within(dialog).getByRole('region', {
+      name: '手部检测关键点导出摘要',
+    })
+    expect(productSummary).toHaveTextContent('检测视图')
+    expect(productSummary).toHaveTextContent('4 个')
+    expect(productSummary).toHaveTextContent('检测运行中')
+    expect(productSummary).toHaveTextContent('检测失败')
+    expect(productSummary).toHaveTextContent('未检测到手部')
+    expect(dialog).toHaveTextContent(
+      '仍有视图尚未开始、已排队、处于运行中、检测失败或未检测到手部；本次仍可导出已有样本。',
+    )
   })
 
   it('shows a preview failure without presenting an export action', async () => {
@@ -777,7 +779,7 @@ describe('annotation task list view', () => {
     renderView()
 
     await user.click(await screen.findByRole('button', { name: '预览手部关键点导出' }))
-    expect(await screen.findByText('当前环境暂未开放手部训练数据导出。')).toBeInTheDocument()
+    expect(await screen.findByText('当前环境暂未开放手部检测关键点导出。')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -890,12 +892,17 @@ function handLandmarkPreview(
 ) {
   return {
     schema_version: 'hand-landmarks.v1' as const,
-    eligible_event_count: 1,
-    events_with_landmarks: 1,
+    hand_detection_view_count: 1,
+    completed_view_count: 1,
+    views_with_hand: 1,
     sample_count: 1,
-    events_without_landmarks: 0,
+    no_job_view_count: 0,
+    queued_view_count: 0,
+    running_view_count: 0,
+    failed_view_count: 0,
+    no_hand_view_count: 0,
     file_name: 'mediapipe_hand_landmarks_v1.csv',
-    content_type: 'text/csv; charset=UTF-8',
+    media_type: 'text/csv; charset=UTF-8',
     ...overrides,
   }
 }

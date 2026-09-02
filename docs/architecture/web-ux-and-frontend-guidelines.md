@@ -277,9 +277,10 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
   准入条件，但视频资产未被删除。
 - post-clean `PASS` 的界面文案只能是“当前规则检查通过”，不得写成“已进入训练集”或自动跳转
   `/datasets`。V1.27 允许管理员在标注任务入口显式预览并下载当前 `training-data.v3` CaptureGroup event manifest
-  和 `hand-landmarks.v1` Primary View feature CSV；界面可以展示实际下载结果，但不得写成已训练。历史
-  `training-data.v2`、DatasetVersion UI、复杂 Export 和自动导出不属于当前产品。尚无实际 training consumer
-  读取 `hand-landmarks.v1` 的证据，不能宣称真实模型训练成功。
+  和独立的 `hand-landmarks.v1` current CameraStream detection evidence CSV；后者不依赖 View/Group Quality、
+  Annotation、Review 或 Cleaning。界面可以展示实际下载结果，但不得写成已训练。历史 `training-data.v2`、
+  DatasetVersion UI、复杂 Export 和自动导出不属于当前产品。尚无实际 training consumer 读取
+  `hand-landmarks.v1` 的证据，不能宣称真实模型训练成功。
 - 管理员可对已完成且 `APPROVED` 的 revision 点击“重新核对清洗”。服务端按当前人工质量版本、视频事实和
   不可变标注文档决定是否产生新 run/result；输入未变化时返回既有结果，前端不得伪造新结果或把该操作写成
   “已进入训练集”。

@@ -24,7 +24,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Read-only candidate provenance exposed to the CaptureGroup annotation review boundary.
+ * Read-only candidate provenance exposed to downstream CaptureGroup workflows.
  *
  * <p>
  * Candidate evidence is advisory only. This query proves the input and execution identity
@@ -191,22 +191,24 @@ public class CandidateEvidenceQueryService {
 		var candidateSetDigest = candidateSetDigest(candidates);
 		return switch (job.status()) {
 			case "QUEUED" -> candidateCount == 0
-					? validJob(job, asset, EXECUTION_STATUS_QUEUED, null, candidateCount, null, null, null) : invalid(
-							requestedClipAssetId, asset.sha256(), job, "CANDIDATES_WITH_NON_TERMINAL_JOB", candidates);
+					? validJob(job, asset, EXECUTION_STATUS_QUEUED, null, candidateCount, null, null, null, candidates)
+					: invalid(requestedClipAssetId, asset.sha256(), job, "CANDIDATES_WITH_NON_TERMINAL_JOB",
+							candidates);
 			case "RUNNING" -> candidateCount == 0
-					? validJob(job, asset, EXECUTION_STATUS_RUNNING, null, candidateCount, null, null, null) : invalid(
-							requestedClipAssetId, asset.sha256(), job, "CANDIDATES_WITH_NON_TERMINAL_JOB", candidates);
+					? validJob(job, asset, EXECUTION_STATUS_RUNNING, null, candidateCount, null, null, null, candidates)
+					: invalid(requestedClipAssetId, asset.sha256(), job, "CANDIDATES_WITH_NON_TERMINAL_JOB",
+							candidates);
 			case "FAILED" -> candidateCount == 0
 					? validJob(job, asset, EXECUTION_STATUS_FAILED, job.failureReason(), candidateCount, null, null,
-							null)
+							null, candidates)
 					: invalid(requestedClipAssetId, asset.sha256(), job, "CANDIDATES_ON_FAILED_JOB", candidates);
-			case "SUCCEEDED" -> successfulEvidence(job, asset, candidateCount, candidateSetDigest);
+			case "SUCCEEDED" -> successfulEvidence(job, asset, candidateCount, candidateSetDigest, candidates);
 			default -> invalid(requestedClipAssetId, asset.sha256(), job, "JOB_STATUS_INVALID", candidates);
 		};
 	}
 
 	private CandidateEvidence successfulEvidence(JobFact job, ClipAssetFact asset, int candidateCount,
-			String candidateSetDigest) {
+			String candidateSetDigest, List<CandidateAnnotationSnapshot> candidates) {
 		var summary = runSummary(job);
 		if (!Objects.equals(job.handResult(), job.attemptHandResult())) {
 			return invalid(job.clipAssetId(), asset.sha256(), job, "HAND_RESULT_MISMATCH");
@@ -218,23 +220,24 @@ public class CandidateEvidenceQueryService {
 		return switch (job.handResult()) {
 			case "NO_HAND_DETECTED" -> candidateCount == 0
 					? validJob(job, asset, EXECUTION_STATUS_SUCCEEDED_NO_HAND, null, candidateCount, null, null,
-							candidateSetDigest)
+							candidateSetDigest, candidates)
 					: invalid(job.clipAssetId(), asset.sha256(), job, "NO_HAND_WITH_CANDIDATES");
 			case "HAND_DETECTED" -> candidateCount > 0
 					? validJob(job, asset, EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES, null, candidateCount,
-							job.firstTimestampMs(), job.lastTimestampMs(), candidateSetDigest)
+							job.firstTimestampMs(), job.lastTimestampMs(), candidateSetDigest, candidates)
 					: invalid(job.clipAssetId(), asset.sha256(), job, "HAND_DETECTED_WITHOUT_CANDIDATES");
 			default -> invalid(job.clipAssetId(), asset.sha256(), job, "SUCCESS_HAND_RESULT_INVALID");
 		};
 	}
 
 	private CandidateEvidence validJob(JobFact job, ClipAssetFact asset, String executionStatus, String failureReason,
-			long candidateCount, Long firstTimestampMs, Long lastTimestampMs, String candidateSetDigest) {
+			long candidateCount, Long firstTimestampMs, Long lastTimestampMs, String candidateSetDigest,
+			List<CandidateAnnotationSnapshot> candidates) {
 		return new CandidateEvidence(job.clipAssetId(), asset.sha256(), true, executionStatus, failureReason,
 				job.aiJobId(), job.inputSha256(), job.algorithmKey(), job.algorithmVersion(), job.modelSha256(),
 				job.profileSha256(), job.attemptId(), job.attempt(), job.messageId(), job.resultSha256(),
 				job.handResult(), candidateCount, firstTimestampMs, lastTimestampMs, candidateSetDigest,
-				runSummary(job));
+				runSummary(job), candidates);
 	}
 
 	private CandidateEvidence invalid(UUID clipAssetId, String clipAssetSha256, JobFact job, String reason) {
@@ -597,7 +600,24 @@ public class CandidateEvidenceQueryService {
 			String executionStatus, String provenanceFailureReason, UUID aiJobId, String inputSha256,
 			String algorithmKey, String algorithmVersion, String modelSha256, String profileSha256, UUID aiJobAttemptId,
 			Integer attempt, UUID messageId, String resultSha256, String handResult, long candidateCount,
-			Long firstTimestampMs, Long lastTimestampMs, String candidateSetDigest, RunSummary runSummary) {
+			Long firstTimestampMs, Long lastTimestampMs, String candidateSetDigest, RunSummary runSummary,
+			List<CandidateAnnotationSnapshot> candidates) {
+
+		public CandidateEvidence {
+			candidates = candidates == null ? List.of() : List.copyOf(candidates);
+		}
+
+		public CandidateEvidence(UUID clipAssetId, String clipAssetSha256, boolean provenanceValid,
+				String executionStatus, String provenanceFailureReason, UUID aiJobId, String inputSha256,
+				String algorithmKey, String algorithmVersion, String modelSha256, String profileSha256,
+				UUID aiJobAttemptId, Integer attempt, UUID messageId, String resultSha256, String handResult,
+				long candidateCount, Long firstTimestampMs, Long lastTimestampMs, String candidateSetDigest,
+				RunSummary runSummary) {
+			this(clipAssetId, clipAssetSha256, provenanceValid, executionStatus, provenanceFailureReason, aiJobId,
+					inputSha256, algorithmKey, algorithmVersion, modelSha256, profileSha256, aiJobAttemptId, attempt,
+					messageId, resultSha256, handResult, candidateCount, firstTimestampMs, lastTimestampMs,
+					candidateSetDigest, runSummary, List.of());
+		}
 
 		public CandidateEvidence(UUID clipAssetId, String clipAssetSha256, boolean provenanceValid,
 				String executionStatus, String provenanceFailureReason, UUID aiJobId, String inputSha256,
@@ -607,7 +627,7 @@ public class CandidateEvidenceQueryService {
 			this(clipAssetId, clipAssetSha256, provenanceValid, executionStatus, provenanceFailureReason, aiJobId,
 					inputSha256, algorithmKey, algorithmVersion, modelSha256, profileSha256, aiJobAttemptId, attempt,
 					messageId, resultSha256, handResult, candidateCount, firstTimestampMs, lastTimestampMs,
-					candidateSetDigest, null);
+					candidateSetDigest, null, List.of());
 		}
 	}
 

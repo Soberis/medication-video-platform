@@ -1,7 +1,7 @@
 # 异步作业协议
 
 > 文档状态：P0 详细设计（评审稿）  
-> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理和 P0 AI hand-pose 作业；当前 V1.27 `training-data.v3` CaptureGroup 资格/来源 manifest 与 `hand-landmarks.v1` feature export 均为 Core API 内的同步只读导出操作
+> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理和 P0 AI hand-pose 作业；当前 V1.27 `training-data.v3` CaptureGroup 资格/来源 manifest 与独立的 `hand-landmarks.v1` current MediaPipe detection evidence export 均为 Core API 内的同步只读导出操作
 > 最后更新：2026-09-01
 
 当前需求口径以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和

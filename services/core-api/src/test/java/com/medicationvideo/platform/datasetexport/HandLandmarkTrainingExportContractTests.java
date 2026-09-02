@@ -2,6 +2,7 @@ package com.medicationvideo.platform.datasetexport;
 
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -74,11 +75,10 @@ class HandLandmarkTrainingExportContractTests {
 	}
 
 	@Test
-	void approvedPrimaryCandidateProducesOneCsvRowAndCompleteSchema() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
+	void exportsCurrentCandidatesWithoutAnnotationReviewOrCleaning() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
 		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
 				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		var revisionId = approveRevision(group, 800, "single-sample");
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
@@ -86,155 +86,177 @@ class HandLandmarkTrainingExportContractTests {
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.schema_version").value("hand-landmarks.v1"))
-			.andExpect(jsonPath("$.eligible_event_count").value(1))
-			.andExpect(jsonPath("$.events_with_landmarks").value(1))
+			.andExpect(jsonPath("$.hand_detection_view_count").value(1))
+			.andExpect(jsonPath("$.completed_view_count").value(1))
+			.andExpect(jsonPath("$.views_with_hand").value(1))
 			.andExpect(jsonPath("$.sample_count").value(1))
-			.andExpect(jsonPath("$.events_without_landmarks").value(0))
+			.andExpect(jsonPath("$.no_job_view_count").value(0))
+			.andExpect(jsonPath("$.queued_view_count").value(0))
+			.andExpect(jsonPath("$.running_view_count").value(0))
+			.andExpect(jsonPath("$.failed_view_count").value(0))
+			.andExpect(jsonPath("$.no_hand_view_count").value(0))
 			.andExpect(jsonPath("$.file_name").value("mediapipe_hand_landmarks_v1.csv"))
-			.andExpect(jsonPath("$.content_type").value("text/csv; charset=UTF-8"))
-			.andExpect(jsonPath("$.reason_counts.NO_VALID_21_POINT_SAMPLE").value(0));
+			.andExpect(jsonPath("$.media_type").value("text/csv; charset=UTF-8"));
 
-		var csv = download(PROJECT_ID);
-		var lines = csv.split("\\R");
-		assertEquals(HandLandmarkTrainingExportService.CSV_COLUMNS, List.of(lines[0].split(",", -1)));
-		var values = lines[1].split(",", -1);
+		var lines = download(PROJECT_ID).lines().toList();
+		assertEquals(HandLandmarkTrainingExportService.CSV_COLUMNS, List.of(lines.getFirst().split(",", -1)));
+		var values = lines.get(1).split(",", -1);
 		assertEquals(HandLandmarkTrainingExportService.CSV_COLUMNS.size(), values.length);
 		assertEquals(group.captureGroupId().toString(), values[0]);
-		assertEquals(revisionId.toString(), values[1]);
-		assertEquals(group.clipAssetIds().getFirst().toString(), values[2]);
-		assertEquals(SHA256, values[3]);
-		assertEquals("1", values[4]);
-		assertEquals("520", values[5]);
-		assertEquals("0", values[6]);
-		assertEquals("LEFT", values[7]);
-		assertEquals("0.91", values[8]);
-		assertEquals("prepare_workspace", values[12]);
-		assertEquals("0", values[13]);
-		assertEquals("800", values[14]);
-		assertEquals(ai.jobId().toString(), values[15]);
-		assertEquals(ai.attemptId().toString(), values[16]);
-		assertEquals("MEDIAPIPE_HAND_LANDMARKER", values[17]);
-		assertEquals("v1", values[18]);
-		assertEquals(MODEL_SHA256, values[19]);
-		assertEquals(PROFILE_SHA256, values[20]);
-		assertEquals("0.1", values[21]);
-		assertEquals("0.2", values[22]);
-		assertEquals("0.2", values[23]);
-		assertEquals("0.3", values[24]);
-		assertEquals("0.101", values[25]);
-		assertEquals("0.201", values[26]);
-		assertEquals("-0.01", values[27]);
+		assertEquals(group.cameraStreamIds().getFirst().toString(), values[1]);
+		assertEquals("1", values[2]);
+		assertEquals(group.clipAssetIds().getFirst().toString(), values[3]);
+		assertEquals(SHA256, values[4]);
+		assertEquals(candidateId(ai.jobId()).toString(), values[5]);
+		assertEquals("520", values[6]);
+		assertEquals("0", values[7]);
+		assertEquals("LEFT", values[8]);
+		assertEquals("0.91", values[9]);
+		assertEquals("1280", values[10]);
+		assertEquals("720", values[11]);
+		assertEquals("21", values[12]);
+		assertEquals("0.1", values[13]);
+		assertEquals("0.2", values[14]);
+		assertEquals("0.2", values[15]);
+		assertEquals("0.3", values[16]);
+		assertEquals("0.101", values[17]);
+		assertEquals("0.201", values[18]);
+		assertEquals("-0.01", values[19]);
+		assertEquals(ai.jobId().toString(), values[80]);
+		assertEquals(ai.attemptId().toString(), values[81]);
+		assertEquals("1", values[82]);
+		assertEquals("MEDIAPIPE_HAND_LANDMARKER", values[83]);
+		assertEquals("v1", values[84]);
+		assertEquals(MODEL_SHA256, values[85]);
+		assertEquals(PROFILE_SHA256, values[86]);
+		assertEquals(SHA256, values[87]);
+		assertEquals(RESULT_SHA256, values[88]);
+		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("annotation_revision_id"));
+		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("action_label"));
+		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("segment_start_ms"));
 	}
 
 	@Test
-	void rowsAreOrderedByCaptureGroupTimestampAndHandIndex() throws Exception {
+	void currentSuccessIsExportedEvenWhenAnOldReviewSnapshotSaysRunning() throws Exception {
 		var group = createGroup(1, 1, "COMPLETE", 1);
-		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-				List.of(new CandidateSpec(520, 1, "RIGHT", "0.9400", 3), new CandidateSpec(100, 0, "LEFT", "0.9100", 1),
-						new CandidateSpec(520, 0, "LEFT", "0.9200", 2)));
-		approveRevision(group, 800, "ordered-samples");
+		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
+				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
+		var revisionId = approveRevision(group, 800, "stale-review");
+		this.jdbcTemplate.update("UPDATE annotation_review SET candidate_evidence = CAST(? AS JSONB) "
+				+ "WHERE annotation_revision_id = ?", "[{\"execution_status\":\"RUNNING\"}]", revisionId);
 
-		var lines = download(PROJECT_ID).split("\\R");
-		assertEquals("100", lines[1].split(",", -1)[5]);
-		assertEquals("0", lines[1].split(",", -1)[6]);
-		assertEquals("520", lines[2].split(",", -1)[5]);
-		assertEquals("0", lines[2].split(",", -1)[6]);
-		assertEquals("520", lines[3].split(",", -1)[5]);
-		assertEquals("1", lines[3].split(",", -1)[6]);
+		var lines = download(PROJECT_ID).lines().toList();
+		assertEquals(2, lines.size());
+		assertEquals(ai.jobId().toString(), lines.get(1).split(",", -1)[80]);
 	}
 
 	@Test
-	void candidateOutsideEveryApprovedIntervalIsNotExported() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-				List.of(new CandidateSpec(800, 0, "LEFT", "0.9100", 1)));
-		approveRevision(group, 800, "outside-interval");
+	void noJobAndQueuedViewsRemainPendingWithoutInvalidatingTheGroup() throws Exception {
+		var noJob = createGroup(1, 1, "COMPLETE", 0);
+		var queued = createGroup(1, 1, "COMPLETE", 0);
+		insertAiJob(queued.clipAssetIds().getFirst(), "QUEUED", "UNKNOWN", "QUEUED", null, List.of());
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.eligible_event_count").value(1))
-			.andExpect(jsonPath("$.events_with_landmarks").value(0))
+			.andExpect(jsonPath("$.hand_detection_view_count").value(2))
+			.andExpect(jsonPath("$.completed_view_count").value(0))
+			.andExpect(jsonPath("$.views_with_hand").value(0))
 			.andExpect(jsonPath("$.sample_count").value(0))
-			.andExpect(jsonPath("$.events_without_landmarks").value(1))
-			.andExpect(jsonPath("$.reason_counts.NO_VALID_21_POINT_SAMPLE").value(1));
+			.andExpect(jsonPath("$.no_job_view_count").value(1))
+			.andExpect(jsonPath("$.queued_view_count").value(1))
+			.andExpect(jsonPath("$.running_view_count").value(0))
+			.andExpect(jsonPath("$.failed_view_count").value(0))
+			.andExpect(jsonPath("$.no_hand_view_count").value(0));
+		assertEquals(1, download(PROJECT_ID).lines().count());
+		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT COUNT(*) FROM camera_stream WHERE clip_asset_id = ?",
+				Integer.class, noJob.clipAssetIds().getFirst()));
+	}
 
+	@Test
+	void runningViewIsCountedAndProducesNoRows() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
+		insertAiJob(group.clipAssetIds().getFirst(), "RUNNING", "UNKNOWN", "RUNNING", null, List.of());
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.hand_detection_view_count").value(1))
+			.andExpect(jsonPath("$.completed_view_count").value(0))
+			.andExpect(jsonPath("$.running_view_count").value(1))
+			.andExpect(jsonPath("$.failed_view_count").value(0))
+			.andExpect(jsonPath("$.no_hand_view_count").value(0))
+			.andExpect(jsonPath("$.sample_count").value(0));
 		assertEquals(1, download(PROJECT_ID).lines().count());
 	}
 
 	@Test
-	void onlyPrimaryViewCandidatesBecomeActionLabelledSamplesForNGreaterThanOne() throws Exception {
-		var group = createGroup(3, 3, "COMPLETE", 3);
-		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		insertAiJob(group.clipAssetIds().get(1), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-				List.of(new CandidateSpec(520, 0, "RIGHT", "0.9200", 2)));
-		approveRevision(group, 800, "primary-only");
+	void failedViewIsCountedWithoutInvalidatingTheGroup() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
+		insertAiJob(group.clipAssetIds().getFirst(), "FAILED", "UNKNOWN", "FAILED", "UNKNOWN", List.of());
 
-		var lines = download(PROJECT_ID).split("\\R");
-		assertEquals(1, lines.length - 1);
-		assertEquals(group.clipAssetIds().getFirst().toString(), lines[1].split(",", -1)[2]);
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.eligible_event_count").value(1))
-			.andExpect(jsonPath("$.sample_count").value(1));
+			.andExpect(jsonPath("$.completed_view_count").value(1))
+			.andExpect(jsonPath("$.failed_view_count").value(1))
+			.andExpect(jsonPath("$.no_hand_view_count").value(0))
+			.andExpect(jsonPath("$.sample_count").value(0));
 	}
 
 	@Test
-	void noJobNonTerminalFailedAndNoHandPrimaryEvidenceProduceNoSamplesWithReasons() throws Exception {
-		var noJob = createGroup(1, 1, "COMPLETE", 1);
-		approveRevision(noJob, 800, "no-job");
-
-		var running = createGroup(1, 1, "COMPLETE", 1);
-		insertAiJob(running.clipAssetIds().getFirst(), "RUNNING", "UNKNOWN", "RUNNING", null, List.of());
-		approveRevision(running, 800, "running");
-
-		var failed = createGroup(1, 1, "COMPLETE", 1);
-		insertAiJob(failed.clipAssetIds().getFirst(), "FAILED", "UNKNOWN", "FAILED", "UNKNOWN", List.of());
-		approveRevision(failed, 800, "failed");
-
-		var noHand = createGroup(1, 1, "COMPLETE", 1);
-		insertAiJob(noHand.clipAssetIds().getFirst(), "SUCCEEDED", "NO_HAND_DETECTED", "SUCCEEDED", "NO_HAND_DETECTED",
+	void successfulNoHandViewIsCountedWithoutInvalidatingTheGroup() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
+		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "NO_HAND_DETECTED", "SUCCEEDED", "NO_HAND_DETECTED",
 				List.of());
-		approveRevision(noHand, 800, "no-hand");
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.eligible_event_count").value(4))
-			.andExpect(jsonPath("$.events_with_landmarks").value(0))
-			.andExpect(jsonPath("$.sample_count").value(0))
-			.andExpect(jsonPath("$.events_without_landmarks").value(4))
-			.andExpect(jsonPath("$.reason_counts.MEDIAPIPE_NOT_FINISHED").value(2))
-			.andExpect(jsonPath("$.reason_counts.MEDIAPIPE_FAILED").value(1))
-			.andExpect(jsonPath("$.reason_counts.NO_HAND_DETECTED").value(1));
+			.andExpect(jsonPath("$.completed_view_count").value(1))
+			.andExpect(jsonPath("$.failed_view_count").value(0))
+			.andExpect(jsonPath("$.no_hand_view_count").value(1))
+			.andExpect(jsonPath("$.sample_count").value(0));
 	}
 
 	@Test
-	void liveAiInputMismatchBlocksStaleApprovedCandidateData() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
+	void exportsCandidatesFromEveryEnabledCameraInNGreaterThanOne() throws Exception {
+		var group = createGroup(2, 2, "COMPLETE", 0);
+		var first = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
 				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		approveRevision(group, 800, "input-mismatch");
-		this.jdbcTemplate.update("UPDATE ai_job SET input_sha256 = ? WHERE ai_job_id = ?", "f".repeat(64), ai.jobId());
+		var second = insertAiJob(group.clipAssetIds().get(1), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
+				"HAND_DETECTED", List.of(new CandidateSpec(420, 0, "RIGHT", "0.9200", 2)));
 
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_EVIDENCE_INVALID"));
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.hand_detection_view_count").value(2))
+			.andExpect(jsonPath("$.completed_view_count").value(2))
+			.andExpect(jsonPath("$.views_with_hand").value(2))
+			.andExpect(jsonPath("$.sample_count").value(2));
+
+		var lines = download(PROJECT_ID).lines().toList();
+		assertEquals(3, lines.size());
+		var firstValues = lines.get(1).split(",", -1);
+		var secondValues = lines.get(2).split(",", -1);
+		assertEquals("1", firstValues[2]);
+		assertEquals(group.cameraStreamIds().getFirst().toString(), firstValues[1]);
+		assertEquals(first.jobId().toString(), firstValues[80]);
+		assertEquals("2", secondValues[2]);
+		assertEquals(group.cameraStreamIds().get(1).toString(), secondValues[1]);
+		assertEquals(second.jobId().toString(), secondValues[80]);
 	}
 
 	@Test
 	void malformedTwentyPointCandidateFailsClosed() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
+		var group = createGroup(1, 1, "COMPLETE", 0);
 		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
 				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		approveRevision(group, 800, "malformed-candidate");
 		this.jdbcTemplate.update("UPDATE candidate_annotation SET valid_landmark_count = 20 WHERE ai_job_id = ?",
 				ai.jobId());
 
@@ -246,11 +268,24 @@ class HandLandmarkTrainingExportContractTests {
 	}
 
 	@Test
-	void sourceSoftDeletionKeepsTheSharedEventEligibilityGate() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
+	void aiInputShaMismatchFailsClosed() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
+		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
+				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
+		this.jdbcTemplate.update("UPDATE ai_job SET input_sha256 = ? WHERE ai_job_id = ?", "f".repeat(64), ai.jobId());
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_EVIDENCE_INVALID"));
+	}
+
+	@Test
+	void softDeletedCurrentAssetHasNoValidExport() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
 		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
 				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		approveRevision(group, 800, "soft-delete");
 		this.jdbcTemplate.update(
 				"UPDATE clip_asset SET deleted_at = ?, deleted_by = ?, delete_reason = ? WHERE clip_asset_id = ?",
 				Timestamp.from(BASE_TIME), ProjectMembershipTestData.ADMIN_ACTOR, "synthetic-test",
@@ -260,7 +295,7 @@ class HandLandmarkTrainingExportContractTests {
 			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("TRAINING_DATA_V3_ELIGIBILITY_INVALID"));
+			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_EVIDENCE_INVALID"));
 	}
 
 	@Test
@@ -329,6 +364,17 @@ class HandLandmarkTrainingExportContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"prepare_workspace\"}]}"
 					.formatted(endMs)));
+	}
+
+	private UUID taskId(GroupFixture group) {
+		return this.jdbcTemplate.queryForObject(
+				"SELECT annotation_task_id FROM annotation_task WHERE project_id = ? AND capture_group_id = ?",
+				UUID.class, PROJECT_ID, group.captureGroupId());
+	}
+
+	private UUID candidateId(UUID jobId) {
+		return this.jdbcTemplate.queryForObject(
+				"SELECT candidate_annotation_id FROM candidate_annotation WHERE ai_job_id = ?", UUID.class, jobId);
 	}
 
 	private AiFixture insertAiJob(UUID clipAssetId, String jobStatus, String jobHandResult, String attemptStatus,
@@ -499,16 +545,19 @@ class HandLandmarkTrainingExportContractTests {
 				VALUES (?, ?, ?, ?, 1, 'group-test-v1', ?, ?)
 				""", snapshotId, captureGroupId, cameraSetId, "snapshot-" + cameraSetId, expectedViewCount,
 				Timestamp.from(now));
+		var cameraStreamIds = new ArrayList<UUID>();
 		for (var index = 0; index < expectedViewCount; index += 1) {
 			var snapshotMemberId = UUID.randomUUID();
 			this.jdbcTemplate.update("""
 					INSERT INTO camera_set_snapshot_member (
 					    camera_set_snapshot_member_id, camera_set_snapshot_id, camera_channel_id,
-					    camera_index, camera_role, mount_position, enabled, created_at)
-					VALUES (?, ?, ?, ?, ?, ?, true, ?)
+					    camera_index, camera_role, mount_position, enabled, enabled_for_hand_detection, created_at)
+					VALUES (?, ?, ?, ?, ?, ?, true, true, ?)
 					""", snapshotMemberId, snapshotId, channelIds.get(index), index, index == 0 ? "OVERVIEW" : "HANDS",
 					"front-" + (index + 1), Timestamp.from(now));
 			if (index < boundViewCount) {
+				var cameraStreamId = UUID.randomUUID();
+				cameraStreamIds.add(cameraStreamId);
 				this.jdbcTemplate.update("""
 						INSERT INTO camera_stream (
 						    camera_stream_id, capture_session_id, camera_set_snapshot_member_id,
@@ -516,7 +565,7 @@ class HandLandmarkTrainingExportContractTests {
 						    record_start_utc, time_offset_ms, declared_sync_status,
 						    stream_status, quality_status, created_at, updated_at)
 						VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'PASS', 'INGESTED', 'PASS', ?, ?)
-						""", UUID.randomUUID(), captureGroupId, snapshotMemberId, channelIds.get(index), index,
+						""", cameraStreamId, captureGroupId, snapshotMemberId, channelIds.get(index), index,
 						clipAssetIds.get(index), clientFileIds.get(index), Timestamp.from(now), Timestamp.from(now),
 						Timestamp.from(now));
 				var decision = index < qualifiedViewCount ? "QUALIFIED" : "REJECTED";
@@ -533,13 +582,7 @@ class HandLandmarkTrainingExportContractTests {
 		this.jdbcTemplate.update(
 				"UPDATE capture_session SET receipt_state = 'COMPLETE', receipt_finalized_at = ?, updated_at = ? WHERE capture_session_id = ?",
 				Timestamp.from(now), Timestamp.from(now), captureGroupId);
-		return new GroupFixture(captureGroupId, clipAssetIds);
-	}
-
-	private UUID taskId(GroupFixture group) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT annotation_task_id FROM annotation_task WHERE project_id = ? AND capture_group_id = ?",
-				UUID.class, PROJECT_ID, group.captureGroupId());
+		return new GroupFixture(captureGroupId, clipAssetIds, cameraStreamIds);
 	}
 
 	private void clearState() {
@@ -596,10 +639,11 @@ class HandLandmarkTrainingExportContractTests {
 		return prefix + "-" + UUID.randomUUID();
 	}
 
-	private record GroupFixture(UUID captureGroupId, List<UUID> clipAssetIds) {
+	private record GroupFixture(UUID captureGroupId, List<UUID> clipAssetIds, List<UUID> cameraStreamIds) {
 
 		private GroupFixture {
 			clipAssetIds = List.copyOf(clipAssetIds);
+			cameraStreamIds = List.copyOf(cameraStreamIds);
 		}
 	}
 
