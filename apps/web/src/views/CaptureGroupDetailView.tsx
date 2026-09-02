@@ -243,7 +243,6 @@ export default function CaptureGroupDetailView() {
       </nav>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
-        eyebrow="配药事件"
         titleId="capture-group-detail-title"
         title={data.group?.capture_group_key ?? '配药事件详情'}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}

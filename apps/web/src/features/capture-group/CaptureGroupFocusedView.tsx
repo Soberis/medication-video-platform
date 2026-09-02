@@ -241,8 +241,8 @@ export function CaptureGroupFocusedView({
   )
 
   return isCompleted ? (
-    <details className="detail-disclosure capture-group-completed-video-details">
-      <summary>查看视频与辅助证据</summary>
+    <details className="detail-disclosure capture-group-completed-video-details" open>
+      <summary>视频与辅助证据</summary>
       <div className="detail-disclosure-content capture-group-completed-video-content">
         {focusedView}
       </div>
