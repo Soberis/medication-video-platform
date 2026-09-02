@@ -107,7 +107,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           )
         }
         if (taskResult.status === 'rejected') {
-          setTaskErrorMessage('暂时无法读取唯一配药事件任务；请刷新后重试。')
+          setTaskErrorMessage('暂时无法读取配药动作标注任务；请刷新后重试。')
         }
         if (nextTask && schemaResult.status === 'rejected') {
           setTaskErrorMessage('标签规范暂时无法读取，当前不能提交新的修订。')

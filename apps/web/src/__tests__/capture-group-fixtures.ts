@@ -12,6 +12,7 @@ import type {
   CaptureGroupQualityReview,
   CaptureGroupSummary,
 } from '@/api/capture-groups'
+import type { ClipAssetPlaybackGrant } from '@/api/catalog'
 import type { QualityReview } from '@/api/quality'
 
 export const projectId = '30000000-0000-4000-8000-000000000001'
@@ -192,6 +193,7 @@ export function stubGroupDetail(
     receiptFinalizeResponse?: CaptureGroup
     receiptFinalizeError?: { status: number; errorCode?: string }
     receiptFinalizeGate?: Promise<void>
+    playbackGrant?: ClipAssetPlaybackGrant
     candidateStatus: 'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN'
     candidateStatusByCamera?: Record<
       number,
@@ -232,6 +234,19 @@ export function stubGroupDetail(
       const groupResponse =
         groupResponses[Math.min(groupResponseIndex++, groupResponses.length - 1)] ?? group
       return Promise.resolve(jsonResponse(groupResponse))
+    }
+    if (url.endsWith('/playback-grants') && init?.method === 'POST') {
+      return Promise.resolve(
+        jsonResponse(
+          options.playbackGrant ?? {
+            grant_id: 'playback-grant-synthetic',
+            purpose: 'DATA_REVIEW',
+            media_url: '/synthetic/authorized-video.mp4',
+            expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            content_type: 'video/mp4',
+          },
+        ),
+      )
     }
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/quality-review`)) {
       if (options.qualityError) {

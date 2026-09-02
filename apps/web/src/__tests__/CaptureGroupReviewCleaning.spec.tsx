@@ -135,7 +135,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
       decision: 'REJECTED',
       review_note: '请补充动作结束位置。',
     })
-    expect(await screen.findByText('唯一配药事件任务 · 待修改')).toBeInTheDocument()
+    expect((await screen.findAllByText('待修改')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
     expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
     expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)

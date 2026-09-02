@@ -617,7 +617,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
       ) : (
         <>
           <p className="form-hint">
-            质量结论为合格后，系统会自动创建并分配唯一标注任务。若当前账号没有可见任务，请刷新状态或前往任务列表查看。
+            质量结论为合格后，系统会自动创建并分配配药动作标注任务。若当前账号没有可见任务，请刷新状态或前往任务列表查看。
           </p>
         </>
       )}

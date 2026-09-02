@@ -687,7 +687,7 @@ function CleaningPrimaryInterval({
           })}
         </ol>
       ) : (
-        <span>未返回正式时间段。</span>
+        <span>未返回动作时间段。</span>
       )}
     </div>
   )
@@ -708,7 +708,7 @@ function EventLevelViewEvidence({ viewEvidence }: { viewEvidence: CaptureGroupEv
             return (
               <li key={evidenceKey(view, index)}>
                 <strong>{evidenceViewName(view, index)}</strong>
-                <span>{primary ? '主视图 · 正式标注时间基准' : '参考视图 · 仅供事件级参考'}</span>
+                <span>{primary ? '主视图 · 时间基准' : '参考视图 · 仅供事件级参考'}</span>
                 <small>
                   {syncReliability
                     ? `同步声明：${syncReliabilityDisplayLabel(syncReliability)} · 仅供参考，不代表精确时间对齐`

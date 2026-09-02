@@ -380,7 +380,7 @@ function deriveAnnotationWorkflow(
   }
   if (!facts.task_status) {
     return buildWorkflow('ANNOTATION', {
-      waitingReason: '事件质量已确认，等待系统创建唯一配药动作标注任务。',
+      waitingReason: '事件质量已确认，等待系统准备配药动作标注。',
     })
   }
 
@@ -408,7 +408,7 @@ function deriveAnnotationWorkflow(
     return buildWorkflow('ANNOTATION', {
       primaryAction: action(
         facts.review?.decision === 'REJECTED' ? 'continue-annotation' : 'start-annotation',
-        facts.review?.decision === 'REJECTED' ? '继续配药动作标注' : '进入配药动作标注',
+        '配药动作标注',
         'annotation',
       ),
     })

@@ -110,10 +110,8 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText(/唯一配药事件任务状态按权限不可见/)).toBeInTheDocument()
-    expect(
-      screen.queryByText('事件质量通过后，服务端会自动创建唯一配药事件任务。'),
-    ).not.toBeInTheDocument()
+    expect(await screen.findByText(/配药动作标注任务状态按权限不可见/)).toBeInTheDocument()
+    expect(screen.queryByText('事件质量通过后，系统会准备配药动作标注。')).not.toBeInTheDocument()
   })
 
   it('keeps a single N=1 group and distinguishes receipt from media and AI facts', async () => {

@@ -1,7 +1,6 @@
 import { App as AntdApp, Alert, Button, Input, Select } from 'antd'
 import { CircleAlert, LockKeyhole } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
 
 import {
   AnnotationTaskApiError,
@@ -13,7 +12,6 @@ import {
 } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import type { QualityReview } from '@/api/quality'
-import { paths } from '@/app/paths'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
 import {
@@ -47,6 +45,7 @@ interface CaptureGroupAnnotationPanelProps {
   viewRows: GroupViewRow[]
   viewReviews: Record<string, QualityReview>
   refreshVersion: number
+  currentPlaybackTimeMs: number | null
   onTaskChange: (task: AnnotationTask) => void
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
@@ -62,6 +61,7 @@ export function CaptureGroupAnnotationPanel({
   viewRows,
   viewReviews,
   refreshVersion,
+  currentPlaybackTimeMs,
   onTaskChange,
   onRefresh,
 }: CaptureGroupAnnotationPanelProps) {
@@ -88,6 +88,9 @@ export function CaptureGroupAnnotationPanel({
       !groupQualityDowngraded &&
       !groupQualityReceiving &&
       sortedLabels.length > 0,
+  )
+  const canUseCurrentPlaybackTime = Boolean(
+    canSubmitRevision && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
 
   useEffect(() => {
@@ -120,10 +123,10 @@ export function CaptureGroupAnnotationPanel({
       ? '当前事件质量结论暂不可用，不能判断事件级标注准入。'
       : !task
         ? taskVisibility === 'permission-limited'
-          ? '当前账号不是该任务执行人；唯一配药事件任务状态按权限不可见。'
+          ? '当前账号不是该任务执行人；配药动作标注任务状态按权限不可见。'
           : taskVisibility === 'unavailable'
-            ? '唯一配药事件任务状态暂不可读，请刷新后重试。'
-            : '事件质量通过后，服务端会自动创建唯一配药事件任务。'
+            ? '配药动作标注任务状态暂不可读，请刷新后重试。'
+            : '事件质量通过后，系统会准备配药动作标注。'
         : !groupQualityAdmitting
           ? '当前事件质量为需复核或不合格；任务和历史仍保留，但不能提交新的修订。'
           : !task.primary_clip_asset_id
@@ -156,7 +159,7 @@ export function CaptureGroupAnnotationPanel({
         clipAssetId,
       )
       onTaskChange(updatedTask)
-      void message.success('主视图已保存；正式标注时间轴将以该机位为准。')
+      void message.success('主视图已保存；动作时间段将以该机位为准。')
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '主视图暂未保存，请刷新后重试。')
     } finally {
@@ -204,6 +207,11 @@ export function CaptureGroupAnnotationPanel({
     )
   }
 
+  function setSegmentPlaybackTime(draftId: number, field: 'start_ms' | 'end_ms') {
+    if (!canUseCurrentPlaybackTime || currentPlaybackTimeMs === null) return
+    updateSegment(draftId, field, Math.max(0, Math.round(currentPlaybackTimeMs)))
+  }
+
   return (
     <Section
       className="capture-group-annotation-section capture-group-workflow-focus-target"
@@ -211,23 +219,16 @@ export function CaptureGroupAnnotationPanel({
       tabIndex={-1}
       title="配药动作标注"
       titleId="capture-group-annotation-title"
-      actions={<span className="capture-group-section-note">一个事件任务 · 一条修订链</span>}
     >
       {task ? (
         <>
           <div className="capture-group-task-banner">
             <div>
               <StatusIndicator tone={taskStatusTone(task)}>
-                唯一配药事件任务 · {formatTaskStatus(task)}
+                {formatTaskStatus(task)}
               </StatusIndicator>
-              <span>执行人：{task.assignee_actor_id}</span>
+              <span>· 执行人 {task.assignee_actor_id}</span>
             </div>
-            <Link
-              className="text-link"
-              to={paths.captureGroupFocus(projectId, captureGroupId, 'annotation')}
-            >
-              打开配药事件标注
-            </Link>
           </div>
           {groupQualityDowngraded ? (
             <Alert
@@ -239,11 +240,11 @@ export function CaptureGroupAnnotationPanel({
           ) : null}
           <div className="capture-group-primary-view-control">
             <div>
-              <strong>主视图 · 正式标注时间基准</strong>
+              <strong>主视图 · 时间基准</strong>
               <p>
                 {primaryLocked
                   ? '首个正式修订已存在；主视图已锁定。'
-                  : '在首个正式修订前选择一路符合服务端条件的机位。'}
+                  : '提交修订前选择一路符合服务端条件的机位。'}
               </p>
             </div>
             <Select
@@ -275,69 +276,125 @@ export function CaptureGroupAnnotationPanel({
             >
               <div className="capture-group-form-heading">
                 <div>
-                  <span className="app-eyebrow">正式标注时间基准</span>
+                  <span className="app-eyebrow">动作时间段</span>
                   <h3>配药动作时间段</h3>
                 </div>
-                <span>所有机位共享这一条事件级修订链，不创建按机位重复的标签。</span>
+                <span>记录动作标签和时间范围；提交前可以继续添加时间段。</span>
+              </div>
+              <div className="capture-group-playback-position" aria-label="当前播放位置">
+                <div>
+                  <span className="app-eyebrow">当前播放位置</span>
+                  <strong>{formatPlaybackPosition(currentPlaybackTimeMs)}</strong>
+                </div>
+                <span>可将当前视频位置填入时间范围，不会自动提交。</span>
               </div>
               {draftSegments.map((segment, index) => {
                 const errors = segmentErrors[segment.draftId] ?? {}
                 return (
                   <div className="capture-group-segment-row" key={segment.draftId}>
-                    <label>
-                      <span>开始（毫秒）</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={segment.start_ms}
-                        disabled={!canSubmitRevision}
-                        onChange={(event) =>
-                          updateSegment(segment.draftId, 'start_ms', Number(event.target.value))
-                        }
-                      />
-                      {errors.start ? <small>{errors.start}</small> : null}
-                    </label>
-                    <label>
-                      <span>结束（毫秒）</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={segment.end_ms}
-                        disabled={!canSubmitRevision}
-                        onChange={(event) =>
-                          updateSegment(segment.draftId, 'end_ms', Number(event.target.value))
-                        }
-                      />
-                      {errors.end ? <small>{errors.end}</small> : null}
-                    </label>
-                    <label>
-                      <span>动作标签</span>
-                      <Select
-                        aria-label={`第 ${index + 1} 个时间段动作标签`}
-                        value={segment.label || undefined}
-                        placeholder="选择标签"
-                        disabled={!canSubmitRevision || !sortedLabels.length}
-                        options={sortedLabels.map((label) => ({
-                          value: label.label_id,
-                          label: label.display_name,
-                        }))}
-                        onChange={(value) => updateSegment(segment.draftId, 'label', value)}
-                      />
-                      {errors.label ? <small>{errors.label}</small> : null}
-                    </label>
-                    {draftSegments.length > 1 ? (
-                      <Button
-                        type="text"
-                        danger
-                        disabled={!canSubmitRevision}
-                        onClick={() =>
-                          setDraftSegments((current) =>
-                            current.filter((candidate) => candidate.draftId !== segment.draftId),
-                          )
-                        }
+                    <div className="capture-group-segment-fields">
+                      <span className="capture-group-segment-heading">时间段 {index + 1}</span>
+                      <label
+                        className="capture-group-segment-label"
+                        htmlFor={`segment-${segment.draftId}-label`}
                       >
-                        删除
-                      </Button>
+                        <span>动作标签</span>
+                        <Select
+                          id={`segment-${segment.draftId}-label`}
+                          aria-label={`第 ${index + 1} 个时间段动作标签`}
+                          value={segment.label || undefined}
+                          placeholder="选择标签"
+                          disabled={!canSubmitRevision || !sortedLabels.length}
+                          options={sortedLabels.map((label) => ({
+                            value: label.label_id,
+                            label: label.display_name,
+                          }))}
+                          onChange={(value) => updateSegment(segment.draftId, 'label', value)}
+                        />
+                        {errors.label ? <small>{errors.label}</small> : null}
+                      </label>
+                      <fieldset className="capture-group-segment-time-range">
+                        <legend>时间范围</legend>
+                        <div className="capture-group-segment-time-controls">
+                          <div className="capture-group-segment-time-field">
+                            <label htmlFor={`segment-${segment.draftId}-start`}>
+                              开始时间（毫秒）
+                            </label>
+                            <input
+                              id={`segment-${segment.draftId}-start`}
+                              type="number"
+                              min={0}
+                              value={segment.start_ms}
+                              disabled={!canSubmitRevision}
+                              onChange={(event) =>
+                                updateSegment(
+                                  segment.draftId,
+                                  'start_ms',
+                                  Number(event.target.value),
+                                )
+                              }
+                            />
+                            <Button
+                              type="text"
+                              size="small"
+                              htmlType="button"
+                              disabled={!canUseCurrentPlaybackTime}
+                              aria-label={`第 ${index + 1} 个时间段：使用当前时间作为开始`}
+                              onClick={() => setSegmentPlaybackTime(segment.draftId, 'start_ms')}
+                            >
+                              使用当前时间作为开始
+                            </Button>
+                            {errors.start ? <small>{errors.start}</small> : null}
+                          </div>
+                          <span className="capture-group-segment-time-arrow" aria-hidden="true">
+                            →
+                          </span>
+                          <div className="capture-group-segment-time-field">
+                            <label htmlFor={`segment-${segment.draftId}-end`}>
+                              结束时间（毫秒）
+                            </label>
+                            <input
+                              id={`segment-${segment.draftId}-end`}
+                              type="number"
+                              min={1}
+                              value={segment.end_ms}
+                              disabled={!canSubmitRevision}
+                              onChange={(event) =>
+                                updateSegment(segment.draftId, 'end_ms', Number(event.target.value))
+                              }
+                            />
+                            <Button
+                              type="text"
+                              size="small"
+                              htmlType="button"
+                              disabled={!canUseCurrentPlaybackTime}
+                              aria-label={`第 ${index + 1} 个时间段：使用当前时间作为结束`}
+                              onClick={() => setSegmentPlaybackTime(segment.draftId, 'end_ms')}
+                            >
+                              使用当前时间作为结束
+                            </Button>
+                            {errors.end ? <small>{errors.end}</small> : null}
+                          </div>
+                        </div>
+                      </fieldset>
+                    </div>
+                    {draftSegments.length > 1 ? (
+                      <div className="capture-group-segment-actions">
+                        <Button
+                          type="text"
+                          danger
+                          htmlType="button"
+                          disabled={!canSubmitRevision}
+                          aria-label={`删除第 ${index + 1} 个时间段`}
+                          onClick={() =>
+                            setDraftSegments((current) =>
+                              current.filter((candidate) => candidate.draftId !== segment.draftId),
+                            )
+                          }
+                        >
+                          删除
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 )
@@ -345,6 +402,7 @@ export function CaptureGroupAnnotationPanel({
               <div className="capture-group-annotation-form-actions">
                 <Button
                   type="text"
+                  htmlType="button"
                   disabled={!canSubmitRevision}
                   onClick={() => setDraftSegments((current) => [...current, createDraftSegment()])}
                 >
@@ -436,4 +494,9 @@ export function CaptureGroupAnnotationPanel({
       )}
     </Section>
   )
+}
+
+function formatPlaybackPosition(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return '未读取'
+  return `${Math.max(0, Math.round(value)).toLocaleString('zh-CN')} 毫秒`
 }

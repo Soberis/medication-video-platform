@@ -1,5 +1,6 @@
 import { Alert, Descriptions } from 'antd'
 import { Clock3, Video } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 import type { AnnotationTask } from '@/api/annotation'
 import type { QualityReview } from '@/api/quality'
@@ -16,6 +17,7 @@ interface CaptureGroupFocusedViewProps {
   viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
+  onPlaybackTimeChange?: (timeMs: number | null) => void
   isCompleted?: boolean
 }
 
@@ -25,6 +27,7 @@ export function CaptureGroupFocusedView({
   viewReviews,
   viewState,
   onSelectView,
+  onPlaybackTimeChange,
   isCompleted = false,
 }: CaptureGroupFocusedViewProps) {
   const {
@@ -50,6 +53,41 @@ export function CaptureGroupFocusedView({
     onLoadedMetadata,
     onPlaybackError,
   } = viewState
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.code !== 'Space' && event.key !== ' ') || event.defaultPrevented || event.repeat) {
+        return
+      }
+      const target = event.target instanceof HTMLElement ? event.target : document.activeElement
+      if (
+        target instanceof HTMLElement &&
+        target.closest(
+          'input, textarea, select, button, a, summary, video, [contenteditable="true"], [role="combobox"], [role="listbox"]',
+        )
+      ) {
+        return
+      }
+      const video = videoRef.current
+      if (!video || !playbackGrant || playbackState === 'error' || playbackState === 'expired') {
+        return
+      }
+      event.preventDefault()
+      if (video.paused) {
+        try {
+          void video.play().catch(() => undefined)
+        } catch {
+          // Keep native playback errors in the existing player state.
+        }
+      } else {
+        video.pause()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [playbackGrant, playbackState])
   const isPrimary = Boolean(
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
@@ -72,7 +110,7 @@ export function CaptureGroupFocusedView({
         </div>
         {isPrimary || isSupporting ? (
           <StatusIndicator tone="information">
-            {isPrimary ? '主视图 · 正式时间基准' : '参考视图 · 事件级证据'}
+            {isPrimary ? '主视图 · 时间基准' : '参考视图 · 事件级证据'}
           </StatusIndicator>
         ) : null}
       </header>
@@ -82,7 +120,7 @@ export function CaptureGroupFocusedView({
           type="info"
           showIcon
           title="当前为参考视图"
-          description="仅供人工视觉对照；正式标注时间基准仍以主视图为准。"
+          description="仅供人工视觉对照；动作时间段仍以主视图为准。"
         />
       ) : null}
       {viewRows.length > 1 ? (
@@ -147,11 +185,22 @@ export function CaptureGroupFocusedView({
         }
         playbackMessage={playbackMessage}
         playbackState={playbackState}
-        onClose={resetPlayback}
+        externalVideoRef={videoRef}
+        onPlaybackTimeChange={onPlaybackTimeChange ?? undefined}
+        onClose={() => {
+          onPlaybackTimeChange?.(null)
+          resetPlayback()
+        }}
         onLoadedMetadata={onLoadedMetadata}
-        onPlaybackError={onPlaybackError}
+        onPlaybackError={() => {
+          onPlaybackTimeChange?.(null)
+          onPlaybackError()
+        }}
         onRecoverMissingMediaProbe={() => undefined}
-        onStartPlayback={() => void startPlayback()}
+        onStartPlayback={() => {
+          onPlaybackTimeChange?.(null)
+          void startPlayback()
+        }}
       />
       {selectedDetail ? (
         <details className="capture-group-focused-details">

@@ -277,11 +277,11 @@ export function CaptureGroupInspector({
         <InspectorSection title="修订、复核与训练资格详情" titleId="capture-group-revision-facts">
           {taskVisibility === 'permission-limited' ? (
             <p className="form-hint" role="status">
-              当前账号不是该任务执行人；唯一配药事件任务状态按权限不可见。
+              当前账号不是该任务执行人；配药动作标注任务状态按权限不可见。
             </p>
           ) : taskVisibility === 'unavailable' ? (
             <p className="form-hint" role="status">
-              唯一配药事件任务状态暂不可读，请刷新后重试。
+              配药动作标注任务状态暂不可读，请刷新后重试。
             </p>
           ) : task ? (
             <>

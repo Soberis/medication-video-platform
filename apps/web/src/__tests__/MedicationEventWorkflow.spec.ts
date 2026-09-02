@@ -285,7 +285,7 @@ describe('medication event workflow presentation', () => {
     expect(rework.stage).toBe('ANNOTATION')
     expect(rework.primaryAction).toEqual({
       key: 'continue-annotation',
-      label: '继续配药动作标注',
+      label: '配药动作标注',
       target: 'annotation',
     })
   })

@@ -63,6 +63,7 @@ export default function CaptureGroupDetailView() {
     () => viewRows.find((view) => view.stream?.clip_asset_id === data.selectedClipAssetId) ?? null,
     [data.selectedClipAssetId, viewRows],
   )
+  const [currentPlaybackTimeMs, setCurrentPlaybackTimeMs] = useState<number | null>(null)
   const viewState = useCaptureGroupView(projectId, selectedView)
   const selectedReview = viewState.selectedStream
     ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
@@ -185,6 +186,7 @@ export default function CaptureGroupDetailView() {
         viewReviews={data.viewReviews}
         viewReviewErrors={data.viewReviewErrors}
         viewQualityLoading={data.viewQualityLoading}
+        currentPlaybackTimeMs={currentPlaybackTimeMs}
         selectedStream={viewState.selectedStream}
         selectedDetail={viewState.selectedDetail}
         selectedReview={selectedReview}
@@ -295,7 +297,11 @@ export default function CaptureGroupDetailView() {
                   task={data.task}
                   viewReviews={data.viewReviews}
                   viewState={viewState}
-                  onSelectView={data.setSelectedClipAssetId}
+                  onSelectView={(clipAssetId) => {
+                    setCurrentPlaybackTimeMs(null)
+                    data.setSelectedClipAssetId(clipAssetId)
+                  }}
+                  onPlaybackTimeChange={setCurrentPlaybackTimeMs}
                   isCompleted
                 />
                 {renderReviewCleaningPanel()}
@@ -311,7 +317,11 @@ export default function CaptureGroupDetailView() {
                     task={data.task}
                     viewReviews={data.viewReviews}
                     viewState={viewState}
-                    onSelectView={data.setSelectedClipAssetId}
+                    onSelectView={(clipAssetId) => {
+                      setCurrentPlaybackTimeMs(null)
+                      data.setSelectedClipAssetId(clipAssetId)
+                    }}
+                    onPlaybackTimeChange={setCurrentPlaybackTimeMs}
                   />
                 </div>
                 <div className="capture-group-action-column">
@@ -384,6 +394,7 @@ interface CaptureGroupActionFormProps {
   viewReviews: Record<string, QualityReview>
   viewReviewErrors: Record<string, string>
   viewQualityLoading: boolean
+  currentPlaybackTimeMs: number | null
   selectedStream: GroupViewRow['stream']
   selectedDetail: ClipAssetRead | null
   selectedReview: QualityReview | null
@@ -408,6 +419,7 @@ function CaptureGroupActionForm({
   viewReviews,
   viewReviewErrors,
   viewQualityLoading,
+  currentPlaybackTimeMs,
   selectedStream,
   selectedDetail,
   selectedReview,
@@ -458,6 +470,7 @@ function CaptureGroupActionForm({
         viewRows={viewRows}
         viewReviews={viewReviews}
         refreshVersion={refreshVersion}
+        currentPlaybackTimeMs={currentPlaybackTimeMs}
         onTaskChange={onTaskChange}
         onRefresh={onRefresh}
       />
