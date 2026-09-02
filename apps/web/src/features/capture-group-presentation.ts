@@ -228,7 +228,14 @@ export function taskNextAction(
   quality: CaptureGroupQualityReview | null,
   task: AnnotationTask | null,
   taskVisibility: CaptureGroupTaskVisibility = 'visible',
+  qualityVisibility: CaptureGroupQualityVisibility = 'loaded',
 ): CaptureGroupNextStep {
+  if (qualityVisibility === 'forbidden') {
+    return statusStep('事件质量按当前权限不可见')
+  }
+  if (qualityVisibility === 'unavailable') {
+    return statusStep('事件质量暂不可用，请刷新后重试')
+  }
   if (group.receipt_state === 'RECEIVING') {
     return statusStep('等待接收完成后进行事件质量判断')
   }

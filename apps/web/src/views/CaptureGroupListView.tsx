@@ -19,14 +19,14 @@ import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import {
   formatViewQualitySummary,
-  groupQualityLabels,
-  groupQualityTone,
+  groupQualityDisplayLabel,
+  groupQualityDisplayTone,
   receiptStateLabels,
   receiptTone,
   taskNextAction,
-  type CaptureGroupNextStep,
   type CaptureGroupQualityVisibility,
   type CaptureGroupTaskVisibility,
+  viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
@@ -182,7 +182,7 @@ export default function CaptureGroupListView() {
         className="capture-group-page-header"
         titleId="capture-group-list-title"
         title="配药事件"
-        description="按服务端已归组的接收记录展示拍摄时间、机位质量和事件质量；列表不推断未返回的事件。"
+        description="按配药事件集中查看各机位视频、质量状态和当前处理进度。"
         actions={
           <Button
             size="small"
@@ -218,24 +218,21 @@ export default function CaptureGroupListView() {
         </EmptyState>
       ) : null}
       {rows.length ? (
-        <section className="capture-group-list-surface" aria-labelledby="capture-group-queue-title">
-          <header className="capture-group-list-heading">
-            <div>
-              <p className="app-eyebrow">事件列表</p>
-              <h2 id="capture-group-queue-title">配药事件</h2>
-            </div>
-            <span className="capture-group-list-count">{rows.length} 个配药事件</span>
-          </header>
+        <section className="capture-group-list-surface" aria-label="配药事件结果">
+          <div className="capture-group-list-heading">
+            <span className="capture-group-list-count">共 {rows.length} 个配药事件</span>
+          </div>
           <div className="capture-group-list" role="list" aria-label="配药事件列表">
             {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => {
               const identity =
                 group.capture_group_key ?? `配药事件 · ${shortId(group.capture_group_id)}`
-              const nextStep = listTaskNextAction(
-                qualityVisibility,
+              const eventTime = group.device_time_utc ?? group.created_at
+              const nextStep = taskNextAction(
                 group,
                 quality,
                 task,
                 taskVisibility,
+                qualityVisibility,
               )
 
               return (
@@ -257,22 +254,17 @@ export default function CaptureGroupListView() {
                         </Link>
                       </div>
                     </div>
-                    <StatusIndicator tone={receiptTone(group.receipt_state)}>
-                      接收状态 · {receiptStateLabels[group.receipt_state]}
-                    </StatusIndicator>
+                    <time className="capture-group-list-time" dateTime={eventTime}>
+                      {formatDateTime(eventTime)}
+                    </time>
                   </header>
                   <dl className="capture-group-list-facts">
                     <div>
-                      <dt>拍摄时间</dt>
-                      <dd>{formatDateTime(group.device_time_utc ?? group.created_at)}</dd>
-                    </div>
-                    <div>
-                      <dt>机位</dt>
-                      <dd>
-                        <span>
-                          应 {group.expected_camera_count} · 已收 {group.received_camera_count} ·
-                          缺失 {group.missing_camera_numbers.length}
-                        </span>
+                      <dt>接收与机位</dt>
+                      <dd className="capture-group-list-receipt">
+                        <StatusIndicator tone={receiptTone(group.receipt_state)}>
+                          {formatListReceipt(group)}
+                        </StatusIndicator>
                         {group.missing_camera_numbers.length ? (
                           <span className="capture-group-list-missing-views">
                             缺失：
@@ -284,23 +276,30 @@ export default function CaptureGroupListView() {
                       </dd>
                     </div>
                     <div>
-                      <dt>机位质量</dt>
-                      <dd>{formatListViewQuality(qualityVisibility, quality)}</dd>
-                    </div>
-                    <div>
-                      <dt>事件质量</dt>
-                      <dd>
-                        <StatusIndicator tone={listGroupQualityTone(qualityVisibility, quality)}>
-                          {formatListGroupQuality(qualityVisibility, quality)}
+                      <dt>质量</dt>
+                      <dd className="capture-group-list-quality">
+                        <span className="capture-group-list-quality-label">事件质量</span>
+                        <StatusIndicator tone={groupQualityDisplayTone(qualityVisibility, quality)}>
+                          {groupQualityDisplayLabel(qualityVisibility, quality)}
                         </StatusIndicator>
+                        <span className="capture-group-list-quality-label">机位质量</span>
+                        <span className="capture-group-list-view-quality">
+                          {formatListViewQuality(qualityVisibility, quality)}
+                        </span>
                       </dd>
                     </div>
                   </dl>
                   <footer className="capture-group-list-row-footer">
                     <span>
-                      {nextStep.kind === 'action' ? '下一步：' : '当前状态：'}
+                      <span className="capture-group-list-row-footer-label">
+                        {nextStep.kind === 'action' ? '下一步：' : '当前状态：'}
+                      </span>
                       {nextStep.label}
-                      {task ? ` · 任务 ${shortId(task.annotation_task_id)}` : ''}
+                      {task ? (
+                        <span className="capture-group-list-task">
+                          {' · '}任务 {shortId(task.annotation_task_id)}
+                        </span>
+                      ) : null}
                     </span>
                     <Link
                       className="capture-group-list-open"
@@ -358,37 +357,12 @@ function formatListViewQuality(
 ) {
   if (visibility === 'forbidden') return '无权查看'
   if (visibility === 'unavailable' || !quality) return '暂不可用'
-  if (quality.result === 'UNREVIEWED') return groupQualityLabels.UNREVIEWED
+  if (quality.result === 'UNREVIEWED' && !quality.confirmed_view_set?.views.length) {
+    return viewQualityLabels.UNREVIEWED
+  }
   return formatViewQualitySummary(quality)
 }
 
-function formatListGroupQuality(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  if (visibility === 'forbidden') return '无权查看'
-  if (visibility === 'unavailable' || !quality) return '暂不可用'
-  return groupQualityLabels[quality.result]
-}
-
-function listGroupQualityTone(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  return visibility === 'loaded' && quality ? groupQualityTone(quality.result) : 'neutral'
-}
-
-function listTaskNextAction(
-  qualityVisibility: CaptureGroupQualityVisibility,
-  group: CaptureGroupSummary,
-  quality: CaptureGroupQualityReview | null,
-  task: AnnotationTask | null,
-  taskVisibility: CaptureGroupTaskVisibility,
-): CaptureGroupNextStep {
-  if (qualityVisibility === 'forbidden')
-    return { kind: 'status', label: '事件质量按当前权限不可见' }
-  if (qualityVisibility === 'unavailable') {
-    return { kind: 'status', label: '事件质量暂不可用，请刷新后重试' }
-  }
-  return taskNextAction(group, quality, task, taskVisibility)
+function formatListReceipt(group: CaptureGroupSummary) {
+  return `${group.received_camera_count}/${group.expected_camera_count} 机位已收 · ${receiptStateLabels[group.receipt_state]}`
 }

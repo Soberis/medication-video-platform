@@ -924,16 +924,11 @@
 
 .capture-group-list-heading {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--app-space-16);
-  padding: var(--app-space-16);
+  padding: var(--app-space-12) var(--app-space-16);
   border-bottom: 1px solid var(--app-color-border-subtle);
-}
-
-.capture-group-list-heading h2 {
-  margin: 0;
-  font-size: var(--app-font-size-heading-2);
 }
 
 .capture-group-list-count {
@@ -981,6 +976,13 @@
   min-width: 0;
 }
 
+.capture-group-list-time {
+  flex: none;
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  white-space: nowrap;
+}
+
 .capture-group-list-title {
   overflow: hidden;
   max-width: 48ch;
@@ -991,13 +993,14 @@
 
 .capture-group-list-facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--app-space-12);
+  grid-template-columns: minmax(14rem, 0.85fr) minmax(0, 1.15fr);
+  gap: var(--app-space-16);
   margin: 0;
 }
 
 .capture-group-list-facts > div {
   display: grid;
+  align-content: start;
   gap: var(--app-space-4);
   min-width: 0;
 }
@@ -1008,8 +1011,10 @@
 }
 
 .capture-group-list-facts dd {
-  display: grid;
-  gap: var(--app-space-4);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--app-space-4) var(--app-space-12);
   min-width: 0;
   margin: 0;
   color: var(--app-color-foreground-secondary);
@@ -1022,6 +1027,17 @@
   font-size: var(--app-font-size-helper);
 }
 
+.capture-group-list-quality-label {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+}
+
+.capture-group-list-view-quality,
+.capture-group-list-task {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+}
+
 .capture-group-list-row-footer {
   align-items: baseline;
   color: var(--app-color-foreground-muted);
@@ -1031,6 +1047,12 @@
 .capture-group-list-row-footer > span {
   min-width: 0;
   line-height: var(--app-line-height-body);
+}
+
+.capture-group-list-row-footer-label {
+  margin-right: var(--app-space-4);
+  color: var(--app-color-foreground-secondary);
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .capture-group-list-open {
@@ -1069,7 +1091,7 @@
   }
 
   .capture-group-list-facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(12rem, 0.85fr) minmax(0, 1.15fr);
   }
 }
 
