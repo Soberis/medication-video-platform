@@ -58,7 +58,9 @@ describe('LoginView', () => {
     await user.type(screen.getByLabelText('密码'), 'synthetic-password-123')
     await user.click(screen.getByRole('button', { name: /登\s*录/ }))
 
-    expect(screen.getByRole('button', { name: /登\s*录/ })).toHaveClass('ant-btn-loading')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /登\s*录/ })).toHaveClass('ant-btn-loading'),
+    )
     resolveLogin(jsonResponse({ username: 'platform-admin', role: 'ADMIN' }))
     await waitFor(() => expect(screen.getByText('Projects')).toBeInTheDocument())
   })
