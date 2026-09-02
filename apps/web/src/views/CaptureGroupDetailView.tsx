@@ -114,6 +114,8 @@ export default function CaptureGroupDetailView() {
   const isCompletedWorkflow = Boolean(
     workflow?.steps.length && workflow.steps.every((step) => step.state === 'completed'),
   )
+  const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
+  const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -245,18 +247,20 @@ export default function CaptureGroupDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <span>视频管理</span>
+        <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
+          视频管理
+        </Link>
         <span aria-hidden="true">/</span>
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
           配药事件
         </Link>
         <span aria-hidden="true">/</span>
-        <span>{data.group?.capture_group_key ?? shortId(captureGroupId)}</span>
+        <span>{eventIdentity}</span>
       </nav>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
         titleId="capture-group-detail-title"
-        title={data.group?.capture_group_key ?? '配药事件详情'}
+        title={eventTitle}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>

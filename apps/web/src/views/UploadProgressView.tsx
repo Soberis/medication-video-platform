@@ -44,6 +44,13 @@ const fileKindLabels: Record<UploadFileKind, string> = {
   METADATA: '元数据',
   EVENT_LOG: '事件日志',
 }
+const uploadDeviceDisplayLabels: Record<string, string> = {
+  PLATFORM_LOCAL: '平台本地上传',
+}
+
+function uploadDeviceDisplayLabel(deviceId: string) {
+  return uploadDeviceDisplayLabels[deviceId] ?? deviceId
+}
 
 function batchStatusTone(status: UploadBatchStatus): StatusBadgeTone {
   if (status === 'COMPLETED') return 'success'
@@ -270,7 +277,11 @@ export default function UploadProgressView() {
                   label: '所属项目',
                   value: <code>{shortId(batch.project_id)}</code>,
                 },
-                { id: 'device-id', label: '来源设备', value: batch.device_id },
+                {
+                  id: 'device-id',
+                  label: '来源设备',
+                  value: uploadDeviceDisplayLabel(batch.device_id),
+                },
               ]}
             />
             <details className="upload-technical-details">
@@ -282,6 +293,15 @@ export default function UploadProgressView() {
                     label: '上传批次 ID',
                     value: <code>{batch.batch_id}</code>,
                   },
+                  ...(batch.device_id === 'PLATFORM_LOCAL'
+                    ? [
+                        {
+                          id: 'device-id-technical',
+                          label: '来源设备标识',
+                          value: <code>{batch.device_id}</code>,
+                        },
+                      ]
+                    : []),
                   { id: 'created-at', label: '创建时间', value: formatTime(batch.created_at) },
                   { id: 'expires-at', label: '有效期至', value: formatTime(batch.expires_at) },
                 ]}

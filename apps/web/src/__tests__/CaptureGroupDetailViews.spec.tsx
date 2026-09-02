@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { paths } from '@/app/paths'
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 import type { QualityReview } from '@/api/quality'
@@ -146,6 +147,12 @@ describe('CaptureGroup detail views', () => {
     if (!currentAction) throw new Error('Current Action section was not mounted.')
     expect(currentAction).toHaveTextContent('当前阶段')
     expect(currentAction).toHaveTextContent('配药动作标注')
+    const user = userEvent.setup()
+    const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
+    if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
+    expect(workflowDisclosure).not.toHaveAttribute('open')
+    expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
+    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
     const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(workflowRail).toBeInTheDocument()
     expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)
@@ -171,6 +178,84 @@ describe('CaptureGroup detail views', () => {
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
       expect.anything(),
     )
+  })
+
+  it('links detail breadcrumb levels back to video management and uses a short fallback identity', async () => {
+    const fallbackGroupId = '60000000-0000-4000-8000-000000000006'
+    const group = captureGroupFixture(fallbackGroupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    group.capture_group_key = null
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${fallbackGroupId}`,
+    })
+
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: '配药事件 · 60000000…0006',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: '配药事件详情' }),
+    ).not.toBeInTheDocument()
+
+    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
+    const breadcrumbLinks = within(breadcrumb).getAllByRole('link')
+    expect(breadcrumbLinks).toHaveLength(2)
+    expect(breadcrumbLinks[0]).toHaveAccessibleName('视频管理')
+    expect(breadcrumbLinks[1]).toHaveAccessibleName('配药事件')
+    expect(breadcrumbLinks[0]).toHaveAttribute('href', paths.captureGroups(projectId))
+    expect(breadcrumbLinks[1]).toHaveAttribute('href', paths.captureGroups(projectId))
+    expect(breadcrumb).toHaveTextContent('视频管理/配药事件/60000000…0006')
+  })
+
+  it('keeps the active action hierarchy compact at a narrow viewport', async () => {
+    const originalInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 })
+
+    try {
+      const group = captureGroupFixture(groupId, {
+        expected: [1],
+        received: [1],
+        receipt: 'COMPLETE',
+        key: 'narrow-active-workbench',
+      })
+      stubGroupDetail(group, {
+        task: null,
+        quality: qualityFixture(group, 'QUALIFIED'),
+        candidateStatus: 'NO_HAND_DETECTED',
+      })
+
+      renderRoute(<CaptureGroupDetailView />, {
+        path: '/projects/:projectId/capture-groups/:captureGroupId',
+        route: `/projects/${projectId}/capture-groups/${groupId}`,
+      })
+
+      const currentAction = await screen.findByRole('heading', {
+        level: 2,
+        name: '当前动作',
+      })
+      expect(currentAction.closest('section')).toHaveTextContent('当前阶段')
+      const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
+      if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
+      expect(workflowDisclosure).not.toHaveAttribute('open')
+      expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalInnerWidth,
+      })
+    }
   })
 
   it('labels a successful hand result as AI evidence without making it a quality decision', async () => {
@@ -238,8 +323,8 @@ describe('CaptureGroup detail views', () => {
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
     expect(screen.getByText('流程已完成')).toBeInTheDocument()
-    expect(screen.getByText('人工复核：已通过')).toBeInTheDocument()
-    expect(screen.getByText('训练资格检查：已通过')).toBeInTheDocument()
+    expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
     const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)

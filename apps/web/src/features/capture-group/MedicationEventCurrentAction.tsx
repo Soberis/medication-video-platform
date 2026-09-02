@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { CircleAlert, CircleCheck, Clock3 } from 'lucide-react'
-import type { Ref } from 'react'
+import { useState, type KeyboardEvent, type Ref } from 'react'
 
 import { Section } from '@/components/workspace/Section'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
@@ -44,8 +44,50 @@ export function MedicationEventWorkflowRail({
 }: {
   workflow: MedicationEventWorkflowModel
 }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const isCompleted = workflow.steps.every((step) => step.state === 'completed')
+
+  const handleSummaryKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return
+    event.preventDefault()
+    setIsOpen((open) => !open)
+  }
+
+  if (!isCompleted) {
+    return (
+      <details
+        className="capture-group-workflow-rail capture-group-workflow-disclosure"
+        open={isOpen}
+        onToggle={(event) => setIsOpen(event.currentTarget.open)}
+      >
+        <summary
+          aria-controls="capture-group-workflow-content"
+          aria-expanded={isOpen}
+          onKeyDown={handleSummaryKeyDown}
+        >
+          查看完整流程
+        </summary>
+        <div
+          id="capture-group-workflow-content"
+          className="capture-group-workflow-rail-content"
+          hidden={!isOpen}
+        >
+          <WorkflowRailContent workflow={workflow} />
+        </div>
+      </details>
+    )
+  }
+
   return (
     <section className="capture-group-workflow-rail" aria-labelledby="capture-group-workflow-title">
+      <WorkflowRailContent workflow={workflow} />
+    </section>
+  )
+}
+
+function WorkflowRailContent({ workflow }: { workflow: MedicationEventWorkflowModel }) {
+  return (
+    <>
       <div className="capture-group-workflow-rail-heading">
         <span id="capture-group-workflow-title" className="app-eyebrow">
           处理进度
@@ -74,7 +116,7 @@ export function MedicationEventWorkflowRail({
           </li>
         ))}
       </ol>
-    </section>
+    </>
   )
 }
 
@@ -153,12 +195,8 @@ function CompletedResultSummary() {
         <CircleCheck aria-hidden="true" size={18} strokeWidth={1.9} />
         <strong>流程已完成</strong>
       </div>
-      <ul className="capture-group-current-result-facts" aria-label="配药事件完成结果">
-        <li>人工复核：已通过</li>
-        <li>训练资格检查：已通过</li>
-      </ul>
       <a className="capture-group-current-result-link" href="#capture-group-review-cleaning">
-        查看复核与训练资格详情 →
+        查看复核与训练资格详情
       </a>
     </div>
   )

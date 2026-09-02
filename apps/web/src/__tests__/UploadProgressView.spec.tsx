@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -123,6 +123,30 @@ describe('UploadProgressView', () => {
     expect(technicalDetails).toHaveLength(2)
     await user.click(technicalDetails[1]!)
     expect(clientFileId.closest('details')).toHaveAttribute('open')
+  })
+
+  it('maps the authoritative platform-local source for the main view and keeps its raw identifier in technical details', async () => {
+    const platformLocalBatch = { ...batchProgress, device_id: 'PLATFORM_LOCAL' }
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation((input: RequestInfo | URL) =>
+          Promise.resolve(
+            jsonResponse(String(input).endsWith('/files') ? fileProgress : platformLocalBatch),
+          ),
+        ),
+    )
+    const user = userEvent.setup()
+    renderRoute(<UploadProgressView />, { route: '/uploads', path: '/uploads' })
+    await user.type(screen.getByLabelText('上传批次 ID'), batchId)
+    await user.click(screen.getByRole('button', { name: '查询进度' }))
+
+    expect(await screen.findByText('平台本地上传')).toBeInTheDocument()
+    const technicalDetails = screen.getAllByText('查看技术信息')[0]?.closest('details')
+    if (!technicalDetails) throw new Error('Batch technical details were not mounted.')
+    expect(technicalDetails).not.toHaveAttribute('open')
+    expect(within(technicalDetails).getByText('PLATFORM_LOCAL')).toBeInTheDocument()
   })
 
   it('shows the project destination after the batch is authoritatively completed', async () => {

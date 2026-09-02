@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { MedicationEventCurrentAction } from '@/features/capture-group/MedicationEventCurrentAction'
+import {
+  MedicationEventCurrentAction,
+  MedicationEventWorkflowRail,
+} from '@/features/capture-group/MedicationEventCurrentAction'
 import type {
   MedicationEventWorkflowModel,
   MedicationEventWorkflowPrimaryAction,
@@ -55,6 +59,43 @@ describe('MedicationEventCurrentAction', () => {
     expect(button).toHaveClass('ant-btn-primary')
   })
 
+  it('keeps the complete workflow in a keyboard-operable disclosure', async () => {
+    const user = userEvent.setup()
+    render(
+      <MedicationEventWorkflowRail
+        workflow={workflow({
+          stage: 'ANNOTATION',
+          steps: [
+            { stage: 'RECEIPT', label: '接收', state: 'completed' },
+            { stage: 'VIEW_QUALITY', label: '机位质量', state: 'completed' },
+            { stage: 'GROUP_QUALITY', label: '事件质量', state: 'completed' },
+            { stage: 'ANNOTATION', label: '配药动作标注', state: 'current' },
+            { stage: 'REVIEW', label: '人工复核', state: 'upcoming' },
+            { stage: 'TRAINING_ELIGIBILITY', label: '训练资格检查', state: 'upcoming' },
+          ],
+        })}
+      />,
+    )
+
+    const summary = screen.getByText('查看完整流程')
+    const disclosure = summary.closest('details')
+    if (!disclosure) throw new Error('Workflow disclosure was not mounted.')
+    expect(disclosure).not.toHaveAttribute('open')
+    expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
+
+    summary.focus()
+    await user.keyboard('{Enter}')
+    expect(disclosure).toHaveAttribute('open')
+    expect(summary).toHaveAttribute('aria-expanded', 'true')
+    const workflowList = screen.getByRole('list', { name: '配药事件处理流程' })
+    expect(within(workflowList).getAllByRole('listitem')).toHaveLength(6)
+    expect(workflowList.querySelector('[aria-current="step"]')).toHaveTextContent('配药动作标注')
+
+    await user.keyboard('{Enter}')
+    expect(disclosure).not.toHaveAttribute('open')
+    expect(summary).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('uses information for waiting and warning for a temporary blocker', () => {
     const { unmount } = render(
       <MedicationEventCurrentAction
@@ -105,9 +146,9 @@ describe('MedicationEventCurrentAction', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
     expect(screen.getByText('流程已完成')).toBeInTheDocument()
-    expect(screen.getByText('人工复核：已通过')).toBeInTheDocument()
-    expect(screen.getByText('训练资格检查：已通过')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看复核与训练资格详情 →' })).toHaveAttribute(
+    expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看复核与训练资格详情' })).toHaveAttribute(
       'href',
       '#capture-group-review-cleaning',
     )
