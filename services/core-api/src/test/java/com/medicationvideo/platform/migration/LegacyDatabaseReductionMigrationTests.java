@@ -33,7 +33,7 @@ class LegacyDatabaseReductionMigrationTests {
 	private static final String LABEL_SCHEMA_DIGEST = "305e92dcd10343e6c97b5780e59485b63183fadad7e9b87bc85db4bb037aa203";
 
 	@Test
-	void migratesFreshDatabaseToV72AndPreservesP0Schema() {
+	void migratesFreshDatabaseToLatestAndPreservesP0Schema() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
 			var dataSource = dataSource(postgres);
@@ -46,6 +46,7 @@ class LegacyDatabaseReductionMigrationTests {
 			assertEquals(1, migrationCount(jdbc, "65"));
 			assertEquals(1, migrationCount(jdbc, "66"));
 			assertEquals(1, migrationCount(jdbc, "72"));
+			assertEquals(1, migrationCount(jdbc, "74"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
@@ -53,7 +54,7 @@ class LegacyDatabaseReductionMigrationTests {
 	}
 
 	@Test
-	void upgradesExistingV64DatabaseToV72WithoutCascade() {
+	void upgradesExistingV64DatabaseToLatestWithoutCascade() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
 			var dataSource = dataSource(postgres);
@@ -72,6 +73,7 @@ class LegacyDatabaseReductionMigrationTests {
 			assertEquals(1, migrationCount(jdbc, "65"));
 			assertEquals(1, migrationCount(jdbc, "66"));
 			assertEquals(1, migrationCount(jdbc, "72"));
+			assertEquals(1, migrationCount(jdbc, "74"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
@@ -79,7 +81,7 @@ class LegacyDatabaseReductionMigrationTests {
 	}
 
 	@Test
-	void refusesToRetireSingleVideoPersistenceWhenHistoricalRowsExist() {
+	void preservesSingleVideoPersistenceAndContinuesWhenHistoricalRowsExist() {
 		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
 			postgres.start();
 			var dataSource = dataSource(postgres);
@@ -99,14 +101,54 @@ class LegacyDatabaseReductionMigrationTests {
 					""", taskId, PROJECT_ID, clipAssetId, LABEL_SCHEMA_ID, LABEL_SCHEMA_DIGEST, ADMIN_ACTOR,
 					ADMIN_ACTOR, "legacy-task-" + taskId, now, now);
 
-			assertThrows(FlywayException.class, () -> configure(dataSource).migrate());
-			assertEquals(0, migrationCount(jdbc, "72"));
+			var flyway = configure(dataSource, "73");
+			flyway.migrate();
+			flyway.validate();
+
+			assertEquals(1, migrationCount(jdbc, "72"));
+			assertEquals(1, migrationCount(jdbc, "73"));
 			assertEquals(1, jdbc.queryForObject(
 					"SELECT count(*) FROM annotation_task WHERE annotation_task_id = ? AND capture_group_id IS NULL",
 					Integer.class, taskId));
 			assertTrue(columnExists(jdbc, "annotation_task", "clip_asset_id"));
 			assertTrue(tableExists(jdbc, "cleaning_run"));
 			assertTrue(tableExists(jdbc, "training_data_eligibility"));
+			assertTrue(tableExists(jdbc, "training_data_group_eligibility_v3_integrity"));
+		}
+	}
+
+	@Test
+	void retiresPreservedSingleVideoPersistenceAfterExplicitRowDeletion() {
+		try (var postgres = new PostgreSQLContainer("postgres:18.4-bookworm")) {
+			postgres.start();
+			var dataSource = dataSource(postgres);
+			var jdbc = new JdbcTemplate(dataSource);
+
+			configure(dataSource, "64").migrate();
+			ProjectMembershipTestData.ensureProject(jdbc, PROJECT_ID);
+			var clipAssetId = insertLegacyClipAsset(jdbc);
+			var taskId = UUID.randomUUID();
+			var now = Timestamp.from(Instant.parse("2026-07-25T02:00:00Z"));
+			jdbc.update("""
+					INSERT INTO annotation_task (
+					    annotation_task_id, project_id, clip_asset_id, label_schema_id,
+					    label_schema_digest, assignee_actor_id, created_by, idempotency_key,
+					    task_status, created_at, updated_at, version)
+					VALUES (?, ?, ?, ?::uuid, ?, ?, ?, ?, 'ASSIGNED', ?, ?, 0)
+					""", taskId, PROJECT_ID, clipAssetId, LABEL_SCHEMA_ID, LABEL_SCHEMA_DIGEST, ADMIN_ACTOR,
+					ADMIN_ACTOR, "legacy-task-delete-" + taskId, now, now);
+
+			configure(dataSource, "73").migrate();
+			assertTrue(columnExists(jdbc, "annotation_task", "clip_asset_id"));
+			assertEquals(1, jdbc.update("DELETE FROM annotation_task WHERE annotation_task_id = ?", taskId));
+
+			var flyway = configure(dataSource);
+			flyway.migrate();
+			flyway.validate();
+
+			assertEquals(1, migrationCount(jdbc, "74"));
+			assertLegacyObjectsAbsent(jdbc);
+			assertP0ObjectsPresent(jdbc);
 		}
 	}
 

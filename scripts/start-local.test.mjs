@@ -110,6 +110,7 @@ test('local startup verifies every host dependency port before application start
   assert.match(source, /--force-recreate "\$service_name"/)
   assert.match(powershellSource, /\$requiredHostPorts = @\(/)
   assert.match(powershellSource, /\$requiredHostPort\.Service/)
+  assert.match(powershellSource, /Core API process exited before becoming healthy/)
 
   const dependencyPortChecks = source.indexOf('required_host_ports=')
   const applicationStartup = source.indexOf('mkdir -p "$LOG_DIRECTORY"')

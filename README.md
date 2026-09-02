@@ -17,7 +17,7 @@ Local Upload / External Ingest
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。`training-data.v2`、单视频任务和单视频 Cleaning 已从 V1.27 当前产品范围退役；Task C 移除对应运行时、公开契约、旧读模型和最小导出工具，Task D 的 V72 只在无历史行时移除空的旧投影/清洗对象和任务级旧关系，发现历史数据即 fail closed；Flyway 历史迁移和历史文档继续保留。
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。`training-data.v2`、单视频任务和单视频 Cleaning 已从 V1.27 当前产品范围退役；Task C 移除对应运行时、公开契约、旧读模型和最小导出工具。Task D 的 V72 在无历史行时移除空的旧投影、清洗对象和任务级旧关系；发现历史行时原样保留这些对象并继续升级，不删除或改写历史数据。完成明确的数据保留或删除决策后，V74 以 fail-closed 的 forward migration 移除这些被保留的旧对象。Flyway 历史迁移和历史文档继续保留。
 
 当前规范：
 

@@ -76,6 +76,9 @@ function Wait-CoreApiHealthy {
             Write-Host "Core API is healthy: $HealthUri" -ForegroundColor Green
             return
         }
+        if (-not (Test-ManagedProcessRunning 'api')) {
+            throw "Core API process exited before becoming healthy. Inspect log: $LogPath and $LogPath.error.log"
+        }
         Start-Sleep -Seconds 1
     }
 
