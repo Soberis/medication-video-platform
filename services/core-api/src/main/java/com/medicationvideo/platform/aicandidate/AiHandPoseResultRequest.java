@@ -137,16 +137,19 @@ record AiHandPoseResultRequest(@NotBlank @Pattern(regexp = "^ai-hand-pose-result
 	}
 }
 
-record AiHandPoseCandidatePayload(@Min(0) long frameTimestampMs, @Min(1) int imageWidth, @Min(1) int imageHeight,
-		@Min(0) @org.hibernate.validator.constraints.Range(max = 1) int handIndex,
+record AiHandPoseCandidatePayload(@NotNull @Min(0) Long frameTimestampMs, @NotNull @Min(1) Integer imageWidth,
+		@NotNull @Min(1) Integer imageHeight,
+		@NotNull @Min(0) @org.hibernate.validator.constraints.Range(max = 1) Integer handIndex,
 		@NotBlank @Pattern(regexp = "^(LEFT|RIGHT|UNKNOWN)$") String handedness,
-		@org.hibernate.validator.constraints.Range(min = 0, max = 1) double handednessScore,
+		@NotNull @org.hibernate.validator.constraints.Range(min = 0, max = 1) Double handednessScore,
 		@NotNull JsonNode boundingBox, @NotNull JsonNode landmarks,
-		@Min(0) @org.hibernate.validator.constraints.Range(max = 21) int validLandmarkCount) {
+		@NotNull @Min(0) @org.hibernate.validator.constraints.Range(max = 21) Integer validLandmarkCount) {
 
 	@AssertTrue(message = "bounding_box must be an object and landmarks must contain 21 points.")
 	boolean validGeometry() {
-		if (this.boundingBox == null || !this.boundingBox.isObject() || this.landmarks == null
+		if (this.frameTimestampMs == null || this.imageWidth == null || this.imageHeight == null
+				|| this.handIndex == null || this.handednessScore == null || this.validLandmarkCount == null
+				|| this.boundingBox == null || !this.boundingBox.isObject() || this.landmarks == null
 				|| !this.landmarks.isArray() || this.landmarks.size() != 21 || this.validLandmarkCount != 21
 				|| !Double.isFinite(this.handednessScore) || this.handednessScore < 0 || this.handednessScore > 1) {
 			return false;
