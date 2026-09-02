@@ -357,6 +357,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     expect(await screen.findByRole('listitem', { name: /capture-page-1/ })).toBeInTheDocument()
     expect(screen.getByRole('listitem', { name: /capture-page-1/ })).toHaveTextContent('合格')
+    expect(screen.getByText('已显示 1 个配药事件')).toBeInTheDocument()
     expect(screen.queryByRole('listitem', { name: /capture-page-2/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
@@ -364,6 +365,7 @@ describe('CaptureGroup operational list and quality', () => {
     expect(await screen.findByRole('listitem', { name: /capture-page-2/ })).toBeInTheDocument()
     expect(firstRow).toHaveTextContent('合格')
     expect(screen.getByRole('listitem', { name: /capture-page-2/ })).toHaveTextContent('合格')
+    expect(screen.getByText('共 2 个配药事件')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/capture-groups?limit=20&cursor=cursor-page-2`,

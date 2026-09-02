@@ -220,7 +220,9 @@ export default function CaptureGroupListView() {
       {rows.length ? (
         <section className="capture-group-list-surface" aria-label="配药事件结果">
           <div className="capture-group-list-heading">
-            <span className="capture-group-list-count">共 {rows.length} 个配药事件</span>
+            <span className="capture-group-list-count">
+              {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
+            </span>
           </div>
           <div className="capture-group-list" role="list" aria-label="配药事件列表">
             {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => {
