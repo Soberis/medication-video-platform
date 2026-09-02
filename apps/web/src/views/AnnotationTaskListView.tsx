@@ -270,9 +270,21 @@ export default function AnnotationTaskListView() {
         title="配药动作标注"
         description="处理已分配的配药动作标注任务；提交后由管理员复核。"
         actions={
-          <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-            刷新
-          </Button>
+          <>
+            {progress?.scope === 'PROJECT' ? (
+              <Button
+                size="small"
+                loading={isTrainingDataV3PreviewLoading}
+                disabled={isTrainingDataV3DownloadLoading}
+                onClick={() => void openTrainingDataV3Export()}
+              >
+                预览训练数据
+              </Button>
+            ) : null}
+            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+              刷新
+            </Button>
+          </>
         }
       />
       {loadState === 'loading' ? <LoadingState>正在加载配药动作标注任务…</LoadingState> : null}
@@ -412,20 +424,30 @@ export default function AnnotationTaskListView() {
                   </div>
                 </details>
               )
-              const taskAction = taskDestination ? (
-                <Button
-                  type="primary"
-                  size="small"
-                  aria-label={`进入${taskSubject}的${taskDestination.actionLabel}`}
-                  onClick={() =>
-                    void navigate(
-                      paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus),
-                    )
-                  }
-                >
-                  {taskDestination.actionLabel}
-                </Button>
-              ) : null
+              const taskAction =
+                row.status !== 'COMPLETED' && taskDestination ? (
+                  <Button
+                    type="primary"
+                    size="small"
+                    aria-label={`进入${taskSubject}的${taskDestination.actionLabel}`}
+                    onClick={() =>
+                      void navigate(
+                        paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus),
+                      )
+                    }
+                  >
+                    {taskDestination.actionLabel}
+                  </Button>
+                ) : null
+              const completedTaskResult =
+                row.status === 'COMPLETED' ? (
+                  <Link
+                    className="text-link"
+                    to={paths.captureGroupFocus(projectId, captureGroupId, 'cleaning')}
+                  >
+                    查看复核与训练资格详情 <span aria-hidden="true">→</span>
+                  </Link>
+                ) : null
               return (
                 <article
                   aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
@@ -504,13 +526,27 @@ export default function AnnotationTaskListView() {
                   <footer className="annotation-task-card-footer">
                     <div
                       className="annotation-task-card-actions"
-                      aria-label={taskAction ? '下一步操作' : '当前任务状态'}
+                      aria-label={
+                        row.status === 'COMPLETED'
+                          ? '完成结果操作'
+                          : taskAction
+                            ? '下一步操作'
+                            : '当前任务状态'
+                      }
                     >
-                      <span className="annotation-task-action-label">
-                        {taskAction ? '下一步' : '当前状态'}
-                      </span>
-                      {taskAction ?? (
-                        <span className="annotation-task-no-action">{taskNoActionLabel(row)}</span>
+                      {row.status === 'COMPLETED' ? (
+                        completedTaskResult
+                      ) : (
+                        <>
+                          <span className="annotation-task-action-label">
+                            {taskAction ? '下一步' : '当前状态'}
+                          </span>
+                          {taskAction ?? (
+                            <span className="annotation-task-no-action">
+                              {taskNoActionLabel(row)}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </footer>
@@ -523,45 +559,19 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && !items.length ? (
         <EmptyState description="当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
       ) : null}
-      {loadState === 'success' && progress?.scope === 'PROJECT' ? (
-        <details className="detail-disclosure annotation-task-project-tools">
-          <summary>
-            <strong>更多项目操作</strong>
-            <span>训练数据导出</span>
-          </summary>
-          <div className="detail-disclosure-content">
-            <div className="annotation-task-project-tools-content">
-              <div className="annotation-task-project-tools-copy">
-                <strong>项目训练数据</strong>
-                <span>项目训练数据使用 training-data.v3；导出前由服务端确认事件级准入。</span>
-              </div>
-              <div className="annotation-task-project-tools-actions">
-                <Button
-                  size="small"
-                  loading={isTrainingDataV3PreviewLoading}
-                  disabled={isTrainingDataV3DownloadLoading}
-                  onClick={() => void openTrainingDataV3Export()}
-                >
-                  预览 training-data.v3
-                </Button>
-              </div>
-            </div>
-          </div>
-        </details>
-      ) : null}
       <Modal
         open={isTrainingDataV3ExportOpen}
-        title="training-data.v3 导出预览"
-        okText="导出 v3"
+        title="训练数据预览"
+        okText="导出训练数据"
         cancelText="关闭"
         confirmLoading={isTrainingDataV3DownloadLoading}
         okButtonProps={{
           disabled: !trainingDataV3Preview?.event_count,
-          'aria-label': '导出 training-data.v3',
+          'aria-label': '导出训练数据',
         }}
         cancelButtonProps={{
           disabled: isTrainingDataV3DownloadLoading,
-          'aria-label': '关闭 v3 预览',
+          'aria-label': '关闭训练数据预览',
         }}
         mask={{ closable: !isTrainingDataV3DownloadLoading }}
         keyboard={!isTrainingDataV3DownloadLoading}
@@ -572,10 +582,10 @@ export default function AnnotationTaskListView() {
         {trainingDataV3Preview ? (
           <>
             <SummaryStrip
-              ariaLabel="training-data.v3 产品摘要"
+              ariaLabel="训练数据摘要"
               items={[
                 {
-                  label: '合格配药事件',
+                  label: '符合条件的事件',
                   value: `${trainingDataV3Preview.eligible_group_count} 组`,
                 },
                 {
@@ -602,7 +612,7 @@ export default function AnnotationTaskListView() {
             />
             {trainingDataV3Preview.event_count === 0 ? (
               <p className="training-data-export-empty" role="status">
-                当前没有符合条件的配药事件，暂时无法导出。
+                当前暂无符合条件的配药事件，暂时无法导出。
               </p>
             ) : null}
             <details className="detail-disclosure training-data-v3-technical-details">

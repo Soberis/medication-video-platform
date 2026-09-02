@@ -107,6 +107,7 @@ describe('annotation task list view', () => {
     expect(
       screen.getByText('处理已分配的配药动作标注任务；提交后由管理员复核。'),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '预览训练数据' })).toBeInTheDocument()
     const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
     expect(breadcrumb).toHaveTextContent('配药动作标注')
     expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
@@ -116,12 +117,7 @@ describe('annotation task list view', () => {
     expect(
       screen.getByRole('button', { name: /进入配药事件 .*进入配药动作标注/ }),
     ).toBeInTheDocument()
-    const projectTools = screen.getByText('更多项目操作').closest('details')
-    if (!projectTools) throw new Error('Project tools disclosure was not mounted.')
-    expect(projectTools).not.toHaveAttribute('open')
-    await user.click(within(projectTools).getByText('更多项目操作'))
-    expect(projectTools).toHaveAttribute('open')
-    expect(screen.getByRole('button', { name: '预览 training-data.v3' })).toBeInTheDocument()
+    expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /配药事件 60000000.*0001/ })).toHaveAttribute(
       'href',
       `/projects/${projectId}/capture-groups/${captureGroupId}`,
@@ -145,6 +141,51 @@ describe('annotation task list view', () => {
     )
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
+  })
+
+  it('keeps the project preview action available while the visible queue is partially complete', async () => {
+    const completedTask = {
+      ...assignedTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000020',
+      status: 'COMPLETED',
+      can_submit: false,
+      annotation_revision: completedRevision,
+    }
+    const pendingTask = {
+      ...assignedTask,
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000021',
+      capture_group_id: '60000000-0000-4000-8000-000000000002',
+      primary_clip_asset_id: '50000000-0000-4000-8000-000000000002',
+    }
+    const preview = trainingDataV3Preview(1)
+    const fetchMock = stubTrainingData([completedTask, pendingTask], labelSchema, preview)
+    const user = userEvent.setup()
+    renderView()
+
+    const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
+    expect(progressSummary).toHaveTextContent('1 个已完成 · 1 个待处理')
+    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/training-data/v3/preview`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+  })
+
+  it('uses a compact all-complete summary for the project queue', async () => {
+    const completedTask = {
+      ...assignedTask,
+      status: 'COMPLETED',
+      can_submit: false,
+      annotation_revision: completedRevision,
+    }
+    stubTasks([completedTask], labelSchema)
+    renderView()
+
+    const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
+    expect(progressSummary).toHaveTextContent('1 个任务')
+    expect(progressSummary).toHaveTextContent('全部完成')
+    expect(progressSummary).not.toHaveTextContent('待处理')
   })
 
   it('routes the only primary action for an assigned task into the CaptureGroup workbench', async () => {
@@ -264,7 +305,9 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('article', { name: /配药事件 .*标注完成/ })
-    await user.click(within(taskRow).getByRole('button', { name: /查看复核 \/ 训练资格检查结果/ }))
+    expect(within(taskRow).queryByText('下一步')).not.toBeInTheDocument()
+    expect(within(taskRow).queryByRole('button')).not.toBeInTheDocument()
+    await user.click(within(taskRow).getByRole('link', { name: /查看复核与训练资格详情/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -371,11 +414,8 @@ describe('annotation task list view', () => {
       await screen.findByText(/当前数据未通过训练资格检查，暂不可用于训练；视频资产未被删除/),
     ).toBeInTheDocument()
     expect(screen.getByText(/主视图正式时间段存在重叠/)).toBeInTheDocument()
-    expect(
-      screen.getAllByRole('button', {
-        name: /进入配药事件 .*查看复核 \/ 训练资格检查结果/,
-      }),
-    ).toHaveLength(4)
+    expect(screen.getAllByRole('link', { name: /查看复核与训练资格详情/ })).toHaveLength(4)
+    expect(screen.queryByText('下一步')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
@@ -402,9 +442,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
 
     const taskRow = await screen.findByRole('article', { name: /标注完成/ })
-    const action = within(taskRow).getByRole('button', {
-      name: /进入配药事件 .*查看复核 \/ 训练资格检查结果/,
-    })
+    const action = within(taskRow).getByRole('link', { name: /查看复核与训练资格详情/ })
     expect(within(taskRow).queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
     await user.click(action)
     await waitFor(() =>
@@ -535,8 +573,8 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    expect(screen.queryByRole('button', { name: '导出训练数据' })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
     const dialog = await screen.findByRole('dialog')
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -544,8 +582,9 @@ describe('annotation task list view', () => {
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
     expect(dialog).toHaveTextContent('2 组')
+    expect(within(dialog).getByRole('button', { name: '导出训练数据' })).not.toBeDisabled()
     const productSummary = within(dialog).getByRole('region', {
-      name: 'training-data.v3 产品摘要',
+      name: '训练数据摘要',
     })
     expect(productSummary).toHaveTextContent('参与机位')
     expect(productSummary).toHaveTextContent('随事件保留')
@@ -598,10 +637,9 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: '导出 training-data.v3' }))
+    await user.click(within(dialog).getByRole('button', { name: '导出训练数据' }))
 
     await waitFor(() => expect(anchorClick).toHaveBeenCalledOnce())
     const link = anchorClick.mock.instances[0] as HTMLAnchorElement
@@ -627,12 +665,11 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
 
-    await user.click(await screen.findByText('更多项目操作'))
-    await user.click(await screen.findByRole('button', { name: '预览 training-data.v3' }))
+    await user.click(await screen.findByRole('button', { name: '预览训练数据' }))
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('0 个')
-    expect(dialog).toHaveTextContent('当前没有符合条件的配药事件，暂时无法导出。')
-    expect(within(dialog).getByRole('button', { name: '导出 training-data.v3' })).toBeDisabled()
+    expect(dialog).toHaveTextContent('当前暂无符合条件的配药事件，暂时无法导出。')
+    expect(within(dialog).getByRole('button', { name: '导出训练数据' })).toBeDisabled()
   })
 
   it('does not show the export action for an assignee-scoped member queue', async () => {
@@ -641,7 +678,7 @@ describe('annotation task list view', () => {
 
     expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '预览 training-data.v3' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '预览训练数据' })).not.toBeInTheDocument()
   })
 
   it('shows the whole page as failed when the label schema cannot be loaded', async () => {
