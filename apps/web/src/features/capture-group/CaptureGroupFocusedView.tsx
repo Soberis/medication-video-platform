@@ -40,6 +40,7 @@ export function CaptureGroupFocusedView({
     candidateState,
     candidateDescription: currentCandidateDescription,
     candidateTone: currentCandidateTone,
+    candidateLiveStatus: currentCandidateLiveStatus,
     playbackGrant,
     playbackState,
     playbackMessage,
@@ -106,6 +107,15 @@ export function CaptureGroupFocusedView({
           </h2>
           {selectedStream ? (
             <span className="capture-group-focused-role">{selectedStream.camera_role}</span>
+          ) : null}
+          {selectedStream ? (
+            <p
+              className="capture-group-hand-detection-status"
+              data-tone={currentCandidateTone}
+              aria-live="polite"
+            >
+              手部检测：{currentCandidateLiveStatus}
+            </p>
           ) : null}
         </div>
         {isPrimary || isSupporting ? (
@@ -219,10 +229,10 @@ export function CaptureGroupFocusedView({
               <Section title="手部检测" titleId="capture-group-candidate-title">
                 <div className="capture-group-candidate-facts capture-group-stack">
                   <StatusIndicator tone={currentCandidateTone}>
-                    {candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
-                      ? '未检测到手部'
-                      : candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
-                        ? '检测失败'
+                    {candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
+                      ? '检测失败'
+                      : candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
+                        ? '未检测到手部'
                         : candidateResponse?.job.status === 'SUCCEEDED' &&
                             candidateResponse.job.hand_result === 'HAND_DETECTED'
                           ? '检测到手部'

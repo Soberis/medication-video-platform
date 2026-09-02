@@ -168,6 +168,10 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText('机位质量')).toBeInTheDocument()
     expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
     expect(await screen.findByText('未检测到手部')).toBeInTheDocument()
+    expect(screen.getByText('手部检测：已完成 · 未检测到手部')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    )
     expect(screen.getByText(/这是检测事实/)).toBeInTheDocument()
     expect(screen.getByText(/人工记录的事件质量结论/)).toBeInTheDocument()
     expect(screen.queryByText(/NO_HAND_DETECTED/)).not.toBeInTheDocument()

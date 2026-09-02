@@ -19,9 +19,16 @@ import {
 import { mediaStatusLabels, syncSafety } from '@/features/capture-group-presentation'
 import {
   candidateDescription,
+  candidateLiveStatusLabel,
   candidateTone,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
+
+const CANDIDATE_POLL_INTERVAL_MS = 4_000
+
+function isCandidateJobPending(response: HandPoseCandidateResponse) {
+  return response.job.status === 'QUEUED' || response.job.status === 'RUNNING'
+}
 
 export function useCaptureGroupView(projectId: string, selectedView: GroupViewRow | null) {
   const selectedStream = selectedView?.stream ?? null
@@ -39,6 +46,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
   const [playbackMessage, setPlaybackMessage] = useState('')
   const [isRequestingPlayback, setIsRequestingPlayback] = useState(false)
   const selectedViewRequest = useRef<AbortController | null>(null)
+  const candidateRefreshRequest = useRef<AbortController | null>(null)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearPlaybackExpiryTimer = useCallback(() => {
@@ -57,6 +65,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
 
   const loadSelectedView = useCallback(async () => {
     selectedViewRequest.current?.abort()
+    candidateRefreshRequest.current?.abort()
     const request = new AbortController()
     selectedViewRequest.current = request
     resetPlayback()
@@ -66,8 +75,9 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     setSelectedMediaReportError('')
     setCandidateResponse(null)
     setCandidateState('idle')
-    if (!selectedClipAssetId || !selectedStream) {
+    if (!selectedClipAssetId) {
       setSelectedMediaReportState('success')
+      selectedViewRequest.current = null
       return
     }
     try {
@@ -79,28 +89,15 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         setCandidateState('unavailable')
         return
       }
-      const [candidateResult, mediaReportResult] = await Promise.allSettled([
-        getLatestHandPoseCandidates(projectId, selectedClipAssetId, request.signal),
-        getClipAssetMediaReport(projectId, selectedClipAssetId, request.signal),
-      ])
+      setCandidateState('loading')
+      const mediaReportResult = await getClipAssetMediaReport(
+        projectId,
+        selectedClipAssetId,
+        request.signal,
+      )
       if (request.signal.aborted || selectedViewRequest.current !== request) return
-      if (candidateResult.status === 'fulfilled') {
-        setCandidateResponse(candidateResult.value)
-        setCandidateState('success')
-      } else {
-        setCandidateState(classifyCandidateReadError(candidateResult.reason))
-      }
-      if (mediaReportResult.status === 'fulfilled') {
-        setSelectedMediaReport(mediaReportResult.value)
-        setSelectedMediaReportState('success')
-      } else {
-        setSelectedMediaReportState('error')
-        setSelectedMediaReportError(
-          mediaReportResult.reason instanceof CatalogApiError
-            ? mediaReportResult.reason.message
-            : '媒体检测报告暂时无法读取。',
-        )
-      }
+      setSelectedMediaReport(mediaReportResult)
+      setSelectedMediaReportState('success')
     } catch (error) {
       if (request.signal.aborted || selectedViewRequest.current !== request) return
       setSelectedMediaReportState('error')
@@ -110,7 +107,33 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     } finally {
       if (selectedViewRequest.current === request) selectedViewRequest.current = null
     }
-  }, [projectId, resetPlayback, selectedClipAssetId, selectedStream])
+  }, [projectId, resetPlayback, selectedClipAssetId])
+
+  const refreshCandidate = useCallback(async () => {
+    if (!selectedClipAssetId) return null
+
+    candidateRefreshRequest.current?.abort()
+    const request = new AbortController()
+    candidateRefreshRequest.current = request
+    try {
+      const response = await getLatestHandPoseCandidates(
+        projectId,
+        selectedClipAssetId,
+        request.signal,
+      )
+      if (request.signal.aborted || candidateRefreshRequest.current !== request) return null
+      setCandidateResponse(response)
+      setCandidateState('success')
+      return response
+    } catch (error) {
+      if (request.signal.aborted || candidateRefreshRequest.current !== request) return null
+      setCandidateResponse(null)
+      setCandidateState(classifyCandidateReadError(error))
+      return null
+    } finally {
+      if (candidateRefreshRequest.current === request) candidateRefreshRequest.current = null
+    }
+  }, [projectId, selectedClipAssetId])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadSelectedView(), 0)
@@ -119,6 +142,46 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       selectedViewRequest.current?.abort()
     }
   }, [loadSelectedView])
+
+  useEffect(() => {
+    if (
+      !selectedClipAssetId ||
+      !selectedDetail ||
+      selectedDetail.clip_asset_id !== selectedClipAssetId
+    ) {
+      return undefined
+    }
+    if (selectedDetail.status !== 'INGESTED') {
+      return undefined
+    }
+
+    let isDisposed = false
+    let pollTimer: number | null = null
+
+    const clearPollTimer = () => {
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer)
+        pollTimer = null
+      }
+    }
+
+    const refreshAndSchedule = async () => {
+      const response = await refreshCandidate()
+      if (isDisposed || !response || !isCandidateJobPending(response)) return
+      pollTimer = window.setTimeout(() => {
+        pollTimer = null
+        void refreshAndSchedule()
+      }, CANDIDATE_POLL_INTERVAL_MS)
+    }
+
+    void refreshAndSchedule()
+
+    return () => {
+      isDisposed = true
+      clearPollTimer()
+      candidateRefreshRequest.current?.abort()
+    }
+  }, [refreshCandidate, selectedClipAssetId, selectedDetail])
 
   useEffect(() => {
     return () => clearPlaybackExpiryTimer()
@@ -200,6 +263,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     candidateState,
     candidateDescription: candidateDescription(candidateState, candidateResponse),
     candidateTone: candidateTone(candidateState, candidateResponse),
+    candidateLiveStatus: candidateLiveStatusLabel(candidateState, candidateResponse),
     playbackGrant,
     playbackState,
     playbackMessage,
@@ -209,6 +273,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     selectedSync: selectedStream ? syncSafety(selectedStream) : null,
     resetPlayback,
     loadSelectedView,
+    refreshCandidate,
     startPlayback,
     onLoadedMetadata: () => {
       setPlaybackState('ready')

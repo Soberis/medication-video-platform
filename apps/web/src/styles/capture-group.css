@@ -382,6 +382,21 @@
   font-size: var(--app-font-size-helper);
 }
 
+.capture-group-hand-detection-status {
+  margin: 0;
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  line-height: var(--app-line-height-body);
+}
+
+.capture-group-hand-detection-status[data-tone='success'] {
+  color: var(--app-color-success);
+}
+
+.capture-group-hand-detection-status[data-tone='warning'] {
+  color: var(--app-color-warning);
+}
+
 .capture-group-form-heading > span,
 .capture-group-compare-heading > span:last-child,
 .capture-group-task-banner > div > span,

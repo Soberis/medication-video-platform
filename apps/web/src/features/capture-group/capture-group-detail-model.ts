@@ -112,6 +112,22 @@ export function candidateStatusLabel(
   return state === 'success' ? '已读取' : '未读取'
 }
 
+export function candidateLiveStatusLabel(
+  state: CandidateLoadState,
+  response: HandPoseCandidateResponse | null,
+) {
+  if (state === 'error' || response?.job.status === 'FAILED') return '失败'
+  if (response?.job.status === 'QUEUED' || response?.job.status === 'RUNNING') return '处理中'
+  if (response?.job.hand_result === 'NO_HAND_DETECTED') return '已完成 · 未检测到手部'
+  if (response?.job.status === 'SUCCEEDED') {
+    if (response.job.hand_result === 'HAND_DETECTED') return '已完成 · 检测到手部'
+    return '已完成 · 结果未知'
+  }
+  if (state === 'unavailable') return '暂不可用'
+  if (state === 'loading') return '读取中'
+  return '未读取'
+}
+
 export function formatTaskStatus(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '已完成'
   if (task.status === 'SUBMITTED') return '待复核'
