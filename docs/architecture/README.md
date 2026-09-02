@@ -1,14 +1,14 @@
 # Architecture Documents
 
-本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.27 为准：产品只有一条以 `CaptureGroup` 为对象的业务路径，Local Upload 和 External Ingest 都通过 `CameraStream / ClipAsset` 进入事件工作台，`N=1` 只是一路视图；流程最终输出 `training-data.v3`。V1.26/V1.25 的事件事实、人工质量、单组任务与 Revision、人工 Review、确定性 Cleaning、权限、审计和 provenance 中仍适用的部分由 V1.27 继承，但旧单视频工作流和 `training-data.v2` 不再是当前产品承诺。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
+本索引汇总配药视频数据管理平台的当前规范与历史参考。当前需求范围以 V1.27 为准：产品只有一条以 `CaptureGroup` 为对象的业务路径，Local Upload 和 External Ingest 都通过 `CameraStream / ClipAsset` 进入事件工作台，`N=1` 只是一路视图；`training-data.v3` 是 CaptureGroup eligibility / provenance event manifest，实际 ML feature export 定义为 Primary View-only 的 `hand-landmarks.v1`。V1.26/V1.25 的事件事实、人工质量、单组任务与 Revision、人工 Review、确定性 Cleaning、权限、审计和 provenance 中仍适用的部分由 V1.27 继承，但旧单视频工作流和 `training-data.v2` 不再是当前产品承诺。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) | 当前产品 IA、唯一业务主链、N=1 统一模型、人工闸门与 `training-data.v3` 输出边界 |
+| [V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) | 当前产品 IA、唯一业务主链、N=1 统一模型、人工闸门、`training-data.v3` manifest 与 `hand-landmarks.v1` 边界 |
 | [V1.27 AI evidence pipeline audit](./v1.27-ai-evidence-audit.md) | 当前 MediaPipe/Candidate 证据链、Review/Cleaning/导出追溯缺口和后续建议 |
-| [V1.27 training traceability audit](./v1.27-training-traceability.md) | 当前训练导出与源视频、人工事实、AI evidence 的追溯审计 |
+| [V1.27 training traceability audit](./v1.27-training-traceability.md) | 当前事件 manifest、landmark feature export 与源视频、人工事实、AI evidence 的追溯审计 |
 | [V1.27 hand detection policy](./v1.27-hand-detection-policy.md) | 当前逐视图检测状态、人工决策边界、审计与保留要求 |
 | [CaptureGroup 多机位接收与数据闭环最小技术设计](./capture-group-multicamera-workflow-technical-design.md) | V1.25 历史领域参考；仅承接 V1.27 仍适用的所有权与实现事实 |
 | [固定多相机配药事件质量评审、标注与清洗用户流程](./multi-camera-quality-review-workflow.md) | V1.25 历史质量、Review 与 Cleaning 语义参考 |
