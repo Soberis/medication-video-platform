@@ -68,9 +68,7 @@ def test_submit_preserves_complete_candidate_fields_in_result_payload() -> None:
         "handedness": "RIGHT",
         "handedness_score": 0.91,
         "bounding_box": {"x": 0.1, "y": 0.2, "width": 0.02, "height": 0.04},
-        "landmarks": [
-            {"x": 0.1 + index * 0.001, "y": 0.2, "z": -0.01} for index in range(21)
-        ],
+        "landmarks": [{"x": 0.1 + index * 0.001, "y": 0.2, "z": -0.01} for index in range(21)],
         "valid_landmark_count": 21,
     }
     result = InferenceResult([candidate], InferenceSummary(3, 3, 1, 2, 0, 1, 0, 0))
