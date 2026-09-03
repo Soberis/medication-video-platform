@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { paths } from '@/app/paths'
-import { validateSegments } from '@/features/capture-group/capture-group-detail-model'
+import {
+  formatAnnotationTime,
+  validateSegments,
+} from '@/features/capture-group/capture-group-detail-model'
 import { renderRoute } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
@@ -17,6 +20,39 @@ import {
 } from './capture-group-fixtures'
 
 afterEach(() => vi.unstubAllGlobals())
+
+describe('formatAnnotationTime', () => {
+  it('formats millisecond values without changing their authoritative unit', () => {
+    expect(formatAnnotationTime(0)).toBe('00:00.000')
+    expect(formatAnnotationTime(12345)).toBe('00:12.345')
+    expect(formatAnnotationTime(60000)).toBe('01:00.000')
+  })
+
+  it('formats the hour boundary with an hours component', () => {
+    expect(formatAnnotationTime(3_599_999)).toBe('59:59.999')
+    expect(formatAnnotationTime(3_600_000)).toBe('01:00:00.000')
+    expect(formatAnnotationTime(3_600_123)).toBe('01:00:00.123')
+  })
+
+  it('does not format invalid or non-finite values', () => {
+    expect(formatAnnotationTime(Number.NaN)).toBeNull()
+    expect(formatAnnotationTime(Number.POSITIVE_INFINITY)).toBeNull()
+    expect(formatAnnotationTime(-1)).toBeNull()
+    expect(formatAnnotationTime(1.5)).toBeNull()
+  })
+
+  it('rejects invalid draft timestamps before submission', () => {
+    expect(
+      validateSegments([
+        { draftId: 1, start_ms: Number.NaN, end_ms: 1000, label: 'label-1' },
+        { draftId: 2, start_ms: 0, end_ms: Number.POSITIVE_INFINITY, label: 'label-1' },
+      ]),
+    ).toEqual({
+      1: { start: '开始时间必须是非负整数毫秒。' },
+      2: { end: '结束时间必须是非负整数毫秒。' },
+    })
+  })
+})
 
 describe('CaptureGroup annotation workflow', () => {
   it('keeps one downgraded task and disables new Revision submission while preserving history and navigation', async () => {
@@ -62,6 +98,9 @@ describe('CaptureGroup annotation workflow', () => {
       receipt: 'COMPLETE',
     })
     const task = groupTask(groupId, true, { revision: true })
+    task.annotation_revision!.annotation_document.segments = [
+      { start_ms: 12345, end_ms: 18760, label: 'PREPARE' },
+    ]
     stubGroupDetail(group, {
       task,
       quality: qualityFixture(group, 'QUALIFIED'),
@@ -75,6 +114,9 @@ describe('CaptureGroup annotation workflow', () => {
 
     expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
+    expect(screen.getByText('机位 1 · 已锁定')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '查看复核与训练资格详情' }))
+    expect(screen.getByText('00:12.345 → 00:18.760')).toBeInTheDocument()
     const auditDisclosure = screen.getByText('事实、历史与审计').closest('details')
     if (!auditDisclosure) throw new Error('Completed audit progressive detail was not mounted.')
     await user.click(screen.getByText('事实、历史与审计'))
@@ -110,7 +152,10 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByRole('button', { name: '提交修订' })).toBeInTheDocument()
+    const submitButton = await screen.findByRole('button', { name: '提交修订' })
+    const annotationSection = screen.getByRole('region', { name: '配药动作标注' })
+    expect(within(annotationSection).getByText('主视图 · 时间基准')).toBeInTheDocument()
+    expect(within(annotationSection).getByText('首个正式修订提交后锁定')).toBeInTheDocument()
     await user.click(await screen.findByRole('combobox', { name: '主视图' }))
     expect(await screen.findByRole('option', { name: '机位 1 · 合格' })).toBeInTheDocument()
     expect(screen.queryByText('PLATFORM_LOCAL')).not.toBeInTheDocument()
@@ -118,6 +163,45 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.queryByRole('button', { name: '继续配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getAllByText('配药动作标注').length).toBeGreaterThan(0)
     expect(screen.queryByText('打开配药事件标注')).not.toBeInTheDocument()
+    expect(submitButton).toBeInTheDocument()
+  })
+
+  it('updates readable time below each millisecond input as the draft changes', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'FAILED',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const form = (await screen.findByRole('button', { name: '提交修订' })).closest('form')
+    if (!form) throw new Error('Annotation form was not mounted.')
+    const startInput = within(form).getByLabelText('开始时间（毫秒）')
+    const endInput = within(form).getByLabelText('结束时间（毫秒）')
+    expect(within(form).getByText('00:00.000')).toBeInTheDocument()
+    expect(within(form).getByText('00:01.000')).toBeInTheDocument()
+    expect(startInput.getAttribute('aria-describedby')).toMatch(/start-readable/)
+    expect(endInput.getAttribute('aria-describedby')).toMatch(/end-readable/)
+
+    fireEvent.change(startInput, { target: { value: '12345' } })
+    fireEvent.change(endInput, { target: { value: '18760' } })
+
+    expect(within(form).getByText('00:12.345')).toBeInTheDocument()
+    expect(within(form).getByText('00:18.760')).toBeInTheDocument()
+
+    fireEvent.change(startInput, { target: { value: '' } })
+    expect((startInput as HTMLInputElement).value).toBe('')
+    expect(startInput.getAttribute('aria-describedby') ?? '').not.toContain('start-readable')
+    expect(within(form).queryByText('00:00.000')).not.toBeInTheDocument()
   })
 
   it('groups each segment by action and time range, and supports adding and deleting segments', async () => {
@@ -284,7 +368,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    await user.click(await screen.findByRole('button', { name: '播放视频' }))
+    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
     const video = await screen.findByLabelText('视频预览')
     let paused = true
     const play = vi.fn(() => {

@@ -17,7 +17,11 @@ import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-grou
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { MetadataList } from '@/components/data/MetadataList'
 import { Section } from '@/components/workspace/Section'
-import { cleaningLabel, cleaningTone } from '@/features/capture-group/capture-group-detail-model'
+import {
+  cleaningLabel,
+  cleaningTone,
+  formatAnnotationTime,
+} from '@/features/capture-group/capture-group-detail-model'
 import {
   groupQualityDisplayLabel,
   groupQualityDisplayTone,
@@ -457,11 +461,20 @@ function FormalAnnotationIntervals({
             const labelName = schema?.labels.find(
               (label) => label.label_id === segment.label,
             )?.display_name
+            const formattedStart = formatAnnotationTime(segment.start_ms)
+            const formattedEnd = formatAnnotationTime(segment.end_ms)
             return (
               <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}-${index}`}>
-                <strong>
-                  {segment.start_ms}–{segment.end_ms} 毫秒
-                </strong>
+                <div className="capture-group-readonly-time">
+                  <strong>
+                    {formattedStart && formattedEnd
+                      ? `${formattedStart} → ${formattedEnd}`
+                      : '时间暂不可用'}
+                  </strong>
+                  <small>
+                    原始值：{segment.start_ms}–{segment.end_ms} 毫秒
+                  </small>
+                </div>
                 <span>{labelName ?? segment.label}</span>
               </li>
             )
@@ -677,12 +690,24 @@ function CleaningPrimaryInterval({
             const labelName = schema?.labels.find(
               (candidate) => candidate.label_id === label,
             )?.display_name
+            const startMs = numberValue(interval, 'start_ms')
+            const endMs = numberValue(interval, 'end_ms')
+            const formattedStart = formatAnnotationTime(startMs)
+            const formattedEnd = formatAnnotationTime(endMs)
             return (
               <li key={evidenceKey(interval, index)}>
-                <strong>
-                  {numberValue(interval, 'start_ms') ?? 0}–{numberValue(interval, 'end_ms') ?? 0}{' '}
-                  毫秒
-                </strong>
+                <div className="capture-group-readonly-time">
+                  <strong>
+                    {formattedStart && formattedEnd
+                      ? `${formattedStart} → ${formattedEnd}`
+                      : '时间暂不可用'}
+                  </strong>
+                  {startMs !== null && endMs !== null ? (
+                    <small>
+                      原始值：{startMs}–{endMs} 毫秒
+                    </small>
+                  ) : null}
+                </div>
                 <span>{labelName ?? label ?? '未提供标签'}</span>
               </li>
             )

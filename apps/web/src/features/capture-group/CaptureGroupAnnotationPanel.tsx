@@ -1,5 +1,5 @@
 import { App as AntdApp, Alert, Button, Input, Select } from 'antd'
-import { CircleAlert, LockKeyhole } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -17,6 +17,7 @@ import { Section } from '@/components/workspace/Section'
 import {
   createDraftSegment,
   currentGroupQualityAdmitting,
+  formatAnnotationTime,
   formatTaskStatus,
   groupViewDecision,
   initialDraftSegments,
@@ -79,6 +80,12 @@ export function CaptureGroupAnnotationPanel({
     groupQuality?.result === 'NEEDS_REVIEW' || groupQuality?.result === 'REJECTED'
   const groupQualityReceiving = group.receipt_state === 'RECEIVING'
   const primaryLocked = Boolean(task?.annotation_revision)
+  const primaryCameraNumber =
+    task?.annotation_revision?.primary_camera_number ??
+    task?.primary_camera_number ??
+    viewRows.find((view) => view.stream?.clip_asset_id === task?.primary_clip_asset_id)
+      ?.cameraNumber ??
+    null
   const canSubmitRevision = Boolean(
     task &&
       task.capture_group_id === captureGroupId &&
@@ -244,12 +251,12 @@ export function CaptureGroupAnnotationPanel({
           ) : null}
           <div className="capture-group-primary-view-control">
             <div>
-              <strong>主视图 · 时间基准</strong>
-              <p>
+              <strong>
                 {primaryLocked
-                  ? '首个正式修订已存在；主视图已锁定。'
-                  : '提交修订前选择一路符合服务端条件的机位。'}
-              </p>
+                  ? `${primaryCameraNumber === null ? '主视图' : `机位 ${primaryCameraNumber}`} · 已锁定`
+                  : '主视图 · 时间基准'}
+              </strong>
+              {!primaryLocked ? <p>首个正式修订提交后锁定</p> : null}
             </div>
             <Select
               aria-label="主视图"
@@ -265,7 +272,6 @@ export function CaptureGroupAnnotationPanel({
               options={primaryOptions}
               onChange={(value) => void choosePrimaryView(value)}
             />
-            {primaryLocked ? <LockKeyhole aria-label="主视图已锁定" size={17} /> : null}
           </div>
           {annotationBlockingReason ? (
             <p className="capture-group-annotation-blocking" role="status">
@@ -289,12 +295,30 @@ export function CaptureGroupAnnotationPanel({
               <div className="capture-group-playback-position" aria-label="当前播放位置">
                 <div>
                   <span className="app-eyebrow">当前播放位置</span>
-                  <strong>{formatPlaybackPosition(currentPlaybackTimeMs)}</strong>
+                  <strong>
+                    {formatAnnotationTime(
+                      currentPlaybackTimeMs === null ? null : Math.round(currentPlaybackTimeMs),
+                    ) ?? '未读取'}
+                  </strong>
                 </div>
                 <span>可将当前视频位置填入时间范围，不会自动提交。</span>
               </div>
               {draftSegments.map((segment, index) => {
                 const errors = segmentErrors[segment.draftId] ?? {}
+                const formattedStart = formatAnnotationTime(segment.start_ms)
+                const formattedEnd = formatAnnotationTime(segment.end_ms)
+                const startReadableId = `segment-${segment.draftId}-start-readable`
+                const endReadableId = `segment-${segment.draftId}-end-readable`
+                const startErrorId = `segment-${segment.draftId}-start-error`
+                const endErrorId = `segment-${segment.draftId}-end-error`
+                const startDescribedBy =
+                  [formattedStart ? startReadableId : '', errors.start ? startErrorId : '']
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                const endDescribedBy =
+                  [formattedEnd ? endReadableId : '', errors.end ? endErrorId : '']
+                    .filter(Boolean)
+                    .join(' ') || undefined
                 return (
                   <div className="capture-group-segment-row" key={segment.draftId}>
                     <div className="capture-group-segment-fields">
@@ -335,22 +359,34 @@ export function CaptureGroupAnnotationPanel({
                             </label>
                             <input
                               id={`segment-${segment.draftId}-start`}
+                              name={`segment-${segment.draftId}-start-ms`}
                               type="number"
                               min={0}
-                              value={segment.start_ms}
+                              step={1}
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={Number.isFinite(segment.start_ms) ? segment.start_ms : ''}
                               aria-invalid={errors.start ? true : undefined}
-                              aria-describedby={
-                                errors.start ? `segment-${segment.draftId}-start-error` : undefined
-                              }
+                              aria-describedby={startDescribedBy}
                               disabled={!canSubmitRevision}
                               onChange={(event) =>
                                 updateSegment(
                                   segment.draftId,
                                   'start_ms',
-                                  Number(event.target.value),
+                                  event.target.value === ''
+                                    ? Number.NaN
+                                    : Number(event.target.value),
                                 )
                               }
                             />
+                            {formattedStart ? (
+                              <span
+                                id={startReadableId}
+                                className="capture-group-segment-time-readable"
+                              >
+                                {formattedStart}
+                              </span>
+                            ) : null}
                             <Button
                               type="text"
                               size="small"
@@ -362,7 +398,7 @@ export function CaptureGroupAnnotationPanel({
                               使用当前时间作为开始
                             </Button>
                             {errors.start ? (
-                              <small id={`segment-${segment.draftId}-start-error`} role="alert">
+                              <small id={startErrorId} role="alert">
                                 {errors.start}
                               </small>
                             ) : null}
@@ -376,18 +412,34 @@ export function CaptureGroupAnnotationPanel({
                             </label>
                             <input
                               id={`segment-${segment.draftId}-end`}
+                              name={`segment-${segment.draftId}-end-ms`}
                               type="number"
                               min={1}
-                              value={segment.end_ms}
+                              step={1}
+                              inputMode="numeric"
+                              autoComplete="off"
+                              value={Number.isFinite(segment.end_ms) ? segment.end_ms : ''}
                               aria-invalid={errors.end ? true : undefined}
-                              aria-describedby={
-                                errors.end ? `segment-${segment.draftId}-end-error` : undefined
-                              }
+                              aria-describedby={endDescribedBy}
                               disabled={!canSubmitRevision}
                               onChange={(event) =>
-                                updateSegment(segment.draftId, 'end_ms', Number(event.target.value))
+                                updateSegment(
+                                  segment.draftId,
+                                  'end_ms',
+                                  event.target.value === ''
+                                    ? Number.NaN
+                                    : Number(event.target.value),
+                                )
                               }
                             />
+                            {formattedEnd ? (
+                              <span
+                                id={endReadableId}
+                                className="capture-group-segment-time-readable"
+                              >
+                                {formattedEnd}
+                              </span>
+                            ) : null}
                             <Button
                               type="text"
                               size="small"
@@ -399,7 +451,7 @@ export function CaptureGroupAnnotationPanel({
                               使用当前时间作为结束
                             </Button>
                             {errors.end ? (
-                              <small id={`segment-${segment.draftId}-end-error`} role="alert">
+                              <small id={endErrorId} role="alert">
                                 {errors.end}
                               </small>
                             ) : null}
@@ -497,18 +549,29 @@ export function CaptureGroupAnnotationPanel({
                 </StatusIndicator>
               </div>
               <ol className="capture-group-readonly-segments">
-                {task.annotation_revision.annotation_document.segments.map((segment, index) => (
-                  <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
-                    <span>时间段 {index + 1}</span>
-                    <strong>
-                      {segment.start_ms}–{segment.end_ms} 毫秒
-                    </strong>
-                    <span>
-                      {schema?.labels.find((label) => label.label_id === segment.label)
-                        ?.display_name ?? segment.label}
-                    </span>
-                  </li>
-                ))}
+                {task.annotation_revision.annotation_document.segments.map((segment, index) => {
+                  const formattedStart = formatAnnotationTime(segment.start_ms)
+                  const formattedEnd = formatAnnotationTime(segment.end_ms)
+                  return (
+                    <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
+                      <span>时间段 {index + 1}</span>
+                      <div className="capture-group-readonly-time">
+                        <strong>
+                          {formattedStart && formattedEnd
+                            ? `${formattedStart} → ${formattedEnd}`
+                            : '时间暂不可用'}
+                        </strong>
+                        <small>
+                          原始值：{segment.start_ms}–{segment.end_ms} 毫秒
+                        </small>
+                      </div>
+                      <span>
+                        {schema?.labels.find((label) => label.label_id === segment.label)
+                          ?.display_name ?? segment.label}
+                      </span>
+                    </li>
+                  )
+                })}
               </ol>
               {task.annotation_revision.annotation_document.note ? (
                 <p className="form-hint">
@@ -523,9 +586,4 @@ export function CaptureGroupAnnotationPanel({
       )}
     </Section>
   )
-}
-
-function formatPlaybackPosition(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return '未读取'
-  return `${Math.max(0, Math.round(value)).toLocaleString('zh-CN')} 毫秒`
 }

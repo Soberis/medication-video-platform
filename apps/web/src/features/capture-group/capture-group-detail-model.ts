@@ -41,6 +41,20 @@ export function createDraftSegment(segment?: AnnotationSegment): DraftAnnotation
   }
 }
 
+function isValidAnnotationTime(value: number | null | undefined): value is number {
+  return value !== null && value !== undefined && Number.isSafeInteger(value) && value >= 0
+}
+
+export function formatAnnotationTime(value: number | null | undefined) {
+  if (!isValidAnnotationTime(value)) return null
+  const milliseconds = value % 1000
+  const seconds = Math.floor(value / 1000) % 60
+  const minutes = Math.floor(value / 60_000) % 60
+  const hours = Math.floor(value / 3_600_000)
+  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`
+  return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock
+}
+
 export function initialDraftSegments(task: AnnotationTask | null) {
   if (!task || task.status !== 'ASSIGNED') return []
   const revision = task.annotation_revision
@@ -52,8 +66,17 @@ export function initialDraftSegments(task: AnnotationTask | null) {
 
 function validateSegment(segment: DraftAnnotationSegment): SegmentValidationErrors {
   const errors: SegmentValidationErrors = {}
-  if (segment.start_ms < 0) errors.start = '开始时间不能小于 0 毫秒。'
-  if (segment.end_ms <= segment.start_ms) errors.end = '结束时间必须晚于开始时间。'
+  const validStart = isValidAnnotationTime(segment.start_ms)
+  const validEnd = isValidAnnotationTime(segment.end_ms)
+  if (!validStart) {
+    errors.start =
+      segment.start_ms < 0 ? '开始时间不能小于 0 毫秒。' : '开始时间必须是非负整数毫秒。'
+  }
+  if (!validEnd) {
+    errors.end = segment.end_ms < 0 ? '结束时间不能小于 0 毫秒。' : '结束时间必须是非负整数毫秒。'
+  } else if (validStart && segment.end_ms <= segment.start_ms) {
+    errors.end = '结束时间必须晚于开始时间。'
+  }
   if (!segment.label.trim()) errors.label = '请选择标签。'
   return errors
 }

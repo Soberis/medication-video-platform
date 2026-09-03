@@ -1213,6 +1213,12 @@
   line-height: var(--app-line-height-metadata);
 }
 
+.task-annotation-time {
+  display: grid;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
 .task-annotation-list li > span:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1223,6 +1229,19 @@
   overflow-wrap: anywhere;
   color: var(--app-color-foreground-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.task-annotation-range strong {
+  color: var(--app-color-foreground-secondary);
+  font-family: var(--app-font-family-mono);
+  font-weight: var(--app-font-weight-regular);
+}
+
+.task-annotation-time > small {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--app-line-height-metadata);
 }
 
 .task-annotation-note {

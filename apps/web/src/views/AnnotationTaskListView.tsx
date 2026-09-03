@@ -27,6 +27,7 @@ import {
   formatDateTime,
   shortId,
 } from '@/features/catalog/catalog-presentation'
+import { formatAnnotationTime } from '@/features/capture-group/capture-group-detail-model'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
@@ -418,11 +419,23 @@ export default function AnnotationTaskListView() {
                             const label =
                               labelSchema?.labels.find((item) => item.label_id === segment.label)
                                 ?.display_name ?? segment.label
+                            const formattedStart = formatAnnotationTime(segment.start_ms)
+                            const formattedEnd = formatAnnotationTime(segment.end_ms)
                             return (
                               <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
-                                <span className="task-annotation-range">
-                                  时间段 {index + 1} · {segment.start_ms}–{segment.end_ms} 毫秒
-                                </span>
+                                <div className="task-annotation-time">
+                                  <span className="task-annotation-range">
+                                    时间段 {index + 1} ·{' '}
+                                    <strong>
+                                      {formattedStart && formattedEnd
+                                        ? `${formattedStart} → ${formattedEnd}`
+                                        : '时间暂不可用'}
+                                    </strong>
+                                  </span>
+                                  <small>
+                                    原始值：{segment.start_ms}–{segment.end_ms} 毫秒
+                                  </small>
+                                </div>
                                 <span>{label}</span>
                               </li>
                             )

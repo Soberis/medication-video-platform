@@ -746,6 +746,14 @@
   background: var(--app-color-surface-muted);
 }
 
+.capture-group-segment-time-readable {
+  color: var(--app-color-foreground-muted);
+  font-family: var(--app-font-family-mono);
+  font-size: var(--app-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--app-line-height-body);
+}
+
 .capture-group-segment-time-field > .ant-btn {
   justify-self: start;
   padding-inline: 0;
@@ -812,6 +820,19 @@
   font-family: var(--app-font-family-mono);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-regular);
+}
+
+.capture-group-readonly-time {
+  display: grid;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+.capture-group-readonly-time small {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--app-line-height-body);
 }
 
 .capture-group-inspector .inspector-section-content {

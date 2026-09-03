@@ -405,7 +405,8 @@ describe('annotation task list view', () => {
     const completedRow = screen.getAllByRole('listitem')[0]!
     const annotationDetails = within(completedRow).getByText('查看详情')
     await user.click(annotationDetails)
-    expect(within(completedRow).getByText(/时间段 1.*0.*1000.*毫秒/)).toBeInTheDocument()
+    expect(within(completedRow).getByText('00:00.000 → 00:01.000')).toBeInTheDocument()
+    expect(within(completedRow).getByText('原始值：0–1000 毫秒')).toBeInTheDocument()
     expect(within(completedRow).getByText('准备工作区')).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看详情')
     expect(evidenceDetails).toHaveLength(4)

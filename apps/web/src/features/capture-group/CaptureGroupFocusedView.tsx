@@ -92,6 +92,7 @@ export function CaptureGroupFocusedView({
   const isPrimary = Boolean(
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
+  const isPrimaryLocked = Boolean(isPrimary && task?.annotation_revision)
   const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
 
   const focusedView = (
@@ -117,7 +118,11 @@ export function CaptureGroupFocusedView({
         </div>
         {isPrimary || isSupporting ? (
           <StatusIndicator tone="information">
-            {isPrimary ? '主视图 · 时间基准' : '参考视图 · 事件级证据'}
+            {isPrimary
+              ? isPrimaryLocked
+                ? `机位 ${selectedStream?.camera_number} · 已锁定`
+                : '主视图 · 时间基准'
+              : '参考视图 · 事件级证据'}
           </StatusIndicator>
         ) : null}
       </header>
