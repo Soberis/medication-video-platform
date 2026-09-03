@@ -64,51 +64,54 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     setPlaybackMessage('')
   }, [clearPlaybackExpiryTimer])
 
-  const loadSelectedView = useCallback(async () => {
-    selectedViewRequest.current?.abort()
-    candidateRefreshRequest.current?.abort()
-    const request = new AbortController()
-    selectedViewRequest.current = request
-    resetPlayback()
-    setSelectedDetail(null)
-    setSelectedMediaReport(null)
-    setSelectedMediaReportState('loading')
-    setSelectedMediaReportError('')
-    setCandidateResponse(null)
-    setCandidateState('idle')
-    if (!selectedClipAssetId) {
-      setSelectedMediaReportState('success')
-      selectedViewRequest.current = null
-      return
-    }
-    try {
-      const detail = await getClipAsset(projectId, selectedClipAssetId, request.signal)
-      if (request.signal.aborted || selectedViewRequest.current !== request) return
-      setSelectedDetail(detail)
-      if (detail.status !== 'INGESTED') {
+  const loadSelectedView = useCallback(
+    async ({ preservePlayback = false } = {}) => {
+      selectedViewRequest.current?.abort()
+      candidateRefreshRequest.current?.abort()
+      const request = new AbortController()
+      selectedViewRequest.current = request
+      if (!preservePlayback) resetPlayback()
+      setSelectedDetail(null)
+      setSelectedMediaReport(null)
+      setSelectedMediaReportState('loading')
+      setSelectedMediaReportError('')
+      setCandidateResponse(null)
+      setCandidateState('idle')
+      if (!selectedClipAssetId) {
         setSelectedMediaReportState('success')
-        setCandidateState('unavailable')
+        selectedViewRequest.current = null
         return
       }
-      setCandidateState('loading')
-      const mediaReportResult = await getClipAssetMediaReport(
-        projectId,
-        selectedClipAssetId,
-        request.signal,
-      )
-      if (request.signal.aborted || selectedViewRequest.current !== request) return
-      setSelectedMediaReport(mediaReportResult)
-      setSelectedMediaReportState('success')
-    } catch (error) {
-      if (request.signal.aborted || selectedViewRequest.current !== request) return
-      setSelectedMediaReportState('error')
-      setSelectedMediaReportError(
-        error instanceof CatalogApiError ? error.message : '暂时无法读取所选机位的媒体事实。',
-      )
-    } finally {
-      if (selectedViewRequest.current === request) selectedViewRequest.current = null
-    }
-  }, [projectId, resetPlayback, selectedClipAssetId])
+      try {
+        const detail = await getClipAsset(projectId, selectedClipAssetId, request.signal)
+        if (request.signal.aborted || selectedViewRequest.current !== request) return
+        setSelectedDetail(detail)
+        if (detail.status !== 'INGESTED') {
+          setSelectedMediaReportState('success')
+          setCandidateState('unavailable')
+          return
+        }
+        setCandidateState('loading')
+        const mediaReportResult = await getClipAssetMediaReport(
+          projectId,
+          selectedClipAssetId,
+          request.signal,
+        )
+        if (request.signal.aborted || selectedViewRequest.current !== request) return
+        setSelectedMediaReport(mediaReportResult)
+        setSelectedMediaReportState('success')
+      } catch (error) {
+        if (request.signal.aborted || selectedViewRequest.current !== request) return
+        setSelectedMediaReportState('error')
+        setSelectedMediaReportError(
+          error instanceof CatalogApiError ? error.message : '暂时无法读取所选机位的媒体事实。',
+        )
+      } finally {
+        if (selectedViewRequest.current === request) selectedViewRequest.current = null
+      }
+    },
+    [projectId, resetPlayback, selectedClipAssetId],
+  )
 
   const refreshCandidate = useCallback(async () => {
     if (!selectedClipAssetId) return null
@@ -155,7 +158,10 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       return undefined
     }
 
-    const timer = window.setTimeout(() => void loadSelectedView(), MEDIA_INGESTION_POLL_INTERVAL_MS)
+    const timer = window.setTimeout(
+      () => void loadSelectedView({ preservePlayback: true }),
+      MEDIA_INGESTION_POLL_INTERVAL_MS,
+    )
     return () => window.clearTimeout(timer)
   }, [loadSelectedView, selectedClipAssetId, selectedDetail])
 
