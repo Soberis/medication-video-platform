@@ -238,7 +238,6 @@ export function CaptureGroupAnnotationPanel({
               <StatusIndicator tone={taskStatusTone(task)}>
                 {formatTaskStatus(task)}
               </StatusIndicator>
-              <span>· 执行人 {task.assignee_actor_id}</span>
             </div>
           </div>
           {groupQualityDowngraded ? (

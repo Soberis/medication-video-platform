@@ -154,6 +154,8 @@ describe('CaptureGroup annotation workflow', () => {
 
     const submitButton = await screen.findByRole('button', { name: '提交修订' })
     const annotationSection = screen.getByRole('region', { name: '配药动作标注' })
+    expect(within(annotationSection).getByText('待提交')).toBeInTheDocument()
+    expect(within(annotationSection).queryByText(task.assignee_actor_id)).not.toBeInTheDocument()
     expect(within(annotationSection).getByText('主视图 · 时间基准')).toBeInTheDocument()
     expect(within(annotationSection).getByText('首个正式修订提交后锁定')).toBeInTheDocument()
     await user.click(await screen.findByRole('combobox', { name: '主视图' }))
