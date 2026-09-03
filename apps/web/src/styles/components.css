@@ -1558,9 +1558,12 @@
 }
 
 .login-card {
-  width: min(100%, 480px);
+  width: min(100%, 400px);
   overflow: hidden;
-  box-shadow: var(--app-shadow-raised);
+  border-color: var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-surface);
+  box-shadow: none;
 }
 
 .login-card h1 {
@@ -1570,17 +1573,17 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
-.login-card > p {
-  color: var(--app-color-foreground-secondary);
-  line-height: var(--app-line-height-relaxed);
+.login-platform-title {
+  margin: 0 0 var(--app-space-8);
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  line-height: var(--app-line-height-metadata);
 }
 
-.login-card > .app-eyebrow {
-  color: var(--app-color-primary);
-}
-
-.login-card > .login-description {
+.login-description {
   margin: var(--app-space-8) 0 0;
+  color: var(--app-color-foreground-secondary);
+  line-height: var(--app-line-height-body-text);
 }
 
 .login-form {
@@ -1589,6 +1592,30 @@
 
 .login-form .ant-btn {
   width: 100%;
+}
+
+/* Enlarge Ant Design password visibility toggle to meet WCAG 24px minimum
+   target size. The default 14×14px icon is too small for pointer and keyboard
+   users; expanding the hit area while keeping the visual icon compact. */
+.login-card .ant-input-password-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--app-radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--app-color-foreground-muted);
+}
+
+.login-card .ant-input-password-icon:hover {
+  color: var(--app-color-foreground-secondary);
+}
+
+.login-card .ant-input-password-icon:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: 1px;
 }
 
 .account-management-page {

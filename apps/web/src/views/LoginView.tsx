@@ -50,8 +50,8 @@ export default function LoginView() {
 
   return (
     <main className="login-page" aria-labelledby="login-title">
-      <Card className="login-card" variant="borderless">
-        <p className="app-eyebrow">配药视频数据管理平台</p>
+      <Card className="login-card" variant="outlined">
+        <p className="login-platform-title">配药视频数据管理平台</p>
         <h1 id="login-title">登录</h1>
         <p className="login-description">使用平台账号登录。</p>
         {errorMessage || auth.sessionError ? (
@@ -72,16 +72,31 @@ export default function LoginView() {
           <Form.Item
             label="账号"
             name="username"
+            htmlFor="login-username"
             rules={[{ required: true, message: '请输入账号。' }]}
           >
-            <Input autoComplete="username" maxLength={128} />
+            <Input
+              id="login-username"
+              name="username"
+              aria-label="账号"
+              autoComplete="username"
+              maxLength={128}
+              spellCheck={false}
+            />
           </Form.Item>
           <Form.Item
             label="密码"
             name="password"
+            htmlFor="login-password"
             rules={[{ required: true, message: '请输入密码。' }]}
           >
-            <Input.Password autoComplete="current-password" maxLength={256} />
+            <Input.Password
+              id="login-password"
+              name="password"
+              aria-label="密码"
+              autoComplete="current-password"
+              maxLength={256}
+            />
           </Form.Item>
           <Button size="middle" htmlType="submit" type="primary" loading={auth.loading}>
             登录
