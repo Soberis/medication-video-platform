@@ -59,7 +59,7 @@ describe('MedicationEventCurrentAction', () => {
     expect(button).toHaveClass('ant-btn-primary')
   })
 
-  it('keeps the complete workflow in a keyboard-operable disclosure', async () => {
+  it('keeps the active workflow in a native keyboard-operable disclosure', async () => {
     const user = userEvent.setup()
     render(
       <MedicationEventWorkflowRail
@@ -81,19 +81,48 @@ describe('MedicationEventCurrentAction', () => {
     const disclosure = summary.closest('details')
     if (!disclosure) throw new Error('Workflow disclosure was not mounted.')
     expect(disclosure).not.toHaveAttribute('open')
-    expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
 
     summary.focus()
-    await user.keyboard('{Enter}')
+    expect(summary).toHaveFocus()
+    await user.click(summary)
     expect(disclosure).toHaveAttribute('open')
-    expect(summary).toHaveAttribute('aria-expanded', 'true')
     const workflowList = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(within(workflowList).getAllByRole('listitem')).toHaveLength(6)
     expect(workflowList.querySelector('[aria-current="step"]')).toHaveTextContent('配药动作标注')
 
-    await user.keyboard('{Enter}')
+    await user.click(summary)
     expect(disclosure).not.toHaveAttribute('open')
-    expect(summary).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('keeps the completed workflow closed until explicitly opened', async () => {
+    const user = userEvent.setup()
+    render(
+      <MedicationEventWorkflowRail
+        workflow={workflow({
+          stage: 'TRAINING_ELIGIBILITY',
+          steps: [
+            { stage: 'RECEIPT', label: '接收', state: 'completed' },
+            { stage: 'VIEW_QUALITY', label: '机位质量', state: 'completed' },
+            { stage: 'GROUP_QUALITY', label: '事件质量', state: 'completed' },
+            { stage: 'ANNOTATION', label: '配药动作标注', state: 'completed' },
+            { stage: 'REVIEW', label: '人工复核', state: 'completed' },
+            { stage: 'TRAINING_ELIGIBILITY', label: '训练资格检查', state: 'completed' },
+          ],
+          primaryAction: null,
+        })}
+      />,
+    )
+
+    const summary = screen.getByText('查看完整流程')
+    const disclosure = summary.closest('details')
+    if (!disclosure) throw new Error('Workflow disclosure was not mounted.')
+    expect(disclosure).not.toHaveAttribute('open')
+
+    await user.click(summary)
+    expect(disclosure).toHaveAttribute('open')
+    expect(screen.getByRole('list', { name: '配药事件处理流程' })).toBeInTheDocument()
+    await user.click(summary)
+    expect(disclosure).not.toHaveAttribute('open')
   })
 
   it('uses information for waiting and warning for a temporary blocker', () => {

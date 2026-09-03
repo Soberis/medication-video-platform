@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { CircleAlert, CircleCheck, Clock3 } from 'lucide-react'
-import { useState, type KeyboardEvent, type Ref } from 'react'
+import type { Ref } from 'react'
 
 import { Section } from '@/components/workspace/Section'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
@@ -44,44 +44,13 @@ export function MedicationEventWorkflowRail({
 }: {
   workflow: MedicationEventWorkflowModel
 }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const isCompleted = workflow.steps.every((step) => step.state === 'completed')
-
-  const handleSummaryKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ' && event.code !== 'Space') return
-    event.preventDefault()
-    setIsOpen((open) => !open)
-  }
-
-  if (!isCompleted) {
-    return (
-      <details
-        className="capture-group-workflow-rail capture-group-workflow-disclosure"
-        open={isOpen}
-        onToggle={(event) => setIsOpen(event.currentTarget.open)}
-      >
-        <summary
-          aria-controls="capture-group-workflow-content"
-          aria-expanded={isOpen}
-          onKeyDown={handleSummaryKeyDown}
-        >
-          查看完整流程
-        </summary>
-        <div
-          id="capture-group-workflow-content"
-          className="capture-group-workflow-rail-content"
-          hidden={!isOpen}
-        >
-          <WorkflowRailContent workflow={workflow} />
-        </div>
-      </details>
-    )
-  }
-
   return (
-    <section className="capture-group-workflow-rail" aria-labelledby="capture-group-workflow-title">
-      <WorkflowRailContent workflow={workflow} />
-    </section>
+    <details className="capture-group-workflow-rail capture-group-workflow-disclosure">
+      <summary>查看完整流程</summary>
+      <div className="capture-group-workflow-rail-content">
+        <WorkflowRailContent workflow={workflow} />
+      </div>
+    </details>
   )
 }
 
@@ -89,9 +58,7 @@ function WorkflowRailContent({ workflow }: { workflow: MedicationEventWorkflowMo
   return (
     <>
       <div className="capture-group-workflow-rail-heading">
-        <span id="capture-group-workflow-title" className="app-eyebrow">
-          处理进度
-        </span>
+        <span className="app-eyebrow">处理进度</span>
         <span>当前阶段：{medicationEventWorkflowStageLabels[workflow.stage]}</span>
       </div>
       <ol className="capture-group-workflow-rail-list" aria-label="配药事件处理流程">

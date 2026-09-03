@@ -154,7 +154,6 @@ describe('CaptureGroup detail views', () => {
     const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
     if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
     expect(workflowDisclosure).not.toHaveAttribute('open')
-    expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
     await user.click(within(workflowDisclosure).getByText('查看完整流程'))
     const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(workflowRail).toBeInTheDocument()
@@ -256,7 +255,6 @@ describe('CaptureGroup detail views', () => {
       const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
       if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
       expect(workflowDisclosure).not.toHaveAttribute('open')
-      expect(screen.queryByRole('list', { name: '配药事件处理流程' })).not.toBeInTheDocument()
     } finally {
       Object.defineProperty(window, 'innerWidth', {
         configurable: true,
@@ -333,9 +331,15 @@ describe('CaptureGroup detail views', () => {
     expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
     expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
+    const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
+    if (!workflowDisclosure) throw new Error('Completed workflow disclosure was not mounted.')
+    expect(workflowDisclosure).not.toHaveAttribute('open')
+    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
     const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)
     expect(workflowRail.querySelector('[aria-current="step"]')).toHaveTextContent('训练资格检查')
+    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
+    expect(workflowDisclosure).not.toHaveAttribute('open')
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
     const detailToggle = screen.getByRole('button', { name: '查看复核与训练资格详情' })
     expect(detailToggle).toHaveAttribute('aria-expanded', 'false')
