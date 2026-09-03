@@ -158,7 +158,7 @@ theme.**
 | `surfaceElevated`     | `#FFFFFF` | 浮层、弹窗和检查器        |
 | `foreground`          | `#161B22` | 标题与主要事实            |
 | `foregroundSecondary` | `#4B5563` | 正文与次要操作            |
-| `foregroundMuted`     | `#8A94A6` | 元数据与辅助说明          |
+| `foregroundMuted`     | `#5F6B7A` | 元数据与辅助说明          |
 | `border`              | `#D1D5DB` | 需要明确边界的控件        |
 | `borderSubtle`        | `#E5E7EB` | 分隔与低权重边界          |
 | `primary`             | `#315E9B` | 主要动作与选中状态        |

@@ -1,6 +1,6 @@
 .app-eyebrow {
   margin: 0;
-  color: var(--app-color-focus-ring);
+  color: var(--app-color-primary);
   font-size: var(--app-font-size-label);
   font-weight: var(--app-font-weight-label);
   line-height: var(--app-line-height-label);

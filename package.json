@@ -11,6 +11,8 @@
     "web:type-check": "pnpm --filter @medication-video-platform/web type-check",
     "web:test": "pnpm --filter @medication-video-platform/web test",
     "web:build": "pnpm --filter @medication-video-platform/web build",
+    "web:e2e": "pnpm --filter @medication-video-platform/web test:e2e",
+    "web:e2e:update": "pnpm --filter @medication-video-platform/web test:e2e:update",
     "web:check": "pnpm run web:format:check && pnpm run web:lint && pnpm run web:type-check && pnpm run web:test && pnpm run web:build",
     "synthetic-upload": "node tools/synthetic-upload-client/index.mjs",
     "synthetic-upload:2gb": "node tools/synthetic-upload-client/large-upload-acceptance.mjs",

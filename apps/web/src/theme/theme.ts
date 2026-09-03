@@ -21,6 +21,7 @@ export const appTheme: ThemeConfig = {
     colorText: appTokens.color.foreground,
     colorTextSecondary: appTokens.color.foregroundSecondary,
     colorTextTertiary: appTokens.color.foregroundMuted,
+    colorTextPlaceholder: appTokens.color.foregroundMuted,
     colorBgLayout: appTokens.color.background,
     colorBgContainer: appTokens.color.surface,
     colorBgElevated: appTokens.color.surfaceElevated,

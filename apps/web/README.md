@@ -14,6 +14,18 @@ pnpm run web:test
 pnpm run web:build
 ```
 
+浏览器验收：
+
+```powershell
+pnpm run web:e2e
+```
+
+首次运行前安装 Chromium：
+
+```powershell
+pnpm --dir apps/web exec playwright install chromium
+```
+
 以上命令从仓库根目录运行；如在 `apps/web` 目录内工作，可分别使用 `pnpm dev`、`pnpm lint`、`pnpm type-check`、`pnpm test` 和 `pnpm build`。
 
 开发服务器默认监听 `http://127.0.0.1:5173`（可由 `WEB_PORT` 覆盖），并把 `/api` 代理到 `http://127.0.0.1:${PLATFORM_API_PORT:-8080}`。Web 使用平台内部账号登录；密码不进入浏览器存储，服务端仅保存 BCrypt 哈希，浏览器通过 HttpOnly 会话 Cookie 与 CSRF Header 调用 API。项目可见性和 ADMIN/MEMBER 仍由后端 Membership 在每次请求中校验，前端从不自行授予权限。医院边端使用独立上传凭据，不使用 Web 登录页。

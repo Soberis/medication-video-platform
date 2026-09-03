@@ -78,7 +78,7 @@ export const appTokens = {
     surfaceHover: '#ECEFF3',
     foreground: '#161B22',
     foregroundSecondary: '#4B5563',
-    foregroundMuted: '#8A94A6',
+    foregroundMuted: '#5F6B7A',
     border: '#D1D5DB',
     borderSubtle: '#E5E7EB',
     primary: '#315E9B',

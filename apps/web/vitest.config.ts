@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.git/**', 'e2e/**'],
     maxWorkers: 4,
     root: fileURLToPath(new URL('.', import.meta.url)),
     setupFiles: ['./src/test/setup.ts'],

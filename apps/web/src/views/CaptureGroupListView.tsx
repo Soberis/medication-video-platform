@@ -239,7 +239,7 @@ export default function CaptureGroupListView() {
               )
 
               return (
-                <article
+                <div
                   className="capture-group-list-row"
                   key={group.capture_group_id}
                   role="listitem"
@@ -307,7 +307,7 @@ export default function CaptureGroupListView() {
                       进入工作台 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
                   </footer>
-                </article>
+                </div>
               )
             })}
           </div>
