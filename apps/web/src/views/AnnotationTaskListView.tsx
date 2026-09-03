@@ -1,4 +1,4 @@
-import { App as AntdApp, Button, Modal } from 'antd'
+import { Button } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -10,12 +10,6 @@ import {
   type AnnotationTask,
   type AnnotationTaskProgress,
 } from '@/api/annotation'
-import {
-  downloadHandLandmarkExport,
-  getHandLandmarkExportPreview,
-  HandLandmarkExportApiError,
-  type HandLandmarkExportPreview,
-} from '@/api/hand-landmarks'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -113,50 +107,16 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
   return decision === 'APPROVED' ? 'success' : 'destructive'
 }
 
-function formatTrainingCount(value: number) {
-  return new Intl.NumberFormat('zh-CN').format(value)
-}
-
-function handLandmarkEmptyMessage(preview: HandLandmarkExportPreview) {
-  if (preview.no_job_view_count > 0) {
-    return `${formatTrainingCount(preview.no_job_view_count)} 个视图尚未开始手部检测。检测完成后，这里会显示可导出的样本数量。`
-  }
-  if (preview.queued_view_count > 0) {
-    return `${formatTrainingCount(preview.queued_view_count)} 个视图的手部检测已排队。检测完成后，这里会显示可导出的样本数量。`
-  }
-  if (preview.running_view_count > 0) {
-    return `${formatTrainingCount(preview.running_view_count)} 个视图的手部检测仍在运行。检测完成后，这里会显示可导出的样本数量。`
-  }
-  if (preview.failed_view_count > 0) {
-    return `${formatTrainingCount(preview.failed_view_count)} 个视图的手部检测失败，当前没有可导出的样本。`
-  }
-  if (preview.no_hand_view_count > 0) {
-    return `${formatTrainingCount(preview.no_hand_view_count)} 个已完成视图未检测到手部关键点。`
-  }
-  if (preview.hand_detection_view_count > 0) {
-    return `${formatTrainingCount(preview.hand_detection_view_count)} 个启用且可用视图当前没有可导出的手部关键点。`
-  }
-  return '当前没有启用且可用的 CameraStream 可供手部检测关键点导出。'
-}
-
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
-  const { message } = AntdApp.useApp()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const [handLandmarkPreview, setHandLandmarkPreview] = useState<HandLandmarkExportPreview | null>(
-    null,
-  )
-  const [isHandLandmarkExportOpen, setIsHandLandmarkExportOpen] = useState(false)
-  const [isHandLandmarkPreviewLoading, setIsHandLandmarkPreviewLoading] = useState(false)
-  const [isHandLandmarkDownloadLoading, setIsHandLandmarkDownloadLoading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
-  const trainingExportRequest = useRef<AbortController | null>(null)
 
   const loadTasks = useCallback(async () => {
     activeRequest.current?.abort()
@@ -199,93 +159,8 @@ export default function AnnotationTaskListView() {
     return () => {
       window.clearTimeout(timer)
       activeRequest.current?.abort()
-      trainingExportRequest.current?.abort()
     }
   }, [loadTasks])
-
-  const openHandLandmarkExport = useCallback(async () => {
-    if (
-      progress?.scope !== 'PROJECT' ||
-      isHandLandmarkPreviewLoading ||
-      isHandLandmarkDownloadLoading
-    )
-      return
-    trainingExportRequest.current?.abort()
-    const request = new AbortController()
-    trainingExportRequest.current = request
-    setIsHandLandmarkPreviewLoading(true)
-    try {
-      const preview = await getHandLandmarkExportPreview(projectId, request.signal)
-      if (request.signal.aborted || trainingExportRequest.current !== request) return
-      setHandLandmarkPreview(preview)
-      setIsHandLandmarkExportOpen(true)
-    } catch (error) {
-      if (request.signal.aborted || trainingExportRequest.current !== request) return
-      void message.error(
-        error instanceof HandLandmarkExportApiError
-          ? error.message
-          : '暂时无法读取 MediaPipe 手部检测关键点，请稍后重试。',
-      )
-    } finally {
-      if (trainingExportRequest.current === request) {
-        trainingExportRequest.current = null
-        setIsHandLandmarkPreviewLoading(false)
-      }
-    }
-  }, [
-    isHandLandmarkDownloadLoading,
-    isHandLandmarkPreviewLoading,
-    message,
-    progress?.scope,
-    projectId,
-  ])
-
-  const closeHandLandmarkExport = useCallback(() => {
-    if (isHandLandmarkDownloadLoading) return
-    setIsHandLandmarkExportOpen(false)
-    setHandLandmarkPreview(null)
-  }, [isHandLandmarkDownloadLoading])
-
-  const downloadHandLandmarkFile = useCallback(async () => {
-    if (
-      !handLandmarkPreview ||
-      handLandmarkPreview.sample_count <= 0 ||
-      isHandLandmarkDownloadLoading
-    )
-      return
-    const request = new AbortController()
-    trainingExportRequest.current = request
-    setIsHandLandmarkDownloadLoading(true)
-    try {
-      const blob = await downloadHandLandmarkExport(projectId, request.signal)
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = handLandmarkPreview.file_name
-      link.rel = 'noopener'
-      link.hidden = true
-      document.body.append(link)
-      try {
-        link.click()
-      } finally {
-        URL.revokeObjectURL(objectUrl)
-        link.remove()
-      }
-      setIsHandLandmarkExportOpen(false)
-      setHandLandmarkPreview(null)
-      void message.success(`已开始下载 ${handLandmarkPreview.file_name}。`)
-    } catch (error) {
-      if (request.signal.aborted) return
-      void message.error(
-        error instanceof HandLandmarkExportApiError
-          ? error.message
-          : 'MediaPipe 手部检测关键点暂时无法导出，请稍后重试。',
-      )
-    } finally {
-      if (trainingExportRequest.current === request) trainingExportRequest.current = null
-      setIsHandLandmarkDownloadLoading(false)
-    }
-  }, [handLandmarkPreview, isHandLandmarkDownloadLoading, message, projectId])
 
   return (
     <>
@@ -298,16 +173,6 @@ export default function AnnotationTaskListView() {
         description="在这里处理配药事件的动作标注；提交后由管理员复核。"
         actions={
           <>
-            {progress?.scope === 'PROJECT' ? (
-              <Button
-                size="small"
-                loading={isHandLandmarkPreviewLoading}
-                disabled={isHandLandmarkDownloadLoading}
-                onClick={() => void openHandLandmarkExport()}
-              >
-                预览手部关键点导出
-              </Button>
-            ) : null}
             <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
               刷新
             </Button>
@@ -594,128 +459,6 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && !items.length ? (
         <EmptyState description="当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
       ) : null}
-      <Modal
-        open={isHandLandmarkExportOpen}
-        title="手部关键点导出预览"
-        okText="导出 CSV"
-        cancelText="关闭"
-        confirmLoading={isHandLandmarkDownloadLoading}
-        okButtonProps={{
-          disabled: !handLandmarkPreview?.sample_count,
-          'aria-label': '导出 CSV',
-        }}
-        cancelButtonProps={{
-          disabled: isHandLandmarkDownloadLoading,
-          'aria-label': '关闭手部关键点导出预览',
-        }}
-        mask={{ closable: !isHandLandmarkDownloadLoading }}
-        keyboard={!isHandLandmarkDownloadLoading}
-        onCancel={closeHandLandmarkExport}
-        onOk={() => void downloadHandLandmarkFile()}
-        destroyOnHidden
-      >
-        {handLandmarkPreview ? (
-          <div className="hand-landmark-export-content">
-            {handLandmarkPreview.sample_count > 0 ? (
-              <div className="hand-landmark-export-readiness" role="status" aria-live="polite">
-                <StatusIndicator tone="success">可以导出</StatusIndicator>
-                <p>当前已有可导出的 MediaPipe 手部关键点样本。</p>
-              </div>
-            ) : (
-              <div
-                className="hand-landmark-export-readiness hand-landmark-export-empty"
-                role="status"
-                aria-live="polite"
-              >
-                <StatusIndicator tone="warning">暂不可导出</StatusIndicator>
-                <strong>暂无可导出的手部关键点</strong>
-                <p>{handLandmarkEmptyMessage(handLandmarkPreview)}</p>
-              </div>
-            )}
-
-            <section className="hand-landmark-export-facts" aria-label="手部检测关键点导出摘要">
-              <dl className="hand-landmark-export-facts-list">
-                <div>
-                  <dt>检测视图</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.hand_detection_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>已完成视图</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.completed_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>检测到手部</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.views_with_hand)} 个</dd>
-                </div>
-                <div>
-                  <dt>可导出样本</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.sample_count)}</dd>
-                </div>
-                <div>
-                  <dt>尚未开始检测</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.no_job_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>检测已排队</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.queued_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>检测运行中</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.running_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>检测失败</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.failed_view_count)} 个</dd>
-                </div>
-                <div>
-                  <dt>未检测到手部</dt>
-                  <dd>{formatTrainingCount(handLandmarkPreview.no_hand_view_count)} 个</dd>
-                </div>
-              </dl>
-            </section>
-            {handLandmarkPreview.sample_count > 0 &&
-            (handLandmarkPreview.no_job_view_count > 0 ||
-              handLandmarkPreview.queued_view_count > 0 ||
-              handLandmarkPreview.running_view_count > 0 ||
-              handLandmarkPreview.failed_view_count > 0 ||
-              handLandmarkPreview.no_hand_view_count > 0) ? (
-              <p className="hand-landmark-export-partial" role="status">
-                仍有视图尚未开始、已排队、处于运行中、检测失败或未检测到手部；本次仍可导出已有样本。
-              </p>
-            ) : null}
-            <details className="hand-landmark-export-disclosure">
-              <summary>查看文件与来源</summary>
-              <dl className="hand-landmark-export-technical">
-                <div>
-                  <dt>导出产物</dt>
-                  <dd>
-                    <code>{handLandmarkPreview.schema_version}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>文件名</dt>
-                  <dd>
-                    <code>{handLandmarkPreview.file_name}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>文件格式</dt>
-                  <dd>
-                    <code>{handLandmarkPreview.media_type}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>样本范围</dt>
-                  <dd>
-                    当前启用且可用的 CameraStream 中，当前 MediaPipe 成功检测到的手部关键点事实；
-                    每个时间戳保持源 ClipAsset 本地时间。
-                  </dd>
-                </div>
-              </dl>
-            </details>
-          </div>
-        ) : null}
-      </Modal>
     </>
   )
 }

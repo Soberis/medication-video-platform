@@ -6,6 +6,7 @@ import { Link, useLocation, useParams } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { paths } from '@/app/paths'
+import { useAuth } from '@/app/auth'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
@@ -44,9 +45,11 @@ import {
   type CaptureGroupDetailRefreshOptions,
 } from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
+import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
+  const { session } = useAuth()
   const location = useLocation()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
@@ -264,6 +267,9 @@ export default function CaptureGroupDetailView() {
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
+            {session?.role === 'ADMIN' ? (
+              <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
+            ) : null}
             <Button
               size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}

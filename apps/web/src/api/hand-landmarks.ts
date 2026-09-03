@@ -10,6 +10,7 @@ export interface HandLandmarkExportPreview {
   failed_view_count: number
   no_hand_view_count: number
   file_name: string
+  generated_at: string
   media_type: string
 }
 
@@ -25,10 +26,12 @@ export class HandLandmarkExportApiError extends Error {
 
 export async function getHandLandmarkExportPreview(
   projectId: string,
+  captureGroupId?: string,
   signal?: AbortSignal,
 ): Promise<HandLandmarkExportPreview> {
+  const query = captureGroupId ? `?capture_group_id=${encodeURIComponent(captureGroupId)}` : ''
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/hand-landmarks/v1/preview`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/hand-landmarks/v1/preview${query}`,
     {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -45,10 +48,14 @@ export async function getHandLandmarkExportPreview(
 
 export async function downloadHandLandmarkExport(
   projectId: string,
+  generatedAt: string,
+  captureGroupId?: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
+  const query = new URLSearchParams({ generated_at: generatedAt })
+  if (captureGroupId) query.set('capture_group_id', captureGroupId)
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/hand-landmarks/v1/download`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/hand-landmarks/v1/download?${query}`,
     {
       method: 'GET',
       headers: { Accept: 'text/csv; charset=UTF-8' },
@@ -77,6 +84,7 @@ async function handLandmarkExportApiError(
   const messages: Record<string, string> = {
     PROJECT_ACCESS_DENIED: '当前身份没有项目手部检测关键点导出的权限。',
     PROJECT_NOT_FOUND: '未找到该项目，或当前身份无权访问。',
+    CAPTURE_GROUP_NOT_FOUND: '未找到该配药事件，或该事件不属于当前项目。',
     HAND_LANDMARK_EXPORT_UNAVAILABLE: '当前环境暂未开放手部检测关键点导出。',
     HAND_LANDMARK_EXPORT_EVIDENCE_INVALID: '当前手部关键点证据不完整，暂时无法导出。',
     HAND_LANDMARK_EXPORT_FAILED: '手部检测关键点导出未完成，请稍后重试。',

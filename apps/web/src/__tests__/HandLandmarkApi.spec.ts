@@ -19,7 +19,8 @@ describe('MediaPipe hand landmark export API', () => {
       running_view_count: 1,
       failed_view_count: 0,
       no_hand_view_count: 1,
-      file_name: 'mediapipe_hand_landmarks_v1.csv',
+      file_name: 'mediapipe_hand_landmarks_v1_project_20260903T112530Z.csv',
+      generated_at: '2026-09-03T11:25:30Z',
       media_type: 'text/csv; charset=UTF-8',
     }
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview))
@@ -37,20 +38,36 @@ describe('MediaPipe hand landmark export API', () => {
     )
   })
 
-  it('downloads the server-generated CSV Blob without reading its rows', async () => {
+  it('downloads project and CaptureGroup scopes with the preview generation time', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('server,csv\n'))
     vi.stubGlobal('fetch', fetchMock)
 
-    const blob = await downloadHandLandmarkExport(projectId)
+    const blob = await downloadHandLandmarkExport(
+      projectId,
+      '2026-09-03T11:25:30Z',
+      '49de2828-0000-4000-8000-000000000001',
+    )
     expect(await blob.text()).toBe('server,csv\n')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/hand-landmarks/v1/download`,
+      `/api/v1/projects/${projectId}/hand-landmarks/v1/download?generated_at=2026-09-03T11%3A25%3A30Z&capture_group_id=49de2828-0000-4000-8000-000000000001`,
       expect.objectContaining({
         method: 'GET',
         headers: { Accept: 'text/csv; charset=UTF-8' },
         cache: 'no-store',
       }),
+    )
+  })
+
+  it('requests a single CaptureGroup preview only when scoped', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getHandLandmarkExportPreview(projectId, '49de2828-0000-4000-8000-000000000001')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/hand-landmarks/v1/preview?capture_group_id=49de2828-0000-4000-8000-000000000001`,
+      expect.objectContaining({ method: 'GET' }),
     )
   })
 

@@ -2,6 +2,9 @@ package com.medicationvideo.platform.datasetexport;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -35,9 +38,10 @@ class HandLandmarkTrainingExportService {
 
 	static final String MEDIA_TYPE = "text/csv; charset=UTF-8";
 
-	static final String FILE_NAME = "mediapipe_hand_landmarks_v1.csv";
-
 	static final List<String> CSV_COLUMNS = csvColumns();
+
+	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+		.withZone(ZoneOffset.UTC);
 
 	private static final String SHA256_PATTERN = "^[a-f0-9]{64}$";
 
@@ -56,22 +60,28 @@ class HandLandmarkTrainingExportService {
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	HandLandmarkTrainingExportPreviewResponse preview(UUID projectId) {
-		var snapshot = snapshot(projectId);
+	HandLandmarkTrainingExportPreviewResponse preview(UUID projectId, UUID captureGroupId, Instant generatedAt) {
+		var snapshot = snapshot(projectId, captureGroupId);
 		return new HandLandmarkTrainingExportPreviewResponse(SCHEMA_VERSION, snapshot.handDetectionViewCount(),
 				snapshot.completedViewCount(), snapshot.viewsWithHand(), snapshot.rows().size(),
 				snapshot.noJobViewCount(), snapshot.queuedViewCount(), snapshot.runningViewCount(),
-				snapshot.failedViewCount(), snapshot.noHandViewCount(), FILE_NAME, MEDIA_TYPE);
+				snapshot.failedViewCount(), snapshot.noHandViewCount(), fileName(captureGroupId, generatedAt),
+				generatedAt, MEDIA_TYPE);
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	byte[] download(UUID projectId) {
-		return toCsv(snapshot(projectId).rows());
+	byte[] download(UUID projectId, UUID captureGroupId) {
+		return toCsv(snapshot(projectId, captureGroupId).rows());
 	}
 
-	private ExportSnapshot snapshot(UUID projectId) {
+	static String fileName(UUID captureGroupId, Instant generatedAt) {
+		var scope = captureGroupId == null ? "project" : "event_" + captureGroupId.toString().substring(0, 8);
+		return "mediapipe_hand_landmarks_v1_%s_%s.csv".formatted(scope, FILE_TIMESTAMP.format(generatedAt));
+	}
+
+	private ExportSnapshot snapshot(UUID projectId, UUID captureGroupId) {
 		requireSyntheticProfile();
-		var views = readDetectionViews(projectId);
+		var views = readDetectionViews(projectId, captureGroupId);
 		if (views.isEmpty()) {
 			return new ExportSnapshot(0, 0, 0, 0, 0, 0, 0, 0, List.of());
 		}
@@ -144,9 +154,11 @@ class HandLandmarkTrainingExportService {
 				runningViewCount, failedViewCount, noHandViewCount, List.copyOf(rows));
 	}
 
-	private List<DetectionView> readDetectionViews(UUID projectId) {
+	private List<DetectionView> readDetectionViews(UUID projectId, UUID captureGroupId) {
 		var views = new ArrayList<DetectionView>();
-		for (var group : this.captureGroupViewQueryService.findAll(projectId)) {
+		var groups = captureGroupId == null ? this.captureGroupViewQueryService.findAll(projectId)
+				: List.of(this.captureGroupViewQueryService.get(projectId, captureGroupId));
+		for (var group : groups) {
 			validateGroup(group, projectId);
 			for (var view : group.views()) {
 				if (view == null || !view.enabledForHandDetection() || !view.present()) {

@@ -81,8 +81,8 @@ paths:
       summary: Preview current MediaPipe hand-landmark detection samples
       description: >-
         Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. The preview enumerates current enabled
-        and available camera streams for every current CaptureGroup and reads the current MediaPipe job and
-        CandidateAnnotation evidence for each ClipAsset. It has no dependency on View or Group Quality,
+        and available camera streams for every current CaptureGroup, or exactly the requested CaptureGroup,
+        and reads the current MediaPipe job and CandidateAnnotation evidence for each ClipAsset. It has no dependency on View or Group Quality,
         AnnotationRevision, Review, Cleaning or training-data.v3 eligibility. Only a current
         SUCCEEDED_WITH_CANDIDATES job contributes rows; NO_JOB, QUEUED, RUNNING, FAILED and
         SUCCEEDED_NO_HAND views contribute no rows and are represented by the corresponding detection-state
@@ -92,6 +92,13 @@ paths:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: query
+          required: false
+          description: Limits the export to exactly one CaptureGroup belonging to the project.
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Current MediaPipe hand-landmark detection export preview.
@@ -104,6 +111,7 @@ paths:
                 $ref: "#/components/schemas/HandLandmarkTrainingExportPreview"
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: >-
             Current CaptureGroup eligibility, frozen AI evidence or selected CandidateAnnotation data
@@ -120,7 +128,8 @@ paths:
       summary: Download current MediaPipe hand-landmark detection samples as CSV
       description: >-
         Returns one row per valid 21-point MediaPipe hand candidate from the current
-        SUCCEEDED_WITH_CANDIDATES job for every current enabled and available camera stream. The export
+        SUCCEEDED_WITH_CANDIDATES job for every current enabled and available camera stream in the project
+        or requested CaptureGroup. The export
         preserves each ClipAsset's source-local frame timestamp and camera stream identity; it does not
         select a Primary View or align timestamps across cameras, and contains no human labels, annotation,
         Review or Cleaning fields. The response contains no MP4 bytes and is restricted to the synthetic
@@ -135,6 +144,20 @@ paths:
         - sessionCookie: []
       parameters:
         - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: query
+          required: false
+          description: Limits the export to exactly one CaptureGroup belonging to the project.
+          schema:
+            type: string
+            format: uuid
+        - name: generated_at
+          in: query
+          required: false
+          description: The generated_at value returned by preview, preserving its advertised filename.
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: Deterministic current MediaPipe hand-landmark detection CSV; no MP4 bytes.
@@ -144,7 +167,7 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-                const: 'attachment; filename="mediapipe_hand_landmarks_v1.csv"'
+                pattern: '^attachment; filename="mediapipe_hand_landmarks_v1_(project|event_[a-f0-9]{8})_[0-9]{8}T[0-9]{6}Z\\.csv"$'
           content:
             "text/csv; charset=UTF-8":
               schema:
@@ -152,6 +175,7 @@ paths:
                 format: binary
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: >-
             Current CaptureGroup camera-stream or MediaPipe candidate evidence cannot be proven safely,
@@ -7042,6 +7066,7 @@ components:
         - failed_view_count
         - no_hand_view_count
         - file_name
+        - generated_at
         - media_type
       properties:
         schema_version:
@@ -7085,7 +7110,10 @@ components:
           minimum: 0
         file_name:
           type: string
-          const: mediapipe_hand_landmarks_v1.csv
+          pattern: '^mediapipe_hand_landmarks_v1_(project|event_[a-f0-9]{8})_[0-9]{8}T[0-9]{6}Z\\.csv$'
+        generated_at:
+          type: string
+          format: date-time
         media_type:
           type: string
           const: text/csv; charset=UTF-8

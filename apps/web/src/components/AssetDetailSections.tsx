@@ -257,7 +257,8 @@ export function PlaybackCard({
                 }}
                 className="review-video"
                 controls
-                controlsList="nofullscreen"
+                controlsList="nodownload nofullscreen noremoteplayback"
+                disablePictureInPicture
                 preload="none"
                 playsInline
                 aria-label="视频预览"

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectActor;
@@ -116,6 +117,11 @@ class TrainingDataExportExceptionHandler {
 	ResponseEntity<TrainingDataExportErrorResponse> export(TrainingDataExportException exception) {
 		return error(HttpStatus.valueOf(exception.getStatusCode()), exception.getErrorCode(), exception.getMessage(),
 				exception.getStatusCode() >= 500);
+	}
+
+	@ExceptionHandler(AssetCatalogQueryException.class)
+	ResponseEntity<TrainingDataExportErrorResponse> captureGroup(AssetCatalogQueryException exception) {
+		return error(HttpStatus.NOT_FOUND, exception.getErrorCode(), exception.getMessage(), false);
 	}
 
 	private static ResponseEntity<TrainingDataExportErrorResponse> error(HttpStatus status, String errorCode,

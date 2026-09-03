@@ -12,6 +12,27 @@ import {
   projectId,
 } from './fixtures/capture-group'
 
+const syntheticPlaybackUrl =
+  'data:video/mp4;base64,' +
+  [
+    'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAONbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAA',
+    'AAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAA',
+    'Ard0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAA',
+    'AAAAAAAAAAAAAABAAAAAAKAAAABaAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAQAAABAAAAAAIvbWRpYQAAACBtZGhk',
+    'AAAAAAAAAAAAAAAAAAAoAAAAUABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAAB2m1p',
+    'bmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAZpzdGJsAAAAwnN0c2QA',
+    'AAAAAAAAAQAAALJhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAKAAWgBIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDIgbGli',
+    'eDI2NAAAAAAAAAAAAAAAGP//AAAAOGF2Y0MBZAAM/+EAG2dkAAyscgRCjfkwEQAAAwABAAADAAoPFCmEYAEABmjoQ48si/34+AAA',
+    'AAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAC4AAAAAAAAAAYc3R0cwAAAAAAAAABAAAACgAACAAAAAAUc3RzcwAAAAAAAAAB',
+    'AAAAAQAAADhjdHRzAAAAAAAAAAUAAAABAAAQAAAAAAEAAFAAAAAAAQAAIAAAAAADAAAAAAAAAAQAAAgAAAAAHHN0c2MAAAAAAAAA',
+    'AQAAAAEAAAAKAAAAAQAAADxzdHN6AAAAAAAAAAAAAAAKAAAANwAAABEAAAAOAAAADgAAAA4AAAAOAAAADgAAAA4AAAAOAAAADgAA',
+    'ABRzdGNvAAAAAAAAAAEAAAO9AAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAt',
+    'aWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDIAAAAIZnJlZQAAAMBtZGF0AAAAM2WIgQACf/7q4/zLLY6H',
+    'NOrfJbldTT0hMRL3GW2p9vz+1MlfKUX2po6nubIEjAAQIDZx4QAAAA1BmgktiH///qmWAOaAAAAACkGeEIcQS/8ADUkAAAAKAZ4Y',
+    'Joh//wBJQAAAAAoBnhhGiH//AElBAAAACgGeGGaIf/8ASUEAAAAKAZ4YrUh//wBJQQAAAAoBnhjNSH//AElBAAAACgGeGO1If/8A',
+    'SUAAAAAKAZ4ZDUh//wBJQA==',
+  ].join('')
+
 test.use({ viewport: { width: 1440, height: 900 } })
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -131,4 +152,81 @@ test.describe('V1.27 CaptureGroup goldens · 720', () => {
       animations: 'disabled',
     })
   })
+})
+
+test.describe('native playback controls', () => {
+  for (const width of [1440, 1100, 1024, 720]) {
+    test(`${width} — keeps native controls while limiting browser-owned actions`, async ({
+      page,
+    }) => {
+      await mockCaptureGroupApi(page, 'n1-active')
+      await page.route('**/playback-grants', (route) =>
+        route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            grant_id: `playback-controls-${width}`,
+            purpose: 'DATA_REVIEW',
+            media_url: syntheticPlaybackUrl,
+            expires_at: '2099-01-01T00:00:00Z',
+            content_type: 'video/mp4',
+          }),
+        }),
+      )
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
+      await page.getByRole('button', { name: '播放视频' }).click()
+
+      const player = page.getByLabel('视频预览')
+      await expect(player).toBeVisible()
+      await expect(player).toHaveJSProperty('controls', true)
+      await expect(player).toHaveAttribute(
+        'controlslist',
+        'nodownload nofullscreen noremoteplayback',
+      )
+      await expect(player).toHaveAttribute('disablepictureinpicture', '')
+      await expect(player).toHaveJSProperty('disablePictureInPicture', true)
+      await expectNoHorizontalPageOverflow(page)
+
+      if (width !== 1440) return
+
+      await player.evaluate((element) => (element as HTMLVideoElement).play())
+      await expect
+        .poll(() => player.evaluate((element) => (element as HTMLVideoElement).currentTime))
+        .toBeGreaterThan(0)
+      await player.evaluate((element) => {
+        const video = element as HTMLVideoElement
+        video.pause()
+        video.currentTime = 1
+        video.dispatchEvent(new Event('timeupdate'))
+      })
+      await expect(page.getByLabel('当前播放位置')).toContainText('00:01.000')
+
+      await player.evaluate((element) => element.blur())
+      await page.keyboard.press('Space')
+      await expect
+        .poll(() => player.evaluate((element) => (element as HTMLVideoElement).paused))
+        .toBe(false)
+      await page.keyboard.press('Space')
+      await expect
+        .poll(() => player.evaluate((element) => (element as HTMLVideoElement).paused))
+        .toBe(true)
+
+      await player.focus()
+      await expect(player).toBeFocused()
+      await page.keyboard.press('Space')
+      await expect
+        .poll(() => player.evaluate((element) => (element as HTMLVideoElement).paused))
+        .toBe(false)
+      await player.evaluate((element) => (element as HTMLVideoElement).pause())
+
+      await page.getByRole('button', { name: '全屏查看视频和骨架' }).click()
+      await expect
+        .poll(() =>
+          page.locator('.video-stage').evaluate((stage) => document.fullscreenElement === stage),
+        )
+        .toBe(true)
+      await page.keyboard.press('Escape')
+    })
+  }
 })

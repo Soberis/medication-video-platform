@@ -29,6 +29,7 @@ import {
   viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
 interface CaptureGroupListRow {
   group: CaptureGroupSummary
@@ -184,14 +185,17 @@ export default function CaptureGroupListView() {
         title="配药事件"
         description="按配药事件集中查看各机位视频、质量状态和当前处理进度。"
         actions={
-          <Button
-            size="small"
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={loadingMode === 'refresh'}
-            onClick={() => void loadGroups()}
-          >
-            刷新
-          </Button>
+          <>
+            {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
+            <Button
+              size="small"
+              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+              loading={loadingMode === 'refresh'}
+              onClick={() => void loadGroups()}
+            >
+              刷新
+            </Button>
+          </>
         }
       />
       {loadState === 'loading' && !rows.length ? (

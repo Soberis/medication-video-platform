@@ -41,6 +41,8 @@ class HandLandmarkTrainingExportContractTests {
 
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000740");
 
+	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000741");
+
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";
@@ -95,7 +97,9 @@ class HandLandmarkTrainingExportContractTests {
 			.andExpect(jsonPath("$.running_view_count").value(0))
 			.andExpect(jsonPath("$.failed_view_count").value(0))
 			.andExpect(jsonPath("$.no_hand_view_count").value(0))
-			.andExpect(jsonPath("$.file_name").value("mediapipe_hand_landmarks_v1.csv"))
+			.andExpect(jsonPath("$.file_name").value(org.hamcrest.Matchers
+				.matchesPattern("mediapipe_hand_landmarks_v1_project_[0-9]{8}T[0-9]{6}Z\\.csv")))
+			.andExpect(jsonPath("$.generated_at").isString())
 			.andExpect(jsonPath("$.media_type").value("text/csv; charset=UTF-8"));
 
 		var lines = download(PROJECT_ID).lines().toList();
@@ -253,6 +257,89 @@ class HandLandmarkTrainingExportContractTests {
 	}
 
 	@Test
+	void supportsProjectAndSingleCaptureGroupScopes() throws Exception {
+		var firstGroup = createGroup(1, 1, "COMPLETE", 0);
+		var secondGroup = createGroup(2, 2, "COMPLETE", 0);
+		insertAiJob(firstGroup.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(100, 0, "LEFT", "0.9", 1)));
+		for (var assetId : secondGroup.clipAssetIds()) {
+			insertAiJob(assetId, "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+					List.of(new CandidateSpec(200, 0, "RIGHT", "0.8", 2)));
+		}
+
+		var projectLines = download(PROJECT_ID).lines().toList();
+		assertEquals(4, projectLines.size());
+		assertEquals(2, projectLines.stream().skip(1).map(line -> line.split(",", -1)[0]).distinct().count());
+
+		var eventLines = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID)
+				.param("capture_group_id", secondGroup.captureGroupId().toString())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"mediapipe_hand_landmarks_v1_event_"
+							+ secondGroup.captureGroupId().toString().substring(0, 8) + "_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsString(StandardCharsets.UTF_8)
+			.lines()
+			.toList();
+		assertEquals(3, eventLines.size());
+		assertEquals(List.of("1", "2"), eventLines.stream().skip(1).map(line -> line.split(",", -1)[2]).toList());
+		assertEquals(1, eventLines.stream().skip(1).map(line -> line.split(",", -1)[0]).distinct().count());
+		assertEquals(secondGroup.captureGroupId().toString(), eventLines.get(1).split(",", -1)[0]);
+	}
+
+	@Test
+	void rejectsUnknownAndWrongProjectCaptureGroups() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 0);
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID)
+				.param("capture_group_id", UUID.randomUUID().toString())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_NOT_FOUND"));
+
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
+		try {
+			this.mockMvc
+				.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", OTHER_PROJECT_ID)
+					.param("capture_group_id", group.captureGroupId().toString())
+					.header("Authorization", "Bearer " + ADMIN_TOKEN))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_NOT_FOUND"));
+		}
+		finally {
+			this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", OTHER_PROJECT_ID);
+			this.jdbcTemplate.update("DELETE FROM project WHERE project_id = ?", OTHER_PROJECT_ID);
+		}
+	}
+
+	@Test
+	void previewAndDownloadUseTheSameSortableFilename() throws Exception {
+		var first = HandLandmarkTrainingExportService.fileName(null, Instant.parse("2026-09-03T11:25:30Z"));
+		var second = HandLandmarkTrainingExportService.fileName(null, Instant.parse("2026-09-03T11:25:31Z"));
+		assertEquals("mediapipe_hand_landmarks_v1_project_20260903T112530Z.csv", first);
+		assertEquals(List.of(first, second), List.of(second, first).stream().sorted().toList());
+
+		var preview = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andReturn()
+			.getResponse()
+			.getContentAsString();
+		String fileName = JsonPath.read(preview, "$.file_name");
+		String generatedAt = JsonPath.read(preview, "$.generated_at");
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID)
+				.param("generated_at", generatedAt)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Disposition", "attachment; filename=\"" + fileName + "\""));
+	}
+
+	@Test
 	void malformedTwentyPointCandidateFailsClosed() throws Exception {
 		var group = createGroup(1, 1, "COMPLETE", 0);
 		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
@@ -314,7 +401,7 @@ class HandLandmarkTrainingExportContractTests {
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"mediapipe_hand_landmarks_v1.csv\"")))
+					startsWith("attachment; filename=\"mediapipe_hand_landmarks_v1_project_")))
 			.andReturn()
 			.getResponse()
 			.getContentAsString(StandardCharsets.UTF_8);

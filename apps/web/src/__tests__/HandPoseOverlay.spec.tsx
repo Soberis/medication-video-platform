@@ -199,7 +199,11 @@ describe('HandPoseOverlay', () => {
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
     expect(stage.querySelector('video')).toBe(screen.getByLabelText('视频预览'))
     expect(stage.querySelector('.hand-pose-overlay')).toBeInTheDocument()
-    expect(screen.getByLabelText('视频预览')).toHaveAttribute('controlslist', 'nofullscreen')
+    expect(screen.getByLabelText('视频预览')).toHaveAttribute(
+      'controlslist',
+      'nodownload nofullscreen noremoteplayback',
+    )
+    expect(screen.getByLabelText('视频预览')).toHaveAttribute('disablepictureinpicture')
   })
 
   it('keeps a landscape review stage for portrait video', () => {
