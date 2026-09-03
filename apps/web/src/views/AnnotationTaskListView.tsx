@@ -479,6 +479,7 @@ export default function AnnotationTaskListView() {
                   aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
                   className="annotation-task-card"
                   key={row.annotation_task_id}
+                  role="listitem"
                 >
                   <header className="annotation-task-card-header">
                     <div className="annotation-task-identity">

@@ -36,11 +36,14 @@ class PlatformLocalCaptureSessionService {
 
 	private final CaptureSessionMediaProjectionService sessionProjection;
 
+	private final HandPoseSchedulingPort handPoseScheduling;
+
 	PlatformLocalCaptureSessionService(UploadBatchRepository batchRepository, ClipAssetRepository clipAssetRepository,
 			CameraChannelRepository channelRepository, CameraSetConfigurationRepository cameraSetRepository,
 			CameraSetMemberRepository cameraSetMemberRepository, CaptureSessionRepository sessionRepository,
 			CameraSetSnapshotRepository snapshotRepository, CameraSetSnapshotMemberRepository snapshotMemberRepository,
-			CameraStreamRepository streamRepository, CaptureSessionMediaProjectionService sessionProjection) {
+			CameraStreamRepository streamRepository, CaptureSessionMediaProjectionService sessionProjection,
+			HandPoseSchedulingPort handPoseScheduling) {
 		this.batchRepository = batchRepository;
 		this.clipAssetRepository = clipAssetRepository;
 		this.channelRepository = channelRepository;
@@ -51,6 +54,7 @@ class PlatformLocalCaptureSessionService {
 		this.snapshotMemberRepository = snapshotMemberRepository;
 		this.streamRepository = streamRepository;
 		this.sessionProjection = sessionProjection;
+		this.handPoseScheduling = handPoseScheduling;
 	}
 
 	@Transactional
@@ -101,6 +105,9 @@ class PlatformLocalCaptureSessionService {
 		this.snapshotMemberRepository.saveAndFlush(snapshotMember);
 		var stream = CameraStream.importLocal(session.getCaptureSessionId(), snapshotMember, assets.getFirst(), now);
 		this.streamRepository.saveAndFlush(stream);
+		if (assets.getFirst().getStatus() == ClipAssetStatus.INGESTED) {
+			this.handPoseScheduling.scheduleAfterMediaIngested(projectId, assets.getFirst().getClipAssetId());
+		}
 		session.finalizeReceipt(Set.of(1), Set.of(1), batch.getCompletedAt(), now);
 		this.sessionRepository.saveAndFlush(session);
 		this.sessionProjection.refresh(projectId, session.getCaptureSessionId(), now);

@@ -97,18 +97,23 @@ describe('CaptureGroup annotation workflow', () => {
       received: [1, 2],
       receipt: 'COMPLETE',
     })
+    group.camera_set_snapshot.members[0]!.camera_role = 'PLATFORM_LOCAL'
     const task = groupTask(groupId, true)
     stubGroupDetail(group, {
       task,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'FAILED',
     })
+    const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
     expect(await screen.findByRole('button', { name: '提交修订' })).toBeInTheDocument()
+    await user.click(await screen.findByRole('combobox', { name: '主视图' }))
+    expect(await screen.findByRole('option', { name: '机位 1 · 合格' })).toBeInTheDocument()
+    expect(screen.queryByText('PLATFORM_LOCAL')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '进入配药动作标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '继续配药动作标注' })).not.toBeInTheDocument()
     expect(screen.getAllByText('配药动作标注').length).toBeGreaterThan(0)
@@ -175,6 +180,14 @@ describe('CaptureGroup annotation workflow', () => {
     await user.click(submitButton)
 
     expect(screen.getAllByText('请选择标签。').length).toBeGreaterThan(0)
+    const labelField = within(form).getByRole('combobox', {
+      name: '第 1 个时间段动作标签',
+    })
+    expect(labelField).toHaveAttribute('aria-invalid', 'true')
+    const descriptionId = labelField.getAttribute('aria-describedby')
+    expect(descriptionId).toMatch(/^segment-\d+-label-error$/)
+    expect(document.getElementById(descriptionId ?? '')).toHaveTextContent('请选择标签。')
+    expect(document.activeElement).toBe(labelField)
     expect(
       validateSegments([
         { draftId: 1, start_ms: -1, end_ms: 0, label: '' },

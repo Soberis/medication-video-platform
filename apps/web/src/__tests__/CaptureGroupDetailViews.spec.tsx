@@ -121,6 +121,7 @@ describe('CaptureGroup detail views', () => {
       received: [1],
       receipt: 'COMPLETE',
     })
+    group.streams[0]!.camera_role = 'PLATFORM_LOCAL'
     const fetchMock = stubGroupDetail(group, {
       task: null,
       quality: qualityFixture(group, 'QUALIFIED'),
@@ -139,7 +140,9 @@ describe('CaptureGroup detail views', () => {
     expect(headerStatus).toHaveTextContent('已完整接收')
     expect(headerStatus).toHaveTextContent('2026')
     expect(headerStatus).toHaveTextContent('1 个机位')
-    expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    const focusedHeading = screen.getByRole('heading', { level: 2, name: '机位 1' })
+    expect(focusedHeading).toBeInTheDocument()
+    expect(focusedHeading.closest('header')).not.toHaveTextContent('PLATFORM_LOCAL')
     expect(screen.queryByLabelText('配药事件机位选择')).not.toBeInTheDocument()
     const currentAction = screen
       .getByRole('heading', { level: 2, name: '当前动作' })
@@ -336,12 +339,12 @@ describe('CaptureGroup detail views', () => {
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
     const detailToggle = screen.getByRole('button', { name: '查看复核与训练资格详情' })
     expect(detailToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(detailToggle).not.toHaveAttribute('aria-controls')
     expect(screen.queryByText('已确认输入与机位集合')).not.toBeInTheDocument()
     await user.click(detailToggle)
-    expect(screen.getByRole('button', { name: '收起复核与训练资格详情' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    )
+    const detailCollapse = screen.getByRole('button', { name: '收起复核与训练资格详情' })
+    expect(detailCollapse).toHaveAttribute('aria-expanded', 'true')
+    expect(detailCollapse).toHaveAttribute('aria-controls', 'capture-group-review-cleaning-details')
     const evidenceDisclosure = screen
       .getByText('查看已确认机位、检测证据与修订历史')
       .closest('details')

@@ -55,6 +55,8 @@ class CaptureSessionIngestService {
 
 	private final MultipartObjectStorage objectStorage;
 
+	private final HandPoseSchedulingPort handPoseScheduling;
+
 	private final ObjectMapper objectMapper;
 
 	private final Validator validator;
@@ -68,8 +70,8 @@ class CaptureSessionIngestService {
 			CameraSetMemberRepository cameraSetMemberRepository, CaptureSessionRepository sessionRepository,
 			CameraSetSnapshotRepository snapshotRepository, CameraSetSnapshotMemberRepository snapshotMemberRepository,
 			CameraStreamRepository streamRepository, CaptureSessionMediaProjectionService sessionProjection,
-			MultipartObjectStorage objectStorage, ObjectMapper objectMapper, Validator validator,
-			TransactionTemplate transactionTemplate) {
+			MultipartObjectStorage objectStorage, HandPoseSchedulingPort handPoseScheduling, ObjectMapper objectMapper,
+			Validator validator, TransactionTemplate transactionTemplate) {
 		this.batchRepository = batchRepository;
 		this.fileRepository = fileRepository;
 		this.externalManifestRepository = externalManifestRepository;
@@ -83,6 +85,7 @@ class CaptureSessionIngestService {
 		this.streamRepository = streamRepository;
 		this.sessionProjection = sessionProjection;
 		this.objectStorage = objectStorage;
+		this.handPoseScheduling = handPoseScheduling;
 		this.objectMapper = objectMapper;
 		this.validator = validator;
 		this.transactionTemplate = transactionTemplate;
@@ -277,6 +280,9 @@ class CaptureSessionIngestService {
 					stream, now))
 			.toList();
 		this.streamRepository.saveAllAndFlush(streams);
+		assets.stream()
+			.filter(asset -> asset.getStatus() == ClipAssetStatus.INGESTED)
+			.forEach(asset -> this.handPoseScheduling.scheduleAfterMediaIngested(projectId, asset.getClipAssetId()));
 		this.sessionProjection.refresh(projectId, session.getCaptureSessionId(), now);
 		return CaptureSessionResponse.from(session, snapshot, snapshotMembers, streams);
 	}

@@ -25,6 +25,7 @@ import {
 } from '@/features/capture-group/capture-group-detail-model'
 
 const CANDIDATE_POLL_INTERVAL_MS = 4_000
+const MEDIA_INGESTION_POLL_INTERVAL_MS = 4_000
 
 function isCandidateJobPending(response: HandPoseCandidateResponse) {
   return response.job.status === 'QUEUED' || response.job.status === 'RUNNING'
@@ -142,6 +143,21 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       selectedViewRequest.current?.abort()
     }
   }, [loadSelectedView])
+
+  useEffect(() => {
+    if (
+      !selectedClipAssetId ||
+      !selectedDetail ||
+      selectedDetail.clip_asset_id !== selectedClipAssetId ||
+      selectedDetail.status === 'INGESTED' ||
+      selectedDetail.status === 'INGEST_FAILED'
+    ) {
+      return undefined
+    }
+
+    const timer = window.setTimeout(() => void loadSelectedView(), MEDIA_INGESTION_POLL_INTERVAL_MS)
+    return () => window.clearTimeout(timer)
+  }, [loadSelectedView, selectedClipAssetId, selectedDetail])
 
   useEffect(() => {
     if (

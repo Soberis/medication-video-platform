@@ -71,6 +71,7 @@ export function CaptureGroupAnnotationPanel({
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [annotationNote, setAnnotationNote] = useState('')
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
+  const annotationFormRef = useRef<HTMLFormElement | null>(null)
   const appliedRefreshVersion = useRef<number | null>(null)
   const sortedLabels = useMemo(() => sortedSchemaLabels(schema), [schema])
   const groupQualityAdmitting = currentGroupQualityAdmitting(groupQuality)
@@ -101,6 +102,11 @@ export function CaptureGroupAnnotationPanel({
     setAnnotationNote('')
   }, [refreshVersion, task])
 
+  useEffect(() => {
+    if (!Object.keys(segmentErrors).length) return
+    annotationFormRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+  }, [segmentErrors])
+
   const primaryOptions = viewRows.map((view) => {
     const decision = groupViewDecision(view, viewReviews)
     const enabled = Boolean(
@@ -110,9 +116,7 @@ export function CaptureGroupAnnotationPanel({
     )
     return {
       value: view.stream?.clip_asset_id ?? `missing-${view.cameraNumber}`,
-      label: `机位 ${view.cameraNumber} · ${view.member?.camera_role ?? '未命名'} · ${
-        view.stream ? viewQualityLabels[decision] : '缺失'
-      }`,
+      label: `机位 ${view.cameraNumber} · ${view.stream ? viewQualityLabels[decision] : '缺失'}`,
       disabled: !enabled,
     }
   })
@@ -271,6 +275,7 @@ export function CaptureGroupAnnotationPanel({
           ) : null}
           {task.status === 'ASSIGNED' ? (
             <form
+              ref={annotationFormRef}
               className="capture-group-annotation-form"
               onSubmit={(event) => void submitRevision(event)}
             >
@@ -302,6 +307,10 @@ export function CaptureGroupAnnotationPanel({
                         <Select
                           id={`segment-${segment.draftId}-label`}
                           aria-label={`第 ${index + 1} 个时间段动作标签`}
+                          aria-invalid={errors.label ? true : undefined}
+                          aria-describedby={
+                            errors.label ? `segment-${segment.draftId}-label-error` : undefined
+                          }
                           value={segment.label || undefined}
                           placeholder="选择标签"
                           disabled={!canSubmitRevision || !sortedLabels.length}
@@ -311,7 +320,11 @@ export function CaptureGroupAnnotationPanel({
                           }))}
                           onChange={(value) => updateSegment(segment.draftId, 'label', value)}
                         />
-                        {errors.label ? <small>{errors.label}</small> : null}
+                        {errors.label ? (
+                          <small id={`segment-${segment.draftId}-label-error`} role="alert">
+                            {errors.label}
+                          </small>
+                        ) : null}
                       </label>
                       <fieldset className="capture-group-segment-time-range">
                         <legend>时间范围</legend>
@@ -325,6 +338,10 @@ export function CaptureGroupAnnotationPanel({
                               type="number"
                               min={0}
                               value={segment.start_ms}
+                              aria-invalid={errors.start ? true : undefined}
+                              aria-describedby={
+                                errors.start ? `segment-${segment.draftId}-start-error` : undefined
+                              }
                               disabled={!canSubmitRevision}
                               onChange={(event) =>
                                 updateSegment(
@@ -344,7 +361,11 @@ export function CaptureGroupAnnotationPanel({
                             >
                               使用当前时间作为开始
                             </Button>
-                            {errors.start ? <small>{errors.start}</small> : null}
+                            {errors.start ? (
+                              <small id={`segment-${segment.draftId}-start-error`} role="alert">
+                                {errors.start}
+                              </small>
+                            ) : null}
                           </div>
                           <span className="capture-group-segment-time-arrow" aria-hidden="true">
                             →
@@ -358,6 +379,10 @@ export function CaptureGroupAnnotationPanel({
                               type="number"
                               min={1}
                               value={segment.end_ms}
+                              aria-invalid={errors.end ? true : undefined}
+                              aria-describedby={
+                                errors.end ? `segment-${segment.draftId}-end-error` : undefined
+                              }
                               disabled={!canSubmitRevision}
                               onChange={(event) =>
                                 updateSegment(segment.draftId, 'end_ms', Number(event.target.value))
@@ -373,7 +398,11 @@ export function CaptureGroupAnnotationPanel({
                             >
                               使用当前时间作为结束
                             </Button>
-                            {errors.end ? <small>{errors.end}</small> : null}
+                            {errors.end ? (
+                              <small id={`segment-${segment.draftId}-end-error`} role="alert">
+                                {errors.end}
+                              </small>
+                            ) : null}
                           </div>
                         </div>
                       </fieldset>

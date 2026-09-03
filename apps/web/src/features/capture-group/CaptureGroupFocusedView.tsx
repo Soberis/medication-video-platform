@@ -106,9 +106,6 @@ export function CaptureGroupFocusedView({
             {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
           </h2>
           {selectedStream ? (
-            <span className="capture-group-focused-role">{selectedStream.camera_role}</span>
-          ) : null}
-          {selectedStream ? (
             <p
               className="capture-group-hand-detection-status"
               data-tone={currentCandidateTone}

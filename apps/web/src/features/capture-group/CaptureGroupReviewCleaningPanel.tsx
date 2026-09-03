@@ -241,7 +241,9 @@ export function CaptureGroupReviewCleaningPanel({
           <Button
             type="link"
             size="small"
-            aria-controls="capture-group-review-cleaning-details"
+            aria-controls={
+              isCompletedDetailOpen ? 'capture-group-review-cleaning-details' : undefined
+            }
             aria-expanded={isCompletedDetailOpen}
             onClick={() => setIsCompletedDetailOpen((open) => !open)}
           >

@@ -2,6 +2,7 @@ package com.medicationvideo.platform.assetcapture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -28,6 +29,7 @@ class PlatformLocalCaptureSessionServiceTests {
 		var snapshotMemberRepository = mock(CameraSetSnapshotMemberRepository.class);
 		var streamRepository = mock(CameraStreamRepository.class);
 		var sessionProjection = mock(CaptureSessionMediaProjectionService.class);
+		var handPoseScheduling = mock(HandPoseSchedulingPort.class);
 		var batch = mock(UploadBatch.class);
 		var asset = mock(ClipAsset.class);
 
@@ -45,7 +47,7 @@ class PlatformLocalCaptureSessionServiceTests {
 
 		var service = new PlatformLocalCaptureSessionService(batchRepository, clipAssetRepository, channelRepository,
 				cameraSetRepository, cameraSetMemberRepository, sessionRepository, snapshotRepository,
-				snapshotMemberRepository, streamRepository, sessionProjection);
+				snapshotMemberRepository, streamRepository, sessionProjection, handPoseScheduling);
 
 		var response = service.ingest(projectId, batchId);
 
@@ -53,6 +55,7 @@ class PlatformLocalCaptureSessionServiceTests {
 		assertEquals(List.of(1), response.receivedCameraNumbers());
 		assertEquals(List.of(), response.missingCameraNumbers());
 		assertEquals(completedAt, response.receiptFinalizedAt());
+		verify(handPoseScheduling).scheduleAfterMediaIngested(projectId, asset.getClipAssetId());
 	}
 
 }

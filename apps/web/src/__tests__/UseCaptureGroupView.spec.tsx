@@ -160,6 +160,28 @@ afterEach(() => {
 })
 
 describe('useCaptureGroupView MediaPipe refresh', () => {
+  it('polls media ingestion before starting candidate refresh', async () => {
+    vi.mocked(getClipAsset)
+      .mockResolvedValueOnce({ ...clipAsset(firstClipAssetId), status: 'INGESTING' })
+      .mockResolvedValueOnce(clipAsset(firstClipAssetId))
+    latestCandidateMock().mockResolvedValue(candidateResponse(firstClipAssetId, 'QUEUED'))
+
+    const { result } = renderHook(() => useCaptureGroupView(projectId, view(firstClipAssetId, 1)))
+    await settleInitialView()
+
+    expect(result.current.selectedDetail?.status).toBe('INGESTING')
+    expect(getClipAssetMediaReport).not.toHaveBeenCalled()
+    expect(latestCandidateMock()).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000)
+    })
+
+    expect(getClipAsset).toHaveBeenCalledTimes(2)
+    expect(getClipAssetMediaReport).toHaveBeenCalledTimes(1)
+    expect(latestCandidateMock()).toHaveBeenCalledTimes(1)
+  })
+
   it('polls a queued job and continues while it is running', async () => {
     latestCandidateMock()
       .mockResolvedValueOnce(candidateResponse(firstClipAssetId, 'QUEUED'))

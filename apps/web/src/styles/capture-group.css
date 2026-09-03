@@ -377,11 +377,6 @@
   min-width: 0;
 }
 
-.capture-group-focused-role {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-}
-
 .capture-group-hand-detection-status {
   margin: 0;
   color: var(--app-color-foreground-muted);

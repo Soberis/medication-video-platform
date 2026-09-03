@@ -219,7 +219,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
     await user.click(within(taskRow).getByRole('button', { name: /进入配药动作标注/ }))
 
     await waitFor(() => {
@@ -241,7 +241,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
     await user.click(within(taskRow).getByRole('button', { name: /选择主视图/ }))
 
     await waitFor(() => {
@@ -263,7 +263,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待复核/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待复核/ })
     await user.click(within(taskRow).getByRole('button', { name: /进入人工复核/ }))
 
     await waitFor(() => {
@@ -290,7 +290,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
     await user.click(within(taskRow).getByRole('button', { name: /进入标注返工/ }))
 
     await waitFor(() => {
@@ -311,7 +311,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*标注完成/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*标注完成/ })
     expect(within(taskRow).queryByText('下一步')).not.toBeInTheDocument()
     expect(within(taskRow).queryByRole('button')).not.toBeInTheDocument()
     await user.click(within(taskRow).getByRole('link', { name: /查看复核与训练资格详情/ }))
@@ -358,7 +358,7 @@ describe('annotation task list view', () => {
     stubTasks([deniedGroupTask], labelSchema)
     renderView()
 
-    const taskRow = await screen.findByRole('article', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
     expect(within(taskRow).queryByRole('button', { name: /进入配药事件/ })).not.toBeInTheDocument()
     expect(within(taskRow).getByRole('link', { name: /配药事件/ })).toHaveAttribute(
       'href',
@@ -402,7 +402,7 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    const completedRow = screen.getAllByRole('article')[0]!
+    const completedRow = screen.getAllByRole('listitem')[0]!
     const annotationDetails = within(completedRow).getByText('查看详情')
     await user.click(annotationDetails)
     expect(within(completedRow).getByText(/时间段 1.*0.*1000.*毫秒/)).toBeInTheDocument()
@@ -448,7 +448,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     const { router } = renderView()
 
-    const taskRow = await screen.findByRole('article', { name: /标注完成/ })
+    const taskRow = await screen.findByRole('listitem', { name: /标注完成/ })
     const action = within(taskRow).getByRole('link', { name: /查看复核与训练资格详情/ })
     expect(within(taskRow).queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
     await user.click(action)
@@ -482,7 +482,7 @@ describe('annotation task list view', () => {
 
     renderView()
     await waitFor(() => {
-      const taskRow = screen.getAllByRole('article')[0]
+      const taskRow = screen.getAllByRole('listitem')[0]
       expect(taskRow).toHaveTextContent('待复核')
     })
     expect(
@@ -513,7 +513,7 @@ describe('annotation task list view', () => {
     expect(await screen.findByText('复核 · 已通过')).toBeInTheDocument()
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
     expect(screen.getByText('训练资格检查 · 当前规则检查通过')).toBeInTheDocument()
-    const taskRow = screen.getByRole('article', { name: /标注完成/ })
+    const taskRow = screen.getByRole('listitem', { name: /标注完成/ })
     const user = userEvent.setup()
     await user.click(within(taskRow).getByText('查看详情'))
     expect(within(taskRow).getByText('执行人')).toBeInTheDocument()
@@ -540,7 +540,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /待标注/ })
     expect(taskRow).toHaveTextContent('复核意见：请补充完整的拿取药品时间段。')
     await user.click(within(taskRow).getByRole('button', { name: /进入配药事件 .*进入标注返工/ }))
     await waitFor(() =>
@@ -561,7 +561,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('article', { name: /待复核/ })
+    const taskRow = await screen.findByRole('listitem', { name: /待复核/ })
     expect(
       within(taskRow).getByRole('button', { name: /进入配药事件 .*进入人工复核/ }),
     ).toBeInTheDocument()
