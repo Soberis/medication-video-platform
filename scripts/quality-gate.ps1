@@ -71,6 +71,31 @@ function Get-GitRepositoryPaths {
     $output -split [char]0 | Where-Object { $_ }
 }
 
+function Test-TextFile {
+    param([string]$Path)
+
+    $stream = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        $buffer = [byte[]]::new(4096)
+        $read = $stream.Read($buffer, 0, $buffer.Length)
+        for ($index = 0; $index -lt $read; $index++) {
+            if ($buffer[$index] -eq 0) {
+                return $false
+            }
+        }
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        if ($null -ne $stream) {
+            $stream.Dispose()
+        }
+    }
+}
+
 $changedFiles = @()
 if ($Changed) {
     $changedFiles = @(
@@ -117,7 +142,10 @@ $hardcodedWindowsPaths = @(
     Get-GitRepositoryPaths |
         Where-Object { [System.IO.Path]::GetExtension($_) -notin @('.lock', '.jar', '.class', '.docx') } |
         ForEach-Object {
-            Select-String -LiteralPath (Join-Path $root $_) -Pattern '(?i)\b[A-Z]:[\\/]' -ErrorAction SilentlyContinue
+            $path = Join-Path $root $_
+            if (Test-TextFile $path) {
+                Select-String -LiteralPath $path -Pattern '(?i)\b[A-Z]:[\\/]' -ErrorAction SilentlyContinue
+            }
         }
 )
 foreach ($match in $hardcodedWindowsPaths) {

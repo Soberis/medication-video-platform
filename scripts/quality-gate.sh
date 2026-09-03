@@ -203,7 +203,7 @@ if git -C "$PROJECT_ROOT" -c core.quotepath=false \
             [[ -n "$match" ]] || continue
             line_number="${match%%:*}"
             add_failure "Hard-coded local Windows path: $relative_path:$line_number"
-        done < <(LC_ALL=C grep -nE '(^|[^[:alnum:]_])[A-Za-z]:[\\/]' -- "$full_path" 2>/dev/null || true)
+        done < <(LC_ALL=C grep -I -nE '(^|[^[:alnum:]_])[A-Za-z]:[\\/]' -- "$full_path" 2>/dev/null || true)
     done < "$repository_paths_file"
 else
     add_failure "git ls-files failed while scanning repository paths"

@@ -74,7 +74,7 @@ Node 运行时必须保持在仓库声明的 >=22.12.0 <23 范围内；同时核
   | `media-probe-baseline-v1.json` normalized digest | `8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765` |
   | CaptureGroup Cleaning ruleset (`capture-group-event-eligibility`, `v1`) digest | `9b0f46e8e6a0a4a2f2d31ef6c2cb2b7d0b7fca0a20a7e6b3f6f4a9d4b7f0a61c` |
   | AI hand-pose profile digest | `3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626` |
-  | local Core API approved Media Worker software digest | `sha256:5b038769e2d8e0a100786acf2eb50114466542d45ae1cf24b65c12fd8fb2ec90` |
+  | local Core API approved Media Worker software digest | `sha256:d7accc8bd9123226c273034cdb7b868e6815450ce1d307c8f55f01197463a252` |
 
   若 profile、Worker 源码、`uv.lock` 或批准配置变化，必须重新计算、审批并同步摘要；不能把运行中的摘要强行改成“批准值”来绕过校验。模型文件应使用 `Get-FileHash -Algorithm SHA256` 或等价工具核对。
 - `.env.example` 是本地合成占位配置；`.env` 不应提交。`change-me-local-only`、`synthetic-local-*` 和 `*-do-not-reuse` 只能用于 local/test synthetic，不能用于医院、UAT 或生产。

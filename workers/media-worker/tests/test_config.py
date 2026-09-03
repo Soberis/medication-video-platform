@@ -78,3 +78,27 @@ def test_default_local_approved_digest_matches_the_worker_source() -> None:
 
     assert value is not None, f"{key} must be present in .env.example"
     assert value == config.calculate_software_digest(repository_root / "workers" / "media-worker")
+
+
+def test_software_digest_is_stable_across_line_endings(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repository"
+    worker_root = repository_root / "workers" / "media-worker"
+    source_root = worker_root / "src" / "medication_media_worker"
+    profile = repository_root / "contracts" / "profiles" / "media-probe-baseline-v1.json"
+    source_root.mkdir(parents=True)
+    profile.parent.mkdir(parents=True)
+
+    files = {
+        worker_root / "pyproject.toml": b"[project]\r\nname = 'test'\r\n",
+        worker_root / "uv.lock": b"version = 1\r\n",
+        source_root / "worker.py": b"VALUE = 1\r\n",
+        profile: b'{"profile": "test"}\r\n',
+    }
+    for path, content in files.items():
+        path.write_bytes(content)
+
+    windows_digest = config.calculate_software_digest(worker_root)
+    for path, content in files.items():
+        path.write_bytes(content.replace(b"\r\n", b"\n"))
+
+    assert windows_digest == config.calculate_software_digest(worker_root)

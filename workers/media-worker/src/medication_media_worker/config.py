@@ -137,7 +137,8 @@ def calculate_software_digest(project_root: Path) -> str:
         relative_name = path.relative_to(project_root.parents[1]).as_posix().encode()
         digest.update(len(relative_name).to_bytes(4, "big"))
         digest.update(relative_name)
-        content = path.read_bytes()
+        # Keep the approved fingerprint stable across Git line-ending conversion.
+        content = path.read_bytes().replace(b"\r\n", b"\n")
         digest.update(len(content).to_bytes(8, "big"))
         digest.update(content)
     return f"sha256:{digest.hexdigest()}"
