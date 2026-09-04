@@ -174,11 +174,6 @@ export default function CaptureGroupListView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑导航">
-        <span>视频管理</span>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">配药事件</span>
-      </nav>
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
@@ -223,8 +218,7 @@ export default function CaptureGroupListView() {
       ) : null}
       {rows.length ? (
         <section className="capture-group-list-surface" aria-label="配药事件结果">
-          <div className="capture-group-list-heading">
-            <h2>事件记录</h2>
+          <div className="capture-group-list-meta">
             <span className="capture-group-list-count">
               {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
             </span>
@@ -253,23 +247,30 @@ export default function CaptureGroupListView() {
                   <header className="capture-group-list-row-header">
                     <div className="capture-group-list-identity">
                       <Camera aria-hidden="true" size={18} strokeWidth={1.7} />
-                      <div>
-                        <span className="capture-group-list-eyebrow">配药事件</span>
-                        <strong className="capture-group-list-title">{identity}</strong>
-                      </div>
+                      <strong className="capture-group-list-title">{identity}</strong>
                     </div>
                     <time className="capture-group-list-time" dateTime={eventTime}>
                       <span>{eventTimeLabel}</span>
                       <strong>{formatDateTime(eventTime)}</strong>
                     </time>
                   </header>
+                  <div className="capture-group-list-current" data-kind={nextStep.kind}>
+                    <span className="capture-group-list-current-label">
+                      {nextStep.kind === 'action' ? '下一步' : '当前状态'}
+                    </span>
+                    <strong>{nextStep.label}</strong>
+                  </div>
                   <dl className="capture-group-list-facts">
                     <div>
-                      <dt>接收 / 机位</dt>
+                      <dt className="visually-hidden">接收 / 机位</dt>
                       <dd className="capture-group-list-receipt">
-                        <StatusIndicator tone={receiptTone(group.receipt_state)}>
-                          {formatListReceipt(group)}
-                        </StatusIndicator>
+                        {group.receipt_state === 'COMPLETE' ? (
+                          <span>{formatListReceipt(group)}</span>
+                        ) : (
+                          <StatusIndicator tone={receiptTone(group.receipt_state)}>
+                            {formatListReceipt(group)}
+                          </StatusIndicator>
+                        )}
                         {group.missing_camera_numbers.length ? (
                           <span className="capture-group-list-missing-views">
                             缺失：
@@ -281,35 +282,44 @@ export default function CaptureGroupListView() {
                       </dd>
                     </div>
                     <div>
-                      <dt>事件质量</dt>
+                      <dt className="visually-hidden">事件质量</dt>
                       <dd>
-                        <StatusIndicator tone={groupQualityDisplayTone(qualityVisibility, quality)}>
-                          {groupQualityDisplayLabel(qualityVisibility, quality)}
-                        </StatusIndicator>
+                        {isQuietGroupQuality(qualityVisibility, quality) ? (
+                          <span>{formatListGroupQuality(qualityVisibility, quality)}</span>
+                        ) : (
+                          <StatusIndicator
+                            tone={groupQualityDisplayTone(qualityVisibility, quality)}
+                          >
+                            {formatListGroupQuality(qualityVisibility, quality)}
+                          </StatusIndicator>
+                        )}
                       </dd>
                     </div>
                     <div>
-                      <dt>机位质量</dt>
+                      <dt className="visually-hidden">机位质量</dt>
                       <dd>
-                        <span className="capture-group-list-view-quality">
-                          {formatListViewQuality(qualityVisibility, quality)}
-                        </span>
+                        {isQuietGroupQuality(qualityVisibility, quality) ? (
+                          <span className="capture-group-list-view-quality">
+                            {`机位质量 ${formatListViewQuality(qualityVisibility, quality)}`}
+                          </span>
+                        ) : (
+                          <StatusIndicator
+                            tone={groupQualityDisplayTone(qualityVisibility, quality)}
+                          >
+                            {`机位质量 ${formatListViewQuality(qualityVisibility, quality)}`}
+                          </StatusIndicator>
+                        )}
                       </dd>
                     </div>
                   </dl>
-                  <footer className="capture-group-list-row-footer" data-kind={nextStep.kind}>
-                    <span className="capture-group-list-next-step">
-                      <span className="capture-group-list-row-footer-label">
-                        {nextStep.kind === 'action' ? '下一步：' : '当前状态：'}
-                      </span>
-                      {nextStep.label}
-                    </span>
+                  <footer className="capture-group-list-row-footer">
                     <Link
                       className="capture-group-list-open"
-                      aria-label={`进入${identityLabel}工作台`}
+                      aria-label={`${nextStep.kind === 'action' ? '处理事件' : '查看事件'}：${identityLabel}`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
-                      进入工作台 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                      {nextStep.kind === 'action' ? '处理事件' : '查看事件'}{' '}
+                      <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
                   </footer>
                 </div>
@@ -367,6 +377,31 @@ function formatListViewQuality(
   return formatViewQualitySummary(quality)
 }
 
+function isQuietGroupQuality(
+  visibility: CaptureGroupQualityVisibility,
+  quality: CaptureGroupQualityReview | null,
+) {
+  return (
+    visibility === 'loaded' &&
+    Boolean(
+      quality &&
+        (quality.result === 'UNREVIEWED' ||
+          quality.result === 'QUALIFIED' ||
+          quality.result === 'QUALIFIED_WITH_EXCLUSIONS'),
+    )
+  )
+}
+
+function formatListGroupQuality(
+  visibility: CaptureGroupQualityVisibility,
+  quality: CaptureGroupQualityReview | null,
+) {
+  return `事件质量 ${groupQualityDisplayLabel(visibility, quality)}`
+}
+
 function formatListReceipt(group: CaptureGroupSummary) {
-  return `${group.received_camera_count}/${group.expected_camera_count} 机位已收 · ${receiptStateLabels[group.receipt_state]}`
+  const receipt = `${group.received_camera_count}/${group.expected_camera_count} 机位已收`
+  return group.receipt_state === 'COMPLETE'
+    ? receipt
+    : `${receipt} · ${receiptStateLabels[group.receipt_state]}`
 }
