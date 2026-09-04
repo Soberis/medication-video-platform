@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 
 import {
   AnnotationTaskApiError,
@@ -16,11 +16,7 @@ import { MetadataList } from '@/components/data/MetadataList'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
-import {
-  cleaningStatusLabels,
-  formatDateTime,
-  shortId,
-} from '@/features/catalog/catalog-presentation'
+import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { formatAnnotationTime } from '@/features/capture-group/capture-group-detail-model'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 
@@ -39,19 +35,21 @@ const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   VIEW_QUALITY_NOT_QUALIFIED: '事件机位质量未通过',
 }
 function taskStatusLabel(task: AnnotationTask) {
-  if (task.status === 'COMPLETED') return '标注完成'
+  if (task.status === 'COMPLETED') return '已完成'
   if (task.status === 'SUBMITTED') return '待复核'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return '待返工'
   return '待标注'
 }
 function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
-  if (task.status === 'COMPLETED') return 'success'
+  if (task.status === 'COMPLETED') return 'neutral'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
   return 'information'
 }
 function taskNoActionLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '当前无需操作'
   if (task.status === 'SUBMITTED') return '等待管理员复核'
-  return '等待处理'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return '等待任务执行人返工'
+  return '等待任务执行人处理'
 }
 function captureGroupCleaningPresentation(task: AnnotationTask): {
   label: string
@@ -71,15 +69,15 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
   })
   if (result?.outcome === 'PASS')
     return {
-      label: cleaningStatusLabels.PASS,
+      label: '通过',
       tone: 'success',
-      description: '当前事件清洗规则检查通过；手部检测样本请通过独立导出预览确认。',
+      description: '当前事件清洗规则检查通过。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
   if (result?.outcome === 'WARNING')
     return {
-      label: cleaningStatusLabels.WARNING,
+      label: '需处理',
       tone: 'warning',
       description: '当前事件清洗需处理，请补充事实后重新执行事件清洗。',
       reasons,
@@ -87,14 +85,14 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
     }
   if (result?.outcome === 'REJECT')
     return {
-      label: cleaningStatusLabels.REJECT,
+      label: '未通过',
       tone: 'destructive',
       description: '当前事件清洗未通过；视频资产未被删除。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
   return {
-    label: cleaningStatusLabels.NOT_STARTED,
+    label: '待处理',
     tone: 'neutral',
     description: '尚未形成事件清洗结论。',
     reasons,
@@ -102,13 +100,30 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
   }
 }
 
-function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTone {
-  return decision === 'APPROVED' ? 'success' : 'destructive'
+function taskEvidenceLabel(
+  task: AnnotationTask,
+  cleaning: ReturnType<typeof captureGroupCleaningPresentation>,
+) {
+  const review = task.annotation_revision?.review
+  if (!review) return '等待人工复核'
+  if (review.decision === 'REJECTED') return '复核未通过'
+  return cleaning ? `复核已通过 · 事件清洗${cleaning.label}` : '复核已通过'
+}
+
+function taskEvidenceTone(
+  task: AnnotationTask,
+  cleaning: ReturnType<typeof captureGroupCleaningPresentation>,
+): StatusIndicatorTone {
+  const review = task.annotation_revision?.review
+  if (review?.decision === 'REJECTED') return 'destructive'
+  if (!review) return 'information'
+  return cleaning?.tone === 'warning' || cleaning?.tone === 'destructive'
+    ? cleaning.tone
+    : 'neutral'
 }
 
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
-  const navigate = useNavigate()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
@@ -186,20 +201,21 @@ export default function AnnotationTaskListView() {
         >
           <strong>{progress.total} 个任务</strong>
           <span aria-hidden="true">·</span>
+          <span>{progress.completed} 个已完成</span>
+          <span aria-hidden="true">·</span>
           <span>
-            {progress.total > 0 && progress.completed === progress.total
-              ? '全部完成'
-              : `${progress.completed} 个已完成 · ${progress.awaiting_submission + progress.rework_required + progress.awaiting_review} 个待处理`}
+            {progress.awaiting_submission + progress.rework_required + progress.awaiting_review}{' '}
+            个待处理
           </span>
         </section>
       ) : null}
       {loadState === 'success' && items.length ? (
         <Section
           className="annotation-task-queue"
-          title="任务列表"
+          title="任务队列"
           titleId="annotation-task-queue-title"
         >
-          <div className="annotation-task-list-surface" role="list" aria-label="标注任务列表">
+          <ul className="annotation-task-list-surface" aria-label="标注任务列表">
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
               const taskSubject = `配药事件 ${shortId(captureGroupId)}`
@@ -264,6 +280,12 @@ export default function AnnotationTaskListView() {
                           : []),
                       ]}
                     />
+                    {revision?.review?.review_note ? (
+                      <div className="task-details-block">
+                        <h3>复核意见</h3>
+                        <p className="task-review-note">{revision.review.review_note}</p>
+                      </div>
+                    ) : null}
                     {revision ? (
                       <div className="task-details-block">
                         <h3>标注时间段</h3>
@@ -318,34 +340,29 @@ export default function AnnotationTaskListView() {
               )
               const taskAction =
                 row.status !== 'COMPLETED' && taskDestination ? (
-                  <Button
-                    type="primary"
-                    size="small"
+                  <Link
+                    className="annotation-task-action-link"
                     aria-label={`进入${taskSubject}的${taskDestination.actionLabel}`}
-                    onClick={() =>
-                      void navigate(
-                        paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus),
-                      )
-                    }
+                    to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    {taskDestination.actionLabel}
-                  </Button>
+                    {taskDestination.actionLabel} <span aria-hidden="true">→</span>
+                  </Link>
                 ) : null
               const completedTaskResult =
-                row.status === 'COMPLETED' ? (
+                row.status === 'COMPLETED' && taskDestination ? (
                   <Link
-                    className="text-link"
-                    to={paths.captureGroupFocus(projectId, captureGroupId, 'cleaning')}
+                    className="text-link annotation-task-result-link"
+                    to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    查看复核与事件清洗详情 <span aria-hidden="true">→</span>
+                    查看结果 <span aria-hidden="true">→</span>
                   </Link>
                 ) : null
               return (
-                <article
+                <li
                   aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
                   className="annotation-task-card"
                   key={row.annotation_task_id}
-                  role="listitem"
+                  data-status={row.status}
                 >
                   <header className="annotation-task-card-header">
                     <div className="annotation-task-identity">
@@ -368,44 +385,28 @@ export default function AnnotationTaskListView() {
                     <div className="annotation-task-progress">
                       {revision ? (
                         <div className="task-evidence-summary">
-                          <strong>
+                          <strong className="task-evidence-primary">
                             已提交 · {revision.annotation_document.segments.length} 个时间段
                           </strong>
-                          <div className="task-evidence-statuses">
-                            {revision.review ? (
-                              <StatusIndicator
-                                className="task-evidence-review"
-                                tone={reviewStatusTone(revision.review.decision)}
-                              >
-                                复核 ·{' '}
-                                {revision.review.decision === 'APPROVED' ? '已通过' : '未通过'}
-                                {revision.review.reviewed_by === revision.submitted_by ? (
-                                  <small className="task-evidence-self-review">
-                                    <span aria-hidden="true">（</span>
-                                    <span>管理员自审</span>
-                                    <span aria-hidden="true">）</span>
-                                  </small>
-                                ) : null}
-                              </StatusIndicator>
-                            ) : (
-                              <StatusIndicator tone="information">复核 · 待复核</StatusIndicator>
-                            )}
-                            {presentation ? (
-                              <StatusIndicator tone={presentation.tone}>
-                                事件清洗 · {presentation.label}
-                              </StatusIndicator>
+                          <p
+                            className="task-evidence-status"
+                            data-tone={taskEvidenceTone(row, presentation)}
+                          >
+                            {taskEvidenceLabel(row, presentation)}
+                            {revision.review?.decision === 'APPROVED' &&
+                            revision.review.reviewed_by === revision.submitted_by ? (
+                              <small className="task-evidence-self-review">
+                                <span aria-hidden="true">（</span>
+                                <span>管理员自审</span>
+                                <span aria-hidden="true">）</span>
+                              </small>
                             ) : null}
-                          </div>
-                          {revision.review?.review_note ? (
-                            <span className="task-review-note">
-                              复核意见：{revision.review.review_note}
-                            </span>
-                          ) : null}
+                          </p>
                           {taskDetails}
                         </div>
                       ) : (
                         <div className="task-evidence-summary">
-                          <span className="muted-text">尚未提交标注</span>
+                          <span className="muted-text">尚未提交</span>
                           {taskDetails}
                         </div>
                       )}
@@ -422,26 +423,19 @@ export default function AnnotationTaskListView() {
                             : '当前任务状态'
                       }
                     >
-                      {row.status === 'COMPLETED' ? (
-                        completedTaskResult
-                      ) : (
-                        <>
-                          <span className="annotation-task-action-label">
-                            {taskAction ? '下一步' : '当前状态'}
-                          </span>
-                          {taskAction ?? (
+                      {row.status === 'COMPLETED'
+                        ? completedTaskResult
+                        : (taskAction ?? (
                             <span className="annotation-task-no-action">
                               {taskNoActionLabel(row)}
                             </span>
-                          )}
-                        </>
-                      )}
+                          ))}
                     </div>
                   </footer>
-                </article>
+                </li>
               )
             })}
-          </div>
+          </ul>
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
