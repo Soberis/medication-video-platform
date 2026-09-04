@@ -169,7 +169,12 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getAllByText('事件质量').length).toBeGreaterThan(0)
     expect(screen.getByText('机位质量')).toBeInTheDocument()
     expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
-    expect(await screen.findByText('未检测到手部')).toBeInTheDocument()
+    const evidenceDisclosure = document.querySelector<HTMLElement>(
+      'details.capture-group-focused-details',
+    )
+    if (!evidenceDisclosure) throw new Error('Focused evidence disclosure was not mounted.')
+    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
+    expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
     expect(screen.getByText('手部检测：已完成 · 未检测到手部')).toHaveAttribute(
       'aria-live',
       'polite',
@@ -278,9 +283,17 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText('检测到手部')).toBeInTheDocument()
+    const user = userEvent.setup()
+    const evidenceDisclosure = (await screen.findByText('查看机位技术与辅助证据')).closest(
+      'details',
+    )
+    if (!evidenceDisclosure) throw new Error('Focused progressive detail was not mounted.')
+    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
     expect(
-      screen.getByText('AI 证据仅供人工参考，不自动决定机位质量或事件准入。'),
+      await within(evidenceDisclosure).findByText('手部检测：已完成 · 检测到手部'),
+    ).toBeInTheDocument()
+    expect(
+      within(evidenceDisclosure).getByText('AI 证据仅供人工参考，不自动决定机位质量或事件准入。'),
     ).toBeInTheDocument()
   })
 
@@ -301,8 +314,18 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByText('检测结果未知')).toBeInTheDocument()
-    expect(screen.getByText(/检测结果未知；这是 AI 证据状态/)).toBeInTheDocument()
+    const user = userEvent.setup()
+    const evidenceDisclosure = (await screen.findByText('查看机位技术与辅助证据')).closest(
+      'details',
+    )
+    if (!evidenceDisclosure) throw new Error('Focused progressive detail was not mounted.')
+    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
+    expect(
+      await within(evidenceDisclosure).findByText('手部检测：已完成 · 结果未知'),
+    ).toBeInTheDocument()
+    expect(
+      within(evidenceDisclosure).getByText(/检测结果未知；这是 AI 证据状态/),
+    ).toBeInTheDocument()
   })
 
   it.each([
@@ -871,9 +894,17 @@ describe('CaptureGroup detail views', () => {
 
     expect((await screen.findAllByText('机位 3')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('合格（排除部分机位）').length).toBeGreaterThan(0)
-    expect(await screen.findByText('检测失败')).toBeInTheDocument()
-    expect(await screen.findByText(/手部检测失败/)).toBeInTheDocument()
-    expect(screen.getAllByText(/同步需关注 · 仅供参考/).length).toBeGreaterThan(0)
+    const initialFocusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest(
+      'details',
+    )
+    if (!initialFocusedDetails) throw new Error('Focused progressive detail was not mounted.')
+    await user.click(within(initialFocusedDetails).getByText('查看机位技术与辅助证据'))
+    expect(await within(initialFocusedDetails).findByText('手部检测：失败')).toBeInTheDocument()
+    expect(await within(initialFocusedDetails).findByText(/手部检测失败/)).toBeInTheDocument()
+    expect(
+      within(initialFocusedDetails).getAllByText(/同步需关注 · 仅供参考/).length,
+    ).toBeGreaterThan(0)
+    await user.click(within(initialFocusedDetails).getByText('查看机位技术与辅助证据'))
     const selector = screen.getByRole('group', { name: '配药事件机位选择' })
     expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
     expect(within(selector).getAllByRole('button')).toHaveLength(5)
@@ -907,7 +938,12 @@ describe('CaptureGroup detail views', () => {
 
     await user.click(within(selector).getByRole('button', { name: /机位 2/ }))
     expect(await screen.findByRole('heading', { level: 2, name: /机位 2/ })).toBeInTheDocument()
-    expect(await screen.findByText(/未检测到手部；这是检测事实/)).toBeInTheDocument()
+    const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
+    if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
+    await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
+    expect(
+      await within(focusedDetails).findByText(/未检测到手部；这是检测事实/),
+    ).toBeInTheDocument()
     expect(screen.getAllByText(/参考视图/).length).toBeGreaterThan(0)
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/clip-assets/${clipIds[1]}/media-report`,

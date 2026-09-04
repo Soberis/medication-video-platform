@@ -299,9 +299,7 @@ describe('App', () => {
       'data-active',
       'true',
     )
-    expect(within(navigation).getByText('上传排障').closest('a')).not.toHaveAttribute(
-      'aria-current',
-    )
+    expect(within(navigation).queryByText('上传排障')).not.toBeInTheDocument()
   })
 
   it('lets users collapse and expand the canonical sidebar', async () => {

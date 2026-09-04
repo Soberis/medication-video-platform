@@ -40,7 +40,6 @@ export function CaptureGroupFocusedView({
     selectedMediaReportState,
     selectedMediaReportError,
     candidateResponse,
-    candidateState,
     candidateDescription: currentCandidateDescription,
     candidateTone: currentCandidateTone,
     candidateLiveStatus: currentCandidateLiveStatus,
@@ -109,15 +108,6 @@ export function CaptureGroupFocusedView({
           <h2 id="capture-group-focused-title">
             {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
           </h2>
-          {selectedStream ? (
-            <p
-              className="capture-group-hand-detection-status"
-              data-tone={currentCandidateTone}
-              aria-live="polite"
-            >
-              手部检测：{currentCandidateLiveStatus}
-            </p>
-          ) : null}
         </div>
         {isPrimary || isSupporting ? (
           <StatusIndicator tone="information">
@@ -233,22 +223,8 @@ export function CaptureGroupFocusedView({
             <div className="capture-group-focused-facts">
               <Section title="手部检测" titleId="capture-group-candidate-title">
                 <div className="capture-group-candidate-facts capture-group-stack">
-                  <StatusIndicator tone={currentCandidateTone}>
-                    {candidateResponse?.job.status === 'FAILED' || candidateState === 'error'
-                      ? '检测失败'
-                      : candidateResponse?.job.hand_result === 'NO_HAND_DETECTED'
-                        ? '未检测到手部'
-                        : candidateResponse?.job.status === 'SUCCEEDED' &&
-                            candidateResponse.job.hand_result === 'HAND_DETECTED'
-                          ? '检测到手部'
-                          : candidateResponse?.job.status === 'SUCCEEDED' &&
-                              candidateResponse.job.hand_result === 'UNKNOWN'
-                            ? '检测结果未知'
-                            : candidateResponse?.job.status === 'SUCCEEDED'
-                              ? '检测完成'
-                              : candidateState === 'unavailable'
-                                ? '尚无检测结果'
-                                : '读取中'}
+                  <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
+                    手部检测：{currentCandidateLiveStatus}
                   </StatusIndicator>
                   <p>AI 证据仅供人工参考，不自动决定机位质量或事件准入。</p>
                   <p>{currentCandidateDescription}</p>

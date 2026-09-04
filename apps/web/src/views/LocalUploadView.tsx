@@ -389,14 +389,24 @@ export default function LocalUploadView() {
                   />
                 </details>
               ) : null}
-              {task.captureSessionId ? (
+              {task.captureSessionId || (task.status === 'FAILED' && task.progress?.batchId) ? (
                 <div className="local-upload-task-actions">
-                  <Link
-                    className="text-link"
-                    to={paths.captureGroup(task.projectId, task.captureSessionId)}
-                  >
-                    打开配药事件
-                  </Link>
+                  {task.captureSessionId ? (
+                    <Link
+                      className="text-link"
+                      to={paths.captureGroup(task.projectId, task.captureSessionId)}
+                    >
+                      打开配药事件
+                    </Link>
+                  ) : null}
+                  {task.status === 'FAILED' && task.progress?.batchId ? (
+                    <Link
+                      className="text-link"
+                      to={`${paths.uploads}?batchId=${encodeURIComponent(task.progress.batchId)}`}
+                    >
+                      查看上传状态与异常
+                    </Link>
+                  ) : null}
                 </div>
               ) : null}
               {task.errorCode ? (

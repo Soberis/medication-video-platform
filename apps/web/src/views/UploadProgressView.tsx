@@ -1,6 +1,6 @@
 import { Button } from 'antd'
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 
 import {
   getUploadBatchProgress,
@@ -100,13 +100,16 @@ const formatTime = (value: string | null) =>
       )
 
 export default function UploadProgressView() {
-  const [batchId, setBatchId] = useState('')
+  const [searchParams] = useSearchParams()
+  const queryBatchId = searchParams.get('batchId')?.trim() ?? ''
+  const [batchId, setBatchId] = useState(queryBatchId)
   const [batch, setBatch] = useState<UploadBatchProgress | null>(null)
   const [files, setFiles] = useState<UploadFileProgress[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [errorCode, setErrorCode] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
+  const lastAutoLoadedBatchId = useRef('')
   const isLoading = loadState === 'loading'
   const hasResult = batch !== null && (loadState === 'success' || loadState === 'loading')
   const isRefreshing = isLoading && batch !== null
@@ -114,55 +117,69 @@ export default function UploadProgressView() {
 
   useEffect(() => () => activeRequest.current?.abort(), [])
 
-  async function loadProgress() {
-    const normalizedBatchId = batchId.trim()
-    if (!uuidPattern.test(normalizedBatchId)) {
-      setBatch(null)
-      setFiles([])
-      setLoadState('error')
-      setErrorCode('INVALID_BATCH_ID')
-      setErrorMessage('请输入有效的上传批次 UUID。')
+  const loadProgress = useCallback(
+    async (requestedBatchId = batchId) => {
+      const normalizedBatchId = requestedBatchId.trim()
+      if (!uuidPattern.test(normalizedBatchId)) {
+        setBatch(null)
+        setFiles([])
+        setLoadState('error')
+        setErrorCode('INVALID_BATCH_ID')
+        setErrorMessage('请输入有效的上传批次 UUID。')
+        return
+      }
+      activeRequest.current?.abort()
+      const request = new AbortController()
+      activeRequest.current = request
+      setLoadState('loading')
+      setErrorMessage('')
+      setErrorCode('')
+      try {
+        const [batchResponse, fileResponse] = await Promise.all([
+          getUploadBatchProgress(normalizedBatchId, request.signal),
+          listUploadFileProgress(normalizedBatchId, request.signal),
+        ])
+        if (activeRequest.current !== request) return
+        setBatch(batchResponse)
+        setFiles(fileResponse.files)
+        setLoadState('success')
+      } catch (error) {
+        if (request.signal.aborted || activeRequest.current !== request) return
+        setBatch(null)
+        setFiles([])
+        setLoadState('error')
+        if (error instanceof UploadApiError) {
+          setErrorCode(error.errorCode)
+          setErrorMessage(error.message)
+        } else {
+          setErrorCode('UPLOAD_PROGRESS_REQUEST_FAILED')
+          setErrorMessage('无法连接上传进度服务，请稍后重试。')
+        }
+      } finally {
+        if (activeRequest.current === request) activeRequest.current = null
+      }
+    },
+    [batchId],
+  )
+
+  useEffect(() => {
+    if (queryBatchId.length === 0) {
+      lastAutoLoadedBatchId.current = ''
       return
     }
-    activeRequest.current?.abort()
-    const request = new AbortController()
-    activeRequest.current = request
-    setLoadState('loading')
-    setErrorMessage('')
-    setErrorCode('')
-    try {
-      const [batchResponse, fileResponse] = await Promise.all([
-        getUploadBatchProgress(normalizedBatchId, request.signal),
-        listUploadFileProgress(normalizedBatchId, request.signal),
-      ])
-      if (activeRequest.current !== request) return
-      setBatch(batchResponse)
-      setFiles(fileResponse.files)
-      setLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || activeRequest.current !== request) return
-      setBatch(null)
-      setFiles([])
-      setLoadState('error')
-      if (error instanceof UploadApiError) {
-        setErrorCode(error.errorCode)
-        setErrorMessage(error.message)
-      } else {
-        setErrorCode('UPLOAD_PROGRESS_REQUEST_FAILED')
-        setErrorMessage('无法连接上传进度服务，请稍后重试。')
-      }
-    } finally {
-      if (activeRequest.current === request) activeRequest.current = null
-    }
-  }
+    if (lastAutoLoadedBatchId.current === queryBatchId) return
+    lastAutoLoadedBatchId.current = queryBatchId
+    setBatchId(queryBatchId)
+    void loadProgress(queryBatchId)
+  }, [loadProgress, queryBatchId])
 
   return (
     <>
       <PageHeader
-        eyebrow="上传状态查询"
+        eyebrow="上传状态与异常"
         titleId="progress-title"
-        title="查看批次上传进度"
-        description="只读取平台已确认的批次和文件状态，不会上传文件或改变批次。"
+        title="查看上传状态"
+        description="查看平台已确认的批次和文件状态，必要时根据错误信息处理异常。"
       />
       <Section
         className="upload-progress-query working-surface"

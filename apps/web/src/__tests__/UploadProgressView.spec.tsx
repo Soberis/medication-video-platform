@@ -82,6 +82,25 @@ describe('UploadProgressView', () => {
     expect(await screen.findByText('synthetic-device-01')).toBeInTheDocument()
   })
 
+  it('loads a batch automatically from a contextual failure link', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(
+          jsonResponse(String(input).endsWith('/files') ? fileProgress : batchProgress),
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    renderRoute(<UploadProgressView />, {
+      route: `/uploads?batchId=${batchId}`,
+      path: '/uploads',
+    })
+
+    expect(await screen.findByText('synthetic-device-01')).toBeInTheDocument()
+    expect(screen.getByLabelText('上传批次 ID')).toHaveValue(batchId)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('validates the batch UUID before calling the API', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

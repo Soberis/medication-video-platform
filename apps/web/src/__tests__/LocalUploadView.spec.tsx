@@ -86,19 +86,30 @@ describe('LocalUploadView', () => {
   })
 
   it('separates confirmed and failed files after a partial upload result', async () => {
-    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockImplementation(async ({ file }) => {
-      if (file.name === 'broken.mp4') {
-        throw new localUploadApi.LocalUploadApiError(
-          '平台校验到视频文件内容不完整，请重新选择文件后上传。',
-          'UPLOAD_FILE_SHA256_MISMATCH',
-        )
-      }
-      return {
-        batchId: '40000000-0000-4000-8000-000000000001',
-        captureSessionId: '50000000-0000-4000-8000-000000000001',
-        clipAssetId: '60000000-0000-4000-8000-000000000001',
-      }
-    })
+    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockImplementation(
+      async ({ file }, onProgress) => {
+        if (file.name === 'broken.mp4') {
+          onProgress({
+            phase: 'VERIFYING',
+            totalBytes: 100,
+            processedBytes: 100,
+            uploadedBytes: 100,
+            totalParts: 1,
+            completedParts: 1,
+            batchId: '40000000-0000-4000-8000-000000000001',
+          })
+          throw new localUploadApi.LocalUploadApiError(
+            '平台校验到视频文件内容不完整，请重新选择文件后上传。',
+            'UPLOAD_FILE_SHA256_MISMATCH',
+          )
+        }
+        return {
+          batchId: '40000000-0000-4000-8000-000000000001',
+          captureSessionId: '50000000-0000-4000-8000-000000000001',
+          clipAssetId: '60000000-0000-4000-8000-000000000001',
+        }
+      },
+    )
     stubCatalog([project])
     const user = userEvent.setup()
     renderLocalUpload()
@@ -120,6 +131,10 @@ describe('LocalUploadView', () => {
     expect(screen.getByRole('link', { name: '打开配药事件' })).toHaveAttribute(
       'href',
       paths.captureGroup(project.project_id, '50000000-0000-4000-8000-000000000001'),
+    )
+    expect(screen.getByRole('link', { name: '查看上传状态与异常' })).toHaveAttribute(
+      'href',
+      `${paths.uploads}?batchId=40000000-0000-4000-8000-000000000001`,
     )
   })
 

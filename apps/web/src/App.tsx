@@ -1,6 +1,5 @@
 import { App as AntdApp, Button } from 'antd'
 import {
-  Activity,
   Clapperboard,
   FolderKanban,
   ListChecks,
@@ -193,12 +192,6 @@ export default function AppShell() {
                 >
                   <UsersRound {...iconProps} />
                   <span className="sidebar-label">项目成员</span>
-                </NavLink>
-              ) : null}
-              {isAdministrator ? (
-                <NavLink end to={paths.uploads} aria-label="上传排障" title="上传排障">
-                  <Activity {...iconProps} />
-                  <span className="sidebar-label">上传排障</span>
                 </NavLink>
               ) : null}
               {isAdministrator ? (

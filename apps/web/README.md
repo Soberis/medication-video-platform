@@ -2,7 +2,7 @@
 
 所有前端 UI 变更开始前必须阅读 [`docs/DESIGN_SYSTEM.md`](../../docs/DESIGN_SYSTEM.md)。不得在页面中引入第二套视觉语言、任意设计 Token 或一次性布局系统。
 
-React 管理端。当前激活的纵向功能包括上传排障、CaptureGroup 视频管理、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、事件级 Cleaning，以及 MediaPipe 手部训练数据预览和 CSV 下载。事件资格与追溯 manifest 仍由服务端内部能力维护，不作为用户侧的手部训练数据下载入口。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
+React 管理端。当前激活的纵向功能包括平台本地上传、上传状态与异常查询、CaptureGroup 视频管理、Media Probe、手部候选/Skeleton Overlay、人工质量、动作标注、复核、事件级 Cleaning，以及 MediaPipe 手部训练数据预览和 CSV 下载。上传状态与异常查询通过上传失败上下文进入，不作为主导航入口。事件资格与追溯 manifest 仍由服务端内部能力维护，不作为用户侧的手部训练数据下载入口。当前规则下，拥有 ACTIVE 项目 `ADMIN` Membership 的 `ROLE_ADMIN` 可自审/自批，页面必须显示 `SELF_ADMIN_APPROVAL`；`ROLE_MEMBER` 不能执行管理员命令。
 
 ## Commands
 
