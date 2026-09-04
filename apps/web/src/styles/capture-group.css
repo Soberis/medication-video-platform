@@ -1279,18 +1279,6 @@
   justify-content: flex-start;
 }
 
-.capture-group-list-identity > svg {
-  flex: none;
-  margin-top: 2px;
-  color: var(--app-color-primary);
-}
-
-.capture-group-list-time > span {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-compact);
-}
-
 .capture-group-list-time {
   display: grid;
   flex: none;
@@ -1298,6 +1286,8 @@
   gap: var(--app-space-4);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--app-font-weight-regular);
   white-space: nowrap;
 }
 
@@ -1315,11 +1305,9 @@
 
 .capture-group-list-current {
   grid-area: current;
-  display: flex;
+  display: grid;
   min-width: 0;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--app-space-4) var(--app-space-8);
+  gap: var(--app-space-4);
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-body);
   line-height: var(--app-line-height-body);
@@ -1380,9 +1368,9 @@
 }
 
 .capture-group-list-view-quality {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .capture-group-list-row-footer {
@@ -1554,10 +1542,6 @@
   .capture-group-list-row-footer {
     align-items: flex-start;
     text-align: left;
-  }
-
-  .capture-group-list-time {
-    justify-items: start;
   }
 
   .capture-group-list-open {

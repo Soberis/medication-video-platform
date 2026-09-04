@@ -1,5 +1,5 @@
 import { Alert, Button } from 'antd'
-import { ArrowRight, Camera, RefreshCw } from 'lucide-react'
+import { ArrowRight, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
@@ -183,6 +183,7 @@ export default function CaptureGroupListView() {
           <>
             {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
             <Button
+              type="text"
               size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={loadingMode === 'refresh'}
@@ -246,12 +247,11 @@ export default function CaptureGroupListView() {
                 >
                   <header className="capture-group-list-row-header">
                     <div className="capture-group-list-identity">
-                      <Camera aria-hidden="true" size={18} strokeWidth={1.7} />
                       <strong className="capture-group-list-title">{identity}</strong>
                     </div>
                     <time className="capture-group-list-time" dateTime={eventTime}>
-                      <span>{eventTimeLabel}</span>
-                      <strong>{formatDateTime(eventTime)}</strong>
+                      <span className="visually-hidden">{eventTimeLabel}：</span>
+                      {formatDateTime(eventTime)}
                     </time>
                   </header>
                   <div className="capture-group-list-current" data-kind={nextStep.kind}>
@@ -396,7 +396,7 @@ function formatListGroupQuality(
   visibility: CaptureGroupQualityVisibility,
   quality: CaptureGroupQualityReview | null,
 ) {
-  return `事件质量 ${groupQualityDisplayLabel(visibility, quality)}`
+  return `事件质量${groupQualityDisplayLabel(visibility, quality)}`
 }
 
 function formatListReceipt(group: CaptureGroupSummary) {

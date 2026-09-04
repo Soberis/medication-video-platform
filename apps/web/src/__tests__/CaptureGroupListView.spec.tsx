@@ -51,12 +51,13 @@ describe('capture group list view', () => {
     const completedRow = within(list).getByRole('listitem', { name: /completed-event/ })
 
     expect(activeRow.querySelector('.capture-group-list-eyebrow')).not.toBeInTheDocument()
+    expect(activeRow.querySelector('.capture-group-list-identity svg')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '事件记录' })).not.toBeInTheDocument()
     expect(screen.getByText('共 2 个配药事件')).toBeInTheDocument()
     expect(activeRow).toHaveTextContent('下一步')
     expect(activeRow).toHaveTextContent('提交配药动作修订')
     expect(activeRow).toHaveTextContent('1/1 机位已收')
-    expect(activeRow).toHaveTextContent('事件质量 合格')
+    expect(activeRow).toHaveTextContent('事件质量合格')
     expect(activeRow).toHaveTextContent('机位质量 1 合格')
     expect(activeRow.querySelectorAll('.status-indicator[data-tone="success"]')).toHaveLength(0)
 
@@ -112,14 +113,14 @@ describe('capture group list view', () => {
     expect(receivingRow).toHaveTextContent('等待接收完成后进行事件质量判断')
     expect(receivingRow).toHaveTextContent('1/2 机位已收 · 接收中')
     expect(receivingRow).toHaveTextContent('缺失：机位 2')
-    expect(receivingRow).toHaveTextContent('事件质量 待判断')
+    expect(receivingRow).toHaveTextContent('事件质量待判断')
     expect(receivingRow).toHaveTextContent('机位质量 待判断')
     expect(within(receivingRow).getByRole('link', { name: /查看事件/ })).toBeInTheDocument()
 
     expect(incompleteRow).toHaveTextContent('任务状态按当前权限不可见')
     expect(incompleteRow).toHaveTextContent('2/3 机位已收 · 接收完成 · 有缺失')
     expect(incompleteRow).toHaveTextContent('缺失：机位 2')
-    expect(incompleteRow).toHaveTextContent('事件质量 合格（排除部分机位）')
+    expect(incompleteRow).toHaveTextContent('事件质量合格（排除部分机位）')
     expect(incompleteRow).toHaveTextContent('机位质量 2 合格 · 1 待判断')
     expect(within(incompleteRow).getByRole('link', { name: /查看事件/ })).toBeInTheDocument()
     expect(screen.getByText('部分任务状态不可直接确认')).toBeInTheDocument()
@@ -130,13 +131,13 @@ describe('capture group list view', () => {
       label: 'forbidden',
       error: { status: 403, errorCode: 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED' },
       current: '事件质量按当前权限不可见',
-      fact: '事件质量 无权查看',
+      fact: '事件质量无权查看',
     },
     {
       label: 'unavailable',
       error: { status: 503, errorCode: 'CAPTURE_GROUP_QUALITY_REQUEST_FAILED' },
       current: '事件质量暂不可用，请刷新后重试',
-      fact: '事件质量 暂不可用',
+      fact: '事件质量暂不可用',
     },
   ])('does not turn $label quality into a success state', async ({ error, current, fact }) => {
     const group = captureGroupFixture('60000000-0000-4000-8000-000000000005', {
@@ -152,7 +153,7 @@ describe('capture group list view', () => {
     expect(row).toHaveTextContent(current)
     expect(row).toHaveTextContent(fact)
     expect(row).toHaveTextContent('机位质量 ' + (error.status === 403 ? '无权查看' : '暂不可用'))
-    expect(row).not.toHaveTextContent('事件质量 合格')
+    expect(row).not.toHaveTextContent('事件质量合格')
     expect(within(row).getByRole('link', { name: /查看事件/ })).toBeInTheDocument()
   })
 

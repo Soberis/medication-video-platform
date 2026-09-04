@@ -138,6 +138,19 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
   })
 })
 
+test.describe('CaptureGroup event ledger responsive widths', () => {
+  for (const width of [1440, 1280, 1024, 768, 720]) {
+    test(`${width} — keeps the event ledger within the page`, async ({ page }) => {
+      await mockCaptureGroupApi(page, 'list')
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(`/projects/${projectId}/capture-groups`)
+
+      await expect(page.getByRole('list', { name: '配药事件列表' })).toBeVisible()
+      await expectNoHorizontalPageOverflow(page)
+    })
+  }
+})
+
 test.describe('V1.27 CaptureGroup goldens · 720', () => {
   test.use({ viewport: { width: 720, height: 900 } })
 
