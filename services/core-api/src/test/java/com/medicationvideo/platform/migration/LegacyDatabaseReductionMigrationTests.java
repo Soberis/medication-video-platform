@@ -47,6 +47,7 @@ class LegacyDatabaseReductionMigrationTests {
 			assertEquals(1, migrationCount(jdbc, "66"));
 			assertEquals(1, migrationCount(jdbc, "72"));
 			assertEquals(1, migrationCount(jdbc, "74"));
+			assertEquals(1, migrationCount(jdbc, "75"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
@@ -74,6 +75,7 @@ class LegacyDatabaseReductionMigrationTests {
 			assertEquals(1, migrationCount(jdbc, "66"));
 			assertEquals(1, migrationCount(jdbc, "72"));
 			assertEquals(1, migrationCount(jdbc, "74"));
+			assertEquals(1, migrationCount(jdbc, "75"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertCurrentQueueContracts(jdbc);
 			assertP0ObjectsPresent(jdbc);
@@ -147,6 +149,7 @@ class LegacyDatabaseReductionMigrationTests {
 			flyway.validate();
 
 			assertEquals(1, migrationCount(jdbc, "74"));
+			assertEquals(1, migrationCount(jdbc, "75"));
 			assertLegacyObjectsAbsent(jdbc);
 			assertP0ObjectsPresent(jdbc);
 		}
@@ -305,7 +308,8 @@ class LegacyDatabaseReductionMigrationTests {
 		assertTrue(tableExists(jdbc, "annotation_task"));
 		assertTrue(tableExists(jdbc, "annotation_review"));
 		assertTrue(tableExists(jdbc, "capture_group_cleaning"));
-		assertTrue(tableExists(jdbc, "training_data_group_eligibility_v3"));
+		assertFalse(tableExists(jdbc, "training_data_group_eligibility_v3"));
+		assertFalse(tableExists(jdbc, "training_data_group_eligibility_v3_integrity"));
 		assertTrue(columnExists(jdbc, "annotation_revision", "clip_asset_id"));
 		assertTrue(tableExists(jdbc, "inbox_message"));
 		assertTrue(tableExists(jdbc, "outbox_event"));

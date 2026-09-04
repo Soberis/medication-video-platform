@@ -17,7 +17,7 @@ export type MedicationEventWorkflowStage =
   | 'GROUP_QUALITY'
   | 'ANNOTATION'
   | 'REVIEW'
-  | 'TRAINING_ELIGIBILITY'
+  | 'CLEANING'
 
 export const medicationEventWorkflowStageLabels: Record<MedicationEventWorkflowStage, string> = {
   RECEIPT: '接收',
@@ -25,7 +25,7 @@ export const medicationEventWorkflowStageLabels: Record<MedicationEventWorkflowS
   GROUP_QUALITY: '事件质量',
   ANNOTATION: '配药动作标注',
   REVIEW: '人工复核',
-  TRAINING_ELIGIBILITY: '训练资格检查',
+  CLEANING: '事件清洗',
 }
 
 const medicationEventWorkflowStages: readonly MedicationEventWorkflowStage[] = [
@@ -34,7 +34,7 @@ const medicationEventWorkflowStages: readonly MedicationEventWorkflowStage[] = [
   'GROUP_QUALITY',
   'ANNOTATION',
   'REVIEW',
-  'TRAINING_ELIGIBILITY',
+  'CLEANING',
 ]
 
 export type MedicationEventFactVisibility = 'loading' | 'loaded' | 'unavailable' | 'forbidden'
@@ -98,7 +98,7 @@ export type MedicationEventWorkflowActionKey =
   | 'start-annotation'
   | 'continue-annotation'
   | 'enter-review'
-  | 'view-training-eligibility'
+  | 'view-cleaning'
 
 export type MedicationEventWorkflowTarget =
   | 'receipt'
@@ -106,7 +106,7 @@ export type MedicationEventWorkflowTarget =
   | 'group-quality'
   | 'annotation'
   | 'review'
-  | 'training-eligibility'
+  | 'cleaning'
 
 export interface MedicationEventWorkflowPrimaryAction {
   key: MedicationEventWorkflowActionKey
@@ -443,19 +443,19 @@ function deriveAnnotationWorkflow(
   }
   if (review.decision !== 'APPROVED') {
     return buildWorkflow('REVIEW', {
-      blocker: '当前任务缺少已通过的人工复核，不能进入训练资格检查。',
+      blocker: '当前任务缺少已通过的人工复核，不能进入事件清洗。',
     })
   }
 
   const cleaning = facts.cleaning ?? facts.annotation_revision.capture_group_cleaning
   if (cleaning?.outcome === 'PASS') {
-    return buildWorkflow('TRAINING_ELIGIBILITY', {
+    return buildWorkflow('CLEANING', {
       primaryAction: null,
       currentState: 'completed',
     })
   }
-  return buildWorkflow('TRAINING_ELIGIBILITY', {
-    primaryAction: action('view-training-eligibility', '查看训练资格检查', 'training-eligibility'),
+  return buildWorkflow('CLEANING', {
+    primaryAction: action('view-cleaning', '查看事件清洗', 'cleaning'),
   })
 }
 

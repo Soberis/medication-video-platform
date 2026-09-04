@@ -71,7 +71,7 @@ describe('MedicationEventCurrentAction', () => {
             { stage: 'GROUP_QUALITY', label: '事件质量', state: 'completed' },
             { stage: 'ANNOTATION', label: '配药动作标注', state: 'current' },
             { stage: 'REVIEW', label: '人工复核', state: 'upcoming' },
-            { stage: 'TRAINING_ELIGIBILITY', label: '训练资格检查', state: 'upcoming' },
+            { stage: 'CLEANING', label: '事件清洗', state: 'upcoming' },
           ],
         })}
       />,
@@ -99,14 +99,14 @@ describe('MedicationEventCurrentAction', () => {
     render(
       <MedicationEventWorkflowRail
         workflow={workflow({
-          stage: 'TRAINING_ELIGIBILITY',
+          stage: 'CLEANING',
           steps: [
             { stage: 'RECEIPT', label: '接收', state: 'completed' },
             { stage: 'VIEW_QUALITY', label: '机位质量', state: 'completed' },
             { stage: 'GROUP_QUALITY', label: '事件质量', state: 'completed' },
             { stage: 'ANNOTATION', label: '配药动作标注', state: 'completed' },
             { stage: 'REVIEW', label: '人工复核', state: 'completed' },
-            { stage: 'TRAINING_ELIGIBILITY', label: '训练资格检查', state: 'completed' },
+            { stage: 'CLEANING', label: '事件清洗', state: 'completed' },
           ],
           primaryAction: null,
         })}
@@ -159,11 +159,11 @@ describe('MedicationEventCurrentAction', () => {
     render(
       <MedicationEventCurrentAction
         workflow={workflow({
-          stage: 'TRAINING_ELIGIBILITY',
+          stage: 'CLEANING',
           steps: [
             {
-              stage: 'TRAINING_ELIGIBILITY',
-              label: '训练资格检查',
+              stage: 'CLEANING',
+              label: '事件清洗',
               state: 'completed',
             },
           ],
@@ -174,10 +174,10 @@ describe('MedicationEventCurrentAction', () => {
     )
 
     expect(screen.getByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
-    expect(screen.getByText('人工复核已通过，训练资格检查通过')).toBeInTheDocument()
+    expect(screen.getByText('人工复核已通过，事件清洗通过')).toBeInTheDocument()
     expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
-    expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '查看复核与训练资格详情' })).not.toBeInTheDocument()
+    expect(screen.queryByText('事件清洗：已通过')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '查看复核与事件清洗详情' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

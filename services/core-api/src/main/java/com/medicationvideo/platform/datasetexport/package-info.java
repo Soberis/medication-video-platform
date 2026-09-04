@@ -1,8 +1,7 @@
 /**
- * CaptureGroup-owned training-data.v3 and MediaPipe hand-landmark preview/download
- * exports.
+ * CaptureGroup-scoped MediaPipe hand-landmark preview/download export.
  */
-@ApplicationModule(displayName = "Training Data Export")
+@ApplicationModule(displayName = "Hand Landmark Export")
 package com.medicationvideo.platform.datasetexport;
 
 import org.springframework.modulith.ApplicationModule;

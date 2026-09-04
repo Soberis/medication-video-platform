@@ -29,7 +29,7 @@ import com.medicationvideo.platform.governance.AuditOutcome;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Event-level training eligibility for CaptureGroup AnnotationRevisions.
+ * Deterministic event-level cleaning for CaptureGroup AnnotationRevisions.
  *
  * <p>
  * This service intentionally has no dependency on annotationreview persistence. The
@@ -88,8 +88,8 @@ public class CaptureGroupCleaningService {
 	}
 
 	/**
-	 * Pure event eligibility evaluation used by the application service and focused
-	 * contract tests.
+	 * Pure event cleaning evaluation used by the application service and focused contract
+	 * tests.
 	 */
 	public static EligibilityEvaluation evaluateEligibility(EvaluationCommand command) {
 		var reasons = new LinkedHashSet<String>();

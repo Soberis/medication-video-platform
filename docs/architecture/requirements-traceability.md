@@ -1,18 +1,28 @@
-# 当前需求追踪矩阵（V1.27）
+# 当前需求追踪矩阵（V1.28）
 
-> 当前需求基线：[V1.27 单一 CaptureGroup 产品路径、training-data.v3 与 hand-landmarks.v1](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)<br>
-> 当前技术设计：[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md)<br>
-> 当前证据审计：[V1.27 AI evidence pipeline audit](./v1.27-ai-evidence-audit.md)与[training traceability audit](./v1.27-training-traceability.md)<br>
+> 当前需求基线：[V1.28 单一 CaptureGroup 路径与唯一手部检测导出](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)<br>
+> 当前技术设计：[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md)<br>
+> 上一基线与审计参考：[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md)、[AI evidence pipeline audit](./v1.27-ai-evidence-audit.md)与[training traceability audit](./v1.27-training-traceability.md)<br>
 > V1.26 前一基线与历史参考：[V1.26 需求基线](../requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md) 与 [V1.26 工作台设计](./v1.26-medication-event-workbench-design.md)<br>
 > V1.25/V1.24 历史实现参考：[V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[CaptureGroup 多机位技术设计](./capture-group-multicamera-workflow-technical-design.md) 与 [V1.24 手部组件设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
-> 最后更新：2026-09-02
+> 最后更新：2026-09-04
 
-本文件区分 CURRENT REQUIREMENTS 与 CURRENT IMPLEMENTATION STATUS。V1.27 是当前正式需求基线，唯一支持的业务对象和流程是 `CaptureGroup` 事件路径；`training-data.v3` 是当前已实现的 CaptureGroup eligibility / provenance event manifest，不是主要机器学习特征数据集；独立的 `hand-landmarks.v1` 是当前 MediaPipe detection evidence export，不依赖人工质量、Annotation、Review 或 Cleaning。V1.26 及更早版本的行保留为历史实现证据，不重新定义当前产品范围；批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
+本文件区分 CURRENT REQUIREMENTS 与 CURRENT IMPLEMENTATION STATUS。V1.28 是当前正式需求基线，唯一支持的业务对象和流程是 `CaptureGroup` 事件路径；唯一公开导出是当前 MediaPipe `hand-landmarks.v1` detection evidence CSV，支持项目或单一事件范围。旧事件资格 manifest 出口已从当前运行时、公开契约、Web 和合成工具删除，历史行仅保留为上一版本实现证据。批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
-V1.27 保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Media Probe、MediaPipe Candidate、权限、审计和 provenance 等低层事实，但不再把旧单视频任务、单视频 Cleaning 或 `training-data.v2` 作为当前业务流程。V1.27 的实现状态必须区分“现有代码仍可读取的历史表面”和“当前产品承诺”；前者不自动转化为兼容要求。
+V1.28 继续保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Media Probe、MediaPipe Candidate、权限、审计和 provenance 等低层事实，但不再把旧单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 作为当前业务流程。V1.27 的实现状态和历史导出语义只作为上一基线证据，不自动转化为兼容要求。
 
-## V1.27 当前需求
+## V1.28 当前需求
+
+| 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 实现/证据状态 |
+| --- | --- | --- | --- | --- | --- |
+| V28-FR-001 保持 V1.27 CaptureGroup 主链与 N=1 统一模型 | P0 | `assetcapture`、`mediaprivacy`、`aicandidate`、`annotationreview`、`qualitycleaning` | CaptureGroup、Media Probe、Candidate、Quality、Task、Revision、Review、Cleaning | 继承上一基线自动化回归；不改变业务事实 | I |
+| V28-FR-002 唯一 `hand-landmarks.v1` 项目/单事件导出 | P0 | `aicandidate`、`datasetexport`、`governance` | OpenAPI preview/download、CSV contract/readback | N=1/N>1、21 点、当前 job、状态计数、provenance fail-closed | I |
+| V28-FR-003 删除旧事件 manifest 出口 | P0 | `datasetexport`、`apps/web`、`tools` | 无旧路由/schema/service/button；V75 清除旧 projection views | OpenAPI 无旧路由；源码无当前引用；Flyway latest 无旧 views | I |
+
+2026-09-04 V1.28 单一导出收敛检查证据：以起始 HEAD `00df4f052f47477d35b2ddaa15ec86fb2b2b9153` 的同一 `main` 工作树完成唯一导出收敛。移除当前运行时、OpenAPI、Web、合成工具和测试中的 `training-data.v3` 出口；新增 V75 只读投影退役迁移，保留 CaptureGroup、Review、Cleaning 和 MediaPipe Candidate 事实；工作台将旧“训练资格检查”显示统一为“事件清洗”，不改变清洗规则或持久化契约。当前仅保留 `hand-landmarks.v1` 项目/单事件 preview/download；项目范围与单事件范围复用同一契约，独立于人工质量、Review 与 Cleaning。Windows `quality-gate.ps1 -Strict` 实际通过，`Skipped gates: 0`；Core API `verify` 为 `290 passed`，Web 为 `32` 个测试文件、`221 passed`，Python 四个组件分别为 `47`、`24`、`32`、`19 passed`，synthetic upload `7 passed`，OpenAPI lint、Flyway 75 个迁移和 Web format/lint/type-check/build 均实际通过。上述仅为自动化/合成证据；没有真实患者/授权样本、实际 training consumer、生产或批准 UAT 证据，因此不标记 `UAT`。
+
+## V1.27 上一基线需求（历史证据）
 
 | 需求 | 优先级 | Owner module | 契约/读模型 | 最小验证 | 实现/证据状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -26,7 +36,7 @@ V1.27 保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Med
 | V27-FR-008 退役单视频业务路径与兼容性承诺 | P0 | 全模块 / product scope | V1.27 baseline、当前入口和导出说明 | 文档不再承诺 `/videos`、独立 `/assets/:id`、单视频任务/Cleaning、v2 或 V1.24 runtime compatibility | I |
 | V27-FR-009 MediaPipe landmark detection export（`hand-landmarks.v1`） | P0 | `aicandidate`、`datasetexport`、`governance` | 服务端生成的 current CameraStream hand-landmark evidence CSV + synthetic readback | 一手一 frame sample；覆盖所有当前启用且可用视图；不读取 View/Group Quality、AnnotationRevision、Review、Cleaning 或 v3 eligibility；保留 CaptureGroup/CameraStream/ClipAsset SHA/AI job/model provenance；区分当前 job 状态；无 fake no-hand row；实际 consumer 读取和真实 UAT 仍未发生 | I |
 
-## 历史/继承实现证据（不构成 V1.27 产品承诺）
+## 历史/继承实现证据（不构成 V1.28 产品承诺）
 
 以下 V1.18、V1.21、V1.24、V1.25 和 V1.26 行及其后续验收记录保留为历史实现、迁移和测试证据。它们不表示旧单视频路径、`training-data.v2` 或 V1.24-compatible runtime behavior 仍属于当前产品范围。
 

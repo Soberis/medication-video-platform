@@ -271,10 +271,10 @@ export function CaptureGroupInspector({
       </ProgressiveDetail>
 
       <ProgressiveDetail
-        title="修订、复核与训练资格"
+        title="修订、复核与事件清洗"
         summary={revision ? `第 ${revision.revision_number} 次正式修订` : '尚无正式修订'}
       >
-        <InspectorSection title="修订、复核与训练资格详情" titleId="capture-group-revision-facts">
+        <InspectorSection title="修订、复核与事件清洗详情" titleId="capture-group-revision-facts">
           {taskVisibility === 'permission-limited' ? (
             <p className="form-hint" role="status">
               当前账号不是该任务执行人；配药动作标注任务状态按权限不可见。
@@ -329,10 +329,10 @@ export function CaptureGroupInspector({
                   {review?.review_note ? <p>复核意见：{review.review_note}</p> : null}
                   {cleaning ? (
                     <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-                      训练资格检查 · {cleaningLabel(cleaning.outcome)}
+                      事件清洗 · {cleaningLabel(cleaning.outcome)}
                     </StatusIndicator>
                   ) : (
-                    <span>尚无训练资格检查结果。</span>
+                    <span>尚无事件清洗结果。</span>
                   )}
                 </div>
               ) : (

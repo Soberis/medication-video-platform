@@ -1267,35 +1267,30 @@
   line-height: var(--app-line-height-metadata);
 }
 
-.hand-landmark-export-content,
-.training-data-v3-export-content {
+.hand-landmark-export-content {
   display: grid;
   gap: var(--app-space-12);
 }
 
-.hand-landmark-export-readiness,
-.training-data-v3-export-readiness {
+.hand-landmark-export-readiness {
   display: grid;
   gap: var(--app-space-8);
   padding-bottom: var(--app-space-12);
   border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
-.hand-landmark-export-readiness .status-indicator,
-.training-data-v3-export-readiness .status-indicator {
+.hand-landmark-export-readiness .status-indicator {
   justify-self: start;
 }
 
-.hand-landmark-export-readiness strong,
-.training-data-v3-export-readiness strong {
+.hand-landmark-export-readiness strong {
   color: var(--app-color-foreground);
   font-size: var(--app-font-size-body);
   font-weight: var(--app-font-weight-semibold);
   line-height: var(--app-line-height-body);
 }
 
-.hand-landmark-export-readiness p,
-.training-data-v3-export-readiness p {
+.hand-landmark-export-readiness p {
   margin: 0;
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-helper);
@@ -1306,37 +1301,32 @@
   padding-bottom: var(--app-space-16);
 }
 
-.hand-landmark-export-facts,
-.training-data-v3-export-facts {
+.hand-landmark-export-facts {
   display: grid;
   gap: var(--app-space-8);
   margin: 0;
 }
 
-.hand-landmark-export-facts-list,
-.training-data-v3-export-facts-list {
+.hand-landmark-export-facts-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--app-space-8);
   margin: 0;
 }
 
-.hand-landmark-export-facts-list > div,
-.training-data-v3-export-facts-list > div {
+.hand-landmark-export-facts-list > div {
   min-width: 0;
   padding: var(--app-space-8) 0;
   border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
-.hand-landmark-export-facts-list dt,
-.training-data-v3-export-facts-list dt {
+.hand-landmark-export-facts-list dt {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-compact);
 }
 
-.hand-landmark-export-facts-list dd,
-.training-data-v3-export-facts-list dd {
+.hand-landmark-export-facts-list dd {
   margin: var(--app-space-4) 0 0;
   color: var(--app-color-foreground);
   font-size: var(--app-font-size-body);
@@ -1972,8 +1962,7 @@
     margin-left: 0;
   }
 
-  .hand-landmark-export-facts-list,
-  .training-data-v3-export-facts-list {
+  .hand-landmark-export-facts-list {
     grid-template-columns: minmax(0, 1fr);
   }
 

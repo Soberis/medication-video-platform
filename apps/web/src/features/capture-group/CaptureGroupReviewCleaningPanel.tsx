@@ -140,11 +140,11 @@ export function CaptureGroupReviewCleaningPanel({
       await recheckCaptureGroupCleaning(projectId, revision.annotation_revision_id)
       const refreshed = await onRefresh()
       void (refreshed
-        ? message.success('训练资格已重新检查，服务端事实已刷新。')
-        : message.warning('训练资格已重新检查，但最新事实暂未刷新；请手动刷新确认。'))
+        ? message.success('事件清洗已重新执行，服务端事实已刷新。')
+        : message.warning('事件清洗已重新执行，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       void message.error(
-        error instanceof Error ? error.message : '训练资格检查暂未完成，请刷新后重试。',
+        error instanceof Error ? error.message : '事件清洗暂未完成，请刷新后重试。',
       )
     } finally {
       setIsRechecking(false)
@@ -240,10 +240,10 @@ export function CaptureGroupReviewCleaningPanel({
       className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
       id="capture-group-review-cleaning"
       tabIndex={-1}
-      title="人工复核 / 训练资格检查"
+      title="人工复核 / 事件清洗"
       titleId="capture-group-review-cleaning-title"
       actions={
-        <span className="capture-group-section-note">复核由人工完成 · 训练资格检查按规则执行</span>
+        <span className="capture-group-section-note">复核由人工完成 · 事件清洗按规则执行</span>
       }
     >
       {hasCompletedReviewAndCleaning ? (
@@ -256,12 +256,12 @@ export function CaptureGroupReviewCleaningPanel({
           aria-expanded={isCompletedDetailOpen}
           onClick={() => setIsCompletedDetailOpen((open) => !open)}
         >
-          {isCompletedDetailOpen ? '收起复核与训练资格详情' : '查看复核与训练资格详情'}
+          {isCompletedDetailOpen ? '收起复核与事件清洗详情' : '查看复核与事件清洗详情'}
         </Button>
       ) : null}
       {!task ? (
         <p className="form-hint">
-          当前没有可见的配药事件任务，暂不能读取修订、复核或训练资格事实。
+          当前没有可见的配药事件任务，暂不能读取修订、复核或事件清洗事实。
         </p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
@@ -373,7 +373,7 @@ export function CaptureGroupReviewCleaningPanel({
             </p>
           )}
 
-          <TrainingEligibilityCheck
+          <CaptureGroupCleaningCheck
             cleaning={cleaning}
             primaryCameraNumber={primaryCameraNumber}
             schema={schema}
@@ -525,7 +525,7 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
   )
 }
 
-interface TrainingEligibilityCheckProps {
+interface CaptureGroupCleaningCheckProps {
   cleaning: CleaningResult | null
   primaryCameraNumber: number | null
   schema: AnnotationLabelSchema | null
@@ -535,7 +535,7 @@ interface TrainingEligibilityCheckProps {
   onRecheck: () => void
 }
 
-function TrainingEligibilityCheck({
+function CaptureGroupCleaningCheck({
   cleaning,
   primaryCameraNumber,
   schema,
@@ -543,15 +543,15 @@ function TrainingEligibilityCheck({
   canRecheck,
   isRechecking,
   onRecheck,
-}: TrainingEligibilityCheckProps) {
+}: CaptureGroupCleaningCheckProps) {
   const captureGroupCleaning = cleaning
 
   return (
-    <div className="capture-group-training-check" aria-label="训练资格检查">
+    <div className="capture-group-cleaning-check" aria-label="事件清洗">
       <div className="capture-group-review-subheading">
         <div>
-          <span className="app-eyebrow">事件级训练资格检查</span>
-          <h3>训练资格检查</h3>
+          <span className="app-eyebrow">事件级清洗</span>
+          <h3>事件清洗</h3>
         </div>
         {cleaning ? (
           <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
@@ -563,7 +563,7 @@ function TrainingEligibilityCheck({
         <>
           <div className="capture-group-cleaning-summary">
             <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-              {cleaning.outcome === 'PASS' ? '训练资格检查通过' : '训练资格检查未通过'}
+              {cleaning.outcome === 'PASS' ? '事件清洗通过' : '事件清洗未通过'}
             </StatusIndicator>
             <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
             {captureGroupCleaning?.evaluated_by ? (
@@ -571,7 +571,7 @@ function TrainingEligibilityCheck({
             ) : null}
           </div>
           <MetadataList
-            ariaLabel="训练资格检查规则来源"
+            ariaLabel="事件清洗规则来源"
             items={[
               ...(cleaning.rule_set_key
                 ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
@@ -633,15 +633,15 @@ function TrainingEligibilityCheck({
           <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
           {canRecheck ? (
             <Button type="link" size="small" loading={isRechecking} onClick={onRecheck}>
-              重新检查训练资格
+              重新执行事件清洗
             </Button>
           ) : null}
         </>
       ) : (
         <p className="form-hint">
           {review?.decision === 'APPROVED'
-            ? '人工复核已通过；服务端尚未返回训练资格检查结果。'
-            : '人工复核通过后，服务端会在同一事务内生成训练资格检查结果。这里不是第二个人工质量决定。'}
+            ? '人工复核已通过；服务端尚未返回事件清洗结果。'
+            : '人工复核通过后，服务端会在同一事务内生成事件清洗结果。这里不是第二个人工质量决定。'}
         </p>
       )}
     </div>

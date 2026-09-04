@@ -1,11 +1,11 @@
 # 异步作业协议
 
 > 文档状态：P0 详细设计（评审稿）  
-> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理和 P0 AI hand-pose 作业；当前 V1.27 `training-data.v3` CaptureGroup 资格/来源 manifest 与独立的 `hand-landmarks.v1` current MediaPipe detection evidence export 均为 Core API 内的同步只读导出操作
+> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理和 P0 AI hand-pose 作业；当前 V1.28 `hand-landmarks.v1` MediaPipe detection evidence export 为 Core API 内的同步只读导出操作
 > 最后更新：2026-09-01
 
-当前需求口径以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和
-[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) 为准。V1.26 及之前的单视频和
+当前需求口径以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
+[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) 为准。V1.26 及之前的单视频和
 数据集作业协议只作为历史迁移/审计材料，不构成当前 API、队列或 Worker 承诺。
 
 ## 1. 核心决策
@@ -41,7 +41,6 @@ Flyway/运行记录，不代表当前 active API、队列或 Worker。
 | --- | --- | --- |
 | 媒体探测、转码、抽帧、脱敏 | `mediaprivacy` | media_job、media_job_attempt |
 | 批量/耗时清洗和重复检测 | `qualitycleaning` | cleaning_run、cleaning_result |
-| 最小 `training-data.v3` preview/download | `datasetexport` | CaptureGroup 事件资格只读投影和 v3 JSON manifest |
 | AI hand-pose 推理 | `aicandidate` | ai_job、ai_job_attempt、candidate_annotation |
 
 共享代码只提供 `JobEnvelope`、`JobResult`、状态枚举、错误分类和幂等工具，不拥有业务决策。

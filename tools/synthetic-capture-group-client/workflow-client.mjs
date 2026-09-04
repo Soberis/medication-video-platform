@@ -131,38 +131,6 @@ export class SyntheticCaptureGroupWorkflowClient {
     })
   }
 
-  async previewTrainingDataV3() {
-    return this.#requestJson('preview training-data.v3', `/projects/${pathSegment(this.projectId, 'project')}/training-data/v3/preview`, { role: 'admin' })
-  }
-
-  async downloadTrainingDataV3() {
-    const response = await this.#request('download training-data.v3', `/projects/${pathSegment(this.projectId, 'project')}/training-data/v3/download`, {
-      role: 'admin',
-      accept: 'application/vnd.medication.training-data.v3+json',
-    })
-    const text = await response.text()
-    if (!text) {
-      throw new Error('training-data.v3 download returned an empty body')
-    }
-    let document
-    try {
-      document = JSON.parse(text)
-    }
-    catch {
-      throw new Error('training-data.v3 download returned non-JSON content')
-    }
-    return { document, contentType: response.headers.get('content-type'), fileName: 'training_data_v3.json' }
-  }
-
-  async validateTrainingDataV3Splits(assignments) {
-    return this.#requestJson('validate training-data.v3 split assignments', `/projects/${pathSegment(this.projectId, 'project')}/training-data/v3/validate-splits`, {
-      method: 'POST',
-      role: 'admin',
-      body: { assignments },
-      requestId: requestId('split-validation'),
-    })
-  }
-
   async requestHandPose(clipAssetId) {
     return this.#requestJson('request AI Candidate hand pose', `/projects/${pathSegment(this.projectId, 'project')}/videos/${pathSegment(clipAssetId, 'clip asset')}/hand-pose-detections`, {
       method: 'POST',

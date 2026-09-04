@@ -1043,7 +1043,7 @@
 .capture-group-review-quality-fact,
 .capture-group-review-evidence-block,
 .capture-group-review-annotation-history,
-.capture-group-training-check,
+.capture-group-cleaning-check,
 .capture-group-view-set-summary,
 .capture-group-cleaning-list,
 .capture-group-cleaning-interval,
@@ -1059,7 +1059,7 @@
 .capture-group-review-evidence-block > .form-hint,
 .capture-group-review-annotation-history li > span,
 .capture-group-review-annotation-history li > p,
-.capture-group-training-check > .form-hint,
+.capture-group-cleaning-check > .form-hint,
 .capture-group-cleaning-summary > span,
 .capture-group-cleaning-list > span,
 .capture-group-cleaning-interval > span,
@@ -1115,7 +1115,7 @@
 .capture-group-view-set-summary,
 .capture-group-review-evidence-block,
 .capture-group-review-annotation-history,
-.capture-group-training-check {
+.capture-group-cleaning-check {
   padding-top: var(--app-space-12);
   border-top: 1px solid var(--app-color-border-subtle);
 }

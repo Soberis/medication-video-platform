@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import { generateSyntheticVideo } from '../synthetic-upload-client/synthetic-video.mjs'
 import { PlatformApiError, SyntheticUploadClient, normalizeCameraNumbers } from '../synthetic-upload-client/upload-client.mjs'
-import { assertCaptureGroupIdentity, assertCleaningResult, assertNoSplitLeakage, assertReviewContext, assertSameCameraNumbers, validateTrainingDataV3Document } from './assertions.mjs'
+import { assertCaptureGroupIdentity, assertCleaningResult, assertReviewContext, assertSameCameraNumbers } from './assertions.mjs'
 import { buildScenarioFixture, getScenario, SCENARIO_NAMES } from './scenarios.mjs'
 import { SyntheticCaptureGroupWorkflowClient } from './workflow-client.mjs'
 
@@ -146,7 +146,6 @@ function baseSummary(fixture, projectId, captureGroupId) {
     revision: null,
     review: null,
     cleaning: null,
-    export: null,
     candidates: {},
   }
 }
@@ -342,12 +341,6 @@ async function verifyReviewAndCleaning(workflow, fixture, uploaded, task, summar
       }
       assertApiError(error, 409, 'ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY', 'rejected Review Cleaning gate')
     }
-    const download = await workflow.downloadTrainingDataV3()
-    if (download.document.events?.some((event) => event.capture_group_id === summary.capture_group_id
-      && event.annotation_revision_id === annotationRevisionId(submittedRevision))) {
-      throw new Error('A non-PASS synthetic revision appeared in training-data.v3')
-    }
-    summary.export = { schema_version: download.document.schema_version, exported: false }
     return
   }
 
@@ -358,59 +351,6 @@ async function verifyReviewAndCleaning(workflow, fixture, uploaded, task, summar
   assertCleaningResult(cleaning, activeFixture)
   summary.cleaning = summarizeCleaning(cleaning)
 
-  const preview = await workflow.previewTrainingDataV3()
-  assertEqual(field(preview, 'schema_version', 'schemaVersion'), 'training-data.v3', 'training-data.v3 preview schema')
-  assertEqual(field(preview, 'split_unit', 'splitUnit'), 'capture_group', 'training-data.v3 split unit')
-  if (field(preview, 'event_count', 'eventCount') < 1) {
-    throw new Error('training-data.v3 preview omitted the approved synthetic event')
-  }
-  const download = await workflow.downloadTrainingDataV3()
-  if (!download.contentType?.startsWith('application/vnd.medication.training-data.v3+json')) {
-    throw new Error(`Unexpected training-data.v3 content type: ${download.contentType}`)
-  }
-  const event = validateTrainingDataV3Document(download.document, {
-    captureGroupId: summary.capture_group_id,
-    annotationRevisionId: annotationRevisionId(submittedRevision),
-    revisionNumber: summary.revision,
-    primaryCameraNumber: fixture.primaryCameraNumber,
-    primaryClipAssetId: uploaded.views.find((view) => view.cameraNumber === fixture.primaryCameraNumber).clipAssetId,
-  })
-  summary.export = {
-    schema_version: download.document.schema_version,
-    file_name: download.fileName,
-    event_revision: event.revision,
-    readback: true,
-  }
-
-  const leakingAssignments = [
-    { capture_group_id: summary.capture_group_id, split: 'train' },
-    { capture_group_id: summary.capture_group_id, split: 'validation' },
-  ]
-  try {
-    assertNoSplitLeakage(leakingAssignments)
-    throw new Error('The local split guard accepted a CaptureGroup assigned to two splits')
-  }
-  catch (error) {
-    if (error instanceof Error && error.message.includes('local split guard accepted')) {
-      throw error
-    }
-    assertEqual(error.errorCode, 'TRAINING_DATA_SPLIT_LEAKAGE', 'local split guard error code')
-  }
-  try {
-    await workflow.validateTrainingDataV3Splits(leakingAssignments)
-    throw new Error('The API split guard accepted a CaptureGroup assigned to two splits')
-  }
-  catch (error) {
-    if (error instanceof Error && error.message.includes('API split guard accepted')) {
-      throw error
-    }
-    assertApiError(error, 422, 'TRAINING_DATA_SPLIT_LEAKAGE', 'API split leakage guard')
-  }
-  const validSplit = await workflow.validateTrainingDataV3Splits([
-    { capture_group_id: summary.capture_group_id, split: 'train' },
-  ])
-  assertEqual(field(validSplit, 'split_unit', 'splitUnit'), 'capture_group', 'valid split unit')
-  assertEqual(field(validSplit, 'valid'), true, 'valid split assignment')
 }
 
 export async function executeScenario({

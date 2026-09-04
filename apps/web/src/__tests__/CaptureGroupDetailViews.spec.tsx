@@ -344,7 +344,6 @@ describe('CaptureGroup detail views', () => {
       expect(focusedDetails).toHaveTextContent(
         '导出当前配药事件的 hand-landmarks.v1 手部检测证据。',
       )
-      expect(focusedDetails).not.toHaveTextContent('training-data.v3')
       expect(focusedDetails).not.toHaveTextContent('训练数据导出')
     },
   )
@@ -394,13 +393,13 @@ describe('CaptureGroup detail views', () => {
 
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
-    expect(screen.getAllByText('人工复核已通过，训练资格检查通过')).toHaveLength(1)
-    expect(screen.queryByText('人工复核已通过 · 训练资格检查通过')).not.toBeInTheDocument()
+    expect(screen.getAllByText('人工复核已通过，事件清洗通过')).toHaveLength(1)
+    expect(screen.queryByText('人工复核已通过 · 事件清洗通过')).not.toBeInTheDocument()
     expect(
       screen.queryByText('当前事件已完成既定流程；完整修订、证据与规则事实已收起。'),
     ).not.toBeInTheDocument()
     expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
-    expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('事件清洗：已通过')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
     const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
     if (!workflowDisclosure) throw new Error('Completed workflow disclosure was not mounted.')
@@ -408,16 +407,16 @@ describe('CaptureGroup detail views', () => {
     await user.click(within(workflowDisclosure).getByText('查看完整流程'))
     const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
     expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)
-    expect(workflowRail.querySelector('[aria-current="step"]')).toHaveTextContent('训练资格检查')
+    expect(workflowRail.querySelector('[aria-current="step"]')).toHaveTextContent('事件清洗')
     await user.click(within(workflowDisclosure).getByText('查看完整流程'))
     expect(workflowDisclosure).not.toHaveAttribute('open')
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
-    const detailToggle = screen.getByRole('button', { name: '查看复核与训练资格详情' })
+    const detailToggle = screen.getByRole('button', { name: '查看复核与事件清洗详情' })
     expect(detailToggle).toHaveAttribute('aria-expanded', 'false')
     expect(detailToggle).not.toHaveAttribute('aria-controls')
     expect(screen.queryByText('已确认输入与机位集合')).not.toBeInTheDocument()
     await user.click(detailToggle)
-    const detailCollapse = screen.getByRole('button', { name: '收起复核与训练资格详情' })
+    const detailCollapse = screen.getByRole('button', { name: '收起复核与事件清洗详情' })
     expect(detailCollapse).toHaveAttribute('aria-expanded', 'true')
     expect(detailCollapse).toHaveAttribute('aria-controls', 'capture-group-review-cleaning-details')
     const evidenceDisclosure = screen
@@ -461,9 +460,9 @@ describe('CaptureGroup detail views', () => {
     await user.click(within(receiptDetails).getByText('接收与采集事实'))
     expect(within(receiptDetails).getByText(group.capture_group_id)).toBeInTheDocument()
 
-    const revisionDetails = within(inspector).getByText('修订、复核与训练资格').closest('details')
+    const revisionDetails = within(inspector).getByText('修订、复核与事件清洗').closest('details')
     if (!revisionDetails) throw new Error('Revision progressive detail was not mounted.')
-    await user.click(within(revisionDetails).getByText('修订、复核与训练资格'))
+    await user.click(within(revisionDetails).getByText('修订、复核与事件清洗'))
     expect(within(revisionDetails).getByText(task.annotation_task_id)).toBeInTheDocument()
     const revisionHistory = within(revisionDetails).getByText('正式修订').closest('div')
     if (!revisionHistory) throw new Error('Revision history was not mounted.')

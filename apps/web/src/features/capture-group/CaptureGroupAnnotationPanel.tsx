@@ -517,7 +517,7 @@ export function CaptureGroupAnnotationPanel({
                   <span className="app-eyebrow">修订提交</span>
                   <h3>新修订暂不可提交</h3>
                 </div>
-                <span>保留既有修订、复核和训练资格检查历史；等待服务端恢复事件级准入。</span>
+                <span>保留既有修订、复核和事件清洗历史；等待服务端恢复事件级准入。</span>
               </div>
               <div className="capture-group-annotation-form-actions">
                 <Button type="primary" disabled>

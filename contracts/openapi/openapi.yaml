@@ -6,10 +6,10 @@ info:
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, manage project memberships,
     initialize verified uploads, assemble CaptureSession/CameraSet/CameraStream facts, expose
-    expose CaptureGroup workflows with ClipAsset evidence detail, run Media Probe and MediaPipe hand candidates,
+    CaptureGroup workflows with ClipAsset evidence detail, run Media Probe and MediaPipe hand candidates,
     record human quality, annotation, Review and event-level CaptureGroup Cleaning facts, and synchronously
-    preview, validate and download the training-data.v3 group manifest from authoritative
-    read-only projections. The API never proxies upload bytes through the
+    preview and download current MediaPipe hand-landmark evidence from authoritative read-only
+    projections. The API never proxies upload bytes through the
     Core API, exposes storage locations through catalog reads, controls or probes edge hardware,
     or performs media processing synchronously inside a user request.
   license:
@@ -55,12 +55,11 @@ tags:
       provisioned to an edge device; they do not connect to, control or trigger RK3588 hardware.
   - name: Asset Catalog
     description: Project-scoped read models for nurse medication-preparation sessions and video assets.
-  - name: Training Data Export
+  - name: Hand Landmark Export
     description: >-
-      Explicit, synchronous, read-only P0 exports. training-data.v3 remains the CaptureGroup eligibility and
-      provenance event manifest, while hand-landmarks.v1 is an independent current MediaPipe frame/hand
-      evidence CSV. The landmark export never imports human annotation, Review or Cleaning decisions and
-      preserves the current administrator and synthetic-data security boundary.
+      Explicit, synchronous, read-only current MediaPipe hand-landmark evidence export. It never imports
+      human annotation, Review or Cleaning decisions and preserves the current administrator and
+      synthetic-data security boundary.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -77,13 +76,13 @@ paths:
     get:
       operationId: getHandLandmarkTrainingExportPreview
       tags:
-        - Training Data Export
+        - Hand Landmark Export
       summary: Preview current MediaPipe hand-landmark detection samples
       description: >-
         Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. The preview enumerates current enabled
         and available camera streams for every current CaptureGroup, or exactly the requested CaptureGroup,
         and reads the current MediaPipe job and CandidateAnnotation evidence for each ClipAsset. It has no dependency on View or Group Quality,
-        AnnotationRevision, Review, Cleaning or training-data.v3 eligibility. Only a current
+        AnnotationRevision, Review, Cleaning or any human eligibility decision. Only a current
         SUCCEEDED_WITH_CANDIDATES job contributes rows; NO_JOB, QUEUED, RUNNING, FAILED and
         SUCCEEDED_NO_HAND views contribute no rows and are represented by the corresponding detection-state
         counts (`no_job_view_count`, `queued_view_count`, `running_view_count`, `failed_view_count` and
@@ -114,8 +113,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
           description: >-
-            Current CaptureGroup eligibility, frozen AI evidence or selected CandidateAnnotation data
-            cannot be proven safely.
+            Current CaptureGroup view, frozen AI evidence or selected CandidateAnnotation data cannot be
+            proven safely.
           content:
             application/problem+json:
               schema:
@@ -124,7 +123,7 @@ paths:
     get:
       operationId: downloadHandLandmarkTrainingData
       tags:
-        - Training Data Export
+        - Hand Landmark Export
       summary: Download current MediaPipe hand-landmark detection samples as CSV
       description: >-
         Returns one row per valid 21-point MediaPipe hand candidate from the current
@@ -181,123 +180,6 @@ paths:
             Current CaptureGroup camera-stream or MediaPipe candidate evidence cannot be proven safely,
             including a missing or changed current ClipAsset, a source digest mismatch, or malformed
             candidate provenance.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/training-data/v3/preview:
-    get:
-      operationId: getTrainingDataV3ExportPreview
-      tags:
-        - Training Data Export
-      summary: Preview the minimal V1.27 CaptureGroup training-data manifest
-      description: >-
-        Requires a global ROLE_ADMIN and an ACTIVE ADMIN membership. Only event-level Cleaning PASS
-        rows with APPROVED human Review and a current admitting CaptureGroup quality revision are read.
-        Before a row is exposed, the service verifies the unique current AnnotationRevision and the
-        current participating source media against the Cleaning snapshot. The manifest is read-only,
-        contains no MP4 bytes, and uses CaptureGroup as the minimum split unit.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      responses:
-        "200":
-          description: Current V1.27 group/event manifest preview.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TrainingDataV3ExportPreview"
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "422":
-          description: >-
-            Current CaptureGroup eligibility or source evidence cannot be proven safely, including
-            a stale or ambiguous Revision, a cross-entity context mismatch, a deleted or changed
-            participating ClipAsset, or a source digest mismatch.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/training-data/v3/download:
-    get:
-      operationId: downloadTrainingDataV3
-      tags:
-        - Training Data Export
-      summary: Download the minimal V1.27 CaptureGroup training-data manifest
-      description: >-
-        Returns training-data.v3 JSON events. Each event retains the submitted AnnotationRevision,
-        primary authoritative interval, participating and excluded views, confirmed View Set, current
-        group quality, human Review provenance, event Cleaning provenance and Candidate/model/profile
-        provenance where available. The Primary View is the only formal action timebase; supporting
-        views are retained as event-level evidence without action-aligned intervals.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      responses:
-        "200":
-          description: Minimal V1.27 group/event manifest.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-            Content-Disposition:
-              schema:
-                type: string
-                const: 'attachment; filename="training_data_v3.json"'
-          content:
-            application/vnd.medication.training-data.v3+json:
-              schema:
-                $ref: "#/components/schemas/TrainingDataV3Document"
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "422":
-          description: >-
-            Current CaptureGroup eligibility or source evidence cannot be proven safely, including
-            a stale or ambiguous Revision, a cross-entity context mismatch, a deleted or changed
-            participating ClipAsset, or a source digest mismatch.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/training-data/v3/validate-splits:
-    post:
-      operationId: validateTrainingDataV3Splits
-      tags:
-        - Training Data Export
-      summary: Validate external split assignments at CaptureGroup granularity
-      description: >-
-        The exporter does not assign splits. This contract/tooling gate rejects an assignment set when
-        views or events of the same CaptureGroup are assigned to different train, validation or test
-        splits.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/TrainingDataV3SplitValidationRequest"
-      responses:
-        "200":
-          description: All supplied assignments satisfy the CaptureGroup split constraint.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TrainingDataV3SplitValidation"
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "422":
-          description: The supplied assignments contain split leakage.
           content:
             application/problem+json:
               schema:
@@ -1218,7 +1100,7 @@ paths:
         batch to be bound exactly once. CaptureSession, CameraSetSnapshot, snapshot members and
         CameraStreams are created in one database transaction. Edge-reported synchronization data
         is retained as an observation and does not override server configuration or become a
-        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. The V1.27
+        verified sync revision. Newly uploaded, unprobed assets produce BOUND streams. The V1.28
         CaptureGroup projection uses the actual bound stream count. A natural-resource replay returns
         the original assembly without rereading object storage. The operation does not control the
         RK3588 device or accept video bytes through the Core API. For PLATFORM_LOCAL batches,
@@ -2055,7 +1937,7 @@ paths:
         - Asset Catalog
       summary: Read one CaptureGroup and its receipt/view facts
       description: >-
-        Returns the V1.27 CaptureGroup read model. capture_group_id is the same stable identifier as
+        Returns the V1.28 CaptureGroup read model. capture_group_id is the same stable identifier as
         capture_session_id. Expected, received and missing camera numbers come from the frozen
         CameraSetSnapshot and bound CameraStreams; camera gaps are preserved. Receipt is independent
         of media probing and quality state, and the response does not expose storage locations.
@@ -3157,7 +3039,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422":
-          description: Caller-supplied supporting-view mappings are unsupported in the V1.27 MVP.
+          description: Caller-supplied supporting-view mappings are unsupported in the V1.28 MVP.
           content:
             application/problem+json:
               schema:
@@ -5116,7 +4998,7 @@ components:
         capture_group_id:
           type: string
           format: uuid
-          description: V1.27 business identity; exactly the same UUID as capture_session_id.
+          description: V1.28 business identity; exactly the same UUID as capture_session_id.
         project_id:
           type: string
           format: uuid
@@ -5150,7 +5032,7 @@ components:
           minimum: 0
           maximum: 64
           description: >-
-            V1.27 CaptureGroup responses count unique streams actually bound to the frozen snapshot.
+            V1.28 CaptureGroup responses count unique streams actually bound to the frozen snapshot.
             The CaptureGroup receipt count is independent of media probe status.
         sync_group_id:
           type: [string, "null"]
@@ -6544,7 +6426,7 @@ components:
         capture_group_id:
           type: [string, "null"]
           format: uuid
-          description: Canonical CaptureGroup id when this video belongs to the V1.27 event workflow; otherwise null.
+          description: Canonical CaptureGroup id when this video belongs to the V1.28 event workflow; otherwise null.
         capture_group_workflow:
           type: boolean
           description: True when the video is a view of a CaptureGroup and event-level workflow is authoritative.
@@ -6747,7 +6629,7 @@ components:
       deprecated: true
       description: >-
         Deprecated compatibility request. Omit this body or send an empty support_mappings array.
-        Non-empty caller-provided mappings are rejected; V1.27 has no authoritative supporting-view
+        Non-empty caller-provided mappings are rejected; V1.28 has no authoritative supporting-view
         time mapping system.
       additionalProperties: false
       properties:
@@ -6773,7 +6655,7 @@ components:
           format: uuid
         validated:
           type: boolean
-          description: Not accepted as scientific proof in V1.27.
+          description: Not accepted as scientific proof in V1.28.
         mapping_version:
           type: string
           minLength: 1
@@ -6892,7 +6774,7 @@ components:
             additionalProperties: true
         mapping_provenance:
           deprecated: true
-          description: Always an empty array in the V1.27 MVP; retained for projection compatibility.
+          description: Always an empty array in the V1.28 MVP; retained for projection compatibility.
           type: array
           items:
             type: object
@@ -7117,258 +6999,6 @@ components:
         media_type:
           type: string
           const: text/csv; charset=UTF-8
-    TrainingDataV3ExportPreview:
-      type: object
-      additionalProperties: false
-      required:
-        - schema_version
-        - eligible_group_count
-        - event_count
-        - file_name
-        - content_type
-        - split_unit
-        - includes_mp4
-      properties:
-        schema_version:
-          type: string
-          const: training-data.v3
-        eligible_group_count:
-          type: integer
-          format: int64
-          minimum: 0
-        event_count:
-          type: integer
-          format: int64
-          minimum: 0
-        file_name:
-          type: string
-          const: training_data_v3.json
-        content_type:
-          type: string
-          const: application/vnd.medication.training-data.v3+json
-        split_unit:
-          type: string
-          const: capture_group
-        includes_mp4:
-          type: boolean
-          const: false
-    TrainingDataV3Document:
-      type: object
-      additionalProperties: false
-      required:
-        - schema_version
-        - split_unit
-        - events
-      properties:
-        schema_version:
-          type: string
-          const: training-data.v3
-        split_unit:
-          type: string
-          const: capture_group
-        events:
-          type: array
-          items:
-            $ref: "#/components/schemas/TrainingDataV3Event"
-    TrainingDataV3Event:
-      type: object
-      additionalProperties: false
-      required:
-        - capture_group_id
-        - annotation_revision_id
-        - revision
-        - action_labels
-        - primary_clip_asset_id
-        - primary_camera_number
-        - primary_interval
-        - participating_views
-        - excluded_views
-        - group_quality
-        - group_quality_revision
-        - group_quality_review_id
-        - annotation_review_id
-        - review_decision
-        - capture_group_cleaning_id
-        - cleaning_rule_set_key
-        - cleaning_rule_set_version
-        - cleaning_rule_set_digest
-        - cleaning_outcome
-        - cleaning_reason_codes
-        - cleaning_executed_checks
-        - cleaning_input_fingerprint
-        - cleaning_evaluated_by
-        - cleaning_evaluated_at
-        - mapping_provenance
-        - candidate_evidence
-        - candidate_provenance
-      properties:
-        capture_group_id:
-          type: string
-          format: uuid
-        annotation_revision_id:
-          type: string
-          format: uuid
-        revision:
-          type: integer
-          format: int32
-          minimum: 1
-        action_label:
-          type:
-            - string
-            - "null"
-        action_labels:
-          type: array
-          items:
-            type: string
-        primary_clip_asset_id:
-          type: string
-          format: uuid
-        primary_camera_number:
-          type: integer
-          format: int32
-          minimum: 1
-          maximum: 64
-        primary_interval:
-          type: array
-          items:
-            $ref: "#/components/schemas/ActionInterval"
-        confirmed_view_set:
-          type: object
-          additionalProperties: true
-        input_version:
-          type: string
-        participating_views:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        excluded_views:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        group_quality:
-          type: string
-          enum: [QUALIFIED, QUALIFIED_WITH_EXCLUSIONS]
-        group_quality_revision:
-          type: integer
-          format: int64
-        group_quality_review_id:
-          type: string
-          format: uuid
-        group_quality_reviewed_by:
-          type: string
-        group_quality_decided_at:
-          type: string
-          format: date-time
-        annotation_review_id:
-          type: string
-          format: uuid
-        review_decision:
-          type: string
-          const: APPROVED
-        reviewed_by:
-          type: string
-        reviewed_at:
-          type: string
-          format: date-time
-        qualified_views:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        rejected_missing_views:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        candidate_evidence:
-          type: array
-          items:
-            $ref: "#/components/schemas/CandidateProvenanceEntry"
-        capture_group_cleaning_id:
-          type: string
-          format: uuid
-        cleaning_rule_set_key:
-          type: string
-        cleaning_rule_set_version:
-          type: string
-        cleaning_rule_set_digest:
-          type: string
-          pattern: ^[a-f0-9]{64}$
-        cleaning_outcome:
-          type: string
-          const: PASS
-        cleaning_reason_codes:
-          type: array
-          items:
-            type: string
-        cleaning_executed_checks:
-          type: array
-          items:
-            type: string
-        cleaning_input_fingerprint:
-          type: string
-          pattern: ^[a-f0-9]{64}$
-        cleaning_evaluated_by:
-          type: string
-        cleaning_authorization_basis:
-          type: string
-        cleaning_evaluated_at:
-          type: string
-          format: date-time
-        mapping_provenance:
-          deprecated: true
-          description: Always an empty array in the V1.27 MVP; retained for projection compatibility.
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        candidate_provenance:
-          type: array
-          items:
-            $ref: "#/components/schemas/CandidateProvenanceEntry"
-    TrainingDataV3SplitValidationRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - assignments
-      properties:
-        assignments:
-          type: array
-          maxItems: 10000
-          items:
-            $ref: "#/components/schemas/TrainingDataV3SplitAssignment"
-    TrainingDataV3SplitAssignment:
-      type: object
-      additionalProperties: false
-      required:
-        - capture_group_id
-        - split
-      properties:
-        capture_group_id:
-          type: string
-          format: uuid
-        split:
-          type: string
-          enum: [train, validation, test]
-    TrainingDataV3SplitValidation:
-      type: object
-      additionalProperties: false
-      required:
-        - split_unit
-        - assignment_count
-        - valid
-      properties:
-        split_unit:
-          type: string
-          const: capture_group
-        assignment_count:
-          type: integer
-          format: int64
-          minimum: 0
-        valid:
-          type: boolean
     ApiError:
       type: object
       additionalProperties: false

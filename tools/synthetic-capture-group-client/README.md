@@ -11,7 +11,7 @@
 → 一个 CaptureGroup AnnotationTask / append-only Revision chain
 → human Review
 → event-level Cleaning
-→ training-data.v3 preview / download / readback
+→ event Cleaning result
 ```
 
 工具只负责验收编排，不改变生产 CaptureGroup、Annotation、Quality、Cleaning 或上传语义；不做前端工作，不创建 DatasetVersion、CaptureSync 或通用 workflow engine。
@@ -26,7 +26,7 @@
 
 ## 使用
 
-先启动本地 PostgreSQL、对象存储、RabbitMQ、Core API 和对应 Worker。v3 读取需要启用 synthetic export profile，例如 `platform.training-data-export.data-profile=synthetic`；`no-hand-detected` 和 `candidate-failure` 还需要 AI Worker/模型配置。
+先启动本地 PostgreSQL、对象存储、RabbitMQ、Core API 和对应 Worker；`no-hand-detected` 和 `candidate-failure` 还需要 AI Worker/模型配置。
 
 PowerShell 示例：
 

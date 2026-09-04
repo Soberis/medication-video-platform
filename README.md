@@ -2,7 +2,7 @@
 
 平台对接医院边端采集系统接收固定舱内相机视频，在云端完成视频与数据管理、MediaPipe 手部预标注、配药动作标注、复核和数据清洗。
 
-当前正式需求：V1.27（单一 CaptureGroup 产品路径；V1.26 及更早版本仅作历史参考）
+当前正式需求：V1.28（单一 CaptureGroup 产品路径与唯一手部检测导出；V1.27 及更早版本仅作历史参考）
 
 当前唯一支持的产品主链：
 
@@ -13,18 +13,17 @@ Local Upload / External Ingest
 → per-view Quality → CaptureGroup Quality
 → one CaptureGroup AnnotationTask → AnnotationRevision
 → Review → deterministic CaptureGroup Cleaning
-├→ training-data.v3（CaptureGroup eligibility / provenance event manifest）
 └→ hand-landmarks.v1（current CameraStream MediaPipe landmark detection evidence）
 ```
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning / 训练资格检查，管理员 recheck 只重跑既有规则。`training-data.v3` 只记录 CaptureGroup eligibility / provenance event manifest，不是主要机器学习特征数据集；独立的 `hand-landmarks.v1` 从当前启用且可用的 CameraStream/ClipAsset 和当前 MediaPipe evidence 生成检测事实 CSV，不读取人工质量、Annotation、Review 或 Cleaning，当前已接入服务端运行时，可由管理员预览并下载，但尚无实际 training consumer 读取后者的证据。`training-data.v2`、单视频任务和单视频 Cleaning 已从 V1.27 当前产品范围退役；Task C 移除对应运行时、公开契约、旧读模型和最小导出工具。Task D 的 V72 在无历史行时移除空的旧投影、清洗对象和任务级旧关系；发现历史行时原样保留这些对象并继续升级，不删除或改写历史数据。完成明确的数据保留或删除决策后，V74 以 fail-closed 的 forward migration 移除这些被保留的旧对象。Flyway 历史迁移和历史文档继续保留。
+边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning，管理员 recheck 只重跑既有规则。唯一公开导出 `hand-landmarks.v1` 从当前启用且可用的 CameraStream/ClipAsset 和当前 MediaPipe evidence 生成检测事实 CSV，支持项目范围或单一 CaptureGroup 范围，不读取人工质量、Annotation、Review 或 Cleaning；尚无实际 training consumer 读取证据。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除；历史迁移和文档只保留审计参考，V75 仅清除旧 eligibility view，不删除业务事实。
 
 当前规范：
 
-- [V1.27 当前正式需求基线](./docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)
-- [V1.27 单一 CaptureGroup 产品路径](./docs/architecture/v1.27-single-capture-group-workflow.md)
+- [V1.28 当前正式需求基线](./docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
+- [V1.28 单一导出边界设计](./docs/architecture/v1.28-single-export-consolidation.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
 - [V1.27 AI evidence pipeline audit](./docs/architecture/v1.27-ai-evidence-audit.md)
 - [V1.27 training traceability audit](./docs/architecture/v1.27-training-traceability.md)

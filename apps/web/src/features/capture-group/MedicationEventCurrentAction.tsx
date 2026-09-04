@@ -92,9 +92,7 @@ function actionMessage(workflow: MedicationEventWorkflowModel, primaryActionHasF
   if (workflow.waitingReason) return workflow.waitingReason
   if (primaryActionHasForm && workflow.primaryAction) return '在下方直接完成当前动作。'
   if (workflow.primaryAction) return '根据当前服务端事实完成这一项处理。'
-  return workflow.stage === 'TRAINING_ELIGIBILITY'
-    ? '当前配药事件工作流已完成。'
-    : '当前没有可执行的处理动作。'
+  return workflow.stage === 'CLEANING' ? '当前配药事件工作流已完成。' : '当前没有可执行的处理动作。'
 }
 
 export function MedicationEventCurrentAction({
@@ -160,7 +158,7 @@ function CompletedResultSummary() {
     <div className="capture-group-current-result" role="status" aria-live="polite">
       <div className="capture-group-current-result-heading">
         <CircleCheck aria-hidden="true" size={18} strokeWidth={1.9} />
-        <strong>人工复核已通过，训练资格检查通过</strong>
+        <strong>人工复核已通过，事件清洗通过</strong>
       </div>
     </div>
   )

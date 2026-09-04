@@ -3,8 +3,8 @@
 > 文档状态：P0 运行设计（评审稿）  
 > 最后更新：2026-07-21
 
-当前产品边界以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 和
-[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md) 为准；本文件只描述部署、容量与恢复边界。
+当前产品边界以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
+[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) 为准；本文件只描述部署、容量与恢复边界。
 
 ## 1. 决策边界
 
@@ -13,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.27 当前不部署 Dataset Export Worker；最小 `training-data.v3` CaptureGroup eligibility/provenance event manifest 与独立的 `hand-landmarks.v1` current CameraStream detection evidence CSV preview/download 均在 Core API 内以只读事务完成，不构成独立 Worker 工作负载。
+- V1.28 当前不部署 Dataset Export Worker；唯一的 `hand-landmarks.v1` current CameraStream detection evidence CSV preview/download 在 Core API 内以只读事务完成，不构成独立 Worker 工作负载。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载
@@ -27,9 +27,9 @@
 | Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
-| Eligibility Manifest Export | `training-data.v3` CaptureGroup event manifest preview/download | 否，只读投影并返回受控 JSON |
+| Hand Landmark Export | `hand-landmarks.v1` current CameraStream detection evidence preview/download | 否，只读投影并返回受控 CSV |
 | PostgreSQL | 关系业务真值、Outbox/Inbox 和审计索引 | 是 |
-| S3 兼容存储 | raw、variant、frames、reports、exports | 保存字节事实，不保存关系状态 |
+| S3 兼容存储 | raw、variant、frames、reports | 保存字节事实，不保存关系状态；当前 hand-landmarks.v1 由 Core API 同步返回，不落导出对象 |
 | RabbitMQ | 作业和事件传递 | 否 |
 | Redis（可选） | 缓存、限流、短锁、短期进度；有测量证据后启用 | 否 |
 | CVAT | Object 标注外部工具 | 外部工作副本，正式 revision 仍在平台 |
@@ -44,7 +44,7 @@
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
 | 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
-| training-data.v3 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
+| hand-landmarks.v1 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
 | 手部预标注 | AI Worker、RabbitMQ、获批准的本地模型 | 批量与自动预标注策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。
@@ -84,14 +84,13 @@ flowchart TB
     MW --> S3
     API --> OBS["Logs / Metrics / Traces"]
     MW --> OBS
-    EW --> OBS
 ```
 
 该图表示完整目标拓扑；未进入当前阶段的节点不部署。网络分区建议：
 
 - 用户入口区：反向代理和 Web；
 - 应用区：Core API 和适配器；
-- Worker 区：媒体/导出/AI，按数据级别和网络策略隔离；
+- Worker 区：媒体/AI，按数据级别和网络策略隔离；
 - 数据区：按阶段启用 PostgreSQL、对象存储、RabbitMQ，以及可选 Redis；
 - 管理区：监控、备份、堡垒/运维入口。
 
@@ -113,7 +112,6 @@ R_raw = raw retention days
 R_working = working variant retention days
 F_preview = preview bytes/raw bytes
 F_frames = exported frame bytes/raw bytes
-F_export = export bytes/raw bytes
 F_replica = storage replication/erasure overhead
 F_backup = backup overhead
 ```
@@ -130,7 +128,7 @@ raw_bytes_day = S × C × D × B / 8
 
 ```text
 online_bytes ≈ raw_bytes_day ×
-  (R_raw + F_preview × R_working + F_frames × R_working + F_export × export_retention_days)
+  (R_raw + F_preview × R_working + F_frames × R_working)
   × F_replica
 ```
 
@@ -148,7 +146,7 @@ peak_ingest_bps = average_ingest_bps × P
 - multipart 并发和 part 数上限；
 - API 生成凭证/complete 的 QPS；
 - 校验 Worker 读取对象造成的第二次存储/网络流量；
-- 上传与预览/导出竞争时的 QoS。
+- 上传与只读查询竞争时的 QoS。
 
 ### 5.4 Worker 容量
 
@@ -160,7 +158,7 @@ worker_hours_day = S × C × D × realtime_factor / 3600
 required_workers = worker_hours_day / effective_worker_hours_day
 ```
 
-分别测量探测、转码、抽帧、隐私处理和导出。CPU、GPU、解码器、分辨率和编码格式必须分层，不用一个平均值覆盖全部场景。
+分别测量探测、转码、抽帧和隐私处理。CPU、GPU、解码器、分辨率和编码格式必须分层，不用一个平均值覆盖全部场景。
 
 ## 6. P0 性能目标
 
@@ -172,7 +170,7 @@ required_workers = worker_hours_day / effective_worker_hours_day
 | 常用列表 | 第一页不超过 3 秒 | 数据量、过滤组合、页大小、并发和 P95/最大值口径 |
 | 视频预览 | 脱敏视频可播放并快速看缩略图 | 浏览器、编码、首帧和 seek 指标 |
 | CVAT 同步 | 完成后不超过 5 分钟 | 正常/故障场景、统计分位和轮询/webhook 方式 |
-| 清洗/导出 | 后台执行，可见进度和失败原因 | job profile、最大数据量和取消时限 |
+| 事件级 Cleaning | Core API 事务内完成，结果可见 | 规则版本、事实摘要和错误原因 |
 
 ### 6.2 测试口径
 
@@ -198,7 +196,7 @@ required_workers = worker_hours_day / effective_worker_hours_day
 
 - 常用 tenant/project/status/time 筛选建立复合索引并以真实查询计划验证。
 - cursor 分页优先，避免大 offset。
-- 大型导出和统计使用只读投影/流式读取，不把全部结果加载进 JVM。
+- 大型只读查询和统计使用只读投影/流式读取，不把全部结果加载进 JVM。
 - 审计和时序大表的分区、归档门槛以规模测试决定，不在初期盲目分区。
 - PostgreSQL major/minor、数据校验和、PITR、连接池和 vacuum 策略在环境基线冻结。
 - Redis 缓存失效时系统仍能从事实库正确运行，只允许性能下降。
@@ -206,7 +204,7 @@ required_workers = worker_hours_day / effective_worker_hours_day
 ## 8. 对象存储运行要求
 
 - S3 API 能力测试：multipart、checksum、versioning、object lock、lifecycle、SSE/KMS、range GET、并发和错误语义。
-- 原始、工作、隔离和导出对象有独立生命周期策略。
+- 原始、工作和隔离对象有独立生命周期策略；当前 hand-landmarks.v1 不生成持久化导出对象。
 - 未完成 multipart 和 job 临时前缀有清理任务及积压告警。
 - 上传过期扫描和对象清理属于破坏性调度，默认关闭；每个环境须在隔离 bucket、最小权限、告警 owner 和运行手册确认后显式启用 `UPLOAD_CLEANUP_ENABLED=true`。
 - 调度关闭或 API 重启时，已提交的 `upload_cleanup_task` 必须保留；claim lease 到期后允许其他实例恢复，达到有限重试上限后进入可告警的 `FAILED`，不得静默丢弃。
@@ -251,7 +249,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 | --- | --- | --- | --- | --- |
 | 上传接收 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
 | 标注/复核 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
-| training-data.v3 preview/download | 待确认 | 待确认 | 待确认 | 投影重建和摘要校验 |
+| hand-landmarks.v1 preview/download | 待确认 | 待确认 | 待确认 | 当前视图、ClipAsset 和 Candidate provenance 校验 |
 | 权限/审计 | 待确认 | 待确认 | 待确认 | PITR 和审计链校验 |
 
 冻结数值后反推 WAL、快照、对象备份频率、异地副本、HA 和值班要求。
@@ -278,7 +276,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 1. 数据库 schema/Flyway 版本检查；
 2. 对象引用、version、size 和 SHA-256 抽样/全量分层核验；
 3. Outbox/Inbox 和作业 attempt 去重检查；
-4. AnnotationRevision、CleaningRun、training-data 投影和 Candidate provenance 完整性；
+4. AnnotationRevision、CleaningRun、hand-landmarks provenance 完整性；
 5. 权限、审批、撤销和过期状态检查；
 6. 审计链连续性；
 7. 端到端合成 session 验证；
@@ -297,7 +295,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 - RabbitMQ 丢失后从 DB job/outbox 恢复；
 - Worker 大量重投、lease 过期和 DLQ 积压；
 - 密钥不可用/轮换失败；
-- 错误数据集导出或隐私放行撤销；
+- 错误 hand-landmarks 证据导出或隐私放行撤销；
 - 整个站点不可用时的替代恢复位置；
 - 从备份恢复出已销毁/已撤销数据后的再处置。
 
@@ -312,7 +310,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 - PostgreSQL：连接、锁、慢查询、WAL、复制/备份、磁盘和 vacuum；
 - S3：容量、增长、错误、延迟、临时对象和生命周期失败；
 - RabbitMQ：ready/unacked、消费者、publish confirm、DLQ；
-- 数据集：构建时长、准入失败、泄漏冲突、导出校验失败；
+- hand-landmarks：preview/download 时延、行数和 provenance 拒绝；
 - 安全：认证失败、越权拒绝、raw 访问、外连尝试和审计投递失败。
 
 ### 14.2 告警原则

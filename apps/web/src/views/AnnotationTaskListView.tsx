@@ -2,7 +2,6 @@ import { Button } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
-import { useAuth } from '@/app/auth'
 import {
   AnnotationTaskApiError,
   getAnnotationLabelSchema,
@@ -24,11 +23,10 @@ import {
 } from '@/features/catalog/catalog-presentation'
 import { formatAnnotationTime } from '@/features/capture-group/capture-group-detail-model'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
-import { TrainingDataV3ExportButton } from '@/features/capture-group/TrainingDataV3ExportButton'
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  GROUP_QUALITY_NOT_ADMITTING: '当前事件质量结论不允许进入训练资格检查',
+  GROUP_QUALITY_NOT_ADMITTING: '当前事件质量结论不允许进入事件清洗',
   PRIMARY_VIEW_MISSING: '缺少主视图',
   PRIMARY_VIEW_NOT_QUALIFIED: '主视图当前未通过机位质量准入',
   PRIMARY_INTERVAL_MISSING: '缺少主视图正式时间段',
@@ -68,15 +66,14 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
   const reasons = (result?.reason_codes ?? []).map((code) => {
     return (
       captureGroupCleaningReasonLabels[code] ??
-      `其他训练资格检查原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
+      `其他事件清洗原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
     )
   })
-  const eligibilityTerm = '训练资格检查'
   if (result?.outcome === 'PASS')
     return {
       label: cleaningStatusLabels.PASS,
       tone: 'success',
-      description: `当前规则检查通过；实际训练行数以服务端导出预览为准。`,
+      description: '当前事件清洗规则检查通过；手部检测样本请通过独立导出预览确认。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -84,7 +81,7 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
     return {
       label: cleaningStatusLabels.WARNING,
       tone: 'warning',
-      description: `当前数据暂不可用于训练，请补充事实后重新核对${eligibilityTerm}。`,
+      description: '当前事件清洗需处理，请补充事实后重新执行事件清洗。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -92,14 +89,14 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
     return {
       label: cleaningStatusLabels.REJECT,
       tone: 'destructive',
-      description: `当前数据未通过${eligibilityTerm}，暂不可用于训练；视频资产未被删除。`,
+      description: '当前事件清洗未通过；视频资产未被删除。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
   return {
     label: cleaningStatusLabels.NOT_STARTED,
     tone: 'neutral',
-    description: `尚未形成可用于训练的${eligibilityTerm}结论。`,
+    description: '尚未形成事件清洗结论。',
     reasons,
     evaluatedAt: null,
   }
@@ -112,7 +109,6 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
-  const { session } = useAuth()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
@@ -175,14 +171,9 @@ export default function AnnotationTaskListView() {
         title="配药动作标注"
         description="在这里处理配药事件的动作标注；提交后由管理员复核。"
         actions={
-          <>
-            {session?.role === 'ADMIN' ? (
-              <TrainingDataV3ExportButton projectId={projectId} />
-            ) : null}
-            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-              刷新
-            </Button>
-          </>
+          <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+            刷新
+          </Button>
         }
       />
       {loadState === 'loading' ? <LoadingState>正在加载配药动作标注任务…</LoadingState> : null}
@@ -321,7 +312,7 @@ export default function AnnotationTaskListView() {
                     ) : null}
                     {presentation ? (
                       <div className="task-details-block">
-                        <h3>训练资格检查说明</h3>
+                        <h3>事件清洗说明</h3>
                         <p>{presentation.description}</p>
                         {presentation.evaluatedAt ? (
                           <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
@@ -355,7 +346,7 @@ export default function AnnotationTaskListView() {
                     className="text-link"
                     to={paths.captureGroupFocus(projectId, captureGroupId, 'cleaning')}
                   >
-                    查看复核与训练资格详情 <span aria-hidden="true">→</span>
+                    查看复核与事件清洗详情 <span aria-hidden="true">→</span>
                   </Link>
                 ) : null
               return (
@@ -410,7 +401,7 @@ export default function AnnotationTaskListView() {
                             )}
                             {presentation ? (
                               <StatusIndicator tone={presentation.tone}>
-                                训练资格检查 · {presentation.label}
+                                事件清洗 · {presentation.label}
                               </StatusIndicator>
                             ) : null}
                           </div>

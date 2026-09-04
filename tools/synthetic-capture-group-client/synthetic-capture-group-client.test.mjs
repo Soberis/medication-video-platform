@@ -4,9 +4,7 @@ import { test } from 'node:test'
 import {
   assertCaptureGroupIdentity,
   assertCleaningResult,
-  assertNoSplitLeakage,
   assertReviewContext,
-  validateTrainingDataV3Document,
 } from './assertions.mjs'
 import { parseArgs } from './index.mjs'
 import { buildScenarioFixture, SCENARIO_NAMES } from './scenarios.mjs'
@@ -251,75 +249,6 @@ test('Review context requires the current revision, primary, view sets and candi
   }, fixture, 1), /qualified view camera numbers differ/)
 })
 
-test('v3 readback keeps the primary interval and strips supporting action timestamps', () => {
-  const event = {
-    capture_group_id: 'group-1',
-    annotation_revision_id: 'revision-1',
-    revision: 2,
-    primary_clip_asset_id: 'asset-1',
-    primary_camera_number: 1,
-    primary_interval: [{ start_ms: 250, end_ms: 1250, label: 'prepare_workspace' }],
-    confirmed_view_set: { schema_version: 'capture-group-view-set.v1' },
-    input_version: 'capture-group-view-set.v1:synthetic',
-    group_quality: 'QUALIFIED',
-    group_quality_review_id: 'group-quality-1',
-    participating_views: [
-      { camera_number: 1, interval_source: 'PRIMARY_AUTHORITATIVE', action_aligned_interval: true },
-      { camera_number: 3, interval_source: 'EVENT_LEVEL_EVIDENCE', action_aligned_interval: false },
-    ],
-    excluded_views: [
-      { camera_number: 2, interval_source: 'EVENT_LEVEL_EVIDENCE', action_aligned_interval: false },
-    ],
-    review_decision: 'APPROVED',
-    annotation_review_id: 'review-1',
-    capture_group_cleaning_id: 'cleaning-1',
-    cleaning_rule_set_key: 'capture-group-event-eligibility',
-    cleaning_rule_set_version: 'v1',
-    cleaning_rule_set_digest: 'a'.repeat(64),
-    cleaning_input_fingerprint: 'b'.repeat(64),
-    cleaning_evaluated_by: 'synthetic-admin',
-    cleaning_evaluated_at: '2026-08-01T01:00:00.000Z',
-    candidate_provenance: [],
-    cleaning_outcome: 'PASS',
-  }
-  const document = { schema_version: 'training-data.v3', split_unit: 'capture_group', events: [event] }
-  const readback = validateTrainingDataV3Document(document, {
-    captureGroupId: 'group-1',
-    annotationRevisionId: 'revision-1',
-    revisionNumber: 2,
-    primaryCameraNumber: 1,
-    primaryClipAssetId: 'asset-1',
-  })
-  assert.equal(readback.capture_group_id, 'group-1')
-  assert.throws(() => validateTrainingDataV3Document({
-    ...document,
-    events: [{
-      ...event,
-      participating_views: [
-        ...event.participating_views,
-        { camera_number: 3, interval: [{ start_ms: 1, end_ms: 2 }] },
-      ],
-    }],
-  }, {
-      captureGroupId: 'group-1',
-      annotationRevisionId: 'revision-1',
-      revisionNumber: 2,
-      primaryCameraNumber: 1,
-      primaryClipAssetId: 'asset-1',
-  }), /fabricated a supporting interval/)
-})
-
-test('split protection rejects one CaptureGroup assigned to multiple splits', () => {
-  assert.throws(() => assertNoSplitLeakage([
-    { capture_group_id: 'group-1', split: 'train' },
-    { capture_group_id: 'group-1', split: 'validation' },
-  ]), (error) => error.errorCode === 'TRAINING_DATA_SPLIT_LEAKAGE')
-  assert.deepEqual(assertNoSplitLeakage([
-    { capture_group_id: 'group-1', split: 'train' },
-    { capture_group_id: 'group-2', split: 'validation' },
-  ]), { splitUnit: 'capture_group', assignmentCount: 2, valid: true })
-})
-
 test('workflow client uses project-scoped paths and keeps administrator review separate', async () => {
   const calls = []
   const client = new SyntheticCaptureGroupWorkflowClient({
@@ -331,9 +260,6 @@ test('workflow client uses project-scoped paths and keeps administrator review s
       calls.push({ url, request })
       return new Response(JSON.stringify({
         decision: 'APPROVED',
-        schema_version: 'training-data.v3',
-        split_unit: 'capture_group',
-        events: [],
       }), { status: 200, headers: { 'content-type': 'application/json' } })
     },
   })

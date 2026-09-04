@@ -108,8 +108,7 @@ export default function CaptureGroupDetailView() {
     ],
   )
   const isReviewWorkflowAction =
-    workflow?.primaryAction?.target === 'review' ||
-    workflow?.primaryAction?.target === 'training-eligibility'
+    workflow?.primaryAction?.target === 'review' || workflow?.primaryAction?.target === 'cleaning'
   const primaryActionHasForm =
     workflow?.primaryAction?.target === 'view-quality' ||
     workflow?.primaryAction?.target === 'group-quality' ||
@@ -166,7 +165,7 @@ export default function CaptureGroupDetailView() {
       'group-quality': 'capture-group-group-quality',
       annotation: 'capture-group-annotation',
       review: 'capture-group-review-cleaning',
-      'training-eligibility': 'capture-group-review-cleaning',
+      cleaning: 'capture-group-review-cleaning',
       receipt: '',
     }[action.target]
     if (!targetId) return
@@ -487,7 +486,7 @@ function CaptureGroupActionForm({
       />
     )
   }
-  if (action.target === 'review' || action.target === 'training-eligibility') {
+  if (action.target === 'review' || action.target === 'cleaning') {
     return (
       <CaptureGroupReviewCleaningPanel
         projectId={projectId}

@@ -193,7 +193,7 @@ export function captureGroupTaskDestination(
   // Completed task visibility is already authorized by the task list. The
   // Recheck mutation remains guarded separately by can_recheck_capture_group_cleaning.
   if (task.status === 'COMPLETED' && task.annotation_revision) {
-    return { focus: 'cleaning', actionLabel: '查看复核 / 训练资格检查结果' }
+    return { focus: 'cleaning', actionLabel: '查看复核 / 事件清洗结果' }
   }
 
   return null
@@ -282,8 +282,8 @@ export function taskNextAction(
   if (task.annotation_revision?.review?.decision === 'APPROVED') {
     const cleaning = task.annotation_revision.capture_group_cleaning
     return cleaning?.outcome === 'PASS'
-      ? statusStep('训练资格检查已通过')
-      : actionStep('查看训练资格检查结果')
+      ? statusStep('事件清洗已通过')
+      : actionStep('查看事件清洗结果')
   }
   return actionStep('查看任务历史')
 }

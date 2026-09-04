@@ -357,8 +357,8 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const row = await screen.findByRole('listitem', { name: /completed-training/ })
-    expect(row).toHaveTextContent('当前状态：训练资格检查已通过')
-    expect(row).not.toHaveTextContent('下一步：训练资格检查已通过')
+    expect(row).toHaveTextContent('当前状态：事件清洗已通过')
+    expect(row).not.toHaveTextContent('下一步：事件清洗已通过')
   })
 
   it('appends the next CaptureGroup cursor page and enriches only returned summaries', async () => {

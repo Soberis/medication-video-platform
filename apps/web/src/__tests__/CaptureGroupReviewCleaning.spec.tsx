@@ -19,7 +19,7 @@ import {
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('CaptureGroup Review and training eligibility check', () => {
+describe('CaptureGroup Review and event cleaning', () => {
   it('lets an authorized reviewer approve a submitted Revision and shows server cleaning', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2, 3],
@@ -59,8 +59,8 @@ describe('CaptureGroup Review and training eligibility check', () => {
         ) && init?.method === 'POST',
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
-    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
-    expect(await screen.findByText('训练资格检查通过')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
+    expect(await screen.findByText('事件清洗通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
     expect(screen.getByText('REVIEW_APPROVED')).toBeInTheDocument()
@@ -139,7 +139,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
     expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
     expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)
-    expect(screen.queryByText('训练资格检查通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('事件清洗通过')).not.toBeInTheDocument()
   })
 
   it('surfaces a server rejection when Group Quality was downgraded before Review', async () => {
@@ -176,7 +176,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
           ) && init?.method === 'POST',
       ),
     ).toHaveLength(1)
-    expect(screen.queryByText('训练资格检查通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('事件清洗通过')).not.toBeInTheDocument()
   })
 
   it('keeps missing and rejected views visible and gives supporting views no action timestamps', async () => {
@@ -196,7 +196,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
 
     const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
@@ -216,7 +216,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
     expect(screen.queryByText(/first_timestamp_ms|last_timestamp_ms/)).not.toBeInTheDocument()
   })
 
-  it('offers only the authorized server-side training eligibility recheck', async () => {
+  it('offers only the authorized server-side event cleaning recheck', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -233,8 +233,8 @@ describe('CaptureGroup Review and training eligibility check', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与训练资格详情' }))
-    await user.click(await screen.findByRole('button', { name: '重新检查训练资格' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
+    await user.click(await screen.findByRole('button', { name: '重新执行事件清洗' }))
 
     await waitFor(() => {
       expect(
@@ -244,7 +244,7 @@ describe('CaptureGroup Review and training eligibility check', () => {
         ),
       ).toBe(true)
     })
-    expect(screen.queryByRole('button', { name: '训练资格检查通过' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '事件清洗通过' })).not.toBeInTheDocument()
   })
 })
 

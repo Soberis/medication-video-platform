@@ -141,7 +141,7 @@ describe('medication event workflow presentation', () => {
       'GROUP_QUALITY',
       'ANNOTATION',
       'REVIEW',
-      'TRAINING_ELIGIBILITY',
+      'CLEANING',
     ])
     expect(workflow.primaryAction).toEqual({
       key: 'finalize-receipt',
@@ -331,7 +331,7 @@ describe('medication event workflow presentation', () => {
     expect(nonReviewer.waitingReason).toContain('人工复核')
   })
 
-  it('moves approved review to deterministic training eligibility without a manual cleaning action', () => {
+  it('moves approved review to deterministic event cleaning without a manual action', () => {
     const approved = deriveMedicationEventWorkflow(
       facts({
         task_status: 'COMPLETED',
@@ -341,11 +341,11 @@ describe('medication event workflow presentation', () => {
       }),
     )
 
-    expect(approved.stage).toBe('TRAINING_ELIGIBILITY')
+    expect(approved.stage).toBe('CLEANING')
     expect(approved.primaryAction).toEqual({
-      key: 'view-training-eligibility',
-      label: '查看训练资格检查',
-      target: 'training-eligibility',
+      key: 'view-cleaning',
+      label: '查看事件清洗',
+      target: 'cleaning',
     })
   })
 
@@ -364,7 +364,7 @@ describe('medication event workflow presentation', () => {
       }),
     )
 
-    expect(completed.stage).toBe('TRAINING_ELIGIBILITY')
+    expect(completed.stage).toBe('CLEANING')
     expect(completed.steps.at(-1)?.state).toBe('completed')
     expect(completed.primaryAction).toBeNull()
   })

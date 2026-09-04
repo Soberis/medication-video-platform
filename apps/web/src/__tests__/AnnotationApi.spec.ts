@@ -328,7 +328,7 @@ describe('annotation task API', () => {
     )
   })
 
-  it('rechecks CaptureGroup training eligibility through the existing server operation', async () => {
+  it('rechecks CaptureGroup cleaning through the existing server operation', async () => {
     const revisionId = '30000000-0000-4000-8000-000000000004'
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

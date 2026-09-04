@@ -8,10 +8,10 @@
 
 本文冻结模块命名、聚合边界、表所有权、跨模块引用和关键不变量。它不替代 Flyway、OpenAPI 或事件 Schema；实际字段类型、长度、索引和约束最终必须在这些可执行工件中一致体现。
 
-当前正式业务需求基线是 [V1.27](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)；本文记录单一 CaptureGroup 主链所依赖的实体、权限、审计和数据所有权边界。当前业务路径是
-`CaptureGroup → CameraStream / ClipAsset → Media Probe → Candidate` 后分为两条只读输出语义：人工质量 → 组质量 → 组任务/修订 → Review →
-CaptureGroup Cleaning → training-data.v3 eligibility/provenance manifest，以及当前启用且可用 CameraStream → hand-landmarks.v1 current MediaPipe detection evidence export；
-`ClipAsset` 是物理视频证据，不是独立产品工作流。当前运行时提供 v3 manifest 和独立的 `hand-landmarks.v1` current CameraStream CSV detection evidence export。V1.26、V1.25 和 V1.24 的单视频产品
+当前正式业务需求基线是 [V1.28](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)；本文记录单一 CaptureGroup 主链所依赖的实体、权限、审计和数据所有权边界。当前业务路径是
+`CaptureGroup → CameraStream / ClipAsset → Media Probe → Candidate`，再由当前启用且可用 CameraStream 生成 `hand-landmarks.v1` current MediaPipe detection evidence export；
+人工质量 → 组质量 → 组任务/修订 → Review → CaptureGroup Cleaning 仍保留为业务事实和人工闸门。`ClipAsset` 是物理视频证据，不是独立产品工作流。当前运行时只提供
+`hand-landmarks.v1` current CameraStream CSV detection evidence export。V1.27、V1.26、V1.25 和 V1.24 的单视频产品
 路径及 DatasetVersion/legacy Export 只作为历史迁移/演进记录保留，不构成当前产品承诺。医院边端只作为远端采集和自动上传来源；内部团队使用平台管理、筛选和生产训练数据。本文记录两种上传入口、项目成员直接审核播放、项目改名/归档、视频删除、两级角色和视频标注的已批准领域边界；AssetFolder、CaptureEventLog 和 DatasetVersion/legacy Export 的旧运行面已由 V65/V66 退役，历史设计只作为演进记录保留。
 
 P0 是一个 Spring Boot + Spring Modulith 应用。下列模块是 Java 直接子包和业务所有权边界，不是独立服务：
@@ -82,7 +82,7 @@ flowchart LR
     ASSET --> MEDIA["mediaprivacy"]
     MEDIA --> ANNO["annotationreview"]
     ANNO --> CLEAN["qualitycleaning"]
-    CLEAN --> DATASET["datasetexport (training-data.v3 read-only)"]
+    MEDIA --> DATASET["datasetexport (hand-landmarks.v1 read-only)"]
     MEDIA --> AI["aicandidate (P0)"]
     AI --> ANNO
     GOV["governance"] -. "审批/审计门禁" .-> ASSET
@@ -182,13 +182,13 @@ flowchart LR
 
 - `capture_event_log` 表及其历史索引已由 V65 forward migration 退役；历史 V1--V64 migration 文件不可修改，仅用于解释演进过程。
 - 原始 `EVENT_LOG` 上传对象仍按 UploadFile 的对象保留规则处理，但它不再创建数据库事件索引，也不属于 Governance Audit。
-- CaptureSession、Media、Candidate、Annotation、Review、Cleaning 和 training-data.v3 均不依赖该旧表。
+- CaptureSession、Media、Candidate、Annotation、Review 和 Cleaning 均不依赖该旧表。
 - 若未来重新需要事件日志索引，必须通过新的版本化契约单独评审，不复活旧表或回溯修改历史 migration。
 
 ### 5.7 AssetFolder 历史字段边界
 
 - `asset_folder`、`upload_batch.asset_folder_id` 和 `clip_asset.folder_id` 以及其历史约束已由 V65 forward migration 退役；当前应用不创建、校验、绑定、读取或暴露这些字段。
-- 当前视频主链、项目权限、CaptureSession、Media、Candidate、Annotation、Review、Cleaning 和 training-data.v3 均不依赖文件夹事实。
+- 当前视频主链、项目权限、CaptureSession、Media、Candidate、Annotation、Review 和 Cleaning 均不依赖文件夹事实。
 - V23/V24 等历史 migration 不修改；若未来重新引入分类能力，必须以新的领域契约单独评审，不能恢复旧兼容字段。
 
 ### 5.8 视频删除不变量
@@ -229,7 +229,7 @@ flowchart LR
 | --- | --- | --- |
 | LabelSchema | label_schema、label_definition、label_attribute_definition | 标签、属性、互斥/重叠规则和版本摘要 |
 | AnnotationProject | annotation_project、annotation_guideline_version | 项目范围、工具、schema 和指南版本 |
-| AnnotationTask | annotation_task（当前）；task_assignment、external_task_mapping（后续） | V1.27 当前按 CaptureGroup 统一分配，状态启用 ASSIGNED/SUBMITTED/COMPLETED；底层 ClipAsset 仍作为组内视图事实，不恢复独立单视频任务 |
+| AnnotationTask | annotation_task（当前）；task_assignment、external_task_mapping（后续） | V1.28 当前按 CaptureGroup 统一分配，状态启用 ASSIGNED/SUBMITTED/COMPLETED；底层 ClipAsset 仍作为组内视图事实，不恢复独立单视频任务 |
 | AnnotationRevision | annotation_revision、step_segment、object_annotation、observable_event_annotation、privacy_region_annotation | 一次不可变提交 |
 | Review | annotation_review（当前）；adjudication_record（后续） | 当前每个 revision 一次独立 APPROVED/REJECTED；不覆盖原 revision |
 | ValidationResult | annotation_validation_result | 时间、标签、几何、必填属性和隐私规则检查 |
@@ -282,19 +282,18 @@ flowchart LR
 - 当前轻量 post-clean 与 APPROVED review 在 Core API 的同一数据库事务中完成，不创建 Worker、
   Outbox 事件、RabbitMQ 路由或通用清洗页面。PASS 只是后续准入前提，不写 `datasetexport` 表。
 
-## 9. `datasetexport`（当前 `training-data.v3` manifest 与独立 `hand-landmarks.v1` detection export；历史 DatasetVersion/Export 设计参考）
+## 9. `datasetexport`（唯一的 `hand-landmarks.v1` detection export；历史 DatasetVersion/Export 设计参考）
 
-V1.27 当前公开运行时导出包括以 CaptureGroup 为单位的 `training-data.v3` preview/download JSON event manifest，以及按当前启用且可用 CameraStream/ClipAsset 和当前 CandidateEvidence 生成的 `hand-landmarks.v1` preview/download CSV；前者读取组质量、AnnotationRevision、Review、CaptureGroupCleaning 投影，后者不读取这些人工工作流事实。二者都不复制 MP4、不创建 DatasetVersion；实际 training consumer 和真实 UAT 仍未发生。V64 的 `training_data_eligibility`、`training_data_candidate_observations` 以及 v2 Parquet 只属于历史迁移/审计路径；V72 在无历史清洗或单视频任务行时移除旧视图和旧清洗表，存在历史行则原样保留旧对象并继续迁移，等待单独的数据保留与迁移决策。完成该决策并显式清空旧行后，V74 才会移除被保留的对象；它不自动删除业务行。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和 V1--V64 Flyway 记录；对应未使用数据库对象已由 V66 退役，不代表当前表、公开 API、Worker 或用户流程。
+V1.28 当前公开运行时只提供按当前启用且可用 CameraStream/ClipAsset 和 CandidateEvidence 生成的 `hand-landmarks.v1` preview/download CSV；它不读取人工质量、AnnotationRevision、Review 或 Cleaning，不复制 MP4，也不创建 DatasetVersion。V64 及更早的资格、观察和 v2 Parquet 只属于历史迁移/审计路径；V75 清除已退役的旧 eligibility views，不删除 CaptureGroup、Review、Cleaning 或 MediaPipe 事实。下表中的 DatasetVersion/Export 聚合只用于解释历史设计和旧 Flyway 记录，不代表当前表、公开 API、Worker 或用户流程。
 
 ### 9.1 所有权
 
 | 聚合根 | 子实体/表 | 关键职责 |
 | --- | --- | --- |
 | DatasetVersion（历史设计，V66 已退役） | dataset_version、dataset_member_session、dataset_member_stream、dataset_split_plan、dataset_split_assignment、dataset_build_specification、dataset_build_snapshot、dataset_version_validation | 历史上的选择、准入、防泄漏、构建配置、快照封印、验证和冻结 |
-| MinimalTrainingDataProfile | 当前 `training-data.v3` 导出契约中的固定 profile key/digest；不单独建表 | CaptureGroup event manifest 格式、采样和字段版本 |
 | DatasetExport（历史设计，V66 已退役） | dataset_export、export_artifact | 历史上的后台导出、校验、发布、下载和过期 |
 
-### 9.2 历史 DatasetVersion 冻结内容（非 V1.27 当前产品路径）
+### 9.2 历史 DatasetVersion 冻结内容（非 V1.28 当前产品路径）
 
 必须保存：
 
