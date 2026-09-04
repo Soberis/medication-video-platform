@@ -198,8 +198,10 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     setIsFinalizingReceipt(true)
     try {
       await finalizeCaptureGroupReceipt(projectId, captureGroupId)
-      void message.success('配药事件接收已结束，正在刷新服务端事实。')
-      await refresh()
+      const refreshed = await refresh()
+      void (refreshed
+        ? message.success('配药事件接收已结束，服务端事实已刷新。')
+        : message.warning('接收已结束，但最新事实暂未刷新；请手动刷新确认。'))
       return true
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '结束接收未完成，请稍后重试。')

@@ -234,6 +234,7 @@ export default function CaptureGroupListView() {
               const identity = group.capture_group_key ?? shortId(group.capture_group_id)
               const identityLabel = `配药事件 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
+              const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
               const nextStep = taskNextAction(
                 group,
                 quality,
@@ -258,7 +259,7 @@ export default function CaptureGroupListView() {
                       </div>
                     </div>
                     <time className="capture-group-list-time" dateTime={eventTime}>
-                      <span>拍摄时间</span>
+                      <span>{eventTimeLabel}</span>
                       <strong>{formatDateTime(eventTime)}</strong>
                     </time>
                   </header>

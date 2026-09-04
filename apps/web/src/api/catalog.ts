@@ -307,13 +307,18 @@ export async function deleteClipAsset(projectId: string, clipAssetId: string, re
   throw await toCatalogError(response)
 }
 
-export async function authorizeClipAssetPlayback(projectId: string, clipAssetId: string) {
+export async function authorizeClipAssetPlayback(
+  projectId: string,
+  clipAssetId: string,
+  signal?: AbortSignal,
+) {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/playback-grants`,
     {
       method: 'POST',
       headers: { Accept: 'application/json', ...csrfHeaders() },
       cache: 'no-store',
+      signal,
     },
   )
   if (response.ok) return (await response.json()) as ClipAssetPlaybackGrant

@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
+import { useAuth } from '@/app/auth'
 import {
   AnnotationTaskApiError,
   getAnnotationLabelSchema,
@@ -23,6 +24,7 @@ import {
 } from '@/features/catalog/catalog-presentation'
 import { formatAnnotationTime } from '@/features/capture-group/capture-group-detail-model'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
+import { TrainingDataV3ExportButton } from '@/features/capture-group/TrainingDataV3ExportButton'
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
@@ -110,6 +112,7 @@ function reviewStatusTone(decision: 'APPROVED' | 'REJECTED'): StatusIndicatorTon
 export default function AnnotationTaskListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const { session } = useAuth()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
@@ -173,6 +176,9 @@ export default function AnnotationTaskListView() {
         description="在这里处理配药事件的动作标注；提交后由管理员复核。"
         actions={
           <>
+            {session?.role === 'ADMIN' ? (
+              <TrainingDataV3ExportButton projectId={projectId} />
+            ) : null}
             <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
               刷新
             </Button>

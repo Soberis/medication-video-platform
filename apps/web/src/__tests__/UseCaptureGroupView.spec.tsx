@@ -351,6 +351,45 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
     expect(result.current.candidateResponse?.job.clip_asset_id).toBe(secondClipAssetId)
   })
 
+  it('ignores a playback grant that returns after the selected view changes', async () => {
+    let resolvePlayback: (grant: ClipAssetPlaybackGrant) => void = () => undefined
+    const pendingGrant = new Promise<ClipAssetPlaybackGrant>((resolve) => {
+      resolvePlayback = resolve
+    })
+    vi.mocked(authorizeClipAssetPlayback).mockReturnValue(pendingGrant)
+
+    const { result, rerender } = renderHook(
+      ({ selectedView }: { selectedView: GroupViewRow }) =>
+        useCaptureGroupView(projectId, selectedView),
+      { initialProps: { selectedView: view(firstClipAssetId, 1) } },
+    )
+    await settleInitialView()
+
+    await act(async () => {
+      void result.current.startPlayback()
+      await Promise.resolve()
+    })
+    expect(result.current.isRequestingPlayback).toBe(true)
+
+    await act(async () => {
+      rerender({ selectedView: view(secondClipAssetId, 2) })
+    })
+    await settleInitialView()
+    expect(result.current.selectedDetail?.clip_asset_id).toBe(secondClipAssetId)
+
+    resolvePlayback({
+      ...playbackGrant(),
+      grant_id: 'grant-for-first-view',
+      media_url: '/synthetic/first-view.mp4',
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(result.current.playbackGrant).toBeNull()
+    expect(result.current.playbackState).toBe('idle')
+  })
+
   it('keeps playback state unchanged while polling', async () => {
     const grant = playbackGrant()
     latestCandidateMock()

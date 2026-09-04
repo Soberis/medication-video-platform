@@ -103,11 +103,13 @@ export function CaptureGroupViewQualitySection({
         reason_code: selectedReason,
         expected_version: selectedReview?.version ?? 0,
       })
+      onReviewSaved(review)
       const refreshed = await onRefresh({ focusNextPendingView: true })
-      if (refreshed) {
-        onReviewSaved(review)
-        void message.success(`机位 ${selectedStream.camera_number} 的机位质量已保存。`)
-      }
+      void (refreshed
+        ? message.success(`机位 ${selectedStream.camera_number} 的机位质量已保存。`)
+        : message.warning(
+            `机位 ${selectedStream.camera_number} 的质量已保存，但最新事实暂未刷新；请手动刷新确认。`,
+          ))
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '机位质量暂未保存，请稍后重试。')
     } finally {
@@ -217,8 +219,10 @@ export function CaptureGroupQualityPanel({
         groupReason,
         groupQuality.revision,
       )
-      void message.success('事件质量已记录，正在刷新任务与机位快照。')
-      await onRefresh()
+      const refreshed = await onRefresh()
+      void (refreshed
+        ? message.success('事件质量已记录，任务与机位快照已刷新。')
+        : message.warning('事件质量已记录，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '事件质量暂未保存，请稍后重试。')
     } finally {
@@ -309,6 +313,7 @@ export function CaptureGroupQualityPanel({
             />
           </label>
           <Button
+            className="capture-group-decision-submit"
             type={isSecondary ? 'default' : 'primary'}
             loading={isSaving}
             disabled={saveDisabled}
@@ -316,6 +321,11 @@ export function CaptureGroupQualityPanel({
           >
             保存事件质量
           </Button>
+          {!isSaving && !groupReason.trim() ? (
+            <span className="capture-group-decision-hint" role="status">
+              请填写结论理由后保存。
+            </span>
+          ) : null}
           {groupQuality?.confirmed_view_set ? (
             <div className="capture-group-confirmed-view-set capture-group-stack">
               <strong>本次结论使用的机位集合</strong>

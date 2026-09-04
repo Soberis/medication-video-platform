@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { PlatformSession } from '@/api/auth'
 import { paths } from '@/app/paths'
 import { renderRouter } from '@/test/render'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
@@ -94,6 +95,13 @@ const assignedGroupTask = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task list view', () => {
+  it('exposes the project training manifest export to an administrator', async () => {
+    stubTasks([assignedTask], labelSchema)
+    renderView({ username: 'platform-admin', role: 'ADMIN' })
+
+    expect(await screen.findByRole('button', { name: '导出训练资格数据' })).toBeInTheDocument()
+  })
+
   it('loads the task queue and keeps annotation navigation as a top-level context', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
     const user = userEvent.setup()
@@ -569,7 +577,7 @@ describe('annotation task list view', () => {
   })
 })
 
-function renderView() {
+function renderView(session: PlatformSession | null = null) {
   return renderRouter(
     [
       {
@@ -582,6 +590,7 @@ function renderView() {
       },
     ],
     [`/projects/${projectId}/annotation-tasks`],
+    session,
   )
 }
 function stubTasks(tasks: object[], schema: object, scope: 'PROJECT' | 'ASSIGNEE' = 'PROJECT') {

@@ -15,8 +15,10 @@ import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams }
 
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
+import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
+import { NoticeState } from '@/components/WorkspaceFeedback'
 
 const managementRoutePatterns = [
   '/projects/:projectId/members',
@@ -26,6 +28,42 @@ const managementRoutePatterns = [
 ] as const
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
+
+function LocalUploadActivity() {
+  const { tasks, uploadState } = useLocalUpload()
+  const location = useLocation()
+  if (tasks.length === 0 || location.pathname === paths.localUpload) return null
+
+  const completedTaskCount = tasks.filter((task) => task.status === 'COMPLETED').length
+  const failedTaskCount = tasks.filter((task) => task.status === 'FAILED').length
+  const tone: StatusBadgeTone =
+    uploadState === 'uploading'
+      ? 'processing'
+      : failedTaskCount === tasks.length
+        ? 'error'
+        : failedTaskCount > 0
+          ? 'warning'
+          : 'success'
+  const label = uploadState === 'uploading' ? '上传中' : '上传结果'
+  const description =
+    uploadState === 'uploading'
+      ? `已确认 ${completedTaskCount} / ${tasks.length} 个视频，其余文件仍在处理。`
+      : failedTaskCount > 0
+        ? `已确认 ${completedTaskCount} 个视频，${failedTaskCount} 个文件需要处理。`
+        : `已确认 ${completedTaskCount} 个视频，可返回查看结果。`
+
+  return (
+    <NoticeState className="app-upload-activity">
+      <div className="app-upload-activity-copy">
+        <StatusBadge tone={tone}>{label}</StatusBadge>
+        <span>{description}</span>
+      </div>
+      <Link className="text-link" to={paths.localUpload}>
+        查看上传进度
+      </Link>
+    </NoticeState>
+  )
+}
 
 export default function AppShell() {
   const auth = useAuth()
@@ -169,7 +207,10 @@ export default function AppShell() {
         </Sidebar>
       }
     >
-      <Outlet />
+      <LocalUploadProvider>
+        <LocalUploadActivity />
+        <Outlet />
+      </LocalUploadProvider>
     </AppFrame>
   )
 }

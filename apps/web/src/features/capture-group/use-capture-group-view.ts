@@ -48,7 +48,13 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
   const [isRequestingPlayback, setIsRequestingPlayback] = useState(false)
   const selectedViewRequest = useRef<AbortController | null>(null)
   const candidateRefreshRequest = useRef<AbortController | null>(null)
+  const playbackRequest = useRef<AbortController | null>(null)
+  const selectedClipAssetIdRef = useRef(selectedClipAssetId)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    selectedClipAssetIdRef.current = selectedClipAssetId
+  }, [selectedClipAssetId])
 
   const clearPlaybackExpiryTimer = useCallback(() => {
     if (playbackExpiryTimer.current !== null) {
@@ -58,10 +64,13 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
   }, [])
 
   const resetPlayback = useCallback(() => {
+    playbackRequest.current?.abort()
+    playbackRequest.current = null
     clearPlaybackExpiryTimer()
     setPlaybackGrant(null)
     setPlaybackState('idle')
     setPlaybackMessage('')
+    setIsRequestingPlayback(false)
   }, [clearPlaybackExpiryTimer])
 
   const loadSelectedView = useCallback(
@@ -206,7 +215,11 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
   }, [refreshCandidate, selectedClipAssetId, selectedDetail])
 
   useEffect(() => {
-    return () => clearPlaybackExpiryTimer()
+    return () => {
+      playbackRequest.current?.abort()
+      playbackRequest.current = null
+      clearPlaybackExpiryTimer()
+    }
   }, [clearPlaybackExpiryTimer])
 
   const startPlayback = useCallback(async () => {
@@ -217,10 +230,23 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     ) {
       return
     }
+    const requestedClipAssetId = selectedClipAssetId
     resetPlayback()
+    const request = new AbortController()
+    playbackRequest.current = request
     setIsRequestingPlayback(true)
     try {
-      const grant = await authorizeClipAssetPlayback(projectId, selectedClipAssetId)
+      const grant = await authorizeClipAssetPlayback(
+        projectId,
+        requestedClipAssetId,
+        request.signal,
+      )
+      if (
+        request.signal.aborted ||
+        playbackRequest.current !== request ||
+        selectedClipAssetIdRef.current !== requestedClipAssetId
+      )
+        return
       setPlaybackGrant(grant)
       setPlaybackState('waiting')
       const remaining = new Date(grant.expires_at).getTime() - Date.now()
@@ -235,12 +261,21 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         }, remaining)
       }
     } catch (error) {
+      if (
+        request.signal.aborted ||
+        playbackRequest.current !== request ||
+        selectedClipAssetIdRef.current !== requestedClipAssetId
+      )
+        return
       setPlaybackState('error')
       setPlaybackMessage(
         error instanceof CatalogApiError ? error.message : '无法获取播放授权，请稍后重试。',
       )
     } finally {
-      setIsRequestingPlayback(false)
+      if (playbackRequest.current === request) {
+        playbackRequest.current = null
+        setIsRequestingPlayback(false)
+      }
     }
   }, [isRequestingPlayback, projectId, resetPlayback, selectedClipAssetId, selectedDetail])
 

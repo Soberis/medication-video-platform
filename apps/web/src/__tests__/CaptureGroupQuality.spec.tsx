@@ -206,6 +206,26 @@ describe('CaptureGroup operational list and quality', () => {
     )
   })
 
+  it('does not label server record time as capture time when device time is absent', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'record-time-only',
+      deviceTime: null,
+    })
+    stubGroupList([group], [])
+
+    renderRoute(<CaptureGroupListView />, {
+      path: '/projects/:projectId/capture-groups',
+      route: `/projects/${projectId}/capture-groups`,
+    })
+
+    const row = await screen.findByRole('listitem', { name: /record-time-only/ })
+    expect(row).toHaveTextContent('记录时间')
+    expect(row).not.toHaveTextContent('拍摄时间')
+  })
+
   it('keeps receipt states, camera counts, and task enrichment visible for N=1 and N=5 summaries', async () => {
     const receiving = captureGroupFixture(groupId, {
       expected: [1],

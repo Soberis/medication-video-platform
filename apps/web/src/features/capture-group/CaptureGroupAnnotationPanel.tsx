@@ -199,8 +199,10 @@ export function CaptureGroupAnnotationPanel({
         })),
         annotationNote,
       )
-      void message.success('配药动作修订已提交；主视图现在锁定。')
-      await onRefresh()
+      const refreshed = await onRefresh()
+      void (refreshed
+        ? message.success('配药动作修订已提交；主视图现在锁定。')
+        : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       void message.error(
         error instanceof AnnotationTaskApiError ? error.message : '修订暂未提交，请稍后重试。',

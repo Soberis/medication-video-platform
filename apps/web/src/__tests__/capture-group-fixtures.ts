@@ -399,6 +399,7 @@ export function captureGroupFixture(
     received: number[]
     receipt: 'RECEIVING' | 'COMPLETE' | 'INCOMPLETE'
     key?: string
+    deviceTime?: string | null
   },
 ): CaptureGroup {
   const members = options.expected.map((cameraNumber) => ({
@@ -438,7 +439,7 @@ export function captureGroupFixture(
     expected_camera_count: options.expected.length,
     received_camera_count: options.received.length,
     sync_group_id: 'sync-synthetic',
-    device_time_utc: '2026-08-20T01:00:00Z',
+    device_time_utc: options.deviceTime === undefined ? '2026-08-20T01:00:00Z' : options.deviceTime,
     device_timezone: 'Asia/Shanghai',
     server_receive_time: '2026-08-20T01:00:02Z',
     assembly_status: options.receipt === 'RECEIVING' ? 'OPEN' : options.receipt,

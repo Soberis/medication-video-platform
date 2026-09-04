@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import * as localUploadApi from '@/api/local-upload'
+import AppShell from '@/App'
+import { LocalUploadProvider } from '@/app/local-upload'
 import { paths } from '@/app/paths'
-import { renderRoute } from '@/test/render'
+import { renderRoute, renderRouter } from '@/test/render'
 import LocalUploadView from '@/views/LocalUploadView'
 
 const project = {
@@ -29,7 +31,7 @@ describe('LocalUploadView', () => {
   it('shows each selected local video as a separate queued upload', async () => {
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
     await selectProject(user, '合成测试项目')
     await user.upload(screen.getByLabelText('本机视频'), [
       new File(['video-a'], 'first.mp4', { type: 'video/mp4' }),
@@ -66,7 +68,7 @@ describe('LocalUploadView', () => {
       })
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
     await user.upload(
@@ -99,7 +101,7 @@ describe('LocalUploadView', () => {
     })
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
     await user.upload(screen.getByLabelText('本机视频'), [
@@ -131,7 +133,7 @@ describe('LocalUploadView', () => {
       }))
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
     await user.upload(screen.getByLabelText('本机视频'), [
@@ -161,7 +163,7 @@ describe('LocalUploadView', () => {
   it('requires a project before local videos can be selected', async () => {
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     const fileInput = screen.getByLabelText('本机视频')
     expect(fileInput).toBeDisabled()
@@ -201,7 +203,7 @@ describe('LocalUploadView', () => {
     )
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
     await user.upload(
@@ -235,7 +237,7 @@ describe('LocalUploadView', () => {
         ),
     )
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
     await selectProject(user, '合成测试项目')
     authorized = false
     await user.click(screen.getByRole('button', { name: /刷新项目/ }))
@@ -246,7 +248,7 @@ describe('LocalUploadView', () => {
   it('does not allow a finished upload batch to be submitted again', async () => {
     stubCatalog([project, anotherProject])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
     await selectProject(user, '合成测试项目')
     await user.upload(
       screen.getByLabelText('本机视频'),
@@ -269,7 +271,7 @@ describe('LocalUploadView', () => {
     })
     stubCatalog([project])
     const user = userEvent.setup()
-    renderRoute(<LocalUploadView />)
+    renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
     await user.upload(
@@ -286,7 +288,7 @@ describe('LocalUploadView', () => {
     )
   })
 
-  it('aborts the active hash or upload request when leaving the page', async () => {
+  it('keeps the active upload running when changing routes', async () => {
     let activeSignal: AbortSignal | undefined
     const uploadSpy = vi
       .spyOn(localUploadApi, 'uploadPlatformLocalVideo')
@@ -302,7 +304,20 @@ describe('LocalUploadView', () => {
       })
     stubCatalog([project])
     const user = userEvent.setup()
-    const view = renderRoute(<LocalUploadView />)
+    const view = renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'uploads/new', element: <LocalUploadView /> },
+            { path: 'projects', element: <div>其他页面</div> },
+          ],
+        },
+      ],
+      ['/uploads/new'],
+      { username: 'admin', role: 'ADMIN' },
+    )
 
     await selectProject(user, '合成测试项目')
     await user.upload(
@@ -312,11 +327,27 @@ describe('LocalUploadView', () => {
     await user.click(screen.getByRole('button', { name: '开始上传' }))
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1))
 
+    await view.router.navigate('/projects')
+    expect(await screen.findByText('其他页面')).toBeInTheDocument()
+    expect(activeSignal?.aborted).toBe(false)
+    expect(screen.getByRole('link', { name: '查看上传进度' })).toBeInTheDocument()
+
+    await view.router.navigate('/uploads/new')
+    expect(await screen.findByRole('button', { name: /正在上传…/ })).toBeDisabled()
+
     view.unmount()
 
     expect(activeSignal?.aborted).toBe(true)
   })
 })
+
+function renderLocalUpload() {
+  return renderRoute(
+    <LocalUploadProvider>
+      <LocalUploadView />
+    </LocalUploadProvider>,
+  )
+}
 
 async function selectProject(user: ReturnType<typeof userEvent.setup>, name: string) {
   const select = await screen.findByRole('combobox', { name: '所属项目' })

@@ -114,8 +114,14 @@ export function CaptureGroupReviewCleaningPanel({
             decision,
             reviewNote,
           )
-          void message.success(approved ? '配药事件复核已通过。' : '已退回配药事件修订。')
-          await onRefresh()
+          const refreshed = await onRefresh()
+          void (refreshed
+            ? message.success(approved ? '配药事件复核已通过。' : '已退回配药事件修订。')
+            : message.warning(
+                approved
+                  ? '复核已通过，但最新事实暂未刷新；请手动刷新确认。'
+                  : '修订已退回，但最新事实暂未刷新；请手动刷新确认。',
+              ))
         } catch (error) {
           void message.error(
             error instanceof Error ? error.message : '复核暂未提交，请刷新后重试。',
@@ -132,8 +138,10 @@ export function CaptureGroupReviewCleaningPanel({
     setIsRechecking(true)
     try {
       await recheckCaptureGroupCleaning(projectId, revision.annotation_revision_id)
-      void message.success('训练资格已重新检查，正在刷新服务端事实。')
-      await onRefresh()
+      const refreshed = await onRefresh()
+      void (refreshed
+        ? message.success('训练资格已重新检查，服务端事实已刷新。')
+        : message.warning('训练资格已重新检查，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       void message.error(
         error instanceof Error ? error.message : '训练资格检查暂未完成，请刷新后重试。',

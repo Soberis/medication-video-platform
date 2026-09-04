@@ -1,15 +1,16 @@
 import { Alert, Button, Progress, Select } from 'antd'
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
-import {
-  LocalUploadApiError,
-  type LocalUploadPhase,
-  type LocalUploadProgress,
-  uploadPlatformLocalVideo,
-} from '@/api/local-upload'
+import type { LocalUploadPhase } from '@/api/local-upload'
 import { listProjects, type DataProject } from '@/api/projects'
+import {
+  useLocalUpload,
+  type LocalUploadState,
+  type LocalUploadTask,
+  type LocalUploadTaskStatus,
+} from '@/app/local-upload'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -18,59 +19,6 @@ import { EmptyState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
-type TaskStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
-interface UploadTask {
-  readonly id: number
-  readonly file: File
-  status: TaskStatus
-  progress: LocalUploadProgress | null
-  errorCode: string | null
-  errorMessage: string | null
-  captureSessionId: string | null
-  clipAssetId: string | null
-}
-type TaskAction =
-  | { type: 'initialize'; files: File[] }
-  | { type: 'reset' }
-  | { type: 'running'; id: number }
-  | { type: 'progress'; id: number; progress: LocalUploadProgress }
-  | { type: 'completed'; id: number; captureSessionId: string; clipAssetId: string | null }
-  | { type: 'failed'; id: number; errorCode: string; errorMessage: string }
-function taskReducer(tasks: UploadTask[], action: TaskAction): UploadTask[] {
-  if (action.type === 'reset') return []
-  if (action.type === 'initialize')
-    return action.files.map((file, id) => ({
-      id,
-      file,
-      status: 'QUEUED',
-      progress: null,
-      errorCode: null,
-      errorMessage: null,
-      captureSessionId: null,
-      clipAssetId: null,
-    }))
-  return tasks.map((task) =>
-    task.id !== action.id
-      ? task
-      : action.type === 'running'
-        ? { ...task, status: 'RUNNING' }
-        : action.type === 'progress'
-          ? { ...task, progress: action.progress }
-          : action.type === 'completed'
-            ? {
-                ...task,
-                status: 'COMPLETED',
-                captureSessionId: action.captureSessionId,
-                clipAssetId: action.clipAssetId,
-              }
-            : {
-                ...task,
-                status: 'FAILED',
-                errorCode: action.errorCode,
-                errorMessage: action.errorMessage,
-              },
-  )
-}
 const phaseLabels: Record<LocalUploadPhase, string> = {
   HASHING: '正在计算文件摘要',
   INITIALIZING: '正在创建上传批次',
@@ -80,7 +28,7 @@ const phaseLabels: Record<LocalUploadPhase, string> = {
   ASSEMBLING: '正在建立单机位配药事件记录',
   COMPLETED: '平台已确认上传完成',
 }
-function taskPercent(task: UploadTask) {
+function taskPercent(task: LocalUploadTask) {
   const progress = task.progress
   if (!progress || progress.totalBytes < 1) return 0
   return Math.round(
@@ -89,7 +37,7 @@ function taskPercent(task: UploadTask) {
       100,
   )
 }
-function taskDescription(task: UploadTask) {
+function taskDescription(task: LocalUploadTask) {
   if (task.status === 'QUEUED') return '等待前一个视频处理完成。'
   if (task.status === 'FAILED') {
     const message = task.errorMessage ?? '本轮处理未完成，请检查网络和本地服务后重试。'
@@ -103,14 +51,14 @@ function taskDescription(task: UploadTask) {
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
 
-function taskStatusLabel(task: UploadTask) {
+function taskStatusLabel(task: LocalUploadTask) {
   if (task.status === 'QUEUED') return '等待处理'
   if (task.status === 'FAILED') return '处理失败'
   if (task.status === 'COMPLETED') return '已确认完成'
   return task.progress ? phaseLabels[task.progress.phase] : '准备中'
 }
 
-function taskProgressLabel(task: UploadTask) {
+function taskProgressLabel(task: LocalUploadTask) {
   if (task.status === 'QUEUED') return '等待开始'
   if (task.status === 'FAILED') return '本轮未完成'
   if (task.status === 'COMPLETED') return '平台已确认完成'
@@ -123,13 +71,13 @@ function taskProgressLabel(task: UploadTask) {
   return phaseLabels[progress.phase]
 }
 
-function uploadTaskTone(status: TaskStatus): 'error' | 'processing' | 'success' {
+function uploadTaskTone(status: LocalUploadTaskStatus): 'error' | 'processing' | 'success' {
   if (status === 'FAILED') return 'error'
   return status === 'COMPLETED' ? 'success' : 'processing'
 }
 
 function uploadResultDescription(
-  uploadState: 'idle' | 'uploading' | 'completed',
+  uploadState: LocalUploadState,
   completedTaskCount: number,
   failedTaskCount: number,
   totalTaskCount: number,
@@ -150,15 +98,18 @@ export default function LocalUploadView() {
   const [projects, setProjects] = useState<DataProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [tasks, dispatchTasks] = useReducer(taskReducer, [])
+  const {
+    tasks,
+    uploadState,
+    resetUpload,
+    startUpload: startPlatformLocalUpload,
+  } = useLocalUpload()
   const [projectLoadState, setProjectLoadState] = useState<'loading' | 'success' | 'error'>(
     'loading',
   )
-  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'completed'>('idle')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const projectRequest = useRef<AbortController | null>(null)
-  const uploadRequest = useRef<AbortController | null>(null)
   const isUploading = uploadState === 'uploading'
   const canStart =
     !isUploading &&
@@ -212,70 +163,29 @@ export default function LocalUploadView() {
     return () => {
       window.clearTimeout(timer)
       projectRequest.current?.abort()
-      uploadRequest.current?.abort()
     }
   }, [loadProjects])
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSelectedFiles([])
-      dispatchTasks({ type: 'reset' })
-      setUploadState('idle')
-      setErrorCode('')
-      setErrorMessage('')
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [selectedProjectId])
 
-  function selectFiles(event: React.ChangeEvent<HTMLInputElement>) {
-    setSelectedFiles(Array.from(event.target.files ?? []))
-    event.target.value = ''
-    dispatchTasks({ type: 'reset' })
-    setUploadState('idle')
+  function selectProject(projectId: string) {
+    setSelectedProjectId(projectId)
+    setSelectedFiles([])
+    resetUpload()
     setErrorCode('')
     setErrorMessage('')
   }
-  async function startUpload() {
+
+  function selectFiles(event: ChangeEvent<HTMLInputElement>) {
+    setSelectedFiles(Array.from(event.target.files ?? []))
+    event.target.value = ''
+    resetUpload()
+    setErrorCode('')
+    setErrorMessage('')
+  }
+  function startUpload() {
     if (!canStart) return
     const files = [...selectedFiles]
     const projectId = selectedProjectId
-    const request = new AbortController()
-    uploadRequest.current = request
-    dispatchTasks({ type: 'initialize', files })
-    setUploadState('uploading')
-    for (let id = 0; id < files.length; id += 1) {
-      const file = files[id]
-      if (!file) continue
-      dispatchTasks({ type: 'running', id })
-      try {
-        const result = await uploadPlatformLocalVideo(
-          { projectId, file },
-          (progress) => dispatchTasks({ type: 'progress', id, progress }),
-          request.signal,
-        )
-        dispatchTasks({
-          type: 'completed',
-          id,
-          captureSessionId: result.captureSessionId,
-          clipAssetId: result.clipAssetId,
-        })
-      } catch (error) {
-        if (request.signal.aborted) {
-          if (uploadRequest.current === request) uploadRequest.current = null
-          return
-        }
-        dispatchTasks({
-          type: 'failed',
-          id,
-          errorCode: error instanceof LocalUploadApiError ? error.errorCode : 'LOCAL_UPLOAD_FAILED',
-          errorMessage:
-            error instanceof LocalUploadApiError
-              ? error.message
-              : '本地视频上传失败，请检查网络和本地服务后重试。',
-        })
-      }
-    }
-    if (uploadRequest.current === request) uploadRequest.current = null
-    setUploadState('completed')
+    startPlatformLocalUpload(projectId, files)
     setSelectedFiles([])
   }
 
@@ -326,7 +236,7 @@ export default function LocalUploadView() {
                 loading={projectLoadState === 'loading'}
                 disabled={isUploading || projectLoadState !== 'success'}
                 placeholder="选择已加入的项目"
-                onChange={setSelectedProjectId}
+                onChange={selectProject}
                 options={projects.map((project) => ({
                   value: project.project_id,
                   label: `${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '成员'}）`,
@@ -483,7 +393,7 @@ export default function LocalUploadView() {
                 <div className="local-upload-task-actions">
                   <Link
                     className="text-link"
-                    to={paths.captureGroup(selectedProjectId, task.captureSessionId)}
+                    to={paths.captureGroup(task.projectId, task.captureSessionId)}
                   >
                     打开配药事件
                   </Link>
