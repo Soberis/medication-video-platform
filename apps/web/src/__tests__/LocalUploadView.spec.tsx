@@ -339,6 +339,87 @@ describe('LocalUploadView', () => {
 
     expect(activeSignal?.aborted).toBe(true)
   })
+
+  it('lets users acknowledge and clear an all-success upload activity from another page', async () => {
+    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockResolvedValue({
+      batchId: '40000000-0000-4000-8000-000000000001',
+      captureSessionId: '50000000-0000-4000-8000-000000000001',
+      clipAssetId: '60000000-0000-4000-8000-000000000001',
+    })
+    stubCatalog([project])
+    const user = userEvent.setup()
+    const view = renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'uploads/new', element: <LocalUploadView /> },
+            { path: 'projects', element: <div>其他页面</div> },
+          ],
+        },
+      ],
+      ['/uploads/new'],
+      { username: 'admin', role: 'ADMIN' },
+    )
+
+    await selectProject(user, '合成测试项目')
+    await user.upload(
+      screen.getByLabelText('本机视频'),
+      new File(['synthetic-video'], 'synthetic.mp4', { type: 'video/mp4' }),
+    )
+    await user.click(screen.getByRole('button', { name: '开始上传' }))
+    expect(await screen.findByText('已确认完成')).toBeInTheDocument()
+
+    await view.router.navigate('/projects')
+    expect(await screen.findByRole('link', { name: '查看上传进度' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '知道了' }))
+    expect(screen.queryByRole('link', { name: '查看上传进度' })).not.toBeInTheDocument()
+  })
+
+  it('keeps a partial upload activity visible without offering a success dismissal', async () => {
+    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockImplementation(async ({ file }) => {
+      if (file.name === 'broken.mp4') {
+        throw new localUploadApi.LocalUploadApiError(
+          '平台校验到视频文件内容不完整，请重新选择文件后上传。',
+          'UPLOAD_FILE_SHA256_MISMATCH',
+        )
+      }
+      return {
+        batchId: '40000000-0000-4000-8000-000000000001',
+        captureSessionId: '50000000-0000-4000-8000-000000000001',
+        clipAssetId: '60000000-0000-4000-8000-000000000001',
+      }
+    })
+    stubCatalog([project])
+    const user = userEvent.setup()
+    const view = renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'uploads/new', element: <LocalUploadView /> },
+            { path: 'projects', element: <div>其他页面</div> },
+          ],
+        },
+      ],
+      ['/uploads/new'],
+      { username: 'admin', role: 'ADMIN' },
+    )
+
+    await selectProject(user, '合成测试项目')
+    await user.upload(screen.getByLabelText('本机视频'), [
+      new File(['broken'], 'broken.mp4', { type: 'video/mp4' }),
+      new File(['confirmed'], 'confirmed.mp4', { type: 'video/mp4' }),
+    ])
+    await user.click(screen.getByRole('button', { name: '开始上传（2 个视频）' }))
+    expect(await screen.findByText('部分上传完成')).toBeInTheDocument()
+
+    await view.router.navigate('/projects')
+    expect(await screen.findByRole('link', { name: '查看上传进度' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '知道了' })).not.toBeInTheDocument()
+  })
 })
 
 function renderLocalUpload() {

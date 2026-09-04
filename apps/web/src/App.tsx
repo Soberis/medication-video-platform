@@ -30,7 +30,7 @@ const managementRoutePatterns = [
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
 
 function LocalUploadActivity() {
-  const { tasks, uploadState } = useLocalUpload()
+  const { tasks, uploadState, resetUpload } = useLocalUpload()
   const location = useLocation()
   if (tasks.length === 0 || location.pathname === paths.localUpload) return null
 
@@ -61,6 +61,11 @@ function LocalUploadActivity() {
       <Link className="text-link" to={paths.localUpload}>
         查看上传进度
       </Link>
+      {uploadState === 'completed' && failedTaskCount === 0 ? (
+        <Button size="small" type="text" onClick={resetUpload}>
+          知道了
+        </Button>
+      ) : null}
     </NoticeState>
   )
 }

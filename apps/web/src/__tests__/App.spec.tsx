@@ -188,6 +188,32 @@ describe('App', () => {
     expect(within(navigation).getByRole('link', { name: '标注任务' })).toBeInTheDocument()
   })
 
+  it('marks the annotation task list as the active workspace navigation', () => {
+    const projectId = '30000000-0000-4000-8000-000000000001'
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'projects/:projectId/annotation-tasks', element: <div>标注任务页面</div> },
+          ],
+        },
+      ],
+      [`/projects/${projectId}/annotation-tasks`],
+      { username: 'project-member', role: 'MEMBER' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).not.toHaveAttribute(
+      'aria-current',
+    )
+  })
+
   it('keeps a CaptureGroup detail in the video-management navigation context', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     const captureGroupId = '60000000-0000-4000-8000-000000000001'
