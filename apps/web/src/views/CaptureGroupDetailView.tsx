@@ -316,20 +316,6 @@ export default function CaptureGroupDetailView() {
                 className={`capture-group-workspace capture-group-workspace-${workflow.stage.toLowerCase().replace(/_/g, '-')}`}
                 data-stage={workflow.stage}
               >
-                <div className="capture-group-video-column">
-                  <CaptureGroupFocusedView
-                    viewRows={viewRows}
-                    task={data.task}
-                    viewReviews={data.viewReviews}
-                    viewState={viewState}
-                    onSelectView={(clipAssetId) => {
-                      setCurrentPlaybackTimeMs(null)
-                      data.setSelectedClipAssetId(clipAssetId)
-                    }}
-                    onPlaybackTimeChange={setCurrentPlaybackTimeMs}
-                    handDetectionEvidenceAction={handDetectionEvidenceAction}
-                  />
-                </div>
                 <div className="capture-group-action-column">
                   <MedicationEventCurrentAction
                     workflow={workflow}
@@ -350,6 +336,20 @@ export default function CaptureGroupDetailView() {
                     onPrimaryAction={handlePrimaryAction}
                   />
                   {!isReviewWorkflowAction ? renderActionForm() : null}
+                </div>
+                <div className="capture-group-video-column">
+                  <CaptureGroupFocusedView
+                    viewRows={viewRows}
+                    task={data.task}
+                    viewReviews={data.viewReviews}
+                    viewState={viewState}
+                    onSelectView={(clipAssetId) => {
+                      setCurrentPlaybackTimeMs(null)
+                      data.setSelectedClipAssetId(clipAssetId)
+                    }}
+                    onPlaybackTimeChange={setCurrentPlaybackTimeMs}
+                    handDetectionEvidenceAction={handDetectionEvidenceAction}
+                  />
                 </div>
               </div>
             )

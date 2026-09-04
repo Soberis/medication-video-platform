@@ -360,28 +360,25 @@ export default function AnnotationTaskListView() {
               return (
                 <li
                   aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
-                  className="annotation-task-card"
+                  className="annotation-task-row"
                   key={row.annotation_task_id}
                   data-status={row.status}
                 >
-                  <header className="annotation-task-card-header">
-                    <div className="annotation-task-identity">
-                      <Link
-                        className="text-link mono-wrap"
-                        to={paths.captureGroup(projectId, captureGroupId)}
-                        title={captureGroupId}
-                      >
-                        {taskSubject}
-                      </Link>
-                    </div>
-                    <StatusIndicator
-                      className="annotation-task-card-status"
-                      tone={taskStatusTone(row)}
+                  <header className="annotation-task-row-identity">
+                    <Link
+                      className="text-link mono-wrap"
+                      to={paths.captureGroup(projectId, captureGroupId)}
+                      title={captureGroupId}
                     >
+                      {taskSubject}
+                    </Link>
+                  </header>
+                  <div className="annotation-task-row-status">
+                    <StatusIndicator className="annotation-task-status" tone={taskStatusTone(row)}>
                       {taskStatusLabel(row)}
                     </StatusIndicator>
-                  </header>
-                  <div className="annotation-task-card-content">
+                  </div>
+                  <div className="annotation-task-row-evidence">
                     <div className="annotation-task-progress">
                       {revision ? (
                         <div className="task-evidence-summary">
@@ -412,9 +409,9 @@ export default function AnnotationTaskListView() {
                       )}
                     </div>
                   </div>
-                  <footer className="annotation-task-card-footer">
+                  <footer className="annotation-task-row-footer">
                     <div
-                      className="annotation-task-card-actions"
+                      className="annotation-task-row-actions"
                       aria-label={
                         row.status === 'COMPLETED'
                           ? '完成结果操作'
