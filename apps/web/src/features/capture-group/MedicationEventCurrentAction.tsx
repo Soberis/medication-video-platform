@@ -160,11 +160,8 @@ function CompletedResultSummary() {
     <div className="capture-group-current-result" role="status" aria-live="polite">
       <div className="capture-group-current-result-heading">
         <CircleCheck aria-hidden="true" size={18} strokeWidth={1.9} />
-        <strong>流程已完成</strong>
+        <strong>人工复核已通过，训练资格检查通过</strong>
       </div>
-      <a className="capture-group-current-result-link" href="#capture-group-review-cleaning">
-        查看复核与训练资格详情
-      </a>
     </div>
   )
 }

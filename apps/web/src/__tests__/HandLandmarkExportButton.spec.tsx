@@ -13,7 +13,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('hand landmark export scopes', () => {
   it.each([
     ['导出项目手部关键点', undefined, '整个项目', ''],
-    ['导出本事件手部关键点', captureGroupId, '当前配药事件', `?capture_group_id=${captureGroupId}`],
+    ['导出手部检测证据', captureGroupId, '当前配药事件', `?capture_group_id=${captureGroupId}`],
   ])('uses the natural scope for %s', async (label, scope, scopeLabel, query) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview(scope)))
     vi.stubGlobal('fetch', fetchMock)

@@ -119,6 +119,10 @@ export default function CaptureGroupDetailView() {
   )
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
   const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
+  const handDetectionEvidenceAction =
+    session?.role === 'ADMIN' ? (
+      <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
+    ) : undefined
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -266,19 +270,14 @@ export default function CaptureGroupDetailView() {
         title={eventTitle}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
-          <>
-            {session?.role === 'ADMIN' ? (
-              <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
-            ) : null}
-            <Button
-              size="small"
-              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-              loading={data.groupLoadState === 'loading'}
-              onClick={() => void data.refresh()}
-            >
-              刷新事实
-            </Button>
-          </>
+          <Button
+            size="small"
+            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+            loading={data.groupLoadState === 'loading'}
+            onClick={() => void data.refresh()}
+          >
+            刷新事实
+          </Button>
         }
       />
       {workflow ? <MedicationEventWorkflowRail workflow={workflow} /> : null}
@@ -312,6 +311,7 @@ export default function CaptureGroupDetailView() {
                     data.setSelectedClipAssetId(clipAssetId)
                   }}
                   onPlaybackTimeChange={setCurrentPlaybackTimeMs}
+                  handDetectionEvidenceAction={handDetectionEvidenceAction}
                   isCompleted
                 />
                 {renderReviewCleaningPanel()}
@@ -332,6 +332,7 @@ export default function CaptureGroupDetailView() {
                       data.setSelectedClipAssetId(clipAssetId)
                     }}
                     onPlaybackTimeChange={setCurrentPlaybackTimeMs}
+                    handDetectionEvidenceAction={handDetectionEvidenceAction}
                   />
                 </div>
                 <div className="capture-group-action-column">

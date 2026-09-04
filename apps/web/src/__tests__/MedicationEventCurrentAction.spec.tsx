@@ -174,13 +174,10 @@ describe('MedicationEventCurrentAction', () => {
     )
 
     expect(screen.getByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
-    expect(screen.getByText('流程已完成')).toBeInTheDocument()
+    expect(screen.getByText('人工复核已通过，训练资格检查通过')).toBeInTheDocument()
     expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
     expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看复核与训练资格详情' })).toHaveAttribute(
-      'href',
-      '#capture-group-review-cleaning',
-    )
+    expect(screen.queryByRole('link', { name: '查看复核与训练资格详情' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

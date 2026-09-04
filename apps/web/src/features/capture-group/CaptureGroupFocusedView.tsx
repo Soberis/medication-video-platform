@@ -1,6 +1,7 @@
 import { Alert, Descriptions } from 'antd'
 import { Clock3, Video } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 
 import type { AnnotationTask } from '@/api/annotation'
 import type { QualityReview } from '@/api/quality'
@@ -18,6 +19,7 @@ interface CaptureGroupFocusedViewProps {
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
   onPlaybackTimeChange?: (timeMs: number | null) => void
+  handDetectionEvidenceAction?: ReactNode
   isCompleted?: boolean
 }
 
@@ -28,6 +30,7 @@ export function CaptureGroupFocusedView({
   viewState,
   onSelectView,
   onPlaybackTimeChange,
+  handDetectionEvidenceAction,
   isCompleted = false,
 }: CaptureGroupFocusedViewProps) {
   const {
@@ -214,7 +217,7 @@ export function CaptureGroupFocusedView({
           void startPlayback()
         }}
       />
-      {selectedDetail ? (
+      {selectedDetail || handDetectionEvidenceAction ? (
         <details className="capture-group-focused-details">
           <summary>查看机位技术与辅助证据</summary>
           <div className="capture-group-focused-details-content">
@@ -285,16 +288,27 @@ export function CaptureGroupFocusedView({
                       ]}
                     />
                   ) : null}
+                  {handDetectionEvidenceAction ? (
+                    <div className="capture-group-stack">
+                      <p>
+                        导出当前配药事件的 <code translate="no">hand-landmarks.v1</code>{' '}
+                        手部检测证据。
+                      </p>
+                      <div>{handDetectionEvidenceAction}</div>
+                    </div>
+                  ) : null}
                 </div>
               </Section>
-              <MediaReportCard
-                detail={selectedDetail}
-                errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
-                errorMessage={selectedMediaReportError}
-                loadState={selectedMediaReportState}
-                onRetry={() => void loadSelectedView()}
-                report={selectedMediaReport}
-              />
+              {selectedDetail ? (
+                <MediaReportCard
+                  detail={selectedDetail}
+                  errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
+                  errorMessage={selectedMediaReportError}
+                  loadState={selectedMediaReportState}
+                  onRetry={() => void loadSelectedView()}
+                  report={selectedMediaReport}
+                />
+              ) : null}
             </div>
           </div>
         </details>

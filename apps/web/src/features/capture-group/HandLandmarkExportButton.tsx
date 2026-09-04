@@ -101,7 +101,7 @@ export function HandLandmarkExportButton({
         disabled={downloadLoading}
         onClick={() => void openPreview()}
       >
-        {captureGroupId ? '导出本事件手部关键点' : '导出项目手部关键点'}
+        {captureGroupId ? '导出手部检测证据' : '导出项目手部关键点'}
       </Button>
       <Modal
         open={Boolean(preview)}

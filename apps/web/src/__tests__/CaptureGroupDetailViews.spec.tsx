@@ -307,6 +307,72 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByText(/检测结果未知；这是 AI 证据状态/)).toBeInTheDocument()
   })
 
+  it.each([
+    ['N=1', [1]],
+    ['N>1', [1, 2]],
+  ])(
+    'keeps the ADMIN hand-detection evidence export in auxiliary evidence for %s',
+    async (_, cameras) => {
+      const group = captureGroupFixture(groupId, {
+        expected: cameras,
+        received: cameras,
+        receipt: 'COMPLETE',
+      })
+      stubGroupDetail(group, {
+        task: null,
+        quality: qualityFixture(group, 'QUALIFIED'),
+        candidateStatus: 'NO_HAND_DETECTED',
+      })
+      const user = userEvent.setup()
+
+      renderRoute(<CaptureGroupDetailView />, {
+        path: '/projects/:projectId/capture-groups/:captureGroupId',
+        route: `/projects/${projectId}/capture-groups/${groupId}`,
+        session: { username: 'platform-admin', role: 'ADMIN' },
+      })
+
+      const toolbar = await screen.findByRole('toolbar', { name: '页面操作' })
+      expect(
+        within(toolbar).queryByRole('button', { name: '导出手部检测证据' }),
+      ).not.toBeInTheDocument()
+      const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
+      if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
+      await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
+      expect(
+        within(focusedDetails).getByRole('button', { name: '导出手部检测证据' }),
+      ).toBeInTheDocument()
+      expect(focusedDetails).toHaveTextContent(
+        '导出当前配药事件的 hand-landmarks.v1 手部检测证据。',
+      )
+      expect(focusedDetails).not.toHaveTextContent('training-data.v3')
+      expect(focusedDetails).not.toHaveTextContent('训练数据导出')
+    },
+  )
+
+  it('does not expose the hand-detection evidence export to a non-ADMIN', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      session: { username: 'project-member', role: 'MEMBER' },
+    })
+
+    const focusedDetails = await screen.findByText('查看机位技术与辅助证据')
+    await user.click(focusedDetails)
+    expect(screen.queryByRole('button', { name: '导出手部检测证据' })).not.toBeInTheDocument()
+  })
+
   it('keeps a completed workflow compact and leaves full event identifiers in progressive details', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
@@ -323,11 +389,16 @@ describe('CaptureGroup detail views', () => {
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
+      session: { username: 'platform-admin', role: 'ADMIN' },
     })
 
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
-    expect(screen.getByText('流程已完成')).toBeInTheDocument()
+    expect(screen.getAllByText('人工复核已通过，训练资格检查通过')).toHaveLength(1)
+    expect(screen.queryByText('人工复核已通过 · 训练资格检查通过')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('当前事件已完成既定流程；完整修订、证据与规则事实已收起。'),
+    ).not.toBeInTheDocument()
     expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
     expect(screen.queryByText('训练资格检查：已通过')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
@@ -370,6 +441,9 @@ describe('CaptureGroup detail views', () => {
     if (!focusedDetails) throw new Error('Completed focused evidence details were not mounted.')
     await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
     expect(within(focusedDetails).getByRole('heading', { name: '手部检测' })).toBeInTheDocument()
+    expect(
+      within(focusedDetails).getByRole('button', { name: '导出手部检测证据' }),
+    ).toBeInTheDocument()
     expect(
       within(focusedDetails).getByRole('heading', { name: '媒体检测报告' }),
     ).toBeInTheDocument()
@@ -534,7 +608,7 @@ describe('CaptureGroup detail views', () => {
     expect(within(receiptDetails).getByText('配药事件 ID')).toBeInTheDocument()
     expect(within(receiptDetails).getByText('服务端接收时间')).toBeInTheDocument()
 
-    const focusedDetails = screen.getByText('查看机位技术与辅助证据').closest('details')
+    const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
     if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
     expect(focusedDetails).not.toHaveAttribute('open')
     await user.click(screen.getByText('查看机位技术与辅助证据'))

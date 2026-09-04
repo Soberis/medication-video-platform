@@ -123,21 +123,6 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
-.capture-group-current-result-link {
-  justify-self: start;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-regular);
-  text-decoration: none;
-}
-
-.capture-group-current-result-link:hover,
-.capture-group-current-result-link:focus-visible {
-  color: var(--app-color-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .capture-group-completed-inspector-details {
   margin-top: 0;
 }
@@ -980,26 +965,6 @@
 .capture-group-review-cleaning-section {
   display: grid;
   gap: var(--app-space-12);
-}
-
-.capture-group-review-complete-summary {
-  display: grid;
-  gap: var(--app-space-8);
-  padding: var(--app-space-12);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-surface-muted);
-}
-
-.capture-group-review-complete-summary > p {
-  margin: 0;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-}
-
-.capture-group-review-complete-summary > .ant-btn {
-  justify-self: start;
 }
 
 .capture-group-review-detail-disclosure {

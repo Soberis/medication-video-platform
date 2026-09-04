@@ -239,21 +239,17 @@ export function CaptureGroupReviewCleaningPanel({
       }
     >
       {hasCompletedReviewAndCleaning ? (
-        <div className="capture-group-review-complete-summary" role="status">
-          <StatusIndicator tone="success">人工复核已通过 · 训练资格检查通过</StatusIndicator>
-          <p>当前事件已完成既定流程；完整修订、证据与规则事实已收起。</p>
-          <Button
-            type="link"
-            size="small"
-            aria-controls={
-              isCompletedDetailOpen ? 'capture-group-review-cleaning-details' : undefined
-            }
-            aria-expanded={isCompletedDetailOpen}
-            onClick={() => setIsCompletedDetailOpen((open) => !open)}
-          >
-            {isCompletedDetailOpen ? '收起复核与训练资格详情' : '查看复核与训练资格详情'}
-          </Button>
-        </div>
+        <Button
+          type="link"
+          size="small"
+          aria-controls={
+            isCompletedDetailOpen ? 'capture-group-review-cleaning-details' : undefined
+          }
+          aria-expanded={isCompletedDetailOpen}
+          onClick={() => setIsCompletedDetailOpen((open) => !open)}
+        >
+          {isCompletedDetailOpen ? '收起复核与训练资格详情' : '查看复核与训练资格详情'}
+        </Button>
       ) : null}
       {!task ? (
         <p className="form-hint">
