@@ -1,5 +1,10 @@
 {
   "schema_version": "requirements-manifest-v1",
+  "draft": {
+    "version": "V1.29",
+    "path": "baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md",
+    "sha256": "A82F16DF429331C7923B80AD44F04741E9B476C9FF81B3BCEE29C9171982069D"
+  },
   "current": {
     "version": "V1.28",
     "path": "baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md",

@@ -1,29 +1,29 @@
-# 配药视频数据管理平台
+# 配药视频数据处理平台
 
-平台对接医院边端采集系统接收固定舱内相机视频，在云端完成视频与数据管理、MediaPipe 手部预标注、配药动作标注、复核和数据清洗。
+平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
 
-当前正式需求：V1.28（单一 CaptureGroup 产品路径与唯一手部检测导出；V1.27 及更早版本仅作历史参考）
+当前需求方向：V1.29 DRAFT（数据组主线收敛与 Runtime Simplification）。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
 
-当前唯一支持的产品主链：
+V1.29 DRAFT 的目标默认产品主链：
 
 ```text
-Local Upload / External Ingest
+External Ingest / Upload
 → CaptureGroup → CameraStream / ClipAsset
 → Media Probe → MediaPipe Candidate
-→ per-view Quality → CaptureGroup Quality
-→ one CaptureGroup AnnotationTask → AnnotationRevision
-→ Review → deterministic CaptureGroup Cleaning
-└→ hand-landmarks.v1（current CameraStream MediaPipe landmark detection evidence）
+→ Automated / Human Quality
+→ Optional Annotation / Review
+→ Export
 ```
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-边端负责采集、缓存和上传策略；平台不控制相机或边端设备。每个事件视图可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision 或 Review。Review `APPROVED` 后由系统使用冻结规则确定性执行 CaptureGroup Cleaning，管理员 recheck 只重跑既有规则。唯一公开导出 `hand-landmarks.v1` 从当前启用且可用的 CameraStream/ClipAsset 和当前 MediaPipe evidence 生成检测事实 CSV，支持项目范围或单一 CaptureGroup 范围，不读取人工质量、Annotation、Review 或 Cleaning；尚无实际 training consumer 读取证据。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除；历史迁移和文档只保留审计参考，V75 仅清除旧 eligibility view，不删除业务事实。
+采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用，现有 runtime 变更须等待审计。唯一公开导出 `hand-landmarks.v1` 从当前启用且可用的 CameraStream/ClipAsset 和当前 MediaPipe evidence 生成检测事实 CSV，支持项目范围或单一 CaptureGroup 范围，不读取人工质量、Annotation、Review 或 Cleaning；尚无实际 training consumer 读取证据。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除；历史迁移和文档只保留审计参考，V75 仅清除旧 eligibility view，不删除业务事实。
 
 当前规范：
 
-- [V1.28 当前正式需求基线](./docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
-- [V1.28 单一导出边界设计](./docs/architecture/v1.28-single-export-consolidation.md)
+- [V1.29 DRAFT 需求基线](./docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)
+- [V1.28 上一正式需求基线](./docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
+- [V1.28 上一正式导出边界设计](./docs/architecture/v1.28-single-export-consolidation.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
 - [V1.27 AI evidence pipeline audit](./docs/architecture/v1.27-ai-evidence-audit.md)
 - [V1.27 training traceability audit](./docs/architecture/v1.27-training-traceability.md)

@@ -11,8 +11,8 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md`：当前正式业务需求基线，冻结唯一的 CaptureGroup 产品路径、N=1 统一模型、保留的低层视频事实、人工闸门和唯一的 `hand-landmarks.v1` current MediaPipe detection evidence export 边界。
-3. `docs/architecture/v1.28-single-export-consolidation.md`：当前 V1.28 导出边界设计；V1.27 的入口、视图、任务、Review 和 Cleaning 语义仅作为上一版本参考。
+2. `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md`：当前 DRAFT 需求边界，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
+3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.29 与其冲突处以 V1.29 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
 4. `docs/architecture/v1.27-hand-detection-policy.md`、`docs/architecture/v1.27-ai-evidence-audit.md` 与 `docs/architecture/v1.27-training-traceability.md`：上一版本的手部检测和证据审计参考，其中检测事实边界仍适用，事件 manifest 部分不再是当前产品。`docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md`、`docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`、`docs/architecture/v1.26-medication-event-workbench-design.md`、V1.25 CaptureGroup 文档和 V1.24 文档均为历史/迁移参考，不构成当前兼容性承诺。
 5. `docs/adr/`：已经冻结的技术决策。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
@@ -49,7 +49,7 @@ Do not introduce independent page-level visual styles.
 - P0 采用一个 Java 21、Spring Boot、Spring Modulith Core API，不提前拆微服务。
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
-- Python Worker 只处理媒体、导出和 AI 作业，不直接写正式标注或冻结数据集。
+- Python Worker 只处理媒体和 AI 作业；当前 `hand-landmarks.v1` 由 Core API 同步只读导出，不直接写正式标注或冻结数据集。
 - AI 输出只能进入 `CandidateAnnotation`；`hand-landmarks.v1` 可在校验当前 Candidate evidence provenance 后独立导出检测事实，但不得把它写成正式标注、人工质量、Review 或 Cleaning 结论。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 
@@ -68,20 +68,17 @@ Do not introduce independent page-level visual styles.
 严格遵循：
 
 ```text
-边端接收
-→ CaptureGroup / 视频管理
-→ 每路 Media Probe / MediaPipe Candidate
-→ 逐视图人工质量
-→ CaptureGroup 人工质量准入
-→ 一个 CaptureGroup AnnotationTask / Revision 修订链
-→ Review
-→ 事件级 Cleaning
-└→ `hand-landmarks.v1` current CameraStream landmark detection export
-→ 授权样本算法评估
-→ 后续 P1 批量预标注和自动策略
+External Ingest / Upload
+→ CaptureGroup
+→ CameraStream / ClipAsset
+→ Media Probe
+→ MediaPipe Candidate
+→ Automated / Human Quality
+→ Optional Annotation / Review
+→ Export
 ```
 
-MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只能产生 `CandidateAnnotation`，不得绕过人工确认、复核和清洗改写正式业务数据。独立的 `hand-landmarks.v1` 只导出经过 provenance 校验的当前检测事实，不以人工 Review/Cleaning 作为前置条件。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
+MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。人工质量、Annotation、Review 和 Cleaning 仅在项目需要 human ground truth 时使用，不是每个 CaptureGroup 或 `hand-landmarks.v1` 的强制流程。独立的 `hand-landmarks.v1` 只导出经过 provenance 校验的当前检测事实，不以人工链作为前置条件。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
 
 ## MVP Simplicity
 
@@ -91,7 +88,7 @@ MediaPipe 手部预标注是当前 P0 数据生产闭环的辅助能力；它只
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 每次优先交付一个可运行、可测试、可回退的纵向切片；完成后再选择下一项，不并行铺开多个未闭环模块。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
-- V1.28 MVP 不恢复未接线的 CaptureSync runtime，不新增 `CaptureGroupView`、持久化 `next_action` / `blockers` 或通用工作流引擎；不再支持独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留。
+- V1.29 DRAFT 不恢复未接线的 CaptureSync runtime，不新增 `CaptureGroupView`、持久化 `next_action` / `blockers` 或通用工作流引擎；不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；现有 runtime 的具体收缩或删除必须等待后续审计和批准。
 
 ## Data And Safety
 
