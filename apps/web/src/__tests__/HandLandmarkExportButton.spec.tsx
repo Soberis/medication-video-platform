@@ -12,7 +12,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('hand landmark export scopes', () => {
   it.each([
-    ['导出项目手部关键点', undefined, '整个项目', ''],
+    ['导出手部检测证据', undefined, '整个项目', ''],
     ['导出手部检测证据', captureGroupId, '当前配药事件', `?capture_group_id=${captureGroupId}`],
   ])('uses the natural scope for %s', async (label, scope, scopeLabel, query) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview(scope)))
@@ -50,7 +50,7 @@ describe('hand landmark export scopes', () => {
       </AntdApp>,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: '导出项目手部关键点' }))
+    await userEvent.click(screen.getByRole('button', { name: '导出手部检测证据' }))
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('部分可导出')

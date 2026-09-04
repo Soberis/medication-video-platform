@@ -142,21 +142,21 @@ export default function AppShell() {
                 <Link
                   to={paths.captureGroups(projectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
-                  aria-label="视频管理"
-                  title="视频管理"
+                  aria-label="配药事件"
+                  title="配药事件"
                 >
                   <Video {...iconProps} />
-                  <span className="sidebar-label">视频管理</span>
+                  <span className="sidebar-label">配药事件</span>
                 </Link>
               ) : null}
               {projectId ? (
                 <NavLink
                   to={paths.annotationTasks(projectId)}
-                  aria-label="配药动作标注"
-                  title="配药动作标注"
+                  aria-label="标注任务"
+                  title="标注任务"
                 >
                   <ListChecks {...iconProps} />
-                  <span className="sidebar-label">配药动作标注</span>
+                  <span className="sidebar-label">标注任务</span>
                 </NavLink>
               ) : null}
             </div>

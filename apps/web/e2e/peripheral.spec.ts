@@ -56,7 +56,7 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
   await mockCaptureGroupApi(page, 'list')
   await page.goto(`/projects/${projectId}/annotation-tasks`)
 
-  const taskList = page.getByRole('list', { name: '配药动作标注任务列表' })
+  const taskList = page.getByRole('list', { name: '标注任务列表' })
   const taskRows = taskList.getByRole('listitem')
   await expect(taskRows).toHaveCount(2)
   await expect(taskRows.nth(0)).toHaveAccessibleName(/待标注/)

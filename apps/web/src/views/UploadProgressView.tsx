@@ -264,7 +264,7 @@ export default function UploadProgressView() {
               footer={
                 batch.status === 'COMPLETED' ? (
                   <Link className="text-link" to={paths.captureGroups(batch.project_id)}>
-                    进入视频管理
+                    进入配药事件
                   </Link>
                 ) : null
               }

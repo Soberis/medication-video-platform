@@ -100,7 +100,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('尚未提交标注')).toBeInTheDocument()
-    const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
+    const progressSummary = await screen.findByLabelText('项目标注任务进度')
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent('0 个已完成 · 1 个待处理')
     expect(screen.getByText('待标注')).toBeInTheDocument()
@@ -110,10 +110,8 @@ describe('annotation task list view', () => {
       screen.getByText('在这里处理配药事件的动作标注；提交后由管理员复核。'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
-    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
-    expect(breadcrumb).toHaveTextContent('配药动作标注')
-    expect(within(breadcrumb).queryByRole('link', { name: '视频管理' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '配药事件任务' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '任务列表' })).toBeInTheDocument()
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
@@ -125,7 +123,7 @@ describe('annotation task list view', () => {
       'href',
       `/projects/${projectId}/capture-groups/${captureGroupId}`,
     )
-    expect(screen.getByRole('list', { name: '配药动作标注任务列表' })).toHaveClass(
+    expect(screen.getByRole('list', { name: '标注任务列表' })).toHaveClass(
       'annotation-task-list-surface',
     )
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
@@ -140,7 +138,7 @@ describe('annotation task list view', () => {
     renderView()
 
     const emptyState = await screen.findByText(
-      '当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。',
+      '当前没有待处理的标注任务。符合质量准入条件的配药事件会自动生成标注任务。',
     )
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
@@ -156,7 +154,7 @@ describe('annotation task list view', () => {
     stubTasks([completedTask], labelSchema)
     renderView()
 
-    const progressSummary = await screen.findByLabelText('项目配药动作标注进度')
+    const progressSummary = await screen.findByLabelText('项目标注任务进度')
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent('全部完成')
     expect(progressSummary).not.toHaveTextContent('待处理')
@@ -544,7 +542,7 @@ describe('annotation task list view', () => {
     stubTasks([assignedTask], labelSchema, 'ASSIGNEE')
     renderView()
 
-    expect(await screen.findByLabelText('我的配药动作标注进度')).toHaveTextContent('1 个任务')
+    expect(await screen.findByLabelText('我的标注任务进度')).toHaveTextContent('1 个任务')
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
   })

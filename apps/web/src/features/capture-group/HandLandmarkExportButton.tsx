@@ -101,16 +101,16 @@ export function HandLandmarkExportButton({
         disabled={downloadLoading}
         onClick={() => void openPreview()}
       >
-        {captureGroupId ? '导出手部检测证据' : '导出项目手部关键点'}
+        导出手部检测证据
       </Button>
       <Modal
         open={Boolean(preview)}
-        title="手部关键点导出预览"
+        title="手部检测证据导出预览"
         okText="导出 CSV"
         cancelText="关闭"
         confirmLoading={downloadLoading}
         okButtonProps={{ disabled: !preview?.sample_count, 'aria-label': '导出 CSV' }}
-        cancelButtonProps={{ disabled: downloadLoading, 'aria-label': '关闭手部关键点导出预览' }}
+        cancelButtonProps={{ disabled: downloadLoading, 'aria-label': '关闭手部检测证据导出预览' }}
         mask={{ closable: !downloadLoading }}
         keyboard={!downloadLoading}
         onCancel={() => !downloadLoading && setPreview(null)}

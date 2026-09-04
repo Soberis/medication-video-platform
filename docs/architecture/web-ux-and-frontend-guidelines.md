@@ -21,7 +21,7 @@
 
 Web 是护士配药视频数据的云端管理端。V1.2 的界面只展示管理员和普通用户；标注、复核、导出等能力由后端权限项和任务分配决定，不再把每个权限集合都显示为独立角色。它帮助用户理解数据当前状态、处理异常、完成受控业务操作并追溯结果。
 
-平台当前产品主线以一个真实配药事件（领域身份为 `CaptureGroup`，接入身份复用 `CaptureSession`）为工作对象。“视频管理”负责发现事件并进入 current-task-first 事件工作台；“配药动作标注”是任务待办入口，并深链回对应事件和当前操作。单路视频（产品 API 中的 `video_id`，映射既有 `clip_asset_id`）是事件内视图，不再与配药事件形成两套并行主流程。
+平台当前产品主线以一个真实配药事件（领域身份为 `CaptureGroup`，接入身份复用 `CaptureSession`）为工作对象。“配药事件”负责发现事件并进入 current-task-first 事件工作台；“标注任务”是任务待办入口，并深链回对应事件和当前操作。单路视频（产品 API 中的 `video_id`，映射既有 `clip_asset_id`）是事件内视图，不再与配药事件形成两套并行主流程。
 
 视频可以由医院侧设备或系统远端上传，也可以由用户在平台页面选择本机文件上传。两种入口使用同一套入库规则，Web 不控制医院侧采集设备。
 
@@ -111,7 +111,7 @@ P0 非目标：
 | --- | --- | --- | --- |
 | `/projects` | 仅列出当前身份具有 ACTIVE Membership 的数据项目并显示角色；管理员可改名、归档项目和管理成员 | 项目/成员契约、权限与测试具备 | 已启用；归档不物理删除数据。AssetFolder 不属于当前产品面，相关旧表和字段已由 V65 退役。 |
 | `/projects/:projectId/assets/:id` | 仅供受控历史或诊断读取单路视频事实；当前组内资产进入事件工作台 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 退役的单视频产品表面；不属于 V1.28 当前业务入口或独立工作台。管理员诊断/恢复入口不放入普通用户主界面。 |
-| `/projects/:projectId/capture-groups` | 按事件查询 CaptureGroup，并进入多视图事件工作台 | 服务端显式归组、项目隔离、收件与质量事实分离 | 当前“视频管理”默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
+| `/projects/:projectId/capture-groups` | 按事件查询 CaptureGroup，并进入多视图事件工作台 | 服务端显式归组、项目隔离、收件与质量事实分离 | 当前“配药事件”默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
 | `/projects/:projectId/videos` | 仅供历史单路视频数据或迁移诊断读取 | 稳定游标、同条件汇总、项目隔离 | 退役的单视频产品表面；不属于 V1.28 当前导航、业务验收或兼容承诺。 |
 | `/projects/:projectId/annotation-tasks` | 查看当前用户可见的 CaptureGroup 任务队列、进度和状态；组质量保存为合格时系统自动创建并分配唯一组任务，并为需要处理的事件进入组任务工作台 | 自动任务、项目权限、质量守卫、LabelSchema、时间边界与重叠守卫、不可变修订/复核/返工/post-clean 与测试具备 | 已启用；列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。CaptureGroup 首个正式 Revision 前的 Primary View 入口使用服务端 `can_select_primary`，不从 `can_submit` 推断。P0 只处理 `annotation-document.v1` 主 Step 时间片段和备注 |
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
@@ -128,7 +128,7 @@ P0 非目标：
 
 ### 4.1 视频主链与历史页面
 
-- `/projects/:projectId/capture-groups` 是当前“视频管理”默认业务入口；事件列表和详情以服务端 CaptureGroup 事实为准，不自动播放或预加载视频；
+- `/projects/:projectId/capture-groups` 是当前“配药事件”默认业务入口；事件列表和详情以服务端 CaptureGroup 事实为准，不自动播放或预加载视频；
 - `/projects/:projectId/videos` 是退役的历史单视频表面；不得把它作为 V1.28 兼容入口、当前导航或新事件跳转目标；
 - `/projects/:projectId/sessions` 与详情仅保留历史兼容路由和测试，不进入当前导航；不得继续增加同步、批量检测或 Dataset 草稿动作；
 - 每个单个已入库视频自动提交一个幂等的 MediaPipe 手部姿态检测；不提供一键批量检测或可配置自动策略。Candidate/handedness 不得阻断人工标注；
@@ -136,7 +136,7 @@ P0 非目标：
 - `/assets/:id` 详情只服务历史单视频数据或受控管理/诊断；属于 CaptureGroup 的资产必须进入事件工作台，不恢复独立资产工作流；
 - `/assets/:id` 只展示当前已持久化且获准返回的元数据。播放器、缩略图、下载和对象存储定位在授权契约完成前不得出现；
 - 工作台所需的异常数、待办数和状态汇总必须来自专用服务端查询，不得通过浏览器拉取多页列表后自行汇总。
-- 顶部导航的上下文归属固定为：`/projects` 属于“项目”，`/projects/:projectId/capture-groups` 与事件详情属于“视频管理”，`/projects/:projectId/annotation-tasks` 属于“配药动作标注”。历史 `/videos` 与 `/assets/:id` 不进入当前导航；管理菜单只承担真实管理和诊断入口，视频详情不得高亮“管理”。
+- 顶部导航的上下文归属固定为：`/projects` 属于“项目”，`/projects/:projectId/capture-groups` 与事件详情属于“配药事件”，`/projects/:projectId/annotation-tasks` 属于“标注任务”。历史 `/videos` 与 `/assets/:id` 不进入当前导航；管理菜单只承担真实管理和诊断入口，视频详情不得高亮“管理”。
 
 ### 4.2 当前可用筛选与渐进披露
 
@@ -144,7 +144,7 @@ P0 非目标：
 
 - 默认筛选区只保留已有服务端契约支持的最少必要筛选，具体高频组合留待 UAT 验证；其余已支持筛选进入“更多筛选”。收起不得清除条件，已应用条件必须始终可见并可逐项移除；
 
-- 视频管理：来源、拍摄时间、固定相机编号、媒体状态、手部状态/结果、配药动作标注状态和清洗结论；汇总与列表必须使用同一筛选；
+- 配药事件：来源、拍摄时间、固定相机编号、媒体状态、手部状态/结果、配药动作标注状态和清洗结论；汇总与列表必须使用同一筛选；
 - Session：设备、拍摄时间范围、组装状态、质量状态；
 - ClipAsset：所属 session、批次、设备、相机角色、拍摄时间范围和资产状态；
 - 场景、科室、隐私、标注、清洗和质量分等筛选仅在相应字段、所有权和查询契约落地后启用，不能展示无效控件或用前端假数据代替；
@@ -276,7 +276,7 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
   `WARNING` 应说明仍需处理或批准例外且不会自动准入；`REJECT` 应说明当前 revision 不具备后续
   准入条件，但视频资产未被删除。
 - post-clean `PASS` 的界面文案只能是“当前规则检查通过”，不得写成“已进入训练集”或自动跳转
-  `/datasets`。V1.28 只在视频管理事件列表和事件详情提供同一个 `hand-landmarks.v1` current CameraStream
+  `/datasets`。V1.28 只在配药事件列表和事件详情提供同一个 `hand-landmarks.v1` current CameraStream
   detection evidence CSV 出口；它不依赖 View/Group Quality、Annotation、Review 或 Cleaning。界面可以展示实际
   下载结果，但不得写成已训练。历史训练数据出口、
   DatasetVersion UI、复杂 Export 和自动导出不属于当前产品。尚无实际 training consumer 读取

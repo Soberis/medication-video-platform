@@ -177,16 +177,15 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/capture-groups`,
     )
-    expect(within(navigation).queryByRole('link', { name: '配药事件' })).not.toBeInTheDocument()
-    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).toBeInTheDocument()
   })
 
   it('keeps a CaptureGroup detail in the video-management navigation context', () => {
@@ -210,7 +209,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -240,10 +239,10 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药动作标注' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).getByRole('link', { name: '视频管理' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )

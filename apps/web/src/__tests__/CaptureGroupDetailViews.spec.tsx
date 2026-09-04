@@ -217,12 +217,10 @@ describe('CaptureGroup detail views', () => {
 
     const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
     const breadcrumbLinks = within(breadcrumb).getAllByRole('link')
-    expect(breadcrumbLinks).toHaveLength(2)
-    expect(breadcrumbLinks[0]).toHaveAccessibleName('视频管理')
-    expect(breadcrumbLinks[1]).toHaveAccessibleName('配药事件')
+    expect(breadcrumbLinks).toHaveLength(1)
+    expect(breadcrumbLinks[0]).toHaveAccessibleName('配药事件')
     expect(breadcrumbLinks[0]).toHaveAttribute('href', paths.captureGroups(projectId))
-    expect(breadcrumbLinks[1]).toHaveAttribute('href', paths.captureGroups(projectId))
-    expect(breadcrumb).toHaveTextContent('视频管理/配药事件/60000000…0006')
+    expect(breadcrumb).toHaveTextContent('配药事件/60000000…0006')
   })
 
   it('keeps the active action hierarchy compact at a narrow viewport', async () => {

@@ -188,14 +188,12 @@ describe('CaptureGroup operational list and quality', () => {
     expect(screen.getByRole('list', { name: '配药事件列表' })).toBeInTheDocument()
     expect(await screen.findAllByRole('listitem')).toHaveLength(5)
     const firstRow = screen.getByRole('listitem', { name: /capture-1/ })
-    expect(firstRow).toHaveTextContent('配药事件')
+    expect(within(firstRow).queryByText('配药事件', { exact: true })).not.toBeInTheDocument()
     expect(firstRow).toHaveTextContent('拍摄时间')
     expect(firstRow).toHaveTextContent('接收 / 机位')
     expect(firstRow).toHaveTextContent('事件质量')
     expect(firstRow).toHaveTextContent('机位质量')
-    expect(
-      within(firstRow).getByRole('link', { name: /进入配药事件 .*工作台/ }),
-    ).toBeInTheDocument()
+    expect(within(firstRow).getByRole('link', { name: /处理事件/ })).toBeInTheDocument()
     expect(firstRow).toHaveTextContent('4/5 机位已收')
     expect(firstRow).toHaveTextContent('缺失：机位 3')
     expect(firstRow).toHaveTextContent('接收完成 · 有缺失')
@@ -276,14 +274,14 @@ describe('CaptureGroup operational list and quality', () => {
 
     const receivingRow = await screen.findByRole('listitem', { name: /receiving-no-task/ })
     expect(receivingRow).toHaveTextContent('1/1 机位已收 · 接收中')
-    expect(receivingRow).toHaveTextContent('当前状态：等待接收完成后进行事件质量判断')
-    expect(receivingRow).not.toHaveTextContent('下一步：等待接收完成后进行事件质量判断')
+    expect(receivingRow).toHaveTextContent('当前状态等待接收完成后进行事件质量判断')
+    expect(receivingRow).not.toHaveTextContent('下一步等待接收完成后进行事件质量判断')
     expect(receivingRow).toHaveTextContent('等待接收完成后进行事件质量判断')
 
     const completeRow = screen.getByRole('listitem', { name: /complete-unreviewed/ })
     expect(completeRow).toHaveTextContent('1/1 机位已收')
     expect(completeRow).toHaveTextContent('待判断')
-    expect(completeRow).toHaveTextContent('下一步：进行事件质量判断')
+    expect(completeRow).toHaveTextContent('下一步进行事件质量判断')
     expect(completeRow).toHaveTextContent('进行事件质量判断')
 
     const incompleteRow = screen.getByRole('listitem', { name: /incomplete-gap/ })
@@ -296,7 +294,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     const qualifiedRow = screen.getByRole('listitem', { name: /qualified-task/ })
     expect(qualifiedRow).toHaveTextContent('合格')
-    expect(qualifiedRow).toHaveTextContent('下一步：提交配药动作修订')
+    expect(qualifiedRow).toHaveTextContent('下一步提交配药动作修订')
     expect(qualifiedRow).not.toHaveTextContent('任务 70000000…0001')
     expect(
       fetchMock.mock.calls.filter(([input]) =>
@@ -331,7 +329,7 @@ describe('CaptureGroup operational list and quality', () => {
       name: '配药事件 · 60000000…0006',
     })
     expect(
-      within(row).getByRole('link', { name: '进入配药事件 · 60000000…0006工作台' }),
+      within(row).getByRole('link', { name: '处理事件：配药事件 · 60000000…0006' }),
     ).toBeInTheDocument()
     expect(
       within(row).queryByRole('link', { name: '配药事件 · 60000000…0006' }),
@@ -357,8 +355,8 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const row = await screen.findByRole('listitem', { name: /completed-training/ })
-    expect(row).toHaveTextContent('当前状态：事件清洗已通过')
-    expect(row).not.toHaveTextContent('下一步：事件清洗已通过')
+    expect(row).toHaveTextContent('当前状态事件清洗已通过')
+    expect(row).not.toHaveTextContent('下一步事件清洗已通过')
   })
 
   it('appends the next CaptureGroup cursor page and enriches only returned summaries', async () => {
@@ -440,11 +438,11 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const firstRow = await screen.findByRole('listitem', { name: /quality-page-1-loaded/ })
-    expect(firstRow).toHaveTextContent('事件质量合格')
+    expect(firstRow).toHaveTextContent('事件质量 合格')
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
     const secondRow = await screen.findByRole('listitem', { name: /quality-page-2-unavailable/ })
-    expect(firstRow).toHaveTextContent('事件质量合格')
+    expect(firstRow).toHaveTextContent('事件质量 合格')
     expect(firstRow).not.toHaveTextContent('事件质量暂不可用')
     expect(secondRow).toHaveTextContent('事件质量暂不可用，请刷新后重试')
     expect(await screen.findByText('事件质量 · 暂不可用')).toBeInTheDocument()
@@ -484,7 +482,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     const secondRow = await screen.findByRole('listitem', { name: /quality-page-2-loaded/ })
     expect(firstRow).toHaveTextContent('事件质量暂不可用，请刷新后重试')
-    expect(secondRow).toHaveTextContent('事件质量合格')
+    expect(secondRow).toHaveTextContent('事件质量 合格')
     expect(secondRow).not.toHaveTextContent('事件质量暂不可用')
   })
 
@@ -522,14 +520,14 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const firstRow = await screen.findByRole('listitem', { name: /quality-page-1-forbidden/ })
-    expect(firstRow).toHaveTextContent('事件质量无权查看')
+    expect(firstRow).toHaveTextContent('事件质量 无权查看')
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
     const secondRow = await screen.findByRole('listitem', {
       name: /quality-page-2-loaded-after-forbidden/,
     })
-    expect(firstRow).toHaveTextContent('事件质量无权查看')
-    expect(secondRow).toHaveTextContent('事件质量合格')
+    expect(firstRow).toHaveTextContent('事件质量 无权查看')
+    expect(secondRow).toHaveTextContent('事件质量 合格')
     expect(secondRow).not.toHaveTextContent('事件质量无权查看')
     expect(await screen.findByText('事件质量 · 无权查看')).toBeInTheDocument()
   })
@@ -592,9 +590,7 @@ describe('CaptureGroup operational list and quality', () => {
 
     expect(await screen.findByText('还没有配药事件')).toBeInTheDocument()
     expect(screen.getByText(/完成明确归组的接收记录后，配药事件会显示在这里/)).toBeInTheDocument()
-    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
-    expect(breadcrumb).toHaveTextContent('视频管理')
-    expect(breadcrumb).toHaveTextContent('配药事件')
+    expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '上传视频' })).toHaveAttribute(
       'href',
       paths.localUpload,
@@ -693,7 +689,7 @@ describe('CaptureGroup operational list and quality', () => {
     const row = await screen.findByRole('listitem', { name: /unreviewed-quality/ })
     expect(row).toHaveTextContent('事件质量')
     expect(row).toHaveTextContent('待判断')
-    expect(row).toHaveTextContent('机位质量待判断')
+    expect(row).toHaveTextContent('机位质量 待判断')
     expect(screen.queryByText('事件质量 · 暂不可用')).not.toBeInTheDocument()
   })
 
@@ -718,10 +714,10 @@ describe('CaptureGroup operational list and quality', () => {
     const row = await screen.findByRole('listitem', {
       name: /view-quality-complete-group-pending/,
     })
-    expect(row).toHaveTextContent('事件质量待判断')
-    expect(row).toHaveTextContent('机位质量2 合格')
-    expect(row).not.toHaveTextContent('机位质量待判断')
-    expect(row).toHaveTextContent('下一步：进行事件质量判断')
+    expect(row).toHaveTextContent('事件质量 待判断')
+    expect(row).toHaveTextContent('机位质量 2 合格')
+    expect(row).not.toHaveTextContent('机位质量 待判断')
+    expect(row).toHaveTextContent('下一步进行事件质量判断')
   })
 
   it('shows quality as unavailable after a batch 5xx while keeping event rows visible', async () => {
@@ -739,7 +735,7 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const row = await screen.findByRole('listitem', { name: /quality-5xx/ })
-    expect(row).toHaveTextContent('机位质量暂不可用')
+    expect(row).toHaveTextContent('机位质量 暂不可用')
     expect(row).toHaveTextContent('事件质量暂不可用，请刷新后重试')
     expect(row).not.toHaveTextContent('待判断')
     expect(await screen.findByText('事件质量 · 暂不可用')).toBeInTheDocument()
@@ -765,8 +761,8 @@ describe('CaptureGroup operational list and quality', () => {
     })
 
     const row = await screen.findByRole('listitem', { name: /quality-forbidden/ })
-    expect(row).toHaveTextContent('机位质量无权查看')
-    expect(row).toHaveTextContent('事件质量无权查看')
+    expect(row).toHaveTextContent('机位质量 无权查看')
+    expect(row).toHaveTextContent('事件质量 无权查看')
     expect(row).not.toHaveTextContent('待判断')
     expect(await screen.findByText('事件质量 · 无权查看')).toBeInTheDocument()
   })

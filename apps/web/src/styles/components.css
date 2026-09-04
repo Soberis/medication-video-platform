@@ -752,7 +752,6 @@
   padding: var(--app-space-12) 0;
 }
 
-.annotation-task-card:hover,
 .annotation-task-card:focus-within {
   background: var(--app-color-surface-hover);
 }

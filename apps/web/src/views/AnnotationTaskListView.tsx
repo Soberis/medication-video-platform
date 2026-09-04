@@ -147,7 +147,7 @@ export default function AnnotationTaskListView() {
       setErrorMessage(
         error instanceof AnnotationTaskApiError
           ? error.message
-          : '暂时无法读取配药动作标注，请稍后重试。',
+          : '暂时无法读取标注任务，请稍后重试。',
       )
     } finally {
       if (activeRequest.current === request) activeRequest.current = null
@@ -163,12 +163,9 @@ export default function AnnotationTaskListView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑导航">
-        <span>配药动作标注</span>
-      </nav>
       <PageHeader
         titleId="annotation-task-title"
-        title="配药动作标注"
+        title="配药动作标注任务"
         description="在这里处理配药事件的动作标注；提交后由管理员复核。"
         actions={
           <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
@@ -176,7 +173,7 @@ export default function AnnotationTaskListView() {
           </Button>
         }
       />
-      {loadState === 'loading' ? <LoadingState>正在加载配药动作标注任务…</LoadingState> : null}
+      {loadState === 'loading' ? <LoadingState>正在加载标注任务…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadTasks()}>
           {errorMessage}
@@ -185,9 +182,7 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && progress ? (
         <section
           className="annotation-task-overview"
-          aria-label={
-            progress.scope === 'PROJECT' ? '项目配药动作标注进度' : '我的配药动作标注进度'
-          }
+          aria-label={progress.scope === 'PROJECT' ? '项目标注任务进度' : '我的标注任务进度'}
         >
           <strong>{progress.total} 个任务</strong>
           <span aria-hidden="true">·</span>
@@ -201,14 +196,10 @@ export default function AnnotationTaskListView() {
       {loadState === 'success' && items.length ? (
         <Section
           className="annotation-task-queue"
-          title="配药事件任务"
+          title="任务列表"
           titleId="annotation-task-queue-title"
         >
-          <div
-            className="annotation-task-list-surface"
-            role="list"
-            aria-label="配药动作标注任务列表"
-          >
+          <div className="annotation-task-list-surface" role="list" aria-label="标注任务列表">
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
               const taskSubject = `配药事件 ${shortId(captureGroupId)}`
@@ -454,7 +445,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有待处理的配药动作标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
+        <EmptyState description="当前没有待处理的标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
       ) : null}
     </>
   )

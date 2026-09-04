@@ -86,7 +86,7 @@ function uploadResultDescription(
     return `平台已确认 ${completedTaskCount} / ${totalTaskCount} 个视频；其余文件仍在处理。`
   }
   if (failedTaskCount === 0) {
-    return '所有视频都已由平台完成校验并确认；现在可以进入视频管理继续处理。'
+    return '所有视频都已由平台完成校验并确认；现在可以进入配药事件继续处理。'
   }
   if (completedTaskCount === 0) {
     return '本轮没有视频得到平台确认；请根据每个文件的原因重新选择后再上传。'
@@ -288,7 +288,7 @@ export default function LocalUploadView() {
               </Button>
               {selectedProjectId ? (
                 <Link className="text-link" to={paths.captureGroups(selectedProjectId)}>
-                  进入视频管理
+                  进入配药事件
                 </Link>
               ) : null}
             </div>

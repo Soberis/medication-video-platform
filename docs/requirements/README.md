@@ -6,7 +6,7 @@
 
 - [V1.28 配药视频数据管理平台需求基线（单一 CaptureGroup 路径与唯一手部检测导出）](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
 
-V1.28 是当前正式业务需求基线：项目只保留一个面向用户的“视频管理”入口，以配药事件（`CaptureGroup`）为工作对象；Local Upload 和 External Ingest 都进入同一事件路径，`N=1` 只是一路 `CameraStream` 视图。事件工作台统一承载媒体事实、逐视图质量、事件质量、唯一组任务、Revision、Review 和确定性 Cleaning；唯一公开导出是按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV，支持项目范围或单一 CaptureGroup 范围。旧事件资格 manifest 出口已从当前运行时、公开契约、Web 和合成工具删除；历史代码、迁移和文档只保留为审计参考。真实 UAT、生产和医院部署证据仍待完成。
+V1.28 是当前正式业务需求基线：项目只保留一个面向用户的“配药事件”入口，以配药事件（`CaptureGroup`）为工作对象；Local Upload 和 External Ingest 都进入同一事件路径，`N=1` 只是一路 `CameraStream` 视图。事件工作台统一承载媒体事实、逐视图质量、事件质量、唯一组任务、Revision、Review 和确定性 Cleaning；唯一公开导出是按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV，支持项目范围或单一 CaptureGroup 范围。旧事件资格 manifest 出口已从当前运行时、公开契约、Web 和合成工具删除；历史代码、迁移和文档只保留为审计参考。真实 UAT、生产和医院部署证据仍待完成。
 
 ## 前一正式版本
 

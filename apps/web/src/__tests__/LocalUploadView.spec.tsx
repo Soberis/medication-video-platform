@@ -173,8 +173,8 @@ describe('LocalUploadView', () => {
 
     expect(fileInput).not.toBeDisabled()
     expect(screen.getByText(/平台会按顺序分别上传/)).toBeInTheDocument()
-    const videoManagementLink = screen.getByRole('link', { name: '进入视频管理' })
-    expect(videoManagementLink).toHaveAttribute('href', paths.captureGroups(project.project_id))
+    const captureGroupLink = screen.getByRole('link', { name: '进入配药事件' })
+    expect(captureGroupLink).toHaveAttribute('href', paths.captureGroups(project.project_id))
     expect(screen.queryByRole('link', { name: '查看项目视频' })).not.toBeInTheDocument()
   })
 

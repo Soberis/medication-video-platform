@@ -254,10 +254,6 @@ export default function CaptureGroupDetailView() {
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
-          视频管理
-        </Link>
-        <span aria-hidden="true">/</span>
-        <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
           配药事件
         </Link>
         <span aria-hidden="true">/</span>
