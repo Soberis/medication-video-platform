@@ -22,62 +22,75 @@ import {
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
-interface CaptureGroupListRow {
-  group: CaptureGroupSummary
-  task: AnnotationTask | null
-}
-
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
+
+type AnnotationTaskReadState =
+  | { status: 'loading' }
+  | { status: 'success'; scope: 'PROJECT' | 'ASSIGNEE'; items: AnnotationTask[] }
+  | { status: 'error' }
+
+interface RequestToken {
+  controller: AbortController
+  generation: number
+}
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
   const { session } = useAuth()
-  const [rows, setRows] = useState<CaptureGroupListRow[]>([])
+  const [rows, setRows] = useState<CaptureGroupSummary[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [loadingMode, setLoadingMode] = useState<CaptureGroupListLoadingMode>('initial')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
-  const activeRequest = useRef<AbortController | null>(null)
-  const rowsRef = useRef<CaptureGroupListRow[]>([])
+  const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
+    status: 'loading',
+  })
+  const groupRequest = useRef<RequestToken | null>(null)
+  const taskRequest = useRef<RequestToken | null>(null)
+  const groupGeneration = useRef(0)
+  const taskGeneration = useRef(0)
+  const rowsRef = useRef<CaptureGroupSummary[]>([])
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
-      activeRequest.current?.abort()
-      const request = new AbortController()
-      activeRequest.current = request
+      groupRequest.current?.controller.abort()
+      const request: RequestToken = {
+        controller: new AbortController(),
+        generation: groupGeneration.current + 1,
+      }
+      groupGeneration.current = request.generation
+      groupRequest.current = request
       const requestMode: CaptureGroupListLoadingMode = append
         ? 'more'
         : rowsRef.current.length
           ? 'refresh'
           : 'initial'
+      if (requestMode === 'initial') {
+        setRows([])
+        setNextCursor(null)
+      }
       setLoadingMode(requestMode)
       setLoadState('loading')
       setErrorCode('')
       setErrorMessage('')
       try {
-        const groupList = await listCaptureGroups(projectId, cursor, request.signal)
-        if (request.signal.aborted || activeRequest.current !== request) return
-
-        // Human tasks are an optional inbox. A failed task read must not turn a
-        // healthy data-group/media read into an error or a blocked state.
-        const taskResult = await listAnnotationTasks(projectId, request.signal).catch(() => null)
-        if (request.signal.aborted || activeRequest.current !== request) return
-        const indexedTasks = taskResult?.items ?? []
-        const loadedRows = groupList.items.map(
-          (group): CaptureGroupListRow => ({
-            group,
-            task:
-              indexedTasks.find(
-                (candidate) => candidate.capture_group_id === group.capture_group_id,
-              ) ?? null,
-          }),
-        )
-        const existingGroupIds = new Set(rowsRef.current.map((row) => row.group.capture_group_id))
+        const groupList = await listCaptureGroups(projectId, cursor, request.controller.signal)
+        if (
+          request.controller.signal.aborted ||
+          groupRequest.current !== request ||
+          groupGeneration.current !== request.generation
+        ) {
+          return
+        }
+        const loadedRows = groupList.items
+        const existingGroupIds = new Set(rowsRef.current.map((row) => row.capture_group_id))
         const nextRows = append
           ? [
               ...rowsRef.current,
-              ...loadedRows.filter(({ group }) => !existingGroupIds.has(group.capture_group_id)),
+              ...loadedRows.filter(
+                ({ capture_group_id }) => !existingGroupIds.has(capture_group_id),
+              ),
             ]
           : loadedRows
         rowsRef.current = nextRows
@@ -85,7 +98,13 @@ export default function CaptureGroupListView() {
         setNextCursor(groupList.next_cursor)
         setLoadState('success')
       } catch (error) {
-        if (request.signal.aborted || activeRequest.current !== request) return
+        if (
+          request.controller.signal.aborted ||
+          groupRequest.current !== request ||
+          groupGeneration.current !== request.generation
+        ) {
+          return
+        }
         setLoadState('error')
         setErrorCode(
           error instanceof CaptureGroupApiError
@@ -94,8 +113,8 @@ export default function CaptureGroupListView() {
         )
         setErrorMessage('暂时无法读取数据组，请稍后重试。')
       } finally {
-        if (activeRequest.current === request) {
-          activeRequest.current = null
+        if (groupRequest.current === request) {
+          groupRequest.current = null
           setLoadingMode(null)
         }
       }
@@ -103,14 +122,62 @@ export default function CaptureGroupListView() {
     [projectId],
   )
 
+  const loadTasks = useCallback(async () => {
+    taskRequest.current?.controller.abort()
+    const request: RequestToken = {
+      controller: new AbortController(),
+      generation: taskGeneration.current + 1,
+    }
+    taskGeneration.current = request.generation
+    taskRequest.current = request
+    setTaskReadState({ status: 'loading' })
+
+    try {
+      const taskList = await listAnnotationTasks(projectId, request.controller.signal)
+      if (
+        request.controller.signal.aborted ||
+        taskRequest.current !== request ||
+        taskGeneration.current !== request.generation
+      ) {
+        return
+      }
+      setTaskReadState({
+        status: 'success',
+        scope: taskList.progress.scope,
+        items: taskList.items,
+      })
+    } catch {
+      if (
+        request.controller.signal.aborted ||
+        taskRequest.current !== request ||
+        taskGeneration.current !== request.generation
+      ) {
+        return
+      }
+      setTaskReadState({ status: 'error' })
+    } finally {
+      if (taskRequest.current === request) taskRequest.current = null
+    }
+  }, [projectId])
+
   useEffect(() => {
-    const timer = window.setTimeout(() => void loadGroups(), 0)
+    rowsRef.current = []
+    const timer = window.setTimeout(() => {
+      void loadGroups()
+      void loadTasks()
+    }, 0)
+
     return () => {
       window.clearTimeout(timer)
-      activeRequest.current?.abort()
+      groupGeneration.current += 1
+      taskGeneration.current += 1
+      groupRequest.current?.controller.abort()
+      taskRequest.current?.controller.abort()
+      groupRequest.current = null
+      taskRequest.current = null
       rowsRef.current = []
     }
-  }, [loadGroups])
+  }, [loadGroups, loadTasks])
 
   return (
     <>
@@ -165,11 +232,17 @@ export default function CaptureGroupListView() {
             </span>
           </div>
           <div className="capture-group-list" role="list" aria-label="数据组列表">
-            {rows.map(({ group, task }) => {
+            {rows.map((group) => {
               const identity = group.capture_group_key ?? shortId(group.capture_group_id)
               const identityLabel = `数据组 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
               const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
+              const task =
+                taskReadState.status === 'success'
+                  ? taskReadState.items.find(
+                      (candidate) => candidate.capture_group_id === group.capture_group_id,
+                    )
+                  : undefined
               const taskDestination = task ? captureGroupTaskDestination(task) : null
 
               return (
@@ -206,15 +279,45 @@ export default function CaptureGroupListView() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="visually-hidden">处理路径</dt>
+                      <dt className="visually-hidden">人工标签任务</dt>
                       <dd>
-                        {task ? (
-                          <StatusIndicator tone="information">已有人工标签任务</StatusIndicator>
+                        {taskReadState.status === 'loading' ? (
+                          <StatusIndicator ariaLive="polite" tone="information">
+                            人工任务读取中
+                          </StatusIndicator>
+                        ) : taskReadState.status === 'error' ? (
+                          <>
+                            <StatusIndicator ariaLive="polite" tone="warning">
+                              人工任务状态暂不可用
+                            </StatusIndicator>
+                            <Button
+                              type="link"
+                              size="small"
+                              aria-label="重试读取人工任务"
+                              onClick={() => void loadTasks()}
+                            >
+                              重试
+                            </Button>
+                          </>
+                        ) : task ? (
+                          <StatusIndicator tone="information">
+                            {taskReadState.scope === 'ASSIGNEE'
+                              ? '有分配给我的人工标签任务'
+                              : '有人工标签任务'}
+                          </StatusIndicator>
                         ) : (
                           <span className="capture-group-list-machine-path">
-                            MediaPipe machine evidence
+                            {taskReadState.scope === 'ASSIGNEE'
+                              ? '没有分配给我的人工标签任务'
+                              : '暂无人工标签任务'}
                           </span>
                         )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="visually-hidden">机器检测证据</dt>
+                      <dd className="capture-group-list-machine-path">
+                        MediaPipe machine evidence
                       </dd>
                     </div>
                     <div>
