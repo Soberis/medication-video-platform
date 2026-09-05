@@ -62,7 +62,7 @@ describe('CaptureGroup data-group list', () => {
     })
 
     const row = await screen.findByRole('listitem', { name: /human-label-group/ })
-    expect(row).toHaveTextContent('已有人工标签任务')
+    expect(row).toHaveTextContent('有人工标签任务')
     expect(within(row).getByRole('link', { name: /进入配药动作标注/ })).toHaveAttribute(
       'href',
       paths.captureGroupFocus(projectId, groupId, 'annotation'),

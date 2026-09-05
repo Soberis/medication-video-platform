@@ -145,7 +145,7 @@ function latestCandidateMock() {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   vi.mocked(getClipAsset).mockImplementation(async (_projectId, clipAssetId) =>
     clipAsset(clipAssetId),
   )
@@ -214,7 +214,7 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
     const { result } = renderHook(() => useCaptureGroupView(projectId, view(firstClipAssetId, 1)))
     await settleInitialView()
 
-    expect(result.current.candidateLiveStatus).toBe('处理中')
+    expect(result.current.candidateLiveStatus).toBe('等待检测')
     expect(latestCandidateMock()).toHaveBeenCalledTimes(1)
 
     await act(async () => {
@@ -256,7 +256,7 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(result.current.candidateLiveStatus).toBe('处理中')
+    expect(result.current.candidateLiveStatus).toBe('检测中')
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_000)
@@ -276,7 +276,7 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
 
       const { result } = renderHook(() => useCaptureGroupView(projectId, view(firstClipAssetId, 1)))
       await settleInitialView()
-      expect(result.current.candidateLiveStatus).toBe('处理中')
+      expect(result.current.candidateLiveStatus).toBe('检测中')
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4_000)
@@ -304,7 +304,7 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
       await vi.advanceTimersByTimeAsync(4_000)
     })
 
-    expect(result.current.candidateLiveStatus).toBe('失败')
+    expect(result.current.candidateLiveStatus).toBe('检测任务失败')
     expect(latestCandidateMock()).toHaveBeenCalledTimes(2)
 
     await act(async () => {
