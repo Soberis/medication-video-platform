@@ -227,7 +227,7 @@ export function CaptureGroupFocusedView({
                   <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
                     手部检测：{currentCandidateLiveStatus}
                   </StatusIndicator>
-                  <p>AI 证据仅供人工参考，不自动决定机位质量或事件准入。</p>
+                  <p>这是机器检测证据，不构成人工标签或数据质量结论。</p>
                   <p>{currentCandidateDescription}</p>
                   {candidateResponse?.job.run_summary ? (
                     <Descriptions

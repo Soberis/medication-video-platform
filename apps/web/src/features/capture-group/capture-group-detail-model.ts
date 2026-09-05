@@ -91,32 +91,38 @@ export function candidateDescription(
   response: HandPoseCandidateResponse | null,
 ) {
   if (state === 'loading') return '正在读取手部检测；这不会阻止人工查看或标注。'
-  if (state === 'error') return '手部检测暂时无法读取；这不会阻止人工流程。'
-  if (state === 'unavailable') return '当前没有可用的手部检测；这不是人工流程失败。'
+  if (state === 'error') return '检测结果读取失败；检测状态暂不可用，这不会阻止人工查看或标注。'
+  if (state === 'unavailable') return '暂无手部检测结果；当前暂不可用，这不会阻止人工查看或标注。'
   if (!response) return '仅在媒体入库完成后读取手部检测。'
   if (response.job.status === 'FAILED') {
-    return '手部检测失败；检测结果仅供人工参考，不作为正式标注或质量结论。'
+    const failureReason = response.job.run_summary?.failure_reason
+    return `检测任务失败${failureReason ? `；失败原因：${failureReason}` : ''}。这是机器检测证据，不构成人工标签或数据质量结论。`
   }
-  if (response.job.status === 'QUEUED' || response.job.status === 'RUNNING') {
-    return '手部检测处理中；检测结果仅供人工参考，不作为正式标注或质量结论。'
+  if (response.job.status === 'QUEUED')
+    return '等待检测；这是机器检测证据，不构成人工标签或数据质量结论。'
+  if (response.job.status === 'RUNNING')
+    return '检测中；这是机器检测证据，不构成人工标签或数据质量结论。'
+  if (response.job.hand_result === 'HAND_DETECTED') {
+    return '检测到手部；这是机器检测证据，不构成人工标签或数据质量结论。'
   }
   if (response.job.hand_result === 'NO_HAND_DETECTED') {
-    return '未检测到手部；这是检测事实，不阻止人工流程。检测结果仅供人工参考，不作为正式标注或质量结论。'
+    return '未检测到手部；这是机器检测证据，不构成人工标签或数据质量结论。'
   }
-  if (response.job.hand_result === 'UNKNOWN') {
-    return '检测结果未知；这是 AI 证据状态，不阻止人工流程。请人工判断视频是否可用。'
-  }
-  return `${response.candidates.length} 组手部关键点；检测结果仅供人工参考，不作为正式标注或质量结论。`
+  return '结果未知；这是机器检测证据，不构成人工标签或数据质量结论。'
 }
 
 export function candidateTone(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ): StatusIndicatorTone {
-  if (state === 'error' || response?.job.status === 'FAILED') return 'warning'
-  if (response?.job.hand_result === 'NO_HAND_DETECTED') return 'neutral'
-  if (response?.job.hand_result === 'UNKNOWN') return 'neutral'
-  if (state === 'success' && response?.job.status === 'SUCCEEDED') return 'success'
+  if (state === 'error') return 'warning'
+  if (state === 'unavailable') return 'information'
+  if (state !== 'success' || !response) return 'information'
+  if (response.job.status === 'FAILED') return 'warning'
+  if (response?.job.status === 'SUCCEEDED' && response.job.hand_result === 'HAND_DETECTED') {
+    return 'success'
+  }
+  if (response?.job.status === 'SUCCEEDED') return 'neutral'
   return 'information'
 }
 
@@ -124,27 +130,23 @@ export function candidateStatusLabel(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
-  if (response?.job.hand_result === 'NO_HAND_DETECTED') {
-    return '未检测到手部'
-  }
-  if (response?.job.status === 'FAILED' || state === 'error') return '失败'
-  return state === 'success' ? '已读取' : '未读取'
+  if (state === 'error') return '读取失败'
+  if (state === 'unavailable') return '暂不可用'
+  if (state === 'loading') return '读取中'
+  if (state !== 'success' || !response) return '未读取'
+  if (response.job.status === 'FAILED') return '检测任务失败'
+  if (response.job.status === 'QUEUED') return '等待检测'
+  if (response.job.status === 'RUNNING') return '检测中'
+  if (response.job.hand_result === 'HAND_DETECTED') return '已完成 · 检测到手部'
+  if (response.job.hand_result === 'NO_HAND_DETECTED') return '已完成 · 未检测到手部'
+  return '已完成 · 结果未知'
 }
 
 export function candidateLiveStatusLabel(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
-  if (state === 'error' || response?.job.status === 'FAILED') return '失败'
-  if (response?.job.status === 'QUEUED' || response?.job.status === 'RUNNING') return '处理中'
-  if (response?.job.hand_result === 'NO_HAND_DETECTED') return '已完成 · 未检测到手部'
-  if (response?.job.status === 'SUCCEEDED') {
-    if (response.job.hand_result === 'HAND_DETECTED') return '已完成 · 检测到手部'
-    return '已完成 · 结果未知'
-  }
-  if (state === 'unavailable') return '暂不可用'
-  if (state === 'loading') return '读取中'
-  return '未读取'
+  return candidateStatusLabel(state, response)
 }
 
 export function formatTaskStatus(task: AnnotationTask) {

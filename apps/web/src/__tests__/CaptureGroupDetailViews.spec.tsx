@@ -90,7 +90,7 @@ describe('CaptureGroup detail views', () => {
     const selector = await screen.findByRole('group', { name: '数据组机位选择' })
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看机位技术与辅助证据'))
-    expect(await screen.findByText('手部检测：失败')).toBeInTheDocument()
+    expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
   })
 
