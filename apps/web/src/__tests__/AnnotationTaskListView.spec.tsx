@@ -109,7 +109,7 @@ describe('annotation task list view', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/唯一配药事件任务/)).not.toBeInTheDocument()
     expect(
-      screen.getByText('仅显示当前项目已有的人工标签任务；提交后由有权限的人员复核。'),
+      screen.getByText('查看当前项目的标注任务；提交后由有权限的人员复核。'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
@@ -140,9 +140,7 @@ describe('annotation task list view', () => {
     stubTasks([], labelSchema)
     renderView()
 
-    const emptyState = await screen.findByText(
-      '当前没有人工标签任务。人工标签只在项目需要 human ground truth 时启用。',
-    )
+    const emptyState = await screen.findByText('当前没有标注任务。项目需要人工训练数据时才会启用。')
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
   })

@@ -185,7 +185,7 @@ describe('App', () => {
       'href',
       `/projects/${projectId}/capture-groups`,
     )
-    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).toBeInTheDocument()
   })
 
   it('marks the annotation task list as the active workspace navigation', () => {
@@ -198,7 +198,7 @@ describe('App', () => {
           children: [
             {
               path: 'projects/:projectId/annotation-tasks',
-              element: <div>人工标签收件箱页面</div>,
+              element: <div>标注任务页面</div>,
             },
           ],
         },
@@ -208,7 +208,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -268,7 +268,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '标注任务' })).not.toHaveAttribute(
       'aria-current',
     )
     expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(

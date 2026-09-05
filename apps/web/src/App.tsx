@@ -156,14 +156,14 @@ export default function AppShell() {
             </div>
             {projectId ? (
               <div className="sidebar-nav-group">
-                <p className="sidebar-nav-group-label">人工标签</p>
+                <p className="sidebar-nav-group-label">任务</p>
                 <NavLink
                   to={paths.annotationTasks(projectId)}
-                  aria-label="人工标签收件箱"
-                  title="人工标签收件箱"
+                  aria-label="标注任务"
+                  title="标注任务"
                 >
                   <ListChecks {...iconProps} />
-                  <span className="sidebar-label">人工标签收件箱</span>
+                  <span className="sidebar-label">标注任务</span>
                 </NavLink>
               </div>
             ) : null}

@@ -180,8 +180,8 @@ export default function AnnotationTaskListView() {
     <>
       <PageHeader
         titleId="annotation-task-title"
-        title="人工标签收件箱"
-        description="仅显示当前项目已有的人工标签任务；提交后由有权限的人员复核。"
+        title="标注任务"
+        description="查看当前项目的标注任务；提交后由有权限的人员复核。"
         actions={
           <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
             刷新
@@ -436,7 +436,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有人工标签任务。人工标签只在项目需要 human ground truth 时启用。" />
+        <EmptyState description="当前没有标注任务。项目需要人工训练数据时才会启用。" />
       ) : null}
     </>
   )
