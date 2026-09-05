@@ -252,12 +252,12 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       const remaining = new Date(grant.expires_at).getTime() - Date.now()
       if (!Number.isFinite(remaining) || remaining <= 0) {
         setPlaybackState('expired')
-        setPlaybackMessage('本次播放授权已到期，请重新获取后继续查看。')
+        setPlaybackMessage('播放链接已过期，点击“重新加载视频”继续。')
       } else {
         playbackExpiryTimer.current = setTimeout(() => {
           playbackExpiryTimer.current = null
           setPlaybackState('expired')
-          setPlaybackMessage('本次播放授权已到期，请重新获取后继续查看。')
+          setPlaybackMessage('播放链接已过期，点击“重新加载视频”继续。')
         }, remaining)
       }
     } catch (error) {
@@ -269,7 +269,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         return
       setPlaybackState('error')
       setPlaybackMessage(
-        error instanceof CatalogApiError ? error.message : '无法获取播放授权，请稍后重试。',
+        error instanceof CatalogApiError ? error.message : '视频暂时无法加载，请重试。',
       )
     } finally {
       if (playbackRequest.current === request) {
@@ -283,8 +283,8 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     ? selectedDetail
       ? selectedDetail.status === 'INGESTED'
         ? {
-            title: '媒体已入库，可按需播放',
-            description: '点击后开始播放；播放器只加载当前机位。',
+            title: '视频已就绪',
+            description: '点击“播放视频”查看画面。',
             type: 'success',
           }
         : selectedDetail.status === 'INGEST_FAILED'
@@ -338,7 +338,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     },
     onPlaybackError: () => {
       setPlaybackState('error')
-      setPlaybackMessage('视频加载失败，请重新获取播放授权后重试。')
+      setPlaybackMessage('视频加载失败，请点击“重新加载视频”重试。')
     },
   }
 }

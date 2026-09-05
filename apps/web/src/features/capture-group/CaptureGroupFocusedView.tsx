@@ -101,15 +101,11 @@ export function CaptureGroupFocusedView({
     >
       <header className="capture-group-focused-heading">
         <h2 id="capture-group-focused-title">
-          {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
+          {viewRows.length > 1 && selectedStream ? `相机 ${selectedStream.camera_number}` : '视频'}
         </h2>
-        {isPrimary || isSupporting ? (
+        {viewRows.length > 1 && (isPrimary || isSupporting) ? (
           <StatusIndicator tone="information">
-            {isPrimary
-              ? isPrimaryLocked
-                ? '已锁定'
-                : '主视图 · 时间基准'
-              : '参考视图 · 配药事件证据'}
+            {isPrimary ? (isPrimaryLocked ? '标注基准相机' : '标注时间基准') : '参考相机'}
           </StatusIndicator>
         ) : null}
       </header>
@@ -123,11 +119,7 @@ export function CaptureGroupFocusedView({
         />
       ) : null}
       {viewRows.length > 1 ? (
-        <div className="capture-group-compare-strip" role="group" aria-label="配药事件机位选择">
-          <div className="capture-group-compare-heading">
-            <span className="app-eyebrow">机位切换</span>
-            <span>选择一路机位查看当前视频；缺失机位保留在原编号位置。</span>
-          </div>
+        <div className="capture-group-compare-strip" role="group" aria-label="采集记录机位选择">
           <div className="capture-group-compare-list">
             {viewRows.map((view) => {
               const stream = view.stream
@@ -202,10 +194,15 @@ export function CaptureGroupFocusedView({
         }}
       />
       {selectedDetail || selectedStream ? (
+        <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
+          手部检测：{currentCandidateLiveStatus}
+        </StatusIndicator>
+      ) : null}
+      {selectedDetail || selectedStream ? (
         <details className="capture-group-focused-details">
           <summary>查看检测与媒体信息</summary>
           <div className="capture-group-focused-details-content">
-            {selectedSync ? (
+            {selectedSync && viewRows.length > 1 ? (
               <div className="capture-group-sync-note capture-group-stack" role="status">
                 <Clock3 aria-hidden="true" size={16} strokeWidth={1.8} />
                 <div>
@@ -217,10 +214,6 @@ export function CaptureGroupFocusedView({
             <div className="capture-group-focused-facts">
               <Section title="手部检测" titleId="capture-group-candidate-title">
                 <div className="capture-group-candidate-facts capture-group-stack">
-                  <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
-                    手部检测：{currentCandidateLiveStatus}
-                  </StatusIndicator>
-                  <p>这是机器检测证据，不构成人工标签或数据质量结论。</p>
                   <p>{currentCandidateDescription}</p>
                   {candidateResponse?.job.run_summary ? (
                     <Descriptions

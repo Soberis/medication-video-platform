@@ -72,19 +72,17 @@ export function CaptureGroupInspector({
       aria-labelledby="capture-group-inspector-title"
     >
       <header className="capture-group-inspector-heading">
-        <p className="app-eyebrow">渐进详情</p>
-        <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
-        <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
+        <h2 id="capture-group-inspector-title">更多信息</h2>
       </header>
 
       <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>
         <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
           <MetadataList
-            ariaLabel="配药事件接收事实"
+            ariaLabel="采集记录接收事实"
             items={[
               {
                 id: 'group-id',
-                label: '配药事件 ID',
+                label: '采集记录 ID',
                 value: <code>{group.capture_group_id}</code>,
               },
               { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
@@ -202,7 +200,7 @@ export function CaptureGroupInspector({
           summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
         >
           <InspectorSection title="人工标签质量事实" titleId="capture-group-quality-facts">
-            <p className="form-hint">人工记录的事件质量结论与自动检测事实分开保存。</p>
+            <p className="form-hint">人工记录的人工标签质量结论与自动检测事实分开保存。</p>
             <div className="capture-group-inspector-status">
               <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
                 {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
@@ -217,15 +215,15 @@ export function CaptureGroupInspector({
             {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
             {groupQualityVisibility === 'unavailable' ? (
               <div className="capture-group-inspector-status" role="status">
-                <strong>事件质量暂不可用</strong>
-                <span>事件质量暂不可用，请刷新后重试</span>
+                <strong>人工标签质量暂不可用</strong>
+                <span>人工标签质量暂不可用，请刷新后重试</span>
               </div>
             ) : null}
             {groupQualityVisibility === 'forbidden' ? (
               <div className="capture-group-inspector-status" role="status">
-                <strong>事件质量无权查看</strong>
-                <span>事件质量按当前权限不可见</span>
-                <span>当前账号不能读取或修改事件质量。</span>
+                <strong>人工标签质量无权查看</strong>
+                <span>人工标签质量按当前权限不可见</span>
+                <span>当前账号不能读取或修改人工标签质量。</span>
               </div>
             ) : null}
             {groupQuality?.confirmed_view_set ? (
@@ -319,10 +317,10 @@ export function CaptureGroupInspector({
                   {review?.review_note ? <p>复核意见：{review.review_note}</p> : null}
                   {cleaning ? (
                     <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-                      标签适用性检查 · {cleaningLabel(cleaning.outcome)}
+                      标注检查 · {cleaningLabel(cleaning.outcome)}
                     </StatusIndicator>
                   ) : (
-                    <span>尚无标签适用性检查结果。</span>
+                    <span>尚无标注检查结果。</span>
                   )}
                 </div>
               ) : (
@@ -332,7 +330,7 @@ export function CaptureGroupInspector({
                 className="text-link"
                 to={paths.captureGroupFocus(projectId, captureGroupId, taskFocus)}
               >
-                打开配药事件人工标签任务上下文
+                打开采集记录人工标签任务上下文
               </Link>
             </>
           </InspectorSection>

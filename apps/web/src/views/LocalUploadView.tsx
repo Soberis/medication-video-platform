@@ -20,13 +20,13 @@ import { Section } from '@/components/workspace/Section'
 import { formatBytes } from '@/features/catalog/catalog-presentation'
 
 const phaseLabels: Record<LocalUploadPhase, string> = {
-  HASHING: '正在计算文件摘要',
+  HASHING: '正在计算摘要',
   INITIALIZING: '正在创建上传批次',
-  REGISTERING: '正在登记视频文件',
-  UPLOADING: '正在传输视频分片',
-  VERIFYING: '平台正在校验文件',
-  ASSEMBLING: '正在建立单机位配药事件记录',
-  COMPLETED: '平台已确认上传完成',
+  REGISTERING: '正在登记视频',
+  UPLOADING: '正在上传视频分片',
+  VERIFYING: '正在校验视频',
+  ASSEMBLING: '正在建立采集记录',
+  COMPLETED: '上传已完成',
 }
 function taskPercent(task: LocalUploadTask) {
   const progress = task.progress
@@ -40,13 +40,11 @@ function taskPercent(task: LocalUploadTask) {
 function taskDescription(task: LocalUploadTask) {
   if (task.status === 'QUEUED') return '等待前一个视频处理完成。'
   if (task.status === 'FAILED') {
-    const message = task.errorMessage ?? '本轮处理未完成，请检查网络和本地服务后重试。'
+    const message = task.errorMessage ?? '上传未完成，请检查网络后重试。'
     return message.includes('重新选择') ? message : `${message} 请重新选择该文件后开始新一轮上传。`
   }
   if (task.status === 'COMPLETED') {
-    return task.captureSessionId
-      ? '平台已确认上传完成并建立配药事件；可直接进入事件工作台继续处理。'
-      : '平台已确认上传完成，并建立配药事件。'
+    return task.captureSessionId ? '上传已完成，已建立采集记录；可查看视频。' : '上传已完成。'
   }
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
@@ -66,8 +64,8 @@ function taskProgressLabel(task: LocalUploadTask) {
   if (!progress) return '准备中'
   if (progress.phase === 'HASHING') return `摘要已处理 ${taskPercent(task)}%`
   if (progress.phase === 'UPLOADING') return `已传输 ${taskPercent(task)}%`
-  if (progress.phase === 'VERIFYING') return '传输已完成，平台校验中'
-  if (progress.phase === 'ASSEMBLING') return '校验通过，正在建立记录'
+  if (progress.phase === 'VERIFYING') return '上传完成，平台校验中'
+  if (progress.phase === 'ASSEMBLING') return '校验通过，正在建立采集记录'
   return phaseLabels[progress.phase]
 }
 
@@ -83,15 +81,15 @@ function uploadResultDescription(
   totalTaskCount: number,
 ) {
   if (uploadState === 'uploading') {
-    return `平台已确认 ${completedTaskCount} / ${totalTaskCount} 个视频；其余文件仍在处理。`
+    return `平台已确认 ${completedTaskCount} / ${totalTaskCount} 个视频；其余仍在处理。`
   }
   if (failedTaskCount === 0) {
-    return '所有视频都已由平台完成校验并确认；现在可以进入配药事件继续处理。'
+    return '所有视频已确认，采集记录已建立；可查看视频。'
   }
   if (completedTaskCount === 0) {
-    return '本轮没有视频得到平台确认；请根据每个文件的原因重新选择后再上传。'
+    return '本轮没有确认成功的视频；请重新选择后上传。'
   }
-  return `平台已确认 ${completedTaskCount} 个视频，${failedTaskCount} 个文件需要重新选择后再上传。`
+  return `平台已确认 ${completedTaskCount} 个视频，${failedTaskCount} 个需重新选择后上传。`
 }
 
 export default function LocalUploadView() {
@@ -192,10 +190,9 @@ export default function LocalUploadView() {
   return (
     <>
       <PageHeader
-        eyebrow="平台本地上传"
         titleId="local-upload-title"
-        title="选择视频并上传"
-        description="每个视频单独上传并建立可追踪记录；平台不会根据文件名猜测多机位关系。"
+        title="上传视频"
+        description="选择项目和视频，开始上传。"
         actions={
           <Button
             loading={projectLoadState === 'loading'}
@@ -218,7 +215,7 @@ export default function LocalUploadView() {
       {projectLoadState !== 'success' || projects.length > 0 ? (
         <Section
           className="local-upload-card form-surface working-surface"
-          title="上传准备"
+          title="选择项目和视频"
           titleId="local-upload-preparation-title"
         >
           <form
@@ -244,7 +241,7 @@ export default function LocalUploadView() {
               />
             </div>
             <div className="local-upload-field local-upload-files-field">
-              <label htmlFor="local-upload-files">本机视频</label>
+              <label htmlFor="local-upload-files">视频文件</label>
               <input
                 id="local-upload-files"
                 className="local-file-input"
@@ -256,9 +253,7 @@ export default function LocalUploadView() {
                 onChange={selectFiles}
               />
               <p id="local-upload-files-hint" className="form-hint">
-                {selectedProjectId
-                  ? '可一次选择多个视频；平台会按顺序分别上传，避免把多个视频误组装为同一次拍摄。'
-                  : '请先选择所属项目，再选择本机视频。'}
+                {selectedProjectId ? '可选择多个视频，平台会分别上传。' : '请先选择项目。'}
               </p>
             </div>
             {selectedFiles.length > 0 && tasks.length === 0 ? (
@@ -266,12 +261,12 @@ export default function LocalUploadView() {
                 <p id="local-upload-selected-files" className="selected-file-count" role="status">
                   已选择 {selectedFiles.length} 个视频
                 </p>
-                <ul className="selected-file-list" aria-label="已选择视频">
+                <ul className="selected-file-list" aria-label="已选视频">
                   {selectedFiles.map((file) => (
                     <li key={`${file.name}:${file.size}:${file.lastModified}`}>
                       <strong>{file.name}</strong>
                       <span>
-                        {file.type || '视频文件'} · {formatBytes(file.size)}
+                        {file.type || '视频'} · {formatBytes(file.size)}
                       </span>
                     </li>
                   ))}
@@ -286,11 +281,6 @@ export default function LocalUploadView() {
                     ? '重新选择视频后上传'
                     : `开始上传${selectedFiles.length > 1 ? `（${selectedFiles.length} 个视频）` : ''}`}
               </Button>
-              {selectedProjectId ? (
-                <Link className="text-link" to={paths.captureGroups(selectedProjectId)}>
-                  进入配药事件
-                </Link>
-              ) : null}
             </div>
           </form>
         </Section>
@@ -320,9 +310,7 @@ export default function LocalUploadView() {
               tasks.length,
             )}
           </p>
-          <p className="section-description">
-            传输进度只代表浏览器已发送的字节；只有平台完成校验并建立记录后，文件才会标记为“已确认完成”。
-          </p>
+          <p className="section-description">进度仅表示已传输字节；完成以平台校验结果为准。</p>
           {tasks.map((task) => (
             <article
               key={task.id}
@@ -336,7 +324,7 @@ export default function LocalUploadView() {
                       ? '平台已确认'
                       : task.status === 'FAILED'
                         ? '需要处理'
-                        : '上传流程'}
+                        : '处理中'}
                   </p>
                   <h3 id={`local-upload-task-${task.id}-title`}>{task.file.name}</h3>
                 </div>
@@ -364,7 +352,7 @@ export default function LocalUploadView() {
               <p className="task-description">{taskDescription(task)}</p>
               {task.progress?.batchId || task.captureSessionId ? (
                 <details className="upload-technical-details">
-                  <summary>查看技术信息</summary>
+                  <summary>技术信息</summary>
                   <MetadataList
                     items={[
                       ...(task.progress?.batchId
@@ -380,7 +368,7 @@ export default function LocalUploadView() {
                         ? [
                             {
                               id: 'capture-session-id',
-                              label: '配药事件 ID',
+                              label: '采集记录 ID',
                               value: <code>{task.captureSessionId}</code>,
                             },
                           ]
@@ -396,7 +384,7 @@ export default function LocalUploadView() {
                       className="text-link"
                       to={paths.captureGroup(task.projectId, task.captureSessionId)}
                     >
-                      打开配药事件
+                      打开视频
                     </Link>
                   ) : null}
                   {task.status === 'FAILED' && task.progress?.batchId ? (

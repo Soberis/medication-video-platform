@@ -62,7 +62,7 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
   await expect(taskRows.nth(0)).toHaveAccessibleName(/待标注/)
   await expect(taskRows.nth(1)).toHaveAccessibleName(/已完成/)
 
-  const primaryAction = taskRows.nth(0).getByRole('link', { name: /进入配药事件.*标注/ })
+  const primaryAction = taskRows.nth(0).getByRole('link', { name: /进入视频.*标注/ })
   await primaryAction.focus()
   await expect(primaryAction).toBeFocused()
 
@@ -101,12 +101,12 @@ test('Local Upload — load and select files', async ({ page }) => {
   })
 
   await page.goto('/uploads/new')
-  await expect(page.getByRole('heading', { name: '选择视频并上传' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '上传视频' })).toBeVisible()
   const projectSelect = page.getByRole('combobox', { name: '所属项目' })
   await projectSelect.click()
   await projectSelect.press('ArrowDown')
   await projectSelect.press('Enter')
-  await page.getByLabel('本机视频').setInputFiles({
+  await page.getByLabel('视频文件').setInputFiles({
     name: 'synthetic-camera-1.mp4',
     mimeType: 'video/mp4',
     buffer: Buffer.from('synthetic-video'),

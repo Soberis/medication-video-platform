@@ -1,7 +1,7 @@
 import { Button } from 'antd'
 import { ArrowRight, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
@@ -20,8 +20,8 @@ import {
   receiptTone,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
-import { HumanAnnotationExportButton } from '@/features/capture-group/HumanAnnotationExportButton'
-import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
+import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
+import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
 
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
 
@@ -37,6 +37,7 @@ interface RequestToken {
 
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
+  const navigate = useNavigate()
   const { session } = useAuth()
   const [rows, setRows] = useState<CaptureGroupSummary[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -112,7 +113,7 @@ export default function CaptureGroupListView() {
             ? error.errorCode
             : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
         )
-        setErrorMessage('暂时无法读取配药事件，请稍后重试。')
+        setErrorMessage('暂时无法读取采集记录，请稍后重试。')
       } finally {
         if (groupRequest.current === request) {
           groupRequest.current = null
@@ -185,22 +186,34 @@ export default function CaptureGroupListView() {
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
-        title="配药事件"
-        description="按配药事件查看接收事实、视频资产、Media Probe 与 MediaPipe 检测证据。"
+        title="视频"
+        description="查看视频、标注动作，导出训练所需数据。同一次采集的多相机视频保存在一起。"
         actions={
           <>
-            {session?.role === 'ADMIN' &&
-            taskReadState.status === 'success' &&
-            taskReadState.items.some(isHumanAnnotationExportReady) ? (
-              <HumanAnnotationExportButton projectId={projectId} />
+            {session?.role === 'ADMIN' ? (
+              <>
+                <Button type="primary" onClick={() => void navigate(paths.localUpload)}>
+                  上传视频
+                </Button>
+                <ExportDataMenu
+                  key={projectId}
+                  projectId={projectId}
+                  humanReady={
+                    taskReadState.status === 'success' &&
+                    taskReadState.items.some(isHumanAnnotationExportReady)
+                  }
+                />
+              </>
             ) : null}
-            {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
             <Button
               type="text"
               size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={loadingMode === 'refresh'}
-              onClick={() => void loadGroups()}
+              onClick={() => {
+                void loadGroups()
+                void loadTasks()
+              }}
             >
               刷新
             </Button>
@@ -208,7 +221,7 @@ export default function CaptureGroupListView() {
         }
       />
       {loadState === 'loading' && !rows.length ? (
-        <LoadingState>正在读取配药事件…</LoadingState>
+        <LoadingState>正在读取采集记录…</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadGroups()}>
@@ -219,11 +232,9 @@ export default function CaptureGroupListView() {
         <EmptyState
           description={
             <div>
-              <strong>还没有配药事件</strong>
+              <strong>还没有视频</strong>
               <br />
-              完成明确归组的接收记录后，配药事件会显示在这里。
-              <br />
-              已有独立视频不会根据文件名、上传顺序或拍摄时间自动归组。
+              上传视频后，即可查看检测结果并添加标注。
             </div>
           }
         >
@@ -231,16 +242,16 @@ export default function CaptureGroupListView() {
         </EmptyState>
       ) : null}
       {rows.length ? (
-        <section className="capture-group-list-surface" aria-label="配药事件结果">
+        <section className="capture-group-list-surface" aria-label="采集记录结果">
           <div className="capture-group-list-meta">
             <span className="capture-group-list-count">
-              {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
+              {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
             </span>
           </div>
-          <div className="capture-group-list" role="list" aria-label="配药事件列表">
+          <div className="capture-group-list" role="list" aria-label="采集记录列表">
             {rows.map((group) => {
               const identity = group.capture_group_key ?? shortId(group.capture_group_id)
-              const identityLabel = `配药事件 · ${identity}`
+              const identityLabel = `采集记录 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
               const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
               const task =
@@ -305,9 +316,7 @@ export default function CaptureGroupListView() {
                           </>
                         ) : task ? (
                           <StatusIndicator tone="information">
-                            {taskReadState.scope === 'ASSIGNEE'
-                              ? '有分配给我的人工标签任务'
-                              : '有人工标签任务'}
+                            {formatTaskStatus(task)}
                           </StatusIndicator>
                         ) : (
                           <span className="capture-group-list-machine-path">
@@ -318,26 +327,14 @@ export default function CaptureGroupListView() {
                         )}
                       </dd>
                     </div>
-                    <div>
-                      <dt className="visually-hidden">机器检测证据</dt>
-                      <dd className="capture-group-list-machine-path">
-                        MediaPipe machine evidence
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="visually-hidden">事实入口</dt>
-                      <dd className="capture-group-list-evidence-hint">
-                        Media Probe · hand-landmarks.v1
-                      </dd>
-                    </div>
                   </dl>
                   <footer className="capture-group-list-row-footer">
                     <Link
                       className="capture-group-list-open"
-                      aria-label={`查看配药事件：${identityLabel}`}
+                      aria-label={`查看视频：${identityLabel}`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
-                      查看配药事件 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                      查看视频 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
                   </footer>
                 </div>

@@ -6,7 +6,7 @@ export const oneCameraGroupId = '60000000-0000-4000-8000-000000000002'
 export const multiCameraGroupId = '60000000-0000-4000-8000-000000000003'
 export const completedGroupId = '60000000-0000-4000-8000-000000000004'
 
-export type CaptureGroupScenario = 'list' | 'n1-active' | 'n2-active' | 'completed'
+export type CaptureGroupScenario = 'list' | 'n1-active' | 'n2-active' | 'completed' | 'unassigned'
 
 type CameraStream = {
   camera_stream_id: string
@@ -299,14 +299,14 @@ function buildScenario(scenario: CaptureGroupScenario): MockData {
   }
 
   const group = createGroup(
-    scenario === 'n1-active'
+    scenario === 'n1-active' || scenario === 'unassigned'
       ? oneCameraGroupId
       : scenario === 'n2-active'
         ? multiCameraGroupId
         : completedGroupId,
-    scenario === 'n1-active' ? [1] : [1, 2],
-    scenario === 'n1-active' ? [1] : [1, 2],
-    scenario === 'n1-active'
+    scenario === 'n1-active' || scenario === 'unassigned' ? [1] : [1, 2],
+    scenario === 'n1-active' || scenario === 'unassigned' ? [1] : [1, 2],
+    scenario === 'n1-active' || scenario === 'unassigned'
       ? '事件-2026-N1'
       : scenario === 'n2-active'
         ? '事件-2026-N2'
@@ -317,7 +317,10 @@ function buildScenario(scenario: CaptureGroupScenario): MockData {
     group,
     groups: [],
     qualities: new Map([[group.capture_group_id, quality]]),
-    tasks: [createTask(group, scenario === 'completed' ? 'COMPLETED' : 'ASSIGNED')],
+    tasks:
+      scenario === 'unassigned'
+        ? []
+        : [createTask(group, scenario === 'completed' ? 'COMPLETED' : 'ASSIGNED')],
     candidateStatus: scenario === 'completed' ? 'SUCCEEDED' : 'RUNNING',
   }
 }

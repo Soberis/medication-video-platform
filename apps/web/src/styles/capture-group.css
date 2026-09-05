@@ -3,6 +3,23 @@
   gap: var(--app-space-16);
 }
 
+.capture-group-export-options {
+  display: grid;
+  gap: var(--app-space-16);
+  max-width: 320px;
+}
+
+.capture-group-export-options section + section {
+  border-top: 1px solid var(--app-color-border-subtle);
+  padding-top: var(--app-space-16);
+}
+
+.capture-group-export-options p {
+  color: var(--app-color-foreground-muted);
+  margin: var(--app-space-8) 0;
+  overflow-wrap: anywhere;
+}
+
 .capture-group-header-status {
   display: flex;
   align-items: center;
@@ -569,7 +586,8 @@
   font-size: var(--app-font-size-helper);
 }
 
-.capture-group-quality-boundary span {
+.capture-group-quality-boundary > span,
+.capture-group-quality-boundary > div > span {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   line-height: var(--app-line-height-body);
@@ -595,7 +613,7 @@
   border-bottom: 1px solid var(--app-color-border-subtle);
 }
 
-.capture-group-primary-view-control > div {
+.capture-group-primary-view-control > div:first-child {
   display: grid;
   gap: var(--app-space-4);
   min-width: 0;
@@ -855,8 +873,10 @@
   align-items: start;
 }
 
-.capture-group-inspector-heading > p {
+.capture-group-inspector-heading h2 {
   margin: 0;
+  font-size: var(--app-font-size-section-title);
+  font-weight: var(--app-font-weight-semibold);
 }
 
 .capture-group-progressive-detail {
@@ -1251,11 +1271,9 @@
 .capture-group-list-row {
   display: grid;
   grid-template-areas:
-    'header'
-    'current'
-    'facts'
-    'footer';
-  grid-template-columns: minmax(0, 1fr);
+    'header header'
+    'facts footer';
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--app-space-12);
   padding: var(--app-space-12) 0;
@@ -1428,15 +1446,15 @@
 @media (max-width: 1100px) {
   .capture-group-workspace {
     grid-template-areas:
-      'action'
-      'video';
+      'video'
+      'action';
     grid-template-columns: minmax(0, 1fr);
   }
 
   .capture-group-workspace[data-stage='ANNOTATION'] {
     grid-template-areas:
-      'action'
-      'video';
+      'video'
+      'action';
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1452,6 +1470,11 @@
 }
 
 @media (max-width: 720px) {
+  .capture-group-list-row {
+    grid-template-areas: 'header' 'facts' 'footer';
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .capture-group-quality-boundary,
   .capture-group-review-evidence-grid,
   .capture-group-cleaning-evidence-grid {

@@ -155,10 +155,10 @@ export function CaptureGroupQualityPanel({
       )
       const refreshed = await onRefresh()
       void (refreshed
-        ? message.success('事件质量已记录，现在可以按需开始人工动作标注。')
-        : message.warning('事件质量已记录，但最新事实暂未刷新；请手动刷新确认。'))
+        ? message.success('整体质量已记录，现在可以按需开始标注。')
+        : message.warning('整体质量已记录，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : '事件质量暂未保存，请稍后重试。')
+      void message.error(error instanceof Error ? error.message : '整体质量暂未保存，请稍后重试。')
     } finally {
       setSaving(null)
     }
@@ -187,134 +187,153 @@ export function CaptureGroupQualityPanel({
     <Section
       className="capture-group-human-label-setup"
       id="capture-group-human-label-setup"
-      title="人工标注准备"
+      title="人工标注"
       titleId="capture-group-human-label-setup-title"
-      actions={<span className="capture-group-section-note">完成质量确认后再开始</span>}
     >
-      <p className="form-hint">先确认视频质量和事件质量；人工动作标注是可选步骤。</p>
-      {selectedStream && selectedDetail ? (
-        <QualityReviewCard
-          assetStatus={selectedDetail.status}
-          canReview={selectedDetail.status === 'INGESTED'}
-          errorCode={viewQualityState === 'error' ? 'VIEW_QUALITY_REQUEST_FAILED' : ''}
-          errorMessage={viewQualityError || '当前机位质量暂时无法读取。'}
-          isSaving={saving === 'view'}
-          loadState={viewQualityState}
-          review={selectedReview}
-          selectedDecision={viewDecision}
-          selectedReason={viewReason}
-          onSave={() => void saveViewQuality()}
-          onSelectionChange={(decision, reason) => {
-            setViewDecision(decision)
-            setViewReason(reason)
-          }}
-        />
-      ) : (
-        <p className="form-hint">选择一路已接收机位后记录机位质量。</p>
-      )}
+      <p className="form-hint">需要动作标签时，先检查视频是否适合标注。手部关键点可独立导出。</p>
+      <details className="capture-group-progressive-detail">
+        <summary>标注前检查</summary>
+        <div className="capture-group-progressive-detail-content">
+          {selectedStream && selectedDetail ? (
+            <QualityReviewCard
+              assetStatus={selectedDetail.status}
+              canReview={selectedDetail.status === 'INGESTED'}
+              errorCode={viewQualityState === 'error' ? 'VIEW_QUALITY_REQUEST_FAILED' : ''}
+              errorMessage={viewQualityError || '当前机位质量暂时无法读取。'}
+              isSaving={saving === 'view'}
+              loadState={viewQualityState}
+              review={selectedReview}
+              selectedDecision={viewDecision}
+              selectedReason={viewReason}
+              onSave={() => void saveViewQuality()}
+              onSelectionChange={(decision, reason) => {
+                setViewDecision(decision)
+                setViewReason(reason)
+              }}
+            />
+          ) : (
+            <p className="form-hint">选择一路已接收机位后记录机位质量。</p>
+          )}
 
-      <InspectorSection
-        id="capture-group-group-quality"
-        title="事件质量"
-        titleId="capture-group-quality-inspector"
-      >
-        <div className="capture-group-inspector-status">
-          <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
-            {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-          </StatusIndicator>
-          {groupQuality?.reviewer_actor_id ? (
-            <span>记录人：{groupQuality.reviewer_actor_id}</span>
-          ) : null}
-        </div>
-        {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
-        {groupQualityVisibility === 'loading' ? (
-          <p className="form-hint" role="status">
-            正在读取事件质量…
-          </p>
-        ) : null}
-        {groupQualityVisibility === 'forbidden' ? (
-          <Alert
-            type="warning"
-            showIcon
-            title="事件质量无权查看"
-            description="当前账号不能读取或修改事件质量。"
-          />
-        ) : null}
-        {groupQualityVisibility === 'unavailable' ? (
-          <Alert type="warning" showIcon title="事件质量暂不可用" description="请刷新后重试。" />
-        ) : null}
-        {qualityReadable ? (
-          <>
-            {receiving ? (
+          <InspectorSection
+            id="capture-group-group-quality"
+            title="整体质量"
+            titleId="capture-group-quality-inspector"
+          >
+            <div className="capture-group-inspector-status">
+              <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+                {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
+              </StatusIndicator>
+              {groupQuality?.reviewer_actor_id ? (
+                <span>记录人：{groupQuality.reviewer_actor_id}</span>
+              ) : null}
+            </div>
+            {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
+            {groupQualityVisibility === 'loading' ? (
+              <p className="form-hint" role="status">
+                正在读取整体质量…
+              </p>
+            ) : null}
+            {groupQualityVisibility === 'forbidden' ? (
               <Alert
-                type="info"
+                type="warning"
                 showIcon
-                title="接收仍在进行中"
-                description="服务器当前只接受“需复核”，结束接收后才能提交准入结论。"
+                title="整体质量无权查看"
+                description="当前账号不能读取或修改整体质量。"
               />
             ) : null}
-            <label className="capture-group-decision-field">
-              <span>事件质量结论</span>
-              <Select
-                aria-label="事件质量结论"
-                value={groupDecision}
-                options={[
-                  { value: 'QUALIFIED', label: groupQualityLabels.QUALIFIED, disabled: receiving },
-                  {
-                    value: 'QUALIFIED_WITH_EXCLUSIONS',
-                    label: groupQualityLabels.QUALIFIED_WITH_EXCLUSIONS,
-                    disabled: receiving,
-                  },
-                  { value: 'NEEDS_REVIEW', label: groupQualityLabels.NEEDS_REVIEW },
-                  { value: 'REJECTED', label: groupQualityLabels.REJECTED, disabled: receiving },
-                ]}
-                onChange={(value) => setGroupDecision(value as CaptureGroupQualityCommandResult)}
+            {groupQualityVisibility === 'unavailable' ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="整体质量暂不可用"
+                description="请刷新后重试。"
               />
-            </label>
-            <label className="capture-group-decision-field">
-              <span>结论理由</span>
-              <Input.TextArea
-                value={groupReason}
-                maxLength={1000}
-                autoSize={{ minRows: 2, maxRows: 4 }}
-                onChange={(event) => setGroupReason(event.target.value)}
-              />
-            </label>
+            ) : null}
+            {qualityReadable ? (
+              <>
+                {receiving ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    title="接收仍在进行中"
+                    description="服务器当前只接受“需复核”；结束接收后才能提交最终整体质量结论。"
+                  />
+                ) : null}
+                <label className="capture-group-decision-field">
+                  <span>整体质量结论</span>
+                  <Select
+                    aria-label="整体质量结论"
+                    value={groupDecision}
+                    options={[
+                      {
+                        value: 'QUALIFIED',
+                        label: groupQualityLabels.QUALIFIED,
+                        disabled: receiving,
+                      },
+                      {
+                        value: 'QUALIFIED_WITH_EXCLUSIONS',
+                        label: groupQualityLabels.QUALIFIED_WITH_EXCLUSIONS,
+                        disabled: receiving,
+                      },
+                      { value: 'NEEDS_REVIEW', label: groupQualityLabels.NEEDS_REVIEW },
+                      {
+                        value: 'REJECTED',
+                        label: groupQualityLabels.REJECTED,
+                        disabled: receiving,
+                      },
+                    ]}
+                    onChange={(value) =>
+                      setGroupDecision(value as CaptureGroupQualityCommandResult)
+                    }
+                  />
+                </label>
+                <label className="capture-group-decision-field">
+                  <span>结论理由</span>
+                  <Input.TextArea
+                    value={groupReason}
+                    maxLength={1000}
+                    autoSize={{ minRows: 2, maxRows: 4 }}
+                    onChange={(event) => setGroupReason(event.target.value)}
+                  />
+                </label>
+                <Button
+                  type="primary"
+                  loading={saving === 'group'}
+                  disabled={
+                    !groupReason.trim() ||
+                    Boolean(saving) ||
+                    (receiving && groupDecision !== 'NEEDS_REVIEW')
+                  }
+                  onClick={() => void saveGroupQuality()}
+                >
+                  保存整体质量
+                </Button>
+              </>
+            ) : null}
+          </InspectorSection>
+        </div>
+      </details>
+      {currentGroupQualityAdmitting(groupQuality) ? (
+        <div className="capture-group-quality-boundary" role="status">
+          <div>
+            <strong>视频已满足标注条件</strong>
+            <span>开始后在本页添加动作与时间段。</span>
+          </div>
+          {canAssignHumanLabel ? (
             <Button
               type="primary"
-              loading={saving === 'group'}
-              disabled={
-                !groupReason.trim() ||
-                Boolean(saving) ||
-                (receiving && groupDecision !== 'NEEDS_REVIEW')
-              }
-              onClick={() => void saveGroupQuality()}
+              loading={saving === 'task'}
+              disabled={Boolean(saving) || !assigneeActorId.trim()}
+              onClick={() => void assignHumanLabelTask()}
             >
-              保存事件质量
+              开始标注
             </Button>
-          </>
-        ) : null}
-        {currentGroupQualityAdmitting(groupQuality) ? (
-          <div className="capture-group-quality-boundary" role="status">
-            <div>
-              <strong>现在可以开始人工动作标注</strong>
-              <span>点击后创建任务并打开时间段标注工作台。</span>
-            </div>
-            {canAssignHumanLabel ? (
-              <Button
-                type="primary"
-                loading={saving === 'task'}
-                disabled={Boolean(saving) || !assigneeActorId.trim()}
-                onClick={() => void assignHumanLabelTask()}
-              >
-                开始人工动作标注
-              </Button>
-            ) : (
-              <span>请由项目管理员开始。</span>
-            )}
-          </div>
-        ) : null}
-      </InspectorSection>
+          ) : (
+            <span>请由项目管理员开始。</span>
+          )}
+        </div>
+      ) : null}
     </Section>
   )
 }

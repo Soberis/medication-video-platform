@@ -82,10 +82,10 @@ export function syncReliabilityDisplayLabel(value: string) {
 }
 
 export const groupQualityReasons = [
-  '所有参与机位满足当前事件准入要求。',
+  '所有参与机位满足人工标签条件。',
   '部分机位被排除，但剩余机位足以支持人工标注。',
   '机位事实或质量结论需要人工进一步确认。',
-  '当前事件不满足人工标注准入要求。',
+  '当前采集记录不满足人工标签条件。',
 ] as const
 
 export function receiptTone(state: CaptureGroup['receipt_state']): StatusIndicatorTone {
@@ -121,7 +121,7 @@ export function streamTone(stream: CaptureGroupStream | null): StatusIndicatorTo
 
 export function formatViewQualitySummary(review: CaptureGroupQualityReview | null) {
   const views = review?.confirmed_view_set?.views ?? []
-  if (!views.length) return '未形成事件质量快照'
+  if (!views.length) return '未形成整体质量快照'
   const counts = views.reduce(
     (summary, view) => {
       summary[view.quality_review_decision] += 1
@@ -186,7 +186,7 @@ export function captureGroupTaskDestination(
   // Completed task visibility is already authorized by the task list. The
   // Recheck mutation remains guarded separately by can_recheck_capture_group_cleaning.
   if (task.status === 'COMPLETED' && task.annotation_revision) {
-    return { focus: 'cleaning', actionLabel: '查看复核 / 事件清洗结果' }
+    return { focus: 'cleaning', actionLabel: '查看复核 / 标注检查结果' }
   }
 
   return null
@@ -244,7 +244,7 @@ export function syncSafety(stream: CaptureGroupStream) {
   return {
     label: '同步未知 · 仅供参考',
     tone: 'neutral' as const,
-    detail: '当前没有后端验证映射；参考视图仅供事件级人工参考。',
+    detail: '当前没有后端验证映射；参考视图仅供采集记录级人工参考。',
     referenceOnly: true,
   }
 }

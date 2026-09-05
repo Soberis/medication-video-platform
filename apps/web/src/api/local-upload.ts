@@ -63,16 +63,16 @@ interface ApiErrorBody {
 }
 
 const errorMessages: Record<string, string> = {
-  INVALID_REQUEST: '上传信息不符合要求，请检查项目和视频后重试。',
+  INVALID_REQUEST: '上传信息无效，请检查项目和视频后重试。',
   PROJECT_NOT_FOUND: '未找到该项目，或当前账号尚未加入该项目。',
   PROJECT_ACCESS_DENIED: '当前账号无权向该项目上传视频。',
-  PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED: '每个本地上传批次只能包含一个视频。',
-  PLATFORM_LOCAL_VIDEO_REQUIRED: '本地上传只能登记一个视频文件。',
-  PLATFORM_LOCAL_FILE_NAME_REQUIRED: '本地上传缺少原始文件名，请重新选择视频后重试。',
-  PLATFORM_LOCAL_DEVICE_INVALID: '本地上传来源标识无效。',
+  PLATFORM_LOCAL_SINGLE_VIDEO_REQUIRED: '每个上传批次只能包含一个视频。',
+  PLATFORM_LOCAL_VIDEO_REQUIRED: '上传需要一个视频文件。',
+  PLATFORM_LOCAL_FILE_NAME_REQUIRED: '缺少视频文件名，请重新选择后重试。',
+  PLATFORM_LOCAL_DEVICE_INVALID: '上传来源无效。',
   UPLOAD_BATCH_EXPIRED: '上传批次已过期，请重新开始。',
-  UPLOAD_PART_AUTHORIZATION_FAILED: '无法取得视频分片上传授权，请稍后重试。',
-  UPLOAD_FILE_SHA256_MISMATCH: '服务器校验到视频文件内容不完整或已变化，请重新选择文件后上传。',
+  UPLOAD_PART_AUTHORIZATION_FAILED: '无法获取视频分片上传授权，请稍后重试。',
+  UPLOAD_FILE_SHA256_MISMATCH: '视频文件校验不一致，请重新选择原文件上传。',
 }
 
 export class LocalUploadApiError extends Error {
@@ -95,10 +95,7 @@ export async function uploadPlatformLocalVideo(
   const contentType = requireVideoContentType(request.file)
   const totalParts = Math.ceil(request.file.size / LOCAL_UPLOAD_PART_SIZE_BYTES)
   if (totalParts > 10_000) {
-    throw new LocalUploadApiError(
-      '文件超过当前分片上传的单文件上限。',
-      'LOCAL_UPLOAD_TOO_MANY_PARTS',
-    )
+    throw new LocalUploadApiError('视频文件过大，无法上传。', 'LOCAL_UPLOAD_TOO_MANY_PARTS')
   }
 
   onProgress(progress('HASHING', request.file.size, 0, 0, totalParts, 0))
@@ -160,10 +157,7 @@ export async function uploadPlatformLocalVideo(
     signal,
   )
   if (multipart.total_parts !== totalParts || hashes.partSha256.length !== totalParts) {
-    throw new LocalUploadApiError(
-      '本地上传清单与服务器分片计划不一致。',
-      'LOCAL_UPLOAD_PLAN_MISMATCH',
-    )
+    throw new LocalUploadApiError('上传清单与服务器分片计划不一致。', 'LOCAL_UPLOAD_PLAN_MISMATCH')
   }
 
   let uploadedBytes = 0
@@ -174,7 +168,7 @@ export async function uploadPlatformLocalVideo(
       Math.min((index + 1) * LOCAL_UPLOAD_PART_SIZE_BYTES, request.file.size),
     )
     const partSha256 = hashes.partSha256[index]
-    if (!partSha256) throw new LocalUploadApiError('本地分片摘要缺失。', 'LOCAL_UPLOAD_HASH_FAILED')
+    if (!partSha256) throw new LocalUploadApiError('上传分片摘要缺失。', 'LOCAL_UPLOAD_HASH_FAILED')
 
     const authorization = await requestJson<UploadPartAuthorizationResponse>(
       `/api/v1/upload/${encodeURIComponent(batch.batch_id)}/files/${encodeURIComponent(clientFileId)}/parts/${partNumber}/authorization`,
@@ -319,14 +313,11 @@ export function calculateManifestSha256(entry: {
 
 function requireVideoContentType(file: File) {
   if (file.size < 1) {
-    throw new LocalUploadApiError('不能上传空文件。', 'LOCAL_UPLOAD_FILE_EMPTY')
+    throw new LocalUploadApiError('不能上传空视频。', 'LOCAL_UPLOAD_FILE_EMPTY')
   }
   const contentType = file.type.trim().toLowerCase()
   if (!contentType.startsWith('video/')) {
-    throw new LocalUploadApiError(
-      '浏览器未识别该文件为视频，请选择具有明确视频类型的文件。',
-      'LOCAL_UPLOAD_VIDEO_TYPE_REQUIRED',
-    )
+    throw new LocalUploadApiError('请选择视频文件。', 'LOCAL_UPLOAD_VIDEO_TYPE_REQUIRED')
   }
   return contentType
 }
@@ -372,7 +363,7 @@ async function requestJson<T>(
   const errorCode =
     typeof errorBody.error_code === 'string' ? errorBody.error_code : 'LOCAL_UPLOAD_REQUEST_FAILED'
   throw new LocalUploadApiError(
-    errorMessages[errorCode] ?? '本地上传请求未完成，请稍后重试。',
+    errorMessages[errorCode] ?? '上传视频请求未完成，请稍后重试。',
     errorCode,
     errorBody.retryable === true,
   )
@@ -408,7 +399,7 @@ function uploadPart(
         finish(() =>
           reject(
             new LocalUploadApiError(
-              '视频分片未能上传，请稍后重试。',
+              '视频分片上传失败，请稍后重试。',
               'LOCAL_UPLOAD_PART_TRANSFER_FAILED',
               true,
             ),

@@ -22,10 +22,10 @@ export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
 }
 
 export const cleaningStatusLabels = {
-  NOT_STARTED: '待清洗',
-  PASS: '当前规则检查通过',
-  WARNING: '需处理',
-  REJECT: '清洗未通过',
+  NOT_STARTED: '待处理',
+  PASS: '标注检查通过',
+  WARNING: '标注检查需处理',
+  REJECT: '标注检查未通过',
 } as const
 
 export function statusTone(

@@ -217,15 +217,15 @@ export function PlaybackCard({
       ) : null}
       {grant ? (
         <>
-          <div className="playback-meta" aria-label="本次播放授权">
-            <span className="playback-meta-label">本次播放授权</span>
+          <details className="playback-meta" aria-label="本次播放授权">
+            <summary>播放信息</summary>
             <time
               dateTime={grant.expires_at}
               title={`完整到期时间：${formatDateTime(grant.expires_at)}`}
             >
               有效至 {formatPlaybackExpiry(grant.expires_at)}
             </time>
-          </div>
+          </details>
           {playbackMessage ? (
             <Alert
               className="playback-feedback"
@@ -287,9 +287,6 @@ export function PlaybackCard({
               </div>
             </div>
           ) : null}
-          <p className="form-hint playback-fullscreen-hint" role="note">
-            全屏仅用于查看；退出后返回工作台继续操作。
-          </p>
           {candidateOverlay.length > 0 ? (
             <div className="playback-supporting-note" aria-label="骨架叠加说明">
               <span>
@@ -306,7 +303,7 @@ export function PlaybackCard({
           <div className="playback-toolbar">
             {playbackFailed ? (
               <Button type="primary" loading={isRequestingPlayback} onClick={onStartPlayback}>
-                重新获取播放授权
+                重新加载视频
               </Button>
             ) : null}
             <Button onClick={onClose}>关闭视频</Button>
@@ -430,7 +427,7 @@ export function MediaReportCard({
       <Alert
         type="error"
         title="媒体检测失败"
-        description="该视频仍可人工查看，但不能记录质量结论或进入配药动作标注流程。"
+        description="该视频仍可人工查看，但不能记录质量结论或开始配药动作标注。"
         showIcon
       />
     )
@@ -543,7 +540,7 @@ export function QualityReviewCard({
   return (
     <section className="workbench-panel" aria-labelledby="quality-review-title">
       <h3 id="quality-review-title">人工质量判断</h3>
-      <p className="form-hint">查看画面，判断视频是否可进入配药动作标注。</p>
+      <p className="form-hint">查看画面，判断视频是否可用于配药动作标注。</p>
       {loadState === 'loading' ? <LoadingState>正在读取质量结论…</LoadingState> : null}
       {loadState === 'error' ? (
         <Alert
@@ -606,7 +603,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
             <span>执行人：{createdTask.assignee_actor_id}</span>
           </div>
           <p className="form-hint">
-            质量合格后系统已自动分配任务。请在标注页提交时间段，项目管理员随后复核。
+            人工标签任务已创建并分配。请在标注页提交时间段，项目管理员随后复核。
           </p>
           <Link className="text-link" to={paths.annotationTasks(projectId)}>
             查看配药动作标注
@@ -615,7 +612,7 @@ export function AnnotationTaskCard({ createdTask, projectId }: AnnotationTaskCar
       ) : (
         <>
           <p className="form-hint">
-            质量结论为合格后，系统会自动创建并分配配药动作标注任务。若当前账号没有可见任务，请刷新状态或前往任务列表查看。
+            如项目需要人工标签，质量结论确认后可创建并分配配药动作标注任务。若当前账号没有可见任务，请刷新状态或前往任务列表查看。
           </p>
         </>
       )}
@@ -706,7 +703,7 @@ export function AssetFacts({ detail }: { detail: ClipAssetRead }) {
           ]}
         />
       ) : (
-        <p className="empty-state">该视频已完成上传校验，但尚未绑定到配药操作记录。</p>
+        <p className="empty-state">该视频已完成上传校验，但尚未绑定到采集记录接收记录。</p>
       )}
     </section>
   )
@@ -725,8 +722,7 @@ export function DangerZoneCard({
         <span className="app-eyebrow">低频高风险操作</span>
         <strong id="danger-zone-title">删除视频</strong>
         <p className="form-hint">
-          从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一配药操作
-          的其他视频。
+          从普通列表隐藏此视频并保留审计记录；不会立即删除存储对象，也不影响同一采集记录的其他视频。
         </p>
       </div>
       <Button danger loading={isDeleting} onClick={onDelete}>

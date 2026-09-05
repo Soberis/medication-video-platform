@@ -22,17 +22,17 @@ import { captureGroupTaskDestination } from '@/features/capture-group-presentati
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  GROUP_QUALITY_NOT_ADMITTING: '当前事件质量结论不允许进入事件清洗',
+  GROUP_QUALITY_NOT_ADMITTING: '采集记录整体质量结论不满足标注检查条件',
   PRIMARY_VIEW_MISSING: '缺少主视图',
-  PRIMARY_VIEW_NOT_QUALIFIED: '主视图当前未通过机位质量准入',
+  PRIMARY_VIEW_NOT_QUALIFIED: '主视图当前未通过机位质量检查',
   PRIMARY_INTERVAL_MISSING: '缺少主视图正式时间段',
   PRIMARY_INTERVAL_INVALID: '主视图存在无效的正式时间段',
   PRIMARY_INTERVAL_OVERLAP: '主视图正式时间段存在重叠',
-  NO_QUALIFIED_VIEWS: '事件没有可参与的合格机位',
-  VIEW_SET_DUPLICATE_CAMERA_NUMBER: '事件机位集合存在重复机位编号',
-  MISSING_VIEW: '事件机位缺失',
-  VIEW_NOT_REVIEWABLE: '事件机位当前不可复核',
-  VIEW_QUALITY_NOT_QUALIFIED: '事件机位质量未通过',
+  NO_QUALIFIED_VIEWS: '采集记录没有可参与的合格机位',
+  VIEW_SET_DUPLICATE_CAMERA_NUMBER: '采集记录机位编号重复',
+  MISSING_VIEW: '采集记录机位缺失',
+  VIEW_NOT_REVIEWABLE: '采集记录机位当前不可复核',
+  VIEW_QUALITY_NOT_QUALIFIED: '采集记录机位质量未通过',
 }
 function taskStatusLabel(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '已完成'
@@ -64,14 +64,14 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
   const reasons = (result?.reason_codes ?? []).map((code) => {
     return (
       captureGroupCleaningReasonLabels[code] ??
-      `其他事件清洗原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
+      `其他标注检查原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
     )
   })
   if (result?.outcome === 'PASS')
     return {
       label: '通过',
       tone: 'success',
-      description: '当前事件清洗规则检查通过。',
+      description: '标注检查通过。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -79,7 +79,7 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
     return {
       label: '需处理',
       tone: 'warning',
-      description: '当前事件清洗需处理，请补充事实后重新执行事件清洗。',
+      description: '标注检查需处理，请补充事实后重试。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
@@ -87,14 +87,14 @@ function captureGroupCleaningPresentation(task: AnnotationTask): {
     return {
       label: '未通过',
       tone: 'destructive',
-      description: '当前事件清洗未通过；视频资产未被删除。',
+      description: '标注检查未通过；视频未删除。',
       reasons,
       evaluatedAt: result.evaluated_at,
     }
   return {
     label: '待处理',
     tone: 'neutral',
-    description: '尚未形成事件清洗结论。',
+    description: '尚无标注检查结论。',
     reasons,
     evaluatedAt: null,
   }
@@ -107,7 +107,7 @@ function taskEvidenceLabel(
   const review = task.annotation_revision?.review
   if (!review) return '等待人工复核'
   if (review.decision === 'REJECTED') return '复核未通过'
-  return cleaning ? `复核已通过 · 事件清洗${cleaning.label}` : '复核已通过'
+  return cleaning ? `复核已通过 · 标注检查${cleaning.label}` : '复核已通过'
 }
 
 function taskEvidenceTone(
@@ -218,7 +218,7 @@ export default function AnnotationTaskListView() {
           <ul className="annotation-task-list-surface" aria-label="标注任务列表">
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
-              const taskSubject = `配药事件 ${shortId(captureGroupId)}`
+              const taskSubject = `采集记录 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
               const presentation = captureGroupCleaningPresentation(row)
               const taskDestination = captureGroupTaskDestination(row)
@@ -325,7 +325,7 @@ export default function AnnotationTaskListView() {
                     ) : null}
                     {presentation ? (
                       <div className="task-details-block">
-                        <h3>事件清洗说明</h3>
+                        <h3>标注检查说明</h3>
                         <p>{presentation.description}</p>
                         {presentation.evaluatedAt ? (
                           <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
@@ -342,7 +342,7 @@ export default function AnnotationTaskListView() {
                 row.status !== 'COMPLETED' && taskDestination ? (
                   <Link
                     className="annotation-task-action-link"
-                    aria-label={`进入${taskSubject}的${taskDestination.actionLabel}`}
+                    aria-label={`进入视频，${taskDestination.actionLabel}`}
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
                     {taskDestination.actionLabel} <span aria-hidden="true">→</span>
@@ -354,7 +354,7 @@ export default function AnnotationTaskListView() {
                     className="text-link annotation-task-result-link"
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    查看结果 <span aria-hidden="true">→</span>
+                    进入视频查看结果 <span aria-hidden="true">→</span>
                   </Link>
                 ) : null
               return (
@@ -432,7 +432,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有标注任务。项目需要人工训练数据时才会启用。" />
+        <EmptyState description="当前没有需要处理的标注任务。" />
       ) : null}
     </>
   )

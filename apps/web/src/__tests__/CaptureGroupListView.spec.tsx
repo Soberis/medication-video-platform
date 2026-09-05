@@ -49,20 +49,20 @@ describe('capture group list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const list = await screen.findByRole('list', { name: '配药事件列表' })
+    const list = await screen.findByRole('list', { name: '采集记录列表' })
     const activeRow = within(list).getByRole('listitem', { name: /active-group/ })
     const completedRow = within(list).getByRole('listitem', { name: /completed-group/ })
 
     expect(activeRow.querySelector('.capture-group-list-eyebrow')).not.toBeInTheDocument()
     expect(activeRow.querySelector('.capture-group-list-identity svg')).not.toBeInTheDocument()
-    expect(screen.getByText('共 2 个配药事件')).toBeInTheDocument()
-    expect(activeRow).toHaveTextContent('有人工标签任务')
-    expect(activeRow).toHaveTextContent('Media Probe · hand-landmarks.v1')
+    expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument()
+    expect(activeRow).toHaveTextContent('待提交')
+    expect(activeRow).not.toHaveTextContent('Media Probe · hand-landmarks.v1')
     expect(activeRow).toHaveTextContent('1/1 机位已收')
 
-    const processLink = within(activeRow).getByRole('link', { name: /查看配药事件/ })
+    const processLink = within(activeRow).getByRole('link', { name: /查看视频/ })
     expect(within(activeRow).getAllByRole('link')).toHaveLength(1)
-    expect(completedRow).toHaveTextContent('有人工标签任务')
+    expect(completedRow).toHaveTextContent('已完成')
     expect(within(completedRow).getAllByRole('link')).toHaveLength(1)
 
     await user.click(processLink)
@@ -101,21 +101,21 @@ describe('capture group list view', () => {
     })
     renderView()
 
-    const list = await screen.findByRole('list', { name: '配药事件列表' })
+    const list = await screen.findByRole('list', { name: '采集记录列表' })
     const receivingRow = within(list).getByRole('listitem', { name: /receiving-group/ })
     const incompleteRow = within(list).getByRole('listitem', { name: /incomplete-group/ })
 
     expect(receivingRow).toHaveTextContent('1/2 机位已收 · 接收中')
     expect(receivingRow).toHaveTextContent('缺失：机位 2')
     expect(receivingRow).toHaveTextContent('没有分配给我的人工标签任务')
-    expect(receivingRow).toHaveTextContent('MediaPipe machine evidence')
-    expect(within(receivingRow).getByRole('link', { name: /查看配药事件/ })).toBeInTheDocument()
+    expect(receivingRow).not.toHaveTextContent('MediaPipe machine evidence')
+    expect(within(receivingRow).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
 
     expect(incompleteRow).toHaveTextContent('2/3 机位已收 · 接收完成 · 有缺失')
     expect(incompleteRow).toHaveTextContent('缺失：机位 2')
     expect(incompleteRow).toHaveTextContent('没有分配给我的人工标签任务')
-    expect(incompleteRow).toHaveTextContent('hand-landmarks.v1')
-    expect(within(incompleteRow).getByRole('link', { name: /查看配药事件/ })).toBeInTheDocument()
+    expect(incompleteRow).not.toHaveTextContent('hand-landmarks.v1')
+    expect(within(incompleteRow).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
   })
 
   it('keeps machine facts independent of the retired quality batch enrichment', async () => {
@@ -131,8 +131,8 @@ describe('capture group list view', () => {
     renderView()
 
     const row = await screen.findByRole('listitem', { name: /quality-independent-group/ })
-    expect(row).toHaveTextContent('MediaPipe machine evidence')
-    expect(row).toHaveTextContent('hand-landmarks.v1')
+    expect(row).not.toHaveTextContent('MediaPipe machine evidence')
+    expect(row).not.toHaveTextContent('hand-landmarks.v1')
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes('capture-group-quality-reviews'),
@@ -157,8 +157,8 @@ describe('capture group list view', () => {
     expect(row).toHaveTextContent('人工任务状态暂不可用')
     expect(row).not.toHaveTextContent('暂无人工标签任务')
     expect(within(row).getByRole('button', { name: '重试读取人工任务' })).toBeInTheDocument()
-    expect(row).toHaveTextContent('MediaPipe machine evidence')
-    expect(within(row).getByRole('link', { name: /查看配药事件/ })).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('MediaPipe machine evidence')
+    expect(within(row).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
     expect(within(row).queryByRole('link', { name: /进入/ })).not.toBeInTheDocument()
   })
 
@@ -194,13 +194,11 @@ describe('capture group list view', () => {
     renderView()
     const user = userEvent.setup()
 
-    expect(await screen.findByText('已显示 1 个配药事件')).toBeInTheDocument()
+    expect(await screen.findByText('已显示 1 条采集记录')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
 
-    await waitFor(() => expect(screen.getByText('共 2 个配药事件')).toBeInTheDocument())
-    expect(screen.getByRole('listitem', { name: /second-page-group/ })).toHaveTextContent(
-      '有人工标签任务',
-    )
+    await waitFor(() => expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument())
+    expect(screen.getByRole('listitem', { name: /second-page-group/ })).toHaveTextContent('待复核')
     expect(screen.queryByRole('button', { name: '加载更多' })).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('cursor=cursor-2'))).toBe(
       true,
@@ -231,7 +229,7 @@ describe('capture group list view', () => {
 
     const row = await screen.findByRole('listitem', { name: /task-pending-group/ })
     expect(row).toHaveTextContent('人工任务读取中')
-    expect(row).toHaveTextContent('MediaPipe machine evidence')
+    expect(row).not.toHaveTextContent('MediaPipe machine evidence')
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -277,8 +275,8 @@ describe('capture group list view', () => {
     renderView()
 
     const row = await screen.findByRole('listitem', { name: /assignee-task-group/ })
-    await waitFor(() => expect(row).toHaveTextContent('有分配给我的人工标签任务'))
-    expect(within(row).getByRole('link', { name: /查看配药事件/ })).toHaveAttribute(
+    await waitFor(() => expect(row).toHaveTextContent('待提交'))
+    expect(within(row).getByRole('link', { name: /查看视频/ })).toHaveAttribute(
       'href',
       paths.captureGroup(projectId, group.capture_group_id),
     )

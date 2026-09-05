@@ -129,17 +129,17 @@ export function CaptureGroupAnnotationPanel({
   })
 
   const annotationBlockingReason = groupQualityReceiving
-    ? '接收仍在进行中，不能进入事件级标注准入。'
+    ? '接收仍在进行中，暂不能开始人工标签。'
     : !groupQuality
-      ? '当前事件质量结论暂不可用，不能判断事件级标注准入。'
+      ? '当前整体质量结论暂不可用，不能判断人工标签是否可开始。'
       : !task
         ? taskVisibility === 'permission-limited'
           ? '当前账号不是该任务执行人；配药动作标注任务状态按权限不可见。'
           : taskVisibility === 'unavailable'
             ? '配药动作标注任务状态暂不可读，请刷新后重试。'
-            : '事件质量通过后，系统会准备配药动作标注。'
+            : '整体质量确认后，可按需开始配药动作标注。'
         : !groupQualityAdmitting
-          ? '当前事件质量为需复核或不合格；任务和历史仍保留，但不能提交新的修订。'
+          ? '当前整体质量为需复核或不合格；任务和历史仍保留，但不能提交新的修订。'
           : !task.primary_clip_asset_id
             ? task.can_select_primary
               ? '请选择一路已接收、媒体可用且机位质量合格的主视图。'
@@ -246,34 +246,36 @@ export function CaptureGroupAnnotationPanel({
             <Alert
               type="warning"
               showIcon
-              title={`当前事件质量为“${groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}”`}
-              description="任务和既有修订历史仍可审计；不能提交新的修订。恢复事件质量准入后再继续。"
+              title={`当前整体质量为“${groupQualityLabels[groupQuality?.result ?? 'UNREVIEWED']}”`}
+              description="任务和既有修订历史仍可审计；当前整体质量不满足提交条件，恢复后再继续。"
             />
           ) : null}
-          <div className="capture-group-primary-view-control">
-            <div>
-              <strong>
-                {primaryLocked
-                  ? `${primaryCameraNumber === null ? '主视图' : `机位 ${primaryCameraNumber}`} · 已锁定`
-                  : '主视图 · 时间基准'}
-              </strong>
-              {!primaryLocked ? <p>首个正式修订提交后锁定</p> : null}
+          {viewRows.length > 1 || !task.primary_clip_asset_id ? (
+            <div className="capture-group-primary-view-control">
+              <div>
+                <strong>
+                  {primaryLocked
+                    ? `${primaryCameraNumber === null ? '主视图' : `机位 ${primaryCameraNumber}`} · 已锁定`
+                    : '主视图 · 时间基准'}
+                </strong>
+                {!primaryLocked ? <p>首个正式修订提交后锁定</p> : null}
+              </div>
+              <Select
+                aria-label="主视图"
+                value={task.primary_clip_asset_id ?? undefined}
+                placeholder="选择主视图"
+                disabled={
+                  primaryLocked ||
+                  isSelectingPrimary ||
+                  !groupQualityAdmitting ||
+                  !task.can_select_primary
+                }
+                loading={isSelectingPrimary}
+                options={primaryOptions}
+                onChange={(value) => void choosePrimaryView(value)}
+              />
             </div>
-            <Select
-              aria-label="主视图"
-              value={task.primary_clip_asset_id ?? undefined}
-              placeholder="选择主视图"
-              disabled={
-                primaryLocked ||
-                isSelectingPrimary ||
-                !groupQualityAdmitting ||
-                !task.can_select_primary
-              }
-              loading={isSelectingPrimary}
-              options={primaryOptions}
-              onChange={(value) => void choosePrimaryView(value)}
-            />
-          </div>
+          ) : null}
           {annotationBlockingReason ? (
             <p className="capture-group-annotation-blocking" role="status">
               <CircleAlert aria-hidden="true" size={16} strokeWidth={1.8} />
@@ -288,10 +290,9 @@ export function CaptureGroupAnnotationPanel({
             >
               <div className="capture-group-form-heading">
                 <div>
-                  <span className="app-eyebrow">动作时间段</span>
-                  <h3>配药动作时间段</h3>
+                  <h3>动作时间段</h3>
                 </div>
-                <span>记录动作标签和时间范围；提交前可以继续添加时间段。</span>
+                <span>选择动作，设置开始和结束时间。</span>
               </div>
               <div className="capture-group-playback-position" aria-label="当前播放位置">
                 <div>
@@ -302,7 +303,7 @@ export function CaptureGroupAnnotationPanel({
                     ) ?? '未读取'}
                   </strong>
                 </div>
-                <span>可将当前视频位置填入时间范围，不会自动提交。</span>
+                <span>播放到动作边界，点击“设为开始”或“设为结束”。</span>
               </div>
               {draftSegments.map((segment, index) => {
                 const errors = segmentErrors[segment.draftId] ?? {}
@@ -396,7 +397,7 @@ export function CaptureGroupAnnotationPanel({
                               aria-label={`第 ${index + 1} 个时间段：使用当前时间作为开始`}
                               onClick={() => setSegmentPlaybackTime(segment.draftId, 'start_ms')}
                             >
-                              使用当前时间作为开始
+                              设为开始
                             </Button>
                             {errors.start ? (
                               <small id={startErrorId} role="alert">
@@ -449,7 +450,7 @@ export function CaptureGroupAnnotationPanel({
                               aria-label={`第 ${index + 1} 个时间段：使用当前时间作为结束`}
                               onClick={() => setSegmentPlaybackTime(segment.draftId, 'end_ms')}
                             >
-                              使用当前时间作为结束
+                              设为结束
                             </Button>
                             {errors.end ? (
                               <small id={endErrorId} role="alert">
@@ -517,7 +518,7 @@ export function CaptureGroupAnnotationPanel({
                   <span className="app-eyebrow">修订提交</span>
                   <h3>新修订暂不可提交</h3>
                 </div>
-                <span>保留既有修订、复核和事件清洗历史；等待服务端恢复事件级准入。</span>
+                <span>保留既有修订、复核和标注检查历史；等待服务端允许继续提交。</span>
               </div>
               <div className="capture-group-annotation-form-actions">
                 <Button type="primary" disabled>

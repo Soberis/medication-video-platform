@@ -35,12 +35,15 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '视频' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '视频' })).toBeInTheDocument()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '人工标签任务' })).not.toBeInTheDocument()
-    expect(await screen.findByText('事件质量')).toBeInTheDocument()
+    const preparation = screen.getByText('标注前检查').closest('details')
+    expect(preparation).not.toHaveAttribute('open')
+    await user.click(screen.getByText('标注前检查'))
+    expect(await screen.findByText('整体质量')).toBeVisible()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
       true,
     )
@@ -69,9 +72,9 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
-    const exportButton = await screen.findByRole('button', { name: '导出手部检测证据' })
+    const exportButton = await screen.findByRole('button', { name: '导出数据' })
     expect(exportButton.closest('details')).toBeNull()
-    await user.click(await screen.findByRole('button', { name: '开始人工动作标注' }))
+    await user.click(await screen.findByRole('button', { name: '开始标注' }))
     expect(
       await screen.findByRole('heading', { level: 2, name: '配药动作标注' }),
     ).toBeInTheDocument()
@@ -104,7 +107,7 @@ describe('CaptureGroup detail views', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: '配药动作标注' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '相机 1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '提交修订' })).toBeInTheDocument()
   })
 
@@ -126,11 +129,11 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    const selector = await screen.findByRole('group', { name: '配药事件机位选择' })
+    const selector = await screen.findByRole('group', { name: '采集记录机位选择' })
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
-    expect(await screen.findByRole('combobox', { name: '事件质量结论' })).toBeInTheDocument()
+    expect(await screen.findByRole('combobox', { name: '整体质量结论' })).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {

@@ -146,11 +146,11 @@ export default function AppShell() {
                 <Link
                   to={paths.captureGroups(projectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
-                  aria-label="配药事件"
-                  title="配药事件"
+                  aria-label="视频"
+                  title="视频"
                 >
                   <Video {...iconProps} />
-                  <span className="sidebar-label">配药事件</span>
+                  <span className="sidebar-label">视频</span>
                 </Link>
               ) : null}
             </div>
@@ -176,14 +176,9 @@ export default function AppShell() {
                 管理
               </p>
               {isAdministrator ? (
-                <NavLink
-                  end
-                  to={paths.localUpload}
-                  aria-label="本地上传（辅助）"
-                  title="本地上传（辅助）"
-                >
+                <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
                   <Upload {...iconProps} />
-                  <span className="sidebar-label">本地上传（辅助）</span>
+                  <span className="sidebar-label">上传视频</span>
                 </NavLink>
               ) : null}
               {projectId && isAdministrator ? (

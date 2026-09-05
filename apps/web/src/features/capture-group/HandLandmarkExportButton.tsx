@@ -101,16 +101,16 @@ export function HandLandmarkExportButton({
         disabled={downloadLoading}
         onClick={() => void openPreview()}
       >
-        导出手部检测证据
+        导出手部关键点
       </Button>
       <Modal
         open={Boolean(preview)}
-        title="手部检测证据导出预览"
+        title="手部关键点导出预览"
         okText="导出 CSV"
         cancelText="关闭"
         confirmLoading={downloadLoading}
         okButtonProps={{ disabled: !preview?.sample_count, 'aria-label': '导出 CSV' }}
-        cancelButtonProps={{ disabled: downloadLoading, 'aria-label': '关闭手部检测证据导出预览' }}
+        cancelButtonProps={{ disabled: downloadLoading, 'aria-label': '关闭手部关键点导出预览' }}
         mask={{ closable: !downloadLoading }}
         keyboard={!downloadLoading}
         onCancel={() => !downloadLoading && setPreview(null)}
@@ -152,7 +152,7 @@ function HandLandmarkExportPreviewContent({
       </div>
       <section className="hand-landmark-export-facts" aria-label="手部检测关键点导出摘要">
         <dl className="hand-landmark-export-facts-list">
-          <Fact label="导出范围" value={eventScope ? '当前配药事件' : '整个项目'} />
+          <Fact label="导出范围" value={eventScope ? '当前采集记录' : '整个项目'} />
           <Fact label="检测视图" value={`${formatCount(preview.hand_detection_view_count)} 个`} />
           <Fact label="完成视图" value={`${formatCount(preview.completed_view_count)} 个`} />
           <Fact label="检测到手部的视图" value={`${formatCount(preview.views_with_hand)} 个`} />

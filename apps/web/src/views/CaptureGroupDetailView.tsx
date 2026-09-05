@@ -17,8 +17,7 @@ import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
-import { HumanAnnotationExportButton } from '@/features/capture-group/HumanAnnotationExportButton'
-import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
+import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 import {
@@ -80,7 +79,7 @@ export default function CaptureGroupDetailView() {
       />
     ) : null
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
-  const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
+  const eventTitle = data.group?.capture_group_key ?? `视频 · ${shortId(captureGroupId)}`
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -179,9 +178,7 @@ export default function CaptureGroupDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
-          配药事件
-        </Link>
+        <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>视频</Link>
         <span aria-hidden="true">/</span>
         <span>{eventIdentity}</span>
       </nav>
@@ -203,11 +200,13 @@ export default function CaptureGroupDetailView() {
                 结束接收
               </Button>
             ) : null}
-            {session?.role === 'ADMIN' && isHumanAnnotationExportReady(humanTask) ? (
-              <HumanAnnotationExportButton projectId={projectId} captureGroupId={captureGroupId} />
-            ) : null}
-            {session?.role === 'ADMIN' ? (
-              <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
+            {session?.role === 'ADMIN' && data.group ? (
+              <ExportDataMenu
+                key={captureGroupId}
+                projectId={projectId}
+                captureGroupId={captureGroupId}
+                humanReady={isHumanAnnotationExportReady(humanTask)}
+              />
             ) : null}
             <Button
               size="small"
@@ -215,13 +214,13 @@ export default function CaptureGroupDetailView() {
               loading={data.groupLoadState === 'loading'}
               onClick={() => void data.refresh()}
             >
-              刷新事实
+              刷新
             </Button>
           </>
         }
       />
       {data.groupLoadState === 'loading' ? (
-        <LoadingState>{data.group ? '正在刷新配药事件…' : '正在读取配药事件…'}</LoadingState>
+        <LoadingState>{data.group ? '正在刷新采集记录…' : '正在读取采集记录…'}</LoadingState>
       ) : null}
       {data.groupLoadState === 'error' ? (
         <ErrorState code={data.groupErrorCode} onRetry={() => void data.refresh()}>
@@ -234,7 +233,7 @@ export default function CaptureGroupDetailView() {
             <Alert
               type="warning"
               showIcon
-              title="人工任务状态暂不可用；配药事件、播放器和机器证据仍可查看。"
+              title="人工任务状态暂不可用；采集记录、播放器和机器证据仍可查看。"
             />
           ) : null}
           {humanTask && data.qualityErrorMessage ? (
@@ -255,7 +254,6 @@ export default function CaptureGroupDetailView() {
                 : undefined
             }
           >
-            {actionPanel ? <div className="capture-group-action-column">{actionPanel}</div> : null}
             <div className="capture-group-video-column">
               <CaptureGroupFocusedView
                 viewRows={viewRows}
@@ -270,6 +268,7 @@ export default function CaptureGroupDetailView() {
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>
+            {actionPanel ? <div className="capture-group-action-column">{actionPanel}</div> : null}
           </div>
           {renderInspector()}
         </>

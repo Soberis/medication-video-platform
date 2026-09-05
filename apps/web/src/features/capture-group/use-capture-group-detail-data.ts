@@ -118,8 +118,8 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         if (qualityResult.status === 'rejected') {
           setQualityErrorMessage(
             nextQualityVisibility === 'forbidden'
-              ? '当前账号无权读取人工标签的质量事实；详情仍保留配药事件与机位事实。'
-              : '暂时无法读取人工标签的质量事实；配药事件与机器证据仍可查看。',
+              ? '当前账号无权读取人工标签的质量事实；详情仍保留采集记录与机位事实。'
+              : '暂时无法读取人工标签的质量事实；采集记录与机器证据仍可查看。',
           )
         }
         if (nextTask && schemaResult.status === 'rejected') {
@@ -253,7 +253,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
             ? error.message
             : error instanceof Error
               ? error.message
-              : '暂时无法读取配药事件详情，请稍后重试。',
+              : '暂时无法读取采集记录详情，请稍后重试。',
         )
         return false
       } finally {
@@ -282,7 +282,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       await finalizeCaptureGroupReceipt(projectId, captureGroupId)
       const refreshed = await refresh()
       void (refreshed
-        ? message.success('配药事件接收已结束，服务端事实已刷新。')
+        ? message.success('采集记录接收已结束，服务端事实已刷新。')
         : message.warning('接收已结束，但最新事实暂未刷新；请手动刷新确认。'))
       return true
     } catch (error) {

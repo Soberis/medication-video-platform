@@ -85,12 +85,12 @@ export function CaptureGroupReviewCleaningPanel({
     let reviewNote = ''
     const approved = decision === 'APPROVED'
     modal.confirm({
-      title: approved ? '通过配药事件复核' : '退回配药事件修订',
+      title: approved ? '通过人工标签复核' : '退回人工标签修订',
       content: approved ? (
-        <p>确认当前正式动作时间段、主视图和事件内证据均可接受，并完成这次人工复核？</p>
+        <p>确认这次人工标签修订内容可接受，并完成复核？</p>
       ) : (
         <div className="capture-group-review-confirmation">
-          <p>退回这次配药事件修订，任务将回到原执行人并等待下一次修订。</p>
+          <p>退回这次人工标签修订，任务将回到原执行人并等待下一次修订。</p>
           <Input.TextArea
             aria-label="退回修改说明（可选）"
             maxLength={1000}
@@ -116,7 +116,7 @@ export function CaptureGroupReviewCleaningPanel({
           )
           const refreshed = await onRefresh()
           void (refreshed
-            ? message.success(approved ? '配药事件复核已通过。' : '已退回配药事件修订。')
+            ? message.success(approved ? '人工标签复核已通过。' : '已退回人工标签修订。')
             : message.warning(
                 approved
                   ? '复核已通过，但最新事实暂未刷新；请手动刷新确认。'
@@ -140,11 +140,11 @@ export function CaptureGroupReviewCleaningPanel({
       await recheckCaptureGroupCleaning(projectId, revision.annotation_revision_id)
       const refreshed = await onRefresh()
       void (refreshed
-        ? message.success('事件清洗已重新执行，服务端事实已刷新。')
-        : message.warning('事件清洗已重新执行，但最新事实暂未刷新；请手动刷新确认。'))
+        ? message.success('标注检查已重新执行，服务端事实已刷新。')
+        : message.warning('标注检查已重新执行，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
       void message.error(
-        error instanceof Error ? error.message : '事件清洗暂未完成，请刷新后重试。',
+        error instanceof Error ? error.message : '标注检查暂未完成，请刷新后重试。',
       )
     } finally {
       setIsRechecking(false)
@@ -240,9 +240,8 @@ export function CaptureGroupReviewCleaningPanel({
       className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
       id="capture-group-review-cleaning"
       tabIndex={-1}
-      title="复核与清洗"
+      title="标注复核"
       titleId="capture-group-review-cleaning-title"
-      actions={<span className="capture-group-section-note">人工复核 · 按规则清洗</span>}
     >
       {hasCompletedReviewAndCleaning ? (
         <Button
@@ -254,12 +253,15 @@ export function CaptureGroupReviewCleaningPanel({
           aria-expanded={isCompletedDetailOpen}
           onClick={() => setIsCompletedDetailOpen((open) => !open)}
         >
-          {isCompletedDetailOpen ? '收起复核与清洗详情' : '查看复核与清洗详情'}
+          {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
         </Button>
+      ) : null}
+      {hasCompletedReviewAndCleaning ? (
+        <p role="status">标注已通过复核与规则检查，可从顶部导出数据。</p>
       ) : null}
       {!task ? (
         <p className="form-hint">
-          当前没有可见的配药事件任务，暂不能读取修订、复核或事件清洗事实。
+          当前没有可见的人工标签任务，暂不能读取修订、复核或标注检查事实。
         </p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
@@ -275,11 +277,11 @@ export function CaptureGroupReviewCleaningPanel({
 
           <div className="capture-group-review-facts">
             <MetadataList
-              ariaLabel="配药事件复核核心事实"
+              ariaLabel="人工标签复核核心事实"
               items={[
                 {
                   id: 'review-group',
-                  label: '配药事件',
+                  label: '采集记录',
                   value: group.capture_group_key ?? group.capture_group_id,
                 },
                 {
@@ -308,7 +310,7 @@ export function CaptureGroupReviewCleaningPanel({
               ]}
             />
             <div className="capture-group-review-quality-fact">
-              <span className="app-eyebrow">当前事件质量</span>
+              <span className="app-eyebrow">当前整体质量</span>
               <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
                 {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
               </StatusIndicator>
@@ -335,7 +337,7 @@ export function CaptureGroupReviewCleaningPanel({
           )}
 
           {canReview ? (
-            <div className="capture-group-review-actions" aria-label="配药事件复核操作">
+            <div className="capture-group-review-actions" aria-label="人工标签复核操作">
               <Button
                 type="primary"
                 loading={reviewingDecision === 'APPROVED'}
@@ -413,7 +415,7 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
             },
             {
               id: 'view-set-group-version',
-              label: '配药事件版本',
+              label: '采集记录版本',
               value: viewSet.capture_group_version,
             },
             {
@@ -545,11 +547,11 @@ function CaptureGroupCleaningCheck({
   const captureGroupCleaning = cleaning
 
   return (
-    <div className="capture-group-cleaning-check" aria-label="事件清洗">
+    <div className="capture-group-cleaning-check" aria-label="标注检查">
       <div className="capture-group-review-subheading">
         <div>
-          <span className="app-eyebrow">事件级清洗</span>
-          <h3>事件清洗</h3>
+          <span className="app-eyebrow">标注检查</span>
+          <h3>标注检查</h3>
         </div>
         {cleaning ? (
           <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
@@ -561,7 +563,7 @@ function CaptureGroupCleaningCheck({
         <>
           <div className="capture-group-cleaning-summary">
             <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-              {cleaning.outcome === 'PASS' ? '事件清洗通过' : '事件清洗未通过'}
+              {cleaning.outcome === 'PASS' ? '标注检查通过' : '标注检查未通过'}
             </StatusIndicator>
             <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
             {captureGroupCleaning?.evaluated_by ? (
@@ -569,7 +571,7 @@ function CaptureGroupCleaningCheck({
             ) : null}
           </div>
           <MetadataList
-            ariaLabel="事件清洗规则来源"
+            ariaLabel="标注检查规则来源"
             items={[
               ...(cleaning.rule_set_key
                 ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
@@ -631,15 +633,15 @@ function CaptureGroupCleaningCheck({
           <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
           {canRecheck ? (
             <Button type="link" size="small" loading={isRechecking} onClick={onRecheck}>
-              重新执行事件清洗
+              重新执行标注检查
             </Button>
           ) : null}
         </>
       ) : (
         <p className="form-hint">
           {review?.decision === 'APPROVED'
-            ? '人工复核已通过；服务端尚未返回事件清洗结果。'
-            : '人工复核通过后，服务端会在同一事务内生成事件清洗结果。这里不是第二个人工质量决定。'}
+            ? '人工复核已通过；服务端尚未返回标注检查结果。'
+            : '人工复核通过后，服务端会在同一事务内生成标注检查结果。这里不是第二个人工质量决定。'}
         </p>
       )}
     </div>
@@ -726,18 +728,18 @@ function EventLevelViewEvidence({ viewEvidence }: { viewEvidence: CaptureGroupEv
   return (
     <div className="capture-group-event-evidence">
       <div className="capture-group-review-subheading">
-        <strong>事件级参考视图证据</strong>
+        <strong>采集记录级参考视图证据</strong>
         <span>{viewEvidence.length} 个机位</span>
       </div>
       {viewEvidence.length ? (
-        <ul className="capture-group-evidence-list" aria-label="事件级参考视图证据">
+        <ul className="capture-group-evidence-list" aria-label="采集记录级参考视图证据">
           {viewEvidence.map((view, index) => {
             const primary = booleanValue(view, 'action_aligned_interval')
             const syncReliability = stringValue(view, 'sync_reliability')
             return (
               <li key={evidenceKey(view, index)}>
                 <strong>{evidenceViewName(view, index)}</strong>
-                <span>{primary ? '主视图 · 时间基准' : '参考视图 · 仅供事件级参考'}</span>
+                <span>{primary ? '主视图 · 时间基准' : '参考视图 · 仅供采集记录级参考'}</span>
                 <small>
                   {syncReliability
                     ? `同步声明：${syncReliabilityDisplayLabel(syncReliability)} · 仅供参考，不代表精确时间对齐`
@@ -748,7 +750,7 @@ function EventLevelViewEvidence({ viewEvidence }: { viewEvidence: CaptureGroupEv
           })}
         </ul>
       ) : (
-        <p className="form-hint">未返回事件级机位证据。</p>
+        <p className="form-hint">未返回采集记录级机位证据。</p>
       )}
     </div>
   )

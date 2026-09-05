@@ -59,8 +59,8 @@ describe('CaptureGroup Review and event cleaning', () => {
         ) && init?.method === 'POST',
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
-    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
-    expect(await screen.findByText('事件清洗通过')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
+    expect(await screen.findByText('标注检查通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
     expect(screen.getByText('REVIEW_APPROVED')).toBeInTheDocument()
@@ -139,7 +139,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
     expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
     expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)
-    expect(screen.queryByText('事件清洗通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('标注检查通过')).not.toBeInTheDocument()
   })
 
   it('surfaces a server rejection when Group Quality was downgraded before Review', async () => {
@@ -165,7 +165,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
 
-    expect(await screen.findByText('该 CaptureGroup 已不再满足标注复核条件。')).toBeInTheDocument()
+    expect(await screen.findByText('该采集记录当前不满足标注复核条件。')).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.filter(
         ([input, init]) =>
@@ -176,7 +176,7 @@ describe('CaptureGroup Review and event cleaning', () => {
           ) && init?.method === 'POST',
       ),
     ).toHaveLength(1)
-    expect(screen.queryByText('事件清洗通过')).not.toBeInTheDocument()
+    expect(screen.queryByText('标注检查通过')).not.toBeInTheDocument()
   })
 
   it('keeps missing and rejected views visible and gives supporting views no action timestamps', async () => {
@@ -196,7 +196,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
 
     const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
@@ -205,11 +205,11 @@ describe('CaptureGroup Review and event cleaning', () => {
       within(rejectedViews).queryByText(/MISSING_VIEW|VIEW_NOT_QUALIFIED/),
     ).not.toBeInTheDocument()
 
-    const eventEvidence = screen.getByRole('list', { name: '事件级参考视图证据' })
+    const eventEvidence = screen.getByRole('list', { name: '采集记录级参考视图证据' })
     const supportingItem = within(eventEvidence).getByText('机位 3').closest('li')
     expect(supportingItem).not.toBeNull()
     expect(
-      within(supportingItem as HTMLElement).getByText('参考视图 · 仅供事件级参考'),
+      within(supportingItem as HTMLElement).getByText('参考视图 · 仅供采集记录级参考'),
     ).toBeInTheDocument()
     expect(within(supportingItem as HTMLElement).queryByText(/100|900/)).not.toBeInTheDocument()
     expect(screen.getByText('主视图正式时间轴')).toBeInTheDocument()
@@ -233,8 +233,8 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
-    await user.click(await screen.findByRole('button', { name: '重新执行事件清洗' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
+    await user.click(await screen.findByRole('button', { name: '重新执行标注检查' }))
 
     await waitFor(() => {
       expect(
@@ -244,7 +244,7 @@ describe('CaptureGroup Review and event cleaning', () => {
         ),
       ).toBe(true)
     })
-    expect(screen.queryByRole('button', { name: '事件清洗通过' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '标注检查通过' })).not.toBeInTheDocument()
   })
 })
 

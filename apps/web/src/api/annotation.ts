@@ -363,45 +363,42 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     // Keep the stable fallback for proxy and non-JSON failures.
   }
   const messages: Record<string, string> = {
-    ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问配药动作标注的权限。',
-    ANNOTATION_TASK_NOT_FOUND: '当前标注任务已不存在，请刷新任务列表。',
-    ANNOTATION_REVISION_NOT_FOUND: '当前标注修订已不存在，请刷新任务列表。',
-    ANNOTATION_TASK_QUALITY_NOT_QUALIFIED:
-      '只有事件质量结论为“合格”的 CaptureGroup 才能进入配药动作标注。',
-    ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
-      '请先完成机位质量和事件质量判断，再开始人工动作标注。',
-    ANNOTATION_TASK_ALREADY_ASSIGNED: '该配药事件已经分配给其他成员，请刷新任务状态。',
+    ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问标注任务的权限。',
+    ANNOTATION_TASK_NOT_FOUND: '标注任务不存在，请刷新任务列表。',
+    ANNOTATION_REVISION_NOT_FOUND: '标注修订不存在，请刷新任务列表。',
+    ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '采集记录整体质量为“合格”后才能开始标注。',
+    ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED: '请先完成机位质量和整体质量判断，再开始标注。',
+    ANNOTATION_TASK_ALREADY_ASSIGNED: '该采集记录已分配给其他成员，请刷新任务状态。',
     ANNOTATION_TASK_ASSIGNMENT_IDEMPOTENCY_KEY_REUSED: '本次分配请求与已有请求冲突，请刷新后重试。',
-    ANNOTATION_TASK_NOT_READY: '事件内视图完成媒体检测后才能进入配药动作标注。',
-    ANNOTATION_TASK_ALREADY_EXISTS:
-      '该 CaptureGroup 已有配药动作标注，请在配药动作标注页面继续处理。',
+    ANNOTATION_TASK_NOT_READY: '采集记录中的视频完成媒体检测后才能开始标注。',
+    ANNOTATION_TASK_ALREADY_EXISTS: '该采集记录已有标注任务，请继续处理。',
     ANNOTATION_TASK_IDEMPOTENCY_KEY_REUSED: '本次请求与已提交请求冲突，请刷新后重试。',
     ANNOTATION_TASK_NOT_ASSIGNEE: '只有该任务的执行人可以提交标注。',
-    ANNOTATION_TASK_ALREADY_SUBMITTED: '该配药动作标注已经提交，等待后续复核。',
+    ANNOTATION_TASK_ALREADY_SUBMITTED: '标注已提交，等待复核。',
     ANNOTATION_TASK_NOT_SUBMITTED: '该标注任务已不是待复核状态，请刷新任务列表。',
-    ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该 CaptureGroup 已不再满足标注提交条件。',
+    ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该采集记录当前不满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间段的结束时间必须晚于开始时间。',
     ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了主视图已确认的视频时长。',
     ANNOTATION_LABEL_NOT_ALLOWED: '所选标签不在当前标注规范中，请重新选择。',
-    ANNOTATION_PRIMARY_STEP_OVERLAP: '主流程步骤的时间段不能重叠，请调整后重试。',
-    ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '配药动作标注提交者不能复核自己的标注。',
-    ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已经完成复核，请刷新查看结果。',
+    ANNOTATION_PRIMARY_STEP_OVERLAP: '主要步骤的时间段不能重叠，请调整后重试。',
+    ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',
+    ANNOTATION_REVISION_ALREADY_REVIEWED: '该标注已完成复核，请刷新查看结果。',
     ANNOTATION_REVISION_IDEMPOTENCY_KEY_REUSED: '本次复核请求与已有记录冲突，请刷新后重试。',
     ANNOTATION_REVISION_NOT_CURRENT: '当前修订已不是待复核版本，请刷新任务列表查看最新状态。',
-    ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该 CaptureGroup 已不再满足标注复核条件。',
+    ANNOTATION_REVISION_NO_LONGER_QUALIFIED: '该采集记录当前不满足标注复核条件。',
     ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY:
-      '当前配药事件修订、复核或任务状态不允许重新执行事件清洗。',
+      '当前采集记录的标注修订、复核或任务状态不允许重新执行标注检查。',
     ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
-      '事件清洗不接受浏览器提供的视图映射；请刷新后重试。',
-    HUMAN_ANNOTATION_EXPORT_UNAVAILABLE: '当前环境暂未开放人工标注导出。',
+      '标注检查不接受浏览器提供的视图映射；请刷新后重试。',
+    HUMAN_ANNOTATION_EXPORT_UNAVAILABLE: '暂未开放人工标注导出。',
     HUMAN_ANNOTATION_EXPORT_NOT_READY: '当前没有审核通过的人工标注，暂时不能导出。',
-    HUMAN_ANNOTATION_EXPORT_DATA_INVALID: '当前人工标注数据校验未通过，请刷新后重试。',
+    HUMAN_ANNOTATION_EXPORT_DATA_INVALID: '人工标注数据校验未通过，请刷新后重试。',
     HUMAN_ANNOTATION_EXPORT_FAILED: '人工标注导出未完成，请稍后重试。',
     INVALID_ANNOTATION_TASK: '提交内容不符合当前标注规范，请检查后重试。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }
   return new AnnotationTaskApiError(
-    messages[errorCode] ?? '配药动作操作暂未完成，请稍后重试。',
+    messages[errorCode] ?? '标注操作未完成，请稍后重试。',
     errorCode,
   )
 }

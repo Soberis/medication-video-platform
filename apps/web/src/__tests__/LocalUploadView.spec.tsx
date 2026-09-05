@@ -33,14 +33,14 @@ describe('LocalUploadView', () => {
     const user = userEvent.setup()
     renderLocalUpload()
     await selectProject(user, '合成测试项目')
-    await user.upload(screen.getByLabelText('本机视频'), [
+    await user.upload(screen.getByLabelText('视频文件'), [
       new File(['video-a'], 'first.mp4', { type: 'video/mp4' }),
       new File(['video-b'], 'second.mp4', { type: 'video/mp4' }),
     ])
     expect(screen.getByText('first.mp4')).toBeInTheDocument()
     expect(screen.getByText('second.mp4')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '开始上传（2 个视频）' })).toBeInTheDocument()
-    expect(screen.getByText(/按顺序分别上传/)).toBeInTheDocument()
+    expect(screen.getByText(/平台会分别上传/)).toBeInTheDocument()
   })
 
   it('shows browser transfer progress before platform confirmation completes', async () => {
@@ -72,7 +72,7 @@ describe('LocalUploadView', () => {
 
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File(['synthetic-video'], 'in-progress.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
@@ -115,7 +115,7 @@ describe('LocalUploadView', () => {
     renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
-    await user.upload(screen.getByLabelText('本机视频'), [
+    await user.upload(screen.getByLabelText('视频文件'), [
       new File(['broken'], 'broken.mp4', { type: 'video/mp4' }),
       new File(['confirmed'], 'confirmed.mp4', { type: 'video/mp4' }),
     ])
@@ -123,12 +123,10 @@ describe('LocalUploadView', () => {
 
     expect(await screen.findByText('部分上传完成')).toBeInTheDocument()
     expect(screen.getByText('平台已确认 1 / 2 个视频')).toBeInTheDocument()
-    expect(
-      screen.getByText('平台已确认 1 个视频，1 个文件需要重新选择后再上传。'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('平台已确认 1 个视频，1 个需重新选择后上传。')).toBeInTheDocument()
     expect(screen.getByText('broken.mp4')).toBeInTheDocument()
     expect(screen.getByText('confirmed.mp4')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '打开配药事件' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '打开视频' })).toHaveAttribute(
       'href',
       paths.captureGroup(project.project_id, '50000000-0000-4000-8000-000000000001'),
     )
@@ -151,7 +149,7 @@ describe('LocalUploadView', () => {
     renderLocalUpload()
 
     await selectProject(user, '合成测试项目')
-    await user.upload(screen.getByLabelText('本机视频'), [
+    await user.upload(screen.getByLabelText('视频文件'), [
       new File(['video-a'], 'first.mp4', { type: 'video/mp4' }),
       new File(['video-b'], 'second.mp4', { type: 'video/mp4' }),
     ])
@@ -163,7 +161,7 @@ describe('LocalUploadView', () => {
       'first.mp4',
       'second.mp4',
     ])
-    const eventLinks = screen.getAllByRole('link', { name: '打开配药事件' })
+    const eventLinks = screen.getAllByRole('link', { name: '打开视频' })
     expect(eventLinks).toHaveLength(2)
     expect(eventLinks[0]).toHaveAttribute(
       'href',
@@ -180,16 +178,15 @@ describe('LocalUploadView', () => {
     const user = userEvent.setup()
     renderLocalUpload()
 
-    const fileInput = screen.getByLabelText('本机视频')
+    const fileInput = screen.getByLabelText('视频文件')
     expect(fileInput).toBeDisabled()
-    expect(screen.getByText('请先选择所属项目，再选择本机视频。')).toBeInTheDocument()
+    expect(screen.getByText('请先选择项目。')).toBeInTheDocument()
 
     await selectProject(user, '合成测试项目')
 
     expect(fileInput).not.toBeDisabled()
-    expect(screen.getByText(/平台会按顺序分别上传/)).toBeInTheDocument()
-    const captureGroupLink = screen.getByRole('link', { name: '进入配药事件' })
-    expect(captureGroupLink).toHaveAttribute('href', paths.captureGroups(project.project_id))
+    expect(screen.getByText(/平台会分别上传/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '进入视频' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '查看项目视频' })).not.toBeInTheDocument()
   })
 
@@ -222,16 +219,16 @@ describe('LocalUploadView', () => {
 
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File(['synthetic-video'], 'confirmed.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
 
-    expect(await screen.findAllByText('正在建立单机位配药事件记录')).not.toHaveLength(0)
+    expect(await screen.findAllByText('正在建立采集记录')).not.toHaveLength(0)
     finishUpload?.()
     expect(await screen.findByText('已确认完成')).toBeInTheDocument()
-    await user.click(screen.getByText('查看技术信息'))
-    expect(screen.getByText('配药事件 ID')).toBeInTheDocument()
+    await user.click(screen.getByText('技术信息'))
+    expect(screen.getByText('采集记录 ID')).toBeInTheDocument()
     expect(screen.queryByText('配药操作 ID')).not.toBeInTheDocument()
   })
 
@@ -266,7 +263,7 @@ describe('LocalUploadView', () => {
     renderLocalUpload()
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File([], 'empty.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
@@ -290,14 +287,14 @@ describe('LocalUploadView', () => {
 
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File(['synthetic-video'], 'confirmed.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
 
     expect(await screen.findByText('已确认完成')).toBeInTheDocument()
-    expect(screen.getByText(/平台已确认上传完成/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '打开配药事件' })).toHaveAttribute(
+    expect(screen.getByText('所有视频已确认，采集记录已建立；可查看视频。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开视频' })).toHaveAttribute(
       'href',
       paths.captureGroup(project.project_id, '50000000-0000-4000-8000-000000000001'),
     )
@@ -336,7 +333,7 @@ describe('LocalUploadView', () => {
 
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File(['synthetic-video'], 'synthetic.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
@@ -380,7 +377,7 @@ describe('LocalUploadView', () => {
 
     await selectProject(user, '合成测试项目')
     await user.upload(
-      screen.getByLabelText('本机视频'),
+      screen.getByLabelText('视频文件'),
       new File(['synthetic-video'], 'synthetic.mp4', { type: 'video/mp4' }),
     )
     await user.click(screen.getByRole('button', { name: '开始上传' }))
@@ -424,7 +421,7 @@ describe('LocalUploadView', () => {
     )
 
     await selectProject(user, '合成测试项目')
-    await user.upload(screen.getByLabelText('本机视频'), [
+    await user.upload(screen.getByLabelText('视频文件'), [
       new File(['broken'], 'broken.mp4', { type: 'video/mp4' }),
       new File(['confirmed'], 'confirmed.mp4', { type: 'video/mp4' }),
     ])

@@ -257,8 +257,8 @@ describe('HandPoseOverlay', () => {
     expect(
       Number.parseInt(stage.style.getPropertyValue('--video-stage-width'), 10),
     ).toBeGreaterThan(Number.parseInt(stage.style.getPropertyValue('--video-stage-height'), 10))
-    expect(screen.getByText('本次播放授权')).toBeInTheDocument()
-    expect(screen.getByText('全屏仅用于查看；退出后返回工作台继续操作。')).toBeInTheDocument()
+    expect(screen.getByText('播放信息')).toBeInTheDocument()
+    expect(screen.getByLabelText('本次播放授权')).not.toHaveAttribute('open')
     expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-08-12T10:00:00Z')
     fireEvent.play(video)
     fireEvent.pause(video)

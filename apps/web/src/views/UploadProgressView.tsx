@@ -25,19 +25,19 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const batchStatusLabels: Record<UploadBatchStatus, string> = {
   INITIATED: '待上传',
   UPLOADING: '上传中',
-  COMPLETING: '平台正在完成校验',
-  COMPLETED: '批次已确认完成',
-  FAILED: '批次处理失败',
+  COMPLETING: '校验中',
+  COMPLETED: '已完成',
+  FAILED: '处理失败',
   ABORTED: '已中止',
   EXPIRED: '已过期',
 }
 const fileStatusLabels: Record<UploadFileStatus, string> = {
   REGISTERED: '已登记',
-  SESSION_CREATED: '会话已创建',
+  SESSION_CREATED: '准备上传',
   UPLOADING: '上传中',
   COMPLETING: '校验中',
-  UPLOADED: '文件已上传并校验',
-  FAILED: '上传校验失败',
+  UPLOADED: '已确认',
+  FAILED: '校验失败',
 }
 const fileKindLabels: Record<UploadFileKind, string> = {
   VIDEO: '视频文件',
@@ -45,7 +45,7 @@ const fileKindLabels: Record<UploadFileKind, string> = {
   EVENT_LOG: '事件日志',
 }
 const uploadDeviceDisplayLabels: Record<string, string> = {
-  PLATFORM_LOCAL: '平台本地上传',
+  PLATFORM_LOCAL: '上传视频',
 }
 
 function uploadDeviceDisplayLabel(deviceId: string) {
@@ -65,29 +65,29 @@ function fileStatusTone(status: UploadFileStatus): StatusBadgeTone {
 }
 
 function batchStatusDescription(status: UploadBatchStatus) {
-  if (status === 'INITIATED') return '批次已创建，等待文件登记和上传开始。'
-  if (status === 'UPLOADING') return '文件分片正在传输或等待服务端确认。'
-  if (status === 'COMPLETING') return '字节传输已结束，平台正在校验完整文件和清单。'
-  if (status === 'COMPLETED') return '平台已确认批次完成，视频文件已建立可追踪的资产绑定。'
-  if (status === 'FAILED') return '平台未能完成该批次，具体原因请查看文件级错误信息。'
-  if (status === 'ABORTED') return '该批次已被中止，不能继续使用本批次上传。'
-  return '该批次已过期，不能继续使用本批次上传。'
+  if (status === 'INITIATED') return '批次已创建，等待上传。'
+  if (status === 'UPLOADING') return '视频正在上传，等待平台确认。'
+  if (status === 'COMPLETING') return '上传完成，平台正在校验。'
+  if (status === 'COMPLETED') return '批次已完成，视频已确认。'
+  if (status === 'FAILED') return '批次处理失败，请查看文件错误。'
+  if (status === 'ABORTED') return '批次已中止，不能继续上传。'
+  return '批次已过期，请重新上传。'
 }
 
 function fileStatusDescription(file: UploadFileProgress) {
-  if (file.status === 'REGISTERED') return '文件已登记，等待创建分片上传会话。'
-  if (file.status === 'SESSION_CREATED') return '平台已创建上传会话，等待分片传输。'
-  if (file.status === 'UPLOADING') return '分片正在传输；进度来自服务端已确认的分片记录。'
-  if (file.status === 'COMPLETING') return '分片已提交，平台正在校验对象大小和完整摘要。'
-  if (file.status === 'UPLOADED') return '文件对象已完成服务端校验；批次是否完成仍以批次状态为准。'
-  return '文件最终校验未通过，请根据错误码处理或重新上传。'
+  if (file.status === 'REGISTERED') return '文件已登记，等待上传。'
+  if (file.status === 'SESSION_CREATED') return '已准备上传，等待传输。'
+  if (file.status === 'UPLOADING') return '正在上传，进度以平台确认为准。'
+  if (file.status === 'COMPLETING') return '正在校验文件。'
+  if (file.status === 'UPLOADED') return '文件已确认，批次状态以批次为准。'
+  return '文件校验失败，请查看错误码。'
 }
 
 function fileErrorDescription(errorCode: string) {
   if (errorCode === 'UPLOAD_FILE_SHA256_MISMATCH') {
-    return '平台校验到文件内容与登记摘要不一致，请重新选择原文件上传。'
+    return '文件摘要不一致，请重新选择原文件。'
   }
-  return '平台未确认该文件完整性，请根据错误码处理或重新上传。'
+  return '文件完整性未确认，请根据错误码处理或重新上传。'
 }
 
 const percent = (value: number, total: number) =>
@@ -125,7 +125,7 @@ export default function UploadProgressView() {
         setFiles([])
         setLoadState('error')
         setErrorCode('INVALID_BATCH_ID')
-        setErrorMessage('请输入有效的上传批次 UUID。')
+        setErrorMessage('请输入有效的上传批次 ID。')
         return
       }
       activeRequest.current?.abort()
@@ -153,7 +153,7 @@ export default function UploadProgressView() {
           setErrorMessage(error.message)
         } else {
           setErrorCode('UPLOAD_PROGRESS_REQUEST_FAILED')
-          setErrorMessage('无法连接上传进度服务，请稍后重试。')
+          setErrorMessage('无法读取上传进度，请稍后重试。')
         }
       } finally {
         if (activeRequest.current === request) activeRequest.current = null
@@ -176,14 +176,13 @@ export default function UploadProgressView() {
   return (
     <>
       <PageHeader
-        eyebrow="上传状态与异常"
         titleId="progress-title"
-        title="查看上传状态"
-        description="查看平台已确认的批次和文件状态，必要时根据错误信息处理异常。"
+        title="上传状态"
+        description="查看上传批次和文件状态。"
       />
       <Section
         className="upload-progress-query working-surface"
-        title="批次查询"
+        title="查询上传批次"
         titleId="progress-query-title"
       >
         <form
@@ -214,14 +213,12 @@ export default function UploadProgressView() {
             </Button>
           </div>
           <p id="batch-id-hint" className="form-hint">
-            粘贴平台返回的批次 ID；这里只读取进度，不会上传文件或修改批次。
+            输入上传批次 ID，只读取进度。
           </p>
         </form>
       </Section>
       {isLoading ? (
-        <LoadingState>
-          {isRefreshing ? '正在刷新批次和文件进度…' : '正在读取批次和文件进度…'}
-        </LoadingState>
+        <LoadingState>{isRefreshing ? '正在刷新进度…' : '正在读取进度…'}</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadProgress()}>
@@ -241,7 +238,7 @@ export default function UploadProgressView() {
             }
           >
             <p className="section-description">{batchStatusDescription(batch.status)}</p>
-            <div className="progress-block" role="group" aria-label="批次平台确认传输进度">
+            <div className="progress-block" role="group" aria-label="批次传输进度">
               <div className="progress-copy">
                 <span>已确认传输</span>
                 <strong>{batchBytePercent}%</strong>
@@ -281,7 +278,7 @@ export default function UploadProgressView() {
               footer={
                 batch.status === 'COMPLETED' ? (
                   <Link className="text-link" to={paths.captureGroups(batch.project_id)}>
-                    进入配药事件
+                    进入视频
                   </Link>
                 ) : null
               }
@@ -302,7 +299,7 @@ export default function UploadProgressView() {
               ]}
             />
             <details className="upload-technical-details">
-              <summary>查看技术信息</summary>
+              <summary>技术信息</summary>
               <MetadataList
                 items={[
                   {
@@ -406,7 +403,7 @@ export default function UploadProgressView() {
                   ]}
                 />
                 <details className="upload-technical-details">
-                  <summary>查看技术信息</summary>
+                  <summary>技术信息</summary>
                   <MetadataList
                     items={[
                       {
@@ -439,10 +436,10 @@ export default function UploadProgressView() {
                 </details>
                 {batch.device_id === 'PLATFORM_LOCAL' && file.status === 'FAILED' ? (
                   <div className="upload-recovery-actions">
-                    <strong>恢复方向</strong>
-                    <span>本地上传不提供断点续传，请重新选择原文件开始新一轮上传。</span>
+                    <strong>需要重新上传</strong>
+                    <span>不支持续传，请重新选择原文件上传。</span>
                     <Link className="text-link" to={paths.localUpload}>
-                      返回本地上传
+                      返回上传视频
                     </Link>
                   </div>
                 ) : null}

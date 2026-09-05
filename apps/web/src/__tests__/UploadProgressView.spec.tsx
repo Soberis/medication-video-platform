@@ -110,7 +110,7 @@ describe('UploadProgressView', () => {
     await user.click(screen.getByRole('button', { name: '查询进度' }))
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByText('INVALID_BATCH_ID')).toBeInTheDocument()
-    expect(screen.getByText(/请输入有效的上传批次 UUID/)).toBeInTheDocument()
+    expect(screen.getByText(/请输入有效的上传批次 ID/)).toBeInTheDocument()
   })
 
   it('renders batch, file, Part and stable error progress', async () => {
@@ -130,15 +130,13 @@ describe('UploadProgressView', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(screen.getByText(/已确认 1 \/ 1 个分片/)).toBeInTheDocument()
     expect(screen.getByText('UPLOAD_FILE_SHA256_MISMATCH')).toBeInTheDocument()
-    expect(screen.getByText('上传校验失败')).toBeInTheDocument()
+    expect(screen.getByText('校验失败')).toBeInTheDocument()
     expect(screen.getByText(/客户端标识：/)).toBeInTheDocument()
-    expect(
-      screen.getByText('平台校验到文件内容与登记摘要不一致，请重新选择原文件上传。'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('文件摘要不一致，请重新选择原文件。')).toBeInTheDocument()
     const clientFileId = screen.getByText(fileProgress.files[0]!.client_file_id)
     expect(clientFileId.closest('details')).not.toHaveAttribute('open')
 
-    const technicalDetails = screen.getAllByText('查看技术信息')
+    const technicalDetails = screen.getAllByText('技术信息')
     expect(technicalDetails).toHaveLength(2)
     await user.click(technicalDetails[1]!)
     expect(clientFileId.closest('details')).toHaveAttribute('open')
@@ -161,8 +159,8 @@ describe('UploadProgressView', () => {
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
 
-    expect(await screen.findByText('平台本地上传')).toBeInTheDocument()
-    const technicalDetails = screen.getAllByText('查看技术信息')[0]?.closest('details')
+    expect(await screen.findByText('上传视频')).toBeInTheDocument()
+    const technicalDetails = screen.getAllByText('技术信息')[0]?.closest('details')
     if (!technicalDetails) throw new Error('Batch technical details were not mounted.')
     expect(technicalDetails).not.toHaveAttribute('open')
     expect(within(technicalDetails).getByText('PLATFORM_LOCAL')).toBeInTheDocument()
@@ -190,7 +188,7 @@ describe('UploadProgressView', () => {
     await user.type(screen.getByLabelText('上传批次 ID'), batchId)
     await user.click(screen.getByRole('button', { name: '查询进度' }))
 
-    expect(await screen.findByRole('link', { name: '进入配药事件' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '进入视频' })).toHaveAttribute(
       'href',
       '/projects/00000000-0000-4000-8000-000000000001/capture-groups',
     )

@@ -39,7 +39,7 @@ describe('CaptureGroup detail loading', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '视频' })).toBeInTheDocument()
     await waitFor(() => {
       expect(
         fetchMock.mock.calls.some(([input]) =>

@@ -169,7 +169,7 @@ describe('App', () => {
         {
           path: `/projects/:projectId/capture-groups`,
           element: <AppShell />,
-          children: [{ index: true, element: <div>配药事件页面</div> }],
+          children: [{ index: true, element: <div>视频页面</div> }],
         },
       ],
       [`/projects/${projectId}/capture-groups`],
@@ -177,11 +177,11 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/capture-groups`,
     )
@@ -212,7 +212,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频' })).not.toHaveAttribute(
       'aria-current',
     )
   })
@@ -228,7 +228,7 @@ describe('App', () => {
           children: [
             {
               path: 'projects/:projectId/capture-groups/:captureGroupId',
-              element: <div>配药事件详情页面</div>,
+              element: <div>视频详情页面</div>,
             },
           ],
         },
@@ -238,7 +238,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -271,7 +271,7 @@ describe('App', () => {
     expect(within(navigation).getByRole('link', { name: '标注任务' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -286,7 +286,7 @@ describe('App', () => {
         {
           path: '/',
           element: <AppShell />,
-          children: [{ path: 'uploads/new', element: <div>本地上传页面</div> }],
+          children: [{ path: 'uploads/new', element: <div>上传视频页面</div> }],
         },
       ],
       ['/uploads/new'],
@@ -294,7 +294,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '本地上传（辅助）' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '上传视频' })).toHaveAttribute(
       'aria-current',
       'page',
     )

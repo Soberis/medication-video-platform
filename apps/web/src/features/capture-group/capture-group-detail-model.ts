@@ -226,7 +226,7 @@ export function createGroupViewRows(group: CaptureGroup | null): GroupViewRow[] 
 export function cleaningLabel(outcome: 'PASS' | 'WARNING' | 'REJECT') {
   if (outcome === 'PASS') return '当前规则检查通过'
   if (outcome === 'WARNING') return '需处理'
-  return '事件清洗未通过'
+  return '当前规则检查未通过'
 }
 
 export function cleaningTone(outcome: 'PASS' | 'WARNING' | 'REJECT'): StatusIndicatorTone {

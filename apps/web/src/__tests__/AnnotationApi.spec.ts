@@ -98,7 +98,7 @@ describe('annotation task API', () => {
     })
     await expect(listAnnotationTasks(projectId)).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
-      message: '只有事件质量结论为“合格”的 CaptureGroup 才能进入配药动作标注。',
+      message: '采集记录整体质量为“合格”后才能开始标注。',
     })
   })
 
