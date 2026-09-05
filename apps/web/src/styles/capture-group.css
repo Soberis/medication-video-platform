@@ -26,6 +26,11 @@
   margin-top: var(--app-space-16);
 }
 
+.capture-group-workspace-machine-evidence {
+  grid-template-areas: 'video';
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .capture-group-workspace[data-stage='ANNOTATION'] {
   grid-template-areas: 'video action';
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);

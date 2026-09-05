@@ -1,0 +1,80 @@
+{
+  "format": "mediapipe-hand-landmarker-benchmark-input.v1",
+  "provenance": {
+    "model_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "profile": "synthetic-fps10-threshold05",
+    "profile_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "fps": 10,
+    "threshold": 0.5,
+    "dataset_version": "synthetic-v1",
+    "dataset_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "evaluation_code_version": "hand-landmarker-evaluator.v1",
+    "timestamp": "2026-09-04T00:00:00Z",
+    "dataset_kind": "SYNTHETIC",
+    "authorization_reference": "SYNTHETIC_FIXTURE"
+  },
+  "frames": [
+    {
+      "frame_id": "f-perfect",
+      "timestamp_ms": 0,
+      "groups": {"occlusion": "none", "fast_motion": false, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "h1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}],
+      "predicted_hands": [{"hand_id": "h1", "handedness": "RIGHT", "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}]
+    },
+    {
+      "frame_id": "f-missed",
+      "timestamp_ms": 33,
+      "groups": {"occlusion": "heavy", "fast_motion": false, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "h1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}],
+      "predicted_hands": []
+    },
+    {
+      "frame_id": "f-false-positive",
+      "timestamp_ms": 66,
+      "groups": {"occlusion": "none", "fast_motion": false, "view": "front", "frame_edge": "left"},
+      "ground_truth_hands": [],
+      "predicted_hands": [{"hand_id": "false1", "handedness": "UNKNOWN", "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}]
+    },
+    {
+      "frame_id": "f-offset",
+      "timestamp_ms": 99,
+      "groups": {"occlusion": "moderate", "fast_motion": false, "view": "side", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "h1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}],
+      "predicted_hands": [{"hand_id": "h1", "handedness": "RIGHT", "landmarks": [[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0],[0.1,0,0]]}]
+    },
+    {
+      "frame_id": "f-handedness-mismatch",
+      "timestamp_ms": 132,
+      "groups": {"occlusion": "none", "fast_motion": false, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "h1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}],
+      "predicted_hands": [{"hand_id": "h1", "handedness": "LEFT", "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}]
+    },
+    {
+      "frame_id": "f-two-hands",
+      "timestamp_ms": 165,
+      "groups": {"occlusion": "none", "fast_motion": false, "two_hands": true, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [
+        {"hand_id": "left1", "handedness": "LEFT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]},
+        {"hand_id": "right1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0]]}
+      ],
+      "predicted_hands": [
+        {"hand_id": "left1", "handedness": "LEFT", "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]},
+        {"hand_id": "right1", "handedness": "RIGHT", "landmarks": [[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,0,0]]}
+      ]
+    },
+    {
+      "frame_id": "f-motion-start",
+      "timestamp_ms": 198,
+      "groups": {"occlusion": "none", "fast_motion": true, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "moving1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}],
+      "predicted_hands": [{"hand_id": "moving1", "handedness": "RIGHT", "landmarks": [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]}]
+    },
+    {
+      "frame_id": "f-motion-end",
+      "timestamp_ms": 231,
+      "groups": {"occlusion": "none", "fast_motion": true, "view": "front", "frame_edge": "none"},
+      "ground_truth_hands": [{"hand_id": "moving1", "handedness": "RIGHT", "normalization_scale": 1, "landmarks": [[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0],[0.2,0,0]]}],
+      "predicted_hands": [{"hand_id": "moving1", "handedness": "RIGHT", "landmarks": [[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0],[0.3,0,0]]}]
+    }
+  ]
+}

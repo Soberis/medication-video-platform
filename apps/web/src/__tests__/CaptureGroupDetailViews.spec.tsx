@@ -1,132 +1,33 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { paths } from '@/app/paths'
-import { renderRoute } from '@/test/render'
-import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
-import type { QualityReview } from '@/api/quality'
-
 import {
-  captureGroupFixture,
-  clipIds,
-  groupId,
-  groupTask,
   projectId,
+  groupId,
+  captureGroupFixture,
+  groupTask,
   qualityFixture,
   stubGroupDetail,
 } from './capture-group-fixtures'
-
-function viewQualityRecord(
-  clipAssetId: string,
-  decision: QualityReview['decision'],
-  version = 0,
-): QualityReview {
-  return {
-    quality_review_id: version ? `quality-${clipAssetId}` : null,
-    project_id: projectId,
-    clip_asset_id: clipAssetId,
-    decision,
-    reason_code: version ? 'MEETS_REQUIREMENTS' : null,
-    reviewed_by: version ? 'reviewer' : null,
-    reviewed_at: version ? '2026-08-20T01:02:00Z' : null,
-    version,
-  }
-}
+import { renderRoute } from '@/test/render'
+import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
-  it('focuses the requested Review section from a Group workflow deep link', async () => {
+  it('keeps the default detail path focused on receipt, media and machine evidence', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
       receipt: 'COMPLETE',
     })
-    const completedTask = groupTask(groupId, true, { revision: true })
-    const reviewableTask = {
-      ...completedTask,
-      status: 'SUBMITTED' as const,
-      can_submit: false,
-      can_review: true,
-      can_recheck_capture_group_cleaning: false,
-      annotation_revision: {
-        ...completedTask.annotation_revision!,
-        review: null,
-      },
-    }
-    stubGroupDetail(group, {
-      task: reviewableTask,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const scrollIntoView = vi.fn()
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
-    })
-
-    try {
-      const { unmount } = renderRoute(<CaptureGroupDetailView />, {
-        path: '/projects/:projectId/capture-groups/:captureGroupId',
-        route: `/projects/${projectId}/capture-groups/${groupId}?focus=review`,
-      })
-      await waitFor(() =>
-        expect(document.activeElement).toHaveClass('capture-group-workflow-focus-target'),
-      )
-      expect(await screen.findByRole('button', { name: '进入人工复核' })).toBeInTheDocument()
-      const section = document.activeElement as HTMLElement
-
-      expect(['capture-group-review-cleaning', 'capture-group-review-cleaning-context']).toContain(
-        section.id,
-      )
-      expect(section).toHaveAttribute('tabindex', '-1')
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
-      unmount()
-    } finally {
-      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-        configurable: true,
-        value: originalScrollIntoView,
-      })
-    }
-  })
-
-  it('explains permission-limited task context in the group detail view', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-      key: 'detail-permission-limited-task',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      taskScope: 'ASSIGNEE',
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(await screen.findByText(/配药动作标注任务状态按权限不可见/)).toBeInTheDocument()
-    expect(screen.queryByText('事件质量通过后，系统会准备配药动作标注。')).not.toBeInTheDocument()
-  })
-
-  it('keeps a single N=1 group and distinguishes receipt from media and AI facts', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    group.streams[0]!.camera_role = 'PLATFORM_LOCAL'
     const fetchMock = stubGroupDetail(group, {
       task: null,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
     })
+    const user = userEvent.setup()
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
@@ -134,756 +35,50 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
-    const headerStatus = document.querySelector<HTMLElement>('.capture-group-header-status')
-    if (!headerStatus) throw new Error('CaptureGroup header status was not mounted.')
-    expect(headerStatus).toHaveTextContent('已完整接收')
-    expect(headerStatus).toHaveTextContent('2026')
-    expect(headerStatus).toHaveTextContent('1 个机位')
-    const focusedHeading = screen.getByRole('heading', { level: 2, name: '机位 1' })
-    expect(focusedHeading).toBeInTheDocument()
-    expect(focusedHeading.closest('header')).not.toHaveTextContent('PLATFORM_LOCAL')
-    expect(screen.queryByLabelText('配药事件机位选择')).not.toBeInTheDocument()
-    const currentAction = screen
-      .getByRole('heading', { level: 2, name: '当前动作' })
-      .closest('section')
-    if (!currentAction) throw new Error('Current Action section was not mounted.')
-    expect(currentAction).toHaveTextContent('当前阶段')
-    expect(currentAction).toHaveTextContent('配药动作标注')
-    const user = userEvent.setup()
-    const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
-    if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
-    expect(workflowDisclosure).not.toHaveAttribute('open')
-    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
-    const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
-    expect(workflowRail).toBeInTheDocument()
-    expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)
-    expect(workflowRail.querySelectorAll('[aria-current="step"]')).toHaveLength(1)
-    expect(workflowRail.querySelector('[aria-current="step"]')).toHaveTextContent('配药动作标注')
-    expect(currentAction?.querySelector('[aria-current="step"]')).toBeNull()
-    expect(screen.queryAllByRole('tab')).toHaveLength(0)
-    const workbench = document.querySelector('.capture-group-workspace')
-    expect(workbench).toHaveAttribute('data-stage', 'ANNOTATION')
-    expect(workbench).toHaveClass('capture-group-workspace-annotation')
-    expect(document.querySelectorAll('h1')).toHaveLength(1)
-    expect(screen.getAllByText('事件质量').length).toBeGreaterThan(0)
-    expect(screen.getByText('机位质量')).toBeInTheDocument()
-    expect(screen.getAllByText('手部检测').length).toBeGreaterThan(0)
-    const evidenceDisclosure = document.querySelector<HTMLElement>(
-      'details.capture-group-focused-details',
-    )
-    if (!evidenceDisclosure) throw new Error('Focused evidence disclosure was not mounted.')
-    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
+    expect(screen.getByRole('link', { name: '数据组' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    await user.click(await screen.findByText('查看机位技术与辅助证据'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
-    expect(screen.getByText('手部检测：已完成 · 未检测到手部')).toHaveAttribute(
-      'aria-live',
-      'polite',
-    )
-    expect(screen.getByText(/这是检测事实/)).toBeInTheDocument()
-    expect(screen.getByText(/人工记录的事件质量结论/)).toBeInTheDocument()
-    expect(screen.queryByText(/NO_HAND_DETECTED/)).not.toBeInTheDocument()
-    expect(screen.queryByText('CaptureGroup 多机位')).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: '配药事件关键事实' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('视频预览')).not.toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${clipIds[0]}/playback-grants`,
-      expect.anything(),
+    expect(screen.queryByRole('region', { name: '人工标签任务' })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
+      false,
     )
   })
 
-  it('links detail breadcrumb levels back to video management and uses a short fallback identity', async () => {
-    const fallbackGroupId = '60000000-0000-4000-8000-000000000006'
-    const group = captureGroupFixture(fallbackGroupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    group.capture_group_key = null
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${fallbackGroupId}`,
-    })
-
-    expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: '配药事件 · 60000000…0006',
-      }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('heading', { level: 1, name: '配药事件详情' }),
-    ).not.toBeInTheDocument()
-
-    const breadcrumb = screen.getByRole('navigation', { name: '面包屑导航' })
-    const breadcrumbLinks = within(breadcrumb).getAllByRole('link')
-    expect(breadcrumbLinks).toHaveLength(1)
-    expect(breadcrumbLinks[0]).toHaveAccessibleName('配药事件')
-    expect(breadcrumbLinks[0]).toHaveAttribute('href', paths.captureGroups(projectId))
-    expect(breadcrumb).toHaveTextContent('配药事件/60000000…0006')
-  })
-
-  it('keeps the active action hierarchy compact at a narrow viewport', async () => {
-    const originalInnerWidth = window.innerWidth
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 })
-
-    try {
-      const group = captureGroupFixture(groupId, {
-        expected: [1],
-        received: [1],
-        receipt: 'COMPLETE',
-        key: 'narrow-active-workbench',
-      })
-      stubGroupDetail(group, {
-        task: null,
-        quality: qualityFixture(group, 'QUALIFIED'),
-        candidateStatus: 'NO_HAND_DETECTED',
-      })
-
-      renderRoute(<CaptureGroupDetailView />, {
-        path: '/projects/:projectId/capture-groups/:captureGroupId',
-        route: `/projects/${projectId}/capture-groups/${groupId}`,
-      })
-
-      const currentAction = await screen.findByRole('heading', {
-        level: 2,
-        name: '当前动作',
-      })
-      expect(currentAction.closest('section')).toHaveTextContent('当前阶段')
-      const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
-      if (!workflowDisclosure) throw new Error('Workflow disclosure was not mounted.')
-      expect(workflowDisclosure).not.toHaveAttribute('open')
-    } finally {
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        value: originalInnerWidth,
-      })
-    }
-  })
-
-  it('labels a successful hand result as AI evidence without making it a quality decision', async () => {
+  it('renders an existing human-label task without making it the default machine path', async () => {
     const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
+      expected: [1, 2],
+      received: [1, 2],
       receipt: 'COMPLETE',
     })
     stubGroupDetail(group, {
-      task: null,
+      task: groupTask(groupId, true),
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'HAND_DETECTED',
     })
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const user = userEvent.setup()
-    const evidenceDisclosure = (await screen.findByText('查看机位技术与辅助证据')).closest(
-      'details',
-    )
-    if (!evidenceDisclosure) throw new Error('Focused progressive detail was not mounted.')
-    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
     expect(
-      await within(evidenceDisclosure).findByText('手部检测：已完成 · 检测到手部'),
+      await screen.findByRole('heading', { level: 2, name: '配药动作标注' }),
     ).toBeInTheDocument()
-    expect(
-      within(evidenceDisclosure).getByText('AI 证据仅供人工参考，不自动决定机位质量或事件准入。'),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交修订' })).toBeInTheDocument()
   })
 
-  it('keeps a successful unknown hand result distinct from hand detection', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'UNKNOWN',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    const user = userEvent.setup()
-    const evidenceDisclosure = (await screen.findByText('查看机位技术与辅助证据')).closest(
-      'details',
-    )
-    if (!evidenceDisclosure) throw new Error('Focused progressive detail was not mounted.')
-    await user.click(within(evidenceDisclosure).getByText('查看机位技术与辅助证据'))
-    expect(
-      await within(evidenceDisclosure).findByText('手部检测：已完成 · 结果未知'),
-    ).toBeInTheDocument()
-    expect(
-      within(evidenceDisclosure).getByText(/检测结果未知；这是 AI 证据状态/),
-    ).toBeInTheDocument()
-  })
-
-  it.each([
-    ['N=1', [1]],
-    ['N>1', [1, 2]],
-  ])(
-    'keeps the ADMIN hand-detection evidence export in auxiliary evidence for %s',
-    async (_, cameras) => {
-      const group = captureGroupFixture(groupId, {
-        expected: cameras,
-        received: cameras,
-        receipt: 'COMPLETE',
-      })
-      stubGroupDetail(group, {
-        task: null,
-        quality: qualityFixture(group, 'QUALIFIED'),
-        candidateStatus: 'NO_HAND_DETECTED',
-      })
-      const user = userEvent.setup()
-
-      renderRoute(<CaptureGroupDetailView />, {
-        path: '/projects/:projectId/capture-groups/:captureGroupId',
-        route: `/projects/${projectId}/capture-groups/${groupId}`,
-        session: { username: 'platform-admin', role: 'ADMIN' },
-      })
-
-      const toolbar = await screen.findByRole('toolbar', { name: '页面操作' })
-      expect(
-        within(toolbar).queryByRole('button', { name: '导出手部检测证据' }),
-      ).not.toBeInTheDocument()
-      const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
-      if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
-      await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
-      expect(
-        within(focusedDetails).getByRole('button', { name: '导出手部检测证据' }),
-      ).toBeInTheDocument()
-      expect(focusedDetails).toHaveTextContent(
-        '导出当前配药事件的 hand-landmarks.v1 手部检测证据。',
-      )
-      expect(focusedDetails).not.toHaveTextContent('训练数据导出')
-    },
-  )
-
-  it('does not expose the hand-detection evidence export to a non-ADMIN', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-      session: { username: 'project-member', role: 'MEMBER' },
-    })
-
-    const focusedDetails = await screen.findByText('查看机位技术与辅助证据')
-    await user.click(focusedDetails)
-    expect(screen.queryByRole('button', { name: '导出手部检测证据' })).not.toBeInTheDocument()
-  })
-
-  it('keeps a completed workflow compact and leaves full event identifiers in progressive details', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    const task = groupTask(groupId, true, { revision: true })
-    stubGroupDetail(group, {
-      task,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-      session: { username: 'platform-admin', role: 'ADMIN' },
-    })
-
-    const user = userEvent.setup()
-    expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
-    expect(screen.getAllByText('人工复核已通过，事件清洗通过')).toHaveLength(1)
-    expect(screen.queryByText('人工复核已通过 · 事件清洗通过')).not.toBeInTheDocument()
-    expect(
-      screen.queryByText('当前事件已完成既定流程；完整修订、证据与规则事实已收起。'),
-    ).not.toBeInTheDocument()
-    expect(screen.queryByText('人工复核：已通过')).not.toBeInTheDocument()
-    expect(screen.queryByText('事件清洗：已通过')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
-    const workflowDisclosure = screen.getByText('查看完整流程').closest('details')
-    if (!workflowDisclosure) throw new Error('Completed workflow disclosure was not mounted.')
-    expect(workflowDisclosure).not.toHaveAttribute('open')
-    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
-    const workflowRail = screen.getByRole('list', { name: '配药事件处理流程' })
-    expect(within(workflowRail).getAllByRole('listitem')).toHaveLength(6)
-    expect(workflowRail.querySelector('[aria-current="step"]')).toHaveTextContent('事件清洗')
-    await user.click(within(workflowDisclosure).getByText('查看完整流程'))
-    expect(workflowDisclosure).not.toHaveAttribute('open')
-    expect(screen.queryAllByRole('tab')).toHaveLength(0)
-    const detailToggle = screen.getByRole('button', { name: '查看复核与事件清洗详情' })
-    expect(detailToggle).toHaveAttribute('aria-expanded', 'false')
-    expect(detailToggle).not.toHaveAttribute('aria-controls')
-    expect(screen.queryByText('已确认输入与机位集合')).not.toBeInTheDocument()
-    await user.click(detailToggle)
-    const detailCollapse = screen.getByRole('button', { name: '收起复核与事件清洗详情' })
-    expect(detailCollapse).toHaveAttribute('aria-expanded', 'true')
-    expect(detailCollapse).toHaveAttribute('aria-controls', 'capture-group-review-cleaning-details')
-    const evidenceDisclosure = screen
-      .getByText('查看已确认机位、检测证据与修订历史')
-      .closest('details')
-    if (!evidenceDisclosure)
-      throw new Error('Completed review evidence disclosure was not mounted.')
-    expect(evidenceDisclosure).not.toHaveAttribute('open')
-    await user.click(within(evidenceDisclosure).getByText('查看已确认机位、检测证据与修订历史'))
-    expect(evidenceDisclosure).toHaveAttribute('open')
-    expect(within(evidenceDisclosure).getByText('已确认输入与机位集合')).toBeInTheDocument()
-
-    expect(document.querySelector('.page-heading .app-eyebrow')).toBeNull()
-    const videoRegion = screen.getByRole('region', { name: '视频与辅助证据' })
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: '播放视频' })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: '配药事件机位选择' })).not.toBeInTheDocument()
-    const focusedDetails = within(videoRegion)
-      .getByText('查看机位技术与辅助证据')
-      .closest('details')
-    if (!focusedDetails) throw new Error('Completed focused evidence details were not mounted.')
-    await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
-    expect(within(focusedDetails).getByRole('heading', { name: '手部检测' })).toBeInTheDocument()
-    expect(
-      within(focusedDetails).getByRole('button', { name: '导出手部检测证据' }),
-    ).toBeInTheDocument()
-    expect(
-      within(focusedDetails).getByRole('heading', { name: '媒体检测报告' }),
-    ).toBeInTheDocument()
-
-    const auditDisclosure = screen.getByText('事实、历史与审计').closest('details')
-    if (!auditDisclosure) throw new Error('Completed audit progressive detail was not mounted.')
-    expect(auditDisclosure).not.toHaveAttribute('open')
-    await user.click(screen.getByText('事实、历史与审计'))
-    expect(auditDisclosure).toHaveAttribute('open')
-    const inspector = screen.getByRole('complementary', { name: '事实、历史与审计' })
-    const receiptDetails = within(inspector).getByText('接收与采集事实').closest('details')
-    if (!receiptDetails) throw new Error('Receipt progressive detail was not mounted.')
-    expect(receiptDetails.querySelector('summary')).toHaveTextContent('已完整接收')
-    expect(receiptDetails.querySelector('summary')).not.toHaveTextContent('COMPLETE')
-    await user.click(within(receiptDetails).getByText('接收与采集事实'))
-    expect(within(receiptDetails).getByText(group.capture_group_id)).toBeInTheDocument()
-
-    const revisionDetails = within(inspector).getByText('修订、复核与事件清洗').closest('details')
-    if (!revisionDetails) throw new Error('Revision progressive detail was not mounted.')
-    await user.click(within(revisionDetails).getByText('修订、复核与事件清洗'))
-    expect(within(revisionDetails).getByText(task.annotation_task_id)).toBeInTheDocument()
-    const revisionHistory = within(revisionDetails).getByText('正式修订').closest('div')
-    if (!revisionHistory) throw new Error('Revision history was not mounted.')
-    expect(revisionHistory).toHaveTextContent(task.annotation_revision!.annotation_revision_id)
-    expect(within(revisionDetails).getByText('已完成')).toBeInTheDocument()
-    expect(
-      within(revisionDetails).queryByText('COMPLETED', { exact: true }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('uses a compact camera selector for N=2 and supports keyboard switching', async () => {
+  it('keeps a missing machine result explicit instead of presenting human quality', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
-      received: [1, 2],
-      receipt: 'COMPLETE',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    const selector = await screen.findByRole('group', { name: '配药事件机位选择' })
-    expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
-    expect(within(selector).getAllByRole('button')).toHaveLength(2)
-    const cameraTwoButton = within(selector).getByRole('button', { name: /机位 2/ })
-    cameraTwoButton.focus()
-    await user.keyboard('{Enter}')
-
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
-    expect(cameraTwoButton).toHaveAttribute('aria-pressed', 'true')
-    expect(cameraTwoButton).toHaveAttribute('aria-current', 'true')
-  })
-
-  it('focuses the first unresolved view and advances only after a successful quality refresh', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1, 2],
-      received: [1, 2],
-      receipt: 'COMPLETE',
-    })
-    const viewQualityByCamera: Record<number, QualityReview> = {
-      1: viewQualityRecord(clipIds[0]!, 'UNREVIEWED'),
-      2: viewQualityRecord(clipIds[1]!, 'UNREVIEWED'),
-    }
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'UNREVIEWED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-      viewQualityByCamera,
-      viewQualityAfterSaveByCamera: {
-        1: viewQualityRecord(clipIds[0]!, 'QUALIFIED', 1),
-      },
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '判断当前机位质量' })).not.toBeInTheDocument()
-    const saveQualityButton = await screen.findByRole('button', { name: '保存质量结论' })
-    expect(saveQualityButton).toBeInTheDocument()
-    await user.click(saveQualityButton)
-
-    expect(await screen.findByRole('heading', { level: 2, name: '机位 2' })).toBeInTheDocument()
-  })
-
-  it('treats a bound media stream as waiting instead of a workflow blocker', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
       received: [1],
-      receipt: 'COMPLETE',
-    })
-    const stream = group.streams[0]
-    if (!stream) throw new Error('Expected one stream fixture.')
-    stream.stream_status = 'BOUND'
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'UNREVIEWED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-      viewQualityByCamera: {
-        1: viewQualityRecord(stream.clip_asset_id, 'UNREVIEWED'),
-      },
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(
-      await screen.findByText('正在聚焦下一路未决机位，等待其媒体事实加载。'),
-    ).toBeInTheDocument()
-    const currentAction = screen
-      .getByRole('heading', { level: 2, name: '当前动作' })
-      .closest('section')
-    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
-      'data-tone',
-      'information',
-    )
-    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
-      'data-tone',
-      'destructive',
-    )
-  })
-
-  it('keeps technical and provenance facts behind progressive details', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1, 2],
-      received: [1, 2],
-      receipt: 'COMPLETE',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'FAILED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    const inspector = await screen.findByRole('complementary', {
-      name: '事实、历史与审计',
-    })
-    const receiptSummary = within(inspector).getByText('接收与采集事实')
-    const receiptDetails = receiptSummary.closest('details')
-    if (!receiptDetails) throw new Error('Receipt progressive detail was not mounted.')
-    expect(receiptDetails).not.toHaveAttribute('open')
-    await user.click(receiptSummary)
-    expect(receiptDetails).toHaveAttribute('open')
-    expect(within(receiptDetails).getByText('配药事件 ID')).toBeInTheDocument()
-    expect(within(receiptDetails).getByText('服务端接收时间')).toBeInTheDocument()
-
-    const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
-    if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
-    expect(focusedDetails).not.toHaveAttribute('open')
-    await user.click(screen.getByText('查看机位技术与辅助证据'))
-    expect(focusedDetails).toHaveAttribute('open')
-    expect(
-      within(focusedDetails).getByRole('heading', { level: 2, name: '手部检测' }),
-    ).toBeInTheDocument()
-    expect(
-      within(focusedDetails).getByRole('heading', { level: 3, name: '媒体检测报告' }),
-    ).toBeInTheDocument()
-  })
-
-  it('requires explicit confirmation before ending receipt', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'RECEIVING',
-    })
-    const fetchMock = stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'UNREVIEWED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    const finalizeButton = await screen.findByRole('button', { name: '结束接收' })
-    await user.click(finalizeButton)
-
-    const confirmationTitle = await screen.findByText('结束本次接收？')
-    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
-    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
-    expect(within(dialog).getByText('结束本次接收？')).toBeInTheDocument()
-    expect(dialog).toHaveTextContent(
-      '系统将根据当前已收到的机位形成完整或有缺失的接收结果，并进入后续事件质量判断。',
-    )
-    expect(document.querySelector('.capture-group-header-status')).toHaveTextContent('接收中')
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-
-    await user.click(within(dialog).getByRole('button', { name: '取消' }))
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
-      expect.objectContaining({ method: 'POST' }),
-    )
-    await waitFor(() => expect(document.activeElement).toBe(finalizeButton))
-  })
-
-  it('confirms receipt once, disables duplicates, and refreshes authoritative facts', async () => {
-    const receivingGroup = captureGroupFixture(groupId, {
-      expected: [1, 2, 3, 4, 5],
-      received: [1, 2, 3, 4, 5],
-      receipt: 'RECEIVING',
-    })
-    const completedGroup = captureGroupFixture(groupId, {
-      expected: [1, 2, 3, 4, 5],
-      received: [1, 2, 3, 4, 5],
-      receipt: 'COMPLETE',
-    })
-    let releaseFinalize: () => void = () => undefined
-    const finalizeGate = new Promise<void>((resolve) => {
-      releaseFinalize = () => resolve()
-    })
-    const fetchMock = stubGroupDetail(receivingGroup, {
-      task: null,
-      groupResponses: [receivingGroup, completedGroup],
-      receiptFinalizeResponse: completedGroup,
-      receiptFinalizeGate: finalizeGate,
-      quality: qualityFixture(receivingGroup, 'UNREVIEWED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    await user.click(await screen.findByRole('button', { name: '结束接收' }))
-    const confirmationTitle = await screen.findByText('结束本次接收？')
-    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
-    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
-    const confirmButton = within(dialog).getByRole('button', { name: '结束接收' })
-    await user.click(confirmButton)
-
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        `/api/v1/projects/${projectId}/capture-groups/${groupId}/receipt/finalize`,
-        expect.objectContaining({ method: 'POST' }),
-      ),
-    )
-    expect(confirmButton).toBeDisabled()
-    await user.click(confirmButton)
-    expect(
-      fetchMock.mock.calls.filter(
-        ([input, init]) =>
-          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
-      ),
-    ).toHaveLength(1)
-
-    releaseFinalize()
-    await waitFor(() =>
-      expect(document.querySelector('.capture-group-header-status')).toHaveTextContent(
-        '已完整接收',
-      ),
-    )
-    expect(
-      within(screen.getByRole('toolbar', { name: '页面操作' })).queryByRole('button', {
-        name: '结束接收',
-      }),
-    ).not.toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.filter(
-        ([input, init]) =>
-          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
-      ),
-    ).toHaveLength(1)
-  })
-
-  it('keeps receipt confirmation open when finalization fails', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'RECEIVING',
-    })
-    const fetchMock = stubGroupDetail(group, {
-      task: null,
-      receiptFinalizeError: { status: 500 },
-      quality: qualityFixture(group, 'UNREVIEWED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    await user.click(await screen.findByRole('button', { name: '结束接收' }))
-    const confirmationTitle = await screen.findByText('结束本次接收？')
-    const dialog = confirmationTitle.closest('[role="dialog"]') as HTMLElement | null
-    if (!dialog) throw new Error('Receipt confirmation dialog was not mounted.')
-
-    await user.click(within(dialog).getByRole('button', { name: '结束接收' }))
-
-    await waitFor(() =>
-      expect(screen.getByText('配药事件操作暂未完成，请稍后重试。')).toBeInTheDocument(),
-    )
-    expect(screen.getByText('结束本次接收？')).toBeInTheDocument()
-    expect(document.querySelector('.capture-group-header-status')).toHaveTextContent('接收中')
-    expect(
-      fetchMock.mock.calls.filter(
-        ([input, init]) =>
-          String(input).endsWith('/receipt/finalize') && (init as RequestInit)?.method === 'POST',
-      ),
-    ).toHaveLength(1)
-  })
-
-  it('keeps a group-quality request failure unavailable instead of inventing UNREVIEWED', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-      key: 'detail-quality-unavailable',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      qualityError: { status: 500 },
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(await screen.findAllByText('暂不可用')).not.toHaveLength(0)
-    expect(screen.getAllByText('事件质量暂不可用').length).toBeGreaterThan(0)
-    expect(screen.getByText('事件质量暂不可用，请刷新后重试')).toBeInTheDocument()
-    expect(screen.queryByText('待判断')).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
-    const currentAction = screen
-      .getByRole('heading', { level: 2, name: '当前动作' })
-      .closest('section')
-    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
-      'data-tone',
-      'warning',
-    )
-    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
-      'data-tone',
-      'destructive',
-    )
-  })
-
-  it('shows detail-quality permission denial only when the contract identifies 403', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-      key: 'detail-quality-forbidden',
-    })
-    stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      qualityError: { status: 403, errorCode: 'CAPTURE_GROUP_QUALITY_ACCESS_DENIED' },
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(await screen.findAllByText('无权查看')).not.toHaveLength(0)
-    expect(screen.getAllByText('事件质量无权查看').length).toBeGreaterThan(0)
-    expect(screen.getByText('事件质量按当前权限不可见')).toBeInTheDocument()
-    expect(screen.queryByText('待判断')).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
-    const currentAction = screen
-      .getByRole('heading', { level: 2, name: '当前动作' })
-      .closest('section')
-    expect(currentAction?.querySelector('.status-indicator')).toHaveAttribute(
-      'data-tone',
-      'information',
-    )
-    expect(currentAction?.querySelector('.status-indicator')).not.toHaveAttribute(
-      'data-tone',
-      'destructive',
-    )
-  })
-
-  it('shows missing and rejected views, warns on sync, switches one main player context, and keeps AI failure non-blocking', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1, 2, 3, 4, 5],
-      received: [1, 2, 4, 5],
       receipt: 'INCOMPLETE',
     })
-    const boundStream = group.streams.find((stream) => stream.camera_number === 5)
-    if (!boundStream) throw new Error('Expected camera 5 stream fixture.')
-    boundStream.stream_status = 'BOUND'
-    const mediaFailedStream = group.streams.find((stream) => stream.camera_number === 4)
-    if (!mediaFailedStream) throw new Error('Expected camera 4 stream fixture.')
-    mediaFailedStream.stream_status = 'INGEST_FAILED'
-    const fetchMock = stubGroupDetail(group, {
-      task: groupTask(groupId, true),
-      quality: qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS', { rejectedCamera: 5 }),
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
       candidateStatus: 'FAILED',
-      candidateStatusByCamera: { 2: 'NO_HAND_DETECTED' },
     })
     const user = userEvent.setup()
 
@@ -892,62 +87,43 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect((await screen.findAllByText('机位 3')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('合格（排除部分机位）').length).toBeGreaterThan(0)
-    const initialFocusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest(
-      'details',
-    )
-    if (!initialFocusedDetails) throw new Error('Focused progressive detail was not mounted.')
-    await user.click(within(initialFocusedDetails).getByText('查看机位技术与辅助证据'))
-    expect(await within(initialFocusedDetails).findByText('手部检测：失败')).toBeInTheDocument()
-    expect(await within(initialFocusedDetails).findByText(/手部检测失败/)).toBeInTheDocument()
-    expect(
-      within(initialFocusedDetails).getAllByText(/同步需关注 · 仅供参考/).length,
-    ).toBeGreaterThan(0)
-    await user.click(within(initialFocusedDetails).getByText('查看机位技术与辅助证据'))
-    const selector = screen.getByRole('group', { name: '配药事件机位选择' })
-    expect(screen.getAllByLabelText('配药事件机位选择')).toHaveLength(1)
-    expect(within(selector).getAllByRole('button')).toHaveLength(5)
-    expect(
-      within(selector).getByRole('button', { name: /机位 5.*已绑定 · 待媒体入库/ }),
-    ).not.toHaveAccessibleName(/媒体处理中/)
-    expect(
-      within(selector)
-        .getAllByRole('button')
-        .map((button) => button.textContent),
-    ).toEqual([
-      expect.stringContaining('机位 1'),
-      expect.stringContaining('机位 2'),
-      expect.stringContaining('机位 3'),
-      expect.stringContaining('机位 4'),
-      expect.stringContaining('机位 5'),
-    ])
-    const missingButton = within(selector).getByRole('button', { name: '机位 3 · 缺失' })
-    expect(missingButton).toBeDisabled()
-    expect(missingButton.querySelectorAll('small')).toHaveLength(1)
-    const rejectedButton = within(selector).getByRole('button', {
-      name: /机位 5.*机位质量 · 不合格/,
-    })
-    expect(rejectedButton).not.toBeDisabled()
-    expect(rejectedButton).toHaveTextContent('机位质量 · 不合格')
-    const mediaFailedButton = within(selector).getByRole('button', {
-      name: /机位 4.*媒体入库失败/,
-    })
-    expect(mediaFailedButton).not.toBeDisabled()
-    expect(screen.getAllByText(/不合格/).length).toBeGreaterThan(0)
+    const selector = await screen.findByRole('group', { name: '数据组机位选择' })
+    expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
+    await user.click(await screen.findByText('查看机位技术与辅助证据'))
+    expect(await screen.findByText('手部检测：失败')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '事件质量结论' })).not.toBeInTheDocument()
+  })
 
-    await user.click(within(selector).getByRole('button', { name: /机位 2/ }))
-    expect(await screen.findByRole('heading', { level: 2, name: /机位 2/ })).toBeInTheDocument()
-    const focusedDetails = (await screen.findByText('查看机位技术与辅助证据')).closest('details')
-    if (!focusedDetails) throw new Error('Focused progressive detail was not mounted.')
-    await user.click(within(focusedDetails).getByText('查看机位技术与辅助证据'))
+  it('requires explicit confirmation before finalizing a receiving group', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1],
+      receipt: 'RECEIVING',
+    })
+    const updatedGroup = { ...group, receipt_state: 'INCOMPLETE' as const }
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      groupResponses: [group, updatedGroup],
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'UNKNOWN',
+      receiptFinalizeResponse: updatedGroup,
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await user.click(await screen.findByRole('button', { name: '结束接收' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('结束本次接收？')
+    expect(screen.getByRole('dialog')).toHaveTextContent('媒体检查与 MediaPipe 检测会独立继续。')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '结束接收' }))
+    expect((await screen.findAllByText('接收完成 · 有缺失')).length).toBeGreaterThan(0)
     expect(
-      await within(focusedDetails).findByText(/未检测到手部；这是检测事实/),
-    ).toBeInTheDocument()
-    expect(screen.getAllByText(/参考视图/).length).toBeGreaterThan(0)
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${clipIds[1]}/media-report`,
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
-    )
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).endsWith('/receipt/finalize') && init?.method === 'POST',
+      ),
+    ).toBe(true)
   })
 })

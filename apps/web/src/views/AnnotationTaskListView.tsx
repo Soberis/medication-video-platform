@@ -180,8 +180,8 @@ export default function AnnotationTaskListView() {
     <>
       <PageHeader
         titleId="annotation-task-title"
-        title="配药动作标注任务"
-        description="在这里处理配药事件的动作标注；提交后由管理员复核。"
+        title="人工标签收件箱"
+        description="仅显示当前项目已有的人工标签任务；提交后由有权限的人员复核。"
         actions={
           <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
             刷新
@@ -218,7 +218,7 @@ export default function AnnotationTaskListView() {
           <ul className="annotation-task-list-surface" aria-label="标注任务列表">
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
-              const taskSubject = `配药事件 ${shortId(captureGroupId)}`
+              const taskSubject = `数据组 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
               const presentation = captureGroupCleaningPresentation(row)
               const taskDestination = captureGroupTaskDestination(row)
@@ -436,7 +436,7 @@ export default function AnnotationTaskListView() {
         </Section>
       ) : null}
       {loadState === 'success' && !items.length ? (
-        <EmptyState description="当前没有待处理的标注任务。符合质量准入条件的配药事件会自动生成标注任务。" />
+        <EmptyState description="当前没有人工标签任务。人工标签只在项目需要 human ground truth 时启用。" />
       ) : null}
     </>
   )

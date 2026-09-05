@@ -90,7 +90,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void qualifiedWithExclusionsForFiveViewsCreatesExactlyOneGroupTaskAndRetriesIdempotently() throws Exception {
+	void qualifiedWithExclusionsRequiresExplicitHumanLabelAssignmentAndRetriesIdempotently() throws Exception {
 		var group = createGroup(PROJECT_ID, 5, 3, "INCOMPLETE", 1);
 		var idempotencyKey = key("group-qualified-with-exclusions");
 
@@ -104,6 +104,8 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andReturn();
 		var reviewId = JsonPath.read(first.getResponse().getContentAsString(), "$.capture_group_quality_review_id");
 
+		assertEquals(0,
+				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
 		var taskId = taskId(group);
 		assertEquals(1,
 				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
@@ -117,7 +119,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				""", taskId);
 		assertEquals(group.captureGroupId(), task.get("capture_group_id"));
 		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, task.get("assignee_actor_id"));
-		assertEquals(ProjectMembershipTestData.MEMBER_ACTOR, task.get("created_by"));
+		assertEquals(ProjectMembershipTestData.ADMIN_ACTOR, task.get("created_by"));
 		assertEquals(null, task.get("primary_clip_asset_id"));
 		assertEquals(1L, ((Number) task.get("group_quality_revision")).longValue());
 
@@ -154,6 +156,31 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void onlyAnAuthorizedHumanLabelIntentCanAssignAQualifiedGroup() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("explicit-intent-quality"))
+			.andExpect(status().isOk());
+		assertEquals(0,
+				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
+
+		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("unauthorized-intent"))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+		var assignmentKey = key("explicit-intent-assignment");
+		var first = assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, assignmentKey)
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
+			.andExpect(jsonPath("$.assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
+			.andReturn();
+		var taskId = UUID.fromString(JsonPath.read(first.getResponse().getContentAsString(), "$.annotation_task_id"));
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, assignmentKey)
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.annotation_task_id").value(taskId.toString()));
+		assertEquals(1,
+				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
+	}
+
+	@Test
 	void zeroQualifiedViewsCannotAdmitAndNOneGroupWorks() throws Exception {
 		var zeroQualified = createGroup(PROJECT_ID, 3, 3, "COMPLETE", 0);
 		recordGroup(zeroQualified, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("zero-qualified"))
@@ -167,7 +194,7 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.result").value("QUALIFIED"))
 			.andExpect(jsonPath("$.confirmed_view_set.views.length()").value(1));
-		assertEquals(1,
+		assertEquals(0,
 				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", singleView.captureGroupId()));
 	}
 
@@ -470,6 +497,8 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 2,
 				key("stale-input-qualified"))
 			.andExpect(status().isOk());
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("stale-reassignment"))
+			.andExpect(status().isCreated());
 
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
 				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
@@ -587,6 +616,8 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 4,
 				key("input-changed-qualified"))
 			.andExpect(status().isOk());
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("input-changed-assignment"))
+			.andExpect(status().isCreated());
 		assertEquals("ASSIGNED", this.jdbcTemplate.queryForObject(
 				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
 		this.mockMvc
@@ -688,6 +719,18 @@ class CaptureGroupQualityAnnotationContractTests {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("{\"result\":\"%s\",\"reason\":\"%s\",\"expected_revision\":%d}".formatted(result, reason,
 							expectedRevision)));
+	}
+
+	private ResultActions assignTask(GroupFixture group, String token, String assigneeActorId, String idempotencyKey)
+			throws Exception {
+		return this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/annotation-tasks", PROJECT_ID,
+					group.captureGroupId())
+				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", idempotencyKey)
+				.header("X-Request-Id", key("assignment-request"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"assignee_actor_id\":\"%s\"}".formatted(assigneeActorId)));
 	}
 
 	private ResultActions selectPrimary(UUID taskId, UUID clipAssetId, String token) throws Exception {
@@ -852,7 +895,9 @@ class CaptureGroupQualityAnnotationContractTests {
 		return new GroupFixture(captureGroupId, clipAssetIds);
 	}
 
-	private UUID taskId(GroupFixture group) {
+	private UUID taskId(GroupFixture group) throws Exception {
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("explicit-task-assignment"))
+			.andExpect(status().isCreated());
 		return this.jdbcTemplate.queryForObject(
 				"SELECT annotation_task_id FROM annotation_task WHERE project_id = ? AND capture_group_id = ?",
 				UUID.class, PROJECT_ID, group.captureGroupId());

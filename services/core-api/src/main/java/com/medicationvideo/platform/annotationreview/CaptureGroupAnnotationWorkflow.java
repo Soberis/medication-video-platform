@@ -29,7 +29,6 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary;
-import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQualifiedEvent;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
@@ -89,58 +88,59 @@ class CaptureGroupAnnotationWorkflow {
 	}
 
 	@Transactional
-	void assignAfterQuality(CaptureGroupQualityQualifiedEvent event) {
-		var current = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(event.projectId(),
-				event.captureGroupId());
-		if (!current.isAdmitting() || !event.captureGroupQualityReviewId().equals(current.captureGroupQualityReviewId())
-				|| event.reviewRevision() != current.revision()) {
-			return;
+	AnnotationTaskResponse assignForHumanLabel(UUID projectId, UUID captureGroupId, String actorId,
+			String assigneeActorId, String idempotencyKey, String requestId, String traceId) {
+		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		this.projectAccessService.lockAndRequireMember(projectId, assigneeActorId);
+		var current = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId, captureGroupId);
+		if (!current.isAdmitting()) {
+			throw groupQualityNotAdmitting();
 		}
-
-		var existing = this.taskRepository.findForUpdateByProjectIdAndCaptureGroupId(event.projectId(),
-				event.captureGroupId());
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var existing = this.taskRepository.findForUpdateByProjectIdAndCaptureGroupId(projectId, captureGroupId);
 		if (existing.isPresent()) {
 			var task = existing.get();
+			if (!task.getAssigneeActorId().equals(assigneeActorId)) {
+				throw new AnnotationTaskException("ANNOTATION_TASK_ALREADY_ASSIGNED",
+						"The CaptureGroup already has an annotation task assigned to another member.", 409);
+			}
 			var previousStatus = task.getStatus();
 			var previousInputVersion = task.getGroupInputVersion();
 			var previousGroupQualityRevision = task.getGroupQualityRevision();
 			var inputChanged = task.refreshGroupQualitySnapshot(current.captureGroupQualityReviewId(),
-					current.revision(), current.confirmedViewSet(), current.inputVersion(), event.triggeredAt());
+					current.revision(), current.confirmedViewSet(), current.inputVersion(), now);
 			this.taskRepository.saveAndFlush(task);
 			if (inputChanged && previousStatus != AnnotationTaskStatus.ASSIGNED) {
-				this.auditRecorder
-					.record(new AuditEventCommand(event.triggeredAt(), AuditActorType.USER, event.reviewerActorId(),
-							event.projectId(), "CAPTURE_GROUP_ANNOTATION_TASK_REOPENED_FOR_INPUT_CHANGE",
-							"AnnotationTask", task.getAnnotationTaskId().toString(), Long.toString(task.getVersion()),
-							AuditOutcome.SUCCEEDED, "GROUP_INPUT_VERSION_CHANGED", event.requestId(), event.traceId(),
-							"PROJECT_MEMBERSHIP_" + event.reviewerRole().name(),
-							Map.of("capture_group_id", event.captureGroupId().toString(), "previous_status",
-									previousStatus.name(), "new_status", task.getStatus().name(),
-									"previous_input_version", String.valueOf(previousInputVersion), "input_version",
-									current.inputVersion(), "previous_group_quality_revision",
-									String.valueOf(previousGroupQualityRevision), "group_quality_revision",
-									Long.toString(current.revision()), "assignee_actor_id", task.getAssigneeActorId(),
-									"created_by", task.getCreatedBy(), "revision_chain_preserved", "true")));
+				this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+						"CAPTURE_GROUP_ANNOTATION_TASK_REOPENED_FOR_INPUT_CHANGE", "AnnotationTask",
+						task.getAnnotationTaskId().toString(), Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED,
+						"GROUP_INPUT_VERSION_CHANGED", requestId, traceId, "PROJECT_MEMBERSHIP_ADMIN",
+						Map.of("capture_group_id", captureGroupId.toString(), "previous_status", previousStatus.name(),
+								"new_status", task.getStatus().name(), "previous_input_version",
+								String.valueOf(previousInputVersion), "input_version", current.inputVersion(),
+								"previous_group_quality_revision", String.valueOf(previousGroupQualityRevision),
+								"group_quality_revision", Long.toString(current.revision()), "assignee_actor_id",
+								task.getAssigneeActorId(), "created_by", task.getCreatedBy(),
+								"revision_chain_preserved", "true")));
 			}
-			return;
+			return AnnotationTaskResponse.from(task, actorId, true, null, null, null, true);
 		}
 
-		var task = this.taskRepository.saveAndFlush(
-				AnnotationTask.createForCaptureGroup(event.projectId(), event.captureGroupId(), event.reviewerActorId(),
-						event.reviewerActorId(), "auto-group-quality-" + event.captureGroupQualityReviewId(),
-						this.labelSchemaService.currentBinding(), current.captureGroupQualityReviewId(),
-						current.revision(), current.confirmedViewSet(), current.inputVersion(), event.triggeredAt()));
-		this.auditRecorder.record(new AuditEventCommand(event.triggeredAt(), AuditActorType.USER,
-				event.reviewerActorId(), event.projectId(), "CAPTURE_GROUP_ANNOTATION_TASK_AUTO_ASSIGNED",
-				"AnnotationTask", task.getAnnotationTaskId().toString(), Long.toString(task.getVersion()),
-				AuditOutcome.SUCCEEDED, "AUTO_AFTER_GROUP_QUALITY_QUALIFIED", event.requestId(), event.traceId(),
-				"PROJECT_MEMBERSHIP_" + event.reviewerRole().name(),
-				Map.of("capture_group_id", event.captureGroupId().toString(), "group_quality_review_id",
-						event.captureGroupQualityReviewId().toString(), "group_quality_revision",
-						Long.toString(event.reviewRevision()), "assignee_actor_id", task.getAssigneeActorId(),
-						"created_by", task.getCreatedBy(), "input_version", current.inputVersion(), "assignment_mode",
-						"GROUP_QUALITY_REVIEWER", "label_schema_id", task.getLabelSchemaId().toString(),
+		var task = this.taskRepository
+			.saveAndFlush(AnnotationTask.createForCaptureGroup(projectId, captureGroupId, assigneeActorId, actorId,
+					idempotencyKey, this.labelSchemaService.currentBinding(), current.captureGroupQualityReviewId(),
+					current.revision(), current.confirmedViewSet(), current.inputVersion(), now));
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"CAPTURE_GROUP_ANNOTATION_TASK_ASSIGNED", "AnnotationTask", task.getAnnotationTaskId().toString(),
+				Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "EXPLICIT_HUMAN_LABEL_ASSIGNMENT", requestId,
+				traceId, "PROJECT_MEMBERSHIP_ADMIN",
+				Map.of("capture_group_id", captureGroupId.toString(), "group_quality_review_id",
+						current.captureGroupQualityReviewId().toString(), "group_quality_revision",
+						Long.toString(current.revision()), "assignee_actor_id", task.getAssigneeActorId(), "created_by",
+						task.getCreatedBy(), "input_version", current.inputVersion(), "assignment_mode",
+						"EXPLICIT_HUMAN_LABEL", "label_schema_id", task.getLabelSchemaId().toString(),
 						"label_schema_digest", task.getLabelSchemaDigest())));
+		return AnnotationTaskResponse.from(task, actorId, true, null, null, null, true);
 	}
 
 	AnnotationRevisionResponse submitRevision(UUID projectId, AnnotationTask task, String actorId,

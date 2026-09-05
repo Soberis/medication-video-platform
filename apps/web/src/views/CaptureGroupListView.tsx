@@ -1,15 +1,12 @@
-import { Alert, Button } from 'antd'
+import { Button } from 'antd'
 import { ArrowRight, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
-  isCaptureGroupQualityForbidden,
   listCaptureGroups,
-  listCaptureGroupQualityReviews,
   type CaptureGroupSummary,
-  type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
 import { useAuth } from '@/app/auth'
@@ -18,25 +15,16 @@ import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import {
-  formatViewQualitySummary,
-  groupQualityDisplayLabel,
-  groupQualityDisplayTone,
+  captureGroupTaskDestination,
   receiptStateLabels,
   receiptTone,
-  taskNextAction,
-  type CaptureGroupQualityVisibility,
-  type CaptureGroupTaskVisibility,
-  viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
 interface CaptureGroupListRow {
   group: CaptureGroupSummary
-  quality: CaptureGroupQualityReview | null
-  qualityVisibility: CaptureGroupQualityVisibility
   task: AnnotationTask | null
-  taskVisibility: CaptureGroupTaskVisibility
 }
 
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
@@ -52,8 +40,6 @@ export default function CaptureGroupListView() {
   const [errorMessage, setErrorMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
   const rowsRef = useRef<CaptureGroupListRow[]>([])
-  const hasUnavailableQuality = rows.some((row) => row.qualityVisibility === 'unavailable')
-  const hasForbiddenQuality = rows.some((row) => row.qualityVisibility === 'forbidden')
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
@@ -73,66 +59,20 @@ export default function CaptureGroupListView() {
         const groupList = await listCaptureGroups(projectId, cursor, request.signal)
         if (request.signal.aborted || activeRequest.current !== request) return
 
-        if (!groupList.items.length) {
-          const nextRows = append ? rowsRef.current : []
-          rowsRef.current = nextRows
-          setRows(nextRows)
-          setNextCursor(groupList.next_cursor)
-          setLoadState('success')
-          return
-        }
-
-        const [taskResult, qualityResult] = await Promise.all([
-          listAnnotationTasks(projectId, request.signal)
-            .then((value) => ({ status: 'fulfilled' as const, value }))
-            .catch((error) => ({ status: 'rejected' as const, error })),
-          listCaptureGroupQualityReviews(
-            projectId,
-            groupList.items.map((group) => group.capture_group_id),
-            request.signal,
-          )
-            .then((value) => ({ status: 'fulfilled' as const, value }))
-            .catch((error) => ({ status: 'rejected' as const, error })),
-        ])
-        const indexedTasks = taskResult.status === 'fulfilled' ? taskResult.value.items : []
-        const qualityItems =
-          qualityResult.status === 'fulfilled' && Array.isArray(qualityResult.value.items)
-            ? qualityResult.value.items
-            : []
-        const indexedQuality = new Map(
-          qualityItems.map((quality) => [quality.capture_group_id, quality]),
-        )
-        const qualityBatchComplete =
-          qualityResult.status === 'fulfilled' &&
-          Array.isArray(qualityResult.value.items) &&
-          groupList.items.every((group) => indexedQuality.has(group.capture_group_id))
-        const nextQualityVisibility: CaptureGroupQualityVisibility = qualityBatchComplete
-          ? 'loaded'
-          : qualityResult.status === 'rejected' &&
-              isCaptureGroupQualityForbidden(qualityResult.error)
-            ? 'forbidden'
-            : 'unavailable'
-        const taskVisibility: CaptureGroupTaskVisibility =
-          taskResult.status === 'rejected'
-            ? 'unavailable'
-            : taskResult.value.progress.scope === 'PROJECT'
-              ? 'visible'
-              : 'permission-limited'
-        const loadedRows = groupList.items.map((group): CaptureGroupListRow => {
-          const quality = indexedQuality.get(group.capture_group_id) ?? null
-          const task =
-            indexedTasks.find(
-              (candidate) => candidate.capture_group_id === group.capture_group_id,
-            ) ?? null
-          return {
-            group,
-            quality,
-            qualityVisibility: nextQualityVisibility,
-            task,
-            taskVisibility: task ? 'visible' : taskVisibility,
-          }
-        })
+        // Human tasks are an optional inbox. A failed task read must not turn a
+        // healthy data-group/media read into an error or a blocked state.
+        const taskResult = await listAnnotationTasks(projectId, request.signal).catch(() => null)
         if (request.signal.aborted || activeRequest.current !== request) return
+        const indexedTasks = taskResult?.items ?? []
+        const loadedRows = groupList.items.map(
+          (group): CaptureGroupListRow => ({
+            group,
+            task:
+              indexedTasks.find(
+                (candidate) => candidate.capture_group_id === group.capture_group_id,
+              ) ?? null,
+          }),
+        )
         const existingGroupIds = new Set(rowsRef.current.map((row) => row.group.capture_group_id))
         const nextRows = append
           ? [
@@ -152,7 +92,7 @@ export default function CaptureGroupListView() {
             ? error.errorCode
             : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
         )
-        setErrorMessage('暂时无法读取配药事件，请稍后重试。')
+        setErrorMessage('暂时无法读取数据组，请稍后重试。')
       } finally {
         if (activeRequest.current === request) {
           activeRequest.current = null
@@ -177,8 +117,8 @@ export default function CaptureGroupListView() {
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
-        title="配药事件"
-        description="按配药事件集中查看各机位视频、质量状态和当前处理进度。"
+        title="数据组"
+        description="按数据组查看接收事实、视频资产、Media Probe 与 MediaPipe 检测证据。"
         actions={
           <>
             {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
@@ -195,7 +135,7 @@ export default function CaptureGroupListView() {
         }
       />
       {loadState === 'loading' && !rows.length ? (
-        <LoadingState>正在读取配药事件…</LoadingState>
+        <LoadingState>正在读取数据组…</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadGroups()}>
@@ -206,9 +146,9 @@ export default function CaptureGroupListView() {
         <EmptyState
           description={
             <div>
-              <strong>还没有配药事件</strong>
+              <strong>还没有数据组</strong>
               <br />
-              完成明确归组的接收记录后，配药事件会显示在这里。
+              完成明确归组的接收记录后，数据组会显示在这里。
               <br />
               已有独立视频不会根据文件名、上传顺序或拍摄时间自动归组。
             </div>
@@ -218,25 +158,19 @@ export default function CaptureGroupListView() {
         </EmptyState>
       ) : null}
       {rows.length ? (
-        <section className="capture-group-list-surface" aria-label="配药事件结果">
+        <section className="capture-group-list-surface" aria-label="数据组结果">
           <div className="capture-group-list-meta">
             <span className="capture-group-list-count">
-              {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
+              {nextCursor ? `已显示 ${rows.length} 个数据组` : `共 ${rows.length} 个数据组`}
             </span>
           </div>
-          <div className="capture-group-list" role="list" aria-label="配药事件列表">
-            {rows.map(({ group, quality, qualityVisibility, task, taskVisibility }) => {
+          <div className="capture-group-list" role="list" aria-label="数据组列表">
+            {rows.map(({ group, task }) => {
               const identity = group.capture_group_key ?? shortId(group.capture_group_id)
-              const identityLabel = `配药事件 · ${identity}`
+              const identityLabel = `数据组 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
               const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
-              const nextStep = taskNextAction(
-                group,
-                quality,
-                task,
-                taskVisibility,
-                qualityVisibility,
-              )
+              const taskDestination = task ? captureGroupTaskDestination(task) : null
 
               return (
                 <div
@@ -254,23 +188,13 @@ export default function CaptureGroupListView() {
                       {formatDateTime(eventTime)}
                     </time>
                   </header>
-                  <div className="capture-group-list-current" data-kind={nextStep.kind}>
-                    <span className="capture-group-list-current-label">
-                      {nextStep.kind === 'action' ? '下一步' : '当前状态'}
-                    </span>
-                    <strong>{nextStep.label}</strong>
-                  </div>
                   <dl className="capture-group-list-facts">
                     <div>
                       <dt className="visually-hidden">接收 / 机位</dt>
                       <dd className="capture-group-list-receipt">
-                        {group.receipt_state === 'COMPLETE' ? (
-                          <span>{formatListReceipt(group)}</span>
-                        ) : (
-                          <StatusIndicator tone={receiptTone(group.receipt_state)}>
-                            {formatListReceipt(group)}
-                          </StatusIndicator>
-                        )}
+                        <StatusIndicator tone={receiptTone(group.receipt_state)}>
+                          {formatListReceipt(group)}
+                        </StatusIndicator>
                         {group.missing_camera_numbers.length ? (
                           <span className="capture-group-list-missing-views">
                             缺失：
@@ -282,45 +206,45 @@ export default function CaptureGroupListView() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="visually-hidden">事件质量</dt>
+                      <dt className="visually-hidden">处理路径</dt>
                       <dd>
-                        {isQuietGroupQuality(qualityVisibility, quality) ? (
-                          <span>{formatListGroupQuality(qualityVisibility, quality)}</span>
+                        {task ? (
+                          <StatusIndicator tone="information">已有人工标签任务</StatusIndicator>
                         ) : (
-                          <StatusIndicator
-                            tone={groupQualityDisplayTone(qualityVisibility, quality)}
-                          >
-                            {formatListGroupQuality(qualityVisibility, quality)}
-                          </StatusIndicator>
+                          <span className="capture-group-list-machine-path">
+                            MediaPipe machine evidence
+                          </span>
                         )}
                       </dd>
                     </div>
                     <div>
-                      <dt className="visually-hidden">机位质量</dt>
-                      <dd>
-                        {isQuietGroupQuality(qualityVisibility, quality) ? (
-                          <span className="capture-group-list-view-quality">
-                            {`机位质量 ${formatListViewQuality(qualityVisibility, quality)}`}
-                          </span>
-                        ) : (
-                          <StatusIndicator
-                            tone={groupQualityDisplayTone(qualityVisibility, quality)}
-                          >
-                            {`机位质量 ${formatListViewQuality(qualityVisibility, quality)}`}
-                          </StatusIndicator>
-                        )}
+                      <dt className="visually-hidden">事实入口</dt>
+                      <dd className="capture-group-list-evidence-hint">
+                        Media Probe · hand-landmarks.v1
                       </dd>
                     </div>
                   </dl>
                   <footer className="capture-group-list-row-footer">
                     <Link
                       className="capture-group-list-open"
-                      aria-label={`${nextStep.kind === 'action' ? '处理事件' : '查看事件'}：${identityLabel}`}
+                      aria-label={`查看数据组：${identityLabel}`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
-                      {nextStep.kind === 'action' ? '处理事件' : '查看事件'}{' '}
-                      <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                      查看数据组 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
+                    {taskDestination ? (
+                      <Link
+                        className="text-link"
+                        aria-label={`${taskDestination.actionLabel}：${identityLabel}`}
+                        to={paths.captureGroupFocus(
+                          projectId,
+                          group.capture_group_id,
+                          taskDestination.focus,
+                        )}
+                      >
+                        {taskDestination.actionLabel}
+                      </Link>
+                    ) : null}
                   </footer>
                 </div>
               )
@@ -339,64 +263,8 @@ export default function CaptureGroupListView() {
           ) : null}
         </section>
       ) : null}
-      {loadState === 'success' && (hasUnavailableQuality || hasForbiddenQuality) ? (
-        <Alert
-          className="capture-group-list-note"
-          type="info"
-          showIcon
-          title={hasForbiddenQuality ? '事件质量 · 无权查看' : '事件质量 · 暂不可用'}
-          description={
-            hasForbiddenQuality && !hasUnavailableQuality
-              ? '当前账号无权读取事件质量；列表保留配药事件与接收状态。'
-              : '当前批次的事件质量或机位质量暂时无法读取；列表保留配药事件与接收状态，请刷新后重试。'
-          }
-        />
-      ) : null}
-      {loadState === 'success' && rows.some((row) => row.taskVisibility !== 'visible') ? (
-        <Alert
-          className="capture-group-list-note"
-          type="info"
-          showIcon
-          title="部分任务状态不可直接确认"
-          description="普通项目成员只能看到分配给自己的任务；任务查询失败时，列表不会把未知状态误报为没有任务。"
-        />
-      ) : null}
     </>
   )
-}
-
-function formatListViewQuality(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  if (visibility === 'forbidden') return '无权查看'
-  if (visibility === 'unavailable' || !quality) return '暂不可用'
-  if (quality.result === 'UNREVIEWED' && !quality.confirmed_view_set?.views.length) {
-    return viewQualityLabels.UNREVIEWED
-  }
-  return formatViewQualitySummary(quality)
-}
-
-function isQuietGroupQuality(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  return (
-    visibility === 'loaded' &&
-    Boolean(
-      quality &&
-        (quality.result === 'UNREVIEWED' ||
-          quality.result === 'QUALIFIED' ||
-          quality.result === 'QUALIFIED_WITH_EXCLUSIONS'),
-    )
-  )
-}
-
-function formatListGroupQuality(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  return `事件质量${groupQualityDisplayLabel(visibility, quality)}`
 }
 
 function formatListReceipt(group: CaptureGroupSummary) {

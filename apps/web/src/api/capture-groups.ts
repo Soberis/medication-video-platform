@@ -165,9 +165,9 @@ export function isCaptureGroupQualityForbidden(error: unknown) {
 }
 
 const errorMessages: Record<string, string> = {
-  CAPTURE_GROUP_NOT_FOUND: '未找到该配药事件，或它不属于当前项目。',
+  CAPTURE_GROUP_NOT_FOUND: '未找到该数据组，或它不属于当前项目。',
   INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
-  PROJECT_ACCESS_DENIED: '当前账号无权访问该项目中的配药事件。',
+  PROJECT_ACCESS_DENIED: '当前账号无权访问该项目中的数据组。',
   CAPTURE_GROUP_QUALITY_ACCESS_DENIED: '当前账号没有读取事件质量的权限。',
   CAPTURE_GROUP_QUALITY_RECEIPT_NOT_FINALIZED:
     '回执仍在接收中；当前只能记录“需复核”，不能提交最终组质量结论。',
@@ -305,7 +305,7 @@ async function toCaptureGroupError(response: Response) {
     // Keep the safe fallback for a proxy and non-JSON failure.
   }
   return new CaptureGroupApiError(
-    errorMessages[errorCode] ?? '配药事件操作暂未完成，请稍后重试。',
+    errorMessages[errorCode] ?? '数据组操作暂未完成，请稍后重试。',
     errorCode,
     response.status,
   )

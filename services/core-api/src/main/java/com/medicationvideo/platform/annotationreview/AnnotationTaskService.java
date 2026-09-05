@@ -101,6 +101,13 @@ class AnnotationTaskService {
 	}
 
 	@Transactional
+	AnnotationTaskResponse assignForHumanLabel(UUID projectId, UUID captureGroupId, String actorId,
+			String assigneeActorId, String idempotencyKey, String requestId, String traceId) {
+		return this.captureGroupAnnotationWorkflow.assignForHumanLabel(projectId, captureGroupId, actorId,
+				assigneeActorId, idempotencyKey, requestId, traceId);
+	}
+
+	@Transactional
 	AnnotationRevisionResponse submitRevision(UUID projectId, UUID annotationTaskId, String actorId,
 			String idempotencyKey, String requestId, String traceId, AnnotationRevisionSubmitCommand request) {
 		this.projectAccessService.requireMember(projectId, actorId);

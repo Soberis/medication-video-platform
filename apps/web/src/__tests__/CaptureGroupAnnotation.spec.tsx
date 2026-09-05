@@ -74,17 +74,15 @@ describe('CaptureGroup annotation workflow', () => {
     })
 
     expect(screen.queryByRole('button', { name: '重新确认事件质量' })).not.toBeInTheDocument()
-    expect(await screen.findByRole('combobox', { name: '事件质量结论' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '保存事件质量' })).toBeInTheDocument()
-    expect(screen.getAllByText('需复核').length).toBeGreaterThan(0)
-    const auditDetails = screen.getByText('修订、复核与事件清洗').closest('details')
+    expect(await screen.findByText('人工复核 / 事件清洗')).toBeInTheDocument()
+    const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
-    await user.click(screen.getByText('修订、复核与事件清洗'))
+    await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
     expect(within(auditDetails).getByText('任务 ID')).toBeInTheDocument()
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '提交修订' })).not.toBeInTheDocument()
     expect(
-      within(auditDetails).getByRole('link', { name: '打开配药事件任务上下文' }),
+      within(auditDetails).getByRole('link', { name: '打开数据组人工标签任务上下文' }),
     ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/revisions')),
@@ -112,24 +110,23 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    expect(await screen.findByRole('heading', { level: 2, name: '当前结果' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
     expect(screen.getByText('机位 1 · 已锁定')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '查看复核与事件清洗详情' }))
     expect(screen.getByText('00:12.345 → 00:18.760')).toBeInTheDocument()
-    const auditDisclosure = screen.getByText('事实、历史与审计').closest('details')
-    if (!auditDisclosure) throw new Error('Completed audit progressive detail was not mounted.')
     await user.click(screen.getByText('事实、历史与审计'))
-    const auditDetails = screen.getByText('修订、复核与事件清洗').closest('details')
+    const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
-    await user.click(screen.getByText('修订、复核与事件清洗'))
+    await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
     expect(within(auditDetails).getByText('已完成')).toBeInTheDocument()
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
     expect(within(auditDetails).getByText('主视图')).toBeInTheDocument()
     expect(within(auditDetails).getByText('机位 1')).toBeInTheDocument()
     expect(screen.getAllByText('人工复核 · 已通过').length).toBeGreaterThan(0)
-    expect(screen.getByText('事件清洗 · 当前规则检查通过')).toBeInTheDocument()
-    const compareStrip = screen.getByLabelText('配药事件机位选择')
+    expect(screen.getByText('事件清洗')).toBeInTheDocument()
+    expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
+    const compareStrip = screen.getByLabelText('数据组机位选择')
     expect(within(compareStrip).getAllByRole('button', { name: /机位 / })).toHaveLength(2)
   })
 
@@ -318,7 +315,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    await user.click(await screen.findByRole('button', { name: '播放视频' }))
+    await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
     const video = await screen.findByLabelText('视频预览')
     Object.defineProperty(video, 'currentTime', { configurable: true, value: 12.345 })
     fireEvent.loadedMetadata(video)

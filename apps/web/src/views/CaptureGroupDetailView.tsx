@@ -3,49 +3,30 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 
-import { PageHeader } from '@/components/PageHeader'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
+import { PageHeader } from '@/components/PageHeader'
+import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
 import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
 import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
-  CaptureGroupQualityPanel,
-  CaptureGroupViewQualitySection,
-} from '@/features/capture-group/CaptureGroupQualityPanel'
-import {
-  MedicationEventCurrentAction,
-  MedicationEventWorkflowRail,
-} from '@/features/capture-group/MedicationEventCurrentAction'
-import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
-import { shortId } from '@/features/catalog/catalog-presentation'
+import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
+import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
+import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 import {
   captureGroupFocusFromLocation,
   captureGroupReviewCleaningFallbackTargetId,
+  captureGroupTaskDestination,
   captureGroupFocusTargetIds,
 } from '@/features/capture-group-presentation'
-import {
-  deriveMedicationEventWorkflow,
-  type MedicationEventWorkflowFacts,
-  type MedicationEventWorkflowModel,
-  type MedicationEventWorkflowPrimaryAction,
-} from '@/features/capture-group/medication-event-workflow'
+import { shortId } from '@/features/catalog/catalog-presentation'
 import type { AnnotationTask } from '@/api/annotation'
-import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
-import type { ClipAssetRead } from '@/api/catalog'
-import type { QualityReview } from '@/api/quality'
-import {
-  useCaptureGroupDetailData,
-  type CaptureGroupDetailRefreshOptions,
-} from '@/features/capture-group/use-capture-group-detail-data'
-import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
-import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
@@ -54,7 +35,6 @@ export default function CaptureGroupDetailView() {
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
-  const [isCompletedAuditOpen, setIsCompletedAuditOpen] = useState(false)
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
@@ -68,56 +48,11 @@ export default function CaptureGroupDetailView() {
   )
   const [currentPlaybackTimeMs, setCurrentPlaybackTimeMs] = useState<number | null>(null)
   const viewState = useCaptureGroupView(projectId, selectedView)
-  const selectedReview = viewState.selectedStream
-    ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
-    : null
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
-  const workflow = useMemo<MedicationEventWorkflowModel | null>(
-    () =>
-      data.group
-        ? deriveMedicationEventWorkflow(
-            createMedicationEventWorkflowFacts({
-              group: data.group,
-              groupQuality: data.groupQuality,
-              groupQualityVisibility: data.groupQualityVisibility,
-              task: data.task,
-              taskVisibility: data.taskVisibility,
-              viewRows,
-              viewReviews: data.viewReviews,
-              viewReviewErrors: data.viewReviewErrors,
-              viewQualityLoading: data.viewQualityLoading,
-              annotationSchemaAvailable: Boolean(data.schema?.labels.length),
-              selectedView,
-              selectedDetail: viewState.selectedDetail,
-            }),
-          )
-        : null,
-    [
-      data.group,
-      data.groupQuality,
-      data.groupQualityVisibility,
-      data.task,
-      data.taskVisibility,
-      data.schema,
-      data.viewQualityLoading,
-      data.viewReviewErrors,
-      data.viewReviews,
-      selectedView,
-      viewRows,
-      viewState.selectedDetail,
-    ],
-  )
-  const isReviewWorkflowAction =
-    workflow?.primaryAction?.target === 'review' || workflow?.primaryAction?.target === 'cleaning'
-  const primaryActionHasForm =
-    workflow?.primaryAction?.target === 'view-quality' ||
-    workflow?.primaryAction?.target === 'group-quality' ||
-    workflow?.primaryAction?.target === 'annotation'
-  const isCompletedWorkflow = Boolean(
-    workflow?.steps.length && workflow.steps.every((step) => step.state === 'completed'),
-  )
+  const humanTask = data.taskVisibility === 'visible' ? data.task : null
+  const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
-  const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
+  const eventTitle = data.group?.capture_group_key ?? `数据组 · ${shortId(captureGroupId)}`
   const handDetectionEvidenceAction =
     session?.role === 'ADMIN' ? (
       <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
@@ -155,65 +90,43 @@ export default function CaptureGroupDetailView() {
     return () => window.clearTimeout(timer)
   }, [data.group, data.groupLoadState, data.refreshVersion, fallbackFocusTargetId, focusTargetId])
 
-  const handlePrimaryAction = (action: MedicationEventWorkflowPrimaryAction) => {
-    if (action.key === 'finalize-receipt') {
-      setIsReceiptConfirmationOpen(true)
-      return
+  const renderHumanLabelPanel = () => {
+    if (!data.group || !humanTask) return null
+    if (!taskDestination) {
+      return (
+        <section className="capture-group-human-label-status" aria-label="人工标签任务">
+          <p className="app-eyebrow">可选人工标签</p>
+          <h2>已有人工标签任务</h2>
+          <p>{humanTaskStatusMessage(humanTask)}</p>
+        </section>
+      )
     }
-    const targetId = {
-      'view-quality': 'capture-group-view-quality',
-      'group-quality': 'capture-group-group-quality',
-      annotation: 'capture-group-annotation',
-      review: 'capture-group-review-cleaning',
-      cleaning: 'capture-group-review-cleaning',
-      receipt: '',
-    }[action.target]
-    if (!targetId) return
-    const target = document.getElementById(targetId)
-    if (!target) return
-    target.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
-    if (target instanceof HTMLElement) target.focus({ preventScroll: true })
-  }
-
-  const renderActionForm = () => {
-    if (!data.group || !workflow?.primaryAction) return null
-    return (
-      <CaptureGroupActionForm
-        action={workflow.primaryAction}
-        projectId={projectId}
-        captureGroupId={captureGroupId}
-        group={data.group}
-        groupQuality={data.groupQuality}
-        groupQualityVisibility={data.groupQualityVisibility}
-        qualityHistory={data.qualityHistory}
-        refreshVersion={data.refreshVersion}
-        task={data.task}
-        taskVisibility={data.taskVisibility}
-        schema={data.schema}
-        viewRows={viewRows}
-        viewReviews={data.viewReviews}
-        viewReviewErrors={data.viewReviewErrors}
-        viewQualityLoading={data.viewQualityLoading}
-        currentPlaybackTimeMs={currentPlaybackTimeMs}
-        selectedStream={viewState.selectedStream}
-        selectedDetail={viewState.selectedDetail}
-        selectedReview={selectedReview}
-        onReviewSaved={data.updateViewReview}
-        onTaskChange={(nextTask) => data.setTask(nextTask)}
-        onRefresh={data.refresh}
-      />
-    )
-  }
-
-  const renderReviewCleaningPanel = () => {
-    if (!data.group) return null
+    if (taskDestination.focus === 'annotation') {
+      return (
+        <CaptureGroupAnnotationPanel
+          projectId={projectId}
+          captureGroupId={captureGroupId}
+          group={data.group}
+          groupQuality={data.groupQuality}
+          task={humanTask}
+          taskVisibility={data.taskVisibility}
+          schema={data.schema}
+          viewRows={viewRows}
+          viewReviews={data.viewReviews}
+          refreshVersion={data.refreshVersion}
+          currentPlaybackTimeMs={currentPlaybackTimeMs}
+          onTaskChange={data.setTask}
+          onRefresh={data.refresh}
+        />
+      )
+    }
     return (
       <CaptureGroupReviewCleaningPanel
         projectId={projectId}
         group={data.group}
         groupQuality={data.groupQuality}
         groupQualityVisibility={data.groupQualityVisibility}
-        task={data.task}
+        task={humanTask}
         schema={data.schema}
         onRefresh={data.refresh}
       />
@@ -222,39 +135,27 @@ export default function CaptureGroupDetailView() {
 
   const renderInspector = () => {
     if (!data.group) return null
-    const inspector = (
+    return (
       <CaptureGroupInspector
         projectId={projectId}
         captureGroupId={captureGroupId}
         group={data.group}
-        groupQuality={data.groupQuality}
+        groupQuality={humanTask ? data.groupQuality : null}
         groupQualityVisibility={data.groupQualityVisibility}
-        qualityHistory={data.qualityHistory}
+        qualityHistory={humanTask ? data.qualityHistory : []}
         selectedView={selectedView}
-        task={data.task}
-        taskVisibility={data.taskVisibility}
-        isCompleted={isCompletedWorkflow}
+        task={humanTask}
       />
     )
-    return isCompletedWorkflow ? (
-      <details
-        className="detail-disclosure capture-group-completed-inspector-details"
-        open={isCompletedAuditOpen}
-        onToggle={(event) => setIsCompletedAuditOpen(event.currentTarget.open)}
-      >
-        <summary>事实、历史与审计</summary>
-        <div className="detail-disclosure-content">{inspector}</div>
-      </details>
-    ) : (
-      inspector
-    )
   }
+
+  const humanLabelPanel = renderHumanLabelPanel()
 
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
-          配药事件
+          数据组
         </Link>
         <span aria-hidden="true">/</span>
         <span>{eventIdentity}</span>
@@ -265,19 +166,31 @@ export default function CaptureGroupDetailView() {
         title={eventTitle}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
-          <Button
-            size="small"
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={data.groupLoadState === 'loading'}
-            onClick={() => void data.refresh()}
-          >
-            刷新事实
-          </Button>
+          <>
+            {data.group?.receipt_state === 'RECEIVING' ? (
+              <Button
+                ref={receiptFinalizeTrigger}
+                size="small"
+                type="primary"
+                loading={isReceiptFinalizationPending}
+                onClick={() => setIsReceiptConfirmationOpen(true)}
+              >
+                结束接收
+              </Button>
+            ) : null}
+            <Button
+              size="small"
+              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+              loading={data.groupLoadState === 'loading'}
+              onClick={() => void data.refresh()}
+            >
+              刷新事实
+            </Button>
+          </>
         }
       />
-      {workflow ? <MedicationEventWorkflowRail workflow={workflow} /> : null}
       {data.groupLoadState === 'loading' ? (
-        <LoadingState>{data.group ? '正在刷新配药事件…' : '正在读取配药事件…'}</LoadingState>
+        <LoadingState>{data.group ? '正在刷新数据组…' : '正在读取数据组…'}</LoadingState>
       ) : null}
       {data.groupLoadState === 'error' ? (
         <ErrorState code={data.groupErrorCode} onRetry={() => void data.refresh()}>
@@ -286,75 +199,34 @@ export default function CaptureGroupDetailView() {
       ) : null}
       {data.group ? (
         <>
-          {data.qualityErrorMessage ? (
+          {humanTask && data.qualityErrorMessage ? (
             <Alert type="warning" showIcon title={data.qualityErrorMessage} />
           ) : null}
-          {data.taskErrorMessage ? (
+          {humanTask && data.taskErrorMessage ? (
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
-          {workflow ? (
-            isCompletedWorkflow ? (
-              <div className="capture-group-completed-workspace">
-                <MedicationEventCurrentAction workflow={workflow} />
-                <CaptureGroupFocusedView
-                  viewRows={viewRows}
-                  task={data.task}
-                  viewReviews={data.viewReviews}
-                  viewState={viewState}
-                  onSelectView={(clipAssetId) => {
-                    setCurrentPlaybackTimeMs(null)
-                    data.setSelectedClipAssetId(clipAssetId)
-                  }}
-                  onPlaybackTimeChange={setCurrentPlaybackTimeMs}
-                  handDetectionEvidenceAction={handDetectionEvidenceAction}
-                  isCompleted
-                />
-                {renderReviewCleaningPanel()}
-              </div>
-            ) : (
-              <div
-                className={`capture-group-workspace capture-group-workspace-${workflow.stage.toLowerCase().replace(/_/g, '-')}`}
-                data-stage={workflow.stage}
-              >
-                <div className="capture-group-action-column">
-                  <MedicationEventCurrentAction
-                    workflow={workflow}
-                    primaryActionHasForm={primaryActionHasForm}
-                    primaryActionDisabled={
-                      workflow.primaryAction?.key === 'finalize-receipt' &&
-                      isReceiptFinalizationPending
-                    }
-                    primaryActionLoading={
-                      workflow.primaryAction?.key === 'finalize-receipt' &&
-                      isReceiptFinalizationPending
-                    }
-                    primaryActionRef={
-                      workflow.primaryAction?.key === 'finalize-receipt'
-                        ? receiptFinalizeTrigger
-                        : undefined
-                    }
-                    onPrimaryAction={handlePrimaryAction}
-                  />
-                  {!isReviewWorkflowAction ? renderActionForm() : null}
-                </div>
-                <div className="capture-group-video-column">
-                  <CaptureGroupFocusedView
-                    viewRows={viewRows}
-                    task={data.task}
-                    viewReviews={data.viewReviews}
-                    viewState={viewState}
-                    onSelectView={(clipAssetId) => {
-                      setCurrentPlaybackTimeMs(null)
-                      data.setSelectedClipAssetId(clipAssetId)
-                    }}
-                    onPlaybackTimeChange={setCurrentPlaybackTimeMs}
-                    handDetectionEvidenceAction={handDetectionEvidenceAction}
-                  />
-                </div>
-              </div>
-            )
-          ) : null}
-          {!isCompletedWorkflow && isReviewWorkflowAction ? renderActionForm() : null}
+          <div
+            className={`capture-group-workspace${humanLabelPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
+          >
+            {humanLabelPanel ? (
+              <div className="capture-group-action-column">{humanLabelPanel}</div>
+            ) : null}
+            <div className="capture-group-video-column">
+              <CaptureGroupFocusedView
+                viewRows={viewRows}
+                task={humanTask}
+                viewReviews={data.viewReviews}
+                viewState={viewState}
+                onSelectView={(clipAssetId) => {
+                  setCurrentPlaybackTimeMs(null)
+                  data.setSelectedClipAssetId(clipAssetId)
+                }}
+                onPlaybackTimeChange={setCurrentPlaybackTimeMs}
+                handDetectionEvidenceAction={handDetectionEvidenceAction}
+                isCompleted={humanTask?.status === 'COMPLETED'}
+              />
+            </div>
+          </div>
           {renderInspector()}
         </>
       ) : null}
@@ -378,215 +250,17 @@ export default function CaptureGroupDetailView() {
         onOk={() => void confirmReceiptFinalization()}
         destroyOnHidden
       >
-        <p>系统将根据当前已收到的机位形成完整或有缺失的接收结果，并进入后续事件质量判断。</p>
+        <p>系统将根据当前已收到的机位记录接收结果；媒体检查与 MediaPipe 检测会独立继续。</p>
       </Modal>
     </>
   )
 }
 
-interface CaptureGroupActionFormProps {
-  action: MedicationEventWorkflowPrimaryAction
-  projectId: string
-  captureGroupId: string
-  group: CaptureGroup
-  groupQuality: CaptureGroupQualityReview | null
-  groupQualityVisibility: MedicationEventWorkflowFacts['group_quality_visibility']
-  qualityHistory: CaptureGroupQualityReview[]
-  refreshVersion: number
-  task: AnnotationTask | null
-  taskVisibility: MedicationEventWorkflowFacts['task_visibility']
-  schema: ReturnType<typeof useCaptureGroupDetailData>['schema']
-  viewRows: GroupViewRow[]
-  viewReviews: Record<string, QualityReview>
-  viewReviewErrors: Record<string, string>
-  viewQualityLoading: boolean
-  currentPlaybackTimeMs: number | null
-  selectedStream: GroupViewRow['stream']
-  selectedDetail: ClipAssetRead | null
-  selectedReview: QualityReview | null
-  onReviewSaved: (review: QualityReview) => void
-  onTaskChange: (task: AnnotationTask) => void
-  onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
-}
-
-function CaptureGroupActionForm({
-  action,
-  projectId,
-  captureGroupId,
-  group,
-  groupQuality,
-  groupQualityVisibility,
-  qualityHistory,
-  refreshVersion,
-  task,
-  taskVisibility,
-  schema,
-  viewRows,
-  viewReviews,
-  viewReviewErrors,
-  viewQualityLoading,
-  currentPlaybackTimeMs,
-  selectedStream,
-  selectedDetail,
-  selectedReview,
-  onReviewSaved,
-  onTaskChange,
-  onRefresh,
-}: CaptureGroupActionFormProps) {
-  if (action.target === 'view-quality') {
-    return (
-      <CaptureGroupViewQualitySection
-        projectId={projectId}
-        selectedStream={selectedStream}
-        selectedDetail={selectedDetail}
-        selectedReview={selectedReview}
-        viewReviews={viewReviews}
-        viewReviewErrors={viewReviewErrors}
-        viewQualityLoading={viewQualityLoading}
-        onReviewSaved={onReviewSaved}
-        onRefresh={onRefresh}
-      />
-    )
+function humanTaskStatusMessage(task: AnnotationTask) {
+  if (task.status === 'COMPLETED') return '该人工标签任务已完成，可查看修订与复核事实。'
+  if (task.status === 'SUBMITTED') return '已提交人工修订，等待有权限的复核人员处理。'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') {
+    return '复核已退回该修订，等待任务执行人根据意见返工。'
   }
-  if (action.target === 'group-quality' || action.target === 'receipt') {
-    return (
-      <CaptureGroupQualityPanel
-        projectId={projectId}
-        captureGroupId={captureGroupId}
-        group={group}
-        groupQuality={groupQuality}
-        groupQualityVisibility={groupQualityVisibility}
-        qualityHistory={qualityHistory}
-        refreshVersion={refreshVersion}
-        onRefresh={onRefresh}
-        isSecondary={action.target === 'receipt'}
-      />
-    )
-  }
-  if (action.target === 'annotation') {
-    return (
-      <CaptureGroupAnnotationPanel
-        projectId={projectId}
-        captureGroupId={captureGroupId}
-        group={group}
-        groupQuality={groupQuality}
-        task={task}
-        taskVisibility={taskVisibility}
-        schema={schema}
-        viewRows={viewRows}
-        viewReviews={viewReviews}
-        refreshVersion={refreshVersion}
-        currentPlaybackTimeMs={currentPlaybackTimeMs}
-        onTaskChange={onTaskChange}
-        onRefresh={onRefresh}
-      />
-    )
-  }
-  if (action.target === 'review' || action.target === 'cleaning') {
-    return (
-      <CaptureGroupReviewCleaningPanel
-        projectId={projectId}
-        group={group}
-        groupQuality={groupQuality}
-        groupQualityVisibility={groupQualityVisibility}
-        task={task}
-        schema={schema}
-        onRefresh={onRefresh}
-      />
-    )
-  }
-  return null
-}
-
-interface WorkflowFactInput {
-  group: CaptureGroup
-  groupQuality: CaptureGroupQualityReview | null
-  groupQualityVisibility: MedicationEventWorkflowFacts['group_quality_visibility']
-  task: AnnotationTask | null
-  taskVisibility: MedicationEventWorkflowFacts['task_visibility']
-  viewRows: GroupViewRow[]
-  viewReviews: Record<string, QualityReview>
-  viewReviewErrors: Record<string, string>
-  viewQualityLoading: boolean
-  annotationSchemaAvailable: boolean
-  selectedView: GroupViewRow | null
-  selectedDetail: ClipAssetRead | null
-}
-
-function createMedicationEventWorkflowFacts({
-  group,
-  groupQuality,
-  groupQualityVisibility,
-  task,
-  taskVisibility,
-  viewRows,
-  viewReviews,
-  viewReviewErrors,
-  viewQualityLoading,
-  annotationSchemaAvailable,
-  selectedView,
-  selectedDetail,
-}: WorkflowFactInput): MedicationEventWorkflowFacts {
-  return {
-    receipt_state: group.receipt_state,
-    view_quality: viewRows.map((view) => {
-      const stream = view.stream
-      const review = stream ? viewReviews[stream.clip_asset_id] : null
-      const visibility = !stream
-        ? 'loaded'
-        : viewReviewErrors[stream.clip_asset_id]
-          ? 'unavailable'
-          : viewQualityLoading
-            ? 'loading'
-            : review
-              ? 'loaded'
-              : 'unavailable'
-      const canDecide = Boolean(
-        stream &&
-          selectedView?.stream?.clip_asset_id === stream.clip_asset_id &&
-          selectedDetail?.status === 'INGESTED',
-      )
-      const mediaUnavailable =
-        stream?.stream_status === 'INGEST_FAILED' || stream?.stream_status === 'UNAVAILABLE'
-      const mediaPending = Boolean(
-        stream && stream.stream_status !== 'INGESTED' && !mediaUnavailable,
-      )
-      return {
-        camera_number: view.cameraNumber,
-        clip_asset_id: stream?.clip_asset_id ?? null,
-        present: Boolean(stream),
-        visibility,
-        decision: review?.decision ?? 'UNREVIEWED',
-        can_decide: canDecide,
-        blocker: mediaUnavailable
-          ? `机位 ${view.cameraNumber} 的媒体不可用，暂不能判断机位质量。`
-          : undefined,
-        waiting_reason: mediaPending
-          ? `机位 ${view.cameraNumber} 的媒体正在处理，等待媒体事实完成。`
-          : stream && !canDecide
-            ? '等待当前机位进入可判断上下文。'
-            : undefined,
-      }
-    }),
-    group_quality_visibility: groupQualityVisibility,
-    group_quality: groupQuality,
-    task_visibility: taskVisibility,
-    task_status: taskVisibility === 'visible' ? (task?.status ?? null) : null,
-    primary_view: task
-      ? {
-          clip_asset_id: task.primary_clip_asset_id ?? null,
-          camera_number: task.primary_camera_number ?? null,
-        }
-      : null,
-    annotation_revision: task?.annotation_revision ?? null,
-    review: task?.annotation_revision?.review ?? null,
-    cleaning: task?.annotation_revision?.capture_group_cleaning ?? null,
-    can_select_primary: Boolean(task?.can_select_primary),
-    can_submit: Boolean(task?.can_submit),
-    can_review: Boolean(task?.can_review),
-    can_recheck_capture_group_cleaning: Boolean(task?.can_recheck_capture_group_cleaning),
-    can_finalize_receipt: group.receipt_state === 'RECEIVING',
-    can_decide_group_quality: groupQualityVisibility === 'loaded' && Boolean(groupQuality),
-    annotation_schema_available: annotationSchemaAvailable,
-  }
+  return '等待任务执行人处理。'
 }

@@ -2119,6 +2119,50 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{project_id}/capture-groups/{capture_group_id}/annotation-tasks:
+    post:
+      operationId: assignCaptureGroupHumanLabelTask
+      tags:
+        - Annotation
+      summary: Explicitly assign an optional human-label task for a CaptureGroup
+      description: >-
+        Requires an ACTIVE project administrator and an ACTIVE project member as the assignee.
+        The CaptureGroup must have a current admitting human-quality conclusion. This command is
+        the explicit opt-in boundary for the human-label path; qualifying a CaptureGroup alone does
+        not create a task. Repeating the Idempotency-Key replays the same assignment. Reassigning an
+        existing task to a different member is rejected.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationTaskAssignmentRequest" }
+      responses:
+        "201":
+          description: The explicitly assigned task, or the identical idempotent replay.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationTask" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/annotation-tasks/{annotation_task_id}/primary-view:
     put:
       operationId: selectCaptureGroupAnnotationPrimaryView
@@ -6001,6 +6045,17 @@ components:
           type: integer
           format: int64
           minimum: 0
+    AnnotationTaskAssignmentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - assignee_actor_id
+      properties:
+        assignee_actor_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
     AnnotationPrimaryViewRequest:
       type: object
       additionalProperties: false

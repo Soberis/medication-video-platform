@@ -104,12 +104,10 @@ describe('annotation task list view', () => {
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent(/0 个已完成.*1 个待处理/)
     expect(screen.getByText('待标注')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /进入数据组 .*进入配药动作标注/ })).toBeInTheDocument()
+    expect(screen.queryByText(/唯一数据组任务/)).not.toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: /进入配药事件 .*进入配药动作标注/ }),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/唯一配药事件任务/)).not.toBeInTheDocument()
-    expect(
-      screen.getByText('在这里处理配药事件的动作标注；提交后由管理员复核。'),
+      screen.getByText('仅显示当前项目已有的人工标签任务；提交后由有权限的人员复核。'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
@@ -117,13 +115,11 @@ describe('annotation task list view', () => {
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: /进入配药事件 .*进入配药动作标注/ }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /进入数据组 .*进入配药动作标注/ })).toBeInTheDocument()
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(
-      within(screen.getByRole('listitem', { name: /配药事件 .*待标注/ })).getByRole('link', {
-        name: /^配药事件 60000000.*0001$/,
+      within(screen.getByRole('listitem', { name: /数据组 .*待标注/ })).getByRole('link', {
+        name: /^数据组 60000000.*0001$/,
       }),
     ).toHaveAttribute('href', `/projects/${projectId}/capture-groups/${captureGroupId}`)
     expect(screen.getByRole('list', { name: '标注任务列表' })).toHaveClass(
@@ -141,7 +137,7 @@ describe('annotation task list view', () => {
     renderView()
 
     const emptyState = await screen.findByText(
-      '当前没有待处理的标注任务。符合质量准入条件的配药事件会自动生成标注任务。',
+      '当前没有人工标签任务。人工标签只在项目需要 human ground truth 时启用。',
     )
     expect(emptyState).toBeInTheDocument()
     expect(emptyState).not.toHaveTextContent(/管理员|创建并分配/)
@@ -167,7 +163,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
     const action = await screen.findByRole('link', {
-      name: /进入配药事件 .*进入配药动作标注/,
+      name: /进入数据组 .*进入配药动作标注/,
     })
     expect(action).toBeInTheDocument()
     await user.click(action)
@@ -186,7 +182,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*待标注/ })
     await user.click(within(taskRow).getByRole('link', { name: /进入配药动作标注/ }))
 
     await waitFor(() => {
@@ -208,7 +204,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*待标注/ })
     await user.click(within(taskRow).getByRole('link', { name: /选择主视图/ }))
 
     await waitFor(() => {
@@ -230,7 +226,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待复核/ })
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*待复核/ })
     await user.click(within(taskRow).getByRole('link', { name: /进入人工复核/ }))
 
     await waitFor(() => {
@@ -257,7 +253,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待返工/ })
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*待返工/ })
     await user.click(within(taskRow).getByRole('link', { name: /进入标注返工/ }))
 
     await waitFor(() => {
@@ -278,7 +274,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*已完成/ })
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*已完成/ })
     expect(within(taskRow).queryByRole('button')).not.toBeInTheDocument()
     await user.click(within(taskRow).getByRole('link', { name: /查看结果/ }))
 
@@ -324,9 +320,9 @@ describe('annotation task list view', () => {
     stubTasks([deniedGroupTask], labelSchema)
     renderView()
 
-    const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
-    expect(within(taskRow).queryByRole('link', { name: /进入配药事件/ })).not.toBeInTheDocument()
-    expect(within(taskRow).getByRole('link', { name: /配药事件/ })).toHaveAttribute(
+    const taskRow = await screen.findByRole('listitem', { name: /数据组 .*待标注/ })
+    expect(within(taskRow).queryByRole('link', { name: /进入数据组/ })).not.toBeInTheDocument()
+    expect(within(taskRow).getByRole('link', { name: /数据组/ })).toHaveAttribute(
       'href',
       paths.captureGroup(projectId, captureGroupId),
     )
@@ -509,7 +505,7 @@ describe('annotation task list view', () => {
     expect(screen.queryByText('请补充完整的拿取药品时间段。')).not.toBeVisible()
     await user.click(within(taskRow).getByText('查看详情'))
     expect(screen.getByText('请补充完整的拿取药品时间段。')).toBeVisible()
-    await user.click(within(taskRow).getByRole('link', { name: /进入配药事件 .*进入标注返工/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /进入数据组 .*进入标注返工/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
@@ -530,11 +526,11 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('listitem', { name: /待复核/ })
     expect(
-      within(taskRow).getByRole('link', { name: /进入配药事件 .*进入人工复核/ }),
+      within(taskRow).getByRole('link', { name: /进入数据组 .*进入人工复核/ }),
     ).toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
-    await user.click(within(taskRow).getByRole('link', { name: /进入配药事件 .*进入人工复核/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /进入数据组 .*进入人工复核/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )

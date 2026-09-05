@@ -409,6 +409,15 @@ class HandLandmarkTrainingExportContractTests {
 
 	private UUID approveRevision(GroupFixture group, int endMs, String prefix) throws Exception {
 		recordGroup(group, "QUALIFIED", prefix + "-quality").andExpect(status().isOk());
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/annotation-tasks", PROJECT_ID,
+					group.captureGroupId())
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key(prefix + "-assignment"))
+				.header("X-Request-Id", key(prefix + "-assignment-request"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"assignee_actor_id\":\"%s\"}".formatted(ProjectMembershipTestData.MEMBER_ACTOR)))
+			.andExpect(status().isCreated());
 		var taskId = taskId(group);
 		selectPrimary(taskId, group.clipAssetIds().getFirst()).andExpect(status().isOk());
 		var revision = submit(taskId, prefix + "-submit", endMs).andExpect(status().isCreated()).andReturn();

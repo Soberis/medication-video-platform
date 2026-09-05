@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,20 +43,17 @@ class CaptureGroupQualityReviewService {
 
 	private final AuditEventRecorder auditRecorder;
 
-	private final ApplicationEventPublisher eventPublisher;
-
 	CaptureGroupQualityReviewService(ProjectAccessService projectAccessService,
 			CaptureGroupViewQueryService captureGroupViewQueryService,
 			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			QualityReviewQueryService qualityReviewQueryService, CaptureGroupQualityReviewRepository repository,
-			AuditEventRecorder auditRecorder, ApplicationEventPublisher eventPublisher) {
+			AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.repository = repository;
 		this.auditRecorder = auditRecorder;
-		this.eventPublisher = eventPublisher;
 	}
 
 	@Transactional(readOnly = true)
@@ -149,11 +145,6 @@ class CaptureGroupQualityReviewService {
 						Map.of("capture_group_id", captureGroupId.toString(), "result", review.getResult().name(),
 								"reason", review.getReason(), "revision", Long.toString(review.getRevision()),
 								"input_version", inputVersion, "confirmed_view_set_sha256", viewSetSha256)));
-		if (review.getResult().isAdmitting()) {
-			this.eventPublisher.publishEvent(new CaptureGroupQualityQualifiedEvent(projectId, captureGroupId,
-					review.getCaptureGroupQualityReviewId(), review.getRevision(), actorId, projectRole, inputVersion,
-					now, requestId, traceId));
-		}
 		return CaptureGroupQualityReviewResponse.from(review);
 	}
 

@@ -6,8 +6,8 @@ import java.util.UUID;
 import com.medicationvideo.platform.iamproject.ProjectRole;
 
 /**
- * Internal transaction event emitted when a group-quality fact admits a group to
- * annotation. Consumers must re-read the current group-quality fact before writing.
+ * Internal transaction event retained for compatibility while automatic human-label task
+ * creation is retired.
  */
 public record CaptureGroupQualityQualifiedEvent(String schemaVersion, UUID projectId, UUID captureGroupId,
 		UUID captureGroupQualityReviewId, long reviewRevision, String reviewerActorId, ProjectRole reviewerRole,

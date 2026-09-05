@@ -162,14 +162,14 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('treats medication events as the canonical video-management workspace', () => {
+  it('treats data groups as the canonical video-management workspace', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
       [
         {
           path: `/projects/:projectId/capture-groups`,
           element: <AppShell />,
-          children: [{ index: true, element: <div>配药事件页面</div> }],
+          children: [{ index: true, element: <div>数据组页面</div> }],
         },
       ],
       [`/projects/${projectId}/capture-groups`],
@@ -177,15 +177,15 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/capture-groups`,
     )
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).toBeInTheDocument()
   })
 
   it('marks the annotation task list as the active workspace navigation', () => {
@@ -196,7 +196,10 @@ describe('App', () => {
           path: '/',
           element: <AppShell />,
           children: [
-            { path: 'projects/:projectId/annotation-tasks', element: <div>标注任务页面</div> },
+            {
+              path: 'projects/:projectId/annotation-tasks',
+              element: <div>人工标签收件箱页面</div>,
+            },
           ],
         },
       ],
@@ -205,11 +208,11 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '数据组' })).not.toHaveAttribute(
       'aria-current',
     )
   })
@@ -225,7 +228,7 @@ describe('App', () => {
           children: [
             {
               path: 'projects/:projectId/capture-groups/:captureGroupId',
-              element: <div>配药事件详情页面</div>,
+              element: <div>数据组详情页面</div>,
             },
           ],
         },
@@ -235,7 +238,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -265,10 +268,10 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
       'aria-current',
       'page',
     )

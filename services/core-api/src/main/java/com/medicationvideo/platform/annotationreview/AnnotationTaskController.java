@@ -61,6 +61,24 @@ class AnnotationTaskController {
 					isPlatformAdministrator(authentication)));
 	}
 
+	@PostMapping("/capture-groups/{captureGroupId}/annotation-tasks")
+	ResponseEntity<AnnotationTaskResponse> assignForHumanLabel(@PathVariable UUID projectId,
+			@PathVariable UUID captureGroupId,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
+			@RequestHeader(name = "X-Request-Id",
+					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
+			@Valid @RequestBody AnnotationTaskAssignmentRequest request, Authentication authentication) {
+		var actor = requireActor(authentication);
+		var response = this.service.assignForHumanLabel(projectId, captureGroupId, actor.actorId(),
+				request.assigneeActorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+		return ResponseEntity.status(HttpStatus.CREATED)
+			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + response.annotationTaskId()))
+			.cacheControl(CacheControl.noStore())
+			.body(response);
+	}
+
 	@PostMapping("/annotation-tasks/{annotationTaskId}/revisions")
 	ResponseEntity<AnnotationRevisionResponse> submitRevision(@PathVariable UUID projectId,
 			@PathVariable UUID annotationTaskId,
@@ -157,6 +175,10 @@ class AnnotationTaskController {
 }
 
 record AnnotationPrimaryViewRequest(@NotNull UUID clipAssetId) {
+}
+
+record AnnotationTaskAssignmentRequest(
+		@NotBlank @Size(max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
 }
 
 record AnnotationRevisionRequest(

@@ -27,7 +27,6 @@ import {
   technicalQualityLabels,
   viewQualityLabels,
   type CaptureGroupQualityVisibility,
-  type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
@@ -40,8 +39,6 @@ interface CaptureGroupInspectorProps {
   qualityHistory: CaptureGroupQualityReview[]
   selectedView: GroupViewRow | null
   task: AnnotationTask | null
-  taskVisibility: CaptureGroupTaskVisibility
-  isCompleted?: boolean
 }
 
 export function CaptureGroupInspector({
@@ -53,8 +50,6 @@ export function CaptureGroupInspector({
   qualityHistory,
   selectedView,
   task,
-  taskVisibility,
-  isCompleted = false,
 }: CaptureGroupInspectorProps) {
   const selectedStream = selectedView?.stream ?? null
   const selectedSync = selectedStream ? syncSafety(selectedStream) : null
@@ -72,26 +67,24 @@ export function CaptureGroupInspector({
 
   return (
     <aside
-      className={`capture-group-inspector${isCompleted ? ' is-completed' : ''}`}
-      aria-label={isCompleted ? '事实、历史与审计' : undefined}
-      aria-labelledby={isCompleted ? undefined : 'capture-group-inspector-title'}
+      className="capture-group-inspector"
+      aria-label="事实、历史与审计"
+      aria-labelledby="capture-group-inspector-title"
     >
-      {!isCompleted ? (
-        <header className="capture-group-inspector-heading">
-          <p className="app-eyebrow">渐进详情</p>
-          <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
-          <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
-        </header>
-      ) : null}
+      <header className="capture-group-inspector-heading">
+        <p className="app-eyebrow">渐进详情</p>
+        <h2 id="capture-group-inspector-title">事实、历史与审计</h2>
+        <p>默认收起低频技术信息；展开后仍可核对原始事实和版本。</p>
+      </header>
 
       <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>
         <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
           <MetadataList
-            ariaLabel="配药事件接收事实"
+            ariaLabel="数据组接收事实"
             items={[
               {
                 id: 'group-id',
-                label: '配药事件 ID',
+                label: '数据组 ID',
                 value: <code>{group.capture_group_id}</code>,
               },
               { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
@@ -203,90 +196,87 @@ export function CaptureGroupInspector({
         </InspectorSection>
       </ProgressiveDetail>
 
-      <ProgressiveDetail
-        title="事件质量事实"
-        summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-      >
-        <InspectorSection title="事件质量事实" titleId="capture-group-quality-facts">
-          <p className="form-hint">人工记录的事件质量结论与自动检测事实分开保存。</p>
-          <div className="capture-group-inspector-status">
-            <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
-              {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-            </StatusIndicator>
-            {groupQuality?.reviewer_actor_id ? (
-              <span>记录人：{groupQuality.reviewer_actor_id}</span>
+      {task ? (
+        <ProgressiveDetail
+          title="人工标签质量事实"
+          summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
+        >
+          <InspectorSection title="人工标签质量事实" titleId="capture-group-quality-facts">
+            <p className="form-hint">人工记录的事件质量结论与自动检测事实分开保存。</p>
+            <div className="capture-group-inspector-status">
+              <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
+                {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
+              </StatusIndicator>
+              {groupQuality?.reviewer_actor_id ? (
+                <span>记录人：{groupQuality.reviewer_actor_id}</span>
+              ) : null}
+              {groupQuality?.decided_at ? (
+                <span>{formatDateTime(groupQuality.decided_at)}</span>
+              ) : null}
+            </div>
+            {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
+            {groupQualityVisibility === 'unavailable' ? (
+              <div className="capture-group-inspector-status" role="status">
+                <strong>事件质量暂不可用</strong>
+                <span>事件质量暂不可用，请刷新后重试</span>
+              </div>
             ) : null}
-            {groupQuality?.decided_at ? (
-              <span>{formatDateTime(groupQuality.decided_at)}</span>
+            {groupQualityVisibility === 'forbidden' ? (
+              <div className="capture-group-inspector-status" role="status">
+                <strong>事件质量无权查看</strong>
+                <span>事件质量按当前权限不可见</span>
+                <span>当前账号不能读取或修改事件质量。</span>
+              </div>
             ) : null}
-          </div>
-          {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
-          {groupQualityVisibility === 'unavailable' ? (
-            <div className="capture-group-inspector-status" role="status">
-              <strong>事件质量暂不可用</strong>
-              <span>事件质量暂不可用，请刷新后重试</span>
-            </div>
-          ) : null}
-          {groupQualityVisibility === 'forbidden' ? (
-            <div className="capture-group-inspector-status" role="status">
-              <strong>事件质量无权查看</strong>
-              <span>事件质量按当前权限不可见</span>
-              <span>当前账号不能读取或修改事件质量。</span>
-            </div>
-          ) : null}
-          {groupQuality?.confirmed_view_set ? (
-            <div className="capture-group-confirmed-view-set capture-group-stack">
-              <strong>本次结论使用的机位集合</strong>
-              <span>
-                {formatViewQualitySummary(groupQuality)} · 确认输入版本{' '}
-                {groupQuality.input_version ?? '未提供'}
-              </span>
-              <ul>
-                {groupQuality.confirmed_view_set.views.map((view) => (
-                  <li key={view.camera_number}>
-                    机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
-                    {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {qualityHistory.length ? (
-            <details className="capture-group-quality-history capture-group-stack">
-              <summary>查看追加质量历史（{qualityHistory.length} 条）</summary>
-              <ol>
-                {qualityHistory.map((entry) => (
-                  <li key={entry.capture_group_quality_review_id ?? `revision-${entry.revision}`}>
-                    <StatusIndicator tone={groupQualityTone(entry.result)}>
-                      第 {entry.revision} 次 · {groupQualityLabels[entry.result]}
-                    </StatusIndicator>
-                    <span>{entry.reason ?? '未提供理由'}</span>
-                    <small>{formatDateTime(entry.decided_at)}</small>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
-        </InspectorSection>
-      </ProgressiveDetail>
+            {groupQuality?.confirmed_view_set ? (
+              <div className="capture-group-confirmed-view-set capture-group-stack">
+                <strong>本次结论使用的机位集合</strong>
+                <span>
+                  {formatViewQualitySummary(groupQuality)} · 确认输入版本{' '}
+                  {groupQuality.input_version ?? '未提供'}
+                </span>
+                <ul>
+                  {groupQuality.confirmed_view_set.views.map((view) => (
+                    <li key={view.camera_number}>
+                      机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
+                      {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {qualityHistory.length ? (
+              <details className="capture-group-quality-history capture-group-stack">
+                <summary>查看追加质量历史（{qualityHistory.length} 条）</summary>
+                <ol>
+                  {qualityHistory.map((entry) => (
+                    <li key={entry.capture_group_quality_review_id ?? `revision-${entry.revision}`}>
+                      <StatusIndicator tone={groupQualityTone(entry.result)}>
+                        第 {entry.revision} 次 · {groupQualityLabels[entry.result]}
+                      </StatusIndicator>
+                      <span>{entry.reason ?? '未提供理由'}</span>
+                      <small>{formatDateTime(entry.decided_at)}</small>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            ) : null}
+          </InspectorSection>
+        </ProgressiveDetail>
+      ) : null}
 
-      <ProgressiveDetail
-        title="修订、复核与事件清洗"
-        summary={revision ? `第 ${revision.revision_number} 次正式修订` : '尚无正式修订'}
-      >
-        <InspectorSection title="修订、复核与事件清洗详情" titleId="capture-group-revision-facts">
-          {taskVisibility === 'permission-limited' ? (
-            <p className="form-hint" role="status">
-              当前账号不是该任务执行人；配药动作标注任务状态按权限不可见。
-            </p>
-          ) : taskVisibility === 'unavailable' ? (
-            <p className="form-hint" role="status">
-              配药动作标注任务状态暂不可读，请刷新后重试。
-            </p>
-          ) : task ? (
+      {task ? (
+        <ProgressiveDetail
+          title="人工标签修订、复核与适用性检查"
+          summary={revision ? `第 ${revision.revision_number} 次正式修订` : '尚无正式修订'}
+        >
+          <InspectorSection
+            title="人工标签修订、复核与适用性检查详情"
+            titleId="capture-group-revision-facts"
+          >
             <>
               <MetadataList
-                ariaLabel="配药事件任务事实"
+                ariaLabel="人工标签任务事实"
                 items={[
                   {
                     id: 'task-id',
@@ -329,10 +319,10 @@ export function CaptureGroupInspector({
                   {review?.review_note ? <p>复核意见：{review.review_note}</p> : null}
                   {cleaning ? (
                     <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-                      事件清洗 · {cleaningLabel(cleaning.outcome)}
+                      标签适用性检查 · {cleaningLabel(cleaning.outcome)}
                     </StatusIndicator>
                   ) : (
-                    <span>尚无事件清洗结果。</span>
+                    <span>尚无标签适用性检查结果。</span>
                   )}
                 </div>
               ) : (
@@ -342,14 +332,12 @@ export function CaptureGroupInspector({
                 className="text-link"
                 to={paths.captureGroupFocus(projectId, captureGroupId, taskFocus)}
               >
-                打开配药事件任务上下文
+                打开数据组人工标签任务上下文
               </Link>
             </>
-          ) : (
-            <p className="form-hint">尚无可见的配药事件任务、修订或复核事实。</p>
-          )}
-        </InspectorSection>
-      </ProgressiveDetail>
+          </InspectorSection>
+        </ProgressiveDetail>
+      ) : null}
 
       <ProgressiveDetail title="审计与受限操作" summary="保留原始事实">
         <InspectorSection title="审计与受限操作" titleId="capture-group-audit-facts">
@@ -357,7 +345,7 @@ export function CaptureGroupInspector({
             本页只展示已授权的服务端事实。删除、隐私放行、数据集冻结和导出等高风险操作不在此处隐式执行。
           </p>
           <p className="form-hint">
-            事件质量历史采用追加记录；当前页面不会因工作台展示而删除或改写历史事实。
+            人工标签质量历史采用追加记录；当前页面不会因工作台展示而删除或改写历史事实。
           </p>
         </InspectorSection>
       </ProgressiveDetail>

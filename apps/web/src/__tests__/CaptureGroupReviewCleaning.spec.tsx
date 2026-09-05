@@ -80,10 +80,10 @@ describe('CaptureGroup Review and event cleaning', () => {
     })
     renderCaptureGroup()
 
-    expect(await screen.findByText(/当前账号没有该修订的复核权限/)).toBeInTheDocument()
+    expect(await screen.findByText('已有人工标签任务')).toBeInTheDocument()
+    expect(screen.getByText('已提交人工修订，等待有权限的复核人员处理。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '通过复核' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退回修改' })).not.toBeInTheDocument()
-    expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
   })
 
   it('returns the same task to rework while keeping the rejected Revision visible', async () => {
