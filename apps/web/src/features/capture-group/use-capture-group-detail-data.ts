@@ -48,57 +48,52 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   const [isFinalizingReceipt, setIsFinalizingReceipt] = useState(false)
   const [selectedClipAssetId, setSelectedClipAssetId] = useState<string | null>(null)
   const groupRequest = useRef<AbortController | null>(null)
+  const humanRequest = useRef<AbortController | null>(null)
+  const requestGeneration = useRef(0)
+  const loadedGroupIdentity = useRef<{ projectId: string; captureGroupId: string } | null>(null)
+  const selectedClipAssetIdRef = useRef(selectedClipAssetId)
 
-  const refresh = useCallback(
-    async ({ focusNextPendingView = false }: CaptureGroupDetailRefreshOptions = {}) => {
-      groupRequest.current?.abort()
+  useEffect(() => {
+    selectedClipAssetIdRef.current = selectedClipAssetId
+  }, [selectedClipAssetId])
+
+  const loadHumanContext = useCallback(
+    async (
+      generation: number,
+      nextGroup: CaptureGroup,
+      focusNextPendingView: boolean,
+      selectedClipAssetIdAtGroupLoad: string | null,
+    ) => {
       const request = new AbortController()
-      groupRequest.current = request
-      setGroupLoadState('loading')
-      setGroupErrorCode('')
-      setGroupErrorMessage('')
-      setQualityErrorMessage('')
-      setTaskErrorMessage('')
-      setGroupQuality(null)
-      setGroupQualityVisibility('loading')
-      setQualityHistory([])
-      setSchema(null)
-      setViewReviews({})
+      humanRequest.current = request
+      const isCurrent = () =>
+        !request.signal.aborted &&
+        humanRequest.current === request &&
+        requestGeneration.current === generation
 
       try {
-        const nextGroup = await getCaptureGroup(projectId, captureGroupId, request.signal)
-        if (request.signal.aborted || groupRequest.current !== request) return false
-        setGroup(nextGroup)
+        let taskList
+        try {
+          taskList = await listAnnotationTasks(projectId, request.signal)
+        } catch {
+          if (!isCurrent()) return
+          setTask(null)
+          setTaskVisibility('unavailable')
+          setGroupQualityVisibility('unavailable')
+          return
+        }
+        if (!isCurrent()) return
 
-        // Task lookup is the only optional human-label lookup on the default
-        // data-group surface. Machine evidence never waits for quality/task APIs.
-        const taskResult = await listAnnotationTasks(projectId, request.signal)
-          .then((value) => ({ status: 'fulfilled' as const, value }))
-          .catch((reason) => ({ status: 'rejected' as const, reason }))
-        if (request.signal.aborted || groupRequest.current !== request) return false
-        const taskList = taskResult.status === 'fulfilled' ? taskResult.value.items : []
         const nextTask =
-          taskList.find((candidate) => candidate.capture_group_id === captureGroupId) ?? null
+          taskList.items.find((candidate) => candidate.capture_group_id === captureGroupId) ?? null
         const nextTaskVisibility: CaptureGroupTaskVisibility =
-          taskResult.status === 'rejected'
-            ? 'unavailable'
-            : nextTask || taskResult.value.progress.scope === 'PROJECT'
-              ? 'visible'
-              : 'permission-limited'
+          nextTask || taskList.progress.scope === 'PROJECT' ? 'visible' : 'permission-limited'
         setTask(nextTask)
         setTaskVisibility(nextTaskVisibility)
 
         if (!nextTask) {
           setGroupQualityVisibility('loaded')
-          setSelectedClipAssetId((current) => {
-            const presentIds = new Set(nextGroup.streams.map((stream) => stream.clip_asset_id))
-            return current && presentIds.has(current)
-              ? current
-              : (nextGroup.streams[0]?.clip_asset_id ?? null)
-          })
-          setRefreshVersion((current) => current + 1)
-          setGroupLoadState('success')
-          return true
+          return
         }
 
         // Existing task: load the human-label facts needed by its deep link.
@@ -107,7 +102,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           listCaptureGroupQualityReviewHistory(projectId, captureGroupId, request.signal),
           getAnnotationLabelSchema(projectId, request.signal),
         ])
-        if (request.signal.aborted || groupRequest.current !== request) return false
+        if (!isCurrent()) return
 
         const nextQuality = qualityResult.status === 'fulfilled' ? qualityResult.value : null
         const nextQualityVisibility: CaptureGroupQualityVisibility =
@@ -136,7 +131,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
             return getQualityReview(projectId, stream.clip_asset_id, request.signal)
           }),
         )
-        if (request.signal.aborted || groupRequest.current !== request) return false
+        if (!isCurrent()) return
         const nextReviews: Record<string, QualityReview> = {}
         reviewResults.forEach((result, index) => {
           const stream = nextGroup.streams[index]
@@ -153,19 +148,89 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
               (!review || (review.decision !== 'QUALIFIED' && review.decision !== 'REJECTED'))
             )
           })
-          if (focusNextPendingView && pendingStream) return pendingStream.clip_asset_id
+          if (focusNextPendingView && current === selectedClipAssetIdAtGroupLoad && pendingStream) {
+            return pendingStream.clip_asset_id
+          }
           if (current && presentIds.has(current)) return current
           if (pendingStream) return pendingStream.clip_asset_id
           if (nextTask.primary_clip_asset_id && presentIds.has(nextTask.primary_clip_asset_id)) {
             return nextTask.primary_clip_asset_id
           }
-          return nextGroup.streams[0]?.clip_asset_id ?? null
+          return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
+        })
+      } finally {
+        if (humanRequest.current === request) humanRequest.current = null
+      }
+    },
+    [captureGroupId, projectId],
+  )
+
+  const refresh = useCallback(
+    async ({ focusNextPendingView = false }: CaptureGroupDetailRefreshOptions = {}) => {
+      groupRequest.current?.abort()
+      groupRequest.current = null
+      humanRequest.current?.abort()
+      humanRequest.current = null
+      const generation = requestGeneration.current + 1
+      requestGeneration.current = generation
+      const request = new AbortController()
+      groupRequest.current = request
+
+      const loadedIdentity = loadedGroupIdentity.current
+      if (
+        loadedIdentity &&
+        (loadedIdentity.projectId !== projectId || loadedIdentity.captureGroupId !== captureGroupId)
+      ) {
+        loadedGroupIdentity.current = null
+        setGroup(null)
+        setSelectedClipAssetId(null)
+      }
+
+      setGroupLoadState('loading')
+      setGroupErrorCode('')
+      setGroupErrorMessage('')
+      setQualityErrorMessage('')
+      setTaskErrorMessage('')
+      setTask(null)
+      setTaskVisibility('visible')
+      setGroupQuality(null)
+      setGroupQualityVisibility('loading')
+      setQualityHistory([])
+      setSchema(null)
+      setViewReviews({})
+
+      try {
+        const nextGroup = await getCaptureGroup(projectId, captureGroupId, request.signal)
+        if (
+          request.signal.aborted ||
+          groupRequest.current !== request ||
+          requestGeneration.current !== generation
+        )
+          return false
+        loadedGroupIdentity.current = { projectId, captureGroupId }
+        setGroup(nextGroup)
+        const selectedClipAssetIdAtGroupLoad = selectedClipAssetIdRef.current
+        setSelectedClipAssetId((current) => {
+          const presentIds = new Set(nextGroup.streams.map((stream) => stream.clip_asset_id))
+          if (current && presentIds.has(current)) return current
+          return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
         })
         setRefreshVersion((current) => current + 1)
         setGroupLoadState('success')
+        void loadHumanContext(
+          generation,
+          nextGroup,
+          focusNextPendingView,
+          selectedClipAssetIdAtGroupLoad,
+        )
         return true
       } catch (error) {
-        if (request.signal.aborted || groupRequest.current !== request) return false
+        if (
+          request.signal.aborted ||
+          groupRequest.current !== request ||
+          requestGeneration.current !== generation
+        )
+          return false
         setGroupLoadState('error')
         setGroupErrorCode(
           error instanceof CaptureGroupApiError || error instanceof CatalogApiError
@@ -184,14 +249,18 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         if (groupRequest.current === request) groupRequest.current = null
       }
     },
-    [captureGroupId, projectId],
+    [captureGroupId, loadHumanContext, projectId],
   )
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0)
     return () => {
       window.clearTimeout(timer)
+      requestGeneration.current += 1
       groupRequest.current?.abort()
+      groupRequest.current = null
+      humanRequest.current?.abort()
+      humanRequest.current = null
     }
   }, [refresh])
 

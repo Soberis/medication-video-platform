@@ -199,6 +199,13 @@ export default function CaptureGroupDetailView() {
       ) : null}
       {data.group ? (
         <>
+          {data.taskVisibility === 'unavailable' ? (
+            <Alert
+              type="warning"
+              showIcon
+              title="人工任务状态暂不可用；数据组、播放器和机器证据仍可查看。"
+            />
+          ) : null}
           {humanTask && data.qualityErrorMessage ? (
             <Alert type="warning" showIcon title={data.qualityErrorMessage} />
           ) : null}
