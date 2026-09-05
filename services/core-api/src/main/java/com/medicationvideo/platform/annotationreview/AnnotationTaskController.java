@@ -215,7 +215,8 @@ record CaptureGroupCleaningRequest(@Size(max = 64) List<Map<String, Object>> sup
 record AnnotationTaskErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {
 }
 
-@RestControllerAdvice(assignableTypes = { AnnotationTaskController.class, AnnotationLabelSchemaController.class })
+@RestControllerAdvice(assignableTypes = { AnnotationTaskController.class, AnnotationLabelSchemaController.class,
+		HumanAnnotationTrainingExportController.class })
 class AnnotationTaskExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

@@ -6,15 +6,6 @@
   width: 100%;
 }
 
-.playback-surface-heading {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 24px;
-  padding-bottom: var(--app-space-12);
-  border-bottom: 1px solid var(--app-color-border-subtle);
-}
-
 .playback-idle-stage {
   display: grid;
   align-content: center;

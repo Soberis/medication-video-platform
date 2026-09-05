@@ -59,7 +59,7 @@ describe('CaptureGroup Review and event cleaning', () => {
         ) && init?.method === 'POST',
     )
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
-    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
     expect(await screen.findByText('事件清洗通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
@@ -196,7 +196,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
 
     const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
@@ -233,7 +233,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await user.click(await screen.findByRole('button', { name: '查看复核与事件清洗详情' }))
+    await user.click(await screen.findByRole('button', { name: '查看复核与清洗详情' }))
     await user.click(await screen.findByRole('button', { name: '重新执行事件清洗' }))
 
     await waitFor(() => {

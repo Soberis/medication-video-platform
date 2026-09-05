@@ -149,6 +149,12 @@ export interface CaptureGroupTaskDestination {
   actionLabel: string
 }
 
+export function isHumanAnnotationExportReady(
+  task: Pick<AnnotationTask, 'status' | 'annotation_revision'> | null | undefined,
+) {
+  return task?.status === 'COMPLETED' && task.annotation_revision?.review?.decision === 'APPROVED'
+}
+
 export function captureGroupTaskDestination(
   task: Pick<
     AnnotationTask,

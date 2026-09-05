@@ -10,12 +10,14 @@ import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
+import { CaptureGroupQualityPanel } from '@/features/capture-group/CaptureGroupQualityPanel'
 import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
 import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
+import { HumanAnnotationExportButton } from '@/features/capture-group/HumanAnnotationExportButton'
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
@@ -24,6 +26,7 @@ import {
   captureGroupReviewCleaningFallbackTargetId,
   captureGroupTaskDestination,
   captureGroupFocusTargetIds,
+  isHumanAnnotationExportReady,
 } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
 import type { AnnotationTask } from '@/api/annotation'
@@ -51,12 +54,33 @@ export default function CaptureGroupDetailView() {
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
   const humanTask = data.taskVisibility === 'visible' ? data.task : null
   const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
+  const humanLabelSetup =
+    data.group && !humanTask && data.taskVisibility === 'visible' ? (
+      <CaptureGroupQualityPanel
+        projectId={projectId}
+        captureGroupId={captureGroupId}
+        group={data.group}
+        groupQuality={data.groupQuality}
+        groupQualityVisibility={data.groupQualityVisibility}
+        refreshVersion={data.refreshVersion}
+        assigneeActorId={session?.username ?? ''}
+        canAssignHumanLabel={session?.role === 'ADMIN'}
+        selectedStream={viewState.selectedStream}
+        selectedDetail={viewState.selectedDetail}
+        selectedReview={
+          viewState.selectedStream
+            ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
+            : null
+        }
+        viewReviews={data.viewReviews}
+        viewReviewErrors={data.viewReviewErrors}
+        viewQualityLoading={data.viewQualityLoading}
+        onReviewSaved={data.updateViewReview}
+        onRefresh={data.refresh}
+      />
+    ) : null
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
   const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
-  const handDetectionEvidenceAction =
-    session?.role === 'ADMIN' ? (
-      <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
-    ) : undefined
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -150,6 +174,7 @@ export default function CaptureGroupDetailView() {
   }
 
   const humanLabelPanel = renderHumanLabelPanel()
+  const actionPanel = humanLabelPanel ?? humanLabelSetup
 
   return (
     <>
@@ -177,6 +202,12 @@ export default function CaptureGroupDetailView() {
               >
                 结束接收
               </Button>
+            ) : null}
+            {session?.role === 'ADMIN' && isHumanAnnotationExportReady(humanTask) ? (
+              <HumanAnnotationExportButton projectId={projectId} captureGroupId={captureGroupId} />
+            ) : null}
+            {session?.role === 'ADMIN' ? (
+              <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
             ) : null}
             <Button
               size="small"
@@ -213,11 +244,18 @@ export default function CaptureGroupDetailView() {
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
           <div
-            className={`capture-group-workspace${humanLabelPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
+            className={`capture-group-workspace${actionPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
+            data-stage={
+              actionPanel
+                ? taskDestination?.focus === 'annotation'
+                  ? 'ANNOTATION'
+                  : humanTask?.status === 'COMPLETED'
+                    ? 'COMPLETED'
+                    : undefined
+                : undefined
+            }
           >
-            {humanLabelPanel ? (
-              <div className="capture-group-action-column">{humanLabelPanel}</div>
-            ) : null}
+            {actionPanel ? <div className="capture-group-action-column">{actionPanel}</div> : null}
             <div className="capture-group-video-column">
               <CaptureGroupFocusedView
                 viewRows={viewRows}
@@ -229,7 +267,6 @@ export default function CaptureGroupDetailView() {
                   data.setSelectedClipAssetId(clipAssetId)
                 }}
                 onPlaybackTimeChange={setCurrentPlaybackTimeMs}
-                handDetectionEvidenceAction={handDetectionEvidenceAction}
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>

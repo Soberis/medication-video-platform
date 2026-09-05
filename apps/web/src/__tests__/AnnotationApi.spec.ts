@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  assignCaptureGroupHumanLabelTask,
+  downloadHumanAnnotationExport,
   getAnnotationLabelSchema,
   listAnnotationTasks,
   recheckCaptureGroupCleaning,
@@ -34,6 +36,53 @@ const emptyProgress = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task API', () => {
+  it('downloads the approved human annotation CSV with the server filename', async () => {
+    const fileName = 'human_annotations_v1_event_60000000_20260905T010203Z.csv'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('capture_group_id,label\n', {
+        headers: { 'Content-Disposition': `attachment; filename="${fileName}"` },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(downloadHumanAnnotationExport(projectId, captureGroupId)).resolves.toMatchObject({
+      fileName,
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/human-annotations/v1/download?capture_group_id=${captureGroupId}`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Accept: 'text/csv; charset=UTF-8' },
+        cache: 'no-store',
+      }),
+    )
+  })
+
+  it('assigns an optional CaptureGroup human-label task with an idempotency key', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ annotation_task_id: 'a0000000-0000-4000-8000-000000000001' }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('human-label-assignment-0001'),
+    })
+
+    await expect(
+      assignCaptureGroupHumanLabelTask(projectId, captureGroupId, 'local-synthetic-uploader'),
+    ).resolves.toMatchObject({ annotation_task_id: 'a0000000-0000-4000-8000-000000000001' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/capture-groups/${captureGroupId}/annotation-tasks`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ assignee_actor_id: 'local-synthetic-uploader' }),
+        headers: expect.objectContaining({ 'Idempotency-Key': 'human-label-assignment-0001' }),
+      }),
+    )
+  })
+
   it('lists the visible CaptureGroup task queue and explains a qualified-state rejection', async () => {
     const fetchMock = vi
       .fn()

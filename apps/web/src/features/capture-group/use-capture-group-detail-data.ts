@@ -39,11 +39,13 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   const [taskVisibility, setTaskVisibility] = useState<CaptureGroupTaskVisibility>('visible')
   const [schema, setSchema] = useState<AnnotationLabelSchema | null>(null)
   const [viewReviews, setViewReviews] = useState<Record<string, QualityReview>>({})
+  const [viewReviewErrors, setViewReviewErrors] = useState<Record<string, string>>({})
   const [groupLoadState, setGroupLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [groupErrorCode, setGroupErrorCode] = useState('')
   const [groupErrorMessage, setGroupErrorMessage] = useState('')
   const [qualityErrorMessage, setQualityErrorMessage] = useState('')
   const [taskErrorMessage, setTaskErrorMessage] = useState('')
+  const [viewQualityLoading, setViewQualityLoading] = useState(true)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [isFinalizingReceipt, setIsFinalizingReceipt] = useState(false)
   const [selectedClipAssetId, setSelectedClipAssetId] = useState<string | null>(null)
@@ -72,35 +74,33 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         requestGeneration.current === generation
 
       try {
-        let taskList
+        let taskList: Awaited<ReturnType<typeof listAnnotationTasks>> | null = null
         try {
           taskList = await listAnnotationTasks(projectId, request.signal)
         } catch {
           if (!isCurrent()) return
           setTask(null)
           setTaskVisibility('unavailable')
-          setGroupQualityVisibility('unavailable')
-          return
+          setTaskErrorMessage('暂时无法读取配药动作标注任务；请刷新后重试。')
         }
         if (!isCurrent()) return
 
         const nextTask =
-          taskList.items.find((candidate) => candidate.capture_group_id === captureGroupId) ?? null
-        const nextTaskVisibility: CaptureGroupTaskVisibility =
-          nextTask || taskList.progress.scope === 'PROJECT' ? 'visible' : 'permission-limited'
+          taskList?.items.find((candidate) => candidate.capture_group_id === captureGroupId) ?? null
+        const nextTaskVisibility: CaptureGroupTaskVisibility = !taskList
+          ? 'unavailable'
+          : nextTask || taskList.progress.scope === 'PROJECT'
+            ? 'visible'
+            : 'permission-limited'
         setTask(nextTask)
         setTaskVisibility(nextTaskVisibility)
 
-        if (!nextTask) {
-          setGroupQualityVisibility('loaded')
-          return
-        }
-
-        // Existing task: load the human-label facts needed by its deep link.
+        // Load quality facts for both paths: quality is the explicit opt-in gate
+        // for human labeling, so it must be visible before a task exists.
         const [qualityResult, historyResult, schemaResult] = await Promise.allSettled([
           getCaptureGroupQualityReview(projectId, captureGroupId, request.signal),
           listCaptureGroupQualityReviewHistory(projectId, captureGroupId, request.signal),
-          getAnnotationLabelSchema(projectId, request.signal),
+          nextTask ? getAnnotationLabelSchema(projectId, request.signal) : Promise.resolve(null),
         ])
         if (!isCurrent()) return
 
@@ -122,7 +122,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
               : '暂时无法读取人工标签的质量事实；配药事件与机器证据仍可查看。',
           )
         }
-        if (schemaResult.status === 'rejected') {
+        if (nextTask && schemaResult.status === 'rejected') {
           setTaskErrorMessage('标签规范暂时无法读取，当前不能提交新的修订。')
         }
 
@@ -133,18 +133,27 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         )
         if (!isCurrent()) return
         const nextReviews: Record<string, QualityReview> = {}
+        const nextReviewErrors: Record<string, string> = {}
         reviewResults.forEach((result, index) => {
           const stream = nextGroup.streams[index]
-          if (stream && result.status === 'fulfilled')
+          if (!stream) return
+          if (result.status === 'fulfilled') {
             nextReviews[stream.clip_asset_id] = result.value
+          } else {
+            nextReviewErrors[stream.clip_asset_id] =
+              result.reason instanceof Error ? result.reason.message : '当前机位质量暂时无法读取。'
+          }
         })
         setViewReviews(nextReviews)
+        setViewReviewErrors(nextReviewErrors)
+        setViewQualityLoading(false)
         setSelectedClipAssetId((current) => {
           const presentIds = new Set(nextGroup.streams.map((stream) => stream.clip_asset_id))
           const pendingStream = nextGroup.streams.find((stream) => {
             const review = nextReviews[stream.clip_asset_id]
             return (
               stream.stream_status === 'INGESTED' &&
+              !nextReviewErrors[stream.clip_asset_id] &&
               (!review || (review.decision !== 'QUALIFIED' && review.decision !== 'REJECTED'))
             )
           })
@@ -153,7 +162,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           }
           if (current && presentIds.has(current)) return current
           if (pendingStream) return pendingStream.clip_asset_id
-          if (nextTask.primary_clip_asset_id && presentIds.has(nextTask.primary_clip_asset_id)) {
+          if (nextTask?.primary_clip_asset_id && presentIds.has(nextTask.primary_clip_asset_id)) {
             return nextTask.primary_clip_asset_id
           }
           return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
@@ -198,6 +207,8 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       setQualityHistory([])
       setSchema(null)
       setViewReviews({})
+      setViewReviewErrors({})
+      setViewQualityLoading(true)
 
       try {
         const nextGroup = await getCaptureGroup(projectId, captureGroupId, request.signal)
@@ -282,6 +293,16 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     }
   }, [captureGroupId, group, isFinalizingReceipt, message, projectId, refresh])
 
+  const updateViewReview = useCallback((review: QualityReview) => {
+    setViewReviews((current) => ({ ...current, [review.clip_asset_id]: review }))
+    setViewReviewErrors((current) => {
+      if (!current[review.clip_asset_id]) return current
+      const next = { ...current }
+      delete next[review.clip_asset_id]
+      return next
+    })
+  }, [])
+
   return {
     group,
     groupQuality,
@@ -291,11 +312,13 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     taskVisibility,
     schema,
     viewReviews,
+    viewReviewErrors,
     groupLoadState,
     groupErrorCode,
     groupErrorMessage,
     qualityErrorMessage,
     taskErrorMessage,
+    viewQualityLoading,
     refreshVersion,
     selectedClipAssetId,
     isFinalizingReceipt,
@@ -303,5 +326,6 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     finalizeReceipt,
     setTask,
     setSelectedClipAssetId,
+    updateViewReview,
   }
 }

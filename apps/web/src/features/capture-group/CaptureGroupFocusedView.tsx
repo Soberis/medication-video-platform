@@ -1,7 +1,6 @@
 import { Alert, Descriptions } from 'antd'
 import { Clock3, Video } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import type { ReactNode } from 'react'
 
 import type { AnnotationTask } from '@/api/annotation'
 import type { QualityReview } from '@/api/quality'
@@ -19,7 +18,6 @@ interface CaptureGroupFocusedViewProps {
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
   onPlaybackTimeChange?: (timeMs: number | null) => void
-  handDetectionEvidenceAction?: ReactNode
   isCompleted?: boolean
 }
 
@@ -30,7 +28,6 @@ export function CaptureGroupFocusedView({
   viewState,
   onSelectView,
   onPlaybackTimeChange,
-  handDetectionEvidenceAction,
   isCompleted = false,
 }: CaptureGroupFocusedViewProps) {
   const {
@@ -103,17 +100,14 @@ export function CaptureGroupFocusedView({
       aria-labelledby="capture-group-focused-title"
     >
       <header className="capture-group-focused-heading">
-        <div>
-          <p className="app-eyebrow">当前视图</p>
-          <h2 id="capture-group-focused-title">
-            {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
-          </h2>
-        </div>
+        <h2 id="capture-group-focused-title">
+          {selectedStream ? `机位 ${selectedStream.camera_number}` : '等待选择机位'}
+        </h2>
         {isPrimary || isSupporting ? (
           <StatusIndicator tone="information">
             {isPrimary
               ? isPrimaryLocked
-                ? `机位 ${selectedStream?.camera_number} · 已锁定`
+                ? '已锁定'
                 : '主视图 · 时间基准'
               : '参考视图 · 配药事件证据'}
           </StatusIndicator>
@@ -141,10 +135,9 @@ export function CaptureGroupFocusedView({
                 stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
               )
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
-              const qualityLabel =
-                task && stream
-                  ? `机位质量 · ${viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
-                  : null
+              const qualityLabel = stream
+                ? `机位质量 · ${viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
+                : null
               const mediaLabel = stream
                 ? (mediaStatusLabels[stream.stream_status] ?? '媒体状态暂不可用')
                 : '缺失'
@@ -208,9 +201,9 @@ export function CaptureGroupFocusedView({
           void startPlayback()
         }}
       />
-      {selectedDetail || handDetectionEvidenceAction ? (
+      {selectedDetail || selectedStream ? (
         <details className="capture-group-focused-details">
-          <summary>查看机位技术与辅助证据</summary>
+          <summary>查看检测与媒体信息</summary>
           <div className="capture-group-focused-details-content">
             {selectedSync ? (
               <div className="capture-group-sync-note capture-group-stack" role="status">
@@ -264,15 +257,6 @@ export function CaptureGroupFocusedView({
                           : []),
                       ]}
                     />
-                  ) : null}
-                  {handDetectionEvidenceAction ? (
-                    <div className="capture-group-stack">
-                      <p>
-                        导出当前配药事件的 <code translate="no">hand-landmarks.v1</code>{' '}
-                        手部检测证据。
-                      </p>
-                      <div>{handDetectionEvidenceAction}</div>
-                    </div>
                   ) : null}
                 </div>
               </Section>

@@ -186,6 +186,7 @@ export function stubGroupDetail(
   options: {
     task: AnnotationTask | null
     taskResponses?: Array<AnnotationTask | null>
+    taskAfterAssignment?: AnnotationTask
     groupResponses?: CaptureGroup[]
     taskScope?: 'PROJECT' | 'ASSIGNEE'
     quality: CaptureGroupQualityReview
@@ -265,6 +266,12 @@ export function stubGroupDetail(
       return Promise.resolve(
         jsonResponse({ items: options.quality.result === 'UNREVIEWED' ? [] : [options.quality] }),
       )
+    }
+    if (
+      url.endsWith(`/capture-groups/${group.capture_group_id}/annotation-tasks`) &&
+      init?.method === 'POST'
+    ) {
+      return Promise.resolve(jsonResponse(options.taskAfterAssignment ?? options.task ?? {}))
     }
     if (url.endsWith('/annotation-tasks')) {
       const taskResponses = options.taskResponses ?? [options.task]

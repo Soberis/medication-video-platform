@@ -216,6 +216,30 @@ export async function getAnnotationLabelSchema(
   throw await annotationTaskApiError(response)
 }
 
+export async function assignCaptureGroupHumanLabelTask(
+  projectId: string,
+  captureGroupId: string,
+  assigneeActorId: string,
+): Promise<AnnotationTask> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}/annotation-tasks`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+        'X-Request-Id': crypto.randomUUID(),
+        ...csrfHeaders(),
+      },
+      body: JSON.stringify({ assignee_actor_id: assigneeActorId.trim() }),
+      cache: 'no-store',
+    },
+  )
+  if (response.ok) return (await response.json()) as AnnotationTask
+  throw await annotationTaskApiError(response)
+}
+
 export async function selectAnnotationPrimaryView(
   projectId: string,
   annotationTaskId: string,
@@ -306,6 +330,30 @@ export async function recheckCaptureGroupCleaning(
   throw await annotationTaskApiError(response)
 }
 
+export async function downloadHumanAnnotationExport(
+  projectId: string,
+  captureGroupId?: string,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; fileName: string }> {
+  const query = captureGroupId ? `?capture_group_id=${encodeURIComponent(captureGroupId)}` : ''
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/human-annotations/v1/download${query}`,
+    {
+      method: 'GET',
+      headers: { Accept: 'text/csv; charset=UTF-8' },
+      cache: 'no-store',
+      signal,
+    },
+  )
+  if (!response.ok) throw await annotationTaskApiError(response)
+  return {
+    blob: await response.blob(),
+    fileName:
+      response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ??
+      `human_annotations_v1_${captureGroupId ? 'event' : 'project'}.csv`,
+  }
+}
+
 async function annotationTaskApiError(response: Response): Promise<AnnotationTaskApiError> {
   let errorCode = 'ANNOTATION_TASK_REQUEST_FAILED'
   try {
@@ -320,6 +368,10 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_REVISION_NOT_FOUND: '当前标注修订已不存在，请刷新任务列表。',
     ANNOTATION_TASK_QUALITY_NOT_QUALIFIED:
       '只有事件质量结论为“合格”的 CaptureGroup 才能进入配药动作标注。',
+    ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
+      '请先完成机位质量和事件质量判断，再开始人工动作标注。',
+    ANNOTATION_TASK_ALREADY_ASSIGNED: '该配药事件已经分配给其他成员，请刷新任务状态。',
+    ANNOTATION_TASK_ASSIGNMENT_IDEMPOTENCY_KEY_REUSED: '本次分配请求与已有请求冲突，请刷新后重试。',
     ANNOTATION_TASK_NOT_READY: '事件内视图完成媒体检测后才能进入配药动作标注。',
     ANNOTATION_TASK_ALREADY_EXISTS:
       '该 CaptureGroup 已有配药动作标注，请在配药动作标注页面继续处理。',
@@ -341,6 +393,10 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
       '当前配药事件修订、复核或任务状态不允许重新执行事件清洗。',
     ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
       '事件清洗不接受浏览器提供的视图映射；请刷新后重试。',
+    HUMAN_ANNOTATION_EXPORT_UNAVAILABLE: '当前环境暂未开放人工标注导出。',
+    HUMAN_ANNOTATION_EXPORT_NOT_READY: '当前没有审核通过的人工标注，暂时不能导出。',
+    HUMAN_ANNOTATION_EXPORT_DATA_INVALID: '当前人工标注数据校验未通过，请刷新后重试。',
+    HUMAN_ANNOTATION_EXPORT_FAILED: '人工标注导出未完成，请稍后重试。',
     INVALID_ANNOTATION_TASK: '提交内容不符合当前标注规范，请检查后重试。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }

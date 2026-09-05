@@ -74,7 +74,7 @@ describe('CaptureGroup annotation workflow', () => {
     })
 
     expect(screen.queryByRole('button', { name: '重新确认事件质量' })).not.toBeInTheDocument()
-    expect(await screen.findByText('人工复核 / 事件清洗')).toBeInTheDocument()
+    expect(await screen.findByText('复核与清洗')).toBeInTheDocument()
     const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
     await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
@@ -112,8 +112,8 @@ describe('CaptureGroup annotation workflow', () => {
 
     expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
-    expect(screen.getByText('机位 1 · 已锁定')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '查看复核与事件清洗详情' }))
+    expect(screen.getByText('已锁定')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '查看复核与清洗详情' }))
     expect(screen.getByText('00:12.345 → 00:18.760')).toBeInTheDocument()
     await user.click(screen.getByText('事实、历史与审计'))
     const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')

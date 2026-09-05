@@ -291,6 +291,52 @@ class HandLandmarkTrainingExportContractTests {
 	}
 
 	@Test
+	void exportsOnlyApprovedCurrentHumanAnnotationSegments() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		approveRevision(group, 900, "human-export");
+
+		var lines = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"human_annotations_v1_project_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsString(StandardCharsets.UTF_8)
+			.lines()
+			.toList();
+		assertEquals(2, lines.size());
+		var columns = List.of(lines.getFirst().split(",", -1));
+		var values = lines.get(1).split(",", -1);
+		assertEquals(columns.size(), values.length);
+		assertEquals(group.captureGroupId().toString(), values[columns.indexOf("capture_group_id")]);
+		assertEquals("900", values[columns.indexOf("segment_end_ms")]);
+		assertEquals("prepare_workspace", values[columns.indexOf("label")]);
+		assertEquals("APPROVED", values[columns.indexOf("review_decision")]);
+		assertFalse(columns.contains("landmark_00_x"));
+		assertFalse(columns.contains("ai_job_id"));
+	}
+
+	@Test
+	void humanAnnotationExportRequiresApprovedCurrentInput() throws Exception {
+		createGroup(1, 1, "COMPLETE", 1);
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_NOT_READY"));
+
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+	}
+
+	@Test
 	void rejectsUnknownAndWrongProjectCaptureGroups() throws Exception {
 		var group = createGroup(1, 1, "COMPLETE", 0);
 		this.mockMvc

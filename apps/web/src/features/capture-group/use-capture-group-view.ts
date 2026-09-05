@@ -284,7 +284,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
       ? selectedDetail.status === 'INGESTED'
         ? {
             title: '媒体已入库，可按需播放',
-            description: '播放授权只在点击后获取；播放器仍只加载当前选中的一路机位。',
+            description: '点击后开始播放；播放器只加载当前机位。',
             type: 'success',
           }
         : selectedDetail.status === 'INGEST_FAILED'

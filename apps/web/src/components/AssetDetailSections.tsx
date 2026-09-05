@@ -194,9 +194,6 @@ export function PlaybackCard({
 
   return (
     <section className="playback-panel" aria-label="视频查看">
-      <div className="playback-surface-heading">
-        <span className="app-eyebrow">人工查看</span>
-      </div>
       {!grant && availability ? (
         <div
           className={`playback-idle-stage playback-availability-${availability.type}`}

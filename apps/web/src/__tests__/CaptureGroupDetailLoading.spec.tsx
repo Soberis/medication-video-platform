@@ -76,7 +76,7 @@ describe('CaptureGroup detail loading', () => {
     await waitFor(() => expect(result.current.taskVisibility).toBe('unavailable'))
     expect(result.current.group?.capture_group_id).toBe(groupId)
     expect(result.current.task).toBeNull()
-    expect(result.current.groupQualityVisibility).toBe('unavailable')
+    expect(result.current.groupQualityVisibility).toBe('loaded')
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/capture-groups/'))).toBe(
       true,
     )
@@ -84,10 +84,10 @@ describe('CaptureGroup detail loading', () => {
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes('/capture-groups/' + groupId + '/quality-review'),
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('keeps ASSIGNEE empty distinct from a project-wide empty task scope', async () => {
+  it('keeps ASSIGNEE empty distinct from a project-wide empty task scope while loading facts', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -101,7 +101,7 @@ describe('CaptureGroup detail loading', () => {
     expect(assignee.result.current.task).toBeNull()
     expect(
       assigneeFetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review')),
-    ).toBe(false)
+    ).toBe(true)
 
     assignee.unmount()
     const projectFetchMock = stubHookDetail([group], {
@@ -112,10 +112,10 @@ describe('CaptureGroup detail loading', () => {
     expect(project.result.current.task).toBeNull()
     expect(
       projectFetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review')),
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('starts human quality, schema and per-view reads only after a visible task exists', async () => {
+  it('loads quality facts and the schema after the optional human task becomes visible', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -128,6 +128,12 @@ describe('CaptureGroup detail loading', () => {
     await waitFor(() => expect(result.current.groupLoadState).toBe('success'))
     expect(result.current.task).toBeNull()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
+      false,
+    )
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review/history')),
+    ).toBe(false)
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/clip-assets/'))).toBe(
       false,
     )
     expect(

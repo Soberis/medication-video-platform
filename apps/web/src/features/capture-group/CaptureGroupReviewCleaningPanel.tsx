@@ -240,11 +240,9 @@ export function CaptureGroupReviewCleaningPanel({
       className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
       id="capture-group-review-cleaning"
       tabIndex={-1}
-      title="人工复核 / 事件清洗"
+      title="复核与清洗"
       titleId="capture-group-review-cleaning-title"
-      actions={
-        <span className="capture-group-section-note">复核由人工完成 · 事件清洗按规则执行</span>
-      }
+      actions={<span className="capture-group-section-note">人工复核 · 按规则清洗</span>}
     >
       {hasCompletedReviewAndCleaning ? (
         <Button
@@ -256,7 +254,7 @@ export function CaptureGroupReviewCleaningPanel({
           aria-expanded={isCompletedDetailOpen}
           onClick={() => setIsCompletedDetailOpen((open) => !open)}
         >
-          {isCompletedDetailOpen ? '收起复核与事件清洗详情' : '查看复核与事件清洗详情'}
+          {isCompletedDetailOpen ? '收起复核与清洗详情' : '查看复核与清洗详情'}
         </Button>
       ) : null}
       {!task ? (

@@ -36,6 +36,13 @@
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);
 }
 
+.capture-group-workspace[data-stage='COMPLETED'] {
+  grid-template-areas:
+    'video'
+    'action';
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .capture-group-completed-workspace {
   display: grid;
   gap: var(--app-space-16);
@@ -370,12 +377,6 @@
   color: var(--app-color-foreground);
   font-size: var(--app-font-size-heading-2);
   line-height: var(--app-line-height-heading);
-}
-
-.capture-group-focused-heading > div {
-  display: grid;
-  gap: var(--app-space-4);
-  min-width: 0;
 }
 
 .capture-group-form-heading > span,
@@ -1417,6 +1418,10 @@
     position: sticky;
     top: var(--app-space-16);
     align-self: start;
+  }
+
+  .capture-group-workspace[data-stage='COMPLETED'] .capture-group-video-column {
+    position: static;
   }
 }
 

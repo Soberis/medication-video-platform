@@ -14,8 +14,13 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
+import {
+  isHumanAnnotationExportReady,
+  receiptStateLabels,
+  receiptTone,
+} from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import { HumanAnnotationExportButton } from '@/features/capture-group/HumanAnnotationExportButton'
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
@@ -184,6 +189,11 @@ export default function CaptureGroupListView() {
         description="按配药事件查看接收事实、视频资产、Media Probe 与 MediaPipe 检测证据。"
         actions={
           <>
+            {session?.role === 'ADMIN' &&
+            taskReadState.status === 'success' &&
+            taskReadState.items.some(isHumanAnnotationExportReady) ? (
+              <HumanAnnotationExportButton projectId={projectId} />
+            ) : null}
             {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
             <Button
               type="text"

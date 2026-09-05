@@ -60,6 +60,10 @@ tags:
       Explicit, synchronous, read-only current MediaPipe hand-landmark evidence export. It never imports
       human annotation, Review or Cleaning decisions and preserves the current administrator and
       synthetic-data security boundary.
+  - name: Human Annotation Export
+    description: >-
+      Explicit, synchronous, read-only export of current-input human action annotations that have completed
+      review approval. It is separate from MediaPipe machine evidence and contains no MP4 bytes.
   - name: Video Playback
     description: >-
       Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
@@ -72,6 +76,53 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
+  /projects/{project_id}/human-annotations/v1/download:
+    get:
+      operationId: downloadHumanAnnotationTrainingData
+      tags:
+        - Human Annotation Export
+      summary: Download approved human action annotations as CSV
+      description: >-
+        Returns one row per segment from the latest AnnotationRevision for each current CaptureGroup in the project,
+        or the requested CaptureGroup. Only COMPLETED tasks with APPROVED AnnotationReview and current input/media
+        provenance are exported. The CSV contains labels and provenance, no MP4 bytes and no MediaPipe landmark fields.
+        It is restricted to the synthetic data profile until a non-synthetic authorization model is defined.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: query
+          required: false
+          description: Limits the export to exactly one CaptureGroup belonging to the project.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Approved human annotation CSV; no MP4 bytes.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              schema:
+                type: string
+                pattern: '^attachment; filename="human_annotations_v1_(project|event_[a-f0-9]{8})_[0-9]{8}T[0-9]{6}Z\\.csv"$'
+          content:
+            "text/csv; charset=UTF-8":
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: >-
+            No current approved annotation is ready, or current annotation/media provenance cannot be proven safely.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/hand-landmarks/v1/preview:
     get:
       operationId: getHandLandmarkTrainingExportPreview
