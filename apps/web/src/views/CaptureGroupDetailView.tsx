@@ -52,7 +52,7 @@ export default function CaptureGroupDetailView() {
   const humanTask = data.taskVisibility === 'visible' ? data.task : null
   const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
-  const eventTitle = data.group?.capture_group_key ?? `数据组 · ${shortId(captureGroupId)}`
+  const eventTitle = data.group?.capture_group_key ?? `配药事件 · ${shortId(captureGroupId)}`
   const handDetectionEvidenceAction =
     session?.role === 'ADMIN' ? (
       <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
@@ -155,7 +155,7 @@ export default function CaptureGroupDetailView() {
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
         <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>
-          数据组
+          配药事件
         </Link>
         <span aria-hidden="true">/</span>
         <span>{eventIdentity}</span>
@@ -190,7 +190,7 @@ export default function CaptureGroupDetailView() {
         }
       />
       {data.groupLoadState === 'loading' ? (
-        <LoadingState>{data.group ? '正在刷新数据组…' : '正在读取数据组…'}</LoadingState>
+        <LoadingState>{data.group ? '正在刷新配药事件…' : '正在读取配药事件…'}</LoadingState>
       ) : null}
       {data.groupLoadState === 'error' ? (
         <ErrorState code={data.groupErrorCode} onRetry={() => void data.refresh()}>
@@ -203,7 +203,7 @@ export default function CaptureGroupDetailView() {
             <Alert
               type="warning"
               showIcon
-              title="人工任务状态暂不可用；数据组、播放器和机器证据仍可查看。"
+              title="人工任务状态暂不可用；配药事件、播放器和机器证据仍可查看。"
             />
           ) : null}
           {humanTask && data.qualityErrorMessage ? (

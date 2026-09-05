@@ -169,7 +169,7 @@ describe('App', () => {
         {
           path: `/projects/:projectId/capture-groups`,
           element: <AppShell />,
-          children: [{ index: true, element: <div>数据组页面</div> }],
+          children: [{ index: true, element: <div>配药事件页面</div> }],
         },
       ],
       [`/projects/${projectId}/capture-groups`],
@@ -177,11 +177,11 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'href',
       `/projects/${projectId}/capture-groups`,
     )
@@ -212,7 +212,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByRole('link', { name: '数据组' })).not.toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).not.toHaveAttribute(
       'aria-current',
     )
   })
@@ -228,7 +228,7 @@ describe('App', () => {
           children: [
             {
               path: 'projects/:projectId/capture-groups/:captureGroupId',
-              element: <div>数据组详情页面</div>,
+              element: <div>配药事件详情页面</div>,
             },
           ],
         },
@@ -238,7 +238,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )
@@ -271,7 +271,7 @@ describe('App', () => {
     expect(within(navigation).getByRole('link', { name: '人工标签收件箱' })).not.toHaveAttribute(
       'aria-current',
     )
-    expect(within(navigation).getByRole('link', { name: '数据组' })).toHaveAttribute(
+    expect(within(navigation).getByRole('link', { name: '配药事件' })).toHaveAttribute(
       'aria-current',
       'page',
     )

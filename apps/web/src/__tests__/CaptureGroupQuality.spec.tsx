@@ -32,9 +32,9 @@ describe('CaptureGroup data-group list', () => {
       route: `/projects/${projectId}/capture-groups`,
     })
 
-    const list = await screen.findByRole('list', { name: '数据组列表' })
+    const list = await screen.findByRole('list', { name: '配药事件列表' })
     const row = within(list).getByRole('listitem', { name: /machine-evidence-group/ })
-    expect(screen.getByRole('heading', { name: '数据组' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '配药事件' })).toBeInTheDocument()
     expect(row).toHaveTextContent('1/2 机位已收 · 接收完成 · 有缺失')
     expect(row).toHaveTextContent('缺失：机位 2')
     expect(row).toHaveTextContent('MediaPipe machine evidence')
@@ -80,7 +80,7 @@ describe('CaptureGroup data-group list', () => {
       route: `/projects/${projectId}/capture-groups`,
     })
 
-    expect(await screen.findByText('暂时无法读取数据组，请稍后重试。')).toBeInTheDocument()
+    expect(await screen.findByText('暂时无法读取配药事件，请稍后重试。')).toBeInTheDocument()
     expect(screen.getByText('CAPTURE_GROUP_LIST_FAILED')).toBeInTheDocument()
   })
 })

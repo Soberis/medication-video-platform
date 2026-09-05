@@ -80,11 +80,11 @@ export function CaptureGroupInspector({
       <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>
         <InspectorSection title="接收状态 / 采集事实" titleId="capture-group-receipt-facts">
           <MetadataList
-            ariaLabel="数据组接收事实"
+            ariaLabel="配药事件接收事实"
             items={[
               {
                 id: 'group-id',
-                label: '数据组 ID',
+                label: '配药事件 ID',
                 value: <code>{group.capture_group_id}</code>,
               },
               { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
@@ -332,7 +332,7 @@ export function CaptureGroupInspector({
                 className="text-link"
                 to={paths.captureGroupFocus(projectId, captureGroupId, taskFocus)}
               >
-                打开数据组人工标签任务上下文
+                打开配药事件人工标签任务上下文
               </Link>
             </>
           </InspectorSection>

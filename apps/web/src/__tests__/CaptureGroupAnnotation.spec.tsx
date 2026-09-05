@@ -82,7 +82,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '提交修订' })).not.toBeInTheDocument()
     expect(
-      within(auditDetails).getByRole('link', { name: '打开数据组人工标签任务上下文' }),
+      within(auditDetails).getByRole('link', { name: '打开配药事件人工标签任务上下文' }),
     ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/revisions')),
@@ -126,7 +126,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.getAllByText('人工复核 · 已通过').length).toBeGreaterThan(0)
     expect(screen.getByText('事件清洗')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
-    const compareStrip = screen.getByLabelText('数据组机位选择')
+    const compareStrip = screen.getByLabelText('配药事件机位选择')
     expect(within(compareStrip).getAllByRole('button', { name: /机位 / })).toHaveLength(2)
   })
 

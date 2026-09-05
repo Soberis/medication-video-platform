@@ -218,7 +218,7 @@ export default function AnnotationTaskListView() {
           <ul className="annotation-task-list-surface" aria-label="标注任务列表">
             {items.map((row) => {
               const captureGroupId = row.capture_group_id
-              const taskSubject = `数据组 ${shortId(captureGroupId)}`
+              const taskSubject = `配药事件 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
               const presentation = captureGroupCleaningPresentation(row)
               const taskDestination = captureGroupTaskDestination(row)

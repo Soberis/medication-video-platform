@@ -115,7 +115,7 @@ export function CaptureGroupFocusedView({
               ? isPrimaryLocked
                 ? `机位 ${selectedStream?.camera_number} · 已锁定`
                 : '主视图 · 时间基准'
-              : '参考视图 · 数据组证据'}
+              : '参考视图 · 配药事件证据'}
           </StatusIndicator>
         ) : null}
       </header>
@@ -129,7 +129,7 @@ export function CaptureGroupFocusedView({
         />
       ) : null}
       {viewRows.length > 1 ? (
-        <div className="capture-group-compare-strip" role="group" aria-label="数据组机位选择">
+        <div className="capture-group-compare-strip" role="group" aria-label="配药事件机位选择">
           <div className="capture-group-compare-heading">
             <span className="app-eyebrow">机位切换</span>
             <span>选择一路机位查看当前视频；缺失机位保留在原编号位置。</span>
@@ -268,7 +268,7 @@ export function CaptureGroupFocusedView({
                   {handDetectionEvidenceAction ? (
                     <div className="capture-group-stack">
                       <p>
-                        导出当前数据组的 <code translate="no">hand-landmarks.v1</code>{' '}
+                        导出当前配药事件的 <code translate="no">hand-landmarks.v1</code>{' '}
                         手部检测证据。
                       </p>
                       <div>{handDetectionEvidenceAction}</div>

@@ -146,11 +146,11 @@ export default function AppShell() {
                 <Link
                   to={paths.captureGroups(projectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
-                  aria-label="数据组"
-                  title="数据组"
+                  aria-label="配药事件"
+                  title="配药事件"
                 >
                   <Video {...iconProps} />
-                  <span className="sidebar-label">数据组</span>
+                  <span className="sidebar-label">配药事件</span>
                 </Link>
               ) : null}
             </div>

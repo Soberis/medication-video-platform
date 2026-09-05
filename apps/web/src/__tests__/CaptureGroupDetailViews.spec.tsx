@@ -35,7 +35,7 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '数据组' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '配药事件' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '机位 1' })).toBeInTheDocument()
     await user.click(await screen.findByText('查看机位技术与辅助证据'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
@@ -87,7 +87,7 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    const selector = await screen.findByRole('group', { name: '数据组机位选择' })
+    const selector = await screen.findByRole('group', { name: '配药事件机位选择' })
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看机位技术与辅助证据'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()

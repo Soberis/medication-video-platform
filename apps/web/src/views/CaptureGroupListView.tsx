@@ -111,7 +111,7 @@ export default function CaptureGroupListView() {
             ? error.errorCode
             : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
         )
-        setErrorMessage('暂时无法读取数据组，请稍后重试。')
+        setErrorMessage('暂时无法读取配药事件，请稍后重试。')
       } finally {
         if (groupRequest.current === request) {
           groupRequest.current = null
@@ -184,8 +184,8 @@ export default function CaptureGroupListView() {
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
-        title="数据组"
-        description="按数据组查看接收事实、视频资产、Media Probe 与 MediaPipe 检测证据。"
+        title="配药事件"
+        description="按配药事件查看接收事实、视频资产、Media Probe 与 MediaPipe 检测证据。"
         actions={
           <>
             {session?.role === 'ADMIN' ? <HandLandmarkExportButton projectId={projectId} /> : null}
@@ -202,7 +202,7 @@ export default function CaptureGroupListView() {
         }
       />
       {loadState === 'loading' && !rows.length ? (
-        <LoadingState>正在读取数据组…</LoadingState>
+        <LoadingState>正在读取配药事件…</LoadingState>
       ) : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadGroups()}>
@@ -213,9 +213,9 @@ export default function CaptureGroupListView() {
         <EmptyState
           description={
             <div>
-              <strong>还没有数据组</strong>
+              <strong>还没有配药事件</strong>
               <br />
-              完成明确归组的接收记录后，数据组会显示在这里。
+              完成明确归组的接收记录后，配药事件会显示在这里。
               <br />
               已有独立视频不会根据文件名、上传顺序或拍摄时间自动归组。
             </div>
@@ -225,16 +225,16 @@ export default function CaptureGroupListView() {
         </EmptyState>
       ) : null}
       {rows.length ? (
-        <section className="capture-group-list-surface" aria-label="数据组结果">
+        <section className="capture-group-list-surface" aria-label="配药事件结果">
           <div className="capture-group-list-meta">
             <span className="capture-group-list-count">
-              {nextCursor ? `已显示 ${rows.length} 个数据组` : `共 ${rows.length} 个数据组`}
+              {nextCursor ? `已显示 ${rows.length} 个配药事件` : `共 ${rows.length} 个配药事件`}
             </span>
           </div>
-          <div className="capture-group-list" role="list" aria-label="数据组列表">
+          <div className="capture-group-list" role="list" aria-label="配药事件列表">
             {rows.map((group) => {
               const identity = group.capture_group_key ?? shortId(group.capture_group_id)
-              const identityLabel = `数据组 · ${identity}`
+              const identityLabel = `配药事件 · ${identity}`
               const eventTime = group.device_time_utc ?? group.created_at
               const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
               const task =
@@ -330,10 +330,10 @@ export default function CaptureGroupListView() {
                   <footer className="capture-group-list-row-footer">
                     <Link
                       className="capture-group-list-open"
-                      aria-label={`查看数据组：${identityLabel}`}
+                      aria-label={`查看配药事件：${identityLabel}`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
                     >
-                      查看数据组 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                      查看配药事件 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
                     {taskDestination ? (
                       <Link

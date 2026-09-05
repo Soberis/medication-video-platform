@@ -84,7 +84,7 @@ async function handLandmarkExportApiError(
   const messages: Record<string, string> = {
     PROJECT_ACCESS_DENIED: '当前身份没有项目手部检测关键点导出的权限。',
     PROJECT_NOT_FOUND: '未找到该项目，或当前身份无权访问。',
-    CAPTURE_GROUP_NOT_FOUND: '未找到该数据组，或该数据组不属于当前项目。',
+    CAPTURE_GROUP_NOT_FOUND: '未找到该配药事件，或该配药事件不属于当前项目。',
     HAND_LANDMARK_EXPORT_UNAVAILABLE: '当前环境暂未开放手部检测关键点导出。',
     HAND_LANDMARK_EXPORT_EVIDENCE_INVALID: '当前手部关键点证据不完整，暂时无法导出。',
     HAND_LANDMARK_EXPORT_FAILED: '手部检测关键点导出未完成，请稍后重试。',
