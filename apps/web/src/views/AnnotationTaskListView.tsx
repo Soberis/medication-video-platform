@@ -365,13 +365,9 @@ export default function AnnotationTaskListView() {
                   data-status={row.status}
                 >
                   <header className="annotation-task-row-identity">
-                    <Link
-                      className="text-link mono-wrap"
-                      to={paths.captureGroup(projectId, captureGroupId)}
-                      title={captureGroupId}
-                    >
+                    <strong className="mono-wrap" title={captureGroupId}>
                       {taskSubject}
-                    </Link>
+                    </strong>
                   </header>
                   <div className="annotation-task-row-status">
                     <StatusIndicator className="annotation-task-status" tone={taskStatusTone(row)}>

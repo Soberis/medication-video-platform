@@ -122,10 +122,13 @@ describe('annotation task list view', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(
-      within(screen.getByRole('listitem', { name: /配药事件 .*待标注/ })).getByRole('link', {
-        name: /^配药事件 60000000.*0001$/,
-      }),
-    ).toHaveAttribute('href', `/projects/${projectId}/capture-groups/${captureGroupId}`)
+      within(screen.getByRole('listitem', { name: /配药事件 .*待标注/ })).getByText(
+        /^配药事件 60000000.*0001$/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('listitem', { name: /配药事件 .*待标注/ })).getAllByRole('link'),
+    ).toHaveLength(1)
     expect(screen.getByRole('list', { name: '标注任务列表' })).toHaveClass(
       'annotation-task-list-surface',
     )
@@ -324,10 +327,8 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('listitem', { name: /配药事件 .*待标注/ })
     expect(within(taskRow).queryByRole('link', { name: /进入配药事件/ })).not.toBeInTheDocument()
-    expect(within(taskRow).getByRole('link', { name: /配药事件/ })).toHaveAttribute(
-      'href',
-      paths.captureGroup(projectId, captureGroupId),
-    )
+    expect(within(taskRow).getByText(/^配药事件 60000000.*0001$/)).toBeInTheDocument()
+    expect(within(taskRow).queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('shows the completed state and each CaptureGroup cleaning outcome without adding another page', async () => {

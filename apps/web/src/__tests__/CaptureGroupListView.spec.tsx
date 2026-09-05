@@ -60,11 +60,10 @@ describe('capture group list view', () => {
     expect(activeRow).toHaveTextContent('Media Probe · hand-landmarks.v1')
     expect(activeRow).toHaveTextContent('1/1 机位已收')
 
-    const processLink = within(activeRow).getByRole('link', { name: /进入配药动作标注/ })
+    const processLink = within(activeRow).getByRole('link', { name: /查看配药事件/ })
+    expect(within(activeRow).getAllByRole('link')).toHaveLength(1)
     expect(completedRow).toHaveTextContent('有人工标签任务')
-    expect(
-      within(completedRow).getByRole('link', { name: /查看复核 \/ 事件清洗结果/ }),
-    ).toHaveTextContent('查看复核 / 事件清洗结果')
+    expect(within(completedRow).getAllByRole('link')).toHaveLength(1)
 
     await user.click(processLink)
     await waitFor(() =>
@@ -279,9 +278,9 @@ describe('capture group list view', () => {
 
     const row = await screen.findByRole('listitem', { name: /assignee-task-group/ })
     await waitFor(() => expect(row).toHaveTextContent('有分配给我的人工标签任务'))
-    expect(within(row).getByRole('link', { name: /进入配药动作标注/ })).toHaveAttribute(
+    expect(within(row).getByRole('link', { name: /查看配药事件/ })).toHaveAttribute(
       'href',
-      paths.captureGroupFocus(projectId, group.capture_group_id, 'annotation'),
+      paths.captureGroup(projectId, group.capture_group_id),
     )
   })
 

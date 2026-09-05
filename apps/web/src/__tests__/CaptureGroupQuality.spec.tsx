@@ -47,7 +47,7 @@ describe('CaptureGroup data-group list', () => {
     ).toBe(false)
   })
 
-  it('shows the optional human-label path only when a task already exists', async () => {
+  it('shows the human-label task status without adding a second row link', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -63,10 +63,11 @@ describe('CaptureGroup data-group list', () => {
 
     const row = await screen.findByRole('listitem', { name: /human-label-group/ })
     expect(row).toHaveTextContent('有人工标签任务')
-    expect(within(row).getByRole('link', { name: /进入配药动作标注/ })).toHaveAttribute(
+    expect(within(row).getByRole('link', { name: /查看配药事件/ })).toHaveAttribute(
       'href',
-      paths.captureGroupFocus(projectId, groupId, 'annotation'),
+      paths.captureGroup(projectId, groupId),
     )
+    expect(within(row).getAllByRole('link')).toHaveLength(1)
   })
 
   it('keeps the data-group error boundary independent from optional task enrichment', async () => {

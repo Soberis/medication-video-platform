@@ -14,11 +14,7 @@ import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import {
-  captureGroupTaskDestination,
-  receiptStateLabels,
-  receiptTone,
-} from '@/features/capture-group-presentation'
+import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
 
@@ -243,8 +239,6 @@ export default function CaptureGroupListView() {
                       (candidate) => candidate.capture_group_id === group.capture_group_id,
                     )
                   : undefined
-              const taskDestination = task ? captureGroupTaskDestination(task) : null
-
               return (
                 <div
                   className="capture-group-list-row"
@@ -335,19 +329,6 @@ export default function CaptureGroupListView() {
                     >
                       查看配药事件 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>
-                    {taskDestination ? (
-                      <Link
-                        className="text-link"
-                        aria-label={`${taskDestination.actionLabel}：${identityLabel}`}
-                        to={paths.captureGroupFocus(
-                          projectId,
-                          group.capture_group_id,
-                          taskDestination.focus,
-                        )}
-                      >
-                        {taskDestination.actionLabel}
-                      </Link>
-                    ) : null}
                   </footer>
                 </div>
               )
