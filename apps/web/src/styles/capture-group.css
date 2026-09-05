@@ -1083,7 +1083,7 @@
 
 .capture-group-review-facts {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--app-space-12);
   padding: var(--app-space-12) 0;
   border-top: 1px solid var(--app-color-border-subtle);
@@ -1093,8 +1093,8 @@
 
 .capture-group-review-quality-fact {
   align-content: start;
-  padding-left: var(--app-space-12);
-  border-left: 1px solid var(--app-color-border-subtle);
+  padding-top: var(--app-space-12);
+  border-top: 1px solid var(--app-color-border-subtle);
 }
 
 .capture-group-review-subheading {
@@ -1451,17 +1451,6 @@
   .capture-group-review-evidence-grid,
   .capture-group-cleaning-evidence-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .capture-group-review-facts {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .capture-group-review-quality-fact {
-    padding-top: var(--app-space-12);
-    padding-left: 0;
-    border-top: 1px solid var(--app-color-border-subtle);
-    border-left: 0;
   }
 
   .capture-group-current-action-summary {
