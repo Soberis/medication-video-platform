@@ -1,6 +1,6 @@
 # V1.28 运行时需求追踪矩阵
 
-> 当前 DRAFT 需求方向：[V1.29 数据组主线收敛与 Runtime Simplification](../requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)<br>
+> 当前 DRAFT 需求方向：[V1.30 浅色专业工作区与视频优先体验重构](../requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)；继承 V1.29 未变更边界。V30-UX-001 至 V30-UX-006 的验收和未实施状态见该基线第 8 节，以下历史实现状态不计作 V1.30 完成证据。<br>
 > 上一正式运行时基线：[V1.28 单一 CaptureGroup 路径与唯一手部检测导出](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)<br>
 > 上一正式技术设计：[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md)<br>
 > 上一基线与审计参考：[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md)、[AI evidence pipeline audit](./v1.27-ai-evidence-audit.md)与[training traceability audit](./v1.27-training-traceability.md)<br>

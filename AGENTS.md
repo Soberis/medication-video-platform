@@ -11,8 +11,8 @@
 按以下顺序理解需求和实现：
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
-2. `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md`：当前 DRAFT 需求边界，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
-3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.29 与其冲突处以 V1.29 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
+2. `docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md`：当前 DRAFT 需求基线，定义浅色专业工作区与视频优先体验重构；界面方向冲突以 V1.30 为准，实施前同步设计系统。本版本继承 `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md` 的未变更业务边界；V1.29 为前序 DRAFT，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
+3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.30 及其继承的 V1.29 与其冲突处以最新 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
 4. `docs/architecture/v1.27-hand-detection-policy.md`、`docs/architecture/v1.27-ai-evidence-audit.md` 与 `docs/architecture/v1.27-training-traceability.md`：上一版本的手部检测和证据审计参考，其中检测事实边界仍适用，事件 manifest 部分不再是当前产品。`docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md`、`docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`、`docs/architecture/v1.26-medication-event-workbench-design.md`、V1.25 CaptureGroup 文档和 V1.24 文档均为历史/迁移参考，不构成当前兼容性承诺。
 5. `docs/adr/`：已经冻结的技术决策。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
@@ -24,7 +24,9 @@
 
 ## Frontend Design Identity
 
-All frontend UI work must follow the permanent design identity:
+V1.30 DRAFT defines the next visual direction. Before implementing it, revise `docs/DESIGN_SYSTEM.md` and this identity together; a version change alone does not change the current UI.
+
+Until that revision, frontend UI work follows the existing design identity:
 
 Linear-inspired Quiet Professional Workspace
 
