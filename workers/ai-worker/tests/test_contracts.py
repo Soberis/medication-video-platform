@@ -7,7 +7,7 @@ import pytest
 
 from medication_ai_worker.contracts import AiJob, ContractError
 
-PROFILE_SHA256 = "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626"
+PROFILE_SHA256 = "239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09"
 
 
 def test_job_contract_requires_the_frozen_profile_digest_field() -> None:

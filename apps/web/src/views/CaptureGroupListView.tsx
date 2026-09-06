@@ -1,7 +1,7 @@
 import { Button } from 'antd'
-import { ArrowRight, RefreshCw } from 'lucide-react'
+import { ArrowRight, RefreshCw, Video } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 
 import {
   CaptureGroupApiError,
@@ -35,14 +35,33 @@ interface RequestToken {
   generation: number
 }
 
+interface ListReturnState {
+  projectId: string
+  viewer: string
+  rows: CaptureGroupSummary[]
+  nextCursor: string | null
+  scrollY: number
+}
+
 export default function CaptureGroupListView() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { session } = useAuth()
-  const [rows, setRows] = useState<CaptureGroupSummary[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
-  const [loadingMode, setLoadingMode] = useState<CaptureGroupListLoadingMode>('initial')
+  const viewer = `${session?.username}:${session?.role}`
+  const savedList = (location.state as { captureGroupList?: ListReturnState } | null)
+    ?.captureGroupList
+  const [restoredList] = useState(
+    savedList?.projectId === projectId && savedList.viewer === viewer ? savedList : null,
+  )
+  const [rows, setRows] = useState<CaptureGroupSummary[]>(restoredList?.rows ?? [])
+  const [nextCursor, setNextCursor] = useState<string | null>(restoredList?.nextCursor ?? null)
+  const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>(
+    restoredList ? 'success' : 'loading',
+  )
+  const [loadingMode, setLoadingMode] = useState<CaptureGroupListLoadingMode>(
+    restoredList ? null : 'initial',
+  )
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
@@ -163,9 +182,11 @@ export default function CaptureGroupListView() {
   }, [projectId])
 
   useEffect(() => {
-    rowsRef.current = []
+    const restored = restoredList?.projectId === projectId ? restoredList : null
+    rowsRef.current = restored?.rows ?? []
     const timer = window.setTimeout(() => {
-      void loadGroups()
+      if (restored) window.scrollTo(0, restored.scrollY)
+      else void loadGroups()
       void loadTasks()
     }, 0)
 
@@ -179,7 +200,7 @@ export default function CaptureGroupListView() {
       taskRequest.current = null
       rowsRef.current = []
     }
-  }, [loadGroups, loadTasks])
+  }, [loadGroups, loadTasks, projectId, restoredList])
 
   return (
     <>
@@ -187,7 +208,6 @@ export default function CaptureGroupListView() {
         className="capture-group-page-header"
         titleId="capture-group-list-title"
         title="视频"
-        description="查看视频、标注动作，导出训练所需数据。同一次采集的多相机视频保存在一起。"
         actions={
           <>
             {session?.role === 'ADMIN' ? (
@@ -269,6 +289,7 @@ export default function CaptureGroupListView() {
                 >
                   <header className="capture-group-list-row-header">
                     <div className="capture-group-list-identity">
+                      <Video aria-hidden="true" size={16} strokeWidth={1.8} />
                       <strong className="capture-group-list-title">{identity}</strong>
                     </div>
                     <time className="capture-group-list-time" dateTime={eventTime}>
@@ -318,13 +339,7 @@ export default function CaptureGroupListView() {
                           <StatusIndicator tone="information">
                             {formatTaskStatus(task)}
                           </StatusIndicator>
-                        ) : (
-                          <span className="capture-group-list-machine-path">
-                            {taskReadState.scope === 'ASSIGNEE'
-                              ? '没有分配给我的人工标签任务'
-                              : '暂无人工标签任务'}
-                          </span>
-                        )}
+                        ) : null}
                       </dd>
                     </div>
                   </dl>
@@ -333,6 +348,33 @@ export default function CaptureGroupListView() {
                       className="capture-group-list-open"
                       aria-label={`查看视频：${identityLabel}`}
                       to={paths.captureGroup(projectId, group.capture_group_id)}
+                      onClick={(event) => {
+                        if (
+                          event.button !== 0 ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey
+                        )
+                          return
+                        event.preventDefault()
+                        const captureGroupList: ListReturnState = {
+                          projectId,
+                          viewer,
+                          rows,
+                          nextCursor,
+                          scrollY: window.scrollY,
+                        }
+                        void (async () => {
+                          await navigate(location.pathname + location.search, {
+                            replace: true,
+                            state: { captureGroupList },
+                          })
+                          await navigate(paths.captureGroup(projectId, group.capture_group_id), {
+                            state: { captureGroupList },
+                          })
+                        })()
+                      }}
                     >
                       查看视频 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
                     </Link>

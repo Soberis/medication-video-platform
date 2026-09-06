@@ -4,6 +4,7 @@ import {
   FolderKanban,
   ListChecks,
   LogOut,
+  Settings,
   Upload,
   UserRoundCog,
   UsersRound,
@@ -156,7 +157,6 @@ export default function AppShell() {
             </div>
             {projectId ? (
               <div className="sidebar-nav-group">
-                <p className="sidebar-nav-group-label">任务</p>
                 <NavLink
                   to={paths.annotationTasks(projectId)}
                   aria-label="标注任务"
@@ -167,38 +167,46 @@ export default function AppShell() {
                 </NavLink>
               </div>
             ) : null}
-            <div
-              className="sidebar-nav-group"
-              data-active={isManagementRoute || undefined}
-              aria-labelledby="management-navigation-label"
-            >
-              <p id="management-navigation-label" className="sidebar-nav-group-label">
-                管理
-              </p>
-              {isAdministrator ? (
-                <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
-                  <Upload {...iconProps} />
-                  <span className="sidebar-label">上传视频</span>
-                </NavLink>
-              ) : null}
-              {projectId && isAdministrator ? (
-                <NavLink
-                  end
-                  to={paths.memberships(projectId)}
-                  aria-label="项目成员"
-                  title="项目成员"
+            {isAdministrator ? (
+              <details
+                className="sidebar-nav-group"
+                open={isManagementRoute}
+                data-active={isManagementRoute || undefined}
+                aria-labelledby="management-navigation-label"
+              >
+                <summary
+                  id="management-navigation-label"
+                  className="sidebar-settings-toggle"
+                  title="设置"
                 >
-                  <UsersRound {...iconProps} />
-                  <span className="sidebar-label">项目成员</span>
-                </NavLink>
-              ) : null}
-              {isAdministrator ? (
-                <NavLink end to={paths.accounts} aria-label="账号管理" title="账号管理">
-                  <UserRoundCog {...iconProps} />
-                  <span className="sidebar-label">账号管理</span>
-                </NavLink>
-              ) : null}
-            </div>
+                  <Settings {...iconProps} />
+                  <span className="sidebar-label">设置</span>
+                </summary>
+                {isAdministrator ? (
+                  <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
+                    <Upload {...iconProps} />
+                    <span className="sidebar-label">上传视频</span>
+                  </NavLink>
+                ) : null}
+                {projectId && isAdministrator ? (
+                  <NavLink
+                    end
+                    to={paths.memberships(projectId)}
+                    aria-label="项目成员"
+                    title="项目成员"
+                  >
+                    <UsersRound {...iconProps} />
+                    <span className="sidebar-label">项目成员</span>
+                  </NavLink>
+                ) : null}
+                {isAdministrator ? (
+                  <NavLink end to={paths.accounts} aria-label="账号管理" title="账号管理">
+                    <UserRoundCog {...iconProps} />
+                    <span className="sidebar-label">账号管理</span>
+                  </NavLink>
+                ) : null}
+              </details>
+            ) : null}
           </nav>
         </Sidebar>
       }

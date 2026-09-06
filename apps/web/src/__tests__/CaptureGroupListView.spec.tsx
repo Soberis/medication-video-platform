@@ -54,7 +54,10 @@ describe('capture group list view', () => {
     const completedRow = within(list).getByRole('listitem', { name: /completed-group/ })
 
     expect(activeRow.querySelector('.capture-group-list-eyebrow')).not.toBeInTheDocument()
-    expect(activeRow.querySelector('.capture-group-list-identity svg')).not.toBeInTheDocument()
+    expect(activeRow.querySelector('.capture-group-list-identity svg')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
     expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument()
     expect(activeRow).toHaveTextContent('待提交')
     expect(activeRow).not.toHaveTextContent('Media Probe · hand-landmarks.v1')
@@ -107,13 +110,13 @@ describe('capture group list view', () => {
 
     expect(receivingRow).toHaveTextContent('1/2 机位已收 · 接收中')
     expect(receivingRow).toHaveTextContent('缺失：机位 2')
-    expect(receivingRow).toHaveTextContent('没有分配给我的人工标签任务')
+    expect(receivingRow).not.toHaveTextContent('没有分配给我的人工标签任务')
     expect(receivingRow).not.toHaveTextContent('MediaPipe machine evidence')
     expect(within(receivingRow).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
 
     expect(incompleteRow).toHaveTextContent('2/3 机位已收 · 接收完成 · 有缺失')
     expect(incompleteRow).toHaveTextContent('缺失：机位 2')
-    expect(incompleteRow).toHaveTextContent('没有分配给我的人工标签任务')
+    expect(incompleteRow).not.toHaveTextContent('没有分配给我的人工标签任务')
     expect(incompleteRow).not.toHaveTextContent('hand-landmarks.v1')
     expect(within(incompleteRow).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
   })
@@ -191,7 +194,8 @@ describe('capture group list view', () => {
         },
       },
     )
-    renderView()
+    const { router } = renderView()
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     const user = userEvent.setup()
 
     expect(await screen.findByText('已显示 1 条采集记录')).toBeInTheDocument()
@@ -203,6 +207,24 @@ describe('capture group list view', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('cursor=cursor-2'))).toBe(
       true,
     )
+    const listReads = fetchMock.mock.calls.filter(([input]) =>
+      String(input).includes('/capture-groups'),
+    ).length
+    await user.click(
+      within(screen.getByRole('listitem', { name: /second-page-group/ })).getByRole('link', {
+        name: /查看视频/,
+      }),
+    )
+    await waitFor(() =>
+      expect(router.state.location.pathname).toContain(secondGroup.capture_group_id),
+    )
+    await router.navigate(-1)
+    expect(await screen.findByText('共 2 条采集记录')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([input]) => String(input).includes('/capture-groups')),
+    ).toHaveLength(listReads)
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 0))
+    scrollTo.mockRestore()
   })
 
   it('shows the data-group list while the optional task read is pending', async () => {
@@ -244,7 +266,8 @@ describe('capture group list view', () => {
     ).toBe(true)
 
     taskResponse.resolve(taskList([]))
-    await waitFor(() => expect(row).toHaveTextContent('暂无人工标签任务'))
+    await waitFor(() => expect(row).not.toHaveTextContent('人工任务读取中'))
+    expect(row).not.toHaveTextContent('暂无人工标签任务')
   })
 
   it('uses the PROJECT scope wording when no human-label task exists', async () => {
@@ -258,7 +281,8 @@ describe('capture group list view', () => {
     renderView()
 
     const row = await screen.findByRole('listitem', { name: /project-empty-group/ })
-    await waitFor(() => expect(row).toHaveTextContent('暂无人工标签任务'))
+    await waitFor(() => expect(row).not.toHaveTextContent('人工任务读取中'))
+    expect(row).not.toHaveTextContent('暂无人工标签任务')
     expect(row).not.toHaveTextContent('没有分配给我的人工标签任务')
   })
 
@@ -341,7 +365,7 @@ describe('capture group list view', () => {
     await waitFor(() => {
       expect(screen.getByRole('listitem', { name: /project-b-group/ })).toBeInTheDocument()
       expect(screen.queryByRole('listitem', { name: /project-a-group/ })).not.toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: /进入配药动作标注/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /继续标注/ })).not.toBeInTheDocument()
     })
   })
 })

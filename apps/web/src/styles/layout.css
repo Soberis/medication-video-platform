@@ -134,6 +134,20 @@
   letter-spacing: 0.04em;
 }
 
+.sidebar-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  min-height: var(--app-control-height);
+  padding-inline: var(--app-space-8);
+  color: var(--app-color-sidebar-muted);
+  cursor: pointer;
+}
+
+.sidebar-settings-toggle:hover {
+  color: var(--app-color-sidebar-foreground);
+}
+
 .primary-nav a {
   position: relative;
   display: flex;

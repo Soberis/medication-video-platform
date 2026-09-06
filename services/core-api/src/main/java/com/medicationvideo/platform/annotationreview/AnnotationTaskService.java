@@ -144,13 +144,11 @@ class AnnotationTaskService {
 
 	@Transactional
 	AnnotationReviewResponse reviewRevision(UUID projectId, UUID annotationRevisionId, String actorId,
-			boolean selfAdminApprovalAllowed, String idempotencyKey, String requestId, String traceId,
-			AnnotationReviewCommand request) {
+			String idempotencyKey, String requestId, String traceId, AnnotationReviewCommand request) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
 			.orElseThrow(AnnotationTaskService::revisionNotFound);
-		var selfAdminApproval = revision.getSubmittedBy().equals(actorId);
-		if (selfAdminApproval && !selfAdminApprovalAllowed) {
+		if (revision.getSubmittedBy().equals(actorId)) {
 			throw new AnnotationTaskException("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN",
 					"The submitting member cannot independently review this annotation revision.", 403);
 		}
@@ -163,8 +161,8 @@ class AnnotationTaskService {
 			throw new AnnotationTaskException("ANNOTATION_REVISION_ALREADY_REVIEWED",
 					"The annotation revision already has an immutable review decision.", 409);
 		}
-		return this.captureGroupAnnotationWorkflow.reviewRevision(projectId, revision, actorId, selfAdminApproval,
-				idempotencyKey, requestId, traceId, request);
+		return this.captureGroupAnnotationWorkflow.reviewRevision(projectId, revision, actorId, idempotencyKey,
+				requestId, traceId, request);
 	}
 
 	@Transactional
@@ -342,7 +340,7 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				task.getLabelSchemaId(), task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(),
 				task.getStatus().name(), canSubmit(task, actorId, captureGroupQualityAdmitting),
 				canSelectPrimary(task, actorId, revision, captureGroupQualityAdmitting),
-				canReview(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
+				canReview(task, actorId, projectAdministrator, revision, review, captureGroupQualityAdmitting),
 				canRecheckCaptureGroupCleaning(task, projectAdministrator, revision, review,
 						captureGroupQualityAdmitting),
 				AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
@@ -360,10 +358,10 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				&& revision == null && captureGroupQualityAdmitting;
 	}
 
-	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
-			AnnotationReview review, boolean captureGroupQualityAdmitting) {
+	private static boolean canReview(AnnotationTask task, String actorId, boolean projectAdministrator,
+			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
-				&& review == null && captureGroupQualityAdmitting;
+				&& review == null && !revision.getSubmittedBy().equals(actorId) && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canRecheckCaptureGroupCleaning(AnnotationTask task, boolean projectAdministrator,

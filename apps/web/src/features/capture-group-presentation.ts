@@ -172,21 +172,21 @@ export function captureGroupTaskDestination(
       focus: 'annotation',
       actionLabel:
         task.annotation_revision?.review?.decision === 'REJECTED'
-          ? '进入标注返工'
+          ? '修改标注'
           : task.primary_clip_asset_id
-            ? '进入配药动作标注'
+            ? '继续标注'
             : '选择主视图',
     }
   }
 
   if (task.status === 'SUBMITTED' && task.can_review && task.annotation_revision) {
-    return { focus: 'review', actionLabel: '进入人工复核' }
+    return { focus: 'review', actionLabel: '复核标注' }
   }
 
   // Completed task visibility is already authorized by the task list. The
   // Recheck mutation remains guarded separately by can_recheck_capture_group_cleaning.
   if (task.status === 'COMPLETED' && task.annotation_revision) {
-    return { focus: 'cleaning', actionLabel: '查看复核 / 标注检查结果' }
+    return { focus: 'cleaning', actionLabel: '查看标注结果' }
   }
 
   return null

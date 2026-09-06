@@ -91,7 +91,6 @@ export function CaptureGroupFocusedView({
   const isPrimary = Boolean(
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
-  const isPrimaryLocked = Boolean(isPrimary && task?.annotation_revision)
   const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
 
   const focusedView = (
@@ -99,23 +98,16 @@ export function CaptureGroupFocusedView({
       className="capture-group-focused-workspace"
       aria-labelledby="capture-group-focused-title"
     >
-      <header className="capture-group-focused-heading">
-        <h2 id="capture-group-focused-title">
-          {viewRows.length > 1 && selectedStream ? `相机 ${selectedStream.camera_number}` : '视频'}
-        </h2>
-        {viewRows.length > 1 && (isPrimary || isSupporting) ? (
-          <StatusIndicator tone="information">
-            {isPrimary ? (isPrimaryLocked ? '标注基准相机' : '标注时间基准') : '参考相机'}
-          </StatusIndicator>
-        ) : null}
-      </header>
+      <h2 id="capture-group-focused-title" className="visually-hidden">
+        视频
+      </h2>
       {isSupporting ? (
         <Alert
           className="capture-group-supporting-warning"
           type="info"
           showIcon
           title="当前为参考视图"
-          description="仅供人工视觉对照；人工标签时间段仍以主视图为准。"
+          description="标注时间仍以主视图为准。"
         />
       ) : null}
       {viewRows.length > 1 ? (
@@ -141,9 +133,17 @@ export function CaptureGroupFocusedView({
                   disabled={!stream}
                   aria-pressed={isCurrent}
                   aria-current={isCurrent ? 'true' : undefined}
-                  aria-label={[`机位 ${view.cameraNumber}`, mediaLabel, qualityLabel]
+                  aria-label={[
+                    `机位 ${view.cameraNumber}`,
+                    mediaLabel,
+                    qualityLabel,
+                    stream && stream.clip_asset_id === task?.primary_clip_asset_id
+                      ? '标注基准'
+                      : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
+                  title={[mediaLabel, qualityLabel].filter(Boolean).join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
                 >
                   <span className="capture-group-compare-thumbnail" aria-hidden="true">
@@ -151,8 +151,10 @@ export function CaptureGroupFocusedView({
                   </span>
                   <span>
                     <strong>机位 {view.cameraNumber}</strong>
-                    <small>{mediaLabel}</small>
-                    {qualityLabel ? <small>{qualityLabel}</small> : null}
+                    {stream && stream.clip_asset_id === task?.primary_clip_asset_id ? (
+                      <small>· 标注基准</small>
+                    ) : null}
+                    {stream?.stream_status !== 'INGESTED' ? <small>{mediaLabel}</small> : null}
                   </span>
                 </button>
               )

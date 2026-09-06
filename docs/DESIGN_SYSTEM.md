@@ -2,7 +2,7 @@
 
 > 状态：正式 / 永久前端视觉与布局基线
 
-> 改版入口（2026-09-06）：[V1.30 需求基线](./requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md) 提出浅色专业工作区与视频优先详情页。该方案尚未完成视觉验证；实施前将选定决策统一修订到本文，现有运行界面不因此被视为已改版。
+> V1.30 实施基线（2026-09-06）：按用户批准的 Twenty 浅色工作区、Frame.io 视频优先详情方向修订；业务与验收范围见 [V1.30 需求基线](./requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)。实现仍须通过浏览器验证。
 
 本文件是配药视频数据管理平台前端设计的唯一视觉权威。业务需求、权限、状态机和 API
 仍以正式需求、架构规范和契约为准；本文件约束这些事实如何被组织、表达和交互。
@@ -14,7 +14,7 @@
 
 ## Design Identity / 设计身份
 
-**Official identity:** Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue
+**Official identity:** Video-first Quiet Professional Workspace with Neutral Light + Medical Blue
 visual theme.
 
 This is the permanent design identity for the professional medication video management platform.
@@ -22,20 +22,20 @@ It is a governance baseline for future frontend work, not a page-specific visual
 
 | 层级 | 定义 |
 | --- | --- |
-| Official name / 正式名称 | Linear-inspired Quiet Professional Workspace |
-| Reference style / 参考风格 | Linear-inspired professional productivity tools |
+| Official name / 正式名称 | Video-first Quiet Professional Workspace |
+| Reference style / 参考风格 | Twenty light workspace + Frame.io video-first detail |
 | Design language / 设计语言 | Quiet Professional Workspace |
-| Visual theme / 视觉主题 | Graphite + Medical Blue |
+| Visual theme / 视觉主题 | Neutral Light + Medical Blue |
 | Product positioning / 产品定位 | Professional medication video management platform |
 
 以上术语描述同一设计系统的不同层次，不是相互替代的风格：
 
 ```text
-Linear-inspired → Quiet Professional Workspace → Graphite + Medical Blue →
+Video-first → Quiet Professional Workspace → Neutral Light + Medical Blue →
 design tokens, components, layouts, interaction patterns
 ```
 
-完整的设计身份是：**Linear-inspired Quiet Professional Workspace with Graphite + Medical Blue visual
+完整的设计身份是：**Video-first Quiet Professional Workspace with Neutral Light + Medical Blue visual
 theme.**
 
 ### 核心原则
@@ -56,9 +56,9 @@ theme.**
 - 快速工作流决策；
 - 可靠的数据理解。
 
-### Linear 风格原则
+### 浅色工作区原则
 
-产品借鉴 Linear 风格专业工具的以下特点：
+产品借鉴专业内容工具的以下特点：
 
 - 平静的界面；
 - 精确的对齐；
@@ -69,7 +69,7 @@ theme.**
 - 最少的装饰；
 - 高效的工作流。
 
-本项目**不是** Linear 的复制品，而是将这些原则适配到配药视频管理平台。
+这些原则适配到配药视频管理平台；FiftyOne 仅作为检测证据表达参考。
 
 不要复制：
 
@@ -155,7 +155,7 @@ theme.**
 
 | 语义角色              | 基线值    | 用途                      |
 | --------------------- | --------- | ------------------------- |
-| `background`          | `#F6F7F9` | 应用工作区背景            |
+| `background`          | `#FFFFFF` | 应用工作区背景            |
 | `surface`             | `#FFFFFF` | 常规内容面                |
 | `surfaceElevated`     | `#FFFFFF` | 浮层、弹窗和检查器        |
 | `foreground`          | `#161B22` | 标题与主要事实            |
@@ -171,9 +171,8 @@ theme.**
 | `destructive`         | `#B42318` | 失败、删除与高风险操作    |
 | `information`         | `#315E9B` | 确有必要的处理中/信息状态 |
 
-侧栏是应用唯一的大面积深色视觉锚点：背景 `#111827`，主要文字 `#F9FAFB`，次级文字
-`#9CA3AF`；选中项使用 `rgb(49 94 155 / 20%)` 的低饱和底色和 `#3B82F6` 的 2px 活动轨。
-侧栏之外不得复制深色导航主题，业务页面也不得使用它制造装饰区块。
+侧栏使用浅中性背景 `#F6F7F9`，主要文字 `#161B22`，次级文字 `#5F6B7A`；边界 `#E5E7EB`，
+悬停 `#ECEFF3`，选中项 `#E8EEF6` 与 `#315E9B` 的 2px 活动轨。深色仅用于真实视频播放舞台。
 
 规则：
 
@@ -360,8 +359,10 @@ PageHeader
 └── Optional secondary or risk section
 ```
 
-现有业务页可分阶段迁移。本次设计系统建立不会自动授权重做 Videos、Video Detail、Processing、
-Upload 或 Dashboard；自然继承全局 Token 与 AppShell 的变化不等于页面重设计。
+V1.30 视频列表使用对齐的紧凑行，默认展示名称、时间、机位和必要状态；没有人工任务时不重复提示。
+视频详情默认展示播放器与紧凑机位切换，标注基准直接标在机位按钮；统一使用“标注”开关，
+任务深链接自动展开对应操作。标注前检查随面板展开，不再设置第二个展开开关。
+技术 ID、模型参数、历史和审计渐进披露；错误、权限提示与未提交修改始终保留。
 
 ## 16. Accessibility and interaction / 可访问性与交互
 

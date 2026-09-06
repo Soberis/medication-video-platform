@@ -45,9 +45,9 @@ interface CaptureGroupAnnotationPanelProps {
   schema: AnnotationLabelSchema | null
   viewRows: GroupViewRow[]
   viewReviews: Record<string, QualityReview>
-  refreshVersion: number
   currentPlaybackTimeMs: number | null
   onTaskChange: (task: AnnotationTask) => void
+  onDirtyChange?: (dirty: boolean) => void
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
 
@@ -61,8 +61,8 @@ export function CaptureGroupAnnotationPanel({
   schema,
   viewRows,
   viewReviews,
-  refreshVersion,
   currentPlaybackTimeMs,
+  onDirtyChange,
   onTaskChange,
   onRefresh,
 }: CaptureGroupAnnotationPanelProps) {
@@ -73,7 +73,15 @@ export function CaptureGroupAnnotationPanel({
   const [annotationNote, setAnnotationNote] = useState('')
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
-  const appliedRefreshVersion = useRef<number | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+  const draftContext = [
+    task?.annotation_task_id,
+    task?.group_input_version,
+    task?.primary_clip_asset_id,
+    task?.annotation_revision?.annotation_revision_id,
+  ].join(':')
+  const [appliedContext, setAppliedContext] = useState<string | null>(null)
+  const contextChanged = isDirty && appliedContext !== draftContext
   const sortedLabels = useMemo(() => sortedSchemaLabels(schema), [schema])
   const groupQualityAdmitting = currentGroupQualityAdmitting(groupQuality)
   const groupQualityDowngraded =
@@ -88,6 +96,7 @@ export function CaptureGroupAnnotationPanel({
     null
   const canSubmitRevision = Boolean(
     task &&
+      !contextChanged &&
       task.capture_group_id === captureGroupId &&
       task.status === 'ASSIGNED' &&
       task.can_submit &&
@@ -101,13 +110,16 @@ export function CaptureGroupAnnotationPanel({
     canSubmitRevision && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
 
-  useEffect(() => {
-    if (appliedRefreshVersion.current === refreshVersion) return
-    appliedRefreshVersion.current = refreshVersion
+  if (!isDirty && appliedContext !== draftContext) {
+    setAppliedContext(draftContext)
     setDraftSegments(initialDraftSegments(task))
     setSegmentErrors({})
     setAnnotationNote('')
-  }, [refreshVersion, task])
+  }
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   useEffect(() => {
     if (!Object.keys(segmentErrors).length) return
@@ -162,6 +174,7 @@ export function CaptureGroupAnnotationPanel({
     ) {
       return
     }
+    if (isDirty && !window.confirm('切换标注主视图会丢弃当前未提交的时间段和备注，继续？')) return
     setIsSelectingPrimary(true)
     try {
       const updatedTask = await selectAnnotationPrimaryView(
@@ -170,6 +183,7 @@ export function CaptureGroupAnnotationPanel({
         clipAssetId,
       )
       onTaskChange(updatedTask)
+      setIsDirty(false)
       void message.success('主视图已保存；动作时间段将以该机位为准。')
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '主视图暂未保存，请刷新后重试。')
@@ -199,6 +213,7 @@ export function CaptureGroupAnnotationPanel({
         })),
         annotationNote,
       )
+      setIsDirty(false)
       const refreshed = await onRefresh()
       void (refreshed
         ? message.success('配药动作修订已提交；主视图现在锁定。')
@@ -213,6 +228,7 @@ export function CaptureGroupAnnotationPanel({
   }
 
   function updateSegment(draftId: number, field: keyof AnnotationSegment, value: string | number) {
+    setIsDirty(true)
     setDraftSegments((current) =>
       current.map((segment) =>
         segment.draftId === draftId ? { ...segment, [field]: value } : segment,
@@ -230,11 +246,28 @@ export function CaptureGroupAnnotationPanel({
       className="capture-group-annotation-section capture-group-workflow-focus-target"
       id="capture-group-annotation"
       tabIndex={-1}
-      title="配药动作标注"
+      title="动作标注"
       titleId="capture-group-annotation-title"
     >
       {task ? (
         <>
+          {contextChanged ? (
+            <Alert
+              type="warning"
+              showIcon
+              title="标注输入已变化，当前草稿已保留但不能提交。"
+              action={
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (window.confirm('丢弃当前草稿并读取最新输入？')) setIsDirty(false)
+                  }}
+                >
+                  丢弃草稿并更新
+                </Button>
+              }
+            />
+          ) : null}
           <div className="capture-group-task-banner">
             <div>
               <StatusIndicator tone={taskStatusTone(task)}>
@@ -258,7 +291,7 @@ export function CaptureGroupAnnotationPanel({
                     ? `${primaryCameraNumber === null ? '主视图' : `机位 ${primaryCameraNumber}`} · 已锁定`
                     : '主视图 · 时间基准'}
                 </strong>
-                {!primaryLocked ? <p>首个正式修订提交后锁定</p> : null}
+                {!primaryLocked ? <p>当前输入提交后锁定</p> : null}
               </div>
               <Select
                 aria-label="主视图"
@@ -292,7 +325,6 @@ export function CaptureGroupAnnotationPanel({
                 <div>
                   <h3>动作时间段</h3>
                 </div>
-                <span>选择动作，设置开始和结束时间。</span>
               </div>
               <div className="capture-group-playback-position" aria-label="当前播放位置">
                 <div>
@@ -303,7 +335,6 @@ export function CaptureGroupAnnotationPanel({
                     ) ?? '未读取'}
                   </strong>
                 </div>
-                <span>播放到动作边界，点击“设为开始”或“设为结束”。</span>
               </div>
               {draftSegments.map((segment, index) => {
                 const errors = segmentErrors[segment.draftId] ?? {}
@@ -469,11 +500,12 @@ export function CaptureGroupAnnotationPanel({
                           htmlType="button"
                           disabled={!canSubmitRevision}
                           aria-label={`删除第 ${index + 1} 个时间段`}
-                          onClick={() =>
+                          onClick={() => {
+                            setIsDirty(true)
                             setDraftSegments((current) =>
                               current.filter((candidate) => candidate.draftId !== segment.draftId),
                             )
-                          }
+                          }}
                         >
                           删除
                         </Button>
@@ -487,7 +519,10 @@ export function CaptureGroupAnnotationPanel({
                   type="text"
                   htmlType="button"
                   disabled={!canSubmitRevision}
-                  onClick={() => setDraftSegments((current) => [...current, createDraftSegment()])}
+                  onClick={() => {
+                    setIsDirty(true)
+                    setDraftSegments((current) => [...current, createDraftSegment()])
+                  }}
                 >
                   添加时间段
                 </Button>
@@ -498,7 +533,10 @@ export function CaptureGroupAnnotationPanel({
                     disabled={!canSubmitRevision}
                     maxLength={1000}
                     autoSize={{ minRows: 2, maxRows: 4 }}
-                    onChange={(event) => setAnnotationNote(event.target.value)}
+                    onChange={(event) => {
+                      setIsDirty(true)
+                      setAnnotationNote(event.target.value)
+                    }}
                   />
                 </label>
                 <Button

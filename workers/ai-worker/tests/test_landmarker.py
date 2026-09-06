@@ -14,7 +14,39 @@ from medication_ai_worker.landmarker import PROFILE_SHA256, _detect_all, _timest
 
 
 def test_profile_digest_freezes_worker_inference_configuration() -> None:
-    assert PROFILE_SHA256 == "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626"
+    assert PROFILE_SHA256 == "239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09"
+
+
+@pytest.mark.parametrize("fps", [24, 25, 30, 60])
+def test_fixed_grid_samples_ten_frames_per_second_without_drift(
+    monkeypatch: pytest.MonkeyPatch, fps: int
+) -> None:
+    frames = [
+        SimpleNamespace(pts=index, width=640, height=360, to_ndarray=lambda format: object())
+        for index in range(fps * 10)
+    ]
+    container = _FakeContainer(frames)
+    container.streams.video[0].time_base = Fraction(1, fps)
+    timestamps: list[int] = []
+
+    def detect(image: object, timestamp: int) -> SimpleNamespace:
+        timestamps.append(timestamp)
+        return SimpleNamespace(hand_landmarks=[], handedness=[])
+
+    monkeypatch.setattr(landmarker, "av", SimpleNamespace(open=lambda path: container))
+    monkeypatch.setattr(
+        landmarker,
+        "mp",
+        SimpleNamespace(Image=lambda **kwargs: kwargs["data"], ImageFormat=SimpleNamespace(SRGB=1)),
+    )
+    summary = _detect_all(Path("synthetic.mp4"), SimpleNamespace(detect_for_video=detect), 10, [])
+    assert summary.inference_frame_count == 100
+    source_timestamps = {round(index * 1000 / fps) for index in range(fps * 10)}
+    assert all(timestamp in source_timestamps for timestamp in timestamps)
+    assert all(
+        index * 100 <= timestamp < index * 100 + math.ceil(1000 / fps)
+        for index, timestamp in enumerate(timestamps)
+    )
 
 
 def test_timestamp_uses_container_pts_without_synthesizing_time() -> None:

@@ -85,7 +85,9 @@ paths:
       description: >-
         Returns one row per segment from the latest AnnotationRevision for each current CaptureGroup in the project,
         or the requested CaptureGroup. Only COMPLETED tasks with APPROVED AnnotationReview and current input/media
-        provenance are exported. The CSV contains labels and provenance, no MP4 bytes and no MediaPipe landmark fields.
+        provenance are exported. Latest group and per-view quality must still match the revision snapshot;
+        verified media duration is required and all segments must fit within it. The CSV contains labels
+        and provenance, no MP4 bytes and no MediaPipe landmark fields.
         It is restricted to the synthetic data profile until a non-synthetic authorization model is defined.
       security:
         - sessionCookie: []
@@ -2222,9 +2224,10 @@ paths:
       summary: Select the CaptureGroup annotation timebase view
       description: >-
         Selects an eligible participating view as the formal annotation timebase. The view does
-        not own the annotation. The selection is allowed before the first formal revision and is
-        frozen once that revision exists; a group-quality downgrade blocks annotation submission
-        but does not delete, replace or reassign the existing task.
+        not own the annotation. Selection is frozen after submission for the same input. After an
+        administrator explicitly reassigns the task to changed inputs, an ASSIGNED task may select
+        a new primary view before submitting its new revision. Historical revisions retain their
+        original timebase. A quality downgrade alone never reassigns or deletes the task.
       security:
         - sessionCookie: []
       parameters:
@@ -2948,8 +2951,9 @@ paths:
         annotation-document.v1 consisting of one or more primary-Step time ranges selected from the
         immutable schema bound to the task and an optional note. Primary-Step ranges may touch at a
         boundary but must not overlap. This operation does not provide drawing tools, AI annotations
-        or independent review. When a media report exists, each range must also end within its
-        verified duration.
+        or independent review. A verified media duration is required, and each range must end within
+        it. Missing duration returns ANNOTATION_MEDIA_DURATION_UNVERIFIED; changed task inputs
+        return ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED until explicit reassignment.
         The Idempotency-Key safely replays the identical submission without creating another revision.
       security:
         - sessionCookie: []
@@ -3020,8 +3024,10 @@ paths:
         - Annotation Tasks
       summary: Record one administrator decision for a submitted annotation revision
       description: >-
-        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. The same administrator may
-        review their own revision and the audit records SELF_ADMIN_APPROVAL. The CaptureGroup quality
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership and a reviewer different from
+        the revision submitter. Self-review returns ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN; historical
+        SELF_ADMIN_APPROVAL audit facts remain unchanged. Approval requires verified media duration
+        and in-bounds segments; rejection remains available for rework. The CaptureGroup quality
         admission and confirmed View Set must remain current. P0 records one immutable APPROVED or
         REJECTED decision. A rejection returns the task to its assignee; their next immutable revision
         receives the next revision number. An approval completes the task and persists the deterministic
@@ -6019,10 +6025,10 @@ components:
           description: Server-evaluated capability for the current authenticated account to submit this task.
         can_select_primary:
           type: boolean
-          description: Server-evaluated capability for the assigned account to select or change the CaptureGroup Primary View before the first formal revision.
+          description: Server-evaluated capability to select the Primary View before submission for the current task input, including explicitly reassigned changed inputs.
         can_review:
           type: boolean
-          description: Server-evaluated capability for the current authenticated account to independently review its submitted revision.
+          description: Server-evaluated capability for an administrator other than the revision submitter to independently review the submitted revision.
         can_recheck_capture_group_cleaning:
           type: boolean
           description: Server-evaluated capability for an administrator to re-evaluate CaptureGroup training eligibility against current facts.
@@ -7388,7 +7394,7 @@ components:
           const: 10
         profile_sha256:
           type: string
-          const: 3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626
+          enum: [3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626, 239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09]
         status:
           type: string
           enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
@@ -7656,7 +7662,7 @@ components:
         content_type: { type: string }
         model_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         sampling_fps: { type: integer, const: 10 }
-        profile_sha256: { type: string, const: 3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626 }
+        profile_sha256: { type: string, enum: [3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626, 239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09] }
     AiWorkerHeartbeatResponse:
       type: object
       additionalProperties: false

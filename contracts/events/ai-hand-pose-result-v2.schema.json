@@ -19,7 +19,7 @@
     "lease_token": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43,128}$" },
     "input_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "model_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "profile_sha256": { "const": "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626" },
+    "profile_sha256": { "enum": ["3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626", "239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09"] },
     "started_at": { "type": "string", "format": "date-time" },
     "completed_at": { "type": "string", "format": "date-time" },
     "outcome": { "enum": ["SUCCEEDED", "FAILED"] },

@@ -33,6 +33,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import com.jayway.jsonpath.JsonPath;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
+import com.medicationvideo.platform.support.VerifiedMediaTestData;
 
 @SpringBootTest
 @org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -334,6 +335,66 @@ class HandLandmarkTrainingExportContractTests {
 				.header("Authorization", "Bearer " + MEMBER_TOKEN))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
+	}
+
+	@Test
+	void humanExportRejectsQualityRevokedAfterApprovalWithoutReassigningTask() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		approveRevision(group, 900, "revoked-human-export");
+		this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/capture-groups/{groupId}/quality-review", PROJECT_ID,
+					group.captureGroupId())
+				.header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.header("Idempotency-Key", key("revoke-quality"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"result\":\"REJECTED\",\"reason\":\"Synthetic correction\",\"expected_revision\":1}"))
+			.andExpect(status().isOk());
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_DATA_INVALID"));
+		assertEquals("COMPLETED",
+				this.jdbcTemplate.queryForObject("SELECT task_status FROM annotation_task WHERE capture_group_id = ?",
+						String.class, group.captureGroupId()));
+	}
+
+	@Test
+	void humanExportRejectsViewQualityChangedAfterApprovalWithoutNewGroupDecision() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		approveRevision(group, 900, "changed-view-human-export");
+		this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/clip-assets/{clipId}/quality-review", PROJECT_ID,
+					group.clipAssetIds().getFirst())
+				.header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"REJECTED\",\"reason_code\":\"WRONG_SCENE\",\"expected_version\":0}"))
+			.andExpect(status().isOk());
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_DATA_INVALID"));
+	}
+
+	@Test
+	void humanExportRejectsMissingOrShortenedMediaDuration() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		approveRevision(group, 900, "duration-human-export");
+		var clipId = group.clipAssetIds().getFirst();
+		this.jdbcTemplate.update("DELETE FROM media_report WHERE clip_asset_id = ?", clipId);
+		this.jdbcTemplate.update("DELETE FROM media_job WHERE clip_asset_id = ?", clipId);
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity());
+		VerifiedMediaTestData.insert(this.jdbcTemplate, PROJECT_ID, clipId, SHA256, 800_000);
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isUnprocessableEntity());
+		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_review WHERE project_id = ?",
+				Integer.class, PROJECT_ID));
 	}
 
 	@Test
@@ -646,6 +707,7 @@ class HandLandmarkTrainingExportContractTests {
 					        'INGESTED', NULL, NULL, NULL, ?, ?, 0)
 					""", clipAssetId, PROJECT_ID, batchId, uploadFileId, clientFileId, SHA256, "objects/" + clipAssetId,
 					Timestamp.from(now), Timestamp.from(now));
+			VerifiedMediaTestData.insert(this.jdbcTemplate, PROJECT_ID, clipAssetId, SHA256, 10_000_000);
 			clipAssetIds.add(clipAssetId);
 			clientFileIds.add(clientFileId);
 		}
@@ -757,6 +819,8 @@ class HandLandmarkTrainingExportContractTests {
 				PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM camera_set WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM camera_channel WHERE project_id = ?", PROJECT_ID);
+		this.jdbcTemplate.update("DELETE FROM media_report WHERE project_id = ?", PROJECT_ID);
+		this.jdbcTemplate.update("DELETE FROM media_job WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM clip_asset WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update(
 				"DELETE FROM upload_file WHERE batch_id IN (SELECT batch_id FROM upload_batch WHERE project_id = ?)",

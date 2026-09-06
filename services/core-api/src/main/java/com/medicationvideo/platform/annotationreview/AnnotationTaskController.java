@@ -122,9 +122,9 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationReviewRequest request, Authentication authentication) {
 		var response = this.service.reviewRevision(projectId, annotationRevisionId,
-				requirePlatformAdministrator(authentication).actorId(), isPlatformAdministrator(authentication),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"), new AnnotationReviewCommand(request.decision(), request.reviewNote()));
+				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				new AnnotationReviewCommand(request.decision(), request.reviewNote()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI
 				.create("/api/v1/projects/" + projectId + "/annotation-revisions/" + annotationRevisionId + "/review"))

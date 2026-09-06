@@ -8,9 +8,9 @@
 
 ## Sources Of Truth
 
-按以下顺序理解需求和实现：
+以下是需求冲突的裁决顺序，不是每次任务的全量阅读清单；按本次改动涉及的业务、UI、契约或迁移读取相关材料：
 
-1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。
+1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。纯指令维护、文档勘误和不改变业务语义的修复无需新增业务版本。
 2. `docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md`：当前 DRAFT 需求基线，定义浅色专业工作区与视频优先体验重构；界面方向冲突以 V1.30 为准，实施前同步设计系统。本版本继承 `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md` 的未变更业务边界；V1.29 为前序 DRAFT，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
 3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.30 及其继承的 V1.29 与其冲突处以最新 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
 4. `docs/architecture/v1.27-hand-detection-policy.md`、`docs/architecture/v1.27-ai-evidence-audit.md` 与 `docs/architecture/v1.27-training-traceability.md`：上一版本的手部检测和证据审计参考，其中检测事实边界仍适用，事件 manifest 部分不再是当前产品。`docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md`、`docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`、`docs/architecture/v1.26-medication-event-workbench-design.md`、V1.25 CaptureGroup 文档和 V1.24 文档均为历史/迁移参考，不构成当前兼容性承诺。
@@ -24,27 +24,13 @@
 
 ## Frontend Design Identity
 
-V1.30 DRAFT defines the next visual direction. Before implementing it, revise `docs/DESIGN_SYSTEM.md` and this identity together; a version change alone does not change the current UI.
+V1.30 implementation follows the revised `docs/DESIGN_SYSTEM.md`; user acceptance is still required before the baseline becomes CURRENT.
 
-Until that revision, frontend UI work follows the existing design identity:
+Frontend UI work follows this design identity:
 
-Linear-inspired Quiet Professional Workspace
+Video-first Quiet Professional Workspace
 
-with Graphite + Medical Blue visual theme.
-
-Before modifying frontend UI, read:
-
-`docs/DESIGN_SYSTEM.md`
-
-The design system is the source of truth for:
-
-- layout;
-- colors;
-- spacing;
-- components;
-- interaction patterns.
-
-Do not introduce independent page-level visual styles.
+with Neutral Light + Medical Blue visual theme (Twenty workspace + Frame.io video-first detail).
 
 ## Architecture
 
@@ -119,7 +105,11 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 
 
 ## Verification
 
-阶段 0 在 macOS / Linux 可运行：
+按受影响组件运行相关检查；行为变更仍须增加相应测试，API 和事件变更仍须完成契约检查。复用现有测试框架和 fixtures，不限制测试数量。确认使用合成数据且与生产隔离后，本地验证和本次变更导致的失败修复可连续执行，无需逐步确认。
+
+纯指令或文档修改检查内容一致性、引用和 diff；无需为此运行整套应用测试。相关检查通过即结束验证；新改动、失败或未解决风险才触发扩大或重跑。需要完整质量门禁时使用以下入口。
+
+macOS / Linux：
 
 ```bash
 ./scripts/check-environment.sh
@@ -133,7 +123,7 @@ Windows PowerShell 7 可运行：
 .\scripts\quality-gate.ps1 -Strict
 ```
 
-组件工程生成后，质量门禁应覆盖：
+完整质量门禁覆盖：
 
 - Java：编译、测试、格式检查、Spring Modulith 边界验证和 Flyway 测试。
 - React：lint、type-check、unit test 和 build。

@@ -4,7 +4,7 @@
 
 ## 当前需求方向（DRAFT）
 
-- [V1.30 配药视频数据处理平台需求基线](./baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)：浅色专业工作区与视频优先体验重构，继承 V1.29 未变更的业务边界；版本升级不表示 UI 已实施或前序 runtime 审计已完成。
+- [V1.30 配药视频数据处理平台需求基线](./baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)：浅色专业工作区与视频优先体验重构已实施并通过自动化回归，继承 V1.29 未变更的业务边界；用户验收与前序 runtime 审计仍未完成，保持 DRAFT。实施证据见第 7–8 节。
 
 ## 前序需求方向（DRAFT）
 
@@ -16,7 +16,7 @@ V1.29 是前序 DRAFT 需求方向：平台以由上游明确归属的 `CaptureG
 
 - [V1.28 配药视频数据管理平台需求基线（单一 CaptureGroup 路径与唯一手部检测导出）](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
 
-V1.28 仍是上一正式运行时基线，直到后续版本满足其冻结条件。唯一公开导出仍为按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV；历史代码、迁移和文档只保留为审计参考。真实 UAT、生产和医院部署证据仍待完成。
+V1.28 仍是上一正式运行时基线，直到后续版本满足其冻结条件。V1.28 定义的唯一公开导出为按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV；后续用户需求和当前实现已增加独立人工标注 CSV，边界以 V1.30 第 5 节及 OpenAPI 为准。真实 UAT、生产和医院部署证据仍待完成。
 
 ## 更早正式版本
 

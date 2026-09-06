@@ -30,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.jayway.jsonpath.JsonPath;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
+import com.medicationvideo.platform.support.VerifiedMediaTestData;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -541,7 +542,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void frozenPrimaryBecomingIneligibleBlocksSubmissionWithoutFallback() throws Exception {
+	void changedInputAllowsExplicitPrimaryReselectionWhilePreservingOldRevision() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("primary-ineligible-qualified"))
 			.andExpect(status().isOk());
@@ -559,12 +560,98 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isOk());
 
 		submit(group, taskId, MEMBER_TOKEN, key("primary-ineligible-second"), 120).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE"));
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED"));
 		selectPrimary(taskId, group.clipAssetIds().getLast(), MEMBER_TOKEN).andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_FROZEN"));
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("primary-reassign"))
+			.andExpect(status().isCreated());
+		selectPrimary(taskId, group.clipAssetIds().getLast(), MEMBER_TOKEN).andExpect(status().isOk());
+		submit(group, taskId, MEMBER_TOKEN, key("primary-new-input-submit"), 120).andExpect(status().isCreated())
+			.andExpect(jsonPath("$.revision_number").value(2))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getLast().toString()));
 		assertEquals(primaryClipAssetId, this.jdbcTemplate.queryForObject(
-				"SELECT primary_clip_asset_id FROM annotation_task WHERE annotation_task_id = ?", UUID.class, taskId));
-		assertEquals(1, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+				"SELECT primary_clip_asset_id FROM annotation_revision WHERE annotation_task_id = ? AND revision_number = 1",
+				UUID.class, taskId));
+		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
+	}
+
+	@Test
+	void missingDurationBlocksSubmissionAndBoundsRemainEnforced() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("duration-quality"))
+			.andExpect(status().isOk());
+		var task = taskId(group);
+		var clip = group.clipAssetIds().getFirst();
+		selectPrimary(task, clip, MEMBER_TOKEN).andExpect(status().isOk());
+		this.jdbcTemplate.update("DELETE FROM media_report WHERE clip_asset_id = ?", clip);
+		this.jdbcTemplate.update("DELETE FROM media_job WHERE clip_asset_id = ?", clip);
+		submit(group, task, MEMBER_TOKEN, key("unknown-duration"), 100).andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_MEDIA_DURATION_UNVERIFIED"));
+		VerifiedMediaTestData.insert(this.jdbcTemplate, PROJECT_ID, clip, SHA256, 100_000);
+		submit(group, task, MEMBER_TOKEN, key("over-duration"), 101).andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION"));
+		submit(group, task, MEMBER_TOKEN, key("valid-duration"), 100).andExpect(status().isCreated());
+	}
+
+	@Test
+	void approvalRechecksDurationButRejectionCanReturnInvalidInputForRework() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("review-duration-quality"))
+			.andExpect(status().isOk());
+		var task = taskId(group);
+		selectPrimary(task, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		var submitted = submit(group, task, MEMBER_TOKEN, key("review-duration-submit"), 100)
+			.andExpect(status().isCreated())
+			.andReturn();
+		var revision = JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id")
+			.toString();
+		this.jdbcTemplate.update("DELETE FROM media_report WHERE clip_asset_id = ?", group.clipAssetIds().getFirst());
+		this.jdbcTemplate.update("DELETE FROM media_job WHERE clip_asset_id = ?", group.clipAssetIds().getFirst());
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revision)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key("unknown-duration-approve"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"APPROVED\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_MEDIA_DURATION_UNVERIFIED"));
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revision)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key("unknown-duration-reject"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"REJECTED\"}"))
+			.andExpect(status().isCreated());
+	}
+
+	@Test
+	void administratorCannotReviewTheirOwnSubmission() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("self-review-quality"))
+			.andExpect(status().isOk());
+		var assigned = assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.ADMIN_ACTOR,
+				key("self-review-assignment"))
+			.andExpect(status().isCreated())
+			.andReturn();
+		var task = UUID.fromString(JsonPath.read(assigned.getResponse().getContentAsString(), "$.annotation_task_id"));
+		selectPrimary(task, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isOk());
+		var submitted = submit(group, task, ADMIN_TOKEN, key("self-review-submit"), 100).andExpect(status().isCreated())
+			.andReturn();
+		var revision = JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id")
+			.toString();
+		this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revision)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("Idempotency-Key", key("self-review-approve"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"decision\":\"APPROVED\"}"))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN"));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].can_review").value(false));
 	}
 
 	@Test
@@ -811,6 +898,7 @@ class CaptureGroupQualityAnnotationContractTests {
 					        'INGESTED', NULL, NULL, NULL, ?, ?, 0)
 					""", clipAssetId, projectId, batchId, uploadFileId, clientFileId, SHA256, "objects/" + clipAssetId,
 					Timestamp.from(now), Timestamp.from(now));
+			VerifiedMediaTestData.insert(this.jdbcTemplate, projectId, clipAssetId, SHA256, 10_000_000);
 			clipAssetIds.add(clipAssetId);
 			clientFileIds.add(clientFileId);
 		}
@@ -926,6 +1014,8 @@ class CaptureGroupQualityAnnotationContractTests {
 				+ "(SELECT camera_set_id FROM camera_set WHERE project_id = ?)", projectId);
 		this.jdbcTemplate.update("DELETE FROM camera_set WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM camera_channel WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM media_report WHERE project_id = ?", projectId);
+		this.jdbcTemplate.update("DELETE FROM media_job WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM clip_asset WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM upload_file WHERE batch_id IN "
 				+ "(SELECT batch_id FROM upload_batch WHERE project_id = ?)", projectId);

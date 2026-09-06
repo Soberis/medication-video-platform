@@ -62,7 +62,7 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
   await expect(taskRows.nth(0)).toHaveAccessibleName(/待标注/)
   await expect(taskRows.nth(1)).toHaveAccessibleName(/已完成/)
 
-  const primaryAction = taskRows.nth(0).getByRole('link', { name: /进入视频.*标注/ })
+  const primaryAction = taskRows.nth(0).getByRole('link', { name: /继续标注/ })
   await primaryAction.focus()
   await expect(primaryAction).toBeFocused()
 

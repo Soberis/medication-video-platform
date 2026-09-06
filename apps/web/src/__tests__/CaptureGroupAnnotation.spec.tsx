@@ -55,6 +55,55 @@ describe('formatAnnotationTime', () => {
 })
 
 describe('CaptureGroup annotation workflow', () => {
+  it('preserves unsaved segments through collapse and refresh, and blocks leaving until confirmed', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'FAILED',
+    })
+    const user = userEvent.setup()
+    const { router } = renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+    await user.click(await screen.findByRole('button', { name: '标注' }))
+    const start = await screen.findByLabelText('开始时间（毫秒）')
+    await user.clear(start)
+    await user.type(start, '123')
+    await user.click(screen.getByRole('button', { name: '收起标注 · 未提交' }))
+    expect(start).not.toBeVisible()
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+    await user.click(await screen.findByRole('button', { name: '标注 · 未提交' }))
+    await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(123))
+    await user.click(screen.getByRole('button', { name: /机位 2/ }))
+    expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(123)
+    expect(
+      screen.getByRole('button', { name: '第 1 个时间段：使用当前时间作为开始' }),
+    ).toBeDisabled()
+    const unload = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(unload)
+    expect(unload.defaultPrevented).toBe(true)
+    await user.click(screen.getByRole('link', { name: '视频' }))
+    await waitFor(() =>
+      expect(Array.from(router.state.blockers.values())[0]?.state).toBe('blocked'),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('离开并丢弃未提交的标注？')
+    await user.click(within(dialog).getByRole('button', { name: '继续编辑' }))
+    expect(router.state.location.pathname).toContain(groupId)
+    expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(123)
+    await user.click(screen.getByRole('link', { name: '视频' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '丢弃并离开' }),
+    )
+    await waitFor(() => expect(router.state.location.pathname).toBe(paths.captureGroups(projectId)))
+  })
+
   it('keeps one downgraded task and disables new Revision submission while preserving history and navigation', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
@@ -70,11 +119,12 @@ describe('CaptureGroup annotation workflow', () => {
     const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     expect(screen.queryByRole('button', { name: '重新确认整体质量' })).not.toBeInTheDocument()
     expect(await screen.findByText('标注复核')).toBeInTheDocument()
+    await user.click(await screen.findByText('更多信息'))
     const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
     await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
@@ -107,15 +157,18 @@ describe('CaptureGroup annotation workflow', () => {
     const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    expect(await screen.findByRole('heading', { level: 2, name: '相机 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /机位 1.*标注基准/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     expect(screen.queryByRole('button', { name: '查看结果' })).not.toBeInTheDocument()
-    expect(screen.getByText('标注基准相机')).toBeInTheDocument()
+    expect(screen.getByText('· 标注基准')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '查看复核详情' }))
     expect(screen.getByText('00:12.345 → 00:18.760')).toBeInTheDocument()
-    await user.click(screen.getByText('更多信息'))
+    await user.click(await screen.findByText('更多信息'))
     const auditDetails = screen.getByText('人工标签修订、复核与适用性检查').closest('details')
     if (!auditDetails) throw new Error('Annotation audit details were not mounted.')
     await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
@@ -146,21 +199,21 @@ describe('CaptureGroup annotation workflow', () => {
     const user = userEvent.setup()
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     const submitButton = await screen.findByRole('button', { name: '提交修订' })
-    const annotationSection = screen.getByRole('region', { name: '配药动作标注' })
+    const annotationSection = screen.getByRole('region', { name: '动作标注' })
     expect(within(annotationSection).getByText('待提交')).toBeInTheDocument()
     expect(within(annotationSection).queryByText(task.assignee_actor_id)).not.toBeInTheDocument()
     expect(within(annotationSection).getByText('主视图 · 时间基准')).toBeInTheDocument()
-    expect(within(annotationSection).getByText('首个正式修订提交后锁定')).toBeInTheDocument()
+    expect(within(annotationSection).getByText('当前输入提交后锁定')).toBeInTheDocument()
     await user.click(await screen.findByRole('combobox', { name: '主视图' }))
     expect(await screen.findByRole('option', { name: '机位 1 · 合格' })).toBeInTheDocument()
     expect(screen.queryByText('PLATFORM_LOCAL')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '进入配药动作标注' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '继续标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '继续配药动作标注' })).not.toBeInTheDocument()
-    expect(screen.getAllByText('配药动作标注').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('动作标注').length).toBeGreaterThan(0)
     expect(screen.queryByText('打开采集记录标注')).not.toBeInTheDocument()
     expect(submitButton).toBeInTheDocument()
   })
@@ -179,7 +232,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     const form = (await screen.findByRole('button', { name: '提交修订' })).closest('form')
@@ -218,7 +271,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     const submitButton = await screen.findByRole('button', { name: '提交修订' })
@@ -254,7 +307,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     const submitButton = await screen.findByRole('button', { name: '提交修订' })
@@ -312,7 +365,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))
@@ -364,7 +417,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
     await user.click(await screen.findByRole('button', { name: '播放视频' }, { timeout: 3000 }))

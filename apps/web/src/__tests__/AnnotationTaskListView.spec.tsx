@@ -104,18 +104,18 @@ describe('annotation task list view', () => {
     expect(progressSummary).toHaveTextContent('1 个任务')
     expect(progressSummary).toHaveTextContent(/0 个已完成.*1 个待处理/)
     expect(screen.getByText('待标注')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /进入视频，进入配药动作标注/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /继续标注/ })).toBeInTheDocument()
     expect(screen.queryByText(/唯一采集记录任务/)).not.toBeInTheDocument()
     expect(
-      screen.getByText('查看当前项目的标注任务；提交后由有权限的人员复核。'),
-    ).toBeInTheDocument()
+      screen.queryByText('查看当前项目的标注任务；提交后由有权限的人员复核。'),
+    ).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
     await user.click(screen.getByText('查看详情'))
     expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
     expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /进入视频，进入配药动作标注/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /继续标注/ })).toBeInTheDocument()
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(
       within(screen.getByRole('listitem', { name: /采集记录 .*待标注/ })).getByText(
@@ -164,7 +164,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
     const user = userEvent.setup()
     const action = await screen.findByRole('link', {
-      name: /进入视频，进入配药动作标注/,
+      name: /继续标注/,
     })
     expect(action).toBeInTheDocument()
     await user.click(action)
@@ -184,7 +184,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*待标注/ })
-    await user.click(within(taskRow).getByRole('link', { name: /进入配药动作标注/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /继续标注/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -228,7 +228,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*待复核/ })
-    await user.click(within(taskRow).getByRole('link', { name: /进入人工复核/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /复核标注/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -255,7 +255,7 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*待返工/ })
-    await user.click(within(taskRow).getByRole('link', { name: /进入标注返工/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /修改标注/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -277,7 +277,7 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*已完成/ })
     expect(within(taskRow).queryByRole('button')).not.toBeInTheDocument()
-    await user.click(within(taskRow).getByRole('link', { name: /查看结果/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /查看标注结果/ }))
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
@@ -381,7 +381,7 @@ describe('annotation task list view', () => {
     await user.click(evidenceDetails[2]!)
     expect(await screen.findByText(/标注检查未通过；视频未删除/)).toBeInTheDocument()
     expect(screen.getByText(/主视图正式时间段存在重叠/)).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /查看结果/ })).toHaveLength(4)
+    expect(screen.getAllByRole('link', { name: /查看标注结果/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
@@ -408,7 +408,7 @@ describe('annotation task list view', () => {
     const { router } = renderView()
 
     const taskRow = await screen.findByRole('listitem', { name: /已完成/ })
-    const action = within(taskRow).getByRole('link', { name: /查看结果/ })
+    const action = within(taskRow).getByRole('link', { name: /查看标注结果/ })
     expect(within(taskRow).queryByRole('button', { name: /重新核对视频/ })).not.toBeInTheDocument()
     await user.click(action)
     await waitFor(() =>
@@ -504,7 +504,7 @@ describe('annotation task list view', () => {
     expect(screen.queryByText('请补充完整的拿取药品时间段。')).not.toBeVisible()
     await user.click(within(taskRow).getByText('查看详情'))
     expect(screen.getByText('请补充完整的拿取药品时间段。')).toBeVisible()
-    await user.click(within(taskRow).getByRole('link', { name: /进入视频，进入标注返工/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /修改标注/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
@@ -524,12 +524,10 @@ describe('annotation task list view', () => {
     const user = userEvent.setup()
 
     const taskRow = await screen.findByRole('listitem', { name: /待复核/ })
-    expect(
-      within(taskRow).getByRole('link', { name: /进入视频，进入人工复核/ }),
-    ).toBeInTheDocument()
+    expect(within(taskRow).getByRole('link', { name: /复核标注/ })).toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(within(taskRow).queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
-    await user.click(within(taskRow).getByRole('link', { name: /进入视频，进入人工复核/ }))
+    await user.click(within(taskRow).getByRole('link', { name: /复核标注/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )

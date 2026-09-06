@@ -19,7 +19,7 @@ public final class AiHandPoseResultFixture {
 
 	public static final int IMAGE_HEIGHT = 720;
 
-	public static final String PROFILE_SHA256 = "3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626";
+	public static final String PROFILE_SHA256 = "239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09";
 
 	private static final List<Observation> OBSERVATIONS = List.of(new Observation(100, 0, "RIGHT", 0.91),
 			new Observation(200, 0, "LEFT", 0.92), new Observation(300, 0, "LEFT", 0.93),

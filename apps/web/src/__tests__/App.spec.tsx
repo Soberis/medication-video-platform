@@ -55,7 +55,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理')).toBeInTheDocument()
+    expect(within(navigation).queryByText('设置')).not.toBeInTheDocument()
     expect(screen.queryByText('上传排障')).not.toBeInTheDocument()
     expect(screen.queryByText('账号管理')).not.toBeInTheDocument()
     expect(screen.queryByText('新建项目')).not.toBeInTheDocument()
@@ -242,9 +242,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).not.toHaveAttribute(
-      'data-active',
-    )
+    expect(within(navigation).queryByText('设置')).not.toBeInTheDocument()
   })
 
   it('keeps CaptureGroup annotation focus in the video-management navigation context', () => {
@@ -275,9 +273,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).not.toHaveAttribute(
-      'data-active',
-    )
+    expect(within(navigation).queryByText('设置')).not.toBeInTheDocument()
   })
 
   it('only highlights local upload in the management menu on the local-upload page', () => {
@@ -298,7 +294,7 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('管理').closest('.sidebar-nav-group')).toHaveAttribute(
+    expect(within(navigation).getByText('设置').closest('.sidebar-nav-group')).toHaveAttribute(
       'data-active',
       'true',
     )

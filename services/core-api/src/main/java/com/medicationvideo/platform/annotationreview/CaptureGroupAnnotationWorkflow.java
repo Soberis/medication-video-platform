@@ -188,12 +188,15 @@ class CaptureGroupAnnotationWorkflow {
 		}
 		var existingRevision = this.revisionRepository
 			.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(task.getAnnotationTaskId());
-		if (existingRevision.isPresent() && !Objects.equals(task.getPrimaryClipAssetId(), clipAssetId)) {
+		if (existingRevision.isPresent() && !Objects.equals(task.getPrimaryClipAssetId(), clipAssetId)
+				&& (task.getStatus() != AnnotationTaskStatus.ASSIGNED
+						|| task.isRevisionForCurrentGroupInput(existingRevision.get()))) {
 			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_FROZEN",
-					"The primary view is frozen after the first formal annotation revision.", 409);
+					"The primary view is frozen for the current input after a formal annotation revision.", 409);
 		}
 		if (Objects.equals(task.getPrimaryClipAssetId(), clipAssetId)) {
-			return AnnotationTaskResponse.from(task, actorId, false, existingRevision.orElse(null), null, null);
+			return AnnotationTaskResponse.from(task, actorId, false,
+					existingRevision.filter(task::isRevisionForCurrentGroupInput).orElse(null), null, null);
 		}
 
 		var groupQuality = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId,
@@ -233,8 +236,7 @@ class CaptureGroupAnnotationWorkflow {
 	}
 
 	AnnotationReviewResponse reviewRevision(UUID projectId, AnnotationRevision revision, String actorId,
-			boolean selfAdminApproval, String idempotencyKey, String requestId, String traceId,
-			AnnotationReviewCommand request) {
+			String idempotencyKey, String requestId, String traceId, AnnotationReviewCommand request) {
 		var task = this.taskRepository.findForUpdate(projectId, revision.getAnnotationTaskId())
 			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
 		if (task.getStatus() != AnnotationTaskStatus.SUBMITTED) {
@@ -242,6 +244,9 @@ class CaptureGroupAnnotationWorkflow {
 					"Only the current submitted annotation revision can be reviewed.", 409);
 		}
 		var groupContext = requireGroupReviewContext(projectId, revision, task);
+		if (request.decision() == AnnotationReviewDecision.APPROVED) {
+			validateRevisionBounds(projectId, revision);
+		}
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var review = this.reviewRepository.saveAndFlush(AnnotationReview.record(revision, request.decision(),
 				request.reviewNote(), actorId, idempotencyKey, now, groupContext));
@@ -251,15 +256,14 @@ class CaptureGroupAnnotationWorkflow {
 		}
 		else {
 			evaluateCaptureGroupCleaning(projectId, revision, task, review, actorId, requestId, traceId,
-					selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "INDEPENDENT_ANNOTATION_REVIEW");
+					"INDEPENDENT_ANNOTATION_REVIEW");
 			task.complete(now);
 			this.taskRepository.saveAndFlush(task);
 		}
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_REVISION_REVIEWED", "AnnotationReview", review.getAnnotationReviewId().toString(),
-				review.getDecision().name(), AuditOutcome.SUCCEEDED,
-				selfAdminApproval ? "SELF_ADMIN_APPROVAL" : "INDEPENDENT_ANNOTATION_REVIEW", requestId, traceId,
-				"PROJECT_MEMBERSHIP_ADMIN",
+				review.getDecision().name(), AuditOutcome.SUCCEEDED, "INDEPENDENT_ANNOTATION_REVIEW", requestId,
+				traceId, "PROJECT_MEMBERSHIP_ADMIN",
 				Map.of("annotation_revision_id", revision.getAnnotationRevisionId().toString(), "annotation_task_id",
 						revision.getAnnotationTaskId().toString(), "decision", review.getDecision().name(),
 						"reopened_for_rework",
@@ -285,6 +289,7 @@ class CaptureGroupAnnotationWorkflow {
 			throw groupCleaningRecheckNotReady();
 		}
 		this.requireGroupReviewContext(projectId, revision, task);
+		validateRevisionBounds(projectId, revision);
 		return CaptureGroupCleaningResponse.from(evaluateCaptureGroupCleaning(projectId, revision, task, review,
 				actorId, requestId, traceId, "PROJECT_MEMBERSHIP_ADMIN"));
 	}
@@ -294,6 +299,10 @@ class CaptureGroupAnnotationWorkflow {
 				task.getCaptureGroupId());
 		if (!groupQuality.isAdmitting()) {
 			throw groupQualityNotAdmitting();
+		}
+		if (!Objects.equals(task.getGroupInputVersion(), groupQuality.inputVersion())
+				|| !Objects.equals(task.getConfirmedViewSet(), groupQuality.confirmedViewSet())) {
+			throw primaryViewInputChanged();
 		}
 		if (!task.hasPrimaryView()) {
 			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_REQUIRED",
@@ -426,7 +435,8 @@ class CaptureGroupAnnotationWorkflow {
 		var durationMicroseconds = this.mediaDurationQueryService.findVerifiedDurationMicroseconds(projectId,
 				clipAssetId);
 		if (durationMicroseconds.isEmpty()) {
-			return;
+			throw new AnnotationTaskException("ANNOTATION_MEDIA_DURATION_UNVERIFIED",
+					"The primary media duration must be verified before submitting or approving annotations.", 409);
 		}
 		var maximumEndMilliseconds = durationMicroseconds.getAsLong() / 1_000;
 		for (var segment : segments) {
@@ -437,7 +447,14 @@ class CaptureGroupAnnotationWorkflow {
 		}
 	}
 
-	private static boolean viewSetStillCurrent(Map<String, Object> confirmedViewSet, CaptureGroupFacts facts,
+	private void validateRevisionBounds(UUID projectId, AnnotationRevision revision) {
+		validateSegmentBounds(projectId, revision.getPrimaryClipAssetId(),
+				toGroupCleaningSegments(revision).stream()
+					.map(segment -> new AnnotationSegmentCommand(segment.startMs(), segment.endMs(), segment.label()))
+					.toList());
+	}
+
+	static boolean viewSetStillCurrent(Map<String, Object> confirmedViewSet, CaptureGroupFacts facts,
 			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions) {
 		if (confirmedViewSet == null
 				|| !Objects.equals(confirmedViewSet.get("schema_version"), "capture-group-view-set.v1")

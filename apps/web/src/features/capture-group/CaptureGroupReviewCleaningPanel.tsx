@@ -173,7 +173,6 @@ export function CaptureGroupReviewCleaningPanel({
       <div className="capture-group-review-evidence-block">
         <div className="capture-group-review-subheading">
           <div>
-            <span className="app-eyebrow">手部检测证据</span>
             <h3>相关手部检测证据</h3>
           </div>
           <span>{candidateEvidence.length} 条已固定证据</span>
@@ -208,7 +207,6 @@ export function CaptureGroupReviewCleaningPanel({
       <div className="capture-group-review-annotation-history">
         <div className="capture-group-review-subheading">
           <div>
-            <span className="app-eyebrow">修订历史</span>
             <h3>标注备注与历史</h3>
           </div>
           <History aria-hidden="true" size={16} strokeWidth={1.8} />

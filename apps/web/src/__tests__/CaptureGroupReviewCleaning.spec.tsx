@@ -251,6 +251,6 @@ describe('CaptureGroup Review and event cleaning', () => {
 function renderCaptureGroup() {
   renderRoute(<CaptureGroupDetailView />, {
     path: '/projects/:projectId/capture-groups/:captureGroupId',
-    route: `/projects/${projectId}/capture-groups/${groupId}`,
+    route: `/projects/${projectId}/capture-groups/${groupId}?focus=review`,
   })
 }

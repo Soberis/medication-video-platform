@@ -36,13 +36,15 @@ describe('CaptureGroup detail views', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'capture-1' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '视频' })).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: '视频' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '视频', hidden: true }),
+    ).toBeInTheDocument()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '人工标签任务' })).not.toBeInTheDocument()
-    const preparation = screen.getByText('标注前检查').closest('details')
-    expect(preparation).not.toHaveAttribute('open')
-    await user.click(screen.getByText('标注前检查'))
+    expect(screen.queryByRole('button', { name: '开始标注' })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '标注' }))
+    expect(screen.getByRole('heading', { name: '标注前检查' })).toBeVisible()
     expect(await screen.findByText('整体质量')).toBeVisible()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
       true,
@@ -74,10 +76,9 @@ describe('CaptureGroup detail views', () => {
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
     const exportButton = await screen.findByRole('button', { name: '导出数据' })
     expect(exportButton.closest('details')).toBeNull()
+    await user.click(await screen.findByRole('button', { name: '标注' }))
     await user.click(await screen.findByRole('button', { name: '开始标注' }))
-    expect(
-      await screen.findByRole('heading', { level: 2, name: '配药动作标注' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -104,10 +105,11 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    expect(
-      await screen.findByRole('heading', { level: 2, name: '配药动作标注' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: '相机 1' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /机位 1.*标注基准/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     expect(screen.getByRole('button', { name: '提交修订' })).toBeInTheDocument()
   })
 
@@ -133,6 +135,7 @@ describe('CaptureGroup detail views', () => {
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: '标注' }))
     expect(await screen.findByRole('combobox', { name: '整体质量结论' })).toBeInTheDocument()
   })
 

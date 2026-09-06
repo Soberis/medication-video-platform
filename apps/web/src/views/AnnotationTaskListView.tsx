@@ -181,7 +181,6 @@ export default function AnnotationTaskListView() {
       <PageHeader
         titleId="annotation-task-title"
         title="标注任务"
-        description="查看当前项目的标注任务；提交后由有权限的人员复核。"
         actions={
           <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
             刷新
@@ -342,7 +341,7 @@ export default function AnnotationTaskListView() {
                 row.status !== 'COMPLETED' && taskDestination ? (
                   <Link
                     className="annotation-task-action-link"
-                    aria-label={`进入视频，${taskDestination.actionLabel}`}
+                    aria-label={taskDestination.actionLabel}
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
                     {taskDestination.actionLabel} <span aria-hidden="true">→</span>
@@ -354,7 +353,7 @@ export default function AnnotationTaskListView() {
                     className="text-link annotation-task-result-link"
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    进入视频查看结果 <span aria-hidden="true">→</span>
+                    查看标注结果 <span aria-hidden="true">→</span>
                   </Link>
                 ) : null
               return (

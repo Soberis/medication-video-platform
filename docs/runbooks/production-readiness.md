@@ -73,7 +73,9 @@ Node 运行时必须保持在仓库声明的 >=22.12.0 <23 范围内；同时核
   | --- | --- |
   | `media-probe-baseline-v1.json` normalized digest | `8900937958d0fb81a9c9bf2d9e81ac3e57f35d838d5a4da52b58ccf0f5cd5765` |
   | CaptureGroup Cleaning ruleset (`capture-group-event-eligibility`, `v1`) digest | `9b0f46e8e6a0a4a2f2d31ef6c2cb2b7d0b7fca0a20a7e6b3f6f4a9d4b7f0a61c` |
-  | AI hand-pose profile digest | `3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626` |
+  | AI hand-pose profile digest (fixed time grid) | `239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09` |
+
+- V1.30 采样以首帧 PTS 为起点，按固定 100ms 网格选取目标时刻及之后首个真实帧。24/25/30/60fps 不再因逐次累加实际帧间隔而降采样；稀疏源不补造帧。Core API 与 AI Worker 需一起切换新 profile。旧 `3a3be803…90626` 已完成证据保持原摘要，契约保留兼容；切换前排空旧作业，或按显式新作业重跑。新 Worker 不应把旧作业按新策略执行，也不得修改历史结果或 V55 迁移。
   | local Core API approved Media Worker software digest | `sha256:d7accc8bd9123226c273034cdb7b868e6815450ce1d307c8f55f01197463a252` |
 
   若 profile、Worker 源码、`uv.lock` 或批准配置变化，必须重新计算、审批并同步摘要；不能把运行中的摘要强行改成“批准值”来绕过校验。模型文件应使用 `Get-FileHash -Algorithm SHA256` 或等价工具核对。

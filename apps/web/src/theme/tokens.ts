@@ -71,7 +71,7 @@ const typographyTokens = {
 
 export const appTokens = {
   color: {
-    background: '#F6F7F9',
+    background: '#FFFFFF',
     surface: '#FFFFFF',
     surfaceElevated: '#FFFFFF',
     surfaceMuted: '#F3F4F6',
@@ -102,13 +102,13 @@ export const appTokens = {
     mediaControlBorder: 'rgb(255 255 255 / 42%)',
     mediaControlBackground: 'rgb(16 24 40 / 78%)',
     mediaControlBackgroundHover: 'rgb(16 24 40 / 92%)',
-    sidebarBackground: '#111827',
-    sidebarForeground: '#F9FAFB',
-    sidebarMuted: '#9CA3AF',
-    sidebarBorder: 'rgb(255 255 255 / 10%)',
-    sidebarHover: 'rgb(255 255 255 / 7%)',
-    sidebarSelected: 'rgb(49 94 155 / 20%)',
-    sidebarAccent: '#3B82F6',
+    sidebarBackground: '#F6F7F9',
+    sidebarForeground: '#161B22',
+    sidebarMuted: '#5F6B7A',
+    sidebarBorder: '#E5E7EB',
+    sidebarHover: '#ECEFF3',
+    sidebarSelected: '#E8EEF6',
+    sidebarAccent: '#315E9B',
   },
   spacing: {
     4: 4,

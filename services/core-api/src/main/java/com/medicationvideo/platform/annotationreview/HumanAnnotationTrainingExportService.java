@@ -21,6 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupFacts;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
+import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
+import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
+import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
 /** Exports the current, approved human action annotations as training labels. */
 @Service
@@ -49,16 +52,26 @@ class HumanAnnotationTrainingExportService {
 
 	private final AnnotationReviewRepository reviewRepository;
 
+	private final CaptureGroupQualityQueryService groupQualityQueryService;
+
+	private final QualityReviewQueryService viewQualityQueryService;
+
+	private final MediaDurationQueryService mediaDurationQueryService;
+
 	private final String dataProfile;
 
 	HumanAnnotationTrainingExportService(CaptureGroupViewQueryService captureGroupViewQueryService,
 			AnnotationTaskRepository taskRepository, AnnotationRevisionRepository revisionRepository,
-			AnnotationReviewRepository reviewRepository,
+			AnnotationReviewRepository reviewRepository, CaptureGroupQualityQueryService groupQualityQueryService,
+			QualityReviewQueryService viewQualityQueryService, MediaDurationQueryService mediaDurationQueryService,
 			@Value("${platform.training-data-export.data-profile:disabled}") String dataProfile) {
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.taskRepository = taskRepository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
+		this.groupQualityQueryService = groupQualityQueryService;
+		this.viewQualityQueryService = viewQualityQueryService;
+		this.mediaDurationQueryService = mediaDurationQueryService;
 		this.dataProfile = dataProfile == null ? "" : dataProfile.trim().toLowerCase(Locale.ROOT);
 	}
 
@@ -111,6 +124,18 @@ class HumanAnnotationTrainingExportService {
 			.stream()
 			.collect(Collectors.toUnmodifiableMap(AnnotationReview::getAnnotationRevisionId, review -> review));
 
+		var groupQualityById = this.groupQualityQueryService
+			.getCurrentDecisions(projectId, groups.stream().map(CaptureGroupFacts::captureGroupId).toList())
+			.stream()
+			.collect(Collectors.toMap(CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
+					decision -> decision));
+		var viewQualityById = this.viewQualityQueryService.findCurrentDecisions(projectId,
+				groups.stream()
+					.flatMap(group -> group.views().stream())
+					.map(CaptureGroupView::clipAssetId)
+					.filter(Objects::nonNull)
+					.distinct()
+					.toList());
 		var rows = new ArrayList<AnnotationRow>();
 		for (var task : tasks) {
 			var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
@@ -123,13 +148,30 @@ class HumanAnnotationTrainingExportService {
 			if (facts == null) {
 				throw invalidExport("The approved annotation no longer has a current CaptureGroup view.");
 			}
+			var groupQuality = groupQualityById.get(task.getCaptureGroupId());
+			if (groupQuality == null || !groupQuality.isAdmitting()
+					|| !Objects.equals(groupQuality.inputVersion(), revision.getInputVersion())
+					|| !Objects.equals(groupQuality.confirmedViewSet(), revision.getConfirmedViewSet())
+					|| !CaptureGroupAnnotationWorkflow.viewSetStillCurrent(revision.getConfirmedViewSet(), facts,
+							viewQualityById)) {
+				throw invalidExport("The current quality decisions or media inputs have changed since approval.");
+			}
 			var primaryView = facts.views()
 				.stream()
 				.filter(view -> Objects.equals(view.clipAssetId(), revision.getPrimaryClipAssetId()))
 				.findFirst()
 				.orElseThrow(() -> invalidExport("The approved annotation no longer has a current primary view."));
 			validateCurrentPrimaryView(revision, review, primaryView);
-			rows.addAll(annotationRows(task, revision, review, primaryView));
+			var duration = this.mediaDurationQueryService.findVerifiedDurationMicroseconds(projectId,
+					primaryView.clipAssetId());
+			if (duration.isEmpty()) {
+				throw invalidExport("The primary media duration has not been verified.");
+			}
+			var annotationRows = annotationRows(task, revision, review, primaryView);
+			if (annotationRows.stream().anyMatch(row -> row.segmentEndMs() > duration.getAsLong() / 1_000)) {
+				throw invalidExport("An annotation segment exceeds the verified media duration.");
+			}
+			rows.addAll(annotationRows);
 		}
 		rows.sort(Comparator.comparing((AnnotationRow row) -> row.captureGroupId().toString())
 			.thenComparingInt(AnnotationRow::primaryCameraNumber)

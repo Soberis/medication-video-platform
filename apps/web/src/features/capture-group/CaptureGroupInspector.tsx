@@ -72,7 +72,7 @@ export function CaptureGroupInspector({
       aria-labelledby="capture-group-inspector-title"
     >
       <header className="capture-group-inspector-heading">
-        <h2 id="capture-group-inspector-title">更多信息</h2>
+        <h2 id="capture-group-inspector-title">记录详情</h2>
       </header>
 
       <ProgressiveDetail title="接收与采集事实" summary={receiptStateLabels[group.receipt_state]}>

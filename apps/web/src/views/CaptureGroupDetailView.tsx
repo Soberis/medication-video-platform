@@ -1,7 +1,7 @@
 import { Alert, Button, Modal } from 'antd'
 import { RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useBlocker, useLocation, useParams } from 'react-router'
 
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
@@ -39,7 +39,27 @@ export default function CaptureGroupDetailView() {
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
   const receiptFinalizeRequest = useRef(false)
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
+  const appliedFocus = useRef<string | null>(null)
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
+  const [panelOverride, setPanelOverride] = useState<{ locationKey: string; open: boolean } | null>(
+    null,
+  )
+  const isPanelOpen =
+    panelOverride?.locationKey === location.key ? panelOverride.open : Boolean(focus)
+  const [hasUnsavedAnnotation, setHasUnsavedAnnotation] = useState(false)
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedAnnotation && currentLocation.pathname !== nextLocation.pathname,
+  )
+  useEffect(() => {
+    if (!hasUnsavedAnnotation) return
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [hasUnsavedAnnotation])
   const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
   const fallbackFocusTargetId =
     focus === 'review' || focus === 'cleaning' ? captureGroupReviewCleaningFallbackTargetId : null
@@ -101,21 +121,35 @@ export default function CaptureGroupDetailView() {
   }
 
   useEffect(() => {
-    if (!data.group || data.groupLoadState !== 'success' || !focusTargetId) return
+    if (
+      !data.group ||
+      data.groupLoadState !== 'success' ||
+      !focusTargetId ||
+      appliedFocus.current === location.key
+    )
+      return
     const timer = window.setTimeout(() => {
       const target =
         document.getElementById(focusTargetId) ??
         (fallbackFocusTargetId ? document.getElementById(fallbackFocusTargetId) : null)
       if (!target) return
+      appliedFocus.current = location.key
       target.scrollIntoView?.({ block: 'start', behavior: 'auto' })
       if (target instanceof HTMLElement) target.focus({ preventScroll: true })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [data.group, data.groupLoadState, data.refreshVersion, fallbackFocusTargetId, focusTargetId])
+  }, [
+    data.group,
+    data.groupLoadState,
+    fallbackFocusTargetId,
+    focusTargetId,
+    humanTask,
+    location.key,
+  ])
 
   const renderHumanLabelPanel = () => {
-    if (!data.group || !humanTask) return null
-    if (!taskDestination) {
+    if (!data.group || (!humanTask && !hasUnsavedAnnotation)) return null
+    if (humanTask && !taskDestination && !hasUnsavedAnnotation) {
       return (
         <section className="capture-group-human-label-status" aria-label="人工标签任务">
           <p className="app-eyebrow">可选人工标签</p>
@@ -124,7 +158,7 @@ export default function CaptureGroupDetailView() {
         </section>
       )
     }
-    if (taskDestination.focus === 'annotation') {
+    if (taskDestination?.focus === 'annotation' || hasUnsavedAnnotation) {
       return (
         <CaptureGroupAnnotationPanel
           projectId={projectId}
@@ -136,13 +170,18 @@ export default function CaptureGroupDetailView() {
           schema={data.schema}
           viewRows={viewRows}
           viewReviews={data.viewReviews}
-          refreshVersion={data.refreshVersion}
-          currentPlaybackTimeMs={currentPlaybackTimeMs}
+          currentPlaybackTimeMs={
+            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
+              ? currentPlaybackTimeMs
+              : null
+          }
+          onDirtyChange={setHasUnsavedAnnotation}
           onTaskChange={data.setTask}
           onRefresh={data.refresh}
         />
       )
     }
+    if (!humanTask) return null
     return (
       <CaptureGroupReviewCleaningPanel
         projectId={projectId}
@@ -178,7 +217,9 @@ export default function CaptureGroupDetailView() {
   return (
     <>
       <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={{ pathname: paths.captureGroups(projectId), search: location.search }}>视频</Link>
+        <Link to={paths.captureGroups(projectId)} state={location.state}>
+          视频
+        </Link>
         <span aria-hidden="true">/</span>
         <span>{eventIdentity}</span>
       </nav>
@@ -189,6 +230,17 @@ export default function CaptureGroupDetailView() {
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
+            {actionPanel ? (
+              <Button
+                size="small"
+                aria-expanded={isPanelOpen}
+                aria-controls="human-label-panel"
+                onClick={() => setPanelOverride({ locationKey: location.key, open: !isPanelOpen })}
+              >
+                {isPanelOpen ? '收起标注' : '标注'}
+                {hasUnsavedAnnotation ? ' · 未提交' : ''}
+              </Button>
+            ) : null}
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
@@ -243,9 +295,9 @@ export default function CaptureGroupDetailView() {
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
           <div
-            className={`capture-group-workspace${actionPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
+            className={`capture-group-workspace${actionPanel && isPanelOpen ? '' : ' capture-group-workspace-machine-evidence'}`}
             data-stage={
-              actionPanel
+              actionPanel && isPanelOpen
                 ? taskDestination?.focus === 'annotation'
                   ? 'ANNOTATION'
                   : humanTask?.status === 'COMPLETED'
@@ -268,11 +320,32 @@ export default function CaptureGroupDetailView() {
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>
-            {actionPanel ? <div className="capture-group-action-column">{actionPanel}</div> : null}
+            {actionPanel ? (
+              <div
+                id="human-label-panel"
+                className="capture-group-action-column"
+                hidden={!isPanelOpen}
+              >
+                {actionPanel}
+              </div>
+            ) : null}
           </div>
-          {renderInspector()}
+          <details className="capture-group-record-details">
+            <summary>更多信息</summary>
+            {renderInspector()}
+          </details>
         </>
       ) : null}
+      <Modal
+        open={blocker.state === 'blocked'}
+        title="离开并丢弃未提交的标注？"
+        okText="丢弃并离开"
+        cancelText="继续编辑"
+        onOk={() => blocker.state === 'blocked' && blocker.proceed()}
+        onCancel={() => blocker.state === 'blocked' && blocker.reset()}
+      >
+        <p>当前时间段和备注尚未提交。留在页面可继续编辑。</p>
+      </Modal>
       <Modal
         open={isReceiptConfirmationOpen}
         title="结束本次接收？"

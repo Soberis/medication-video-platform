@@ -17,6 +17,7 @@ MIN_HAND_PRESENCE_CONFIDENCE = 0.5
 MIN_TRACKING_CONFIDENCE = 0.5
 HANDEDNESS_POLICY = "MEDIAPIPE_REPORTED"
 TIMESTAMP_POLICY = "CONTAINER_PTS_STRICTLY_INCREASING"
+SAMPLING_POLICY = "FIXED_TIME_GRID_FIRST_FRAME_AT_OR_AFTER_V1"
 BOUNDING_BOX_RECIPE = "FINITE_NORMALIZED_LANDMARK_BOUNDS_V1"
 PROFILE_SHA256 = hashlib.sha256(
     "\n".join(
@@ -31,6 +32,7 @@ PROFILE_SHA256 = hashlib.sha256(
             HANDEDNESS_POLICY,
             TIMESTAMP_POLICY,
             BOUNDING_BOX_RECIPE,
+            SAMPLING_POLICY,
         )
     ).encode()
 ).hexdigest()
@@ -96,14 +98,19 @@ def _detect_all(
         # a skipped interval could reach MediaPipe and violate VIDEO mode's
         # monotonic timestamp contract.
         last_timestamp = -1
-        next_sample = 0
+        next_sample: int | None = None
+        sample_interval = 1000 // sampling_fps
         for frame in container.decode(stream):
             total_video_frames += 1
             timestamp = _timestamp_ms(frame, stream, last_timestamp)
             last_timestamp = timestamp
+            if next_sample is None:
+                next_sample = timestamp
             if timestamp < next_sample:
                 continue
-            next_sample = timestamp + 1000 // sampling_fps
+            # Advance the fixed grid, not the selected frame, without inventing
+            # samples when source frames are sparse or timestamps have a gap.
+            next_sample += ((timestamp - next_sample) // sample_interval + 1) * sample_interval
             inference_frame_count += 1
             rgb = frame.to_ndarray(format="rgb24")
             result = detector.detect_for_video(
