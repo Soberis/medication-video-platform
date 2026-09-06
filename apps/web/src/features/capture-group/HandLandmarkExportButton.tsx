@@ -13,11 +13,13 @@ import { StatusIndicator } from '@/components/status/StatusIndicator'
 interface HandLandmarkExportButtonProps {
   projectId: string
   captureGroupId?: string
+  onSelect?: () => void
 }
 
 export function HandLandmarkExportButton({
   projectId,
   captureGroupId,
+  onSelect,
 }: HandLandmarkExportButtonProps) {
   const { message } = AntdApp.useApp()
   const [preview, setPreview] = useState<HandLandmarkExportPreview | null>(null)
@@ -99,7 +101,10 @@ export function HandLandmarkExportButton({
         size="small"
         loading={previewLoading}
         disabled={downloadLoading}
-        onClick={() => void openPreview()}
+        onClick={() => {
+          onSelect?.()
+          void openPreview()
+        }}
       >
         导出手部关键点
       </Button>
@@ -152,7 +157,7 @@ function HandLandmarkExportPreviewContent({
       </div>
       <section className="hand-landmark-export-facts" aria-label="手部检测关键点导出摘要">
         <dl className="hand-landmark-export-facts-list">
-          <Fact label="导出范围" value={eventScope ? '当前采集记录' : '整个项目'} />
+          <Fact label="导出范围" value={eventScope ? '当前视频（含各机位）' : '整个项目'} />
           <Fact label="检测视图" value={`${formatCount(preview.hand_detection_view_count)} 个`} />
           <Fact label="完成视图" value={`${formatCount(preview.completed_view_count)} 个`} />
           <Fact label="检测到手部的视图" value={`${formatCount(preview.views_with_hand)} 个`} />

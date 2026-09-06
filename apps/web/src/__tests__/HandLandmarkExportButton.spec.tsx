@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HandLandmarkExportButton } from '@/features/capture-group/HandLandmarkExportButton'
+import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
 const captureGroupId = '49de2828-0000-4000-8000-000000000001'
@@ -13,7 +14,12 @@ afterEach(() => vi.unstubAllGlobals())
 describe('hand landmark export scopes', () => {
   it.each([
     ['导出手部关键点', undefined, '整个项目', ''],
-    ['导出手部关键点', captureGroupId, '当前采集记录', `?capture_group_id=${captureGroupId}`],
+    [
+      '导出手部关键点',
+      captureGroupId,
+      '当前视频（含各机位）',
+      `?capture_group_id=${captureGroupId}`,
+    ],
   ])('uses the natural scope for %s', async (label, scope, scopeLabel, query) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview(scope)))
     vi.stubGlobal('fetch', fetchMock)
@@ -34,6 +40,46 @@ describe('hand landmark export scopes', () => {
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
     )
   })
+
+  it.each([
+    [undefined, '范围：整个项目', '整个项目', ''],
+    [
+      captureGroupId,
+      '范围：当前视频（含各机位）',
+      '当前视频（含各机位）',
+      `?capture_group_id=${captureGroupId}`,
+    ],
+  ])(
+    'keeps export selection lightweight and confirms the natural %s scope once',
+    async (scope, menuScopeLabel, previewScopeLabel, query) => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(preview(scope)))
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      render(
+        <AntdApp>
+          <ExportDataMenu projectId={projectId} captureGroupId={scope} humanReady={false} />
+        </AntdApp>,
+      )
+
+      await user.click(screen.getByRole('button', { name: '导出数据' }))
+
+      expect(await screen.findByText(menuScopeLabel)).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: '导出手部关键点' }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(screen.getByRole('button', { name: '导出数据' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      )
+      expect(within(dialog).getByText(previewScopeLabel)).toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/v1/projects/${projectId}/hand-landmarks/v1/preview${query}`,
+        expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+      )
+    },
+  )
 
   it('shows partial export facts instead of masking unfinished views as complete', async () => {
     const partialPreview = {

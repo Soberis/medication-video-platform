@@ -6,11 +6,13 @@ import { AnnotationTaskApiError, downloadHumanAnnotationExport } from '@/api/ann
 interface HumanAnnotationExportButtonProps {
   projectId: string
   captureGroupId?: string
+  onSelect?: () => void
 }
 
 export function HumanAnnotationExportButton({
   projectId,
   captureGroupId,
+  onSelect,
 }: HumanAnnotationExportButtonProps) {
   const { message } = AntdApp.useApp()
   const [loading, setLoading] = useState(false)
@@ -46,7 +48,15 @@ export function HumanAnnotationExportButton({
   }
 
   return (
-    <Button size="small" loading={loading} disabled={loading} onClick={() => void download()}>
+    <Button
+      size="small"
+      loading={loading}
+      disabled={loading}
+      onClick={() => {
+        onSelect?.()
+        void download()
+      }}
+    >
       导出人工标注
     </Button>
   )

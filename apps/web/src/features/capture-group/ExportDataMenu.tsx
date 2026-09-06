@@ -1,4 +1,4 @@
-import { Button, Modal } from 'antd'
+import { Button, Popover } from 'antd'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
 
@@ -16,38 +16,48 @@ export function ExportDataMenu({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <>
-      <Button
-        onClick={() => setOpen(true)}
-        icon={<Download aria-hidden="true" size={16} strokeWidth={1.8} />}
-      >
-        导出数据
-      </Button>
-      <Modal
-        open={open}
-        onCancel={() => setOpen(false)}
-        title="导出数据"
-        footer={null}
-        destroyOnHidden
-      >
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      title="导出数据"
+      trigger="click"
+      placement="bottomRight"
+      content={
         <div className="capture-group-export-options">
-          <p className="form-hint">{captureGroupId ? '范围：当前采集记录' : '范围：当前项目'}</p>
+          <p className="form-hint">
+            {captureGroupId ? '范围：当前视频（含各机位）' : '范围：整个项目'}
+          </p>
           <section aria-label="MediaPipe 导出">
             <strong>MediaPipe 手部关键点</strong>
             <p>各相机的逐帧检测结果（CSV）。</p>
-            <HandLandmarkExportButton projectId={projectId} captureGroupId={captureGroupId} />
+            <HandLandmarkExportButton
+              projectId={projectId}
+              captureGroupId={captureGroupId}
+              onSelect={() => setOpen(false)}
+            />
           </section>
           <section aria-label="人工标注导出">
             <strong>人工标注</strong>
             <p>标注基准相机的动作、时间段与备注（CSV）。</p>
             {humanReady ? (
-              <HumanAnnotationExportButton projectId={projectId} captureGroupId={captureGroupId} />
+              <HumanAnnotationExportButton
+                projectId={projectId}
+                captureGroupId={captureGroupId}
+                onSelect={() => setOpen(false)}
+              />
             ) : (
               <p role="status">尚未确认有可导出的标注。完成标注并通过复核后可导出。</p>
             )}
           </section>
         </div>
-      </Modal>
-    </>
+      }
+    >
+      <Button
+        icon={<Download aria-hidden="true" size={16} strokeWidth={1.8} />}
+        aria-expanded={open}
+      >
+        导出数据
+      </Button>
+    </Popover>
   )
 }
