@@ -34,11 +34,7 @@ export function ExportDataMenu({
             ) : (
               <p role="status">可在列表中勾选已完成标注并通过复核的记录。</p>
             )}
-            <HumanDemonstrationHdf5ExportButton
-              projectId={projectId}
-              buttonText="导出项目全部合格数据"
-              onSelect={() => setOpen(false)}
-            />
+            <p>仅导出勾选记录；下载时仍会检查当前媒体与标注来源是否有效。</p>
           </section>
         </div>
       }

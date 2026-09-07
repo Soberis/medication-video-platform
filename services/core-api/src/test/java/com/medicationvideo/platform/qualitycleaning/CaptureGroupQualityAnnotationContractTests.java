@@ -625,7 +625,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void administratorCannotReviewTheirOwnSubmission() throws Exception {
+	void administratorCanConfirmTheirOwnSubmission() throws Exception {
 		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("self-review-quality"))
 			.andExpect(status().isOk());
@@ -640,13 +640,18 @@ class CaptureGroupQualityAnnotationContractTests {
 		var revision = JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id")
 			.toString();
 		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].can_review").value(true));
+		this.mockMvc
 			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revision)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("self-review-approve"))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"decision\":\"APPROVED\"}"))
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN"));
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.decision").value("APPROVED"));
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
@@ -792,9 +797,18 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 
+		this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ? AND actor_id = ?", PROJECT_ID,
+				ProjectMembershipTestData.ADMIN_ACTOR);
+		this.mockMvc.perform(get("/api/v1/annotation-label-schema").header("Authorization", "Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"));
+		this.mockMvc
+			.perform(post("/api/v1/annotation-label-schema/labels").header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对剂量。\"}"))
+			.andExpect(status().isForbidden());
 		var published = this.mockMvc
-			.perform(post("/api/v1/projects/{projectId}/annotation-label-schema/labels", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN)
+			.perform(post("/api/v1/annotation-label-schema/labels").header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("X-Request-Id", key("admin-label"))
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对本次已配制剂量。\"}"))
@@ -811,6 +825,7 @@ class CaptureGroupQualityAnnotationContractTests {
 						existingTaskId));
 
 		var newGroup = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, PROJECT_ID);
 		recordGroup(newGroup, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("new-label-quality"))
 			.andExpect(status().isOk());
 		assignTask(newGroup, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("new-label-task"))

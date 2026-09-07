@@ -10,10 +10,11 @@ import {
   UsersRound,
   Video,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
+import { getProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
@@ -23,12 +24,28 @@ import { NoticeState } from '@/components/WorkspaceFeedback'
 const managementRoutePatterns = [
   '/projects/:projectId/members',
   paths.uploads,
-  paths.localUpload,
+  paths.annotationLabelLibrary(),
   '/projects/:projectId/annotation-label-library',
   paths.accounts,
 ] as const
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
+
+function ProjectContext({ projectId }: { projectId: string }) {
+  const [name, setName] = useState<string | null>(null)
+  useEffect(() => {
+    const request = new AbortController()
+    void getProject(projectId, request.signal)
+      .then((project) => {
+        if (!request.signal.aborted) setName(project.display_name)
+      })
+      .catch(() => {
+        /* The page retains its own access and retry state. */
+      })
+    return () => request.abort()
+  }, [projectId])
+  return <p className="form-hint">当前项目：{name ?? projectId}</p>
+}
 
 function LocalUploadActivity() {
   const { tasks, uploadState, resetUpload } = useLocalUpload()
@@ -156,17 +173,11 @@ export default function AppShell() {
                 </Link>
               ) : null}
             </div>
-            {projectId ? (
-              <div className="sidebar-nav-group">
-                <NavLink
-                  to={paths.annotationTasks(projectId)}
-                  aria-label="标注任务"
-                  title="标注任务"
-                >
-                  <ListChecks {...iconProps} />
-                  <span className="sidebar-label">标注任务</span>
-                </NavLink>
-              </div>
+            {isAdministrator ? (
+              <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
+                <Upload {...iconProps} />
+                <span className="sidebar-label">上传视频</span>
+              </NavLink>
             ) : null}
             {isAdministrator ? (
               <details
@@ -183,12 +194,6 @@ export default function AppShell() {
                   <Settings {...iconProps} />
                   <span className="sidebar-label">设置</span>
                 </summary>
-                {isAdministrator ? (
-                  <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
-                    <Upload {...iconProps} />
-                    <span className="sidebar-label">上传视频</span>
-                  </NavLink>
-                ) : null}
                 {projectId && isAdministrator ? (
                   <NavLink
                     end
@@ -200,10 +205,10 @@ export default function AppShell() {
                     <span className="sidebar-label">项目成员</span>
                   </NavLink>
                 ) : null}
-                {projectId && isAdministrator ? (
+                {isAdministrator ? (
                   <NavLink
                     end
-                    to={paths.annotationLabelLibrary(projectId)}
+                    to={paths.annotationLabelLibrary()}
                     aria-label="标签库"
                     title="标签库"
                   >
@@ -225,6 +230,7 @@ export default function AppShell() {
     >
       <LocalUploadProvider>
         <LocalUploadActivity />
+        {projectId ? <ProjectContext key={projectId} projectId={projectId} /> : null}
         <Outlet />
       </LocalUploadProvider>
     </AppFrame>

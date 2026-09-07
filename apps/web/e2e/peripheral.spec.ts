@@ -61,6 +61,11 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
   await expect(taskRows).toHaveCount(2)
   await expect(taskRows.nth(0)).toHaveAccessibleName(/待标注/)
   await expect(taskRows.nth(1)).toHaveAccessibleName(/已完成/)
+  await expect(page).toHaveURL(/capture-groups\?view=tasks$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('视频')
+  await expect(
+    page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '标注任务' }),
+  ).toHaveCount(0)
 
   const primaryAction = taskRows.nth(0).getByRole('link', { name: /继续标注/ })
   await primaryAction.focus()
@@ -75,6 +80,24 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
     fullPage: true,
     animations: 'disabled',
   })
+  await taskRows.nth(1).getByText('查看详情', { exact: true }).click()
+  const expanded = taskRows.nth(1).locator(':scope > details')
+  await expect(expanded).toHaveAttribute('open', '')
+  const rowBox = await taskRows.nth(1).boundingBox()
+  const detailsBox = await expanded.boundingBox()
+  expect(detailsBox!.width).toBeGreaterThan(rowBox!.width * 0.9)
+  await expectNoHorizontalPageOverflow(page)
+  await page.getByText('待标注', { exact: true }).first().click()
+  await expect(taskRows).toHaveCount(1)
+})
+
+test('global labels are available without entering a project', async ({ page }) => {
+  await mockCaptureGroupApi(page, 'list')
+  await page.goto('/settings/annotation-label-library')
+  await expect(page.getByRole('heading', { name: '标签库', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '发布标签' })).toBeVisible()
+  await expectNoHorizontalPageOverflow(page)
+  await expectNoSeriousAxeViolations(page)
 })
 
 test('Local Upload — load and select files', async ({ page }) => {

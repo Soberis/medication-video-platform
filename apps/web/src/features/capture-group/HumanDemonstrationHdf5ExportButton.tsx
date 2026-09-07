@@ -5,7 +5,7 @@ import { AnnotationTaskApiError, downloadHumanDemonstrationHdf5 } from '@/api/an
 
 interface HumanDemonstrationHdf5ExportButtonProps {
   projectId: string
-  captureGroupIds?: string[]
+  captureGroupIds: string[]
   buttonText: string
   onSelect?: () => void
 }
@@ -21,7 +21,7 @@ export function HumanDemonstrationHdf5ExportButton({
   const [loading, setLoading] = useState(false)
 
   async function download() {
-    if (loading) return
+    if (loading || !captureGroupIds.length) return
     setLoading(true)
     try {
       const { blob, fileName } = await downloadHumanDemonstrationHdf5(projectId, captureGroupIds)
@@ -55,6 +55,7 @@ export function HumanDemonstrationHdf5ExportButton({
     <>
       <Button
         size="small"
+        disabled={!captureGroupIds.length}
         onClick={() => {
           onSelect?.()
           setOpen(true)
@@ -87,8 +88,7 @@ export function HumanDemonstrationHdf5ExportButton({
   )
 }
 
-function scopeLabel(captureGroupIds?: string[]) {
-  if (!captureGroupIds?.length) return '项目内全部已完成标注的采集记录'
+function scopeLabel(captureGroupIds: string[]) {
   return captureGroupIds.length === 1
     ? '当前采集记录'
     : `已选择的 ${captureGroupIds.length} 条采集记录`

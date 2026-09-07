@@ -250,20 +250,21 @@ class CaptureGroupAnnotationWorkflow {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		var review = this.reviewRepository.saveAndFlush(AnnotationReview.record(revision, request.decision(),
 				request.reviewNote(), actorId, idempotencyKey, now, groupContext));
+		var reviewReason = revision.getSubmittedBy().equals(actorId) ? "SELF_ADMIN_APPROVAL"
+				: "INDEPENDENT_ANNOTATION_REVIEW";
 		if (review.getDecision() == AnnotationReviewDecision.REJECTED) {
 			task.returnForRework(now);
 			this.taskRepository.saveAndFlush(task);
 		}
 		else {
-			evaluateCaptureGroupCleaning(projectId, revision, task, review, actorId, requestId, traceId,
-					"INDEPENDENT_ANNOTATION_REVIEW");
+			evaluateCaptureGroupCleaning(projectId, revision, task, review, actorId, requestId, traceId, reviewReason);
 			task.complete(now);
 			this.taskRepository.saveAndFlush(task);
 		}
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_REVISION_REVIEWED", "AnnotationReview", review.getAnnotationReviewId().toString(),
-				review.getDecision().name(), AuditOutcome.SUCCEEDED, "INDEPENDENT_ANNOTATION_REVIEW", requestId,
-				traceId, "PROJECT_MEMBERSHIP_ADMIN",
+				review.getDecision().name(), AuditOutcome.SUCCEEDED, reviewReason, requestId, traceId,
+				"PROJECT_MEMBERSHIP_ADMIN",
 				Map.of("annotation_revision_id", revision.getAnnotationRevisionId().toString(), "annotation_task_id",
 						revision.getAnnotationTaskId().toString(), "decision", review.getDecision().name(),
 						"reopened_for_rework",

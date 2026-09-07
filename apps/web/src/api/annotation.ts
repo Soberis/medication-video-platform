@@ -206,11 +206,13 @@ export async function listAnnotationTasks(
 }
 
 export async function getAnnotationLabelSchema(
-  projectId: string,
+  projectId: string | null,
   signal?: AbortSignal,
 ): Promise<AnnotationLabelSchema> {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema`,
+    projectId === null
+      ? '/api/v1/annotation-label-schema'
+      : `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema`,
     {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -223,11 +225,13 @@ export async function getAnnotationLabelSchema(
 }
 
 export async function createAnnotationLabel(
-  projectId: string,
+  projectId: string | null,
   request: CreateAnnotationLabelRequest,
 ): Promise<AnnotationLabelSchema> {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema/labels`,
+    projectId === null
+      ? '/api/v1/annotation-label-schema/labels'
+      : `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema/labels`,
     {
       method: 'POST',
       headers: {

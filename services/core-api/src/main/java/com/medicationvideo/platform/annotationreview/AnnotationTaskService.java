@@ -148,10 +148,6 @@ class AnnotationTaskService {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
 			.orElseThrow(AnnotationTaskService::revisionNotFound);
-		if (revision.getSubmittedBy().equals(actorId)) {
-			throw new AnnotationTaskException("ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN",
-					"The submitting member cannot independently review this annotation revision.", 403);
-		}
 		var existing = this.reviewRepository.findByAnnotationRevisionId(annotationRevisionId);
 		if (existing.isPresent()) {
 			var review = existing.get();
@@ -361,7 +357,7 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 	private static boolean canReview(AnnotationTask task, String actorId, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
-				&& review == null && !revision.getSubmittedBy().equals(actorId) && captureGroupQualityAdmitting;
+				&& review == null && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canRecheckCaptureGroupCleaning(AnnotationTask task, boolean projectAdministrator,

@@ -37,6 +37,11 @@ class AnnotationLabelSchemaService {
 	@Transactional(readOnly = true)
 	AnnotationLabelSchemaResponse getCurrent(UUID projectId, String actorId) {
 		this.projectAccessService.requireMember(projectId, actorId);
+		return getGlobalCurrent();
+	}
+
+	@Transactional(readOnly = true)
+	AnnotationLabelSchemaResponse getGlobalCurrent() {
 		var schema = currentSchema();
 		return AnnotationLabelSchemaResponse.from(schema,
 				this.definitionRepository.findAllByLabelSchemaIdOrderBySortOrder(schema.getLabelSchemaId()));
@@ -52,6 +57,17 @@ class AnnotationLabelSchemaService {
 	AnnotationLabelSchemaResponse addPrimaryStepLabel(UUID projectId, String actorId, String labelId,
 			String displayName, String description, String requestId, String traceId) {
 		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		return publishLabel(projectId, actorId, labelId, displayName, description, requestId, traceId);
+	}
+
+	@Transactional
+	AnnotationLabelSchemaResponse addGlobalLabel(String actorId, String labelId, String displayName, String description,
+			String requestId, String traceId) {
+		return publishLabel(null, actorId, labelId, displayName, description, requestId, traceId);
+	}
+
+	private AnnotationLabelSchemaResponse publishLabel(UUID projectId, String actorId, String labelId,
+			String displayName, String description, String requestId, String traceId) {
 		var current = this.schemaRepository.findByStatusForUpdate(AnnotationLabelSchemaStatus.ACTIVE)
 			.orElseThrow(() -> new IllegalStateException("The active annotation label schema is unavailable."));
 		var definitions = this.definitionRepository.findAllByLabelSchemaIdOrderBySortOrder(current.getLabelSchemaId());
@@ -76,7 +92,7 @@ class AnnotationLabelSchemaService {
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_LABEL_SCHEMA_PUBLISHED", "AnnotationLabelSchema", schemaId.toString(),
 				published.getSchemaDigest(), AuditOutcome.SUCCEEDED, "EXPLICIT_LABEL_LIBRARY_CHANGE", requestId,
-				traceId, "PROJECT_MEMBERSHIP_ADMIN",
+				traceId, projectId == null ? "PLATFORM_ADMIN" : "PROJECT_MEMBERSHIP_ADMIN",
 				Map.of("label_id", labelId, "previous_label_schema_id", current.getLabelSchemaId().toString())));
 		return AnnotationLabelSchemaResponse.from(published,
 				this.definitionRepository.findAllByLabelSchemaIdOrderBySortOrder(schemaId));

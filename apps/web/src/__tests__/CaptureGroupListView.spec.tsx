@@ -23,6 +23,57 @@ import CaptureGroupListView from '@/views/CaptureGroupListView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('capture group list view', () => {
+  it('filters the authorized task query, including tasks outside the loaded video page', async () => {
+    const loaded = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const outsideId = '60000000-0000-4000-8000-000000000099'
+    stubGroupList([loaded], [groupTask(outsideId, true)], { nextCursor: 'more' })
+    renderView()
+    await userEvent.setup().click(screen.getByText('待标注', { exact: true }))
+    const taskRow = await screen.findByRole('listitem', { name: /待标注/ })
+    expect(taskRow).toHaveTextContent('60000000')
+    expect(within(taskRow).getByRole('link', { name: /标注/ })).toHaveAttribute(
+      'href',
+      paths.captureGroupFocus(projectId, outsideId, 'annotation'),
+    )
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(taskRow.querySelector(':scope > .task-details')).not.toBeNull()
+  })
+
+  it('allows one or multiple explicit selections and explains unavailable rows', async () => {
+    const first = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const second = captureGroupFixture('60000000-0000-4000-8000-000000000099', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const pending = captureGroupFixture('60000000-0000-4000-8000-000000000088', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupList([first, second, pending], [approvedGroupTask(first), approvedGroupTask(second)])
+    renderRouter(
+      [{ path: '/projects/:projectId/capture-groups', element: <CaptureGroupListView /> }],
+      [paths.captureGroups(projectId)],
+      { username: 'admin', role: 'ADMIN' },
+    )
+    const checkboxes = await screen.findAllByRole('checkbox', { name: '选择导出' })
+    const user = userEvent.setup()
+    await user.click(checkboxes[0]!)
+    await user.click(checkboxes[1]!)
+    expect(screen.getByRole('checkbox', { name: '尚未标注' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '导出数据' }))
+    expect(screen.getByRole('button', { name: '导出已选择的 2 条记录' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /项目全部|选择全部/ })).not.toBeInTheDocument()
+  })
   it('keeps the data-group facts and optional human-label entry separate', async () => {
     const activeGroup = captureGroupFixture(groupId, {
       expected: [1],

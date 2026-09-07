@@ -80,8 +80,12 @@ describe('CaptureGroup Review and event cleaning', () => {
     })
     renderCaptureGroup()
 
-    expect(await screen.findByText('已有人工标签任务')).toBeInTheDocument()
-    expect(screen.getByText('已提交人工修订，等待有权限的复核人员处理。')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/标注已提交，等待有项目管理权限的管理员确认/),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.capture-group-workspace')).toHaveClass(
+      'capture-group-workspace-machine-evidence',
+    )
     expect(screen.queryByRole('button', { name: '通过复核' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退回修改' })).not.toBeInTheDocument()
   })

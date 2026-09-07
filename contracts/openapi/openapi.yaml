@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Medication Video Platform API
-  version: 0.54.0
+  version: 0.55.0
   description: >-
     P0 contract for the medication video data platform. Active capabilities create data projects,
     authenticate internal platform accounts with an HttpOnly session, manage project memberships,
@@ -2750,6 +2750,61 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /annotation-label-schema:
+    get:
+      operationId: getGlobalAnnotationLabelSchema
+      tags: [Annotation Tasks]
+      summary: Read the shared global immutable label library
+      description: Requires an authenticated platform account, without project membership. Existing tasks retain their bound schema.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Current global label schema.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationLabelSchema"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /annotation-label-schema/labels:
+    post:
+      operationId: addGlobalAnnotationPrimaryStepLabel
+      tags: [Annotation Tasks]
+      summary: Publish a shared global immutable label schema
+      description: Requires ROLE_ADMIN for a platform account, without project membership. Appends a label and records platform-scoped audit; existing tasks and revisions keep their schema and digest.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OptionalRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationLabelCreateRequest"
+      responses:
+        "201":
+          description: Newly published global label schema.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationLabelSchema"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Stable label identifier already exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-label-schema:
     get:
       operationId: getCurrentAnnotationLabelSchema
@@ -2947,9 +3002,9 @@ paths:
         - Annotation Tasks
       summary: Record one administrator decision for a submitted annotation revision
       description: >-
-        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership and a reviewer different from
-        the revision submitter. Self-review returns ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN; historical
-        SELF_ADMIN_APPROVAL audit facts remain unchanged. Approval requires verified media duration
+        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. Administrators may confirm
+        their own submissions; no second person is required. Immutable audit facts remain unchanged.
+        Approval requires verified media duration
         and in-bounds segments; rejection remains available for rework. The CaptureGroup quality
         admission and confirmed View Set must remain current. P0 records one immutable APPROVED or
         REJECTED decision. A rejection returns the task to its assignee; their next immutable revision

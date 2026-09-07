@@ -218,6 +218,15 @@ async function respondToApi(route: Route, data: MockData) {
   if (pathname === '/api/v1/auth/session') {
     return json(route, { username: 'synthetic-reviewer', role: 'ADMIN' })
   }
+  if (pathname === `/api/v1/projects/${projectId}`) {
+    return json(route, {
+      project_id: projectId,
+      display_name: '合成数据项目',
+      status: 'ACTIVE',
+      current_role: 'ADMIN',
+      created_at: createdAt,
+    })
+  }
   if (pathname.endsWith('/capture-groups')) {
     return json(route, {
       items: data.groups.map((group) => ({

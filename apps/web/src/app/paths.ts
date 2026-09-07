@@ -10,8 +10,7 @@ export const paths = {
     `/projects/${encodeURIComponent(projectId)}/annotation-tasks`,
   captureGroupFocus,
   memberships: (projectId: string) => `/projects/${encodeURIComponent(projectId)}/members`,
-  annotationLabelLibrary: (projectId: string) =>
-    `/projects/${encodeURIComponent(projectId)}/annotation-label-library`,
+  annotationLabelLibrary: () => '/settings/annotation-label-library',
   accounts: '/admin/users',
   uploads: '/uploads',
   localUpload: '/uploads/new',

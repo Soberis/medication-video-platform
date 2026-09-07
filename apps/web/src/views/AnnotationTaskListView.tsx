@@ -122,7 +122,13 @@ function taskEvidenceTone(
     : 'neutral'
 }
 
-export default function AnnotationTaskListView() {
+export default function AnnotationTaskListView({
+  filter = 'tasks',
+  embedded = false,
+}: {
+  filter?: string
+  embedded?: boolean
+}) {
   const { projectId = '' } = useParams()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
@@ -176,17 +182,32 @@ export default function AnnotationTaskListView() {
     }
   }, [loadTasks])
 
+  const visibleItems = items.filter((task) => {
+    if (filter === 'mine') return task.can_submit || task.can_select_primary || task.can_review
+    if (filter === 'assigned') return taskStatusLabel(task) === '待标注'
+    if (filter === 'submitted') return task.status === 'SUBMITTED'
+    if (filter === 'rework') return taskStatusLabel(task) === '待返工'
+    if (filter === 'completed') return task.status === 'COMPLETED'
+    return true
+  })
+
   return (
     <>
-      <PageHeader
-        titleId="annotation-task-title"
-        title="标注任务"
-        actions={
-          <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-            刷新
-          </Button>
-        }
-      />
+      {!embedded ? (
+        <PageHeader
+          titleId="annotation-task-title"
+          title="标注任务"
+          actions={
+            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+              刷新
+            </Button>
+          }
+        />
+      ) : (
+        <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+          刷新任务
+        </Button>
+      )}
       {loadState === 'loading' ? <LoadingState>正在加载标注任务…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadTasks()}>
@@ -208,14 +229,14 @@ export default function AnnotationTaskListView() {
           </span>
         </section>
       ) : null}
-      {loadState === 'success' && items.length ? (
+      {loadState === 'success' && visibleItems.length ? (
         <Section
           className="annotation-task-queue"
           title="任务队列"
           titleId="annotation-task-queue-title"
         >
           <ul className="annotation-task-list-surface" aria-label="标注任务列表">
-            {items.map((row) => {
+            {visibleItems.map((row) => {
               const captureGroupId = row.capture_group_id
               const taskSubject = `采集记录 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
@@ -394,12 +415,10 @@ export default function AnnotationTaskListView() {
                               </small>
                             ) : null}
                           </p>
-                          {taskDetails}
                         </div>
                       ) : (
                         <div className="task-evidence-summary">
                           <span className="muted-text">尚未提交</span>
-                          {taskDetails}
                         </div>
                       )}
                     </div>
@@ -424,13 +443,14 @@ export default function AnnotationTaskListView() {
                           ))}
                     </div>
                   </footer>
+                  {taskDetails}
                 </li>
               )
             })}
           </ul>
         </Section>
       ) : null}
-      {loadState === 'success' && !items.length ? (
+      {loadState === 'success' && !visibleItems.length ? (
         <EmptyState description="当前没有需要处理的标注任务。" />
       ) : null}
     </>

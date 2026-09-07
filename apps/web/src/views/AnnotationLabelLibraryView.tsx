@@ -1,6 +1,5 @@
 import { Alert, App as AntdApp, Button, Form, Input, Table } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
 
 import {
   AnnotationTaskApiError,
@@ -8,7 +7,6 @@ import {
   getAnnotationLabelSchema,
   type AnnotationLabelSchema,
 } from '@/api/annotation'
-import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -20,7 +18,6 @@ interface LabelFields {
 }
 
 export default function AnnotationLabelLibraryView() {
-  const { projectId = '' } = useParams()
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm<LabelFields>()
   const [schema, setSchema] = useState<AnnotationLabelSchema | null>(null)
@@ -34,7 +31,7 @@ export default function AnnotationLabelLibraryView() {
     requestRef.current = request
     setState('loading')
     try {
-      const result = await getAnnotationLabelSchema(projectId, request.signal)
+      const result = await getAnnotationLabelSchema(null, request.signal)
       if (requestRef.current === request) {
         setSchema(result)
         setState('success')
@@ -44,7 +41,7 @@ export default function AnnotationLabelLibraryView() {
     } finally {
       if (requestRef.current === request) requestRef.current = null
     }
-  }, [projectId])
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0)
@@ -58,7 +55,7 @@ export default function AnnotationLabelLibraryView() {
     if (saving) return
     setSaving(true)
     try {
-      const result = await createAnnotationLabel(projectId, {
+      const result = await createAnnotationLabel(null, {
         label_id: values.labelId.trim(),
         display_name: values.displayName.trim(),
         description: values.description.trim(),
@@ -77,11 +74,6 @@ export default function AnnotationLabelLibraryView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={paths.projects}>项目</Link>
-        <span aria-hidden="true">/</span>
-        <span>标签库</span>
-      </nav>
       <PageHeader
         eyebrow="全局标注规范"
         title="标签库"

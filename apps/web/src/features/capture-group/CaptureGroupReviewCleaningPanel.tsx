@@ -87,7 +87,9 @@ export function CaptureGroupReviewCleaningPanel({
     modal.confirm({
       title: approved ? '通过人工标签复核' : '退回人工标签修订',
       content: approved ? (
-        <p>确认这次人工标签修订内容可接受，并完成复核？</p>
+        <p>
+          确认本次标注内容正确？管理员可确认自己提交的标注，无需另一人复核。确认后仍须通过当前规则和来源检查才能导出。
+        </p>
       ) : (
         <div className="capture-group-review-confirmation">
           <p>退回这次人工标签修订，任务将回到原执行人并等待下一次修订。</p>
@@ -255,7 +257,7 @@ export function CaptureGroupReviewCleaningPanel({
         </Button>
       ) : null}
       {hasCompletedReviewAndCleaning ? (
-        <p role="status">标注已通过复核与规则检查，可从顶部导出数据。</p>
+        <p role="status">标注已确认并通过规则检查，可返回视频列表选择导出。</p>
       ) : null}
       {!task ? (
         <p className="form-hint">

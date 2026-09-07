@@ -711,7 +711,7 @@
   display: grid;
   grid-template-areas: 'identity status evidence action';
   grid-template-columns: minmax(180px, 1.15fr) minmax(92px, 0.55fr) minmax(180px, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: var(--app-space-16);
   min-width: 0;
   padding: var(--app-space-12) var(--app-space-8);
@@ -720,6 +720,10 @@
 
 .annotation-task-row:hover {
   background: var(--app-color-surface-muted);
+}
+
+.annotation-task-row > .task-details {
+  grid-column: 1 / -1;
 }
 
 .annotation-task-row:last-child {

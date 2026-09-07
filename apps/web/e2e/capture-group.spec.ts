@@ -93,25 +93,10 @@ test('optional annotation keeps preparation collapsed and never writes on open',
   await expect(page.getByRole('button', { name: '开始标注' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '标注前检查' })).toBeVisible()
   await expect(page.getByText('手部检测：检测中')).toBeVisible()
+  await page.getByText('修改整体质量结论', { exact: true }).click()
   await expect(page.getByRole('button', { name: '保存整体质量' })).toBeVisible()
   await page.getByRole('button', { name: '收起标注', exact: true }).click()
-  const exportMenu = page.getByRole('button', { name: '导出数据' })
-  await exportMenu.click()
-  await expect(page.getByRole('button', { name: '导出手部关键点' })).toBeVisible()
-  await expect(page.getByText('范围：当前视频（含各机位）')).toBeVisible()
-  await expect(page.getByText('尚未确认有可导出的标注。完成标注并通过复核后可导出。')).toBeVisible()
-  await expectNoSeriousAxeViolations(page)
-  await page.keyboard.press('Escape')
-  await expect(exportMenu).toHaveAttribute('aria-expanded', 'false')
-  await exportMenu.click()
-  await expect(exportMenu).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByText('范围：当前视频（含各机位）')).toBeVisible()
-  await expect(page).toHaveScreenshot('capture-group-export-1440.png', {
-    fullPage: true,
-    animations: 'disabled',
-  })
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: '导出数据' })).toBeFocused()
+  await expect(page.getByRole('button', { name: '导出数据' })).toHaveCount(0)
   await expectNoSeriousAxeViolations(page)
   await expectNoHorizontalPageOverflow(page)
   expect(mutations).toEqual([])
@@ -132,6 +117,18 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
       fullPage: true,
       animations: 'disabled',
     })
+    await page.getByRole('checkbox', { name: '选择导出' }).check()
+    await page.getByRole('button', { name: '导出数据' }).click()
+    await expect(page.getByRole('button', { name: '导出项目全部合格数据' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '导出已选择的 1 条记录' })).toBeVisible()
+    await expect(page).toHaveScreenshot('capture-group-export-1440.png', {
+      fullPage: true,
+      animations: 'disabled',
+    })
+    await page.getByRole('button', { name: '导出已选择的 1 条记录' }).click()
+    const exportDialog = page.getByRole('dialog', { name: '导出 HDF5 演示数据' })
+    await expect(exportDialog).toContainText('范围：当前采集记录')
+    await exportDialog.getByRole('button', { name: '取消' }).click()
   })
 
   test('1440 — N=1 active annotation workbench', async ({ page }) => {
@@ -148,7 +145,7 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
 
     const pageActions = page.getByRole('toolbar', { name: '页面操作' })
     await expect(pageActions.getByRole('button', { name: '导出人工标注' })).toHaveCount(0)
-    await expect(pageActions.getByRole('button', { name: '导出数据' })).toBeVisible()
+    await expect(pageActions.getByRole('button', { name: '导出数据' })).toHaveCount(0)
     const evidenceDetails = page.locator('details.capture-group-focused-details')
     await evidenceDetails.locator('summary').click()
     await expect(page.getByText('手部检测：检测中')).toBeVisible()
@@ -188,7 +185,7 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
     ).toHaveCount(0)
     await expect(
       page.getByRole('toolbar', { name: '页面操作' }).getByRole('button', { name: '导出数据' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(page.getByText('手部检测：检测中')).toBeVisible()
     await expect(evidenceDetails.getByRole('button', { name: '导出手部关键点' })).toHaveCount(0)
     await evidenceDetails.locator('summary').click()
@@ -218,15 +215,9 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
     const evidenceDetails = page.locator('details.capture-group-focused-details')
     await evidenceDetails.locator('summary').click()
     await expect(page.getByText('手部检测：已完成 · 检测到手部')).toBeVisible()
-    const exportMenu = page.getByRole('button', { name: '导出数据' })
-    await exportMenu.click()
-    await expect(page.getByRole('button', { name: '导出人工标注' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '导出手部关键点' })).toBeVisible()
-    await expect(page.getByText('范围：当前视频（含各机位）')).toBeVisible()
-    await page.keyboard.press('Escape')
     await expect(
       page.getByRole('toolbar', { name: '页面操作' }).getByRole('button', { name: '导出数据' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(evidenceDetails.getByRole('button', { name: '导出手部关键点' })).toHaveCount(0)
     await evidenceDetails.locator('summary').click()
 
@@ -274,7 +265,7 @@ test.describe('V1.27 CaptureGroup goldens · 720', () => {
     ).toHaveCount(0)
     await expect(
       page.getByRole('toolbar', { name: '页面操作' }).getByRole('button', { name: '导出数据' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(page.getByText('手部检测：检测中')).toBeVisible()
     await expect(evidenceDetails.getByRole('button', { name: '导出手部关键点' })).toHaveCount(0)
     await expectNoHorizontalPageOverflow(page)
@@ -302,15 +293,9 @@ test.describe('V1.27 CaptureGroup goldens · 720', () => {
     const evidenceDetails = page.locator('details.capture-group-focused-details')
     await evidenceDetails.locator('summary').click()
     await expect(page.getByText('手部检测：已完成 · 检测到手部')).toBeVisible()
-    const exportMenu = page.getByRole('button', { name: '导出数据' })
-    await exportMenu.click()
-    await expect(page.getByRole('button', { name: '导出人工标注' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '导出手部关键点' })).toBeVisible()
-    await expect(page.getByText('范围：当前视频（含各机位）')).toBeVisible()
-    await page.keyboard.press('Escape')
     await expect(
       page.getByRole('toolbar', { name: '页面操作' }).getByRole('button', { name: '导出数据' }),
-    ).toBeVisible()
+    ).toHaveCount(0)
     await expect(evidenceDetails.getByRole('button', { name: '导出手部关键点' })).toHaveCount(0)
     await expectNoHorizontalPageOverflow(page)
     await evidenceDetails.locator('summary').click()

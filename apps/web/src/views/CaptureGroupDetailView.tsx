@@ -150,8 +150,6 @@ export default function CaptureGroupDetailView() {
     if (humanTask && !taskDestination && !hasUnsavedAnnotation) {
       return (
         <section className="capture-group-human-label-status" aria-label="人工标签任务">
-          <p className="app-eyebrow">可选人工标签</p>
-          <h2>已有人工标签任务</h2>
           <p>{humanTaskStatusMessage(humanTask)}</p>
         </section>
       )
@@ -211,6 +209,7 @@ export default function CaptureGroupDetailView() {
 
   const humanLabelPanel = renderHumanLabelPanel()
   const actionPanel = humanLabelPanel ?? humanLabelSetup
+  const isWaitingPanel = Boolean(humanTask && !taskDestination && !hasUnsavedAnnotation)
 
   return (
     <>
@@ -285,7 +284,7 @@ export default function CaptureGroupDetailView() {
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
           <div
-            className={`capture-group-workspace${actionPanel && isPanelOpen ? '' : ' capture-group-workspace-machine-evidence'}`}
+            className={`capture-group-workspace${actionPanel && isPanelOpen && !isWaitingPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
             data-stage={
               actionPanel && isPanelOpen
                 ? taskDestination?.focus === 'annotation'
@@ -310,7 +309,7 @@ export default function CaptureGroupDetailView() {
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>
-            {actionPanel ? (
+            {actionPanel && !isWaitingPanel ? (
               <div
                 id="human-label-panel"
                 className="capture-group-action-column"
@@ -320,6 +319,11 @@ export default function CaptureGroupDetailView() {
               </div>
             ) : null}
           </div>
+          {isWaitingPanel ? (
+            <div id="human-label-panel" hidden={!isPanelOpen}>
+              {actionPanel}
+            </div>
+          ) : null}
           <details className="capture-group-record-details">
             <summary>更多信息</summary>
             {renderInspector()}
@@ -364,7 +368,8 @@ export default function CaptureGroupDetailView() {
 
 function humanTaskStatusMessage(task: AnnotationTask) {
   if (task.status === 'COMPLETED') return '该人工标签任务已完成，可查看修订与复核事实。'
-  if (task.status === 'SUBMITTED') return '已提交人工修订，等待有权限的复核人员处理。'
+  if (task.status === 'SUBMITTED')
+    return '标注已提交，等待有项目管理权限的管理员确认。管理员也可以确认自己提交的标注；当前不可操作时请检查项目权限与标注前检查状态。'
   if (task.annotation_revision?.review?.decision === 'REJECTED') {
     return '复核已退回该修订，等待任务执行人根据意见返工。'
   }

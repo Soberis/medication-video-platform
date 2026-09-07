@@ -190,7 +190,7 @@ export function CaptureGroupQualityPanel({
       title="标注前检查"
       titleId="capture-group-human-label-setup-title"
     >
-      <p className="form-hint">确认视频可用后，即可开始标注。</p>
+      <p className="form-hint">先检查当前机位，再确认整组参与标注的机位。两项结论独立保存。</p>
       <div className="capture-group-progressive-detail-content">
         {selectedStream && selectedDetail ? (
           <QualityReviewCard
@@ -244,7 +244,15 @@ export function CaptureGroupQualityPanel({
             <Alert type="warning" showIcon title="整体质量暂不可用" description="请刷新后重试。" />
           ) : null}
           {qualityReadable ? (
-            <>
+            <details
+              className="quality-review-editor"
+              open={!currentGroupQualityAdmitting(groupQuality)}
+            >
+              <summary>
+                {currentGroupQualityAdmitting(groupQuality)
+                  ? '修改整体质量结论'
+                  : '记录整体质量结论'}
+              </summary>
               {receiving ? (
                 <Alert
                   type="info"
@@ -300,7 +308,7 @@ export function CaptureGroupQualityPanel({
               >
                 保存整体质量
               </Button>
-            </>
+            </details>
           ) : null}
         </InspectorSection>
       </div>

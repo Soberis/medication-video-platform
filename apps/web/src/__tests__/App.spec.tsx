@@ -185,10 +185,10 @@ describe('App', () => {
       'href',
       `/projects/${projectId}/capture-groups`,
     )
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: '标注任务' })).not.toBeInTheDocument()
   })
 
-  it('marks the annotation task list as the active workspace navigation', () => {
+  it('does not restore a duplicate navigation entry for legacy task URLs', () => {
     const projectId = '30000000-0000-4000-8000-000000000001'
     renderRouter(
       [
@@ -208,10 +208,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    )
+    expect(within(navigation).queryByRole('link', { name: '标注任务' })).not.toBeInTheDocument()
     expect(within(navigation).getByRole('link', { name: '视频' })).not.toHaveAttribute(
       'aria-current',
     )
@@ -266,9 +263,7 @@ describe('App', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '标注任务' })).not.toHaveAttribute(
-      'aria-current',
-    )
+    expect(within(navigation).queryByRole('link', { name: '标注任务' })).not.toBeInTheDocument()
     expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -276,7 +271,7 @@ describe('App', () => {
     expect(within(navigation).queryByText('设置')).not.toBeInTheDocument()
   })
 
-  it('only highlights local upload in the management menu on the local-upload page', () => {
+  it('keeps upload in the workspace and offers global labels without a project', () => {
     renderRouter(
       [
         {
@@ -294,9 +289,12 @@ describe('App', () => {
       'aria-current',
       'page',
     )
-    expect(within(navigation).getByText('设置').closest('.sidebar-nav-group')).toHaveAttribute(
+    expect(within(navigation).getByText('设置').closest('.sidebar-nav-group')).not.toHaveAttribute(
       'data-active',
-      'true',
+    )
+    expect(within(navigation).getByRole('link', { name: '标签库', hidden: true })).toHaveAttribute(
+      'href',
+      paths.annotationLabelLibrary(),
     )
     expect(within(navigation).queryByText('上传排障')).not.toBeInTheDocument()
   })

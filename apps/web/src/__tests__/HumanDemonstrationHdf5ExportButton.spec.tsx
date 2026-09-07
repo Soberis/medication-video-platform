@@ -9,7 +9,7 @@ const projectId = '30000000-0000-4000-8000-000000000001'
 const captureGroupId = '49de2828-0000-4000-8000-000000000001'
 
 describe('HDF5 demonstration export', () => {
-  it('offers selected-record and whole-project HDF5 exports', async () => {
+  it('only offers explicitly selected records and confirms the scope', async () => {
     const user = userEvent.setup()
     render(
       <AntdApp>
@@ -19,13 +19,11 @@ describe('HDF5 demonstration export', () => {
 
     await user.click(screen.getByRole('button', { name: '导出数据' }))
     expect(screen.getByRole('button', { name: '导出已选择的 1 条记录' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '导出项目全部合格数据' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '导出项目全部合格数据' }))
+    expect(screen.queryByRole('button', { name: '导出项目全部合格数据' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '导出已选择的 1 条记录' }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(
-      within(dialog).getByText('范围：项目内全部已完成标注的采集记录', { exact: false }),
-    ).toBeInTheDocument()
+    expect(within(dialog).getByText('范围：当前采集记录', { exact: false })).toBeInTheDocument()
     expect(dialog).toHaveTextContent('不包含 MP4、对象存储地址、患者身份或机器人控制动作')
   })
 })

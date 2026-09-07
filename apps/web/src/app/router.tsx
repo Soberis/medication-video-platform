@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router'
+import { createBrowserRouter, Navigate, Outlet, useLocation, useParams } from 'react-router'
 
 import AppShell from '@/App'
 import { useAuth } from '@/app/auth'
@@ -9,6 +9,11 @@ import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 function RouteLoading() {
   return <LoadingState>正在加载页面…</LoadingState>
+}
+
+function LegacyTaskRedirect() {
+  const { projectId = '' } = useParams()
+  return <Navigate replace to={`${paths.captureGroups(projectId)}?view=tasks`} />
 }
 
 function AuthenticationBoundary() {
@@ -69,9 +74,7 @@ export const router = createBrowserRouter([
           },
           {
             path: '/projects/:projectId/annotation-tasks',
-            lazy: async () => ({
-              Component: (await import('@/views/AnnotationTaskListView')).default,
-            }),
+            Component: LegacyTaskRedirect,
           },
           {
             path: paths.uploads,
@@ -94,6 +97,10 @@ export const router = createBrowserRouter([
               },
               {
                 path: '/projects/:projectId/annotation-label-library',
+                element: <Navigate replace to={paths.annotationLabelLibrary()} />,
+              },
+              {
+                path: paths.annotationLabelLibrary(),
                 lazy: async () => ({
                   Component: (await import('@/views/AnnotationLabelLibraryView')).default,
                 }),

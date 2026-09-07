@@ -95,6 +95,8 @@ export function stubGroupList(
       if (options.taskListError) return Promise.reject(new Error('TASK_LIST_UNAVAILABLE'))
       return Promise.resolve(jsonResponse(taskList(tasks, options.taskScope)))
     }
+    if (path.endsWith('/annotation-label-schema'))
+      return Promise.resolve(jsonResponse(labelSchema()))
     const group = groups.find((candidate) =>
       url.endsWith(`/capture-groups/${candidate.capture_group_id}`),
     )

@@ -264,6 +264,29 @@ describe('annotation task API', () => {
     )
   })
 
+  it('reads and publishes the global library without project context', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(jsonResponse({ labels: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+    await getAnnotationLabelSchema(null)
+    await createAnnotationLabel(null, {
+      label_id: 'verify_dose',
+      display_name: '核对剂量',
+      description: '核对剂量。',
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/annotation-label-schema',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/annotation-label-schema/labels',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
   it('submits an immutable time-range annotation revision with a fresh idempotency key', async () => {
     const taskId = '30000000-0000-4000-8000-000000000003'
     const fetchMock = vi.fn().mockResolvedValue(
