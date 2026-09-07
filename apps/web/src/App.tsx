@@ -24,6 +24,7 @@ const managementRoutePatterns = [
   '/projects/:projectId/members',
   paths.uploads,
   paths.localUpload,
+  '/projects/:projectId/annotation-label-library',
   paths.accounts,
 ] as const
 
@@ -197,6 +198,17 @@ export default function AppShell() {
                   >
                     <UsersRound {...iconProps} />
                     <span className="sidebar-label">项目成员</span>
+                  </NavLink>
+                ) : null}
+                {projectId && isAdministrator ? (
+                  <NavLink
+                    end
+                    to={paths.annotationLabelLibrary(projectId)}
+                    aria-label="标签库"
+                    title="标签库"
+                  >
+                    <ListChecks {...iconProps} />
+                    <span className="sidebar-label">标签库</span>
                   </NavLink>
                 ) : null}
                 {isAdministrator ? (

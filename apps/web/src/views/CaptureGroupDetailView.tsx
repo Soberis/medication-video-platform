@@ -17,7 +17,6 @@ import {
   createGroupViewRows,
   type GroupViewRow,
 } from '@/features/capture-group/capture-group-detail-model'
-import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-group-detail-data'
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 import {
@@ -25,7 +24,6 @@ import {
   captureGroupReviewCleaningFallbackTargetId,
   captureGroupTaskDestination,
   captureGroupFocusTargetIds,
-  isHumanAnnotationExportReady,
 } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
 import type { AnnotationTask } from '@/api/annotation'
@@ -251,14 +249,6 @@ export default function CaptureGroupDetailView() {
               >
                 结束接收
               </Button>
-            ) : null}
-            {session?.role === 'ADMIN' && data.group ? (
-              <ExportDataMenu
-                key={captureGroupId}
-                projectId={projectId}
-                captureGroupId={captureGroupId}
-                humanReady={isHumanAnnotationExportReady(humanTask)}
-              />
             ) : null}
             <Button
               size="small"

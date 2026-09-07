@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   assignCaptureGroupHumanLabelTask,
-  downloadHumanAnnotationExport,
+  createAnnotationLabel,
+  downloadHumanDemonstrationHdf5,
   getAnnotationLabelSchema,
   listAnnotationTasks,
   recheckCaptureGroupCleaning,
@@ -36,23 +37,23 @@ const emptyProgress = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task API', () => {
-  it('downloads the approved human annotation CSV with the server filename', async () => {
-    const fileName = 'human_annotations_v1_event_60000000_20260905T010203Z.csv'
+  it('downloads the approved HDF5 demonstration with the server filename', async () => {
+    const fileName = 'human_demonstration_hdf5_v1_event_60000000_20260905T010203Z.hdf5'
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response('capture_group_id,label\n', {
+      new Response(new Uint8Array([0x89, 0x48, 0x44, 0x46]), {
         headers: { 'Content-Disposition': `attachment; filename="${fileName}"` },
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(downloadHumanAnnotationExport(projectId, captureGroupId)).resolves.toMatchObject({
-      fileName,
-    })
+    await expect(
+      downloadHumanDemonstrationHdf5(projectId, [captureGroupId]),
+    ).resolves.toMatchObject({ fileName })
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/human-annotations/v1/download?capture_group_id=${captureGroupId}`,
+      `/api/v1/projects/${projectId}/human-demonstrations/hdf5/v1/download?capture_group_id=${captureGroupId}`,
       expect.objectContaining({
         method: 'GET',
-        headers: { Accept: 'text/csv; charset=UTF-8' },
+        headers: { Accept: 'application/x-hdf5' },
         cache: 'no-store',
       }),
     )
@@ -234,6 +235,32 @@ describe('annotation task API', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
       expect.objectContaining({ method: 'GET', cache: 'no-store', signal }),
+    )
+  })
+
+  it('publishes a new immutable label schema', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ label_schema_id: labelSchemaId, labels: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      createAnnotationLabel(projectId, {
+        label_id: 'verify_dose',
+        display_name: '核对剂量',
+        description: '核对本次已配制剂量。',
+      }),
+    ).resolves.toMatchObject({ label_schema_id: labelSchemaId })
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-label-schema/labels`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          label_id: 'verify_dose',
+          display_name: '核对剂量',
+          description: '核对本次已配制剂量。',
+        }),
+      }),
     )
   })
 

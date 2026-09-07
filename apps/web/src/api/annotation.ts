@@ -61,6 +61,12 @@ export interface AnnotationLabelSchema {
   labels: AnnotationLabel[]
 }
 
+export interface CreateAnnotationLabelRequest {
+  label_id: string
+  display_name: string
+  description: string
+}
+
 export interface AnnotationRevision {
   annotation_revision_id: string
   project_id: string
@@ -216,6 +222,27 @@ export async function getAnnotationLabelSchema(
   throw await annotationTaskApiError(response)
 }
 
+export async function createAnnotationLabel(
+  projectId: string,
+  request: CreateAnnotationLabelRequest,
+): Promise<AnnotationLabelSchema> {
+  const response = await fetch(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema/labels`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...csrfHeaders(),
+      },
+      cache: 'no-store',
+      body: JSON.stringify(request),
+    },
+  )
+  if (response.ok) return (await response.json()) as AnnotationLabelSchema
+  throw await annotationTaskApiError(response)
+}
+
 export async function assignCaptureGroupHumanLabelTask(
   projectId: string,
   captureGroupId: string,
@@ -330,17 +357,20 @@ export async function recheckCaptureGroupCleaning(
   throw await annotationTaskApiError(response)
 }
 
-export async function downloadHumanAnnotationExport(
+export async function downloadHumanDemonstrationHdf5(
   projectId: string,
-  captureGroupId?: string,
+  captureGroupIds?: string[],
   signal?: AbortSignal,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const query = captureGroupId ? `?capture_group_id=${encodeURIComponent(captureGroupId)}` : ''
+  const query = new URLSearchParams()
+  for (const captureGroupId of captureGroupIds ?? [])
+    query.append('capture_group_id', captureGroupId)
+  const querySuffix = query.size ? `?${query}` : ''
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/human-annotations/v1/download${query}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v1/download${querySuffix}`,
     {
       method: 'GET',
-      headers: { Accept: 'text/csv; charset=UTF-8' },
+      headers: { Accept: 'application/x-hdf5' },
       cache: 'no-store',
       signal,
     },
@@ -350,7 +380,7 @@ export async function downloadHumanAnnotationExport(
     blob: await response.blob(),
     fileName:
       response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ??
-      `human_annotations_v1_${captureGroupId ? 'event' : 'project'}.csv`,
+      `human_demonstration_hdf5_v1_${captureGroupIds?.length ? 'selection' : 'project'}.hdf5`,
   }
 }
 
@@ -394,10 +424,11 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
       '当前采集记录的标注修订、复核或任务状态不允许重新执行标注检查。',
     ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED:
       '标注检查不接受浏览器提供的视图映射；请刷新后重试。',
-    HUMAN_ANNOTATION_EXPORT_UNAVAILABLE: '暂未开放人工标注导出。',
-    HUMAN_ANNOTATION_EXPORT_NOT_READY: '当前没有审核通过的人工标注，暂时不能导出。',
-    HUMAN_ANNOTATION_EXPORT_DATA_INVALID: '人工标注数据校验未通过，请刷新后重试。',
-    HUMAN_ANNOTATION_EXPORT_FAILED: '人工标注导出未完成，请稍后重试。',
+    HDF5_EXPORT_UNAVAILABLE: 'HDF5 演示数据仅对合成数据配置开放。',
+    HDF5_EXPORT_NOT_READY: '当前没有审核通过的人工标注，暂时不能导出 HDF5 演示数据。',
+    HDF5_EXPORT_DATA_INVALID: 'HDF5 演示数据的当前来源校验未通过，请刷新后重试。',
+    HDF5_EXPORT_FAILED: 'HDF5 演示数据未能生成，请稍后重试。',
+    ANNOTATION_LABEL_ALREADY_EXISTS: '当前标签库中已存在相同的稳定标签 ID。',
     INVALID_ANNOTATION_TASK: '提交内容不符合当前标注规范，请检查后重试。',
     PROJECT_ACCESS_DENIED: '当前身份没有执行此标注操作的权限。',
   }

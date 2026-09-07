@@ -39,6 +39,19 @@ class AnnotationLabelDefinition {
 	protected AnnotationLabelDefinition() {
 	}
 
+	static AnnotationLabelDefinition define(UUID labelDefinitionId, UUID labelSchemaId, String labelId,
+			String displayNameZh, String descriptionZh, int sortOrder) {
+		var definition = new AnnotationLabelDefinition();
+		definition.labelDefinitionId = labelDefinitionId;
+		definition.labelSchemaId = labelSchemaId;
+		definition.labelId = labelId;
+		definition.labelType = AnnotationLabelType.PRIMARY_STEP;
+		definition.displayNameZh = displayNameZh;
+		definition.descriptionZh = descriptionZh;
+		definition.sortOrder = sortOrder;
+		return definition;
+	}
+
 	UUID getLabelSchemaId() {
 		return this.labelSchemaId;
 	}

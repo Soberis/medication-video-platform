@@ -74,8 +74,7 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
-    const exportButton = await screen.findByRole('button', { name: '导出数据' })
-    expect(exportButton.closest('details')).toBeNull()
+    expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '标注' }))
     await user.click(await screen.findByRole('button', { name: '开始标注' }))
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()

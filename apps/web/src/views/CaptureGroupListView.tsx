@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Checkbox } from 'antd'
 import { ArrowRight, RefreshCw, Video } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
@@ -67,11 +67,25 @@ export default function CaptureGroupListView() {
   const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
     status: 'loading',
   })
+  const [selectedExportIds, setSelectedExportIds] = useState<Set<string>>(() => new Set())
   const groupRequest = useRef<RequestToken | null>(null)
   const taskRequest = useRef<RequestToken | null>(null)
   const groupGeneration = useRef(0)
   const taskGeneration = useRef(0)
   const rowsRef = useRef<CaptureGroupSummary[]>([])
+  const exportableGroupIds =
+    taskReadState.status === 'success'
+      ? rows
+          .filter((group) =>
+            taskReadState.items.some(
+              (task) =>
+                task.capture_group_id === group.capture_group_id &&
+                isHumanAnnotationExportReady(task),
+            ),
+          )
+          .map((group) => group.capture_group_id)
+      : []
+  const selectedExportGroupIds = exportableGroupIds.filter((id) => selectedExportIds.has(id))
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
@@ -218,11 +232,24 @@ export default function CaptureGroupListView() {
                 <ExportDataMenu
                   key={projectId}
                   projectId={projectId}
-                  humanReady={
-                    taskReadState.status === 'success' &&
-                    taskReadState.items.some(isHumanAnnotationExportReady)
-                  }
+                  selectedCaptureGroupIds={selectedExportGroupIds}
                 />
+                <Button
+                  size="small"
+                  disabled={!exportableGroupIds.length}
+                  onClick={() =>
+                    setSelectedExportIds(
+                      selectedExportGroupIds.length === exportableGroupIds.length
+                        ? new Set()
+                        : new Set(exportableGroupIds),
+                    )
+                  }
+                >
+                  {selectedExportGroupIds.length === exportableGroupIds.length &&
+                  exportableGroupIds.length
+                    ? '取消全选'
+                    : `选择全部可导出（${exportableGroupIds.length}）`}
+                </Button>
               </>
             ) : null}
             <Button
@@ -280,6 +307,7 @@ export default function CaptureGroupListView() {
                       (candidate) => candidate.capture_group_id === group.capture_group_id,
                     )
                   : undefined
+              const exportable = Boolean(task && isHumanAnnotationExportReady(task))
               return (
                 <div
                   className="capture-group-list-row"
@@ -344,6 +372,21 @@ export default function CaptureGroupListView() {
                     </div>
                   </dl>
                   <footer className="capture-group-list-row-footer">
+                    {session?.role === 'ADMIN' && exportable ? (
+                      <Checkbox
+                        checked={selectedExportIds.has(group.capture_group_id)}
+                        onChange={(event) => {
+                          setSelectedExportIds((current) => {
+                            const next = new Set(current)
+                            if (event.target.checked) next.add(group.capture_group_id)
+                            else next.delete(group.capture_group_id)
+                            return next
+                          })
+                        }}
+                      >
+                        选择导出
+                      </Checkbox>
+                    ) : null}
                     <Link
                       className="capture-group-list-open"
                       aria-label={`查看视频：${identityLabel}`}

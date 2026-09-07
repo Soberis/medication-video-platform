@@ -2,17 +2,14 @@ import { Button, Popover } from 'antd'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
 
-import { HandLandmarkExportButton } from './HandLandmarkExportButton'
-import { HumanAnnotationExportButton } from './HumanAnnotationExportButton'
+import { HumanDemonstrationHdf5ExportButton } from './HumanDemonstrationHdf5ExportButton'
 
 export function ExportDataMenu({
   projectId,
-  captureGroupId,
-  humanReady,
+  selectedCaptureGroupIds,
 }: {
   projectId: string
-  captureGroupId?: string
-  humanReady: boolean
+  selectedCaptureGroupIds: string[]
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -24,30 +21,24 @@ export function ExportDataMenu({
       placement="bottomRight"
       content={
         <div className="capture-group-export-options">
-          <p className="form-hint">
-            {captureGroupId ? '范围：当前视频（含各机位）' : '范围：整个项目'}
-          </p>
-          <section aria-label="MediaPipe 导出">
-            <strong>MediaPipe 手部关键点</strong>
-            <p>各相机的逐帧检测结果（CSV）。</p>
-            <HandLandmarkExportButton
-              projectId={projectId}
-              captureGroupId={captureGroupId}
-              onSelect={() => setOpen(false)}
-            />
-          </section>
-          <section aria-label="人工标注导出">
-            <strong>人工标注</strong>
-            <p>标注基准相机的动作、时间段与备注（CSV）。</p>
-            {humanReady ? (
-              <HumanAnnotationExportButton
+          <section aria-label="HDF5 演示数据导出">
+            <strong>HDF5 演示数据</strong>
+            <p>审核动作区间、标签来源与各机位当前可验证的 MediaPipe 手部关键点。</p>
+            {selectedCaptureGroupIds.length ? (
+              <HumanDemonstrationHdf5ExportButton
                 projectId={projectId}
-                captureGroupId={captureGroupId}
+                captureGroupIds={selectedCaptureGroupIds}
+                buttonText={`导出已选择的 ${selectedCaptureGroupIds.length} 条记录`}
                 onSelect={() => setOpen(false)}
               />
             ) : (
-              <p role="status">尚未确认有可导出的标注。完成标注并通过复核后可导出。</p>
+              <p role="status">可在列表中勾选已完成标注并通过复核的记录。</p>
             )}
+            <HumanDemonstrationHdf5ExportButton
+              projectId={projectId}
+              buttonText="导出项目全部合格数据"
+              onSelect={() => setOpen(false)}
+            />
           </section>
         </div>
       }

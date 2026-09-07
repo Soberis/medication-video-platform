@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryException;
 import com.medicationvideo.platform.iamproject.ProjectAccessException;
 
-@RestControllerAdvice(assignableTypes = HandLandmarkTrainingExportController.class)
+@RestControllerAdvice(assignableTypes = HumanDemonstrationHdf5ExportController.class)
 class TrainingDataExportExceptionHandler {
 
 	@ExceptionHandler(ProjectAccessException.class)

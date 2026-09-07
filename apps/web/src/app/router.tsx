@@ -93,6 +93,12 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: '/projects/:projectId/annotation-label-library',
+                lazy: async () => ({
+                  Component: (await import('@/views/AnnotationLabelLibraryView')).default,
+                }),
+              },
+              {
                 path: paths.accounts,
                 lazy: async () => ({
                   Component: (await import('@/views/AccountManagementView')).default,

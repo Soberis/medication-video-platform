@@ -21,47 +21,35 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectActor;
 
 @RestController
-@RequestMapping("/api/v1/projects/{projectId}/hand-landmarks/v1")
-class HandLandmarkTrainingExportController {
+@RequestMapping("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v1")
+class HumanDemonstrationHdf5ExportController {
 
-	private final HandLandmarkTrainingExportService service;
+	private final HumanDemonstrationHdf5ExportService service;
 
 	private final ProjectAccessService projectAccessService;
 
-	HandLandmarkTrainingExportController(HandLandmarkTrainingExportService service,
+	HumanDemonstrationHdf5ExportController(HumanDemonstrationHdf5ExportService service,
 			ProjectAccessService projectAccessService) {
 		this.service = service;
 		this.projectAccessService = projectAccessService;
 	}
 
-	@GetMapping("/preview")
-	ResponseEntity<HandLandmarkTrainingExportPreviewResponse> preview(@PathVariable UUID projectId,
-			@RequestParam(name = "capture_group_id", required = false) UUID captureGroupId,
+	@GetMapping(value = "/download", produces = HumanDemonstrationHdf5ExportService.MEDIA_TYPE)
+	ResponseEntity<byte[]> download(@PathVariable UUID projectId,
+			@RequestParam(name = "capture_group_id", required = false) java.util.List<UUID> captureGroupIds,
 			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.projectAccessService.requireAdministrator(projectId, actor.actorId());
 		var generatedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 		return ResponseEntity.ok()
 			.cacheControl(CacheControl.noStore())
-			.body(this.service.preview(projectId, captureGroupId, generatedAt));
-	}
-
-	@GetMapping(value = "/download", produces = HandLandmarkTrainingExportService.MEDIA_TYPE)
-	ResponseEntity<byte[]> download(@PathVariable UUID projectId,
-			@RequestParam(name = "capture_group_id", required = false) UUID captureGroupId,
-			@RequestParam(name = "generated_at", required = false) Instant generatedAt, Authentication authentication) {
-		var actor = requireActor(authentication);
-		this.projectAccessService.requireAdministrator(projectId, actor.actorId());
-		var effectiveGeneratedAt = generatedAt == null ? Instant.now().truncatedTo(ChronoUnit.SECONDS) : generatedAt;
-		return ResponseEntity.ok()
-			.cacheControl(CacheControl.noStore())
-			.contentType(MediaType.parseMediaType(HandLandmarkTrainingExportService.MEDIA_TYPE))
+			.contentType(MediaType.parseMediaType(HumanDemonstrationHdf5ExportService.MEDIA_TYPE))
 			.header(HttpHeaders.CONTENT_DISPOSITION,
 					ContentDisposition.attachment()
-						.filename(HandLandmarkTrainingExportService.fileName(captureGroupId, effectiveGeneratedAt))
+						.filename(HumanDemonstrationHdf5ExportService.fileName(captureGroupIds, generatedAt))
 						.build()
 						.toString())
-			.body(this.service.download(projectId, captureGroupId));
+			.body(this.service.download(projectId, captureGroupIds));
 	}
 
 	private static ProjectActor requireActor(Authentication authentication) {

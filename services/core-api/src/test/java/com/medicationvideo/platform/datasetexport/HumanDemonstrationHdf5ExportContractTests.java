@@ -31,6 +31,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import io.jhdf.HdfFile;
+
 import com.jayway.jsonpath.JsonPath;
 import com.medicationvideo.platform.support.ProjectMembershipTestData;
 import com.medicationvideo.platform.support.VerifiedMediaTestData;
@@ -38,7 +40,7 @@ import com.medicationvideo.platform.support.VerifiedMediaTestData;
 @SpringBootTest
 @org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 @ActiveProfiles("test")
-class HandLandmarkTrainingExportContractTests {
+class HumanDemonstrationHdf5ExportContractTests {
 
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000740");
 
@@ -78,440 +80,71 @@ class HandLandmarkTrainingExportContractTests {
 	}
 
 	@Test
-	void exportsCurrentCandidatesWithoutAnnotationReviewOrCleaning() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(header().string("Cache-Control", "no-store"))
-			.andExpect(jsonPath("$.schema_version").value("hand-landmarks.v1"))
-			.andExpect(jsonPath("$.hand_detection_view_count").value(1))
-			.andExpect(jsonPath("$.completed_view_count").value(1))
-			.andExpect(jsonPath("$.views_with_hand").value(1))
-			.andExpect(jsonPath("$.sample_count").value(1))
-			.andExpect(jsonPath("$.no_job_view_count").value(0))
-			.andExpect(jsonPath("$.queued_view_count").value(0))
-			.andExpect(jsonPath("$.running_view_count").value(0))
-			.andExpect(jsonPath("$.failed_view_count").value(0))
-			.andExpect(jsonPath("$.no_hand_view_count").value(0))
-			.andExpect(jsonPath("$.file_name").value(org.hamcrest.Matchers
-				.matchesPattern("mediapipe_hand_landmarks_v1_project_[0-9]{8}T[0-9]{6}Z\\.csv")))
-			.andExpect(jsonPath("$.generated_at").isString())
-			.andExpect(jsonPath("$.media_type").value("text/csv; charset=UTF-8"));
-
-		var lines = download(PROJECT_ID).lines().toList();
-		assertEquals(HandLandmarkTrainingExportService.CSV_COLUMNS, List.of(lines.getFirst().split(",", -1)));
-		var values = lines.get(1).split(",", -1);
-		assertEquals(HandLandmarkTrainingExportService.CSV_COLUMNS.size(), values.length);
-		assertEquals(group.captureGroupId().toString(), values[0]);
-		assertEquals(group.cameraStreamIds().getFirst().toString(), values[1]);
-		assertEquals("1", values[2]);
-		assertEquals(group.clipAssetIds().getFirst().toString(), values[3]);
-		assertEquals(SHA256, values[4]);
-		assertEquals(candidateId(ai.jobId()).toString(), values[5]);
-		assertEquals("520", values[6]);
-		assertEquals("0", values[7]);
-		assertEquals("LEFT", values[8]);
-		assertEquals("0.91", values[9]);
-		assertEquals("1280", values[10]);
-		assertEquals("720", values[11]);
-		assertEquals("21", values[12]);
-		assertEquals("0.1", values[13]);
-		assertEquals("0.2", values[14]);
-		assertEquals("0.2", values[15]);
-		assertEquals("0.3", values[16]);
-		assertEquals("0.101", values[17]);
-		assertEquals("0.201", values[18]);
-		assertEquals("-0.01", values[19]);
-		assertEquals(ai.jobId().toString(), values[80]);
-		assertEquals(ai.attemptId().toString(), values[81]);
-		assertEquals("1", values[82]);
-		assertEquals("MEDIAPIPE_HAND_LANDMARKER", values[83]);
-		assertEquals("v1", values[84]);
-		assertEquals(MODEL_SHA256, values[85]);
-		assertEquals(PROFILE_SHA256, values[86]);
-		assertEquals(SHA256, values[87]);
-		assertEquals(RESULT_SHA256, values[88]);
-		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("annotation_revision_id"));
-		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("action_label"));
-		assertFalse(List.of(lines.getFirst().split(",", -1)).contains("segment_start_ms"));
-	}
-
-	@Test
-	void currentSuccessIsExportedEvenWhenAnOldReviewSnapshotSaysRunning() throws Exception {
+	void exportsApprovedHumanLabelsAndCurrentMediapipeFactsAsReadableHdf5() throws Exception {
 		var group = createGroup(1, 1, "COMPLETE", 1);
 		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
 				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		var revisionId = approveRevision(group, 800, "stale-review");
-		this.jdbcTemplate.update("UPDATE annotation_review SET candidate_evidence = CAST(? AS JSONB) "
-				+ "WHERE annotation_revision_id = ?", "[{\"execution_status\":\"RUNNING\"}]", revisionId);
+		var revisionId = approveRevision(group, 900, "hdf5-export");
 
-		var lines = download(PROJECT_ID).lines().toList();
-		assertEquals(2, lines.size());
-		assertEquals(ai.jobId().toString(), lines.get(1).split(",", -1)[80]);
-	}
-
-	@Test
-	void noJobAndQueuedViewsRemainPendingWithoutInvalidatingTheGroup() throws Exception {
-		var noJob = createGroup(1, 1, "COMPLETE", 0);
-		var queued = createGroup(1, 1, "COMPLETE", 0);
-		insertAiJob(queued.clipAssetIds().getFirst(), "QUEUED", "UNKNOWN", "QUEUED", null, List.of());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
+		var bytes = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v1/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.hand_detection_view_count").value(2))
-			.andExpect(jsonPath("$.completed_view_count").value(0))
-			.andExpect(jsonPath("$.views_with_hand").value(0))
-			.andExpect(jsonPath("$.sample_count").value(0))
-			.andExpect(jsonPath("$.no_job_view_count").value(1))
-			.andExpect(jsonPath("$.queued_view_count").value(1))
-			.andExpect(jsonPath("$.running_view_count").value(0))
-			.andExpect(jsonPath("$.failed_view_count").value(0))
-			.andExpect(jsonPath("$.no_hand_view_count").value(0));
-		assertEquals(1, download(PROJECT_ID).lines().count());
-		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT COUNT(*) FROM camera_stream WHERE clip_asset_id = ?",
-				Integer.class, noJob.clipAssetIds().getFirst()));
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v1_project_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsByteArray();
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals("human-demonstration-hdf5.v1", file.getAttribute("schema_version").getData());
+			assertFalse(file.getChildren().containsKey("states"));
+			assertFalse(file.getChildren().containsKey("actions"));
+			var episode = file.getByPath("/data/demo_000000");
+			assertEquals(group.captureGroupId().toString(), episode.getAttribute("capture_group_id").getData());
+			assertEquals(revisionId.toString(), episode.getAttribute("annotation_revision_id").getData());
+			assertEquals(SHA256, episode.getAttribute("primary_clip_asset_sha256").getData());
+			assertEquals("prepare_workspace",
+					((String[]) file.getDatasetByPath("/data/demo_000000/annotations/label").getData())[0]);
+			assertEquals(900L,
+					((long[]) file.getDatasetByPath("/data/demo_000000/annotations/segment_end_ms").getData())[0]);
+			var candidates = "/data/demo_000000/views/camera_01/candidates/";
+			assertEquals(ai.jobId().toString(),
+					file.getByPath("/data/demo_000000/views/camera_01").getAttribute("ai_job_id").getData());
+			assertEquals(520L, ((long[]) file.getDatasetByPath(candidates + "frame_timestamp_ms").getData())[0]);
+			var landmarks = (float[][][]) file.getDatasetByPath(candidates + "landmarks").getData();
+			assertEquals(1, landmarks.length);
+			assertEquals(21, landmarks[0].length);
+			assertEquals(3, landmarks[0][0].length);
+		}
 	}
 
 	@Test
-	void runningViewIsCountedAndProducesNoRows() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		insertAiJob(group.clipAssetIds().getFirst(), "RUNNING", "UNKNOWN", "RUNNING", null, List.of());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.hand_detection_view_count").value(1))
-			.andExpect(jsonPath("$.completed_view_count").value(0))
-			.andExpect(jsonPath("$.running_view_count").value(1))
-			.andExpect(jsonPath("$.failed_view_count").value(0))
-			.andExpect(jsonPath("$.no_hand_view_count").value(0))
-			.andExpect(jsonPath("$.sample_count").value(0));
-		assertEquals(1, download(PROJECT_ID).lines().count());
-	}
-
-	@Test
-	void failedViewIsCountedWithoutInvalidatingTheGroup() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		insertAiJob(group.clipAssetIds().getFirst(), "FAILED", "UNKNOWN", "FAILED", "UNKNOWN", List.of());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.completed_view_count").value(1))
-			.andExpect(jsonPath("$.failed_view_count").value(1))
-			.andExpect(jsonPath("$.no_hand_view_count").value(0))
-			.andExpect(jsonPath("$.sample_count").value(0));
-	}
-
-	@Test
-	void successfulNoHandViewIsCountedWithoutInvalidatingTheGroup() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "NO_HAND_DETECTED", "SUCCEEDED", "NO_HAND_DETECTED",
-				List.of());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.completed_view_count").value(1))
-			.andExpect(jsonPath("$.failed_view_count").value(0))
-			.andExpect(jsonPath("$.no_hand_view_count").value(1))
-			.andExpect(jsonPath("$.sample_count").value(0));
-	}
-
-	@Test
-	void exportsCandidatesFromEveryEnabledCameraInNGreaterThanOne() throws Exception {
-		var group = createGroup(2, 2, "COMPLETE", 0);
-		var first = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		var second = insertAiJob(group.clipAssetIds().get(1), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(420, 0, "RIGHT", "0.9200", 2)));
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.hand_detection_view_count").value(2))
-			.andExpect(jsonPath("$.completed_view_count").value(2))
-			.andExpect(jsonPath("$.views_with_hand").value(2))
-			.andExpect(jsonPath("$.sample_count").value(2));
-
-		var lines = download(PROJECT_ID).lines().toList();
-		assertEquals(3, lines.size());
-		var firstValues = lines.get(1).split(",", -1);
-		var secondValues = lines.get(2).split(",", -1);
-		assertEquals("1", firstValues[2]);
-		assertEquals(group.cameraStreamIds().getFirst().toString(), firstValues[1]);
-		assertEquals(first.jobId().toString(), firstValues[80]);
-		assertEquals("2", secondValues[2]);
-		assertEquals(group.cameraStreamIds().get(1).toString(), secondValues[1]);
-		assertEquals(second.jobId().toString(), secondValues[80]);
-	}
-
-	@Test
-	void supportsProjectAndSingleCaptureGroupScopes() throws Exception {
-		var firstGroup = createGroup(1, 1, "COMPLETE", 0);
-		var secondGroup = createGroup(2, 2, "COMPLETE", 0);
-		insertAiJob(firstGroup.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+	void exportsOnlyTheCaptureGroupsSelectedFromTheVideoList() throws Exception {
+		var first = createGroup(1, 1, "COMPLETE", 1);
+		var second = createGroup(1, 1, "COMPLETE", 1);
+		insertAiJob(first.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
 				List.of(new CandidateSpec(100, 0, "LEFT", "0.9", 1)));
-		for (var assetId : secondGroup.clipAssetIds()) {
-			insertAiJob(assetId, "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-					List.of(new CandidateSpec(200, 0, "RIGHT", "0.8", 2)));
-		}
+		insertAiJob(second.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(200, 0, "RIGHT", "0.9", 2)));
+		approveRevision(first, 800, "first-selected-hdf5");
+		approveRevision(second, 800, "second-selected-hdf5");
 
-		var projectLines = download(PROJECT_ID).lines().toList();
-		assertEquals(4, projectLines.size());
-		assertEquals(2, projectLines.stream().skip(1).map(line -> line.split(",", -1)[0]).distinct().count());
-
-		var eventLines = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID)
-				.param("capture_group_id", secondGroup.captureGroupId().toString())
+		var bytes = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v1/download", PROJECT_ID)
+				.param("capture_group_id", second.captureGroupId().toString())
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"mediapipe_hand_landmarks_v1_event_"
-							+ secondGroup.captureGroupId().toString().substring(0, 8) + "_")))
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v1_event_")))
 			.andReturn()
 			.getResponse()
-			.getContentAsString(StandardCharsets.UTF_8)
-			.lines()
-			.toList();
-		assertEquals(3, eventLines.size());
-		assertEquals(List.of("1", "2"), eventLines.stream().skip(1).map(line -> line.split(",", -1)[2]).toList());
-		assertEquals(1, eventLines.stream().skip(1).map(line -> line.split(",", -1)[0]).distinct().count());
-		assertEquals(secondGroup.captureGroupId().toString(), eventLines.get(1).split(",", -1)[0]);
-	}
-
-	@Test
-	void exportsOnlyApprovedCurrentHumanAnnotationSegments() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		approveRevision(group, 900, "human-export");
-
-		var lines = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(header().string("Cache-Control", "no-store"))
-			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"human_annotations_v1_project_")))
-			.andReturn()
-			.getResponse()
-			.getContentAsString(StandardCharsets.UTF_8)
-			.lines()
-			.toList();
-		assertEquals(2, lines.size());
-		var columns = List.of(lines.getFirst().split(",", -1));
-		var values = lines.get(1).split(",", -1);
-		assertEquals(columns.size(), values.length);
-		assertEquals(group.captureGroupId().toString(), values[columns.indexOf("capture_group_id")]);
-		assertEquals("900", values[columns.indexOf("segment_end_ms")]);
-		assertEquals("prepare_workspace", values[columns.indexOf("label")]);
-		assertEquals("APPROVED", values[columns.indexOf("review_decision")]);
-		assertFalse(columns.contains("landmark_00_x"));
-		assertFalse(columns.contains("ai_job_id"));
-	}
-
-	@Test
-	void humanAnnotationExportRequiresApprovedCurrentInput() throws Exception {
-		createGroup(1, 1, "COMPLETE", 1);
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_NOT_READY"));
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN))
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
-	}
-
-	@Test
-	void humanExportRejectsQualityRevokedAfterApprovalWithoutReassigningTask() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		approveRevision(group, 900, "revoked-human-export");
-		this.mockMvc
-			.perform(put("/api/v1/projects/{projectId}/capture-groups/{groupId}/quality-review", PROJECT_ID,
-					group.captureGroupId())
-				.header("Authorization", "Bearer " + MEMBER_TOKEN)
-				.header("Idempotency-Key", key("revoke-quality"))
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"result\":\"REJECTED\",\"reason\":\"Synthetic correction\",\"expected_revision\":1}"))
-			.andExpect(status().isOk());
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_DATA_INVALID"));
-		assertEquals("COMPLETED",
-				this.jdbcTemplate.queryForObject("SELECT task_status FROM annotation_task WHERE capture_group_id = ?",
-						String.class, group.captureGroupId()));
-	}
-
-	@Test
-	void humanExportRejectsViewQualityChangedAfterApprovalWithoutNewGroupDecision() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		approveRevision(group, 900, "changed-view-human-export");
-		this.mockMvc
-			.perform(put("/api/v1/projects/{projectId}/clip-assets/{clipId}/quality-review", PROJECT_ID,
-					group.clipAssetIds().getFirst())
-				.header("Authorization", "Bearer " + MEMBER_TOKEN)
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"REJECTED\",\"reason_code\":\"WRONG_SCENE\",\"expected_version\":0}"))
-			.andExpect(status().isOk());
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HUMAN_ANNOTATION_EXPORT_DATA_INVALID"));
-	}
-
-	@Test
-	void humanExportRejectsMissingOrShortenedMediaDuration() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		approveRevision(group, 900, "duration-human-export");
-		var clipId = group.clipAssetIds().getFirst();
-		this.jdbcTemplate.update("DELETE FROM media_report WHERE clip_asset_id = ?", clipId);
-		this.jdbcTemplate.update("DELETE FROM media_job WHERE clip_asset_id = ?", clipId);
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity());
-		VerifiedMediaTestData.insert(this.jdbcTemplate, PROJECT_ID, clipId, SHA256, 800_000);
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-annotations/v1/download", PROJECT_ID)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity());
-		assertEquals(1, this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_review WHERE project_id = ?",
-				Integer.class, PROJECT_ID));
-	}
-
-	@Test
-	void rejectsUnknownAndWrongProjectCaptureGroups() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID)
-				.param("capture_group_id", UUID.randomUUID().toString())
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_NOT_FOUND"));
-
-		ProjectMembershipTestData.ensureProject(this.jdbcTemplate, OTHER_PROJECT_ID);
-		try {
-			this.mockMvc
-				.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", OTHER_PROJECT_ID)
-					.param("capture_group_id", group.captureGroupId().toString())
-					.header("Authorization", "Bearer " + ADMIN_TOKEN))
-				.andExpect(status().isNotFound())
-				.andExpect(jsonPath("$.error_code").value("CAPTURE_GROUP_NOT_FOUND"));
+			.getContentAsByteArray();
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals(1, ((io.jhdf.api.Group) file.getByPath("/data")).getChildren().size());
+			assertEquals(second.captureGroupId().toString(),
+					file.getByPath("/data/demo_000000").getAttribute("capture_group_id").getData());
 		}
-		finally {
-			this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", OTHER_PROJECT_ID);
-			this.jdbcTemplate.update("DELETE FROM project WHERE project_id = ?", OTHER_PROJECT_ID);
-		}
-	}
-
-	@Test
-	void previewAndDownloadUseTheSameSortableFilename() throws Exception {
-		var first = HandLandmarkTrainingExportService.fileName(null, Instant.parse("2026-09-03T11:25:30Z"));
-		var second = HandLandmarkTrainingExportService.fileName(null, Instant.parse("2026-09-03T11:25:31Z"));
-		assertEquals("mediapipe_hand_landmarks_v1_project_20260903T112530Z.csv", first);
-		assertEquals(List.of(first, second), List.of(second, first).stream().sorted().toList());
-
-		var preview = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andReturn()
-			.getResponse()
-			.getContentAsString();
-		String fileName = JsonPath.read(preview, "$.file_name");
-		String generatedAt = JsonPath.read(preview, "$.generated_at");
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID)
-				.param("generated_at", generatedAt)
-				.header("Authorization", "Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(header().string("Content-Disposition", "attachment; filename=\"" + fileName + "\""));
-	}
-
-	@Test
-	void malformedTwentyPointCandidateFailsClosed() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		this.jdbcTemplate.update("UPDATE candidate_annotation SET valid_landmark_count = 20 WHERE ai_job_id = ?",
-				ai.jobId());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_DATA_INVALID"));
-	}
-
-	@Test
-	void aiInputShaMismatchFailsClosed() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		this.jdbcTemplate.update("UPDATE ai_job SET input_sha256 = ? WHERE ai_job_id = ?", "f".repeat(64), ai.jobId());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_EVIDENCE_INVALID"));
-	}
-
-	@Test
-	void softDeletedCurrentAssetHasNoValidExport() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 0);
-		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
-				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		this.jdbcTemplate.update(
-				"UPDATE clip_asset SET deleted_at = ?, deleted_by = ?, delete_reason = ? WHERE clip_asset_id = ?",
-				Timestamp.from(BASE_TIME), ProjectMembershipTestData.ADMIN_ACTOR, "synthetic-test",
-				group.clipAssetIds().getFirst());
-
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", PROJECT_ID).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isUnprocessableEntity())
-			.andExpect(jsonPath("$.error_code").value("HAND_LANDMARK_EXPORT_EVIDENCE_INVALID"));
-	}
-
-	@Test
-	void exportRequiresProjectAdministrator() throws Exception {
-		this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/preview", PROJECT_ID).header("Authorization",
-					"Bearer " + MEMBER_TOKEN))
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
-	}
-
-	private String download(UUID projectId) throws Exception {
-		return this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/hand-landmarks/v1/download", projectId).header("Authorization",
-					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(header().string("Cache-Control", "no-store"))
-			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"mediapipe_hand_landmarks_v1_project_")))
-			.andReturn()
-			.getResponse()
-			.getContentAsString(StandardCharsets.UTF_8);
 	}
 
 	private UUID approveRevision(GroupFixture group, int endMs, String prefix) throws Exception {

@@ -28,13 +28,25 @@ class AnnotationLabelSchema {
 	private String schemaDigest;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "status", nullable = false, updatable = false, length = 16)
+	@Column(name = "status", nullable = false, length = 16)
 	private AnnotationLabelSchemaStatus status;
 
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
 	protected AnnotationLabelSchema() {
+	}
+
+	static AnnotationLabelSchema publish(UUID labelSchemaId, String schemaKey, String schemaVersion,
+			String schemaDigest, Instant createdAt) {
+		var schema = new AnnotationLabelSchema();
+		schema.labelSchemaId = labelSchemaId;
+		schema.schemaKey = schemaKey;
+		schema.schemaVersion = schemaVersion;
+		schema.schemaDigest = schemaDigest;
+		schema.status = AnnotationLabelSchemaStatus.ACTIVE;
+		schema.createdAt = createdAt;
+		return schema;
 	}
 
 	UUID getLabelSchemaId() {
@@ -55,6 +67,10 @@ class AnnotationLabelSchema {
 
 	AnnotationLabelSchemaStatus getStatus() {
 		return this.status;
+	}
+
+	void retire() {
+		this.status = AnnotationLabelSchemaStatus.RETIRED;
 	}
 
 	Instant getCreatedAt() {

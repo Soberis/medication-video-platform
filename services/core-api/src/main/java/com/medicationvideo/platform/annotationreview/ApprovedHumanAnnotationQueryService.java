@@ -1,19 +1,14 @@
 package com.medicationvideo.platform.annotationreview;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,22 +20,9 @@ import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
-/** Exports the current, approved human action annotations as training labels. */
+/** Reads current, approved human action annotations for the HDF5 export. */
 @Service
-class HumanAnnotationTrainingExportService {
-
-	static final String SCHEMA_VERSION = "human-annotations.v1";
-
-	static final String MEDIA_TYPE = "text/csv; charset=UTF-8";
-
-	static final List<String> CSV_COLUMNS = List.of("capture_group_id", "annotation_task_id", "annotation_revision_id",
-			"revision_number", "camera_stream_id", "primary_clip_asset_id", "primary_camera_number",
-			"clip_asset_sha256", "annotation_schema_version", "label_schema_id", "label_schema_digest", "input_version",
-			"segment_start_ms", "segment_end_ms", "label", "annotation_note", "document_sha256", "submitted_at",
-			"annotation_review_id", "review_decision", "reviewed_at");
-
-	private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
-		.withZone(ZoneOffset.UTC);
+public class ApprovedHumanAnnotationQueryService {
 
 	private static final String SHA256_PATTERN = "^[a-f0-9]{64}$";
 
@@ -58,13 +40,10 @@ class HumanAnnotationTrainingExportService {
 
 	private final MediaDurationQueryService mediaDurationQueryService;
 
-	private final String dataProfile;
-
-	HumanAnnotationTrainingExportService(CaptureGroupViewQueryService captureGroupViewQueryService,
+	ApprovedHumanAnnotationQueryService(CaptureGroupViewQueryService captureGroupViewQueryService,
 			AnnotationTaskRepository taskRepository, AnnotationRevisionRepository revisionRepository,
 			AnnotationReviewRepository reviewRepository, CaptureGroupQualityQueryService groupQualityQueryService,
-			QualityReviewQueryService viewQualityQueryService, MediaDurationQueryService mediaDurationQueryService,
-			@Value("${platform.training-data-export.data-profile:disabled}") String dataProfile) {
+			QualityReviewQueryService viewQualityQueryService, MediaDurationQueryService mediaDurationQueryService) {
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.taskRepository = taskRepository;
 		this.revisionRepository = revisionRepository;
@@ -72,26 +51,28 @@ class HumanAnnotationTrainingExportService {
 		this.groupQualityQueryService = groupQualityQueryService;
 		this.viewQualityQueryService = viewQualityQueryService;
 		this.mediaDurationQueryService = mediaDurationQueryService;
-		this.dataProfile = dataProfile == null ? "" : dataProfile.trim().toLowerCase(Locale.ROOT);
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	byte[] download(UUID projectId, UUID captureGroupId) {
-		var rows = snapshot(projectId, captureGroupId);
-		if (rows.isEmpty()) {
-			throw new AnnotationTaskException("HUMAN_ANNOTATION_EXPORT_NOT_READY",
-					"No current human annotation has been approved for export.", 422);
-		}
-		return toCsv(rows);
+	public List<HumanAnnotationExportSegment> findApprovedSegments(UUID projectId, UUID captureGroupId) {
+		return findApprovedSegments(projectId, captureGroupId == null ? List.of() : List.of(captureGroupId));
 	}
 
-	static String fileName(UUID captureGroupId, Instant generatedAt) {
-		var scope = captureGroupId == null ? "project" : "event_" + captureGroupId.toString().substring(0, 8);
-		return "human_annotations_v1_%s_%s.csv".formatted(scope, FILE_TIMESTAMP.format(generatedAt));
+	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+	public List<HumanAnnotationExportSegment> findApprovedSegments(UUID projectId, List<UUID> captureGroupIds) {
+		var selectedIds = captureGroupIds == null ? java.util.Set.<UUID>of() : java.util.Set.copyOf(captureGroupIds);
+		return snapshot(projectId, null).stream()
+			.filter(row -> selectedIds.isEmpty() || selectedIds.contains(row.captureGroupId()))
+			.map(row -> new HumanAnnotationExportSegment(row.captureGroupId(), row.annotationTaskId(),
+					row.annotationRevisionId(), row.revisionNumber(), row.cameraStreamId(), row.primaryClipAssetId(),
+					row.primaryCameraNumber(), row.clipAssetSha256(), row.annotationSchemaVersion(),
+					row.labelSchemaId(), row.labelSchemaDigest(), row.inputVersion(), row.segmentStartMs(),
+					row.segmentEndMs(), row.label(), row.annotationNote(), row.documentSha256(), row.submittedAt(),
+					row.annotationReviewId(), row.reviewDecision(), row.reviewedAt()))
+			.toList();
 	}
 
 	private List<AnnotationRow> snapshot(UUID projectId, UUID captureGroupId) {
-		requireSyntheticProfile();
 		var groups = captureGroupId == null ? this.captureGroupViewQueryService.findAll(projectId)
 				: List.of(this.captureGroupViewQueryService.get(projectId, captureGroupId));
 		var factsByGroupId = groups.stream()
@@ -241,51 +222,6 @@ class HumanAnnotationTrainingExportService {
 		return rows;
 	}
 
-	private static byte[] toCsv(List<AnnotationRow> rows) {
-		var csv = new StringBuilder();
-		appendRecord(csv, CSV_COLUMNS);
-		for (var row : rows) {
-			appendRecord(csv,
-					List.of(row.captureGroupId().toString(), row.annotationTaskId().toString(),
-							row.annotationRevisionId().toString(), Integer.toString(row.revisionNumber()),
-							row.cameraStreamId().toString(), row.primaryClipAssetId().toString(),
-							Integer.toString(row.primaryCameraNumber()), row.clipAssetSha256(),
-							row.annotationSchemaVersion(), row.labelSchemaId().toString(), row.labelSchemaDigest(),
-							row.inputVersion(), Long.toString(row.segmentStartMs()), Long.toString(row.segmentEndMs()),
-							row.label(), row.annotationNote(), row.documentSha256(), row.submittedAt().toString(),
-							row.annotationReviewId().toString(), row.reviewDecision(), row.reviewedAt().toString()));
-		}
-		return csv.toString().getBytes(StandardCharsets.UTF_8);
-	}
-
-	private static void appendRecord(StringBuilder csv, List<String> values) {
-		for (var index = 0; index < values.size(); index += 1) {
-			if (index > 0) {
-				csv.append(',');
-			}
-			appendCell(csv, values.get(index));
-		}
-		csv.append('\n');
-	}
-
-	private static void appendCell(StringBuilder csv, String value) {
-		var needsQuotes = value.indexOf(',') >= 0 || value.indexOf('"') >= 0 || value.indexOf('\n') >= 0
-				|| value.indexOf('\r') >= 0;
-		if (!needsQuotes) {
-			csv.append(value);
-			return;
-		}
-		csv.append('"');
-		for (var index = 0; index < value.length(); index += 1) {
-			var character = value.charAt(index);
-			if (character == '"') {
-				csv.append('"');
-			}
-			csv.append(character);
-		}
-		csv.append('"');
-	}
-
 	private static Long exactLong(Object value) {
 		if (!(value instanceof Number)) {
 			return null;
@@ -295,14 +231,6 @@ class HumanAnnotationTrainingExportService {
 		}
 		catch (NumberFormatException exception) {
 			return null;
-		}
-	}
-
-	private void requireSyntheticProfile() {
-		if (!"synthetic".equals(this.dataProfile)) {
-			throw new AnnotationTaskException("HUMAN_ANNOTATION_EXPORT_UNAVAILABLE",
-					"Human annotation export is enabled only for the synthetic profile until a non-synthetic authorization model is defined.",
-					403);
 		}
 	}
 
