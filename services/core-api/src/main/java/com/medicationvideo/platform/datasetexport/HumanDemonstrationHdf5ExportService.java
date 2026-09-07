@@ -20,8 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.CandidateAnnotationSnapshot;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.CandidateEvidence;
-import com.medicationvideo.platform.annotationreview.HumanAnnotationExportSegment;
 import com.medicationvideo.platform.annotationreview.ApprovedHumanAnnotationQueryService;
+import com.medicationvideo.platform.annotationreview.HumanAnnotationExportSegment;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupFacts;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
@@ -65,7 +65,7 @@ class HumanDemonstrationHdf5ExportService {
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	byte[] download(UUID projectId, List<UUID> captureGroupIds) {
 		requireSyntheticProfile();
-		var selectedIds = captureGroupIds == null ? List.<UUID>of() : List.copyOf(captureGroupIds);
+		var selectedIds = captureGroupIds == null ? List.<UUID>of() : captureGroupIds.stream().distinct().toList();
 		var segments = this.approvedHumanAnnotationQueryService.findApprovedSegments(projectId, selectedIds);
 		if (segments.isEmpty()) {
 			throw unavailable("No current approved human annotation is ready for HDF5 export.");
@@ -73,6 +73,9 @@ class HumanDemonstrationHdf5ExportService {
 		var segmentsByGroup = segments.stream()
 			.collect(Collectors.groupingBy(HumanAnnotationExportSegment::captureGroupId,
 					Collectors.collectingAndThen(Collectors.toList(), List::copyOf)));
+		if (!selectedIds.isEmpty() && !segmentsByGroup.keySet().containsAll(selectedIds)) {
+			throw unavailable("One or more selected CaptureGroups are no longer eligible for HDF5 export.");
+		}
 		var groups = segmentsByGroup.keySet()
 			.stream()
 			.sorted(Comparator.comparing(UUID::toString))
@@ -127,6 +130,14 @@ class HumanDemonstrationHdf5ExportService {
 				.thenComparingLong(HumanAnnotationExportSegment::segmentEndMs))
 			.toList();
 		var first = orderedSegments.getFirst();
+		if (orderedSegments.stream()
+			.anyMatch(segment -> !first.annotationRevisionId().equals(segment.annotationRevisionId())
+					|| !first.primaryClipAssetId().equals(segment.primaryClipAssetId())
+					|| first.primaryCameraNumber() != segment.primaryCameraNumber()
+					|| !first.labelSchemaId().equals(segment.labelSchemaId())
+					|| !first.labelSchemaDigest().equals(segment.labelSchemaDigest()))) {
+			throw invalid("The approved annotation segments do not share one immutable source revision.");
+		}
 		episode.putAttribute("capture_group_id", group.captureGroupId().toString());
 		episode.putAttribute("primary_clip_asset_id", first.primaryClipAssetId().toString());
 		episode.putAttribute("primary_camera_number", first.primaryCameraNumber());
@@ -161,11 +172,103 @@ class HumanDemonstrationHdf5ExportService {
 			.collect(Collectors.toMap(CandidateEvidence::clipAssetId, evidence -> evidence, (left, right) -> {
 				throw invalid("The current MediaPipe evidence contains duplicate ClipAsset entries.");
 			}));
+		writeLabeledSampleTable(episode, orderedSegments, group, evidenceByAsset, first, projectId);
 		var viewGroup = episode.putGroup("views");
 		for (var view : views) {
 			writeView(viewGroup.putGroup("camera_%02d".formatted(view.cameraNumber())), view,
 					evidenceByAsset.get(view.clipAssetId()), projectId);
 		}
+	}
+
+	private static void writeLabeledSampleTable(WritableGroup episode,
+			List<HumanAnnotationExportSegment> orderedSegments, CaptureGroupFacts group,
+			Map<UUID, CandidateEvidence> evidenceByAsset, HumanAnnotationExportSegment first, UUID projectId) {
+		var primaryView = group.views()
+			.stream()
+			.filter(CaptureGroupView::present)
+			.filter(CaptureGroupView::enabledForHandDetection)
+			.filter(CaptureGroupView::assetAvailable)
+			.filter(view -> "INGESTED".equals(view.mediaStatus()))
+			.filter(view -> first.primaryClipAssetId().equals(view.clipAssetId()))
+			.filter(view -> first.primaryCameraNumber() == view.cameraNumber())
+			.findFirst()
+			.orElseThrow(() -> invalid("The annotated primary video is not available for MediaPipe sample export."));
+		if (!first.clipAssetSha256().equals(primaryView.clipAssetSha256())) {
+			throw invalid("The approved annotation no longer matches the primary video bytes.");
+		}
+		var evidence = evidenceByAsset.get(primaryView.clipAssetId());
+		if (evidence == null || !evidence.provenanceValid()
+				|| !CandidateEvidenceQueryService.EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES.equals(evidence.executionStatus())
+				|| evidence.aiJobId() == null || evidence.aiJobAttemptId() == null || evidence.attempt() == null
+				|| evidence.inputSha256() == null || evidence.resultSha256() == null
+				|| !primaryView.clipAssetId().equals(evidence.clipAssetId())
+				|| !primaryView.clipAssetSha256().equals(evidence.clipAssetSha256())) {
+			throw invalid("The annotated primary video has no current provenance-verified MediaPipe candidates.");
+		}
+		var rows = evidence.candidates()
+			.stream()
+			.sorted(Comparator.comparingLong(CandidateAnnotationSnapshot::frameTimestampMs)
+				.thenComparingInt(CandidateAnnotationSnapshot::handIndex)
+				.thenComparing(candidate -> candidate.candidateAnnotationId().toString()))
+			.map(candidate -> new LabeledSample(candidate, segmentAt(orderedSegments, candidate.frameTimestampMs())))
+			.filter(row -> row.segment() != null)
+			.toList();
+		if (rows.isEmpty()) {
+			throw unavailable("The approved annotation has no MediaPipe hand samples inside its labeled intervals.");
+		}
+		if (rows.stream()
+			.anyMatch(row -> !projectId.equals(row.candidate().projectId())
+					|| !primaryView.clipAssetId().equals(row.candidate().clipAssetId())
+					|| !evidence.aiJobId().equals(row.candidate().aiJobId()))) {
+			throw invalid("A labeled MediaPipe sample does not match the annotated primary video.");
+		}
+		var landmarks = new float[rows.size()][21][3];
+		for (var index = 0; index < rows.size(); index += 1) {
+			copyLandmarks(rows.get(index).candidate(), landmarks[index]);
+		}
+		var samples = episode.putGroup("samples");
+		samples.putAttribute("layout", "columnar-table.v1");
+		samples.putAttribute("row_count", rows.size());
+		samples.putAttribute("camera_number", primaryView.cameraNumber());
+		samples.putAttribute("clip_asset_id", primaryView.clipAssetId().toString());
+		samples.putAttribute("clip_asset_sha256", primaryView.clipAssetSha256());
+		samples.putAttribute("ai_job_id", evidence.aiJobId().toString());
+		samples.putAttribute("ai_job_attempt_id", evidence.aiJobAttemptId().toString());
+		samples.putAttribute("attempt", evidence.attempt());
+		samples.putAttribute("algorithm_key", evidence.algorithmKey());
+		samples.putAttribute("algorithm_version", evidence.algorithmVersion());
+		samples.putAttribute("model_sha256", evidence.modelSha256());
+		samples.putAttribute("profile_sha256", evidence.profileSha256());
+		samples.putAttribute("input_sha256", evidence.inputSha256());
+		samples.putAttribute("result_sha256", evidence.resultSha256());
+		samples.putDataset("candidate_annotation_id",
+				rows.stream().map(row -> row.candidate().candidateAnnotationId().toString()).toArray(String[]::new));
+		samples.putDataset("frame_timestamp_ms",
+				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
+		samples.putDataset("hand_index",
+				rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
+		samples.putDataset("handedness",
+				rows.stream().map(row -> row.candidate().handedness()).toArray(String[]::new));
+		samples.putDataset("handedness_score",
+				rows.stream().mapToDouble(row -> row.candidate().handednessScore().doubleValue()).toArray());
+		samples.putDataset("image_width",
+				rows.stream().mapToInt(row -> row.candidate().imageWidth()).toArray());
+		samples.putDataset("image_height",
+				rows.stream().mapToInt(row -> row.candidate().imageHeight()).toArray());
+		samples.putDataset("label", rows.stream().map(row -> row.segment().label()).toArray(String[]::new));
+		samples.putDataset("segment_start_ms",
+				rows.stream().mapToLong(row -> row.segment().segmentStartMs()).toArray());
+		samples.putDataset("segment_end_ms",
+				rows.stream().mapToLong(row -> row.segment().segmentEndMs()).toArray());
+		samples.putDataset("landmarks", landmarks);
+	}
+
+	private static HumanAnnotationExportSegment segmentAt(List<HumanAnnotationExportSegment> segments,
+			long timestampMs) {
+		return segments.stream()
+			.filter(segment -> timestampMs >= segment.segmentStartMs() && timestampMs < segment.segmentEndMs())
+			.findFirst()
+			.orElse(null);
 	}
 
 	private static void writeView(WritableGroup output, CaptureGroupView view, CandidateEvidence evidence,
@@ -273,6 +376,9 @@ class HumanDemonstrationHdf5ExportService {
 					"HDF5 demonstration export is enabled only for the synthetic profile until a non-synthetic authorization model is defined.",
 					403);
 		}
+	}
+
+	private record LabeledSample(CandidateAnnotationSnapshot candidate, HumanAnnotationExportSegment segment) {
 	}
 
 }
