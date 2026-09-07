@@ -198,7 +198,8 @@ class HumanDemonstrationHdf5ExportService {
 		}
 		var evidence = evidenceByAsset.get(primaryView.clipAssetId());
 		if (evidence == null || !evidence.provenanceValid()
-				|| !CandidateEvidenceQueryService.EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES.equals(evidence.executionStatus())
+				|| !CandidateEvidenceQueryService.EXECUTION_STATUS_SUCCEEDED_WITH_CANDIDATES
+					.equals(evidence.executionStatus())
 				|| evidence.aiJobId() == null || evidence.aiJobAttemptId() == null || evidence.attempt() == null
 				|| evidence.inputSha256() == null || evidence.resultSha256() == null
 				|| !primaryView.clipAssetId().equals(evidence.clipAssetId())
@@ -245,21 +246,16 @@ class HumanDemonstrationHdf5ExportService {
 				rows.stream().map(row -> row.candidate().candidateAnnotationId().toString()).toArray(String[]::new));
 		samples.putDataset("frame_timestamp_ms",
 				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
-		samples.putDataset("hand_index",
-				rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
-		samples.putDataset("handedness",
-				rows.stream().map(row -> row.candidate().handedness()).toArray(String[]::new));
+		samples.putDataset("hand_index", rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
+		samples.putDataset("handedness", rows.stream().map(row -> row.candidate().handedness()).toArray(String[]::new));
 		samples.putDataset("handedness_score",
 				rows.stream().mapToDouble(row -> row.candidate().handednessScore().doubleValue()).toArray());
-		samples.putDataset("image_width",
-				rows.stream().mapToInt(row -> row.candidate().imageWidth()).toArray());
-		samples.putDataset("image_height",
-				rows.stream().mapToInt(row -> row.candidate().imageHeight()).toArray());
+		samples.putDataset("image_width", rows.stream().mapToInt(row -> row.candidate().imageWidth()).toArray());
+		samples.putDataset("image_height", rows.stream().mapToInt(row -> row.candidate().imageHeight()).toArray());
 		samples.putDataset("label", rows.stream().map(row -> row.segment().label()).toArray(String[]::new));
 		samples.putDataset("segment_start_ms",
 				rows.stream().mapToLong(row -> row.segment().segmentStartMs()).toArray());
-		samples.putDataset("segment_end_ms",
-				rows.stream().mapToLong(row -> row.segment().segmentEndMs()).toArray());
+		samples.putDataset("segment_end_ms", rows.stream().mapToLong(row -> row.segment().segmentEndMs()).toArray());
 		samples.putDataset("landmarks", landmarks);
 	}
 

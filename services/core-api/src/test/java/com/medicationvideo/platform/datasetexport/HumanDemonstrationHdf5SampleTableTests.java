@@ -28,13 +28,21 @@ import tools.jackson.databind.ObjectMapper;
 class HumanDemonstrationHdf5SampleTableTests {
 
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000801");
+
 	private static final UUID GROUP_ID = UUID.fromString("00000000-0000-0000-0000-000000000802");
+
 	private static final UUID STREAM_ID = UUID.fromString("00000000-0000-0000-0000-000000000803");
+
 	private static final UUID CLIP_ID = UUID.fromString("00000000-0000-0000-0000-000000000804");
+
 	private static final UUID JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000805");
+
 	private static final String SHA = "a".repeat(64);
+
 	private static final String MODEL_SHA = "b".repeat(64);
+
 	private static final String PROFILE_SHA = "c".repeat(64);
+
 	private static final String RESULT_SHA = "d".repeat(64);
 
 	@Test
@@ -45,7 +53,8 @@ class HumanDemonstrationHdf5SampleTableTests {
 
 		try (var file = HdfFile.fromBytes(bytes)) {
 			var path = "/data/demo_000000/samples/";
-			assertEquals("columnar-table.v1", file.getByPath("/data/demo_000000/samples").getAttribute("layout").getData());
+			assertEquals("columnar-table.v1",
+					file.getByPath("/data/demo_000000/samples").getAttribute("layout").getData());
 			assertEquals("verify_dose", ((String[]) file.getDatasetByPath(path + "label").getData())[0]);
 			assertEquals(500L, ((long[]) file.getDatasetByPath(path + "segment_start_ms").getData())[0]);
 			assertEquals(900L, ((long[]) file.getDatasetByPath(path + "segment_end_ms").getData())[0]);
@@ -87,8 +96,8 @@ class HumanDemonstrationHdf5SampleTableTests {
 	private static CaptureGroupFacts group() {
 		var view = new CaptureGroupView(STREAM_ID, CLIP_ID, UUID.randomUUID(), 1, "PRIMARY", "front", "INGESTED",
 				"PASS", 1, 1, true, "UNKNOWN", SHA, true);
-		return new CaptureGroupFacts(PROJECT_ID, GROUP_ID, CaptureGroupReceiptState.COMPLETE, 1, UUID.randomUUID(), false,
-				List.of(view));
+		return new CaptureGroupFacts(PROJECT_ID, GROUP_ID, CaptureGroupReceiptState.COMPLETE, 1, UUID.randomUUID(),
+				false, List.of(view));
 	}
 
 	private static CandidateEvidence evidence(CandidateAnnotationSnapshot candidate) {
@@ -102,10 +111,11 @@ class HumanDemonstrationHdf5SampleTableTests {
 	private static CandidateAnnotationSnapshot candidate(long timestampMs) throws Exception {
 		var mapper = new ObjectMapper();
 		var landmarks = mapper.readTree("[" + java.util.stream.IntStream.range(0, 21)
-				.mapToObj(index -> "{\"x\":0.1,\"y\":0.2,\"z\":0.3}")
-				.collect(java.util.stream.Collectors.joining(",")) + "]");
+			.mapToObj(index -> "{\"x\":0.1,\"y\":0.2,\"z\":0.3}")
+			.collect(java.util.stream.Collectors.joining(",")) + "]");
 		var boundingBox = mapper.readTree("{\"x_min\":0.1,\"y_min\":0.1,\"x_max\":0.9,\"y_max\":0.9}");
-		return new CandidateAnnotationSnapshot(UUID.randomUUID(), JOB_ID, PROJECT_ID, CLIP_ID, timestampMs, 1280, 720, 0,
-				"RIGHT", new BigDecimal("0.95"), boundingBox, landmarks, 21);
+		return new CandidateAnnotationSnapshot(UUID.randomUUID(), JOB_ID, PROJECT_ID, CLIP_ID, timestampMs, 1280, 720,
+				0, "RIGHT", new BigDecimal("0.95"), boundingBox, landmarks, 21);
 	}
+
 }

@@ -20,17 +20,11 @@
 
 发现冲突时按上述优先级处理并说明影响，不自行猜测或扩大范围。前端界面任务必须先读取 `docs/DESIGN_SYSTEM.md`，并同时读取 `docs/architecture/web-ux-and-frontend-guidelines.md`；前者是唯一视觉权威，后者只补充领域 UX、实现与验收规则，均不覆盖业务需求和正式契约。
 
-所有 UI 工作必须遵守 `docs/DESIGN_SYSTEM.md`。不得引入新的视觉语言、任意设计 Token 或一次性页面样式；确需改变时，应有意识地先修订设计系统。
+UI 复用 `docs/DESIGN_SYSTEM.md` 的视觉语言、Token 和现有组件；确需改变时先修订设计系统。设计技能的审美建议和默认 `DESIGN.md` 路径不覆盖此权威。
 
 ## Frontend Design Identity
 
-V1.30 implementation follows the revised `docs/DESIGN_SYSTEM.md`; user acceptance is still required before the baseline becomes CURRENT.
-
-Frontend UI work follows this design identity:
-
-Video-first Quiet Professional Workspace
-
-with Neutral Light + Medical Blue visual theme (Twenty workspace + Frame.io video-first detail).
+V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue（Twenty workspace + Frame.io video-first detail）。实施以设计系统为准，用户验收后基线才能成为 CURRENT。
 
 ## Architecture
 
@@ -84,6 +78,7 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 
 - 测试默认使用合成数据；脱敏样本也必须获得明确授权并隔离管理。
 - 禁止把令牌、密码、私钥、预签名 URL、真实视频和模型文件提交到仓库。
 - 涉及删除、数据放行、隐私审批、签名 URL、AI 转正式标签、数据集冻结和导出时必须人工评审。
+- 上述评审边界不阻塞已授权的代码实现、只读审计和隔离合成数据测试；先完成这些准备并给出可评审结果，实际受控操作仍须满足人工评审要求。
 - 不自动触发相机、机器人、PLC、外部医院系统或其他真实硬件/服务状态变化。
 
 ## Versions And Dependencies
@@ -100,12 +95,11 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 
 - 未经用户明确要求，不执行 Git 提交、推送、合并、分支删除或远程状态变更。
 - 不回滚无关的用户改动；遇到重叠修改先说明。
 - 不编造测试、CI、部署、硬件或外部服务结果。
-- 行为变更必须增加相应测试；无法验证时说明原因和可执行命令。
 - 对已有测试的超时、重试或跳过规则，只有在保留原断言且能证明是环境时序问题时才调整；不得借此掩盖失败。
 
 ## Verification
 
-按受影响组件运行相关检查；行为变更仍须增加相应测试，API 和事件变更仍须完成契约检查。复用现有测试框架和 fixtures，不限制测试数量。确认使用合成数据且与生产隔离后，本地验证和本次变更导致的失败修复可连续执行，无需逐步确认。
+按受影响组件运行相关检查；行为变更必须增加相应测试，验证可观察行为和业务约束，避免仅重复实现。API 和事件变更仍须完成契约检查。复用现有测试框架和 fixtures，按风险选择范围，不设固定测试数量。确认使用合成数据且与生产隔离后，本地验证和本次变更导致的失败修复可连续执行，无需逐步确认。无法验证时说明原因和可执行命令。
 
 纯指令或文档修改检查内容一致性、引用和 diff；无需为此运行整套应用测试。相关检查通过即结束验证；新改动、失败或未解决风险才触发扩大或重跑。需要完整质量门禁时使用以下入口。
 
