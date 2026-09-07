@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import type { AnnotationTask } from '@/api/annotation'
 import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
 import { paths } from '@/app/paths'
+import { CopyableText } from '@/components/data/CopyableText'
 import { MetadataList } from '@/components/data/MetadataList'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { InspectorSection } from '@/components/workspace/InspectorSection'
@@ -83,7 +84,7 @@ export function CaptureGroupInspector({
               {
                 id: 'group-id',
                 label: '采集记录 ID',
-                value: <code>{group.capture_group_id}</code>,
+                value: <CopyableText value={group.capture_group_id} />,
               },
               { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
               {
@@ -279,7 +280,7 @@ export function CaptureGroupInspector({
                   {
                     id: 'task-id',
                     label: '任务 ID',
-                    value: <code>{task.annotation_task_id}</code>,
+                    value: <CopyableText value={task.annotation_task_id} />,
                   },
                   { id: 'task-status', label: '任务状态', value: formatTaskStatus(task) },
                   { id: 'task-assignee', label: '执行人', value: task.assignee_actor_id },
@@ -302,9 +303,10 @@ export function CaptureGroupInspector({
               {revision ? (
                 <div className="capture-group-inspector-history capture-group-stack">
                   <strong>正式修订</strong>
+                  <CopyableText value={revision.annotation_revision_id} />
                   <span>
-                    {revision.annotation_revision_id} · 第 {revision.revision_number} 次 ·{' '}
-                    {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
+                    第 {revision.revision_number} 次 · {revision.submitted_by} ·{' '}
+                    {formatDateTime(revision.submitted_at)}
                   </span>
                   <span>确认输入版本：{revision.input_version ?? '未提供'}</span>
                   {review ? (
@@ -338,7 +340,10 @@ export function CaptureGroupInspector({
       ) : null}
 
       <ProgressiveDetail title="审计与受限操作" summary="保留原始事实">
-        <InspectorSection title="审计与受限操作" titleId="capture-group-audit-facts">
+        <InspectorSection
+          title={<span className="visually-hidden">审计与受限操作详情</span>}
+          titleId="capture-group-audit-facts"
+        >
           <p className="form-hint">
             本页只展示已授权的服务端事实。删除、隐私放行、数据集冻结和导出等高风险操作不在此处隐式执行。
           </p>

@@ -18,8 +18,7 @@ import { getProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
-import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
-import { NoticeState } from '@/components/WorkspaceFeedback'
+import { StatusBadge } from '@/components/StatusBadge'
 
 const managementRoutePatterns = [
   '/projects/:projectId/members',
@@ -54,28 +53,16 @@ function LocalUploadActivity() {
 
   const completedTaskCount = tasks.filter((task) => task.status === 'COMPLETED').length
   const failedTaskCount = tasks.filter((task) => task.status === 'FAILED').length
-  const tone: StatusBadgeTone =
-    uploadState === 'uploading'
-      ? 'processing'
-      : failedTaskCount === tasks.length
-        ? 'error'
-        : failedTaskCount > 0
-          ? 'warning'
-          : 'success'
-  const label = uploadState === 'uploading' ? '上传中' : '上传结果'
-  const description =
-    uploadState === 'uploading'
-      ? `已确认 ${completedTaskCount} / ${tasks.length} 个视频，其余文件仍在处理。`
-      : failedTaskCount > 0
-        ? `已确认 ${completedTaskCount} 个视频，${failedTaskCount} 个文件需要处理。`
-        : `已确认 ${completedTaskCount} 个视频，可返回查看结果。`
 
   return (
-    <NoticeState className="app-upload-activity">
-      <div className="app-upload-activity-copy">
-        <StatusBadge tone={tone}>{label}</StatusBadge>
-        <span>{description}</span>
-      </div>
+    <aside className="app-upload-activity" aria-live="polite">
+      <span className="muted-text">
+        {uploadState === 'uploading'
+          ? `上传中 · 已确认 ${completedTaskCount} / ${tasks.length} 个视频`
+          : failedTaskCount > 0
+            ? `上传完成 · ${completedTaskCount} 成功，${failedTaskCount} 需处理`
+            : `上传完成 · 已确认 ${completedTaskCount} 个视频`}
+      </span>
       <Link className="text-link" to={paths.localUpload}>
         查看上传进度
       </Link>
@@ -84,7 +71,7 @@ function LocalUploadActivity() {
           知道了
         </Button>
       ) : null}
-    </NoticeState>
+    </aside>
   )
 }
 
@@ -230,7 +217,9 @@ export default function AppShell() {
     >
       <LocalUploadProvider>
         <LocalUploadActivity />
-        {projectId ? <ProjectContext key={projectId} projectId={projectId} /> : null}
+        {projectId && location.pathname !== paths.captureGroups(projectId) ? (
+          <ProjectContext key={projectId} projectId={projectId} />
+        ) : null}
         <Outlet />
       </LocalUploadProvider>
     </AppFrame>

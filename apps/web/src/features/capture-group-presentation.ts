@@ -155,6 +155,24 @@ export function isHumanAnnotationExportReady(
   return task?.status === 'COMPLETED' && task.annotation_revision?.review?.decision === 'APPROVED'
 }
 
+export interface ExportEligibility {
+  exportable: boolean
+  reason: string
+}
+
+export function describeExportEligibility(
+  task: AnnotationTask | null | undefined,
+  tasksReady: boolean,
+): ExportEligibility {
+  if (!tasksReady) return { exportable: false, reason: '任务状态未确认' }
+  if (!task) return { exportable: false, reason: '尚未标注' }
+  if (task.status === 'SUBMITTED') return { exportable: false, reason: '待复核，暂不可导出' }
+  if (!isHumanAnnotationExportReady(task)) {
+    return { exportable: false, reason: '标注未通过复核' }
+  }
+  return { exportable: true, reason: '可导出' }
+}
+
 export function captureGroupTaskDestination(
   task: Pick<
     AnnotationTask,

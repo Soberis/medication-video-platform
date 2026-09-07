@@ -657,6 +657,10 @@ class CaptureGroupQualityAnnotationContractTests {
 					"Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items[0].can_review").value(false));
+		assertEquals(1,
+				count("SELECT count(*) FROM audit_event WHERE action = 'ANNOTATION_REVISION_REVIEWED' "
+						+ "AND reason_code = 'SELF_ADMIN_APPROVAL' AND details_json ->> 'annotation_revision_id' = ?",
+						revision));
 	}
 
 	@Test
@@ -818,6 +822,8 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andReturn();
 		var publishedSchemaId = UUID
 			.fromString(JsonPath.read(published.getResponse().getContentAsString(), "$.label_schema_id"));
+		assertEquals(1, count("SELECT count(*) FROM audit_event WHERE object_id = ? AND project_id IS NULL "
+				+ "AND authorization_reference = 'PLATFORM_ADMIN'", publishedSchemaId.toString()));
 		assertTrue(!existingSchemaId.equals(publishedSchemaId));
 		assertEquals(existingSchemaId,
 				this.jdbcTemplate.queryForObject(

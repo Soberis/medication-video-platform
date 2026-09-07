@@ -117,17 +117,19 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
       fullPage: true,
       animations: 'disabled',
     })
-    await page.getByRole('checkbox', { name: '选择导出' }).check()
     await page.getByRole('button', { name: '导出数据' }).click()
+    await page
+      .getByRole('checkbox', { name: /选择导出/ })
+      .last()
+      .check()
     await expect(page.getByRole('button', { name: '导出项目全部合格数据' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '导出已选择的 1 条记录' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '下载 HDF5（1 条）' })).toBeEnabled()
     await expect(page).toHaveScreenshot('capture-group-export-1440.png', {
       fullPage: true,
       animations: 'disabled',
     })
-    await page.getByRole('button', { name: '导出已选择的 1 条记录' }).click()
-    const exportDialog = page.getByRole('dialog', { name: '导出 HDF5 演示数据' })
-    await expect(exportDialog).toContainText('范围：当前采集记录')
+    const exportDialog = page.getByRole('dialog', { name: '导出数据', exact: true })
+    await expect(exportDialog).toContainText('不包含 MP4、对象存储地址')
     await exportDialog.getByRole('button', { name: '取消' }).click()
   })
 

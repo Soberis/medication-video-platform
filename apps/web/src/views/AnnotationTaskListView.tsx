@@ -10,6 +10,7 @@ import {
   type AnnotationTask,
   type AnnotationTaskProgress,
 } from '@/api/annotation'
+import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -45,9 +46,17 @@ function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
   if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
   return 'information'
 }
-function taskNoActionLabel(task: AnnotationTask) {
+function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefined) {
   if (task.status === 'COMPLETED') return '当前无需操作'
-  if (task.status === 'SUBMITTED') return '等待管理员复核'
+  if (task.status === 'SUBMITTED') {
+    const revision = task.annotation_revision
+    if (revision?.submitted_by === viewerUsername) {
+      return task.can_review
+        ? '你是提交人，可直接确认本次标注'
+        : '你是提交人；当前尚不能确认，请检查项目权限与标注前检查状态'
+    }
+    return task.can_review ? '等待你确认标注' : '等待项目管理员确认'
+  }
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '等待任务执行人返工'
   return '等待任务执行人处理'
 }
@@ -130,6 +139,7 @@ export default function AnnotationTaskListView({
   embedded?: boolean
 }) {
   const { projectId = '' } = useParams()
+  const { session } = useAuth()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
   const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
@@ -227,6 +237,11 @@ export default function AnnotationTaskListView({
             {progress.awaiting_submission + progress.rework_required + progress.awaiting_review}{' '}
             个待处理
           </span>
+          <p className="form-hint">
+            {progress.scope === 'PROJECT'
+              ? '以下任务来自服务端授权的项目范围查询，不受当前视频分页限制。'
+              : '以下任务仅包含分配给你的记录，不受当前视频分页限制。'}
+          </p>
         </section>
       ) : null}
       {loadState === 'success' && visibleItems.length ? (
@@ -438,7 +453,7 @@ export default function AnnotationTaskListView({
                         ? completedTaskResult
                         : (taskAction ?? (
                             <span className="annotation-task-no-action">
-                              {taskNoActionLabel(row)}
+                              {taskNoActionLabel(row, session?.username)}
                             </span>
                           ))}
                     </div>

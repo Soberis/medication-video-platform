@@ -1,6 +1,6 @@
-import { Button, Checkbox, Segmented } from 'antd'
+import { Button, Segmented } from 'antd'
 import { ArrowRight, RefreshCw, Video } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
 
@@ -10,16 +10,13 @@ import {
   type CaptureGroupSummary,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
+import { getProject } from '@/api/projects'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import {
-  isHumanAnnotationExportReady,
-  receiptStateLabels,
-  receiptTone,
-} from '@/features/capture-group-presentation'
+import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
@@ -70,25 +67,16 @@ export default function CaptureGroupListView() {
   const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
     status: 'loading',
   })
-  const [selectedExportIds, setSelectedExportIds] = useState<Set<string>>(() => new Set())
+  const [projectName, setProjectName] = useState<string | null>(null)
   const groupRequest = useRef<RequestToken | null>(null)
   const taskRequest = useRef<RequestToken | null>(null)
   const groupGeneration = useRef(0)
   const taskGeneration = useRef(0)
   const rowsRef = useRef<CaptureGroupSummary[]>([])
-  const exportableGroupIds =
-    taskReadState.status === 'success'
-      ? rows
-          .filter((group) =>
-            taskReadState.items.some(
-              (task) =>
-                task.capture_group_id === group.capture_group_id &&
-                isHumanAnnotationExportReady(task),
-            ),
-          )
-          .map((group) => group.capture_group_id)
-      : []
-  const selectedExportGroupIds = exportableGroupIds.filter((id) => selectedExportIds.has(id))
+  const tasksByGroupId = useMemo(() => {
+    if (taskReadState.status !== 'success') return new Map<string, AnnotationTask>()
+    return new Map(taskReadState.items.map((task) => [task.capture_group_id, task]))
+  }, [taskReadState])
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
@@ -199,6 +187,18 @@ export default function CaptureGroupListView() {
   }, [projectId])
 
   useEffect(() => {
+    const request = new AbortController()
+    void getProject(projectId, request.signal)
+      .then((project) => {
+        if (!request.signal.aborted) setProjectName(project.display_name)
+      })
+      .catch(() => {
+        if (!request.signal.aborted) setProjectName(null)
+      })
+    return () => request.abort()
+  }, [projectId])
+
+  useEffect(() => {
     const restored = restoredList?.projectId === projectId ? restoredList : null
     rowsRef.current = restored?.rows ?? []
     const timer = window.setTimeout(() => {
@@ -224,6 +224,7 @@ export default function CaptureGroupListView() {
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
+        eyebrow={projectName ?? '当前项目'}
         title="视频"
         actions={
           <>
@@ -235,7 +236,9 @@ export default function CaptureGroupListView() {
                 <ExportDataMenu
                   key={projectId}
                   projectId={projectId}
-                  selectedCaptureGroupIds={selectedExportGroupIds}
+                  rows={rows}
+                  tasksByGroupId={tasksByGroupId}
+                  tasksReady={taskReadState.status === 'success'}
                 />
               </>
             ) : null}
@@ -306,13 +309,7 @@ export default function CaptureGroupListView() {
                   const identityLabel = `采集记录 · ${identity}`
                   const eventTime = group.device_time_utc ?? group.created_at
                   const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
-                  const task =
-                    taskReadState.status === 'success'
-                      ? taskReadState.items.find(
-                          (candidate) => candidate.capture_group_id === group.capture_group_id,
-                        )
-                      : undefined
-                  const exportable = Boolean(task && isHumanAnnotationExportReady(task))
+                  const task = tasksByGroupId.get(group.capture_group_id)
                   return (
                     <div
                       className="capture-group-list-row"
@@ -377,30 +374,6 @@ export default function CaptureGroupListView() {
                         </div>
                       </dl>
                       <footer className="capture-group-list-row-footer">
-                        {session?.role === 'ADMIN' ? (
-                          <Checkbox
-                            disabled={!exportable}
-                            checked={selectedExportIds.has(group.capture_group_id)}
-                            onChange={(event) => {
-                              setSelectedExportIds((current) => {
-                                const next = new Set(current)
-                                if (event.target.checked) next.add(group.capture_group_id)
-                                else next.delete(group.capture_group_id)
-                                return next
-                              })
-                            }}
-                          >
-                            {exportable
-                              ? '选择导出'
-                              : taskReadState.status !== 'success'
-                                ? '任务状态未确认'
-                                : !task
-                                  ? '尚未标注'
-                                  : task.status === 'SUBMITTED'
-                                    ? '待复核，暂不可导出'
-                                    : '标注未通过复核'}
-                          </Checkbox>
-                        ) : null}
                         <Link
                           className="capture-group-list-open"
                           aria-label={`查看视频：${identityLabel}`}

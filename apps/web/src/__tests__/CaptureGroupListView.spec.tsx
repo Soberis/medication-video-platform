@@ -65,13 +65,14 @@ describe('capture group list view', () => {
       [paths.captureGroups(projectId)],
       { username: 'admin', role: 'ADMIN' },
     )
-    const checkboxes = await screen.findAllByRole('checkbox', { name: '选择导出' })
     const user = userEvent.setup()
-    await user.click(checkboxes[0]!)
-    await user.click(checkboxes[1]!)
-    expect(screen.getByRole('checkbox', { name: '尚未标注' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: '导出数据' }))
-    expect(screen.getByRole('button', { name: '导出已选择的 2 条记录' })).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: '导出数据' })
+    const selectable = within(dialog).getAllByRole('checkbox', { name: /选择导出/ })
+    await user.click(selectable[0]!)
+    await user.click(selectable[1]!)
+    expect(within(dialog).getByText('尚未标注')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '下载 HDF5（2 条）' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /项目全部|选择全部/ })).not.toBeInTheDocument()
   })
   it('keeps the data-group facts and optional human-label entry separate', async () => {

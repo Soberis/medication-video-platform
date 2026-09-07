@@ -603,16 +603,36 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--app-space-8) var(--app-space-12);
+  margin-block-end: var(--app-space-8);
+  padding: var(--app-space-4) var(--app-space-8);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-color-surface-muted);
+  font-size: var(--app-font-size-helper);
+}
+
+.copyable-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+.copyable-text code {
+  overflow-wrap: anywhere;
+}
+
+.capture-group-export-modal-footer {
+  display: grid;
   gap: var(--app-space-12);
 }
 
-.app-upload-activity-copy {
+.capture-group-export-modal-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  justify-content: flex-end;
   gap: var(--app-space-8);
-  min-width: 0;
 }
 
 .workspace-error {
