@@ -123,12 +123,15 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
       .last()
       .check()
     await expect(page.getByRole('button', { name: '导出项目全部合格数据' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '下载 HDF5（1 条）' })).toBeEnabled()
+    await expect(page.getByText('已选择 1 条', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '下载 HDF5' })).toBeEnabled()
     await expect(page).toHaveScreenshot('capture-group-export-1440.png', {
       fullPage: true,
       animations: 'disabled',
     })
     const exportDialog = page.getByRole('dialog', { name: '导出数据', exact: true })
+    await expectNoSeriousAxeViolations(page)
+    await expectNoHorizontalPageOverflow(page)
     await expect(exportDialog).toContainText('不包含 MP4、对象存储地址')
     await exportDialog.getByRole('button', { name: '取消' }).click()
   })
@@ -234,6 +237,70 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
       reviewRegion.locator('details.capture-group-review-detail-disclosure'),
     ).toBeVisible()
   })
+})
+
+test('project export selects every candidate across pages without expanding the main video list', async ({
+  page,
+}) => {
+  await mockCaptureGroupApi(page, 'list')
+  const groupRead = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === `/api/v1/projects/${projectId}/capture-groups`,
+  )
+  const taskRead = page.waitForResponse((response) =>
+    new URL(response.url()).pathname.endsWith('/annotation-tasks'),
+  )
+  await page.goto(`/projects/${projectId}/capture-groups`)
+  const groupData = await (await groupRead).json()
+  const taskData = await (await taskRead).json()
+  const candidates = Array.from({ length: 21 }, (_, index) => ({
+    ...groupData.items[1],
+    capture_group_id: `60000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+    capture_group_key: `候选视频 ${index + 1}`,
+  }))
+  await page.route(`**/api/v1/projects/${projectId}/capture-groups?**`, (route) => {
+    const next = new URL(route.request().url()).searchParams.has('cursor')
+    return route.fulfill({
+      json: {
+        items: next ? candidates.slice(20) : candidates.slice(0, 20),
+        next_cursor: next ? null : 'export-page-2',
+      },
+    })
+  })
+  await page.route(`**/api/v1/projects/${projectId}/annotation-tasks`, (route) =>
+    route.fulfill({
+      json: {
+        ...taskData,
+        items: candidates.map((group) => ({
+          ...taskData.items.find((task: { status: string }) => task.status === 'COMPLETED'),
+          capture_group_id: group.capture_group_id,
+        })),
+      },
+    }),
+  )
+  let downloadedIds: string[] = []
+  await page.route('**/human-demonstrations/hdf5/v1/download?**', (route) => {
+    downloadedIds = new URL(route.request().url()).searchParams.getAll('capture_group_id')
+    return route.fulfill({
+      contentType: 'application/x-hdf5',
+      headers: { 'Content-Disposition': 'attachment; filename="synthetic.hdf5"' },
+      body: 'synthetic download fixture',
+    })
+  })
+  await page.getByRole('button', { name: '导出数据' }).click()
+  const dialog = page.getByRole('dialog', { name: '导出数据', exact: true })
+  await expect(dialog.getByRole('checkbox', { name: /选择导出/ })).toHaveCount(21)
+  await dialog.getByRole('checkbox', { name: '全选', exact: true }).focus()
+  await page.keyboard.press('Space')
+  await expect(dialog.getByText('已选择 21 条', { exact: true })).toBeVisible()
+  await expectNoHorizontalPageOverflow(page)
+  await expectNoSeriousAxeViolations(page)
+  const download = page.waitForEvent('download')
+  await dialog.getByRole('button', { name: '下载 HDF5' }).click()
+  expect((await download).suggestedFilename()).toBe('synthetic.hdf5')
+  expect(downloadedIds).toEqual(candidates.map((group) => group.capture_group_id))
+  await expect(page.getByRole('list', { name: '采集记录列表' }).getByRole('listitem')).toHaveCount(
+    2,
+  )
 })
 
 test.describe('CaptureGroup event ledger responsive widths', () => {

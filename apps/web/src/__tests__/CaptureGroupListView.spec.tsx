@@ -43,7 +43,7 @@ describe('capture group list view', () => {
     expect(taskRow.querySelector(':scope > .task-details')).not.toBeNull()
   })
 
-  it('allows one or multiple explicit selections and explains unavailable rows', async () => {
+  it('allows one or multiple selections and hides records without approved annotation', async () => {
     const first = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -66,14 +66,26 @@ describe('capture group list view', () => {
       { username: 'admin', role: 'ADMIN' },
     )
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: '导出数据' }))
+    await user.click(await screen.findByRole('button', { name: '导出数据' }))
     const dialog = await screen.findByRole('dialog', { name: '导出数据' })
-    const selectable = within(dialog).getAllByRole('checkbox', { name: /选择导出/ })
+    const selectable = await within(dialog).findAllByRole('checkbox', { name: /选择导出/ })
     await user.click(selectable[0]!)
     await user.click(selectable[1]!)
-    expect(within(dialog).getByText('尚未标注')).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: '下载 HDF5（2 条）' })).toBeInTheDocument()
+    expect(selectable).toHaveLength(2)
+    expect(within(dialog).queryByText('尚未标注')).not.toBeInTheDocument()
+    expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '下载 HDF5' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /项目全部|选择全部/ })).not.toBeInTheDocument()
+  })
+  it('does not offer project export to a platform admin with only project membership', async () => {
+    stubGroupList([], [], { projectRole: 'MEMBER', taskScope: 'ASSIGNEE' })
+    renderRouter(
+      [{ path: '/projects/:projectId/capture-groups', element: <CaptureGroupListView /> }],
+      [paths.captureGroups(projectId)],
+      { username: 'admin', role: 'ADMIN' },
+    )
+    await screen.findByText('合成数据项目')
+    expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
   })
   it('keeps the data-group facts and optional human-label entry separate', async () => {
     const activeGroup = captureGroupFixture(groupId, {

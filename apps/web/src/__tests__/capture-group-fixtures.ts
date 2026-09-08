@@ -29,6 +29,7 @@ export function stubGroupList(
   options: {
     qualityByGroup?: Record<string, CaptureGroupQualityReview>
     taskScope?: 'PROJECT' | 'ASSIGNEE'
+    projectRole?: 'ADMIN' | 'MEMBER'
     taskListError?: boolean
     qualityListError?: { status: number; errorCode?: string }
     groupListError?: { status: number; errorCode?: string }
@@ -39,6 +40,17 @@ export function stubGroupList(
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
     const url = String(input)
     const path = new URL(url, 'http://localhost').pathname
+    if (path === `/api/v1/projects/${projectId}`) {
+      return Promise.resolve(
+        jsonResponse({
+          project_id: projectId,
+          display_name: '合成数据项目',
+          status: 'ACTIVE',
+          current_role: options.projectRole ?? 'ADMIN',
+          created_at: '2026-09-08T00:00:00Z',
+        }),
+      )
+    }
     if (path.endsWith('/capture-groups')) {
       if (options.groupListError) {
         return Promise.resolve(

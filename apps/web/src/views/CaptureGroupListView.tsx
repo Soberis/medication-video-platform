@@ -10,7 +10,7 @@ import {
   type CaptureGroupSummary,
 } from '@/api/capture-groups'
 import { listAnnotationTasks, type AnnotationTask } from '@/api/annotation'
-import { getProject } from '@/api/projects'
+import { getProject, type DataProject } from '@/api/projects'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
@@ -67,7 +67,8 @@ export default function CaptureGroupListView() {
   const [taskReadState, setTaskReadState] = useState<AnnotationTaskReadState>({
     status: 'loading',
   })
-  const [projectName, setProjectName] = useState<string | null>(null)
+  const [project, setProject] = useState<DataProject | null>(null)
+  const currentProject = project?.project_id === projectId ? project : null
   const groupRequest = useRef<RequestToken | null>(null)
   const taskRequest = useRef<RequestToken | null>(null)
   const groupGeneration = useRef(0)
@@ -190,10 +191,10 @@ export default function CaptureGroupListView() {
     const request = new AbortController()
     void getProject(projectId, request.signal)
       .then((project) => {
-        if (!request.signal.aborted) setProjectName(project.display_name)
+        if (!request.signal.aborted) setProject(project)
       })
       .catch(() => {
-        if (!request.signal.aborted) setProjectName(null)
+        if (!request.signal.aborted) setProject(null)
       })
     return () => request.abort()
   }, [projectId])
@@ -224,7 +225,7 @@ export default function CaptureGroupListView() {
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
-        eyebrow={projectName ?? '当前项目'}
+        eyebrow={currentProject?.display_name ?? '当前项目'}
         title="视频"
         actions={
           <>
@@ -233,13 +234,9 @@ export default function CaptureGroupListView() {
                 <Button type="primary" onClick={() => void navigate(paths.localUpload)}>
                   上传视频
                 </Button>
-                <ExportDataMenu
-                  key={projectId}
-                  projectId={projectId}
-                  rows={rows}
-                  tasksByGroupId={tasksByGroupId}
-                  tasksReady={taskReadState.status === 'success'}
-                />
+                {currentProject?.current_role === 'ADMIN' ? (
+                  <ExportDataMenu key={`${projectId}:${viewer}`} projectId={projectId} />
+                ) : null}
               </>
             ) : null}
             <Button
