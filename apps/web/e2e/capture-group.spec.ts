@@ -243,8 +243,9 @@ test('project export selects every candidate across pages without expanding the 
   page,
 }) => {
   await mockCaptureGroupApi(page, 'list')
-  const groupRead = page.waitForResponse((response) =>
-    new URL(response.url()).pathname === `/api/v1/projects/${projectId}/capture-groups`,
+  const groupRead = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/projects/${projectId}/capture-groups`,
   )
   const taskRead = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith('/annotation-tasks'),
