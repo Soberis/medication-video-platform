@@ -1,5 +1,19 @@
 # V1.28 运行时需求追踪矩阵
 
+## V1.34 新增方向（DRAFT，未验收）
+
+需求定义及部署、评估方法见 [V1.34](../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)。本表仅登记待实现要求，不使用历史测试证明新增能力已完成。
+
+| 需求 | Owner module | 后续验证 | 状态 |
+| --- | --- | --- | --- |
+| V34-FR-001 独立动作预标注 | aicandidate / ai-worker | 不依赖 MediaPipe、失败可恢复且不阻塞人工 | DRAFT / 待实施 |
+| V34-FR-002 候选校验 | aicandidate | 格式、区间、标签、输入版本、幂等及契约 | DRAFT / 待实施 |
+| V34-FR-003 载入与编辑 | apps/web | 保护已有修改、补标、拆分合并、键盘操作 | DRAFT / 待实施 |
+| V34-FR-004 人工提交与复核 | annotationreview | 候选来源可追溯、不可变版本、权限守卫 | DRAFT / 待实施 |
+| V34-FR-005 配套导出 | datasetexport | 复用既有 HDF5；回读边界与来源失效测试 | 既有代码可复用 / 新链路待验证 |
+
+## 前序实现与历史证据
+
 > 当前导出选择：[V1.33 项目级候选选择](../requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)；独立完整读取项目候选，单选、多选与全选均发送明确 ID。回归入口：`HumanDemonstrationHdf5ExportButton.spec.tsx`、`CaptureGroupListView.spec.tsx` 和 `capture-group.spec.ts`；用户验收待完成。
 
 > 当前 DRAFT 需求方向：[V1.30 浅色专业工作区与视频优先体验重构](../requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)；继承 V1.29 未变更边界。V30-UX-001 至 V30-UX-006 已实施，自动化证据与待验收项见该基线第 7–8 节；尚未标记 CURRENT。当前人工标注导出按 V1.30 第 5 节与 OpenAPI 执行，以下 V1.28 唯一导出描述为历史基线，不能覆盖后续实现。<br>
