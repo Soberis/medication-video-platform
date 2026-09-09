@@ -23,7 +23,7 @@ V1.29 是前序 DRAFT 需求方向：平台以由上游明确归属的 `CaptureG
 
 - [V1.28 配药视频数据管理平台需求基线（单一 CaptureGroup 路径与唯一手部检测导出）](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
 
-V1.28 仍是上一正式运行时基线，直到后续版本满足其冻结条件。V1.28 定义的唯一公开导出为按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV；后续用户需求和当前实现已增加独立人工标注 CSV，边界以 V1.30 第 5 节及 OpenAPI 为准。真实 UAT、生产和医院部署证据仍待完成。
+V1.28 仍是上一正式运行时基线，直到后续版本满足其冻结条件。V1.28 定义的唯一公开导出为按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV；V1.30 曾增加人工标注 CSV，V1.31 随后收敛为唯一 `human-demonstration-hdf5.v1`，V1.33 调整选择范围，V1.34 继承该边界，不恢复旧 CSV。真实 UAT、生产和医院部署证据仍待完成。
 
 ## 更早正式版本
 

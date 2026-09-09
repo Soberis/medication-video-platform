@@ -13,8 +13,8 @@
 当前时序预标注、人机协同与导出选择以 `docs/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md` DRAFT 为准，继承 V1.33/V1.32/V1.31；视觉方向仍沿用下述 V1.30 与设计系统，CURRENT 等待用户验收。
 
 1. 用户在当前对话中明确提出的最新业务变更；它优先于任何历史需求或技术文档，必须先形成新的版本化需求基线。纯指令维护、文档勘误和不改变业务语义的修复无需新增业务版本。
-2. `docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md`：当前 DRAFT 需求基线，定义浅色专业工作区与视频优先体验重构；界面方向冲突以 V1.30 为准，实施前同步设计系统。本版本继承 `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md` 的未变更业务边界；V1.29 为前序 DRAFT，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
-3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.30 及其继承的 V1.29 与其冲突处以最新 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
+2. `docs/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md` 为当前 DRAFT，继承 V1.33/V1.32/V1.31 的导出、标签库与人工确认规则。`docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md` 为继承的视觉基线，定义浅色专业工作区与视频优先体验重构；界面方向冲突以 V1.30 为准，实施前同步设计系统。本版本继承 `docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md` 的未变更业务边界；V1.29 为前序 DRAFT，收敛为数据组、媒体检查、MediaPipe machine evidence、可选人工标签与导出；它优先定义后续变更方向，但在冻结前不表示 runtime 已改变或可删除。
+3. `docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md` 与 `docs/architecture/v1.28-single-export-consolidation.md`：上一正式运行时基线和导出边界；V1.34 及其继承基线与其冲突处以最新 DRAFT 的后续变更方向为准，具体删除项必须等待后续代码审计和批准。
 4. `docs/architecture/v1.27-hand-detection-policy.md`、`docs/architecture/v1.27-ai-evidence-audit.md` 与 `docs/architecture/v1.27-training-traceability.md`：上一版本的手部检测和证据审计参考，其中检测事实边界仍适用，事件 manifest 部分不再是当前产品。`docs/requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md`、`docs/requirements/baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md`、`docs/architecture/v1.26-medication-event-workbench-design.md`、V1.25 CaptureGroup 文档和 V1.24 文档均为历史/迁移参考，不构成当前兼容性承诺。
 5. `docs/adr/`：已经冻结的技术决策。
 6. `contracts/`：OpenAPI、事件和 JSON Schema 契约。
@@ -33,8 +33,8 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 - P0 采用一个 Java 21、Spring Boot、Spring Modulith Core API，不提前拆微服务。
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
-- Python Worker 只处理媒体和 AI 作业；当前 `hand-landmarks.v1` 由 Core API 同步只读导出，不直接写正式标注或冻结数据集。
-- AI 输出只能进入 `CandidateAnnotation`；`hand-landmarks.v1` 可在校验当前 Candidate evidence provenance 后独立导出检测事实，但不得把它写成正式标注、人工质量、Review 或 Cleaning 结论。
+- Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v1` 由 Core API 校验后导出，旧 `hand-landmarks.v1` CSV 为历史格式。
+- AI 输出只能进入 `CandidateAnnotation`；动作候选与 MediaPipe 检测事实区分存取，不得直接写成人工质量、正式标注、Review 或 Cleaning 结论。HDF5 关联当前已批准人工区间与同源、provenance 有效的主视频手部样本。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 
 ## Module Boundaries
@@ -49,7 +49,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 
 ## Delivery Order
 
-严格遵循：
+接入事实按下列顺序建立；媒体就绪后的动作预标注不等待 MediaPipe，按需在人工任务内由授权用户触发。下图为既有领域处理顺序，不是动作预标注的串行前置条件：
 
 ```text
 External Ingest / Upload
@@ -62,7 +62,7 @@ External Ingest / Upload
 → Export
 ```
 
-MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。人工质量、Annotation、Review 和 Cleaning 仅在项目需要 human ground truth 时使用，不是每个 CaptureGroup 或 `hand-landmarks.v1` 的强制流程。独立的 `hand-landmarks.v1` 只导出经过 provenance 校验的当前检测事实，不以人工链作为前置条件。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
+MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。人工质量、Annotation、Review 和 Cleaning 仅在项目需要 human ground truth 时使用，不是每个 CaptureGroup 的强制流程。动作预标注不等待 MediaPipe；当前 HDF5 配套导出必须同时满足人工确认、MediaPipe 与既有准入，不恢复独立 CSV。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
 
 ## MVP Simplicity
 

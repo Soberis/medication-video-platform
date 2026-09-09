@@ -2,27 +2,28 @@
 
 平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
 
-当前需求方向：V1.34 DRAFT（配药视频动作时序预标注与人机协同），继承 V1.33/V1.30/V1.29。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
+当前需求方向：V1.34 DRAFT（配药视频动作时序预标注与人机协同），继承 V1.33/V1.32/V1.31/V1.30/V1.29。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
 
-V1.34 DRAFT 的目标默认产品主链：
+V1.34 DRAFT 的处理关系（动作预标注待实现）：
 
 ```text
 External Ingest / Upload
 → CaptureGroup → CameraStream / ClipAsset
-→ Media Probe → MediaPipe & Action Candidate
-→ Automated / Human Quality
-→ AI-assisted Annotation / Review
-→ Export (hand-landmarks.v1 & Human Demonstration HDF5)
+→ Media Probe
+  ├─ MediaPipe 检测事实 ───────────────────────┐
+  └─ 可选人工标注任务 → 可选 AI 草稿 → 人工修改与确认 ┤
+                                              ↓
+                         既有准入校验 → Human Demonstration HDF5
 ```
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频可按既有规则执行 Media Probe、幂等 MediaPipe 手部检测以及可选的动作时序提取作业；Candidate 只提供辅助证据，不能直接写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用。导出支持独立 MediaPipe `hand-landmarks.v1`，以及将手部 21 点骨骼与人工审核通过的动作标签以时间戳对齐配套打包的 `human-demonstration-hdf5.v1` 格式。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除。
+采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频按既有规则执行 Media Probe 和幂等 MediaPipe 手部检测；V1.34 拟在任务主视频就绪后，由授权用户主动触发动作时序提取，无需等待手部检测；Candidate 只提供辅助证据，不能直接写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用。当前仅提供 `human-demonstration-hdf5.v1` 导出：校验主视频身份与来源后，将落入已批准人工区间的现有手部样本关联标签；不保证每帧有检测结果，不自动对齐参考机位。旧 `hand-landmarks.v1` CSV 为历史格式，V1.34 不恢复该入口。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除。
 
 当前规范：
 
 - [V1.34 DRAFT 需求基线（时序动作预标注与人机协同）](./docs/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)
-- [配药视频时序动作预标注与人机协同技术设计](./docs/architecture/video-action-pre-annotation-and-human-loop-design.md)
+- [配药视频时序动作预标注与人机协同技术设计](./docs/architecture/v1.34-action-annotation.md)
 - [V1.33 DRAFT 需求基线（导出选择范围）](./docs/requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)
 - [V1.30 需求基线（浅色专业工作区与视频优先体验）](./docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)
 - [V1.29 数据组主线收敛需求基线](./docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)

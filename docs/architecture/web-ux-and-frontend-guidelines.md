@@ -1,4 +1,4 @@
-> 当前实施需求：[V1.30 视频工作区体验重构](../requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)。新界面与逻辑修复以该基线为准；浅色视觉规格已统一修订到设计系统，CURRENT 冻结仍等待用户验收。
+> 当前实施方向：[V1.34](../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)，继承 V1.33/V1.32/V1.31 的工作入口、人工确认与唯一 HDF5 导出规则；视觉继续遵守 V1.30 和设计系统。动作预标注与时间轴交互为 DRAFT，CURRENT 冻结仍等待用户验收。下文历史版本的导航和导出描述不覆盖这些继承规则。
 
 # Web 前端与用户体验设计规范
 
@@ -12,8 +12,8 @@
 
 发生冲突时按以下顺序处理：
 
-1. `AGENTS.md` 与 `docs/requirements/requirements-manifest.json` 共同指向的当前正式业务需求基线；
-2. 当前正式基线明确继承且未被覆盖的历史条款；
+1. `AGENTS.md` 与 `docs/requirements/requirements-manifest.json` 指向的当前 DRAFT 需求方向；DRAFT 不表示已完成或已验收；
+2. 当前需求明确继承且未被覆盖的前序条款及正式基线；
 3. [总体技术设计](./配药平台技术设计.md)；
 4. `docs/adr/` 中已批准的技术决策；
 5. [状态机与领域守卫](./state-machines.md)、[安全、隐私与保留销毁](./security-privacy-retention.md)等专题设计；
@@ -92,11 +92,11 @@ P0 非目标：
 - SummaryStrip 与列表汇总必须来自同一筛选条件下的服务端正式查询。前端不得抓取多页数据后自行汇总，也不得为视觉统一混合待标注、待复核、待清洗等不同统计语义。
 - Evidence Rail 只能映射服务端状态、结果、当前权限和正式工作流事实；不得根据本地时间伪造完成、预测百分比或用动画暗示不存在的后台进度。状态未知时如实表示未知、尚未获取或暂无结果。
 - AI Candidate 是辅助证据，不是人工标签、审批、质量结论或训练准入结论。`NO_HAND_DETECTED` 是正常结果；当正式人工流程允许继续时，AI `FAILED` 不得被表现为主链 blocked。
-- 手部检测导出只表示当前可读取已验证的 MediaPipe evidence；它不是人工标签、训练准入或模型训练结果。没有相应权限或页面上下文时，只显示结果事实，不展示假导出按钮。
+- 手部检测结果仅表示机器 evidence；当前导出按 V1.31–V1.34 的唯一 HDF5 规则关联已批准人工标签与同源样本，不提供独立手部 CSV 入口，不宣称模型训练成功。
 
 ### 3.6 V1.28 配药事件工作台边界
 
-本节的当前语义由 [V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) 和 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 冻结；V1.27 及之前工作台文档仅保留为历史设计。
+本节保留 V1.28 时期工作台语义；导航、导出及动作候选冲突处以本文件顶部的 V1.34 继承关系为准，历史描述不恢复旧产品入口。
 
 - 事件页按“事件身份与当前阶段 → 聚焦视频与唯一 Current Action → 渐进详情”组织，优先回答对象、阶段和当前动作。
 - 主业务 rail 只有接收、机位质量、事件质量、配药动作标注、人工复核、事件级清洗六个节点。Media Probe、media status、technical quality、MediaPipe 和 Candidate 作为辅助证据展示，不扩充主流程节点。
@@ -285,12 +285,7 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
 - post-clean `PASS/WARNING/REJECT` 必须同时显示中文含义和稳定原因。缺少已验证媒体时长导致的
   `WARNING` 应说明仍需处理或批准例外且不会自动准入；`REJECT` 应说明当前 revision 不具备后续
   准入条件，但视频资产未被删除。
-- post-clean `PASS` 的界面文案只能是“当前规则检查通过”，不得写成“已进入训练集”或自动跳转
-  `/datasets`。V1.28 只在配药事件列表和事件详情提供同一个 `hand-landmarks.v1` current CameraStream
-  detection evidence CSV 出口；它不依赖 View/Group Quality、Annotation、Review 或 Cleaning。界面可以展示实际
-  下载结果，但不得写成已训练。历史训练数据出口、
-  DatasetVersion UI、复杂 Export 和自动导出不属于当前产品。尚无实际 training consumer 读取
-  `hand-landmarks.v1` 的证据，不能宣称真实模型训练成功。
+- post-clean `PASS` 仅表示当前规则检查通过，不等同进入训练集。当前唯一 HDF5 从视频工作入口的项目级选择弹窗导出，沿用 V1.33 完整读取和明确 ID 规则，并检查已批准人工版本及同源 MediaPipe provenance；不恢复旧 CSV、DatasetVersion UI 或自动导出，不宣称真实模型训练成功。
 - 管理员可对已完成且 `APPROVED` 的 revision 点击“重新核对清洗”。服务端按当前人工质量版本、视频事实和
   不可变标注文档决定是否产生新 run/result；输入未变化时返回既有结果，前端不得伪造新结果或把该操作写成
   “已进入训练集”。
@@ -380,4 +375,4 @@ P0 页面至少满足以下要求：
 
 ## 13. 分阶段执行
 
-前端交付顺序遵循[总体技术设计第 21 节](./配药平台技术设计.md#21-实施顺序)。每一阶段只激活当前纵向闭环需要的页面和依赖，不生成空实现；当前完成度统一见[需求追踪矩阵](./requirements-traceability.md)，不在本文维护第二份进度表。
+V1.34 动作预标注交付顺序遵循[动作标注技术设计](./v1.34-action-annotation.md)第 7 节；总体技术设计第 21 节仅为历史顺序。每一阶段只激活当前纵向闭环需要的页面和依赖，不生成空实现；当前完成度统一见[需求追踪矩阵](./requirements-traceability.md)，不在本文维护第二份进度表。

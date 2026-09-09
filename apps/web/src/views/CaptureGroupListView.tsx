@@ -388,7 +388,10 @@ export default function CaptureGroupListView() {
                 <div className="capture-group-list" role="list" aria-label="采集记录列表">
                   <div className="capture-group-list-header" role="row" aria-hidden="true">
                     <div className="capture-group-list-th capture-group-list-th-identity">
-                      <span>采集标识 / 记录时间</span>
+                      <span>采集标识</span>
+                    </div>
+                    <div className="capture-group-list-th capture-group-list-th-time">
+                      <span>记录时间</span>
                     </div>
                     <div className="capture-group-list-th capture-group-list-th-facts">
                       <span>机位与状态</span>
@@ -431,11 +434,11 @@ export default function CaptureGroupListView() {
                               {identity}
                             </strong>
                           </div>
-                          <time className="capture-group-list-time" dateTime={eventTime}>
-                            <span className="visually-hidden">{eventTimeLabel}：</span>
-                            {formatDateTime(eventTime)}
-                          </time>
                         </header>
+                        <time className="capture-group-list-time" dateTime={eventTime}>
+                          <span className="visually-hidden">{eventTimeLabel}：</span>
+                          {formatDateTime(eventTime)}
+                        </time>
                         <dl className="capture-group-list-facts">
                           <div>
                             <dt className="visually-hidden">接收 / 机位</dt>
