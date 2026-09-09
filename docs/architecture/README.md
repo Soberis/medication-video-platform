@@ -1,12 +1,16 @@
 # Architecture Documents
 
-本索引汇总配药视频数据处理平台的当前规范与历史参考。当前需求方向以 V1.29 DRAFT 为准：产品默认链为外部接收、`CaptureGroup` 数据组、`CameraStream / ClipAsset`、媒体检查、MediaPipe machine evidence 与导出；`N=1` 只是一路视图，`hand-landmarks.v1` 继续按当前 CameraStream 生成 detection evidence CSV，且不依赖人工质量、Annotation、Review 或 Cleaning。人工质量、单组任务与 Revision、人工 Review、确定性标签适用性校验仅在项目需要 human ground truth 时使用。V1.28 仍是上一正式运行时基线，任何 runtime 删除或收缩都必须等待后续审计和批准。Candidate、权限、审计和 provenance 边界继续有效；CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实保留，CaptureSync Core API runtime 已退役，V1.22 多视角及 3D/标定/数据集平台仍为历史/延后方向。
+本索引汇总配药视频数据处理平台的当前规范与历史参考。当前需求方向以 V1.34 DRAFT 为准（配药视频动作时序预标注与人机协同，继承 V1.33/V1.30/V1.29）：产品默认链为外部接收、`CaptureGroup` 数据组、`CameraStream / ClipAsset`、媒体检查、MediaPipe 手部事实与可选的动作候选抽取、必要的人工微调与配套导出；`hand-landmarks.v1` 与 `human-demonstration-hdf5.v1` 分别满足单事实和动作-轨迹对齐导出。V1.28 仍是上一正式运行时基线，任何 runtime 删除或收缩都必须等待后续审计和批准。Candidate、权限、审计和 provenance 边界继续有效。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [V1.29 数据组主线收敛与 Runtime Simplification](../requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md) | 当前 DRAFT 需求方向；冻结前不改变 runtime |
+| [V1.34 需求基线（时序动作预标注与人机协同）](../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md) | 当前 DRAFT 需求方向；动作候选、防漏标交互与配套导出 |
+| [配药视频时序动作预标注与人机协同技术设计](./video-action-pre-annotation-and-human-loop-design.md) | Qwen3-VL 部署基线、单层原子动作、防漏标巡检与 HDF5 对齐架构 |
+| [V1.33 需求基线（导出选择范围）](../requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md) | 导出弹窗全量分页读取与单/多/全选范围语义 |
+| [V1.30 需求基线（浅色专业工作区与视频优先体验）](../requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md) | 浅色专业视觉方向、大播放器优先与按需展开标注 |
+| [V1.29 数据组主线收敛与 Runtime Simplification](../requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md) | 前序 DRAFT 需求方向；冻结前不改变 runtime |
 | [V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) | 上一正式导出边界；继承 V1.27 的 CaptureGroup 主链和 N=1 统一模型 |
 | [V1.27 AI evidence pipeline audit](./v1.27-ai-evidence-audit.md) | 上一版本的 MediaPipe/Candidate 证据审计，当前仍适用于检测事实部分 |
 | [V1.27 training traceability audit](./v1.27-training-traceability.md) | 上一版本的 provenance 审计；事件 manifest 部分仅作历史记录 |

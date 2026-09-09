@@ -2,26 +2,30 @@
 
 平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
 
-当前需求方向：V1.29 DRAFT（数据组主线收敛与 Runtime Simplification）。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
+当前需求方向：V1.34 DRAFT（配药视频动作时序预标注与人机协同），继承 V1.33/V1.30/V1.29。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
 
-V1.29 DRAFT 的目标默认产品主链：
+V1.34 DRAFT 的目标默认产品主链：
 
 ```text
 External Ingest / Upload
 → CaptureGroup → CameraStream / ClipAsset
-→ Media Probe → MediaPipe Candidate
+→ Media Probe → MediaPipe & Action Candidate
 → Automated / Human Quality
-→ Optional Annotation / Review
-→ Export
+→ AI-assisted Annotation / Review
+→ Export (hand-landmarks.v1 & Human Demonstration HDF5)
 ```
 
 `ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频可按既有规则执行 Media Probe 和幂等 MediaPipe Candidate 作业；Candidate 只提供辅助证据，不能写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用，现有 runtime 变更须等待审计。唯一公开导出 `hand-landmarks.v1` 从当前启用且可用的 CameraStream/ClipAsset 和当前 MediaPipe evidence 生成检测事实 CSV，支持项目范围或单一 CaptureGroup 范围，不读取人工质量、Annotation、Review 或 Cleaning；尚无实际 training consumer 读取证据。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除；历史迁移和文档只保留审计参考，V75 仅清除旧 eligibility view，不删除业务事实。
+采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频可按既有规则执行 Media Probe、幂等 MediaPipe 手部检测以及可选的动作时序提取作业；Candidate 只提供辅助证据，不能直接写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用。导出支持独立 MediaPipe `hand-landmarks.v1`，以及将手部 21 点骨骼与人工审核通过的动作标签以时间戳对齐配套打包的 `human-demonstration-hdf5.v1` 格式。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除。
 
 当前规范：
 
-- [V1.29 DRAFT 需求基线](./docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)
+- [V1.34 DRAFT 需求基线（时序动作预标注与人机协同）](./docs/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)
+- [配药视频时序动作预标注与人机协同技术设计](./docs/architecture/video-action-pre-annotation-and-human-loop-design.md)
+- [V1.33 DRAFT 需求基线（导出选择范围）](./docs/requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)
+- [V1.30 需求基线（浅色专业工作区与视频优先体验）](./docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)
+- [V1.29 数据组主线收敛需求基线](./docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)
 - [V1.28 上一正式需求基线](./docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
 - [V1.28 上一正式导出边界设计](./docs/architecture/v1.28-single-export-consolidation.md)
 - [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
