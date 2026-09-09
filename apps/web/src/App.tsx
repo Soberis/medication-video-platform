@@ -10,11 +10,10 @@ import {
   UsersRound,
   Video,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
-import { getProject } from '@/api/projects'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
@@ -29,22 +28,6 @@ const managementRoutePatterns = [
 ] as const
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
-
-function ProjectContext({ projectId }: { projectId: string }) {
-  const [name, setName] = useState<string | null>(null)
-  useEffect(() => {
-    const request = new AbortController()
-    void getProject(projectId, request.signal)
-      .then((project) => {
-        if (!request.signal.aborted) setName(project.display_name)
-      })
-      .catch(() => {
-        /* The page retains its own access and retry state. */
-      })
-    return () => request.abort()
-  }, [projectId])
-  return <p className="form-hint">当前项目：{name ?? projectId}</p>
-}
 
 function LocalUploadActivity() {
   const { tasks, uploadState, resetUpload } = useLocalUpload()
@@ -217,9 +200,6 @@ export default function AppShell() {
     >
       <LocalUploadProvider>
         <LocalUploadActivity />
-        {projectId && location.pathname !== paths.captureGroups(projectId) ? (
-          <ProjectContext key={projectId} projectId={projectId} />
-        ) : null}
         <Outlet />
       </LocalUploadProvider>
     </AppFrame>

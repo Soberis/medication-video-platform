@@ -213,11 +213,7 @@ export default function AnnotationTaskListView({
             </Button>
           }
         />
-      ) : (
-        <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
-          刷新任务
-        </Button>
-      )}
+      ) : null}
       {loadState === 'loading' ? <LoadingState>正在加载标注任务…</LoadingState> : null}
       {loadState === 'error' ? (
         <ErrorState code={errorCode} onRetry={() => void loadTasks()}>

@@ -1,4 +1,5 @@
 import { App as AntdApp, Button, Form, Input, Table } from 'antd'
+import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -127,7 +128,8 @@ export default function AccountManagementView() {
         description="平台账号加入项目后，才可访问项目数据。"
         actions={
           <Button
-            size="small"
+            type="text"
+            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
             loading={loadState === 'loading'}
             onClick={() => void loadAccounts()}
           >
@@ -146,44 +148,46 @@ export default function AccountManagementView() {
           className="account-form"
           onFinish={(values) => void createAccount(values)}
         >
-          <Form.Item
-            label="账号"
-            name="username"
-            validateFirst
-            rules={[
-              { required: true, whitespace: true, message: '请输入账号。' },
-              {
-                validator: (_, value: unknown) => {
-                  if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
-                  return usernamePattern.test(value.trim())
-                    ? Promise.resolve()
-                    : Promise.reject(new Error(usernameConstraintMessage))
+          <div className="account-form-row">
+            <Form.Item
+              label="账号"
+              name="username"
+              validateFirst
+              rules={[
+                { required: true, whitespace: true, message: '请输入账号。' },
+                {
+                  validator: (_, value: unknown) => {
+                    if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
+                    return usernamePattern.test(value.trim())
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(usernameConstraintMessage))
+                  },
                 },
-              },
-            ]}
-            extra="3 至 128 位；仅限字母、数字和 . _ : @ -"
-          >
-            <Input autoComplete="username" maxLength={128} placeholder="输入平台账号" />
-          </Form.Item>
-          <Form.Item
-            label="初始密码"
-            name="password"
-            validateFirst
-            rules={[
-              { required: true, message: '请输入初始密码。' },
-              {
-                validator: (_, value: unknown) => {
-                  if (typeof value !== 'string' || value.length === 0) return Promise.resolve()
-                  return value.length >= 12 && value.length <= 72
-                    ? Promise.resolve()
-                    : Promise.reject(new Error(passwordConstraintMessage))
+              ]}
+              extra="3 至 128 位；仅限字母、数字和 . _ : @ -"
+            >
+              <Input autoComplete="username" maxLength={128} placeholder="输入平台账号" />
+            </Form.Item>
+            <Form.Item
+              label="初始密码"
+              name="password"
+              validateFirst
+              rules={[
+                { required: true, message: '请输入初始密码。' },
+                {
+                  validator: (_, value: unknown) => {
+                    if (typeof value !== 'string' || value.length === 0) return Promise.resolve()
+                    return value.length >= 12 && value.length <= 72
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(passwordConstraintMessage))
+                  },
                 },
-              },
-            ]}
-            extra="12 至 72 个字符"
-          >
-            <Input.Password autoComplete="new-password" maxLength={72} placeholder="输入初始密码" />
-          </Form.Item>
+              ]}
+              extra="12 至 72 个字符"
+            >
+              <Input.Password autoComplete="new-password" maxLength={72} placeholder="输入初始密码" />
+            </Form.Item>
+          </div>
           <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>
           <Button htmlType="submit" type="primary" loading={isSubmitting}>
             创建账号

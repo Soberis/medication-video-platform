@@ -1,5 +1,5 @@
-import { Button, Segmented } from 'antd'
-import { ArrowRight, RefreshCw, Video } from 'lucide-react'
+import { Button, Input, Pagination, Segmented } from 'antd'
+import { ArrowRight, RefreshCw, Search, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
@@ -14,6 +14,7 @@ import { getProject, type DataProject } from '@/api/projects'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
+import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
@@ -69,6 +70,10 @@ export default function CaptureGroupListView() {
   })
   const [project, setProject] = useState<DataProject | null>(null)
   const currentProject = project?.project_id === projectId ? project : null
+  const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [refreshEpoch, setRefreshEpoch] = useState(0)
   const groupRequest = useRef<RequestToken | null>(null)
   const taskRequest = useRef<RequestToken | null>(null)
   const groupGeneration = useRef(0)
@@ -78,6 +83,22 @@ export default function CaptureGroupListView() {
     if (taskReadState.status !== 'success') return new Map<string, AnnotationTask>()
     return new Map(taskReadState.items.map((task) => [task.capture_group_id, task]))
   }, [taskReadState])
+
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return rows
+    return rows.filter((group) => {
+      const identity = (group.capture_group_key ?? shortId(group.capture_group_id)).toLowerCase()
+      const fullId = group.capture_group_id.toLowerCase()
+      const timeStr = formatDateTime(group.device_time_utc ?? group.created_at).toLowerCase()
+      return identity.includes(query) || fullId.includes(query) || timeStr.includes(query)
+    })
+  }, [rows, searchQuery])
+
+  const paginatedRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredRows.slice(startIndex, startIndex + pageSize)
+  }, [filteredRows, currentPage, pageSize])
 
   const loadGroups = useCallback(
     async (append = false, cursor: string | null = null) => {
@@ -220,18 +241,45 @@ export default function CaptureGroupListView() {
     }
   }, [loadGroups, loadTasks, projectId, restoredList])
 
+  const openCaptureGroup = useCallback(
+    (targetGroupId: string) => {
+      const captureGroupList: ListReturnState = {
+        projectId,
+        viewer,
+        rows,
+        nextCursor,
+        scrollY: window.scrollY,
+      }
+      void (async () => {
+        await navigate(location.pathname + location.search, {
+          replace: true,
+          state: { captureGroupList },
+        })
+        await navigate(paths.captureGroup(projectId, targetGroupId), {
+          state: { captureGroupList },
+        })
+      })()
+    },
+    [location.pathname, location.search, navigate, nextCursor, projectId, rows, viewer],
+  )
+
   return (
     <>
+      <ProjectBreadcrumb projectId={projectId} currentProject={currentProject} />
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
-        eyebrow={currentProject?.display_name ?? '当前项目'}
         title="视频"
         actions={
           <>
             {session?.role === 'ADMIN' ? (
               <>
-                <Button type="primary" onClick={() => void navigate(paths.localUpload)}>
+                <Button
+                  type="primary"
+                  onClick={() =>
+                    void navigate(`${paths.localUpload}?projectId=${encodeURIComponent(projectId)}`)
+                  }
+                >
                   上传视频
                 </Button>
                 {currentProject?.current_role === 'ADMIN' ? (
@@ -241,10 +289,10 @@ export default function CaptureGroupListView() {
             ) : null}
             <Button
               type="text"
-              size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={loadingMode === 'refresh'}
               onClick={() => {
+                setRefreshEpoch((v) => v + 1)
                 void loadGroups()
                 void loadTasks()
               }}
@@ -254,22 +302,47 @@ export default function CaptureGroupListView() {
           </>
         }
       />
-      <Segmented
-        aria-label="视频视图"
-        value={activeView}
-        onChange={(value) => setSearchParams(value === 'all' ? {} : { view: value })}
-        options={[
-          { label: '全部视频', value: 'all' },
-          { label: '待标注', value: 'assigned' },
-          { label: '待复核', value: 'submitted' },
-          { label: '待返工', value: 'rework' },
-          { label: '已完成', value: 'completed' },
-          { label: '我的待办', value: 'mine' },
-          ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
-        ]}
-      />
+      <div className="capture-group-list-toolbar">
+        <Segmented
+          aria-label="视频视图"
+          value={activeView}
+          onChange={(value) => setSearchParams(value === 'all' ? {} : { view: value })}
+          options={[
+            { label: '全部视频', value: 'all' },
+            { label: '待标注', value: 'assigned' },
+            { label: '待复核', value: 'submitted' },
+            { label: '待返工', value: 'rework' },
+            { label: '已完成', value: 'completed' },
+            { label: '我的待办', value: 'mine' },
+            ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
+          ]}
+        />
+        {activeView === 'all' && rows.length ? (
+          <div className="capture-group-list-toolbar-actions">
+            <Input
+              className="capture-group-list-search"
+              placeholder="搜索视频标识或时间…"
+              prefix={<Search size={14} className="capture-group-search-icon" />}
+              allowClear
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
+              style={{ width: 220 }}
+            />
+            <span className="capture-group-list-count">
+              {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
+            </span>
+          </div>
+        ) : null}
+      </div>
       {activeView !== 'all' ? (
-        <AnnotationTaskListView embedded filter={activeView} />
+        <AnnotationTaskListView
+          embedded
+          filter={activeView}
+          key={`${activeView}:${refreshEpoch}`}
+        />
       ) : (
         <>
           {loadState === 'loading' && !rows.length ? (
@@ -290,138 +363,187 @@ export default function CaptureGroupListView() {
                 </div>
               }
             >
-              {session?.role === 'ADMIN' ? <Link to={paths.localUpload}>上传视频</Link> : null}
+              {session?.role === 'ADMIN' ? (
+                <Button
+                  type="primary"
+                  onClick={() =>
+                    void navigate(`${paths.localUpload}?projectId=${encodeURIComponent(projectId)}`)
+                  }
+                >
+                  上传视频
+                </Button>
+              ) : null}
             </EmptyState>
           ) : null}
           {rows.length ? (
             <section className="capture-group-list-surface" aria-label="采集记录结果">
-              <div className="capture-group-list-meta">
-                <span className="capture-group-list-count">
-                  {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
-                </span>
-              </div>
-              <div className="capture-group-list" role="list" aria-label="采集记录列表">
-                {rows.map((group) => {
-                  const identity = group.capture_group_key ?? shortId(group.capture_group_id)
-                  const identityLabel = `采集记录 · ${identity}`
-                  const eventTime = group.device_time_utc ?? group.created_at
-                  const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
-                  const task = tasksByGroupId.get(group.capture_group_id)
-                  return (
-                    <div
-                      className="capture-group-list-row"
-                      key={group.capture_group_id}
-                      role="listitem"
-                      aria-label={identityLabel}
-                    >
-                      <header className="capture-group-list-row-header">
-                        <div className="capture-group-list-identity">
-                          <Video aria-hidden="true" size={16} strokeWidth={1.8} />
-                          <strong className="capture-group-list-title">{identity}</strong>
-                        </div>
-                        <time className="capture-group-list-time" dateTime={eventTime}>
-                          <span className="visually-hidden">{eventTimeLabel}：</span>
-                          {formatDateTime(eventTime)}
-                        </time>
-                      </header>
-                      <dl className="capture-group-list-facts">
-                        <div>
-                          <dt className="visually-hidden">接收 / 机位</dt>
-                          <dd className="capture-group-list-receipt">
-                            <StatusIndicator tone={receiptTone(group.receipt_state)}>
-                              {formatListReceipt(group)}
-                            </StatusIndicator>
-                            {group.missing_camera_numbers.length ? (
-                              <span className="capture-group-list-missing-views">
-                                缺失：
-                                {group.missing_camera_numbers
-                                  .map((cameraNumber) => `机位 ${cameraNumber}`)
-                                  .join('、')}
-                              </span>
-                            ) : null}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="visually-hidden">人工标签任务</dt>
-                          <dd>
-                            {taskReadState.status === 'loading' ? (
-                              <StatusIndicator ariaLive="polite" tone="information">
-                                人工任务读取中
-                              </StatusIndicator>
-                            ) : taskReadState.status === 'error' ? (
-                              <>
-                                <StatusIndicator ariaLive="polite" tone="warning">
-                                  人工任务状态暂不可用
-                                </StatusIndicator>
-                                <Button
-                                  type="link"
-                                  size="small"
-                                  aria-label="重试读取人工任务"
-                                  onClick={() => void loadTasks()}
-                                >
-                                  重试
-                                </Button>
-                              </>
-                            ) : task ? (
-                              <StatusIndicator tone="information">
-                                {formatTaskStatus(task)}
-                              </StatusIndicator>
-                            ) : null}
-                          </dd>
-                        </div>
-                      </dl>
-                      <footer className="capture-group-list-row-footer">
-                        <Link
-                          className="capture-group-list-open"
-                          aria-label={`查看视频：${identityLabel}`}
-                          to={paths.captureGroup(projectId, group.capture_group_id)}
-                          onClick={(event) => {
-                            if (
-                              event.button !== 0 ||
-                              event.metaKey ||
-                              event.ctrlKey ||
-                              event.shiftKey ||
-                              event.altKey
-                            )
-                              return
-                            event.preventDefault()
-                            const captureGroupList: ListReturnState = {
-                              projectId,
-                              viewer,
-                              rows,
-                              nextCursor,
-                              scrollY: window.scrollY,
-                            }
-                            void (async () => {
-                              await navigate(location.pathname + location.search, {
-                                replace: true,
-                                state: { captureGroupList },
-                              })
-                              await navigate(
-                                paths.captureGroup(projectId, group.capture_group_id),
-                                {
-                                  state: { captureGroupList },
-                                },
-                              )
-                            })()
-                          }}
-                        >
-                          查看视频 <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
-                        </Link>
-                      </footer>
-                    </div>
-                  )
-                })}
-              </div>
-              {nextCursor ? (
-                <div className="capture-group-list-pagination">
-                  <Button
-                    loading={loadingMode === 'more'}
-                    size="small"
-                    onClick={() => void loadGroups(true, nextCursor)}
-                  >
-                    加载更多
+              {filteredRows.length === 0 ? (
+                <div className="capture-group-list-empty-search">
+                  <span>未找到与 “{searchQuery}” 匹配的采集记录</span>
+                  <Button size="small" onClick={() => setSearchQuery('')}>
+                    清除搜索
                   </Button>
+                </div>
+              ) : (
+                <div className="capture-group-list" role="list" aria-label="采集记录列表">
+                  <div className="capture-group-list-header" role="row" aria-hidden="true">
+                    <div className="capture-group-list-th capture-group-list-th-identity">
+                      <span>采集标识 / 记录时间</span>
+                    </div>
+                    <div className="capture-group-list-th capture-group-list-th-facts">
+                      <span>机位与状态</span>
+                    </div>
+                    <div className="capture-group-list-th capture-group-list-th-action">
+                      <span>操作</span>
+                    </div>
+                  </div>
+                  {paginatedRows.map((group) => {
+                    const identity = group.capture_group_key ?? shortId(group.capture_group_id)
+                    const identityLabel = `采集记录 · ${identity}`
+                    const eventTime = group.device_time_utc ?? group.created_at
+                    const eventTimeLabel = group.device_time_utc ? '拍摄时间' : '记录时间'
+                    const task = tasksByGroupId.get(group.capture_group_id)
+                    return (
+                      <div
+                        className="capture-group-list-row"
+                        key={group.capture_group_id}
+                        role="listitem"
+                        aria-label={identityLabel}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement
+                          if (
+                            target.closest('a') ||
+                            target.closest('button') ||
+                            (window.getSelection()?.toString().length ?? 0) > 0
+                          ) {
+                            return
+                          }
+                          openCaptureGroup(group.capture_group_id)
+                        }}
+                      >
+                        <header className="capture-group-list-row-header">
+                          <div className="capture-group-list-identity">
+                            <Video aria-hidden="true" size={16} strokeWidth={1.8} />
+                            <strong
+                              className="capture-group-list-title"
+                              title={`完整 ID: ${group.capture_group_id}`}
+                            >
+                              {identity}
+                            </strong>
+                          </div>
+                          <time className="capture-group-list-time" dateTime={eventTime}>
+                            <span className="visually-hidden">{eventTimeLabel}：</span>
+                            {formatDateTime(eventTime)}
+                          </time>
+                        </header>
+                        <dl className="capture-group-list-facts">
+                          <div>
+                            <dt className="visually-hidden">接收 / 机位</dt>
+                            <dd className="capture-group-list-receipt">
+                              <StatusIndicator tone={receiptTone(group.receipt_state)}>
+                                {formatListReceipt(group)}
+                              </StatusIndicator>
+                              {group.missing_camera_numbers.length ? (
+                                <span className="capture-group-list-missing-views">
+                                  缺失：
+                                  {group.missing_camera_numbers
+                                    .map((cameraNumber) => `机位 ${cameraNumber}`)
+                                    .join('、')}
+                                </span>
+                              ) : null}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="visually-hidden">人工标签任务</dt>
+                            <dd>
+                              {taskReadState.status === 'loading' ? (
+                                <StatusIndicator ariaLive="polite" tone="information">
+                                  人工任务读取中
+                                </StatusIndicator>
+                              ) : taskReadState.status === 'error' ? (
+                                <>
+                                  <StatusIndicator ariaLive="polite" tone="warning">
+                                    人工任务状态暂不可用
+                                  </StatusIndicator>
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    aria-label="重试读取人工任务"
+                                    onClick={() => void loadTasks()}
+                                  >
+                                    重试
+                                  </Button>
+                                </>
+                              ) : task ? (
+                                <StatusIndicator tone="information">
+                                  {formatTaskStatus(task)}
+                                </StatusIndicator>
+                              ) : null}
+                            </dd>
+                          </div>
+                        </dl>
+                        <footer className="capture-group-list-row-footer">
+                          <Link
+                            className="capture-group-list-open"
+                            aria-label={`查看视频：${identityLabel}`}
+                            to={paths.captureGroup(projectId, group.capture_group_id)}
+                            onClick={(event: React.MouseEvent) => {
+                              if (
+                                event.button !== 0 ||
+                                event.metaKey ||
+                                event.ctrlKey ||
+                                event.shiftKey ||
+                                event.altKey
+                              )
+                                return
+                              event.preventDefault()
+                              openCaptureGroup(group.capture_group_id)
+                            }}
+                          >
+                            <span>查看视频</span>
+                            <ArrowRight aria-hidden="true" size={14} strokeWidth={1.8} />
+                          </Link>
+                        </footer>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {nextCursor || filteredRows.length > 10 ? (
+                <div className="capture-group-list-pagination">
+                  <div className="capture-group-list-pagination-left">
+                    {nextCursor ? (
+                      <Button
+                        loading={loadingMode === 'more'}
+                        size="small"
+                        onClick={() => void loadGroups(true, nextCursor)}
+                      >
+                        加载更多
+                      </Button>
+                    ) : (
+                      <span className="capture-group-list-pagination-summary">
+                        共 {filteredRows.length} 条
+                      </span>
+                    )}
+                  </div>
+                  {filteredRows.length > 10 ? (
+                    <Pagination
+                      size="small"
+                      current={currentPage}
+                      pageSize={pageSize}
+                      total={filteredRows.length}
+                      showSizeChanger
+                      pageSizeOptions={['10', '20', '50']}
+                      showTotal={(total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`}
+                      onChange={(page, newPageSize) => {
+                        setCurrentPage(page)
+                        if (newPageSize && newPageSize !== pageSize) {
+                          setPageSize(newPageSize)
+                          setCurrentPage(1)
+                        }
+                      }}
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </section>

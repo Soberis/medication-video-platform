@@ -6,6 +6,7 @@ import { Link, useBlocker, useLocation, useParams } from 'react-router'
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
 import { PageHeader } from '@/components/PageHeader'
+import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
@@ -213,13 +214,15 @@ export default function CaptureGroupDetailView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑导航">
+      <ProjectBreadcrumb projectId={projectId}>
         <Link to={paths.captureGroups(projectId)} state={location.state}>
           视频
         </Link>
-        <span aria-hidden="true">/</span>
+        <span className="breadcrumb-separator" aria-hidden="true">
+          /
+        </span>
         <span>{eventIdentity}</span>
-      </nav>
+      </ProjectBreadcrumb>
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
         titleId="capture-group-detail-title"
@@ -229,7 +232,6 @@ export default function CaptureGroupDetailView() {
           <>
             {actionPanel ? (
               <Button
-                size="small"
                 aria-expanded={isPanelOpen}
                 aria-controls="human-label-panel"
                 onClick={() => setPanelOverride({ locationKey: location.key, open: !isPanelOpen })}
@@ -241,7 +243,6 @@ export default function CaptureGroupDetailView() {
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
-                size="small"
                 type="primary"
                 loading={isReceiptFinalizationPending}
                 onClick={() => setIsReceiptConfirmationOpen(true)}
@@ -250,7 +251,6 @@ export default function CaptureGroupDetailView() {
               </Button>
             ) : null}
             <Button
-              size="small"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={data.groupLoadState === 'loading'}
               onClick={() => void data.refresh()}

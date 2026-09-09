@@ -1,6 +1,7 @@
 import { Alert, App as AntdApp, Button, Form, Select, Table } from 'antd'
+import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useParams } from 'react-router'
 
 import { AdminApiError, listPlatformAccounts, type PlatformAccount } from '@/api/admin'
 import { CatalogApiError } from '@/api/catalog'
@@ -12,8 +13,8 @@ import {
   type ProjectRole,
   upsertProjectMembership,
 } from '@/api/projects'
-import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
+import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -30,6 +31,7 @@ export default function ProjectMembershipView() {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
   const [memberships, setMemberships] = useState<ProjectMembership[]>([])
   const [projectRole, setProjectRole] = useState<ProjectRole | null>(null)
+  const [projectName, setProjectName] = useState<string | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [isMutating, setIsMutating] = useState(false)
@@ -51,6 +53,7 @@ export default function ProjectMembershipView() {
       ])
       if (activeRequest.current !== request) return
       setProjectRole(project.current_role)
+      setProjectName(project.display_name)
       setMemberships(listedMemberships)
       setAccounts(listedAccounts)
       setLoadState('success')
@@ -59,6 +62,7 @@ export default function ProjectMembershipView() {
       setMemberships([])
       setAccounts([])
       setProjectRole(null)
+      setProjectName(null)
       setLoadState('error')
       setErrorMessage(
         error instanceof AdminApiError || error instanceof CatalogApiError
@@ -123,11 +127,9 @@ export default function ProjectMembershipView() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="面包屑导航">
-        <Link to={paths.projects}>项目</Link>
-        <span aria-hidden="true">/</span>
+      <ProjectBreadcrumb projectId={projectId} projectName={projectName} switchTarget="members">
         <span>项目成员</span>
-      </nav>
+      </ProjectBreadcrumb>
       <PageHeader
         eyebrow="项目访问范围"
         titleId="members-title"
@@ -135,7 +137,7 @@ export default function ProjectMembershipView() {
         description="维护当前项目的成员和角色。"
         actions={
           <Button
-            size="small"
+            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
             loading={loadState === 'loading'}
             onClick={() => void loadMemberships()}
           >

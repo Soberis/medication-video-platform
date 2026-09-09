@@ -51,6 +51,22 @@ export function stubGroupList(
         }),
       )
     }
+    if (path === '/api/v1/projects') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              project_id: projectId,
+              display_name: '合成数据项目',
+              status: 'ACTIVE',
+              current_role: options.projectRole ?? 'ADMIN',
+              created_at: '2026-09-08T00:00:00Z',
+            },
+          ],
+          can_create_projects: true,
+        }),
+      )
+    }
     if (path.endsWith('/capture-groups')) {
       if (options.groupListError) {
         return Promise.resolve(

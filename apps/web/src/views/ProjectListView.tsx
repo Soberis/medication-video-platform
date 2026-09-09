@@ -1,6 +1,7 @@
 import { App as AntdApp, Button, Dropdown } from 'antd'
+import { FolderKanban, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
 import {
@@ -20,6 +21,7 @@ type LoadState = 'loading' | 'success' | 'error'
 
 export default function ProjectListView() {
   const { message } = AntdApp.useApp()
+  const navigate = useNavigate()
   const prompt = usePromptDialog()
   const [projects, setProjects] = useState<DataProject[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -158,7 +160,7 @@ export default function ProjectListView() {
         actions={
           <>
             <Button
-              size="small"
+              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={loadState === 'loading'}
               onClick={() => void loadProjects()}
             >
@@ -182,16 +184,26 @@ export default function ProjectListView() {
         <section className="project-list-surface working-surface" aria-label="项目列表">
           <ul className="project-list" aria-label="已加入项目">
             {projects.map((project) => (
-              <li key={project.project_id} className="project-list-item">
+              <li
+                key={project.project_id}
+                className="project-list-item is-interactive"
+                onClick={() => void navigate(paths.captureGroups(project.project_id))}
+              >
                 <div className="project-list-name">
                   <div className="project-list-heading">
+                    <FolderKanban aria-hidden="true" size={16} strokeWidth={1.8} />
                     <strong>{project.display_name}</strong>
                     <StatusBadge tone={project.current_role === 'ADMIN' ? 'info' : 'default'}>
                       {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                     </StatusBadge>
                   </div>
+                  <p className="project-list-meta">
+                    {project.created_at
+                      ? `创建时间：${project.created_at.slice(0, 10)}`
+                      : '已加入项目'}
+                  </p>
                 </div>
-                <div className="project-list-actions">
+                <div className="project-list-actions" onClick={(event) => event.stopPropagation()}>
                   <Link
                     className="project-open-link"
                     to={paths.captureGroups(project.project_id)}

@@ -432,6 +432,30 @@ describe('capture group list view', () => {
       expect(screen.queryByRole('link', { name: /继续标注/ })).not.toBeInTheDocument()
     })
   })
+
+  it('renders breadcrumb and allows project switching through the project switcher', async () => {
+    const loaded = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupList([loaded], [])
+    const user = userEvent.setup()
+    renderView()
+
+    const breadcrumb = await screen.findByRole('navigation', { name: '面包屑导航' })
+    expect(breadcrumb).toBeInTheDocument()
+    const projectLink = within(breadcrumb).getByRole('link', { name: '项目' })
+    expect(projectLink).toHaveAttribute('href', paths.projects)
+
+    const switcherButton = within(breadcrumb).getByRole('button', {
+      name: /当前项目：合成数据项目/,
+    })
+    expect(switcherButton).toBeInTheDocument()
+
+    await user.click(switcherButton)
+    expect(await screen.findByText('全部项目')).toBeInTheDocument()
+  })
 })
 
 function renderView(route = paths.captureGroups(projectId)) {

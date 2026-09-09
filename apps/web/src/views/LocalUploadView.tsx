@@ -1,6 +1,7 @@
 import { Alert, Button, Progress, Select } from 'antd'
+import { RefreshCw, UploadCloud, Video } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
 import type { LocalUploadPhase } from '@/api/local-upload'
@@ -93,8 +94,10 @@ function uploadResultDescription(
 }
 
 export default function LocalUploadView() {
+  const [searchParams] = useSearchParams()
+  const initialProjectId = searchParams.get('projectId') ?? ''
   const [projects, setProjects] = useState<DataProject[]>([])
-  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const {
     tasks,
@@ -107,6 +110,8 @@ export default function LocalUploadView() {
   )
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const projectRequest = useRef<AbortController | null>(null)
   const isUploading = uploadState === 'uploading'
   const canStart =
@@ -139,9 +144,10 @@ export default function LocalUploadView() {
       const response = await listProjects(request.signal)
       if (projectRequest.current !== request) return
       setProjects(response)
-      setSelectedProjectId((current) =>
-        response.some((project) => project.project_id === current) ? current : '',
-      )
+      setSelectedProjectId((current) => {
+        const candidate = current || initialProjectId
+        return response.some((project) => project.project_id === candidate) ? candidate : ''
+      })
       setProjectLoadState('success')
     } catch (error) {
       if (request.signal.aborted || projectRequest.current !== request) return
@@ -155,7 +161,7 @@ export default function LocalUploadView() {
     } finally {
       if (projectRequest.current === request) projectRequest.current = null
     }
-  }, [])
+  }, [initialProjectId])
   useEffect(() => {
     const timer = window.setTimeout(() => void loadProjects(), 0)
     return () => {
@@ -179,6 +185,21 @@ export default function LocalUploadView() {
     setErrorCode('')
     setErrorMessage('')
   }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragging(false)
+    if (!selectedProjectId || isUploading) return
+    const files = Array.from(event.dataTransfer.files ?? [])
+    if (files.length === 0) return
+    const videoFiles = files.filter(
+      (file) => file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm)$/i.test(file.name),
+    )
+    setSelectedFiles(videoFiles.length > 0 ? videoFiles : files)
+    resetUpload()
+    setErrorCode('')
+    setErrorMessage('')
+  }
   function startUpload() {
     if (!canStart) return
     const files = [...selectedFiles]
@@ -195,6 +216,7 @@ export default function LocalUploadView() {
         description="选择项目和视频，开始上传。"
         actions={
           <Button
+            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
             loading={projectLoadState === 'loading'}
             disabled={isUploading}
             onClick={() => void loadProjects()}
@@ -242,16 +264,52 @@ export default function LocalUploadView() {
             </div>
             <div className="local-upload-field local-upload-files-field">
               <label htmlFor="local-upload-files">视频文件</label>
-              <input
-                id="local-upload-files"
-                className="local-file-input"
-                type="file"
-                accept="video/*"
-                multiple
-                aria-describedby={`local-upload-files-hint${selectedFiles.length > 0 ? ' local-upload-selected-files' : ''}`}
-                disabled={isUploading || !selectedProjectId}
-                onChange={selectFiles}
-              />
+              <div
+                className={`local-upload-dropzone ${isDragging ? 'is-dragging' : ''} ${!selectedProjectId || isUploading ? 'is-disabled' : ''}`}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  if (selectedProjectId && !isUploading) setIsDragging(true)
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault()
+                  setIsDragging(false)
+                }}
+                onDrop={handleDrop}
+                onClick={() => {
+                  if (selectedProjectId && !isUploading) {
+                    fileInputRef.current?.click()
+                  }
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  id="local-upload-files"
+                  className="local-file-input visually-hidden-input"
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  aria-describedby={`local-upload-files-hint${selectedFiles.length > 0 ? ' local-upload-selected-files' : ''}`}
+                  disabled={isUploading || !selectedProjectId}
+                  onChange={selectFiles}
+                />
+                <div className="dropzone-inner">
+                  <div className="dropzone-icon-box">
+                    <UploadCloud aria-hidden="true" size={22} strokeWidth={1.8} />
+                  </div>
+                  <div className="dropzone-text">
+                    <span className="dropzone-primary-action">
+                      {selectedFiles.length > 0
+                        ? `已选择 ${selectedFiles.length} 个视频文件（点击或拖拽更换）`
+                        : '点击选择视频，或将视频文件拖拽至此处'}
+                    </span>
+                    <span className="dropzone-hint-text">
+                      {selectedProjectId
+                        ? '支持 MP4、MOV、WebM 等常见视频格式，支持多文件批量选择'
+                        : '请先在上方选择所属项目'}
+                    </span>
+                  </div>
+                </div>
+              </div>
               <p id="local-upload-files-hint" className="form-hint">
                 {selectedProjectId ? '可选择多个视频，平台会分别上传。' : '请先选择项目。'}
               </p>
@@ -263,9 +321,20 @@ export default function LocalUploadView() {
                 </p>
                 <ul className="selected-file-list" aria-label="已选视频">
                   {selectedFiles.map((file) => (
-                    <li key={`${file.name}:${file.size}:${file.lastModified}`}>
-                      <strong>{file.name}</strong>
-                      <span>
+                    <li
+                      key={`${file.name}:${file.size}:${file.lastModified}`}
+                      className="selected-file-item"
+                    >
+                      <div className="selected-file-main">
+                        <Video
+                          aria-hidden="true"
+                          size={15}
+                          strokeWidth={1.8}
+                          className="selected-file-icon"
+                        />
+                        <strong>{file.name}</strong>
+                      </div>
+                      <span className="selected-file-meta">
                         {file.type || '视频'} · {formatBytes(file.size)}
                       </span>
                     </li>
