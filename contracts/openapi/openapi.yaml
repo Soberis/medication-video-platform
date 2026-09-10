@@ -3846,6 +3846,60 @@ paths:
                 items: { $ref: "#/components/schemas/ActionCandidate" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /projects/{project_id}/capture-groups/{capture_group_id}/action-candidate-job:
+    get:
+      operationId: getActionCandidateJob
+      tags: [AI Candidates]
+      summary: Read latest action candidate job status for a capture group
+      description: >-
+        Requires active project membership. Returns 200 with the latest action candidate
+        job if one has been dispatched, or 204 No Content if none exists.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Latest action candidate job status.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionCandidateJobResponse" }
+        "204":
+          description: No action candidate job has been queued yet.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /projects/{project_id}/capture-groups/{capture_group_id}/action-candidate-jobs:
+    post:
+      operationId: queueActionCandidateJob
+      tags: [AI Candidates]
+      summary: Manually queue or retry an action candidate job for a project capture group
+      description: >-
+        Requires active project membership. Queues a new Qwen action candidate job
+        targeting the primary clip asset of the capture group.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: Action candidate job queued.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionCandidateJobResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/action-result:
     put:
       operationId: acceptActionCandidateResult
@@ -7634,6 +7688,22 @@ components:
         source_window: { type: integer }
         stitched_windows: { type: array, items: { type: integer } }
         created_at: { type: string, format: date-time }
+    ActionCandidateJobResponse:
+      type: object
+      required: [job_id, project_id, capture_group_id, clip_asset_id, status, algorithm_key, created_at, updated_at]
+      properties:
+        job_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        capture_group_id: { type: string, format: uuid }
+        clip_asset_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, COMPLETED, FAILED]
+        algorithm_key: { type: string }
+        error_code: { type: [string, "null"] }
+        error_message: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     ActionCandidateResultRequest:
       type: object
       required: [message_id, model_name, sampling_fps, peak_memory_mb, inference_time_ms, started_at, completed_at, segments]

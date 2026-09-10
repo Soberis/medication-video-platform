@@ -93,12 +93,21 @@ function Start-LocalProcess {
         [string]$Arguments,
         [string]$LogPath
     )
-    $childEnvironment = @{}
-    Get-ChildItem Env: | ForEach-Object { $childEnvironment[$_.Name] = $_.Value }
-    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $root `
-        -PassThru `
-        -WindowStyle Hidden -RedirectStandardOutput $LogPath -RedirectStandardError "$LogPath.error.log" `
-        -Environment $childEnvironment
+    $startParams = @{
+        FilePath = $FilePath
+        ArgumentList = $Arguments
+        WorkingDirectory = $root
+        PassThru = $true
+        WindowStyle = 'Hidden'
+        RedirectStandardOutput = $LogPath
+        RedirectStandardError = "$LogPath.error.log"
+    }
+    if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $childEnvironment = @{}
+        Get-ChildItem Env: | ForEach-Object { $childEnvironment[$_.Name] = $_.Value }
+        $startParams['Environment'] = $childEnvironment
+    }
+    $process = Start-Process @startParams
     $managedProcesses[$Key] = [ordered]@{
         processId = $process.Id
         name = $Name
