@@ -29,6 +29,16 @@ class RabbitAiTopologyConfiguration {
 	}
 
 	@Bean
+	Queue aiActionQueue() {
+		return new Queue(AiMessagingTopology.ACTION_QUEUE, true, false, false);
+	}
+
+	@Bean
+	Binding aiActionBinding(@Qualifier("aiActionQueue") Queue aiActionQueue, DirectExchange aiExchange) {
+		return BindingBuilder.bind(aiActionQueue).to(aiExchange).with(AiMessagingTopology.ACTION_ROUTING_KEY);
+	}
+
+	@Bean
 	DirectExchange aiDeadLetterExchange() {
 		return new DirectExchange(AiMessagingTopology.DEAD_LETTER_EXCHANGE, true, false);
 	}

@@ -6,4 +6,6 @@ public interface AiJobDispatchPort {
 
 	void enqueue(AiHandPoseJobEnvelope envelope, Instant availableAt);
 
+	void enqueueAction(AiActionJobEnvelope envelope, Instant availableAt);
+
 }

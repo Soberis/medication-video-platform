@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import com.medicationvideo.platform.aicandidate.AiActionJobEnvelope;
 import com.medicationvideo.platform.aicandidate.AiHandPoseJobEnvelope;
 import com.medicationvideo.platform.aicandidate.AiJobDispatchPort;
 
@@ -40,6 +41,24 @@ class JdbcAiJobOutbox implements AiJobDispatchPort {
 		}
 		catch (JacksonException exception) {
 			throw new IllegalStateException("The AI hand pose job envelope could not be serialized.", exception);
+		}
+	}
+
+	@Override
+	public void enqueueAction(AiActionJobEnvelope envelope, Instant availableAt) {
+		try {
+			this.jdbcTemplate.update("""
+					INSERT INTO outbox_event (
+					    outbox_event_id, aggregate_type, aggregate_id, event_type,
+					    schema_version, exchange_name, routing_key, payload_json,
+					    occurred_at, available_at)
+					VALUES (?, 'AiJob', ?, 'AiActionJobRequestedV1', ?, ?, ?, CAST(? AS JSONB), ?, ?)
+					""", UUID.randomUUID(), envelope.jobId(), envelope.schemaVersion(), AiMessagingTopology.EXCHANGE,
+					AiMessagingTopology.ACTION_ROUTING_KEY, this.objectMapper.writeValueAsString(envelope),
+					Timestamp.from(envelope.requestedAt()), Timestamp.from(availableAt));
+		}
+		catch (JacksonException exception) {
+			throw new IllegalStateException("The AI action job envelope could not be serialized.", exception);
 		}
 	}
 

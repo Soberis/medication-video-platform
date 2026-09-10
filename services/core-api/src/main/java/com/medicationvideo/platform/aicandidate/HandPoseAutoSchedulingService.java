@@ -59,8 +59,9 @@ class HandPoseAutoSchedulingService implements HandPoseSchedulingPort {
 
 	private void scheduleInNewTransaction(UUID projectId, UUID clipAssetId) {
 		try {
-			this.requiresNewTransaction.executeWithoutResult(
-					status -> this.handPoseJobService.queueAfterMediaIngested(projectId, clipAssetId));
+			this.requiresNewTransaction.executeWithoutResult(status -> {
+				this.handPoseJobService.queueAfterMediaIngested(projectId, clipAssetId);
+			});
 		}
 		catch (HandPoseJobException exception) {
 			LOGGER.info("Automatic hand-pose scheduling skipped for project {} clip asset {}: {}", projectId,

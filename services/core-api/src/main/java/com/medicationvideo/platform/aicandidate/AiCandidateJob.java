@@ -109,6 +109,31 @@ class AiCandidateJob {
 				idempotencyKey, requestFingerprint, requestedBy, createdAt);
 	}
 
+	static AiCandidateJob queueAction(UUID projectId, UUID clipAssetId, String modelSha256, String inputSha256,
+			long inputSizeBytes, String contentType, String idempotencyKey, String requestFingerprint,
+			String requestedBy, Instant createdAt) {
+		var job = new AiCandidateJob();
+		job.aiJobId = UUID.randomUUID();
+		job.projectId = projectId;
+		job.clipAssetId = clipAssetId;
+		job.algorithmKey = "QWEN3_VL_ACTION";
+		job.algorithmVersion = "v1";
+		job.modelSha256 = modelSha256 != null && !modelSha256.isBlank() ? modelSha256 : "qwen3-vl-8b";
+		job.inputSha256 = inputSha256;
+		job.inputSizeBytes = inputSizeBytes;
+		job.contentType = contentType;
+		job.samplingFps = 1;
+		job.profileSha256 = "qwen3-vl-8b-bf16";
+		job.status = AiCandidateJobStatus.QUEUED;
+		job.handResult = HandPoseResult.UNKNOWN;
+		job.idempotencyKey = idempotencyKey;
+		job.requestFingerprint = requestFingerprint;
+		job.requestedBy = requestedBy;
+		job.createdAt = createdAt;
+		job.updatedAt = createdAt;
+		return job;
+	}
+
 	UUID getAiJobId() {
 		return this.aiJobId;
 	}

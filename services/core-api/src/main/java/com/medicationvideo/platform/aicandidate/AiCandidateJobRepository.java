@@ -24,4 +24,7 @@ interface AiCandidateJobRepository extends JpaRepository<AiCandidateJob, UUID> {
 
 	Optional<AiCandidateJob> findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(UUID projectId, UUID clipAssetId);
 
+	java.util.List<AiCandidateJob> findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(UUID projectId,
+			UUID clipAssetId);
+
 }

@@ -39,6 +39,35 @@ class ActionCandidateQueryController {
 			.body(this.service.listByCaptureGroup(projectId, captureGroupId));
 	}
 
+	@GetMapping("/projects/{projectId}/capture-groups/{captureGroupId}/action-candidate-job")
+	ResponseEntity<ActionCandidateJobResponse> getJobStatus(@PathVariable UUID projectId,
+			@PathVariable UUID captureGroupId, Authentication authentication) {
+		var actor = requireActor(authentication);
+		this.projectAccessService.requireMember(projectId, actor.actorId());
+		var status = this.service.getJobStatus(projectId, captureGroupId);
+		if (status == null) {
+			return ResponseEntity.noContent().build();
+		}
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(status);
+	}
+
+	@org.springframework.web.bind.annotation.PostMapping("/projects/{projectId}/capture-groups/{captureGroupId}/action-candidate-jobs")
+	ResponseEntity<ActionCandidateJobResponse> queueJob(@PathVariable UUID projectId, @PathVariable UUID captureGroupId,
+			@org.springframework.web.bind.annotation.RequestHeader(name = "Idempotency-Key",
+					required = false) String idempotencyKeyHeader,
+			@org.springframework.web.bind.annotation.RequestHeader(name = "X-Request-ID",
+					required = false) String requestId,
+			@org.springframework.web.bind.annotation.RequestHeader(name = "traceparent",
+					required = false) String traceId,
+			Authentication authentication) {
+		var actor = requireActor(authentication);
+		var idempotencyKey = idempotencyKeyHeader != null && !idempotencyKeyHeader.isBlank() ? idempotencyKeyHeader
+				: "action-job-" + captureGroupId + "-" + UUID.randomUUID();
+		var response = this.service.queueActionCandidateJob(projectId, captureGroupId, actor.actorId(), idempotencyKey,
+				requestId, traceId);
+		return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(response);
+	}
+
 	private static PlatformActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof PlatformActor actor)) {
 			throw new HandPoseJobException("PROJECT_ACCESS_DENIED", "Authentication is required.", 403);
