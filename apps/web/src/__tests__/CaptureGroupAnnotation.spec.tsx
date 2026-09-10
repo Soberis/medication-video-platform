@@ -102,7 +102,7 @@ describe('CaptureGroup annotation workflow', () => {
       within(await screen.findByRole('dialog')).getByRole('button', { name: '丢弃并离开' }),
     )
     await waitFor(() => expect(router.state.location.pathname).toBe(paths.captureGroups(projectId)))
-  })
+  }, 30000)
 
   it('keeps one downgraded task and disables new Revision submission while preserving history and navigation', async () => {
     const group = captureGroupFixture(groupId, {

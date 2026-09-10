@@ -32,12 +32,16 @@ export interface GroupViewRow {
 
 let nextDraftSegmentId = 0
 
-export function createDraftSegment(segment?: AnnotationSegment): DraftAnnotationSegment {
+export function createDraftSegment(
+  segment?: AnnotationSegment,
+  fallbackStartMs = 0,
+  fallbackEndMs = 1000,
+): DraftAnnotationSegment {
   nextDraftSegmentId += 1
   return {
     draftId: nextDraftSegmentId,
-    start_ms: segment?.start_ms ?? 0,
-    end_ms: segment?.end_ms ?? 1000,
+    start_ms: segment?.start_ms ?? fallbackStartMs,
+    end_ms: segment?.end_ms ?? fallbackEndMs,
     label: segment?.label ?? '',
   }
 }

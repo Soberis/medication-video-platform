@@ -76,7 +76,9 @@ if ($IncludeListeningApps) {
     if (Test-Path -LiteralPath $localEnvFile) {
         Import-LocalEnvironment $localEnvFile
     }
-    foreach ($port in @([int]($env:PLATFORM_API_PORT ?? '8080'), [int]($env:WEB_PORT ?? '5173'))) {
+    $apiPort = if ($env:PLATFORM_API_PORT) { [int]$env:PLATFORM_API_PORT } else { 8080 }
+    $webPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 5173 }
+    foreach ($port in @($apiPort, $webPort)) {
         $listenerProcessId = Get-ListeningProcessId $port
         if ($null -ne $listenerProcessId) {
             Stop-ProcessTree $listenerProcessId "process listening on $port"

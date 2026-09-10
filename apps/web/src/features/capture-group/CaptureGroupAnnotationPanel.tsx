@@ -25,6 +25,7 @@ import {
   getActionStyle,
   groupViewDecision,
   initialDraftSegments,
+  normalizeActionLabel,
   sortedSchemaLabels,
   taskStatusTone,
   validateSegments,
@@ -51,6 +52,7 @@ interface CaptureGroupAnnotationPanelProps {
   viewReviews: Record<string, QualityReview>
   currentPlaybackTimeMs: number | null
   totalDurationMs?: number | null
+  hasNoHandDetected?: boolean
   onPlaySegment?: (startMs: number, endMs: number) => void
   onSeekToMs?: (timeMs: number) => void
   onTaskChange: (task: AnnotationTask) => void
@@ -70,6 +72,7 @@ export function CaptureGroupAnnotationPanel({
   viewReviews,
   currentPlaybackTimeMs,
   totalDurationMs,
+  hasNoHandDetected,
   onPlaySegment,
   onSeekToMs,
   onDirtyChange,
@@ -82,6 +85,7 @@ export function CaptureGroupAnnotationPanel({
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [annotationNote, setAnnotationNote] = useState('')
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
+  const [isLoadingAi, setIsLoadingAi] = useState(false)
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
   const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
@@ -286,6 +290,61 @@ export function CaptureGroupAnnotationPanel({
     updateSegment(draftId, field, Math.max(0, Math.round(currentPlaybackTimeMs)))
   }
 
+  function handleAddSegment() {
+    setIsDirty(true)
+    setDraftSegments((current) => {
+      const last = current[current.length - 1]
+      let nextStart = 0
+      if (last && Number.isFinite(last.end_ms) && last.end_ms > 0) {
+        nextStart = last.end_ms
+      } else if (
+        currentPlaybackTimeMs !== null &&
+        Number.isFinite(currentPlaybackTimeMs) &&
+        currentPlaybackTimeMs > 0
+      ) {
+        nextStart = Math.round(currentPlaybackTimeMs)
+      }
+      const defaultDuration = 3000
+      let nextEnd = nextStart + defaultDuration
+      if (totalDurationMs && totalDurationMs > nextStart) {
+        nextEnd = Math.min(nextStart + defaultDuration, totalDurationMs)
+      }
+      return [...current, createDraftSegment(undefined, nextStart, nextEnd)]
+    })
+  }
+
+  async function handleLoadAiCandidates() {
+    if (!canSubmitRevision) return
+    setIsLoadingAi(true)
+    try {
+      const candidates =
+        actionCandidates.length > 0
+          ? actionCandidates
+          : await fetchActionCandidates(projectId, captureGroupId)
+      if (candidates.length > 0) {
+        setActionCandidates(candidates)
+        setIsDirty(true)
+        setDraftSegments(
+          candidates.map((candidate) =>
+            createDraftSegment({
+              start_ms: candidate.start_ms,
+              end_ms: candidate.end_ms,
+              label: normalizeActionLabel(candidate.action_label, schema),
+            }),
+          ),
+        )
+        setHasAutoLoadedAiDraft(true)
+        void message.success(`成功载入 ${candidates.length} 个 AI 预标注动作`)
+      } else {
+        void message.info('暂无可用 AI 预标注候选；请确保 4090 Action Worker 已推理该视频。')
+      }
+    } catch {
+      void message.error('获取 AI 预标注候选失败，请稍后重试。')
+    } finally {
+      setIsLoadingAi(false)
+    }
+  }
+
   return (
     <Section
       className="capture-group-annotation-section capture-group-workflow-focus-target"
@@ -380,6 +439,16 @@ export function CaptureGroupAnnotationPanel({
                   />
                 </div>
               )}
+              {hasNoHandDetected && (
+                <div style={{ marginBottom: 16 }}>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="机器检测（MediaPipe）未发现手部动作"
+                    description="若本视频确为无操作空置视频，无需进行动作标注与修订提交，可直接跳过。"
+                  />
+                </div>
+              )}
               <div className="capture-group-playback-position" aria-label="当前播放位置">
                 <div>
                   <span className="app-eyebrow">当前播放位置</span>
@@ -403,11 +472,23 @@ export function CaptureGroupAnnotationPanel({
                     type="default"
                     size="small"
                     htmlType="button"
+                    loading={isLoadingAi}
+                    disabled={!canSubmitRevision || Boolean(hasNoHandDetected)}
+                    onClick={() => void handleLoadAiCandidates()}
+                    title={
+                      hasNoHandDetected
+                        ? '机器检测未发现手部动作，无需动作标注'
+                        : '将 Qwen3-VL 识别的动作片段一键载入为草稿'
+                    }
+                  >
+                    AI 自动填充
+                  </Button>
+                  <Button
+                    type="default"
+                    size="small"
+                    htmlType="button"
                     disabled={!canSubmitRevision}
-                    onClick={() => {
-                      setIsDirty(true)
-                      setDraftSegments((current) => [...current, createDraftSegment()])
-                    }}
+                    onClick={handleAddSegment}
                   >
                     + 添加时间段
                   </Button>
@@ -740,10 +821,7 @@ export function CaptureGroupAnnotationPanel({
                   type="text"
                   htmlType="button"
                   disabled={!canSubmitRevision}
-                  onClick={() => {
-                    setIsDirty(true)
-                    setDraftSegments((current) => [...current, createDraftSegment()])
-                  }}
+                  onClick={handleAddSegment}
                 >
                   添加时间段
                 </Button>

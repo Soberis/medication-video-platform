@@ -220,6 +220,10 @@ export default function CaptureGroupDetailView() {
               : null
           }
           totalDurationMs={totalDurationMs}
+          hasNoHandDetected={
+            viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
+            viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
+          }
           onPlaySegment={handlePlaySegment}
           onSeekToMs={handleSeekToMs}
           onDirtyChange={setHasUnsavedAnnotation}
