@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { paths } from '@/app/paths'
 import {
   formatAnnotationTime,
+  validActionCandidates,
   validateSegments,
 } from '@/features/capture-group/capture-group-detail-model'
 import { renderRoute } from '@/test/render'
@@ -14,12 +15,66 @@ import {
   captureGroupFixture,
   groupId,
   groupTask,
+  labelSchema,
   projectId,
   qualityFixture,
   stubGroupDetail,
 } from './capture-group-fixtures'
 
 afterEach(() => vi.unstubAllGlobals())
+
+describe('action candidate draft validation', () => {
+  const task = groupTask(groupId, true)
+  const schema = labelSchema()
+  const candidate = {
+    action_candidate_id: 'synthetic-candidate',
+    ai_job_id: 'synthetic-job',
+    project_id: projectId,
+    capture_group_id: groupId,
+    clip_asset_id: task.primary_clip_asset_id!,
+    start_ms: 0,
+    end_ms: 1000,
+    action_label: 'PREPARE',
+    confidence: 0.8,
+    source_window: 1,
+    stitched_windows: [],
+    created_at: '2026-09-10T00:00:00Z',
+  }
+
+  it('accepts exact task labels and adjacent half-open intervals', () => {
+    const next = { ...candidate, start_ms: 1000, end_ms: 2000 }
+    expect(validActionCandidates(task, [next, candidate], schema, 2000)).toEqual([candidate, next])
+  })
+
+  it.each([
+    { project_id: 'other-project' },
+    { capture_group_id: 'other-group' },
+    { clip_asset_id: 'other-camera' },
+    { action_label: 'prepare' },
+    { action_label: '准备' },
+    { start_ms: -1 },
+    { end_ms: 2001 },
+    { start_ms: 0.5 },
+  ])('rejects the entire batch for mismatched source, label or time: %j', (change) => {
+    expect(validActionCandidates(task, [{ ...candidate, ...change }], schema, 2000)).toEqual([])
+  })
+
+  it('rejects overlap, mixed jobs, missing duration and mismatched schemas', () => {
+    expect(validActionCandidates(task, [candidate, candidate], schema, 2000)).toEqual([])
+    expect(
+      validActionCandidates(
+        task,
+        [candidate, { ...candidate, ai_job_id: 'other-job', start_ms: 1000, end_ms: 2000 }],
+        schema,
+        2000,
+      ),
+    ).toEqual([])
+    expect(validActionCandidates(task, [candidate], schema, null)).toEqual([])
+    expect(
+      validActionCandidates(task, [candidate], { ...schema, schema_digest: 'other' }, 2000),
+    ).toEqual([])
+  })
+})
 
 describe('formatAnnotationTime', () => {
   it('formats millisecond values without changing their authoritative unit', () => {
@@ -55,6 +110,30 @@ describe('formatAnnotationTime', () => {
 })
 
 describe('CaptureGroup annotation workflow', () => {
+  it('allows AI loading after no-hand detection and protects an edited draft', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+    })
+    await screen.findByLabelText('开始时间（毫秒）')
+    await waitFor(() =>
+      expect(document.body.textContent).toContain('MediaPipe 在采样帧中未检测到手'),
+    )
+    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeEnabled()
+    await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
+    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeDisabled()
+  })
   it('preserves unsaved segments through collapse and refresh, and blocks leaving until confirmed', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],

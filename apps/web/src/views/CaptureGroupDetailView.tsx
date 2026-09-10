@@ -100,11 +100,13 @@ export default function CaptureGroupDetailView() {
         segmentStopListenerRef.current = null
       }
     }
-  }, [])
+  }, [data.selectedClipAssetId])
 
   const handleSeekToMs = useCallback((timeMs: number) => {
     const video = videoRef.current
     if (!video) return
+    segmentStopListenerRef.current?.()
+    segmentStopListenerRef.current = null
     video.currentTime = Math.max(0, timeMs / 1000)
   }, [])
 
@@ -219,13 +221,24 @@ export default function CaptureGroupDetailView() {
               ? currentPlaybackTimeMs
               : null
           }
-          totalDurationMs={totalDurationMs}
+          totalDurationMs={
+            data.selectedClipAssetId === humanTask?.primary_clip_asset_id ? totalDurationMs : null
+          }
           hasNoHandDetected={
+            data.selectedClipAssetId === humanTask?.primary_clip_asset_id &&
             viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
             viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
           }
-          onPlaySegment={handlePlaySegment}
-          onSeekToMs={handleSeekToMs}
+          onPlaySegment={
+            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
+              ? handlePlaySegment
+              : undefined
+          }
+          onSeekToMs={
+            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
+              ? handleSeekToMs
+              : undefined
+          }
           onDirtyChange={setHasUnsavedAnnotation}
           onTaskChange={data.setTask}
           onRefresh={data.refresh}

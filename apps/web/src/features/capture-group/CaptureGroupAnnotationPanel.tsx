@@ -25,7 +25,7 @@ import {
   getActionStyle,
   groupViewDecision,
   initialDraftSegments,
-  normalizeActionLabel,
+  validActionCandidates,
   sortedSchemaLabels,
   taskStatusTone,
   validateSegments,
@@ -94,9 +94,15 @@ export function CaptureGroupAnnotationPanel({
     task?.annotation_task_id,
     task?.group_input_version,
     task?.primary_clip_asset_id,
+    task?.label_schema_id,
+    task?.label_schema_digest,
     task?.annotation_revision?.annotation_revision_id,
   ].join(':')
   const [appliedContext, setAppliedContext] = useState<string | null>(null)
+  const latestDraft = useRef({ draftContext, isDirty })
+  useEffect(() => {
+    latestDraft.current = { draftContext, isDirty }
+  }, [draftContext, isDirty])
   const contextChanged = isDirty && appliedContext !== draftContext
   const sortedLabels = useMemo(() => sortedSchemaLabels(schema), [schema])
   const groupQualityAdmitting = currentGroupQualityAdmitting(groupQuality)
@@ -144,27 +150,22 @@ export function CaptureGroupAnnotationPanel({
 
   if (!isDirty && appliedContext !== draftContext) {
     setAppliedContext(draftContext)
-    const initial = initialDraftSegments(task, actionCandidates, schema)
+    const initial = initialDraftSegments(task)
     setDraftSegments(initial)
     setSegmentErrors({})
     setAnnotationNote('')
-    if (actionCandidates.length > 0 && !task?.annotation_revision) {
-      setHasAutoLoadedAiDraft(true)
-    }
+    setHasAutoLoadedAiDraft(false)
+  } else if (
+    !isDirty &&
+    task &&
+    !task.annotation_revision &&
+    canSubmitRevision &&
+    validActionCandidates(task, actionCandidates, schema, totalDurationMs).length > 0 &&
+    !hasAutoLoadedAiDraft
+  ) {
+    setDraftSegments(initialDraftSegments(task, actionCandidates, schema, totalDurationMs))
+    setHasAutoLoadedAiDraft(true)
   }
-
-  useEffect(() => {
-    if (
-      !isDirty &&
-      task &&
-      !task.annotation_revision &&
-      actionCandidates.length > 0 &&
-      !hasAutoLoadedAiDraft
-    ) {
-      setDraftSegments(initialDraftSegments(task, actionCandidates, schema))
-      setHasAutoLoadedAiDraft(true)
-    }
-  }, [isDirty, task, actionCandidates, hasAutoLoadedAiDraft, schema])
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -314,13 +315,12 @@ export function CaptureGroupAnnotationPanel({
   }
 
   async function handleLoadAiCandidates() {
-    if (!canSubmitRevision) return
+    if (!canSubmitRevision || isDirty || task?.annotation_revision || isLoadingAi) return
     setIsLoadingAi(true)
     try {
-      const candidates =
-        actionCandidates.length > 0
-          ? actionCandidates
-          : await fetchActionCandidates(projectId, captureGroupId)
+      const fetched = await fetchActionCandidates(projectId, captureGroupId)
+      if (latestDraft.current.isDirty || latestDraft.current.draftContext !== draftContext) return
+      const candidates = validActionCandidates(task, fetched, schema, totalDurationMs)
       if (candidates.length > 0) {
         setActionCandidates(candidates)
         setIsDirty(true)
@@ -329,14 +329,18 @@ export function CaptureGroupAnnotationPanel({
             createDraftSegment({
               start_ms: candidate.start_ms,
               end_ms: candidate.end_ms,
-              label: normalizeActionLabel(candidate.action_label, schema),
+              label: candidate.action_label,
             }),
           ),
         )
         setHasAutoLoadedAiDraft(true)
         void message.success(`成功载入 ${candidates.length} 个 AI 预标注动作`)
       } else {
-        void message.info('暂无可用 AI 预标注候选；请确保 4090 Action Worker 已推理该视频。')
+        void message.info(
+          fetched.length > 0
+            ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
+            : '暂无可用 AI 预标注候选，可继续人工标注。',
+        )
       }
     } catch {
       void message.error('获取 AI 预标注候选失败，请稍后重试。')
@@ -444,8 +448,8 @@ export function CaptureGroupAnnotationPanel({
                   <Alert
                     type="warning"
                     showIcon
-                    message="机器检测（MediaPipe）未发现手部动作"
-                    description="若本视频确为无操作空置视频，无需进行动作标注与修订提交，可直接跳过。"
+                    title="MediaPipe 在采样帧中未检测到手"
+                    description="这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。"
                   />
                 </div>
               )}
@@ -473,11 +477,11 @@ export function CaptureGroupAnnotationPanel({
                     size="small"
                     htmlType="button"
                     loading={isLoadingAi}
-                    disabled={!canSubmitRevision || Boolean(hasNoHandDetected)}
+                    disabled={!canSubmitRevision || isDirty || Boolean(task.annotation_revision)}
                     onClick={() => void handleLoadAiCandidates()}
                     title={
-                      hasNoHandDetected
-                        ? '机器检测未发现手部动作，无需动作标注'
+                      isDirty || task.annotation_revision
+                        ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
                         : '将 Qwen3-VL 识别的动作片段一键载入为草稿'
                     }
                   >
@@ -533,7 +537,10 @@ export function CaptureGroupAnnotationPanel({
                       const leftPercent = Math.max(0, Math.min(100, (startSec / durSec) * 100))
                       const widthPercent = Math.max(
                         0.8,
-                        Math.min(100 - leftPercent, (Math.max(0, endSec - startSec) / durSec) * 100),
+                        Math.min(
+                          100 - leftPercent,
+                          (Math.max(0, endSec - startSec) / durSec) * 100,
+                        ),
                       )
                       const style = getActionStyle(seg.label)
                       const schemaLabel = sortedLabels.find((l) => l.label_id === seg.label)
@@ -551,6 +558,7 @@ export function CaptureGroupAnnotationPanel({
                         >
                           <div
                             role="button"
+                            aria-label={`播放时间段 ${idx + 1}：${displayName}`}
                             tabIndex={0}
                             className={`capture-group-timeline-slice ${isSliceActive ? 'is-active-slice' : ''}`}
                             style={{
@@ -564,6 +572,7 @@ export function CaptureGroupAnnotationPanel({
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
                                 onSeekToMs?.(seg.start_ms)
                                 onPlaySegment?.(seg.start_ms, seg.end_ms)
                               }
@@ -632,7 +641,9 @@ export function CaptureGroupAnnotationPanel({
                             }}
                             aria-hidden="true"
                           />
-                          <strong className="capture-group-segment-index-title">时间段 {index + 1}</strong>
+                          <strong className="capture-group-segment-index-title">
+                            时间段 {index + 1}
+                          </strong>
                           <span className="capture-group-segment-human-time">
                             {formatSegmentDurationLabel(segment.start_ms, segment.end_ms)}
                           </span>
@@ -664,7 +675,9 @@ export function CaptureGroupAnnotationPanel({
                               onClick={() => {
                                 setIsDirty(true)
                                 setDraftSegments((current) =>
-                                  current.filter((candidate) => candidate.draftId !== segment.draftId),
+                                  current.filter(
+                                    (candidate) => candidate.draftId !== segment.draftId,
+                                  ),
                                 )
                               }}
                             >
@@ -737,7 +750,9 @@ export function CaptureGroupAnnotationPanel({
                                 >
                                   {formattedStart}
                                 </span>
-                              ) : <span />}
+                              ) : (
+                                <span />
+                              )}
                               <Button
                                 type="text"
                                 size="small"
@@ -792,7 +807,9 @@ export function CaptureGroupAnnotationPanel({
                                 >
                                   {formattedEnd}
                                 </span>
-                              ) : <span />}
+                              ) : (
+                                <span />
+                              )}
                               <Button
                                 type="text"
                                 size="small"

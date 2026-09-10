@@ -90,7 +90,7 @@ export function CaptureGroupFocusedView({
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [playbackGrant, playbackState])
+  }, [playbackGrant, playbackState, videoRef])
   const isPrimary = Boolean(
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )

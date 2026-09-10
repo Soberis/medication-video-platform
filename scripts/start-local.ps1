@@ -160,10 +160,13 @@ $composeFile = Join-Path $root 'infra/docker-compose/compose.yaml'
 & docker compose @composeEnvironmentArguments -f $composeFile up -d --wait
 if ($LASTEXITCODE -ne 0) { throw 'Local infrastructure did not become healthy.' }
 
+$pgPort = if ($env:POSTGRES_PORT) { [int]$env:POSTGRES_PORT } else { 15432 }
+$s3Port = if ($env:S3_PORT) { [int]$env:S3_PORT } else { 9000 }
+$rmqPort = if ($env:RABBITMQ_PORT) { [int]$env:RABBITMQ_PORT } else { 5672 }
 $requiredHostPorts = @(
-    @{ Service = 'postgres'; Name = 'PostgreSQL'; Port = [int]($env:POSTGRES_PORT ?? '15432') },
-    @{ Service = 's3'; Name = 'S3'; Port = [int]($env:S3_PORT ?? '9000') },
-    @{ Service = 'rabbitmq'; Name = 'RabbitMQ'; Port = [int]($env:RABBITMQ_PORT ?? '5672') }
+    @{ Service = 'postgres'; Name = 'PostgreSQL'; Port = $pgPort },
+    @{ Service = 's3'; Name = 'S3'; Port = $s3Port },
+    @{ Service = 'rabbitmq'; Name = 'RabbitMQ'; Port = $rmqPort }
 )
 foreach ($requiredHostPort in $requiredHostPorts) {
     if (Test-TcpPortInUse $requiredHostPort.Port) { continue }
@@ -193,7 +196,7 @@ if (Test-Path -LiteralPath $runtimeFile) {
     }
 }
 
-$apiPort = [int]($env:PLATFORM_API_PORT ?? '8080')
+$apiPort = if ($env:PLATFORM_API_PORT) { [int]$env:PLATFORM_API_PORT } else { 8080 }
 $apiHealthUri = "http://127.0.0.1:$apiPort/actuator/health"
 $apiLogPath = Join-Path $logDirectory 'api.log'
 

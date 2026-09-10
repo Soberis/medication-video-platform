@@ -96,13 +96,19 @@ else {
 }
 
 Write-Host "`nApplications:" -ForegroundColor Cyan
-Show-CoreApiHealth ([int]($env:PLATFORM_API_PORT ?? '8080'))
-Show-Listener 'Web app' ([int]($env:WEB_PORT ?? '5173'))
+$apiPort = if ($env:PLATFORM_API_PORT) { [int]$env:PLATFORM_API_PORT } else { 8080 }
+$webPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 5173 }
+$pgPort = if ($env:POSTGRES_PORT) { [int]$env:POSTGRES_PORT } else { 15432 }
+$s3Port = if ($env:S3_PORT) { [int]$env:S3_PORT } else { 9000 }
+$rmqPort = if ($env:RABBITMQ_PORT) { [int]$env:RABBITMQ_PORT } else { 5672 }
+
+Show-CoreApiHealth $apiPort
+Show-Listener 'Web app' $webPort
 
 Write-Host "`nHost ports:" -ForegroundColor Cyan
-Show-Listener 'PostgreSQL' ([int]($env:POSTGRES_PORT ?? '15432'))
-Show-Listener 'S3' ([int]($env:S3_PORT ?? '9000'))
-Show-Listener 'RabbitMQ' ([int]($env:RABBITMQ_PORT ?? '5672'))
+Show-Listener 'PostgreSQL' $pgPort
+Show-Listener 'S3' $s3Port
+Show-Listener 'RabbitMQ' $rmqPort
 
 if (Test-Path -LiteralPath $runtimeFile) {
     Write-Host "`nProcesses started by start-local.ps1:" -ForegroundColor Cyan

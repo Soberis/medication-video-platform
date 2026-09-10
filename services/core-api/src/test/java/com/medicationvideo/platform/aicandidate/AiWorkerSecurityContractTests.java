@@ -27,6 +27,34 @@ class AiWorkerSecurityContractTests {
 	private MockMvc mockMvc;
 
 	@Test
+	void actionEndpointUsesSnakeCaseContractAndRequiresWorkerAuthentication() throws Exception {
+		var body = """
+				{"message_id":"00000000-0000-0000-0000-000000000091","model_name":"synthetic-qwen",
+				"sampling_fps":1,"peak_memory_mb":0,"inference_time_ms":1000,
+				"started_at":"2026-09-10T00:00:00Z","completed_at":"2026-09-10T00:00:01Z","segments":[]}
+				""";
+		var path = resultPath().replace("/result", "/action-result");
+		this.mockMvc
+			.perform(put(path).header("Authorization", "Bearer " + AI_TOKEN)
+				.header("X-AI-Lease-Token", "A".repeat(43))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isNotFound());
+		this.mockMvc
+			.perform(put(path).header("X-AI-Lease-Token", "A".repeat(43))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isUnauthorized());
+		this.mockMvc
+			.perform(put(path).header("Authorization", "Bearer " + AI_TOKEN)
+				.header("X-AI-Lease-Token", "A".repeat(43))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body.replace("\"segments\":[]",
+						"\"segments\":[{\"start_ms\":-1,\"end_ms\":1,\"label\":\"x\",\"confidence\":0.5}]")))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void acceptsTheAiWorkerIdentityBeforeEvaluatingTheJob() throws Exception {
 		this.mockMvc
 			.perform(put(resultPath()).header("Authorization", "Bearer " + AI_TOKEN)

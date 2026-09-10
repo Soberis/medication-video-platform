@@ -1,7 +1,5 @@
 package com.medicationvideo.platform.aicandidate;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,7 +39,17 @@ public class ActionCandidateJobService {
 	public void acceptResult(UUID jobId, int attemptNumber, String leaseToken, ActionCandidateResultRequest request,
 			String authenticatedWorkerId) {
 		var job = lockJob(jobId);
+		if (!"QWEN3_VL_ACTION".equals(job.getAlgorithmKey())) {
+			throw new HandPoseJobException("AI_ACTION_JOB_TYPE_MISMATCH",
+					"Action results cannot complete a different algorithm's job.", 409);
+		}
 		var attempt = lockAttempt(jobId, attemptNumber);
+		attempt.requireWorker(authenticatedWorkerId);
+		requireLease(attempt, leaseToken);
+		if (!attempt.getMessageId().equals(request.messageId())) {
+			throw new HandPoseJobException("AI_ACTION_RESULT_IDENTITY_MISMATCH",
+					"The result does not identify the current AI job attempt.", 409);
+		}
 		var now = Instant.now();
 		var digest = computeDigest(request);
 
@@ -57,7 +65,6 @@ public class ActionCandidateJobService {
 					"The result message identifier was reused with different content.", 409);
 		}
 
-		requireLease(attempt, leaseToken);
 		attempt.requireActiveLease(now);
 		if (job.getStatus() != AiCandidateJobStatus.RUNNING) {
 			throw new HandPoseJobException("STALE_ATTEMPT", "The AI job is no longer running.", 409);
@@ -66,14 +73,15 @@ public class ActionCandidateJobService {
 		// Resolve captureGroupId for the clipAssetId via camera_stream
 		UUID captureGroupId = resolveCaptureGroupId(job.getClipAssetId());
 		if (captureGroupId == null) {
-			captureGroupId = job.getClipAssetId();
+			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
+					"The source clip does not belong to a capture group.", 409);
 		}
 
 		var receivedAt = Timestamp.from(now);
 
 		// Validate segments and insert
 		for (var seg : request.segments()) {
-			if (seg.startMs() == null || seg.endMs() == null || seg.endMs() <= seg.startMs()) {
+			if (seg.startMs() == null || seg.endMs() == null || seg.startMs() < 0 || seg.endMs() <= seg.startMs()) {
 				throw new HandPoseJobException("INVALID_SEGMENT_INTERVAL",
 						"Action segment interval must satisfy 0 <= startMs < endMs.", 400);
 			}
@@ -112,6 +120,8 @@ public class ActionCandidateJobService {
 				       start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at
 				  FROM action_candidate
 				 WHERE project_id = ? AND capture_group_id = ?
+				   AND ai_job_id IN (SELECT ai_job_id FROM ai_job
+				                       WHERE algorithm_key = 'QWEN3_VL_ACTION' AND status = 'SUCCEEDED')
 				 ORDER BY start_ms ASC, end_ms ASC
 				""";
 		return this.jdbcTemplate.query(sql, (rs, rowNum) -> {
@@ -162,26 +172,8 @@ public class ActionCandidateJobService {
 		}
 	}
 
-	private static String computeDigest(ActionCandidateResultRequest request) {
-		try {
-			var md = MessageDigest.getInstance("SHA-256");
-			md.update(request.messageId().toString().getBytes(StandardCharsets.UTF_8));
-			md.update(request.modelName().getBytes(StandardCharsets.UTF_8));
-			for (var seg : request.segments()) {
-				md.update(String.valueOf(seg.startMs()).getBytes(StandardCharsets.UTF_8));
-				md.update(String.valueOf(seg.endMs()).getBytes(StandardCharsets.UTF_8));
-				md.update(seg.label().getBytes(StandardCharsets.UTF_8));
-			}
-			var bytes = md.digest();
-			var sb = new StringBuilder();
-			for (byte b : bytes) {
-				sb.append(String.format("%02x", b));
-			}
-			return sb.toString();
-		}
-		catch (Exception exc) {
-			throw new IllegalStateException("SHA-256 unavailable", exc);
-		}
+	private String computeDigest(ActionCandidateResultRequest request) {
+		return HandPoseProfile.sha256(this.objectMapper.writeValueAsString(request));
 	}
 
 }

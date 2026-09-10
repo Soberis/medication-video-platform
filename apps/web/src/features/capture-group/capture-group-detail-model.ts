@@ -61,22 +61,6 @@ export function formatAnnotationTime(value: number | null | undefined) {
   return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock
 }
 
-export function normalizeActionLabel(
-  rawLabel: string,
-  schema?: AnnotationLabelSchema | null,
-): string {
-  const trimmed = rawLabel.trim()
-  if (!trimmed) return ''
-  const lower = trimmed.toLowerCase()
-  if (schema?.labels) {
-    const matched = schema.labels.find(
-      (l) => l.label_id.toLowerCase() === lower || l.display_name.trim() === trimmed,
-    )
-    if (matched) return matched.label_id
-  }
-  return lower
-}
-
 export function formatHumanFriendlyTime(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return '00:00'
   const totalSeconds = Math.floor(ms / 1000)
@@ -100,15 +84,69 @@ export const ACTION_PALETTE: Record<
   string,
   { bg: string; border: string; text: string; dot: string; label: string }
 > = {
-  open_cap: { bg: '#fff7e6', border: '#ffd591', text: '#d46b08', dot: '#fa8c16', label: '操作瓶盖' },
-  draw_liquid: { bg: '#e6f4ff', border: '#91caff', text: '#0958d9', dot: '#1677ff', label: '抽取药液' },
-  inject_mix: { bg: '#f9f0ff', border: '#d3adf7', text: '#531dab', dot: '#722ed1', label: '注入混匀' },
-  check_info: { bg: '#f6ffed', border: '#b7eb8f', text: '#389e0d', dot: '#52c41a', label: '核对信息' },
-  label_seal: { bg: '#e6fffb', border: '#87e8de', text: '#08979c', dot: '#13c2c2', label: '贴签封包' },
-  prepare_workspace: { bg: '#f0f5ff', border: '#adc6ff', text: '#1d39c4', dot: '#2f54eb', label: '准备工位' },
-  retrieve_medicine: { bg: '#feffe6', border: '#fffb8f', text: '#d4b106', dot: '#fadb14', label: '取药' },
-  prepare_dose: { bg: '#fff0f6', border: '#ffadd2', text: '#c41d7f', dot: '#eb2f96', label: '剂量配制' },
-  final_review: { bg: '#fcffe6', border: '#eaff8f', text: '#7cb305', dot: '#a0d911', label: '最终复核' },
+  open_cap: {
+    bg: '#fff7e6',
+    border: '#ffd591',
+    text: '#d46b08',
+    dot: '#fa8c16',
+    label: '操作瓶盖',
+  },
+  draw_liquid: {
+    bg: '#e6f4ff',
+    border: '#91caff',
+    text: '#0958d9',
+    dot: '#1677ff',
+    label: '抽取药液',
+  },
+  inject_mix: {
+    bg: '#f9f0ff',
+    border: '#d3adf7',
+    text: '#531dab',
+    dot: '#722ed1',
+    label: '注入混匀',
+  },
+  check_info: {
+    bg: '#f6ffed',
+    border: '#b7eb8f',
+    text: '#389e0d',
+    dot: '#52c41a',
+    label: '核对信息',
+  },
+  label_seal: {
+    bg: '#e6fffb',
+    border: '#87e8de',
+    text: '#08979c',
+    dot: '#13c2c2',
+    label: '贴签封包',
+  },
+  prepare_workspace: {
+    bg: '#f0f5ff',
+    border: '#adc6ff',
+    text: '#1d39c4',
+    dot: '#2f54eb',
+    label: '准备工位',
+  },
+  retrieve_medicine: {
+    bg: '#feffe6',
+    border: '#fffb8f',
+    text: '#d4b106',
+    dot: '#fadb14',
+    label: '取药',
+  },
+  prepare_dose: {
+    bg: '#fff0f6',
+    border: '#ffadd2',
+    text: '#c41d7f',
+    dot: '#eb2f96',
+    label: '剂量配制',
+  },
+  final_review: {
+    bg: '#fcffe6',
+    border: '#eaff8f',
+    text: '#7cb305',
+    dot: '#a0d911',
+    label: '最终复核',
+  },
   cleanup: { bg: '#f5f5f5', border: '#d9d9d9', text: '#595959', dot: '#8c8c8c', label: '清理废弃' },
 }
 
@@ -129,22 +167,57 @@ export function initialDraftSegments(
   task: AnnotationTask | null,
   candidates?: ActionCandidate[],
   schema?: AnnotationLabelSchema | null,
+  durationMs?: number | null,
 ) {
   if (!task || task.status !== 'ASSIGNED') return []
   const revision = task.annotation_revision
   if (revision?.annotation_document?.segments && revision.annotation_document.segments.length > 0) {
     return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
   }
-  if (candidates && candidates.length > 0) {
-    return candidates.map((candidate) =>
+  const validCandidates = validActionCandidates(task, candidates ?? [], schema, durationMs)
+  if (validCandidates.length > 0) {
+    return validCandidates.map((candidate) =>
       createDraftSegment({
         start_ms: candidate.start_ms,
         end_ms: candidate.end_ms,
-        label: normalizeActionLabel(candidate.action_label, schema),
+        label: candidate.action_label,
       }),
     )
   }
   return [createDraftSegment()]
+}
+
+export function validActionCandidates(
+  task: AnnotationTask | null,
+  candidates: ActionCandidate[],
+  schema?: AnnotationLabelSchema | null,
+  durationMs?: number | null,
+): ActionCandidate[] {
+  if (
+    !task ||
+    !schema ||
+    !durationMs ||
+    task.label_schema_id !== schema.label_schema_id ||
+    task.label_schema_digest !== schema.schema_digest
+  )
+    return []
+  const ordered = [...candidates].sort((a, b) => a.start_ms - b.start_ms)
+  const labels = new Set(schema.labels.map((label) => label.label_id))
+  const valid = ordered.every(
+    (candidate, index) =>
+      candidate.project_id === task.project_id &&
+      candidate.capture_group_id === task.capture_group_id &&
+      candidate.clip_asset_id === task.primary_clip_asset_id &&
+      candidate.ai_job_id === ordered[0]?.ai_job_id &&
+      labels.has(candidate.action_label) &&
+      Number.isSafeInteger(candidate.start_ms) &&
+      Number.isSafeInteger(candidate.end_ms) &&
+      candidate.start_ms >= 0 &&
+      candidate.start_ms < candidate.end_ms &&
+      candidate.end_ms <= durationMs &&
+      (index === 0 || candidate.start_ms >= ordered[index - 1]!.end_ms),
+  )
+  return valid ? ordered : []
 }
 
 function validateSegment(segment: DraftAnnotationSegment): SegmentValidationErrors {

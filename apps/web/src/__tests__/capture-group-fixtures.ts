@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 
 import type {
+  AnnotationLabelSchema,
   AnnotationReview,
   AnnotationTask,
   CaptureGroupCleaning,
@@ -947,7 +948,7 @@ export function taskList(items: AnnotationTask[], scope: 'PROJECT' | 'ASSIGNEE' 
   }
 }
 
-export function labelSchema() {
+export function labelSchema(): AnnotationLabelSchema {
   return {
     label_schema_id: schemaId,
     schema_key: 'medication-primary-step',
@@ -1000,7 +1001,7 @@ function handPoseResponse(
   clipAssetId: string,
   status: 'FAILED' | 'NO_HAND_DETECTED' | 'HAND_DETECTED' | 'UNKNOWN',
 ) {
-  const jobStatus = status === 'HAND_DETECTED' || status === 'UNKNOWN' ? 'SUCCEEDED' : status
+  const jobStatus = status === 'FAILED' ? 'FAILED' : 'SUCCEEDED'
   const handResult =
     status === 'HAND_DETECTED'
       ? 'HAND_DETECTED'

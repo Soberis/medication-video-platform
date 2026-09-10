@@ -3818,6 +3818,63 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{project_id}/capture-groups/{capture_group_id}/action-candidates:
+    get:
+      operationId: listActionCandidates
+      tags: [AI Candidates]
+      summary: Read stored action candidates for a project capture group
+      description: >-
+        Requires active project membership. This initial endpoint returns stored candidates,
+        not an attestation of current task provenance. Qwen dispatch and task snapshot binding
+        are pending implementation; do not treat these records as approved annotations.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: capture_group_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Stored candidates ordered by start and end time.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ActionCandidate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/action-result:
+    put:
+      operationId: acceptActionCandidateResult
+      tags: [AI Candidates]
+      summary: Receive a result for an existing Qwen action attempt
+      description: >-
+        Requires QWEN3_VL_ACTION, the leased worker, matching lease and attempt message ID.
+        Exact receipt replay is idempotent; changed payload returns 409. This endpoint does
+        not create or dispatch Qwen jobs. Frozen task provenance validation remains pending.
+      security: [{ aiWorkerBearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/AiJobId"
+        - $ref: "#/components/parameters/AiJobAttempt"
+        - $ref: "#/components/parameters/AiLeaseToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionCandidateResultRequest" }
+      responses:
+        "204":
+          description: Result accepted or exact receipt replayed.
+          headers:
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 components:
   parameters:
     ProjectId:
@@ -7561,6 +7618,46 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+    ActionCandidate:
+      type: object
+      required: [action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id, start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at]
+      properties:
+        action_candidate_id: { type: string, format: uuid }
+        ai_job_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        capture_group_id: { type: string, format: uuid }
+        clip_asset_id: { type: string, format: uuid }
+        start_ms: { type: integer, format: int64, minimum: 0 }
+        end_ms: { type: integer, format: int64, minimum: 1 }
+        action_label: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_window: { type: integer }
+        stitched_windows: { type: array, items: { type: integer } }
+        created_at: { type: string, format: date-time }
+    ActionCandidateResultRequest:
+      type: object
+      required: [message_id, model_name, sampling_fps, peak_memory_mb, inference_time_ms, started_at, completed_at, segments]
+      properties:
+        message_id: { type: string, format: uuid }
+        model_name: { type: string, minLength: 1 }
+        model_revision: { type: [string, 'null'] }
+        sampling_fps: { type: integer }
+        peak_memory_mb: { type: integer, format: int64 }
+        inference_time_ms: { type: integer, format: int64 }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        segments:
+          type: array
+          items:
+            type: object
+            required: [start_ms, end_ms, label, confidence]
+            properties:
+              start_ms: { type: integer, format: int64, minimum: 0 }
+              end_ms: { type: integer, format: int64, minimum: 1 }
+              label: { type: string, minLength: 1 }
+              confidence: { type: number, minimum: 0, maximum: 1 }
+              source_window: { type: [integer, 'null'] }
+              stitched_windows: { type: [array, 'null'], items: { type: integer } }
     AiWorkerLeaseRequest:
       type: object
       additionalProperties: false
