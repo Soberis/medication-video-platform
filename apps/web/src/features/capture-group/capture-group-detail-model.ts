@@ -1,3 +1,4 @@
+import type { ActionCandidate } from '@/api/action-candidate'
 import type { AnnotationLabelSchema, AnnotationSegment, AnnotationTask } from '@/api/annotation'
 import type {
   CaptureGroup,
@@ -55,11 +56,23 @@ export function formatAnnotationTime(value: number | null | undefined) {
   return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock
 }
 
-export function initialDraftSegments(task: AnnotationTask | null) {
+export function initialDraftSegments(
+  task: AnnotationTask | null,
+  candidates?: ActionCandidate[],
+) {
   if (!task || task.status !== 'ASSIGNED') return []
   const revision = task.annotation_revision
   if (revision?.review?.decision === 'REJECTED') {
     return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
+  }
+  if (candidates && candidates.length > 0) {
+    return candidates.map((candidate) =>
+      createDraftSegment({
+        start_ms: candidate.start_ms,
+        end_ms: candidate.end_ms,
+        label: candidate.action_label,
+      }),
+    )
   }
   return [createDraftSegment()]
 }

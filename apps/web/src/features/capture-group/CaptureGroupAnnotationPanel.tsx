@@ -2,6 +2,7 @@ import { App as AntdApp, Alert, Button, Input, Select } from 'antd'
 import { CircleAlert } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
+import { fetchActionCandidates, type ActionCandidate } from '@/api/action-candidate'
 import {
   AnnotationTaskApiError,
   selectAnnotationPrimaryView,
@@ -72,6 +73,8 @@ export function CaptureGroupAnnotationPanel({
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [annotationNote, setAnnotationNote] = useState('')
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
+  const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
+  const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const draftContext = [
@@ -110,12 +113,45 @@ export function CaptureGroupAnnotationPanel({
     canSubmitRevision && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
 
+  useEffect(() => {
+    let isSubscribed = true
+    fetchActionCandidates(projectId, captureGroupId)
+      .then((candidates) => {
+        if (isSubscribed) {
+          setActionCandidates(candidates)
+        }
+      })
+      .catch(() => {
+        // AI candidates are auxiliary
+      })
+    return () => {
+      isSubscribed = false
+    }
+  }, [projectId, captureGroupId])
+
   if (!isDirty && appliedContext !== draftContext) {
     setAppliedContext(draftContext)
-    setDraftSegments(initialDraftSegments(task))
+    const initial = initialDraftSegments(task, actionCandidates)
+    setDraftSegments(initial)
     setSegmentErrors({})
     setAnnotationNote('')
+    if (actionCandidates.length > 0 && !task?.annotation_revision) {
+      setHasAutoLoadedAiDraft(true)
+    }
   }
+
+  useEffect(() => {
+    if (
+      !isDirty &&
+      task &&
+      !task.annotation_revision &&
+      actionCandidates.length > 0 &&
+      !hasAutoLoadedAiDraft
+    ) {
+      setDraftSegments(initialDraftSegments(task, actionCandidates))
+      setHasAutoLoadedAiDraft(true)
+    }
+  }, [isDirty, task, actionCandidates, hasAutoLoadedAiDraft])
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -326,6 +362,15 @@ export function CaptureGroupAnnotationPanel({
                   <h3>动作时间段</h3>
                 </div>
               </div>
+              {hasAutoLoadedAiDraft && actionCandidates.length > 0 && !task.annotation_revision && (
+                <div style={{ marginBottom: 16 }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={`已自动载入 Qwen3-VL 动作预标注草稿（共 ${actionCandidates.length} 个候选动作），请在时间轴上核对起止时间与标签后提交。`}
+                  />
+                </div>
+              )}
               <div className="capture-group-playback-position" aria-label="当前播放位置">
                 <div>
                   <span className="app-eyebrow">当前播放位置</span>

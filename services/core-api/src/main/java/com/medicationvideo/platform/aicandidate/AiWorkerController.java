@@ -25,8 +25,11 @@ class AiWorkerController {
 
 	private final AiJobExecutionService service;
 
-	AiWorkerController(AiJobExecutionService service) {
+	private final ActionCandidateJobService actionCandidateJobService;
+
+	AiWorkerController(AiJobExecutionService service, ActionCandidateJobService actionCandidateJobService) {
 		this.service = service;
+		this.actionCandidateJobService = actionCandidateJobService;
 	}
 
 	@PostMapping("/{jobId}/attempts/{attempt}/lease")
@@ -55,6 +58,15 @@ class AiWorkerController {
 			@RequestBody @Valid AiHandPoseResultRequest request, Authentication authentication) {
 		var workerId = requireWorker(authentication);
 		this.service.acceptResult(jobId, attempt, leaseToken, request, workerId);
+		return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+	}
+
+	@PutMapping("/{jobId}/attempts/{attempt}/action-result")
+	ResponseEntity<Void> acceptActionResult(@PathVariable UUID jobId, @PathVariable @Min(1) int attempt,
+			@RequestHeader(name = "X-AI-Lease-Token") @Pattern(regexp = "^[A-Za-z0-9_-]{43,128}$") String leaseToken,
+			@RequestBody @Valid ActionCandidateResultRequest request, Authentication authentication) {
+		var workerId = requireWorker(authentication);
+		this.actionCandidateJobService.acceptResult(jobId, attempt, leaseToken, request, workerId);
 		return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
 	}
 

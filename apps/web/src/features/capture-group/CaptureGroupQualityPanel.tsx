@@ -298,6 +298,7 @@ export function CaptureGroupQualityPanel({
               </label>
               <Button
                 type="primary"
+                style={{ marginTop: 12 }}
                 loading={saving === 'group'}
                 disabled={
                   !groupReason.trim() ||
