@@ -246,7 +246,10 @@ export function validActionCandidates(
   return valid ? ordered : []
 }
 
-function validateSegment(segment: DraftAnnotationSegment): SegmentValidationErrors {
+function validateSegment(
+  segment: DraftAnnotationSegment,
+  durationMs?: number | null,
+): SegmentValidationErrors {
   const errors: SegmentValidationErrors = {}
   const validStart = isValidAnnotationTime(segment.start_ms)
   const validEnd = isValidAnnotationTime(segment.end_ms)
@@ -258,15 +261,20 @@ function validateSegment(segment: DraftAnnotationSegment): SegmentValidationErro
     errors.end = segment.end_ms < 0 ? '结束时间不能小于 0 毫秒。' : '结束时间必须是非负整数毫秒。'
   } else if (validStart && segment.end_ms <= segment.start_ms) {
     errors.end = '结束时间必须晚于开始时间。'
+  } else if (durationMs && durationMs > 0 && segment.end_ms > durationMs) {
+    errors.end = `结束时间不能超出视频时长（最大 ${durationMs} 毫秒）。`
   }
   if (!segment.label.trim()) errors.label = '请选择标签。'
   return errors
 }
 
-export function validateSegments(segments: DraftAnnotationSegment[]) {
+export function validateSegments(
+  segments: DraftAnnotationSegment[],
+  durationMs?: number | null,
+) {
   const errors: Record<number, SegmentValidationErrors> = {}
   for (const segment of segments) {
-    const current = validateSegment(segment)
+    const current = validateSegment(segment, durationMs)
     if (current.start || current.end || current.label) errors[segment.draftId] = current
   }
   return errors

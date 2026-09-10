@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,7 +75,7 @@ def probe_duration_ms(video_path: Path) -> int:
         secs = float(out)
         if secs <= 0:
             raise ValueError(f"Non-positive duration probed: {secs}")
-        return max(1000, round(secs * 1000))
+        return max(1000, math.floor(secs * 1000))
     except Exception as exc:
         raise RuntimeError(f"Failed to probe video duration for {video_path}: {exc}") from exc
 

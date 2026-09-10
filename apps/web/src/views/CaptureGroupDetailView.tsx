@@ -107,7 +107,7 @@ export default function CaptureGroupDetailView() {
   const viewState = useCaptureGroupView(projectId, selectedView)
   const totalDurationMs = useMemo(() => {
     if (viewState.selectedMediaReport?.duration_microseconds) {
-      return Math.round(viewState.selectedMediaReport.duration_microseconds / 1000)
+      return Math.floor(viewState.selectedMediaReport.duration_microseconds / 1000)
     }
     return null
   }, [viewState.selectedMediaReport])

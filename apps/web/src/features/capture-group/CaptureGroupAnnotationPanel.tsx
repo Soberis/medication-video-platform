@@ -327,7 +327,7 @@ export function CaptureGroupAnnotationPanel({
   async function submitRevision(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmitRevision || isSubmittingRevision) return
-    const errors = validateSegments(draftSegments)
+    const errors = validateSegments(draftSegments, totalDurationMs)
     if (Object.keys(errors).length) {
       setSegmentErrors(errors)
       return

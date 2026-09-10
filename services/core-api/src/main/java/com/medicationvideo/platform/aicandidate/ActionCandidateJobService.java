@@ -307,8 +307,9 @@ public class ActionCandidateJobService {
 			}
 		}
 
-		var job = this.jobRepository.save(AiCandidateJob.queueAction(projectId, clipAssetId, "qwen3-vl-8b", inputDigest,
-				inputSize, contentType, idempotencyKey, fingerprint, actorId, now));
+		var job = this.jobRepository
+			.save(AiCandidateJob.queueAction(projectId, clipAssetId, AiCandidateJob.ACTION_MODEL_SHA256, inputDigest,
+					inputSize, contentType, idempotencyKey, fingerprint, actorId, now));
 
 		if (this.receiptRepository != null) {
 			this.receiptRepository.save(

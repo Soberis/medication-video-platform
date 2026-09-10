@@ -107,6 +107,20 @@ describe('formatAnnotationTime', () => {
       2: { end: '结束时间必须是非负整数毫秒。' },
     })
   })
+
+  it('rejects segments that exceed total duration', () => {
+    expect(
+      validateSegments(
+        [
+          { draftId: 1, start_ms: 0, end_ms: 1000, label: 'label-1' },
+          { draftId: 2, start_ms: 1000, end_ms: 1001, label: 'label-1' },
+        ],
+        1000,
+      ),
+    ).toEqual({
+      2: { end: '结束时间不能超出视频时长（最大 1000 毫秒）。' },
+    })
+  })
 })
 
 describe('CaptureGroup annotation workflow', () => {

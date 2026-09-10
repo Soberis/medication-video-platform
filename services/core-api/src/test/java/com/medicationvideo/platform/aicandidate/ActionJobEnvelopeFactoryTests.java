@@ -69,7 +69,7 @@ class ActionJobEnvelopeFactoryTests {
 		assertEquals("QWEN3_VL_ACTION", envelope.algorithmKey());
 		assertEquals("v1", envelope.algorithmVersion());
 		assertEquals(1, envelope.samplingFps());
-		assertEquals("qwen3-vl-8b-bf16", envelope.profileSha256());
+		assertEquals(AiCandidateJob.ACTION_PROFILE_SHA256, envelope.profileSha256());
 		assertEquals(job.getAiJobId(), envelope.jobId());
 		assertEquals(PROJECT_ID, envelope.projectId());
 		assertEquals(CAPTURE_GROUP_ID, envelope.captureGroupId());
@@ -108,8 +108,8 @@ class ActionJobEnvelopeFactoryTests {
 	}
 
 	private static AiCandidateJob actionJob() {
-		return AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, "qwen3-vl-8b", "a".repeat(64), 2048L, "video/mp4",
-				"queue-key-0001", "b".repeat(64), "tester", REQUESTED_AT);
+		return AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256, "a".repeat(64),
+				2048L, "video/mp4", "queue-key-0001", "b".repeat(64), "tester", REQUESTED_AT);
 	}
 
 	private static String snakeCase(String value) {

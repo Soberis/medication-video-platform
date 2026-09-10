@@ -18,6 +18,12 @@ class AiCandidateJob {
 	/** Algorithm key of the Qwen3-VL action pre-annotation job family. */
 	static final String ACTION_ALGORITHM_KEY = "QWEN3_VL_ACTION";
 
+	static final String ACTION_MODEL_NAME = "qwen3-vl-8b";
+
+	static final String ACTION_MODEL_SHA256 = HandPoseProfile.sha256("qwen3-vl-8b");
+
+	static final String ACTION_PROFILE_SHA256 = HandPoseProfile.sha256("qwen3-vl-8b-bf16");
+
 	@Id
 	@Column(name = "ai_job_id", nullable = false, updatable = false)
 	private UUID aiJobId;
@@ -121,12 +127,13 @@ class AiCandidateJob {
 		job.clipAssetId = clipAssetId;
 		job.algorithmKey = ACTION_ALGORITHM_KEY;
 		job.algorithmVersion = "v1";
-		job.modelSha256 = modelSha256 != null && !modelSha256.isBlank() ? modelSha256 : "qwen3-vl-8b";
+		job.modelSha256 = (modelSha256 != null && modelSha256.matches("^[a-f0-9]{64}$")) ? modelSha256
+				: ACTION_MODEL_SHA256;
 		job.inputSha256 = inputSha256;
 		job.inputSizeBytes = inputSizeBytes;
 		job.contentType = contentType;
 		job.samplingFps = 1;
-		job.profileSha256 = "qwen3-vl-8b-bf16";
+		job.profileSha256 = ACTION_PROFILE_SHA256;
 		job.status = AiCandidateJobStatus.QUEUED;
 		job.handResult = HandPoseResult.UNKNOWN;
 		job.idempotencyKey = idempotencyKey;

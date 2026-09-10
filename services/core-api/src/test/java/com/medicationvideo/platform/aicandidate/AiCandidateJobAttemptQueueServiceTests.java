@@ -83,8 +83,8 @@ class AiCandidateJobAttemptQueueServiceTests {
 	}
 
 	private static AiCandidateJob actionJob() {
-		return AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, "qwen3-vl-8b", "a".repeat(64), 2048L, "video/mp4",
-				"retry-key-0001", "b".repeat(64), "AUTO_AFTER_MEDIA_INGESTED", Instant.EPOCH);
+		return AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256, "a".repeat(64),
+				2048L, "video/mp4", "retry-key-0001", "b".repeat(64), "AUTO_AFTER_MEDIA_INGESTED", Instant.EPOCH);
 	}
 
 }
