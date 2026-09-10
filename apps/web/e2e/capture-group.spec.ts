@@ -39,14 +39,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 for (const width of [1366, 1440]) {
-  test(`${width} — video first with optional editing and unsaved navigation guard`, async ({
-    page,
-  }) => {
+  test(`${width} — video first workspace with unsaved navigation guard`, async ({ page }) => {
     await page.setViewportSize({ width, height: width === 1366 ? 768 : 900 })
     await mockCaptureGroupApi(page, 'n2-active')
     await page.goto(`/projects/${projectId}/capture-groups/${multiCameraGroupId}`)
-    await expect(page.getByRole('button', { name: '标注', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: '提交修订' })).not.toBeVisible()
+    await expect(page.getByRole('region', { name: '动作标注' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /提交(标注|修订)/ })).toBeVisible()
     await expectNoHorizontalPageOverflow(page)
     await expectNoSeriousAxeViolations(page)
     const rendering = await page.evaluate(() => ({
@@ -62,11 +60,8 @@ for (const width of [1366, 1440]) {
       fullPage: true,
       animations: 'disabled',
     })
-    await page.getByRole('button', { name: '标注', exact: true }).click()
     await page.getByLabel('开始时间（毫秒）', { exact: true }).fill('123')
-    await page.getByRole('button', { name: '收起标注 · 未提交' }).click()
     await page.getByRole('button', { name: '刷新', exact: true }).click()
-    await page.getByRole('button', { name: '标注 · 未提交' }).click()
     await expect(page.getByLabel('开始时间（毫秒）', { exact: true })).toHaveValue('123')
     await page.getByRole('link', { name: '视频', exact: true }).first().click()
     const dialog = page.getByRole('dialog', { name: '离开并丢弃未提交的标注？' })
@@ -77,25 +72,14 @@ for (const width of [1366, 1440]) {
   })
 }
 
-test('optional annotation keeps preparation collapsed and never writes on open', async ({
-  page,
-}) => {
+test('the annotation workspace opens without writing anything', async ({ page }) => {
   await mockCaptureGroupApi(page, 'unassigned')
   const mutations: string[] = []
   page.on('request', (request) => {
     if (request.url().includes('/api/') && request.method() !== 'GET') mutations.push(request.url())
   })
   await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
-  await expect(page.getByRole('button', { name: '开始标注' })).not.toBeVisible()
-  const annotationToggle = page.getByRole('button', { name: '标注', exact: true })
-  await annotationToggle.focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('button', { name: '开始标注' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '标注前检查' })).toBeVisible()
-  await expect(page.getByText('手部检测：检测中')).toBeVisible()
-  await page.getByText('修改整体质量结论', { exact: true }).click()
-  await expect(page.getByRole('button', { name: '保存整体质量' })).toBeVisible()
-  await page.getByRole('button', { name: '收起标注', exact: true }).click()
+  await expect(page.getByRole('region', { name: '动作标注' })).toBeVisible()
   await expect(page.getByRole('button', { name: '导出数据' })).toHaveCount(0)
   await expectNoSeriousAxeViolations(page)
   await expectNoHorizontalPageOverflow(page)
@@ -139,8 +123,7 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
   test('1440 — N=1 active annotation workbench', async ({ page }) => {
     await mockCaptureGroupApi(page, 'n1-active')
     await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
-    await page.getByRole('button', { name: '标注', exact: true }).click()
-    await expect(page.getByRole('button', { name: '提交修订' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /提交(标注|修订)/ })).toBeVisible()
 
     await expect(page.getByText('当前视图', { exact: true })).toHaveCount(0)
     await expect(page.getByText('人工查看', { exact: true })).toHaveCount(0)
@@ -165,7 +148,7 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
 
     await expect(page.getByRole('combobox', { name: '主视图' })).toHaveCount(0)
 
-    await page.getByRole('button', { name: '提交修订' }).click()
+    await page.getByRole('button', { name: /提交(标注|修订)/ }).click()
     const firstInvalidField = page.getByRole('combobox', {
       name: '第 1 个时间段动作标签',
     })
@@ -176,8 +159,7 @@ test.describe('V1.27 CaptureGroup goldens · 1440', () => {
   test('1440 — N>1 annotation workbench', async ({ page }) => {
     await mockCaptureGroupApi(page, 'n2-active')
     await page.goto(`/projects/${projectId}/capture-groups/${multiCameraGroupId}`)
-    await page.getByRole('button', { name: '标注', exact: true }).click()
-    await expect(page.getByRole('button', { name: '提交修订' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /提交(标注|修订)/ })).toBeVisible()
 
     const cameraSelector = page.getByRole('group', { name: '采集记录机位选择' })
     await expect(cameraSelector).toHaveCount(1)
@@ -323,8 +305,7 @@ test.describe('V1.27 CaptureGroup goldens · 720', () => {
   test('720 — active workbench', async ({ page }) => {
     await mockCaptureGroupApi(page, 'n2-active')
     await page.goto(`/projects/${projectId}/capture-groups/${multiCameraGroupId}`)
-    await page.getByRole('button', { name: '标注', exact: true }).click()
-    await expect(page.getByRole('button', { name: '提交修订' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /提交(标注|修订)/ })).toBeVisible()
     await expect(page.getByRole('group', { name: '采集记录机位选择' })).toHaveCount(1)
     await expectNoHorizontalPageOverflow(page)
 
@@ -428,7 +409,7 @@ test.describe('native playback controls', () => {
         video.currentTime = 1
         video.dispatchEvent(new Event('timeupdate'))
       })
-      await expect(page.getByLabel('当前播放位置')).toContainText('00:01.000')
+      await expect(page.getByLabel('当前播放位置')).toContainText('00:01')
 
       await player.evaluate((element) => element.blur())
       await page.keyboard.press('Space')

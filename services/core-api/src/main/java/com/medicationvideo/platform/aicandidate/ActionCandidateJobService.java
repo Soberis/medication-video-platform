@@ -3,6 +3,7 @@ package com.medicationvideo.platform.aicandidate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +30,8 @@ public class ActionCandidateJobService {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ActionCandidateJobService.class);
 
+	static final int MAX_RESULT_SEGMENTS = 2000;
+
 	private final AiCandidateJobRepository jobRepository;
 
 	private final AiCandidateJobAttemptRepository attemptRepository;
@@ -49,9 +52,12 @@ public class ActionCandidateJobService {
 
 	private final AiLeaseCapabilityFactory capabilityFactory;
 
+	private final ActionJobEnvelopeFactory actionEnvelopeFactory;
+
 	ActionCandidateJobService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
 			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, null, null, null, null, null, null);
+		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, null, null, null, null, null, null,
+				new ActionJobEnvelopeFactory(null, null));
 	}
 
 	@Autowired
@@ -62,7 +68,8 @@ public class ActionCandidateJobService {
 			@Autowired(required = false) AiCandidateJobIdempotencyReceiptRepository receiptRepository,
 			@Autowired(required = false) AuditEventRecorder auditRecorder,
 			@Autowired(required = false) AiJobDispatchPort dispatchPort,
-			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory) {
+			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory,
+			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.jdbcTemplate = jdbcTemplate;
@@ -73,13 +80,15 @@ public class ActionCandidateJobService {
 		this.auditRecorder = auditRecorder;
 		this.dispatchPort = dispatchPort;
 		this.capabilityFactory = capabilityFactory;
+		this.actionEnvelopeFactory = actionEnvelopeFactory != null ? actionEnvelopeFactory
+				: new ActionJobEnvelopeFactory(assetCatalog, null);
 	}
 
 	@Transactional
 	public void acceptResult(UUID jobId, int attemptNumber, String leaseToken, ActionCandidateResultRequest request,
 			String authenticatedWorkerId) {
 		var job = lockJob(jobId);
-		if (!"QWEN3_VL_ACTION".equals(job.getAlgorithmKey())) {
+		if (!AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())) {
 			throw new HandPoseJobException("AI_ACTION_JOB_TYPE_MISMATCH",
 					"Action results cannot complete a different algorithm's job.", 409);
 		}
@@ -118,13 +127,9 @@ public class ActionCandidateJobService {
 		}
 
 		var receivedAt = Timestamp.from(now);
+		requireAcceptableSegments(request.segments(), request.durationMs());
 
-		// Validate segments and insert
 		for (var seg : request.segments()) {
-			if (seg.startMs() == null || seg.endMs() == null || seg.startMs() < 0 || seg.endMs() <= seg.startMs()) {
-				throw new HandPoseJobException("INVALID_SEGMENT_INTERVAL",
-						"Action segment interval must satisfy 0 <= startMs < endMs.", 400);
-			}
 			String stitchedJson = "[]";
 			try {
 				if (seg.stitchedWindows() != null && !seg.stitchedWindows().isEmpty()) {
@@ -190,9 +195,10 @@ public class ActionCandidateJobService {
 	}
 
 	private UUID resolveCaptureGroupId(UUID clipAssetId) {
-		var results = this.jdbcTemplate.queryForList(
-				"SELECT capture_session_id FROM camera_stream WHERE clip_asset_id = ?", UUID.class, clipAssetId);
-		return results.isEmpty() ? null : results.getFirst();
+		if (this.assetCatalog != null) {
+			return this.assetCatalog.resolveCaptureGroupId(clipAssetId);
+		}
+		return this.actionEnvelopeFactory.resolveCaptureGroupId(clipAssetId);
 	}
 
 	private AiCandidateJob lockJob(UUID jobId) {
@@ -214,6 +220,41 @@ public class ActionCandidateJobService {
 
 	private String computeDigest(ActionCandidateResultRequest request) {
 		return HandPoseProfile.sha256(this.objectMapper.writeValueAsString(request));
+	}
+
+	/**
+	 * Rejects candidate sets the platform cannot store faithfully: unbounded results,
+	 * labels outside the active schema, intervals beyond the reported duration, and
+	 * overlapping intervals (the product rule allows blank gaps instead of overlaps).
+	 */
+	private void requireAcceptableSegments(List<ActionCandidateSegmentItem> segments, Long durationMs) {
+		if (segments.size() > MAX_RESULT_SEGMENTS) {
+			throw new HandPoseJobException("AI_ACTION_RESULT_TOO_LARGE",
+					"An action result may not contain more than " + MAX_RESULT_SEGMENTS + " segments.", 400);
+		}
+		var allowedLabels = this.actionEnvelopeFactory.resolveAllowedLabels();
+		var ordered = new ArrayList<>(segments);
+		ordered.sort(Comparator.comparingLong(ActionCandidateSegmentItem::startMs));
+		var previousEnd = -1L;
+		for (var seg : ordered) {
+			if (seg.startMs() == null || seg.endMs() == null || seg.startMs() < 0 || seg.endMs() <= seg.startMs()) {
+				throw new HandPoseJobException("INVALID_SEGMENT_INTERVAL",
+						"Action segment interval must satisfy 0 <= startMs < endMs.", 400);
+			}
+			if (durationMs != null && seg.endMs() > durationMs) {
+				throw new HandPoseJobException("INVALID_SEGMENT_INTERVAL",
+						"Action segment interval must not exceed the reported video duration.", 400);
+			}
+			if (!allowedLabels.contains(seg.label())) {
+				throw new HandPoseJobException("INVALID_SEGMENT_LABEL",
+						"Action segment label is not part of the active label schema.", 400);
+			}
+			if (seg.startMs() < previousEnd) {
+				throw new HandPoseJobException("OVERLAPPING_SEGMENT_INTERVAL",
+						"Action segments must not overlap; blank intervals are allowed instead.", 400);
+			}
+			previousEnd = seg.endMs();
+		}
 	}
 
 	@Transactional
@@ -257,7 +298,7 @@ public class ActionCandidateJobService {
 		var existingList = this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId,
 				clipAssetId);
 		for (var candidate : existingList) {
-			if ("QWEN3_VL_ACTION".equals(candidate.getAlgorithmKey())) {
+			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(candidate.getAlgorithmKey())) {
 				if (candidate.getStatus() == AiCandidateJobStatus.QUEUED
 						|| candidate.getStatus() == AiCandidateJobStatus.RUNNING
 						|| candidate.getStatus() == AiCandidateJobStatus.SUCCEEDED) {
@@ -288,36 +329,17 @@ public class ActionCandidateJobService {
 					HandPoseProfile.sha256(leaseToken), now));
 		}
 
-		List<String> allowedLabels = List.of();
-		try {
-			allowedLabels = this.jdbcTemplate.queryForList(
-					"""
-							SELECT label_id FROM label_definition
-							 WHERE label_schema_id = (SELECT label_schema_id FROM label_schema WHERE status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1)
-							 ORDER BY sort_order ASC
-							""",
-					String.class);
-		}
-		catch (Exception ignored) {
-		}
-		if (allowedLabels == null || allowedLabels.isEmpty()) {
-			allowedLabels = List.of("prepare_workspace", "retrieve_medicine", "prepare_dose", "final_review", "cleanup",
-					"open_cap", "draw_liquid", "inject_mix", "check_info", "label_seal");
-		}
-
 		if (this.dispatchPort != null) {
-			var envelope = new AiActionJobEnvelope("ai-action-job.v1", messageId, job.getAiJobId(), 1, leaseToken,
-					projectId, captureGroupId, clipAssetId, inputDigest, inputSize, contentType, "QWEN3_VL_ACTION",
-					"v1", job.getModelSha256(), 1, "qwen3-vl-8b-bf16", allowedLabels, now);
-			this.dispatchPort.enqueueAction(envelope, now);
+			this.dispatchPort.enqueueAction(
+					this.actionEnvelopeFactory.create(job, captureGroupId, 1, messageId, leaseToken, now), now);
 		}
 
 		if (this.auditRecorder != null) {
 			this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 					"AI_ACTION_CANDIDATE_JOB_QUEUED", "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
-					"QWEN3_VL_ACTION", requestId, traceId, "ROLE_MEMBER",
+					AiCandidateJob.ACTION_ALGORITHM_KEY, requestId, traceId, "ROLE_MEMBER",
 					Map.of("capture_group_id", captureGroupId.toString(), "clip_asset_id", clipAssetId.toString(),
-							"algorithm_key", "QWEN3_VL_ACTION")));
+							"algorithm_key", AiCandidateJob.ACTION_ALGORITHM_KEY)));
 		}
 
 		return response(job, captureGroupId);
@@ -331,40 +353,18 @@ public class ActionCandidateJobService {
 		}
 		var jobs = this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, clipAssetId);
 		for (var job : jobs) {
-			if ("QWEN3_VL_ACTION".equals(job.getAlgorithmKey())) {
+			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())) {
 				return response(job, captureGroupId);
 			}
 		}
 		return null;
 	}
 
-	@Transactional
-	public void queueAfterMediaIngested(UUID projectId, UUID clipAssetId) {
-		var captureGroupId = resolveCaptureGroupId(clipAssetId);
-		if (captureGroupId == null) {
-			return;
-		}
-		try {
-			var idempotencyKey = "auto-action-" + clipAssetId;
-			queueActionCandidateJob(projectId, captureGroupId, "AUTO_AFTER_MEDIA_INGESTED", idempotencyKey,
-					idempotencyKey, null);
-			LOGGER.info("Auto-dispatched Qwen action job for clip asset {} in capture group {}", clipAssetId,
-					captureGroupId);
-		}
-		catch (Exception exc) {
-			LOGGER.warn("Auto-dispatch of action candidate job skipped for clip asset {}: {}", clipAssetId,
-					exc.getMessage());
-		}
-	}
-
 	public UUID resolvePrimaryClipAssetId(UUID captureGroupId) {
-		var results = this.jdbcTemplate.queryForList("""
-				SELECT clip_asset_id FROM camera_stream
-				 WHERE capture_session_id = ?
-				 ORDER BY camera_number ASC
-				 LIMIT 1
-				""", UUID.class, captureGroupId);
-		return results.isEmpty() ? null : results.getFirst();
+		if (this.assetCatalog != null) {
+			return this.assetCatalog.resolvePrimaryClipAssetId(captureGroupId);
+		}
+		return null;
 	}
 
 	private ActionCandidateJobResponse response(AiCandidateJob job, UUID captureGroupId) {

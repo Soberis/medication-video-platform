@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -17,6 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service
 class AiJobRecoveryService {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(AiJobRecoveryService.class);
 
 	private final AiCandidateJobRepository jobRepository;
 
@@ -58,9 +62,16 @@ class AiJobRecoveryService {
 		var cutoff = now.minus(this.leaseGrace);
 		var recovered = 0;
 		for (var jobId : this.attemptRepository.findRecoverableJobIds(cutoff, this.batchSize)) {
-			var changed = this.transactionTemplate.execute(status -> recoverOne(jobId, cutoff, now));
-			if (Boolean.TRUE.equals(changed)) {
-				recovered++;
+			try {
+				var changed = this.transactionTemplate.execute(status -> recoverOne(jobId, cutoff, now));
+				if (Boolean.TRUE.equals(changed)) {
+					recovered++;
+				}
+			}
+			catch (RuntimeException exception) {
+				// One job that cannot be requeued (for example an action job whose source
+				// clip no longer belongs to a capture group) must not block the batch.
+				LOGGER.warn("Lease recovery skipped AI job {}: {}", jobId, exception.getMessage());
 			}
 		}
 		return recovered;

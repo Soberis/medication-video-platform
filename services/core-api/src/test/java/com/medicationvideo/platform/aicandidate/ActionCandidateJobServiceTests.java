@@ -10,8 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+
+import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -41,14 +44,22 @@ class ActionCandidateJobServiceTests {
 
 	private static final UUID CAPTURE_GROUP_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
+	private static final UUID CLIP_ASSET_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
+
+	private AssetCatalogQueryService assetCatalog;
+
+	private ActionJobEnvelopeFactory actionEnvelopeFactory;
+
 	@BeforeEach
 	void setUp() {
 		this.jobRepository = mock(AiCandidateJobRepository.class);
 		this.attemptRepository = mock(AiCandidateJobAttemptRepository.class);
 		this.jdbcTemplate = mock(JdbcTemplate.class);
+		this.assetCatalog = mock(AssetCatalogQueryService.class);
+		this.actionEnvelopeFactory = mock(ActionJobEnvelopeFactory.class);
 		this.objectMapper = new ObjectMapper();
 		this.service = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
-				this.objectMapper);
+				this.objectMapper, null, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory);
 	}
 
 	@Test
@@ -112,13 +123,87 @@ class ActionCandidateJobServiceTests {
 
 	private AiCandidateJobAttempt prepareAttempt(UUID messageId) {
 		var job = mock(AiCandidateJob.class);
-		when(job.getAlgorithmKey()).thenReturn("QWEN3_VL_ACTION");
+		when(job.getAlgorithmKey()).thenReturn(AiCandidateJob.ACTION_ALGORITHM_KEY);
 		when(this.jobRepository.findForUpdate(JOB_ID)).thenReturn(Optional.of(job));
+		return stubAttempt(messageId);
+	}
+
+	/**
+	 * Registers a leased attempt without touching the job repository, so a caller can
+	 * keep its own job stub (for example one that reports RUNNING).
+	 */
+	private AiCandidateJobAttempt stubAttempt(UUID messageId) {
 		var now = Instant.now();
 		var attempt = AiCandidateJobAttempt.queue(JOB_ID, 1, messageId, AiLeaseCapabilityFactory.sha256("token"), now);
 		attempt.acquire("worker", now, Duration.ofMinutes(5));
 		when(this.attemptRepository.findByAiJobIdAndAttempt(JOB_ID, 1)).thenReturn(Optional.of(attempt));
 		return attempt;
+	}
+
+	@Test
+	void rejectsSegmentLabelsOutsideTheActiveSchema() {
+		var messageId = UUID.randomUUID();
+		prepareRunningJob(messageId);
+		var request = result(messageId,
+				List.of(new ActionCandidateSegmentItem(0L, 100L, "not_a_label", 0.5, 1, List.of())));
+
+		var exception = assertThrows(HandPoseJobException.class,
+				() -> this.service.acceptResult(JOB_ID, 1, "token", request, "worker"));
+
+		assertEquals("INVALID_SEGMENT_LABEL", exception.getErrorCode());
+	}
+
+	@Test
+	void rejectsOverlappingSegments() {
+		var messageId = UUID.randomUUID();
+		prepareRunningJob(messageId);
+		var request = result(messageId,
+				List.of(new ActionCandidateSegmentItem(0L, 1000L, "draw_liquid", 0.5, 1, List.of()),
+						new ActionCandidateSegmentItem(500L, 1500L, "draw_liquid", 0.5, 1, List.of())));
+
+		var exception = assertThrows(HandPoseJobException.class,
+				() -> this.service.acceptResult(JOB_ID, 1, "token", request, "worker"));
+
+		assertEquals("OVERLAPPING_SEGMENT_INTERVAL", exception.getErrorCode());
+	}
+
+	@Test
+	void rejectsSegmentsBeyondTheReportedDuration() {
+		var messageId = UUID.randomUUID();
+		prepareRunningJob(messageId);
+		var request = result(messageId,
+				List.of(new ActionCandidateSegmentItem(0L, 60_000L, "draw_liquid", 0.5, 1, List.of())));
+
+		var exception = assertThrows(HandPoseJobException.class,
+				() -> this.service.acceptResult(JOB_ID, 1, "token", request, "worker"));
+
+		assertEquals("INVALID_SEGMENT_INTERVAL", exception.getErrorCode());
+	}
+
+	@Test
+	void rejectsResultsExceedingTheSegmentLimit() {
+		var messageId = UUID.randomUUID();
+		prepareRunningJob(messageId);
+		var segments = new ArrayList<ActionCandidateSegmentItem>();
+		for (var index = 0; index <= ActionCandidateJobService.MAX_RESULT_SEGMENTS; index++) {
+			segments.add(new ActionCandidateSegmentItem(index * 2L, index * 2L + 1L, "draw_liquid", 0.5, 1, List.of()));
+		}
+
+		var exception = assertThrows(HandPoseJobException.class,
+				() -> this.service.acceptResult(JOB_ID, 1, "token", result(messageId, segments), "worker"));
+
+		assertEquals("AI_ACTION_RESULT_TOO_LARGE", exception.getErrorCode());
+	}
+
+	private void prepareRunningJob(UUID messageId) {
+		var job = mock(AiCandidateJob.class);
+		when(job.getAlgorithmKey()).thenReturn(AiCandidateJob.ACTION_ALGORITHM_KEY);
+		when(job.getStatus()).thenReturn(AiCandidateJobStatus.RUNNING);
+		when(job.getClipAssetId()).thenReturn(CLIP_ASSET_ID);
+		when(this.jobRepository.findForUpdate(JOB_ID)).thenReturn(Optional.of(job));
+		stubAttempt(messageId);
+		when(this.assetCatalog.resolveCaptureGroupId(CLIP_ASSET_ID)).thenReturn(CAPTURE_GROUP_ID);
+		when(this.actionEnvelopeFactory.resolveAllowedLabels()).thenReturn(List.of("draw_liquid"));
 	}
 
 	private static ActionCandidateResultRequest result(UUID messageId, List<ActionCandidateSegmentItem> segments) {

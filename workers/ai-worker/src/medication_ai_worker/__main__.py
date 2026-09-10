@@ -16,7 +16,11 @@ def main() -> None:
         settings.platform_api_base_url, settings.read_bearer_token, settings.worker_id
     )
     try:
-        AiConsumer(settings.rabbitmq_url, Processor(client, settings)).run()
+        AiConsumer(
+            settings.rabbitmq_url,
+            Processor(client, settings),
+            settings.job_queues,
+        ).run()
     finally:
         client.close()
 

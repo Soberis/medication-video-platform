@@ -80,12 +80,8 @@ describe('CaptureGroup Review and event cleaning', () => {
     })
     renderCaptureGroup()
 
-    expect(
-      await screen.findByText(/标注已提交，等待有项目管理权限的管理员确认/),
-    ).toBeInTheDocument()
-    expect(document.querySelector('.capture-group-workspace')).toHaveClass(
-      'capture-group-workspace-machine-evidence',
-    )
+    expect(await screen.findByText('当前任务状态：待复核。')).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '动作标注' })).toBeVisible()
     expect(screen.queryByRole('button', { name: '通过复核' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退回修改' })).not.toBeInTheDocument()
   })

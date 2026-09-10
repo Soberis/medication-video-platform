@@ -4,13 +4,14 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 import pika
 
+from medication_ai_worker.config import DEFAULT_JOB_QUEUES
 from medication_ai_worker.processor import (
     DeadLetterReason,
     Disposition,
@@ -41,13 +42,15 @@ class AiConsumer:
         self,
         rabbitmq_url: str,
         processor: Processor,
-        queue_name: str = "platform.ai.hand-pose.v1",
+        queue_names: Sequence[str] = DEFAULT_JOB_QUEUES,
         dead_letter_exchange: str = "platform.dead-letter.v1",
         dead_letter_routing_key: str = "ai.dead-letter.v1",
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if not queue_names:
+            raise ValueError("AiConsumer requires at least one job queue")
         self._rabbitmq_url = rabbitmq_url
-        self._queue_name = queue_name
+        self._queue_names = tuple(queue_names)
         self._dead_letter_exchange = dead_letter_exchange
         self._dead_letter_routing_key = dead_letter_routing_key
         self._processor = processor
@@ -76,12 +79,13 @@ class AiConsumer:
             # scrubbed diagnostic reached the durable DLX route.
             channel.confirm_delivery()
             channel.basic_qos(prefetch_count=1)
-            channel.basic_consume(
-                queue=self._queue_name,
-                on_message_callback=self._on_message,
-                auto_ack=False,
-            )
-            LOGGER.info("AI Worker is consuming queue=%s", self._queue_name)
+            for queue_name in self._queue_names:
+                channel.basic_consume(
+                    queue=queue_name,
+                    on_message_callback=self._on_message,
+                    auto_ack=False,
+                )
+            LOGGER.info("AI Worker is consuming queues=%s", ",".join(self._queue_names))
             channel.start_consuming()
         finally:
             if connection.is_open:

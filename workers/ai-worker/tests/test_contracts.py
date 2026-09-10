@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -87,6 +88,38 @@ def test_action_job_contract_parses_valid_payload() -> None:
     assert job.sampling_fps == 1
 
 
+def test_action_job_contract_rejects_undeclared_fields() -> None:
+    from medication_ai_worker.contracts import ActionJob
+
+    payload = _action_payload()
+    payload["unexpected_field"] = "x"
+
+    with pytest.raises(ContractError, match="fields"):
+        ActionJob.from_bytes(json.dumps(payload).encode())
+
+
+def test_action_job_contract_rejects_blank_provenance_fields() -> None:
+    from medication_ai_worker.contracts import ActionJob
+
+    for field in ("model_sha256", "profile_sha256"):
+        payload = _action_payload()
+        payload[field] = "   "
+
+        with pytest.raises(ContractError, match=field):
+            ActionJob.from_bytes(json.dumps(payload).encode())
+
+
+def test_action_job_contract_rejects_an_unusable_label_set() -> None:
+    from medication_ai_worker.contracts import ActionJob
+
+    for labels in ([], ["prepare", " "], ["prepare", 3]):
+        payload = _action_payload()
+        payload["allowed_labels"] = labels
+
+        with pytest.raises(ContractError, match="allowed_labels"):
+            ActionJob.from_bytes(json.dumps(payload).encode())
+
+
 def test_parse_job_routes_both_hand_pose_and_action() -> None:
     from medication_ai_worker.contracts import ActionJob, AiJob, parse_job
 
@@ -95,4 +128,22 @@ def test_parse_job_routes_both_hand_pose_and_action() -> None:
 
     action_job = parse_job(json.dumps(_action_payload()).encode())
     assert isinstance(action_job, ActionJob)
+
+
+def test_action_job_schema_matches_the_worker_field_contract() -> None:
+    from medication_ai_worker.contracts import ACTION_FIELDS
+
+    schema_path = Path(__file__).resolve().parents[3] / "contracts" / "events"
+    schema = json.loads((schema_path / "ai-action-job-v1.schema.json").read_text(encoding="utf-8"))
+
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"]) == set(ACTION_FIELDS)
+    assert schema["properties"]["schema_version"]["const"] == "ai-action-job.v1"
+    assert schema["properties"]["algorithm_key"]["const"] == "QWEN3_VL_ACTION"
+
+
+def test_action_job_example_matches_the_declared_schema_fields() -> None:
+    from medication_ai_worker.contracts import ACTION_FIELDS
+
+    assert set(_action_payload()) == set(ACTION_FIELDS)
 

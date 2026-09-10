@@ -278,7 +278,8 @@ class HandPoseJobServiceTests {
 		var attemptRepository = mock(AiCandidateJobAttemptRepository.class);
 		var dispatch = mock(AiJobDispatchPort.class);
 		var durationQueryService = mock(MediaDurationQueryService.class);
-		var queue = new AiCandidateJobAttemptQueueService(attemptRepository, dispatch, new AiLeaseCapabilityFactory());
+		var queue = new AiCandidateJobAttemptQueueService(attemptRepository, dispatch, new AiLeaseCapabilityFactory(),
+				new ActionJobEnvelopeFactory(assetCatalog, null));
 		var service = new HandPoseJobService(access, assetCatalog, repository, receiptRepository, auditRecorder, queue,
 				durationQueryService, modelSha256, enabled, maxAttempts);
 		return new Fixture(service, access, assetCatalog, repository, receiptRepository, attemptRepository, dispatch,

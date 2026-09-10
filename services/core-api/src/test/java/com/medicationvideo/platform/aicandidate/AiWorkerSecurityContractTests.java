@@ -30,7 +30,8 @@ class AiWorkerSecurityContractTests {
 	void actionEndpointUsesSnakeCaseContractAndRequiresWorkerAuthentication() throws Exception {
 		var body = """
 				{"message_id":"00000000-0000-0000-0000-000000000091","model_name":"synthetic-qwen",
-				"sampling_fps":1,"peak_memory_mb":0,"inference_time_ms":1000,
+				"prompt_version":"placeholder-protocol-scaffold-v1","total_windows":1,"duration_ms":19000,
+				"inference_duration_ms":1000,
 				"started_at":"2026-09-10T00:00:00Z","completed_at":"2026-09-10T00:00:01Z","segments":[]}
 				""";
 		var path = resultPath().replace("/result", "/action-result");
@@ -51,6 +52,18 @@ class AiWorkerSecurityContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body.replace("\"segments\":[]",
 						"\"segments\":[{\"start_ms\":-1,\"end_ms\":1,\"label\":\"x\",\"confidence\":0.5}]")))
+			.andExpect(status().isBadRequest());
+		// The retired sampling_fps/peak_memory_mb/inference_time_ms payload must not pass
+		// validation: the Worker now reports duration_ms/inference_duration_ms instead.
+		this.mockMvc
+			.perform(put(path).header("Authorization", "Bearer " + AI_TOKEN)
+				.header("X-AI-Lease-Token", "A".repeat(43))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"message_id":"00000000-0000-0000-0000-000000000091","model_name":"synthetic-qwen",
+						"sampling_fps":1,"peak_memory_mb":0,"inference_time_ms":1000,
+						"started_at":"2026-09-10T00:00:00Z","completed_at":"2026-09-10T00:00:01Z","segments":[]}
+						"""))
 			.andExpect(status().isBadRequest());
 	}
 

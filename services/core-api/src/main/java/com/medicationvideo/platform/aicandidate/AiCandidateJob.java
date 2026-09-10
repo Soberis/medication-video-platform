@@ -15,6 +15,9 @@ import jakarta.persistence.Version;
 @Table(name = "ai_job")
 class AiCandidateJob {
 
+	/** Algorithm key of the Qwen3-VL action pre-annotation job family. */
+	static final String ACTION_ALGORITHM_KEY = "QWEN3_VL_ACTION";
+
 	@Id
 	@Column(name = "ai_job_id", nullable = false, updatable = false)
 	private UUID aiJobId;
@@ -116,7 +119,7 @@ class AiCandidateJob {
 		job.aiJobId = UUID.randomUUID();
 		job.projectId = projectId;
 		job.clipAssetId = clipAssetId;
-		job.algorithmKey = "QWEN3_VL_ACTION";
+		job.algorithmKey = ACTION_ALGORITHM_KEY;
 		job.algorithmVersion = "v1";
 		job.modelSha256 = modelSha256 != null && !modelSha256.isBlank() ? modelSha256 : "qwen3-vl-8b";
 		job.inputSha256 = inputSha256;

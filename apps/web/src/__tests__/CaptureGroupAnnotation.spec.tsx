@@ -134,7 +134,7 @@ describe('CaptureGroup annotation workflow', () => {
     await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
     expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeDisabled()
   })
-  it('preserves unsaved segments through collapse and refresh, and blocks leaving until confirmed', async () => {
+  it('preserves unsaved segments in permanent workspace and blocks leaving until confirmed', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -153,10 +153,7 @@ describe('CaptureGroup annotation workflow', () => {
     const start = await screen.findByLabelText('开始时间（毫秒）')
     await user.clear(start)
     await user.type(start, '123')
-    await user.click(screen.getByRole('button', { name: '收起标注 · 未提交' }))
-    expect(start).not.toBeVisible()
     await user.click(screen.getByRole('button', { name: '刷新' }))
-    await user.click(await screen.findByRole('button', { name: '标注 · 未提交' }))
     await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(123))
     await user.click(screen.getByRole('button', { name: /机位 2/ }))
     expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(123)
@@ -208,7 +205,7 @@ describe('CaptureGroup annotation workflow', () => {
     await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
     expect(within(auditDetails).getByText('任务 ID')).toBeInTheDocument()
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '提交修订' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /提交(标注|修订)/ })).not.toBeInTheDocument()
     expect(
       within(auditDetails).getByRole('link', { name: '打开采集记录人工标签任务上下文' }),
     ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
@@ -280,7 +277,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交修订' })
+    const submitButton = await screen.findByRole('button', { name: /提交(标注|修订)/ })
     const annotationSection = screen.getByRole('region', { name: '动作标注' })
     expect(within(annotationSection).getByText('待提交')).toBeInTheDocument()
     expect(within(annotationSection).queryByText(task.assignee_actor_id)).not.toBeInTheDocument()
@@ -313,7 +310,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const form = (await screen.findByRole('button', { name: '提交修订' })).closest('form')
+    const form = (await screen.findByRole('button', { name: /提交(标注|修订)/ })).closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     const startInput = within(form).getByLabelText('开始时间（毫秒）')
     const endInput = within(form).getByLabelText('结束时间（毫秒）')
@@ -354,7 +351,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交修订' })
+    const submitButton = await screen.findByRole('button', { name: /提交(标注|修订)/ })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     expect(within(form).getByText('动作标签')).toBeInTheDocument()
@@ -390,7 +387,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交修订' })
+    const submitButton = await screen.findByRole('button', { name: /提交(标注|修订)/ })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     await user.click(submitButton)
@@ -454,7 +451,7 @@ describe('CaptureGroup annotation workflow', () => {
     fireEvent.loadedMetadata(video)
     fireEvent.timeUpdate(video)
 
-    const form = (await screen.findByRole('button', { name: '提交修订' })).closest('form')
+    const form = (await screen.findByRole('button', { name: /提交(标注|修订)/ })).closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     const startButton = await within(form).findByRole('button', {
       name: '第 1 个时间段：使用当前时间作为开始',

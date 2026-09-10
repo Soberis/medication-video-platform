@@ -1,7 +1,7 @@
 import { Alert, Button, Modal } from 'antd'
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useBlocker, useLocation, useParams } from 'react-router'
+import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
@@ -11,7 +11,6 @@ import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
-import { CaptureGroupQualityPanel } from '@/features/capture-group/CaptureGroupQualityPanel'
 import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
 import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
@@ -27,12 +26,12 @@ import {
   captureGroupFocusTargetIds,
 } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
-import type { AnnotationTask } from '@/api/annotation'
 
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const { session } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
   const [isReceiptConfirmationOpen, setIsReceiptConfirmationOpen] = useState(false)
   const [isReceiptFinalizePending, setIsReceiptFinalizePending] = useState(false)
@@ -40,10 +39,6 @@ export default function CaptureGroupDetailView() {
   const receiptFinalizeTrigger = useRef<HTMLButtonElement | null>(null)
   const appliedFocus = useRef<string | null>(null)
   const focus = captureGroupFocusFromLocation(location.search, location.hash)
-  const [panelOverride, setPanelOverride] = useState<{ locationKey: string; open: boolean } | null>(
-    null,
-  )
-  const isPanelOpen = panelOverride?.locationKey === location.key ? panelOverride.open : true
   const [hasUnsavedAnnotation, setHasUnsavedAnnotation] = useState(false)
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -120,31 +115,10 @@ export default function CaptureGroupDetailView() {
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
   const humanTask = data.taskVisibility === 'visible' ? data.task : null
   const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
-  const humanLabelSetup =
-    data.group && !humanTask && data.taskVisibility === 'visible' ? (
-      <CaptureGroupQualityPanel
-        projectId={projectId}
-        captureGroupId={captureGroupId}
-        group={data.group}
-        groupQuality={data.groupQuality}
-        groupQualityVisibility={data.groupQualityVisibility}
-        refreshVersion={data.refreshVersion}
-        assigneeActorId={session?.username ?? ''}
-        canAssignHumanLabel={session?.role === 'ADMIN'}
-        selectedStream={viewState.selectedStream}
-        selectedDetail={viewState.selectedDetail}
-        selectedReview={
-          viewState.selectedStream
-            ? (data.viewReviews[viewState.selectedStream.clip_asset_id] ?? null)
-            : null
-        }
-        viewReviews={data.viewReviews}
-        viewReviewErrors={data.viewReviewErrors}
-        viewQualityLoading={data.viewQualityLoading}
-        onReviewSaved={data.updateViewReview}
-        onRefresh={data.refresh}
-      />
-    ) : null
+  const handleDiscardVideo = useCallback(async () => {
+    await data.refresh()
+    navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
+  }, [data, location.state, navigate, projectId])
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
   const eventTitle = data.group?.capture_group_key ?? `视频 · ${shortId(captureGroupId)}`
 
@@ -195,65 +169,53 @@ export default function CaptureGroupDetailView() {
   ])
 
   const renderHumanLabelPanel = () => {
-    if (!data.group || (!humanTask && !hasUnsavedAnnotation)) return null
-    if (humanTask && !taskDestination && !hasUnsavedAnnotation) {
+    if (!data.group) return null
+    if (taskDestination?.focus === 'review' || taskDestination?.focus === 'cleaning') {
       return (
-        <section className="capture-group-human-label-status" aria-label="人工标签任务">
-          <p>{humanTaskStatusMessage(humanTask)}</p>
-        </section>
-      )
-    }
-    if (taskDestination?.focus === 'annotation' || hasUnsavedAnnotation) {
-      return (
-        <CaptureGroupAnnotationPanel
+        <CaptureGroupReviewCleaningPanel
           projectId={projectId}
-          captureGroupId={captureGroupId}
           group={data.group}
           groupQuality={data.groupQuality}
+          groupQualityVisibility={data.groupQualityVisibility}
           task={humanTask}
-          taskVisibility={data.taskVisibility}
           schema={data.schema}
-          viewRows={viewRows}
-          viewReviews={data.viewReviews}
-          currentPlaybackTimeMs={
-            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
-              ? currentPlaybackTimeMs
-              : null
-          }
-          totalDurationMs={
-            data.selectedClipAssetId === humanTask?.primary_clip_asset_id ? totalDurationMs : null
-          }
-          hasNoHandDetected={
-            data.selectedClipAssetId === humanTask?.primary_clip_asset_id &&
-            viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
-            viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
-          }
-          onPlaySegment={
-            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
-              ? handlePlaySegment
-              : undefined
-          }
-          onSeekToMs={
-            data.selectedClipAssetId === humanTask?.primary_clip_asset_id
-              ? handleSeekToMs
-              : undefined
-          }
-          onDirtyChange={setHasUnsavedAnnotation}
-          onTaskChange={data.setTask}
           onRefresh={data.refresh}
         />
       )
     }
-    if (!humanTask) return null
+
+    const activePrimaryId =
+      humanTask?.primary_clip_asset_id ??
+      viewState.selectedStream?.clip_asset_id ??
+      viewRows.find((view) => view.stream?.clip_asset_id)?.stream?.clip_asset_id ??
+      null
+
     return (
-      <CaptureGroupReviewCleaningPanel
+      <CaptureGroupAnnotationPanel
         projectId={projectId}
+        captureGroupId={captureGroupId}
         group={data.group}
         groupQuality={data.groupQuality}
-        groupQualityVisibility={data.groupQualityVisibility}
         task={humanTask}
         schema={data.schema}
+        viewRows={viewRows}
+        viewReviews={data.viewReviews}
+        assigneeActorId={session?.username ?? ''}
+        currentPlaybackTimeMs={
+          data.selectedClipAssetId === activePrimaryId ? currentPlaybackTimeMs : null
+        }
+        totalDurationMs={data.selectedClipAssetId === activePrimaryId ? totalDurationMs : null}
+        hasNoHandDetected={
+          data.selectedClipAssetId === activePrimaryId &&
+          viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
+          viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
+        }
+        onPlaySegment={data.selectedClipAssetId === activePrimaryId ? handlePlaySegment : undefined}
+        onSeekToMs={data.selectedClipAssetId === activePrimaryId ? handleSeekToMs : undefined}
+        onDirtyChange={setHasUnsavedAnnotation}
+        onTaskChange={data.setTask}
         onRefresh={data.refresh}
+        onDiscardVideo={handleDiscardVideo}
       />
     )
   }
@@ -274,9 +236,7 @@ export default function CaptureGroupDetailView() {
     )
   }
 
-  const humanLabelPanel = renderHumanLabelPanel()
-  const actionPanel = humanLabelPanel ?? humanLabelSetup
-  const isWaitingPanel = Boolean(humanTask && !taskDestination && !hasUnsavedAnnotation)
+  const actionPanel = renderHumanLabelPanel()
 
   return (
     <>
@@ -296,16 +256,6 @@ export default function CaptureGroupDetailView() {
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
-            {actionPanel ? (
-              <Button
-                aria-expanded={isPanelOpen}
-                aria-controls="human-label-panel"
-                onClick={() => setPanelOverride({ locationKey: location.key, open: !isPanelOpen })}
-              >
-                {isPanelOpen ? '收起标注' : '标注'}
-                {hasUnsavedAnnotation ? ' · 未提交' : ''}
-              </Button>
-            ) : null}
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
@@ -350,15 +300,13 @@ export default function CaptureGroupDetailView() {
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
           <div
-            className={`capture-group-workspace${actionPanel && isPanelOpen && !isWaitingPanel ? '' : ' capture-group-workspace-machine-evidence'}`}
+            className="capture-group-workspace"
             data-stage={
-              actionPanel && isPanelOpen
-                ? taskDestination?.focus === 'annotation'
-                  ? 'ANNOTATION'
-                  : humanTask?.status === 'COMPLETED'
-                    ? 'COMPLETED'
-                    : undefined
-                : undefined
+              taskDestination?.focus === 'annotation' || !humanTask
+                ? 'ANNOTATION'
+                : humanTask?.status === 'COMPLETED'
+                  ? 'COMPLETED'
+                  : undefined
             }
           >
             <div className="capture-group-video-column">
@@ -376,21 +324,12 @@ export default function CaptureGroupDetailView() {
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>
-            {actionPanel && !isWaitingPanel ? (
-              <div
-                id="human-label-panel"
-                className="capture-group-action-column"
-                hidden={!isPanelOpen}
-              >
+            {actionPanel ? (
+              <div id="human-label-panel" className="capture-group-action-column">
                 {actionPanel}
               </div>
             ) : null}
           </div>
-          {isWaitingPanel ? (
-            <div id="human-label-panel" hidden={!isPanelOpen}>
-              {actionPanel}
-            </div>
-          ) : null}
           <details className="capture-group-record-details">
             <summary>更多信息</summary>
             {renderInspector()}
@@ -431,14 +370,4 @@ export default function CaptureGroupDetailView() {
       </Modal>
     </>
   )
-}
-
-function humanTaskStatusMessage(task: AnnotationTask) {
-  if (task.status === 'COMPLETED') return '该人工标签任务已完成，可查看修订与复核事实。'
-  if (task.status === 'SUBMITTED')
-    return '标注已提交，等待有项目管理权限的管理员确认。管理员也可以确认自己提交的标注；当前不可操作时请检查项目权限与标注前检查状态。'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') {
-    return '复核已退回该修订，等待任务执行人根据意见返工。'
-  }
-  return '等待任务执行人处理。'
 }

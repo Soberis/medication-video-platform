@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from medication_ai_worker.config import Settings
+from medication_ai_worker.config import ACTION_QUEUE, HAND_POSE_QUEUE, Settings
 
 
 def _environment(tmp_path: Path, worker_id: str) -> dict[str, str]:
@@ -33,3 +33,30 @@ def test_worker_id_rejects_values_the_core_api_cannot_authenticate(
 ) -> None:
     with pytest.raises(ValueError, match="safe identifier"):
         Settings.from_environment(_environment(tmp_path, worker_id))
+
+
+def test_job_queues_default_to_the_hand_pose_queue_only(tmp_path: Path) -> None:
+    settings = Settings.from_environment(_environment(tmp_path, "ai-worker-1"))
+
+    assert settings.job_queues == (HAND_POSE_QUEUE,)
+
+
+def test_job_queues_accept_the_action_queue_alongside_hand_pose(tmp_path: Path) -> None:
+    environment = _environment(tmp_path, "ai-worker-1")
+    environment["AI_WORKER_JOB_QUEUES"] = f" {HAND_POSE_QUEUE} , {ACTION_QUEUE} ,{ACTION_QUEUE}"
+
+    settings = Settings.from_environment(environment)
+
+    assert settings.job_queues == (HAND_POSE_QUEUE, ACTION_QUEUE)
+
+
+@pytest.mark.parametrize(
+    "declared",
+    ["platform.ai.hand pose.v1", "platform/ai/action", ",", "platform.ai.hand-pose.v1,"],
+)
+def test_job_queues_reject_unsafe_or_empty_entries(tmp_path: Path, declared: str) -> None:
+    environment = _environment(tmp_path, "ai-worker-1")
+    environment["AI_WORKER_JOB_QUEUES"] = declared
+
+    with pytest.raises(ValueError, match="AI_WORKER_JOB_QUEUES"):
+        Settings.from_environment(environment)

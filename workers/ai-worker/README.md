@@ -5,6 +5,10 @@ Consumes `platform.ai.hand-pose.v1` and runs the offline MediaPipe Hand Landmark
 The model stays outside the repository; its SHA-256 must equal both `AI_HAND_POSE_MODEL_SHA256` and the queued job's
 frozen `model_sha256`.
 
+`AI_WORKER_JOB_QUEUES` optionally overrides the consumed queues with a comma-separated list. It defaults to
+`platform.ai.hand-pose.v1`; add `platform.ai.action-candidate.v1` only when the action pre-annotation slice is
+deployed, because that queue carries `ai-action-job.v1` envelopes instead of hand-pose jobs.
+
 For an approved local model:
 
 ```powershell

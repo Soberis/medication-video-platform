@@ -103,6 +103,13 @@ def _string(value: dict[str, object], field: str, pattern: re.Pattern[str]) -> s
     return candidate
 
 
+def _non_empty(value: dict[str, object], field: str) -> str:
+    candidate = value.get(field)
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise ContractError(f"{field} must be a non-empty string")
+    return candidate
+
+
 ACTION_FIELDS = frozenset(
     {
         "schema_version",
@@ -152,7 +159,7 @@ class ActionJob:
             value = json.loads(body)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ContractError("Broker body is not valid UTF-8 JSON") from exc
-        if not isinstance(value, dict) or not ACTION_FIELDS.issubset(set(value)):
+        if not isinstance(value, dict) or set(value) != ACTION_FIELDS:
             raise ContractError("Broker body fields do not match ai-action-job.v1")
         if (
             value.get("schema_version") != "ai-action-job.v1"
@@ -160,7 +167,11 @@ class ActionJob:
             or value.get("algorithm_version") != "v1"
         ):
             raise ContractError("Unsupported AI action job profile")
-        labels = value.get("allowed_labels") or []
+        labels = value.get("allowed_labels")
+        if not isinstance(labels, list) or not labels:
+            raise ContractError("allowed_labels must be a non-empty array")
+        if any(not isinstance(label, str) or not label.strip() for label in labels):
+            raise ContractError("allowed_labels entries must be non-empty strings")
         return cls(
             message_id=_uuid(value, "message_id"),
             job_id=_uuid(value, "job_id"),
@@ -172,10 +183,10 @@ class ActionJob:
             input_sha256=_string(value, "input_sha256", SHA256),
             input_size_bytes=_positive(value, "input_size_bytes"),
             content_type=_string(value, "content_type", CONTENT_TYPE),
-            model_sha256=str(value.get("model_sha256", "qwen3-vl-8b")),
-            sampling_fps=int(value.get("sampling_fps", 1)),
-            profile_sha256=str(value.get("profile_sha256", "qwen3-vl-8b-bf16")),
-            allowed_labels=tuple(str(lbl) for lbl in labels),
+            model_sha256=_non_empty(value, "model_sha256"),
+            sampling_fps=_positive(value, "sampling_fps"),
+            profile_sha256=_non_empty(value, "profile_sha256"),
+            allowed_labels=tuple(labels),
         )
 
 

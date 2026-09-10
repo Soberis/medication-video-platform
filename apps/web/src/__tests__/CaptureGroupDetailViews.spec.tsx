@@ -22,7 +22,7 @@ describe('CaptureGroup detail views', () => {
       received: [1],
       receipt: 'COMPLETE',
     })
-    const fetchMock = stubGroupDetail(group, {
+    stubGroupDetail(group, {
       task: null,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
@@ -41,13 +41,9 @@ describe('CaptureGroup detail views', () => {
     ).toBeInTheDocument()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: '人工标签任务' })).not.toBeInTheDocument()
-    expect(await screen.findByRole('heading', { name: '标注前检查' })).toBeVisible()
-    await user.click(await screen.findByText('高级质检选项与审计详情'))
-    expect(await screen.findByText('整体质量')).toBeVisible()
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
-      true,
-    )
+    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeVisible()
+    await user.click(await screen.findByText('更多信息'))
+    expect(await screen.findByText('接收与采集事实')).toBeVisible()
   })
 
   it('lets a project administrator opt into the human annotation task after quality admission', async () => {
@@ -57,14 +53,13 @@ describe('CaptureGroup detail views', () => {
       receipt: 'COMPLETE',
     })
     const assignedTask = groupTask(groupId, true)
-    const fetchMock = stubGroupDetail(group, {
+    stubGroupDetail(group, {
       task: null,
       taskResponses: [null, assignedTask],
       taskAfterAssignment: assignedTask,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'HAND_DETECTED',
     })
-    const user = userEvent.setup()
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
@@ -74,15 +69,8 @@ describe('CaptureGroup detail views', () => {
 
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '开始标注' }))
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.some(
-        ([input, init]) =>
-          String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
-          init?.method === 'POST',
-      ),
-    ).toBe(true)
+    expect(screen.getByRole('button', { name: /提交(标注|修订)/ })).toBeInTheDocument()
   })
 
   it('renders an existing human-label task without making it the default machine path', async () => {
@@ -107,7 +95,7 @@ describe('CaptureGroup detail views', () => {
       'aria-pressed',
       'true',
     )
-    expect(screen.getByRole('button', { name: '提交修订' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /提交(标注|修订)/ })).toBeInTheDocument()
   })
 
   it('keeps a missing machine result explicit while exposing the manual quality gate', async () => {
@@ -132,8 +120,8 @@ describe('CaptureGroup detail views', () => {
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
-    await user.click(await screen.findByText('高级质检选项与审计详情'))
-    expect(await screen.findByRole('combobox', { name: '整体质量结论' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
+    expect(await screen.findByText('4090 等待连接...')).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {

@@ -76,4 +76,26 @@ public class AssetCatalogQueryService {
 				member.isEnabledForHandDetection());
 	}
 
+	/**
+	 * Cross-module read-only entry point to resolve the capture group (session) ID
+	 * corresponding to a given clip asset.
+	 */
+	@Transactional(readOnly = true)
+	public UUID resolveCaptureGroupId(UUID clipAssetId) {
+		return this.streamRepository.findByClipAssetId(clipAssetId).map(CameraStream::getCaptureSessionId).orElse(null);
+	}
+
+	/**
+	 * Cross-module read-only entry point to resolve the primary clip asset ID (camera
+	 * index 0 / primary stream) for a capture group.
+	 */
+	@Transactional(readOnly = true)
+	public UUID resolvePrimaryClipAssetId(UUID captureGroupId) {
+		return this.streamRepository.findAllByCaptureSessionIdOrderByCameraIndexAsc(captureGroupId)
+			.stream()
+			.findFirst()
+			.map(CameraStream::getClipAssetId)
+			.orElse(null);
+	}
+
 }

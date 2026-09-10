@@ -185,7 +185,11 @@ export default function AccountManagementView() {
               ]}
               extra="12 至 72 个字符"
             >
-              <Input.Password autoComplete="new-password" maxLength={72} placeholder="输入初始密码" />
+              <Input.Password
+                autoComplete="new-password"
+                maxLength={72}
+                placeholder="输入初始密码"
+              />
             </Form.Item>
           </div>
           <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>

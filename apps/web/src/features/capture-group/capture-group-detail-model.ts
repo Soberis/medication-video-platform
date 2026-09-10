@@ -168,13 +168,29 @@ export function initialDraftSegments(
   candidates?: ActionCandidate[],
   schema?: AnnotationLabelSchema | null,
   durationMs?: number | null,
+  fallbackContext?: {
+    projectId: string
+    captureGroupId: string
+    primaryClipAssetId?: string | null
+  },
 ) {
-  if (!task || task.status !== 'ASSIGNED') return []
-  const revision = task.annotation_revision
-  if (revision?.annotation_document?.segments && revision.annotation_document.segments.length > 0) {
-    return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
+  if (task) {
+    if (task.status !== 'ASSIGNED') return []
+    const revision = task.annotation_revision
+    if (
+      revision?.annotation_document?.segments &&
+      revision.annotation_document.segments.length > 0
+    ) {
+      return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
+    }
   }
-  const validCandidates = validActionCandidates(task, candidates ?? [], schema, durationMs)
+  const validCandidates = validActionCandidates(
+    task,
+    candidates ?? [],
+    schema,
+    durationMs,
+    fallbackContext,
+  )
   if (validCandidates.length > 0) {
     return validCandidates.map((candidate) =>
       createDraftSegment({
@@ -192,23 +208,32 @@ export function validActionCandidates(
   candidates: ActionCandidate[],
   schema?: AnnotationLabelSchema | null,
   durationMs?: number | null,
+  fallbackContext?: {
+    projectId: string
+    captureGroupId: string
+    primaryClipAssetId?: string | null
+  },
 ): ActionCandidate[] {
-  if (
-    !task ||
-    !schema ||
-    !durationMs ||
-    !Array.isArray(candidates) ||
-    task.label_schema_id !== schema.label_schema_id ||
-    task.label_schema_digest !== schema.schema_digest
-  )
-    return []
+  if (!schema || !durationMs || !Array.isArray(candidates) || candidates.length === 0) return []
+  if (task) {
+    if (
+      task.label_schema_id !== schema.label_schema_id ||
+      task.label_schema_digest !== schema.schema_digest
+    ) {
+      return []
+    }
+  }
+  const targetProjectId = task?.project_id ?? fallbackContext?.projectId
+  const targetGroupId = task?.capture_group_id ?? fallbackContext?.captureGroupId
+  const targetClipAssetId = task?.primary_clip_asset_id ?? fallbackContext?.primaryClipAssetId
+
   const ordered = [...candidates].sort((a, b) => a.start_ms - b.start_ms)
   const labels = new Set(schema.labels.map((label) => label.label_id))
   const valid = ordered.every(
     (candidate, index) =>
-      candidate.project_id === task.project_id &&
-      candidate.capture_group_id === task.capture_group_id &&
-      candidate.clip_asset_id === task.primary_clip_asset_id &&
+      (!targetProjectId || candidate.project_id === targetProjectId) &&
+      (!targetGroupId || candidate.capture_group_id === targetGroupId) &&
+      (!targetClipAssetId || candidate.clip_asset_id === targetClipAssetId) &&
       candidate.ai_job_id === ordered[0]?.ai_job_id &&
       labels.has(candidate.action_label) &&
       Number.isSafeInteger(candidate.start_ms) &&
@@ -247,7 +272,15 @@ export function validateSegments(segments: DraftAnnotationSegment[]) {
   return errors
 }
 
-export function generateIntelligentDraftSegments(
+/**
+ * Builds a deterministic starter skeleton by splitting the clip evenly across the
+ * canonical medication protocol steps.
+ *
+ * This is NOT model output. No inference is performed and no footage is inspected; the
+ * result is a fixed-duration scaffold that only exists so an annotator has editable rows
+ * to adjust. Callers must present it as a manual template, never as an AI suggestion.
+ */
+export function generateProtocolScaffoldSegments(
   durationMs: number | null | undefined,
   availableLabels: Array<{ label_id: string; display_name: string }>,
 ): DraftAnnotationSegment[] {
@@ -255,23 +288,21 @@ export function generateIntelligentDraftSegments(
   const dur = durationMs && durationMs > 3000 ? durationMs : 30000
   const labelMap = new Map(availableLabels.map((l) => [l.label_id, l]))
 
-  const preferredKeys = [
-    'take_supplies',
+  const protocolOrder = [
     'prepare_workspace',
     'retrieve_medicine',
-    'disinfect',
-    'draw_liquid',
     'prepare_dose',
-    'inject_mix',
-    'exhaust_bubble',
-    'check_info',
     'final_review',
-    'label_seal',
     'cleanup',
+    'open_cap',
+    'draw_liquid',
+    'inject_mix',
+    'check_info',
+    'label_seal',
   ]
 
   const chosenLabels: string[] = []
-  for (const key of preferredKeys) {
+  for (const key of protocolOrder) {
     if (labelMap.has(key)) {
       chosenLabels.push(key)
     }

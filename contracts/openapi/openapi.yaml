@@ -7690,44 +7690,53 @@ components:
         created_at: { type: string, format: date-time }
     ActionCandidateJobResponse:
       type: object
-      required: [job_id, project_id, capture_group_id, clip_asset_id, status, algorithm_key, created_at, updated_at]
+      additionalProperties: false
+      required: [ai_job_id, project_id, capture_group_id, clip_asset_id, status, attempt, created_at, updated_at]
       properties:
-        job_id: { type: string, format: uuid }
+        ai_job_id: { type: string, format: uuid }
         project_id: { type: string, format: uuid }
         capture_group_id: { type: string, format: uuid }
         clip_asset_id: { type: string, format: uuid }
         status:
           type: string
-          enum: [QUEUED, RUNNING, COMPLETED, FAILED]
-        algorithm_key: { type: string }
-        error_code: { type: [string, "null"] }
-        error_message: { type: [string, "null"] }
+          enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
+        attempt: { type: integer, minimum: 1 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     ActionCandidateResultRequest:
       type: object
-      required: [message_id, model_name, sampling_fps, peak_memory_mb, inference_time_ms, started_at, completed_at, segments]
+      additionalProperties: false
+      required: [message_id, model_name, prompt_version, total_windows, duration_ms, inference_duration_ms, started_at, completed_at, segments]
       properties:
         message_id: { type: string, format: uuid }
         model_name: { type: string, minLength: 1 }
-        model_revision: { type: [string, 'null'] }
-        sampling_fps: { type: integer }
-        peak_memory_mb: { type: integer, format: int64 }
-        inference_time_ms: { type: integer, format: int64 }
+        prompt_version:
+          type: string
+          description: >-
+            Provenance marker for the producing algorithm. The preparatory
+            placeholder worker reports `placeholder-protocol-scaffold-v1` so
+            reviewers can distinguish a deterministic scaffold from model output.
+          minLength: 1
+        total_windows: { type: integer, minimum: 1 }
+        duration_ms: { type: integer, format: int64, minimum: 1 }
+        inference_duration_ms: { type: integer, format: int64, minimum: 0 }
         started_at: { type: string, format: date-time }
         completed_at: { type: string, format: date-time }
         segments:
           type: array
-          items:
-            type: object
-            required: [start_ms, end_ms, label, confidence]
-            properties:
-              start_ms: { type: integer, format: int64, minimum: 0 }
-              end_ms: { type: integer, format: int64, minimum: 1 }
-              label: { type: string, minLength: 1 }
-              confidence: { type: number, minimum: 0, maximum: 1 }
-              source_window: { type: [integer, 'null'] }
-              stitched_windows: { type: [array, 'null'], items: { type: integer } }
+          maxItems: 2000
+          items: { $ref: "#/components/schemas/ActionCandidateSegmentItem" }
+    ActionCandidateSegmentItem:
+      type: object
+      additionalProperties: false
+      required: [start_ms, end_ms, label, confidence]
+      properties:
+        start_ms: { type: integer, format: int64, minimum: 0 }
+        end_ms: { type: integer, format: int64, minimum: 1 }
+        label: { type: string, minLength: 1 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_window: { type: [integer, 'null'] }
+        stitched_windows: { type: [array, 'null'], items: { type: integer } }
     AiWorkerLeaseRequest:
       type: object
       additionalProperties: false

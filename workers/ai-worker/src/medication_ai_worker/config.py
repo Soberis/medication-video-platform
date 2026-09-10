@@ -11,6 +11,14 @@ from urllib.parse import urlparse
 
 WORKER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")
 
+QUEUE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+HAND_POSE_QUEUE = "platform.ai.hand-pose.v1"
+
+ACTION_QUEUE = "platform.ai.action-candidate.v1"
+
+DEFAULT_JOB_QUEUES = (HAND_POSE_QUEUE,)
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -22,6 +30,7 @@ class Settings:
     model_sha256: str
     worker_id: str
     temp_dir: Path | None
+    job_queues: tuple[str, ...] = DEFAULT_JOB_QUEUES
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str] | None = None) -> Settings:
@@ -61,6 +70,7 @@ class Settings:
             model_sha256,
             worker_id,
             Path(temp).resolve() if temp else None,
+            _job_queues(values),
         )
 
     def read_bearer_token(self) -> str:
@@ -89,6 +99,21 @@ def _identity(values: Mapping[str, str]) -> tuple[str | None, Path | None]:
     if file is not None and not file.is_absolute():
         raise ValueError("AI_WORKER_BEARER_TOKEN_FILE must be absolute")
     return token, file
+
+
+def _job_queues(values: Mapping[str, str]) -> tuple[str, ...]:
+    raw = values.get("AI_WORKER_JOB_QUEUES", "")
+    if not raw.strip():
+        return DEFAULT_JOB_QUEUES
+    queues: list[str] = []
+    for candidate in (item.strip() for item in raw.split(",")):
+        if not candidate:
+            raise ValueError("AI_WORKER_JOB_QUEUES must not contain empty entries")
+        if QUEUE_NAME.fullmatch(candidate) is None:
+            raise ValueError("AI_WORKER_JOB_QUEUES entries must be safe queue names")
+        if candidate not in queues:
+            queues.append(candidate)
+    return tuple(queues)
 
 
 def _is_url(value: str, schemes: set[str]) -> bool:

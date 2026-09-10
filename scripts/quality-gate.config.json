@@ -18,6 +18,7 @@
     "contracts/events/media-probe-result-v1.schema.json",
     "contracts/events/media-dead-letter-v1.schema.json",
     "contracts/events/ai-hand-pose-job-v1.schema.json",
+    "contracts/events/ai-action-job-v1.schema.json",
     "contracts/events/ai-hand-pose-result-v2.schema.json",
     "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
     "contracts/events/capture-group-quality-qualified-v1.schema.json",
@@ -105,6 +106,11 @@
       "path": "contracts/events/ai-hand-pose-job-v1.schema.json",
       "success": "AI hand-pose event JSON Schema is valid JSON: ai-hand-pose-job-v1.schema.json",
       "failure": "AI hand-pose event JSON Schema is invalid (ai-hand-pose-job-v1.schema.json)"
+    },
+    {
+      "path": "contracts/events/ai-action-job-v1.schema.json",
+      "success": "AI action job event JSON Schema is valid JSON: ai-action-job-v1.schema.json",
+      "failure": "AI action job event JSON Schema is invalid (ai-action-job-v1.schema.json)"
     },
     {
       "path": "contracts/events/ai-hand-pose-result-v2.schema.json",

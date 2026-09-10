@@ -128,11 +128,10 @@ export default function AnnotationLabelLibraryView() {
               ]}
             />
           </Section>
-          <Section
-            className="account-create-panel working-surface"
-            title="新增动作标签"
-          >
-            <p className="form-hint" style={{ marginBottom: 12 }}>发布后不能编辑、删除或重新排序。</p>
+          <Section className="account-create-panel working-surface" title="新增动作标签">
+            <p className="form-hint" style={{ marginBottom: 12 }}>
+              发布后不能编辑、删除或重新排序。
+            </p>
             <Alert
               type="info"
               showIcon
@@ -172,7 +171,11 @@ export default function AnnotationLabelLibraryView() {
                 rules={[{ required: true, message: '请输入说明。' }]}
                 extra="详细描述动作开始、进行与结束的标准，供标注员参考"
               >
-                <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} maxLength={512} placeholder="详细说明动作的标准判定依据…" />
+                <Input.TextArea
+                  autoSize={{ minRows: 2, maxRows: 4 }}
+                  maxLength={512}
+                  placeholder="详细说明动作的标准判定依据…"
+                />
               </Form.Item>
               <Button type="primary" htmlType="submit" loading={saving} icon={<Plus size={14} />}>
                 发布标签
