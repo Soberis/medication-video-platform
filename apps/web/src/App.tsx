@@ -5,7 +5,6 @@ import {
   ListChecks,
   LogOut,
   Settings,
-  Upload,
   UserRoundCog,
   UsersRound,
   Video,
@@ -22,8 +21,6 @@ import { StatusBadge } from '@/components/StatusBadge'
 const managementRoutePatterns = [
   '/projects/:projectId/members',
   paths.uploads,
-  paths.annotationLabelLibrary(),
-  '/projects/:projectId/annotation-label-library',
   paths.accounts,
 ] as const
 
@@ -131,6 +128,17 @@ export default function AppShell() {
                 <FolderKanban {...iconProps} />
                 <span className="sidebar-label">项目</span>
               </NavLink>
+              {isAdministrator ? (
+                <NavLink
+                  end
+                  to={paths.annotationLabelLibrary()}
+                  aria-label="标签库"
+                  title="标签库"
+                >
+                  <ListChecks {...iconProps} />
+                  <span className="sidebar-label">标签库</span>
+                </NavLink>
+              ) : null}
               {projectId ? (
                 <Link
                   to={paths.captureGroups(projectId)}
@@ -143,12 +151,6 @@ export default function AppShell() {
                 </Link>
               ) : null}
             </div>
-            {isAdministrator ? (
-              <NavLink end to={paths.localUpload} aria-label="上传视频" title="上传视频">
-                <Upload {...iconProps} />
-                <span className="sidebar-label">上传视频</span>
-              </NavLink>
-            ) : null}
             {isAdministrator ? (
               <details
                 className="sidebar-nav-group"
@@ -173,17 +175,6 @@ export default function AppShell() {
                   >
                     <UsersRound {...iconProps} />
                     <span className="sidebar-label">项目成员</span>
-                  </NavLink>
-                ) : null}
-                {isAdministrator ? (
-                  <NavLink
-                    end
-                    to={paths.annotationLabelLibrary()}
-                    aria-label="标签库"
-                    title="标签库"
-                  >
-                    <ListChecks {...iconProps} />
-                    <span className="sidebar-label">标签库</span>
                   </NavLink>
                 ) : null}
                 {isAdministrator ? (

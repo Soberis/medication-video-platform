@@ -271,30 +271,27 @@ describe('App', () => {
     expect(within(navigation).queryByText('设置')).not.toBeInTheDocument()
   })
 
-  it('keeps upload in the workspace and offers global labels without a project', () => {
+  it('keeps labels in the workspace and keeps upload contextual to projects', () => {
     renderRouter(
       [
         {
           path: '/',
           element: <AppShell />,
-          children: [{ path: 'uploads/new', element: <div>上传视频页面</div> }],
+          children: [{ path: 'projects', element: <div>项目页面</div> }],
         },
       ],
-      ['/uploads/new'],
+      ['/projects'],
       { username: 'platform-admin', role: 'ADMIN' },
     )
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(navigation).getByRole('link', { name: '上传视频' })).toHaveAttribute(
-      'aria-current',
-      'page',
+    expect(within(navigation).queryByRole('link', { name: '上传视频' })).not.toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '标签库' })).toHaveAttribute(
+      'href',
+      paths.annotationLabelLibrary(),
     )
     expect(within(navigation).getByText('设置').closest('.sidebar-nav-group')).not.toHaveAttribute(
       'data-active',
-    )
-    expect(within(navigation).getByRole('link', { name: '标签库', hidden: true })).toHaveAttribute(
-      'href',
-      paths.annotationLabelLibrary(),
     )
     expect(within(navigation).queryByText('上传排障')).not.toBeInTheDocument()
   })
