@@ -680,14 +680,144 @@
   font-weight: var(--app-font-weight-regular);
 }
 
+.capture-group-annotation-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--app-space-8) var(--app-space-12);
+  margin-bottom: var(--app-space-12);
+  background: var(--app-color-surface-muted);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+}
+
+.capture-group-annotation-summary-info {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.capture-group-annotation-summary-text {
+  font-size: var(--app-font-size-body);
+  color: var(--app-color-foreground);
+}
+
+.capture-group-annotation-quick-buttons {
+  display: flex;
+  gap: var(--app-space-8);
+}
+
+.capture-group-timeline-overview {
+  margin-bottom: var(--app-space-16);
+  padding: var(--app-space-8);
+  background: var(--app-color-surface);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+}
+
+.capture-group-timeline-track-bar {
+  position: relative;
+  height: 20px;
+  background: var(--app-color-surface-muted);
+  border-radius: var(--app-radius-sm);
+  overflow: hidden;
+}
+
+.capture-group-timeline-slice {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.capture-group-timeline-slice:hover {
+  opacity: 1;
+  transform: scaleY(1.15);
+  z-index: 2;
+}
+
+.capture-group-timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.capture-group-timeline-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: var(--app-font-family-mono);
+  color: var(--app-color-foreground-muted);
+}
+
+.capture-group-segment-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: var(--app-space-4);
+}
+
+.capture-group-segment-badge-group {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.capture-group-segment-index-title {
+  font-size: var(--app-font-size-body);
+  font-weight: var(--app-font-weight-medium);
+  color: var(--app-color-foreground);
+}
+
+.capture-group-segment-human-time {
+  font-size: var(--app-font-size-helper);
+  font-family: var(--app-font-family-mono);
+  color: var(--app-color-primary);
+  background: #e6f4ff;
+  padding: 1px 8px;
+  border-radius: var(--app-radius-sm);
+}
+
+.capture-group-segment-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
 .capture-group-segment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: start;
   gap: var(--app-space-12);
-  padding: var(--app-space-12) 0;
-  border-top: 1px solid var(--app-color-border-subtle);
-  background: transparent;
+  padding: var(--app-space-12);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  margin-bottom: var(--app-space-8);
+  background: var(--app-color-surface);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.capture-group-segment-row.is-playing-active {
+  border-color: var(--app-color-primary);
+  box-shadow: 0 0 0 1px var(--app-color-primary);
+  background-color: rgba(22, 119, 255, 0.02);
+}
+
+.capture-group-timeline-slice.is-active-slice {
+  opacity: 1;
+  filter: brightness(1.2) drop-shadow(0 0 4px rgba(22, 119, 255, 0.6));
+  transform: scaleY(1.2);
+  z-index: 2;
 }
 
 .capture-group-segment-fields,
@@ -760,6 +890,14 @@
   background: var(--app-color-surface-muted);
 }
 
+.capture-group-segment-time-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-8);
+  min-height: 24px;
+}
+
 .capture-group-segment-time-readable {
   color: var(--app-color-foreground-muted);
   font-family: var(--app-font-family-mono);
@@ -768,8 +906,9 @@
   line-height: var(--app-line-height-body);
 }
 
+.capture-group-segment-time-helper > .ant-btn,
 .capture-group-segment-time-field > .ant-btn {
-  justify-self: start;
+  justify-self: end;
   padding-inline: 0;
   color: var(--app-color-primary-hover);
   font-size: var(--app-font-size-caption);

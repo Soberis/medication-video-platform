@@ -19,6 +19,7 @@ interface CaptureGroupFocusedViewProps {
   onSelectView: (clipAssetId: string) => void
   onPlaybackTimeChange?: (timeMs: number | null) => void
   isCompleted?: boolean
+  externalVideoRef?: React.RefObject<HTMLVideoElement | null>
 }
 
 export function CaptureGroupFocusedView({
@@ -29,6 +30,7 @@ export function CaptureGroupFocusedView({
   onSelectView,
   onPlaybackTimeChange,
   isCompleted = false,
+  externalVideoRef,
 }: CaptureGroupFocusedViewProps) {
   const {
     selectedStream,
@@ -53,7 +55,8 @@ export function CaptureGroupFocusedView({
     onLoadedMetadata,
     onPlaybackError,
   } = viewState
-  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const internalVideoRef = useRef<HTMLVideoElement | null>(null)
+  const videoRef = externalVideoRef ?? internalVideoRef
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

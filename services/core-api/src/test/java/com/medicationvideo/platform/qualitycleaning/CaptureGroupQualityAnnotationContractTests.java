@@ -817,7 +817,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对本次已配制剂量。\"}"))
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.schema_version").value("p0-primary-step.v2"))
+			.andExpect(jsonPath("$.schema_version").value("p0-primary-step.v3"))
 			.andExpect(jsonPath("$.labels[?(@.label_id == 'verify_dose')].display_name").value("核对剂量"))
 			.andReturn();
 		var publishedSchemaId = UUID

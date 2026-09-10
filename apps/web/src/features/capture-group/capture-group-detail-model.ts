@@ -52,17 +52,83 @@ export function formatAnnotationTime(value: number | null | undefined) {
   const seconds = Math.floor(value / 1000) % 60
   const minutes = Math.floor(value / 60_000) % 60
   const hours = Math.floor(value / 3_600_000)
-  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`
+  const msPart = milliseconds > 0 ? `.${String(milliseconds).padStart(3, '0')}` : ''
+  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}${msPart}`
   return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock
+}
+
+export function normalizeActionLabel(
+  rawLabel: string,
+  schema?: AnnotationLabelSchema | null,
+): string {
+  const trimmed = rawLabel.trim()
+  if (!trimmed) return ''
+  const lower = trimmed.toLowerCase()
+  if (schema?.labels) {
+    const matched = schema.labels.find(
+      (l) => l.label_id.toLowerCase() === lower || l.display_name.trim() === trimmed,
+    )
+    if (matched) return matched.label_id
+  }
+  return lower
+}
+
+export function formatHumanFriendlyTime(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return '00:00'
+  const totalSeconds = Math.floor(ms / 1000)
+  const seconds = totalSeconds % 60
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const minutes = totalMinutes % 60
+  const hours = Math.floor(totalMinutes / 60)
+  const clock = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  return hours > 0 ? `${String(hours).padStart(2, '0')}:${clock}` : clock
+}
+
+export function formatSegmentDurationLabel(startMs: number, endMs: number): string {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)}`
+  }
+  const durationSec = Math.max(0, (endMs - startMs) / 1000)
+  return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)} · 持续 ${durationSec.toFixed(1)} 秒`
+}
+
+export const ACTION_PALETTE: Record<
+  string,
+  { bg: string; border: string; text: string; dot: string; label: string }
+> = {
+  open_cap: { bg: '#fff7e6', border: '#ffd591', text: '#d46b08', dot: '#fa8c16', label: '操作瓶盖' },
+  draw_liquid: { bg: '#e6f4ff', border: '#91caff', text: '#0958d9', dot: '#1677ff', label: '抽取药液' },
+  inject_mix: { bg: '#f9f0ff', border: '#d3adf7', text: '#531dab', dot: '#722ed1', label: '注入混匀' },
+  check_info: { bg: '#f6ffed', border: '#b7eb8f', text: '#389e0d', dot: '#52c41a', label: '核对信息' },
+  label_seal: { bg: '#e6fffb', border: '#87e8de', text: '#08979c', dot: '#13c2c2', label: '贴签封包' },
+  prepare_workspace: { bg: '#f0f5ff', border: '#adc6ff', text: '#1d39c4', dot: '#2f54eb', label: '准备工位' },
+  retrieve_medicine: { bg: '#feffe6', border: '#fffb8f', text: '#d4b106', dot: '#fadb14', label: '取药' },
+  prepare_dose: { bg: '#fff0f6', border: '#ffadd2', text: '#c41d7f', dot: '#eb2f96', label: '剂量配制' },
+  final_review: { bg: '#fcffe6', border: '#eaff8f', text: '#7cb305', dot: '#a0d911', label: '最终复核' },
+  cleanup: { bg: '#f5f5f5', border: '#d9d9d9', text: '#595959', dot: '#8c8c8c', label: '清理废弃' },
+}
+
+export function getActionStyle(labelKey: string) {
+  const key = labelKey.toLowerCase()
+  return (
+    ACTION_PALETTE[key] ?? {
+      bg: '#f0f0f0',
+      border: '#d9d9d9',
+      text: '#434343',
+      dot: '#8c8c8c',
+      label: labelKey,
+    }
+  )
 }
 
 export function initialDraftSegments(
   task: AnnotationTask | null,
   candidates?: ActionCandidate[],
+  schema?: AnnotationLabelSchema | null,
 ) {
   if (!task || task.status !== 'ASSIGNED') return []
   const revision = task.annotation_revision
-  if (revision?.review?.decision === 'REJECTED') {
+  if (revision?.annotation_document?.segments && revision.annotation_document.segments.length > 0) {
     return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
   }
   if (candidates && candidates.length > 0) {
@@ -70,7 +136,7 @@ export function initialDraftSegments(
       createDraftSegment({
         start_ms: candidate.start_ms,
         end_ms: candidate.end_ms,
-        label: candidate.action_label,
+        label: normalizeActionLabel(candidate.action_label, schema),
       }),
     )
   }

@@ -53,8 +53,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change-me-local-only}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-medication}
     ports:
-      - "${RABBITMQ_HOST:-0.0.0.0}:${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_HOST:-0.0.0.0}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "0.0.0.0:${RABBITMQ_PORT:-5672}:5672"
+      - "0.0.0.0:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:

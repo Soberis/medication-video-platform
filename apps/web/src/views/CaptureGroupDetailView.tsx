@@ -1,6 +1,6 @@
 import { Alert, Button, Modal } from 'antd'
 import { RefreshCw } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useParams } from 'react-router'
 
 import { paths } from '@/app/paths'
@@ -68,7 +68,54 @@ export default function CaptureGroupDetailView() {
     [data.selectedClipAssetId, viewRows],
   )
   const [currentPlaybackTimeMs, setCurrentPlaybackTimeMs] = useState<number | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const segmentStopListenerRef = useRef<(() => void) | null>(null)
+
+  const handlePlaySegment = useCallback((startMs: number, endMs: number) => {
+    const video = videoRef.current
+    if (!video) return
+    if (segmentStopListenerRef.current) {
+      segmentStopListenerRef.current()
+      segmentStopListenerRef.current = null
+    }
+    video.currentTime = Math.max(0, startMs / 1000)
+    void video.play().catch(() => undefined)
+    const onTimeUpdate = () => {
+      if (video.currentTime * 1000 >= endMs) {
+        video.pause()
+        video.removeEventListener('timeupdate', onTimeUpdate)
+        segmentStopListenerRef.current = null
+      }
+    }
+    video.addEventListener('timeupdate', onTimeUpdate)
+    segmentStopListenerRef.current = () => {
+      video.removeEventListener('timeupdate', onTimeUpdate)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (segmentStopListenerRef.current) {
+        segmentStopListenerRef.current()
+        segmentStopListenerRef.current = null
+      }
+    }
+  }, [])
+
+  const handleSeekToMs = useCallback((timeMs: number) => {
+    const video = videoRef.current
+    if (!video) return
+    video.currentTime = Math.max(0, timeMs / 1000)
+  }, [])
+
   const viewState = useCaptureGroupView(projectId, selectedView)
+  const totalDurationMs = useMemo(() => {
+    if (viewState.selectedMediaReport?.duration_microseconds) {
+      return Math.round(viewState.selectedMediaReport.duration_microseconds / 1000)
+    }
+    return null
+  }, [viewState.selectedMediaReport])
+
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
   const humanTask = data.taskVisibility === 'visible' ? data.task : null
   const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
@@ -172,6 +219,9 @@ export default function CaptureGroupDetailView() {
               ? currentPlaybackTimeMs
               : null
           }
+          totalDurationMs={totalDurationMs}
+          onPlaySegment={handlePlaySegment}
+          onSeekToMs={handleSeekToMs}
           onDirtyChange={setHasUnsavedAnnotation}
           onTaskChange={data.setTask}
           onRefresh={data.refresh}
@@ -301,6 +351,7 @@ export default function CaptureGroupDetailView() {
                 task={humanTask}
                 viewReviews={data.viewReviews}
                 viewState={viewState}
+                externalVideoRef={videoRef}
                 onSelectView={(clipAssetId) => {
                   setCurrentPlaybackTimeMs(null)
                   data.setSelectedClipAssetId(clipAssetId)

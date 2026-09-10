@@ -23,14 +23,14 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('formatAnnotationTime', () => {
   it('formats millisecond values without changing their authoritative unit', () => {
-    expect(formatAnnotationTime(0)).toBe('00:00.000')
+    expect(formatAnnotationTime(0)).toBe('00:00')
     expect(formatAnnotationTime(12345)).toBe('00:12.345')
-    expect(formatAnnotationTime(60000)).toBe('01:00.000')
+    expect(formatAnnotationTime(60000)).toBe('01:00')
   })
 
   it('formats the hour boundary with an hours component', () => {
     expect(formatAnnotationTime(3_599_999)).toBe('59:59.999')
-    expect(formatAnnotationTime(3_600_000)).toBe('01:00:00.000')
+    expect(formatAnnotationTime(3_600_000)).toBe('01:00:00')
     expect(formatAnnotationTime(3_600_123)).toBe('01:00:00.123')
   })
 
@@ -239,21 +239,23 @@ describe('CaptureGroup annotation workflow', () => {
     if (!form) throw new Error('Annotation form was not mounted.')
     const startInput = within(form).getByLabelText('开始时间（毫秒）')
     const endInput = within(form).getByLabelText('结束时间（毫秒）')
-    expect(within(form).getByText('00:00.000')).toBeInTheDocument()
-    expect(within(form).getByText('00:01.000')).toBeInTheDocument()
-    expect(startInput.getAttribute('aria-describedby')).toMatch(/start-readable/)
-    expect(endInput.getAttribute('aria-describedby')).toMatch(/end-readable/)
+    const startDescribedBy = startInput.getAttribute('aria-describedby')!
+    const endDescribedBy = endInput.getAttribute('aria-describedby')!
+    expect(startDescribedBy).toMatch(/start-readable/)
+    expect(endDescribedBy).toMatch(/end-readable/)
+    expect(form.querySelector(`#${startDescribedBy}`)).toHaveTextContent('00:00')
+    expect(form.querySelector(`#${endDescribedBy}`)).toHaveTextContent('00:01')
 
     fireEvent.change(startInput, { target: { value: '12345' } })
     fireEvent.change(endInput, { target: { value: '18760' } })
 
-    expect(within(form).getByText('00:12.345')).toBeInTheDocument()
-    expect(within(form).getByText('00:18.760')).toBeInTheDocument()
+    expect(form.querySelector(`#${startDescribedBy}`)).toHaveTextContent('00:12.345')
+    expect(form.querySelector(`#${endDescribedBy}`)).toHaveTextContent('00:18.760')
 
     fireEvent.change(startInput, { target: { value: '' } })
     expect((startInput as HTMLInputElement).value).toBe('')
     expect(startInput.getAttribute('aria-describedby') ?? '').not.toContain('start-readable')
-    expect(within(form).queryByText('00:00.000')).not.toBeInTheDocument()
+    expect(form.querySelector(`#${startDescribedBy}`)).toBeNull()
   })
 
   it('groups each segment by action and time range, and supports adding and deleting segments', async () => {
