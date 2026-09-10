@@ -101,3 +101,89 @@ def _string(value: dict[str, object], field: str, pattern: re.Pattern[str]) -> s
     if not isinstance(candidate, str) or pattern.fullmatch(candidate) is None:
         raise ContractError(f"{field} has an invalid format")
     return candidate
+
+
+ACTION_FIELDS = frozenset(
+    {
+        "schema_version",
+        "message_id",
+        "job_id",
+        "attempt",
+        "lease_token",
+        "project_id",
+        "capture_group_id",
+        "clip_asset_id",
+        "input_sha256",
+        "input_size_bytes",
+        "content_type",
+        "algorithm_key",
+        "algorithm_version",
+        "model_sha256",
+        "sampling_fps",
+        "profile_sha256",
+        "allowed_labels",
+        "requested_at",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ActionJob:
+    message_id: UUID
+    job_id: UUID
+    attempt: int
+    lease_token: str
+    project_id: UUID
+    capture_group_id: UUID
+    clip_asset_id: UUID
+    input_sha256: str
+    input_size_bytes: int
+    content_type: str
+    model_sha256: str
+    sampling_fps: int
+    profile_sha256: str
+    allowed_labels: tuple[str, ...]
+    algorithm_key: str = "QWEN3_VL_ACTION"
+    algorithm_version: str = "v1"
+
+    @classmethod
+    def from_bytes(cls, body: bytes) -> ActionJob:
+        try:
+            value = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ContractError("Broker body is not valid UTF-8 JSON") from exc
+        if not isinstance(value, dict) or not ACTION_FIELDS.issubset(set(value)):
+            raise ContractError("Broker body fields do not match ai-action-job.v1")
+        if (
+            value.get("schema_version") != "ai-action-job.v1"
+            or value.get("algorithm_key") != "QWEN3_VL_ACTION"
+            or value.get("algorithm_version") != "v1"
+        ):
+            raise ContractError("Unsupported AI action job profile")
+        labels = value.get("allowed_labels") or []
+        return cls(
+            message_id=_uuid(value, "message_id"),
+            job_id=_uuid(value, "job_id"),
+            attempt=_positive(value, "attempt"),
+            lease_token=_string(value, "lease_token", LEASE),
+            project_id=_uuid(value, "project_id"),
+            capture_group_id=_uuid(value, "capture_group_id"),
+            clip_asset_id=_uuid(value, "clip_asset_id"),
+            input_sha256=_string(value, "input_sha256", SHA256),
+            input_size_bytes=_positive(value, "input_size_bytes"),
+            content_type=_string(value, "content_type", CONTENT_TYPE),
+            model_sha256=str(value.get("model_sha256", "qwen3-vl-8b")),
+            sampling_fps=int(value.get("sampling_fps", 1)),
+            profile_sha256=str(value.get("profile_sha256", "qwen3-vl-8b-bf16")),
+            allowed_labels=tuple(str(lbl) for lbl in labels),
+        )
+
+
+def parse_job(body: bytes) -> AiJob | ActionJob:
+    try:
+        value = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ContractError("Broker body is not valid UTF-8 JSON") from exc
+    if isinstance(value, dict) and value.get("schema_version") == "ai-action-job.v1":
+        return ActionJob.from_bytes(body)
+    return AiJob.from_bytes(body)

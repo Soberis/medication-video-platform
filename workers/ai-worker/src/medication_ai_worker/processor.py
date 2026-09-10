@@ -9,9 +9,10 @@ from enum import Enum
 from pathlib import Path
 from uuid import UUID
 
+from medication_ai_worker.action_analyzer import analyze_video_actions
 from medication_ai_worker.api import CoreApiClient, PermanentError, RetryableError, StaleError
 from medication_ai_worker.config import Settings
-from medication_ai_worker.contracts import AiJob, ContractError
+from medication_ai_worker.contracts import ActionJob, AiJob, ContractError, parse_job
 from medication_ai_worker.landmarker import (
     PROFILE_SHA256,
     InferenceSummary,
@@ -48,7 +49,7 @@ class ProcessingOutcome:
     def for_job(
         cls,
         disposition: Disposition,
-        job: AiJob,
+        job: AiJob | ActionJob,
         dead_letter_reason: DeadLetterReason | None = None,
     ) -> ProcessingOutcome:
         return cls(
@@ -81,10 +82,13 @@ class Processor:
 
     def process_delivery(self, body: bytes) -> ProcessingOutcome:
         try:
-            job = AiJob.from_bytes(body)
+            job = parse_job(body)
         except ContractError:
             LOGGER.warning("Rejected an AI message that failed contract validation")
             return ProcessingOutcome(Disposition.REJECT, DeadLetterReason.CONTRACT_INVALID)
+
+        if isinstance(job, ActionJob):
+            return self._process_action_job(job)
 
         started_at = datetime.now(UTC)
         try:
@@ -198,6 +202,53 @@ class Processor:
                 DeadLetterReason.RESULT_REJECTED,
             )
         return ProcessingOutcome.for_job(Disposition.ACK, job)
+
+    def _process_action_job(self, job: ActionJob) -> ProcessingOutcome:
+        started_at = datetime.now(UTC)
+        try:
+            grant = self._client.acquire(job)  # type: ignore[arg-type]
+        except StaleError:
+            LOGGER.info(
+                "Acknowledged stale Action attempt job_id=%s attempt=%d", job.job_id, job.attempt
+            )
+            return ProcessingOutcome.for_job(Disposition.ACK, job)
+        except RetryableError:
+            LOGGER.warning(
+                "Retrying Action attempt after transient lease error job_id=%s", job.job_id
+            )
+            return ProcessingOutcome.for_job(Disposition.REQUEUE, job)
+        except PermanentError:
+            LOGGER.error("Action lease request was rejected job_id=%s", job.job_id)
+            return ProcessingOutcome.for_job(
+                Disposition.REJECT, job, DeadLetterReason.ACQUIRE_REJECTED
+            )
+
+        try:
+            with self._client.maintain_lease(job, grant):  # type: ignore[arg-type]
+                started_clock = time.monotonic()
+                with tempfile.TemporaryDirectory(
+                    dir=self._settings.temp_dir, prefix="ai-action-"
+                ) as directory:
+                    input_path = Path(directory) / "input.mp4"
+                    self._client.download(grant, input_path)
+                    duration_ms, segments = analyze_video_actions(input_path, job.allowed_labels)
+                processing_duration_ms = max(0, round((time.monotonic() - started_clock) * 1000))
+                segment_dicts = [seg.to_dict() for seg in segments]
+                self._client.submit_action(
+                    job,
+                    started_at,
+                    duration_ms,
+                    processing_duration_ms,
+                    segment_dicts,
+                )
+                LOGGER.info("Action job %s succeeded with %d segments", job.job_id, len(segments))
+                return ProcessingOutcome.for_job(Disposition.ACK, job)
+        except StaleError:
+            LOGGER.info("Action lease expired during processing job_id=%s", job.job_id)
+            return ProcessingOutcome.for_job(Disposition.ACK, job)
+        except Exception as exc:
+            LOGGER.exception("Action processing failed job_id=%s: %s", job.job_id, exc)
+            return ProcessingOutcome.for_job(Disposition.REQUEUE, job)
 
     def _best_effort_failure(
         self,

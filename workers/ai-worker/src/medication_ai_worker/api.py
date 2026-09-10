@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from medication_ai_worker.contracts import CONTENT_TYPE, SHA256, AiJob
+from medication_ai_worker.contracts import CONTENT_TYPE, SHA256, ActionJob, AiJob
 from medication_ai_worker.landmarker import InferenceResult, InferenceSummary
 
 
@@ -254,6 +254,32 @@ class CoreApiClient:
             payload,
         )
 
+    def submit_action(
+        self,
+        job: ActionJob,
+        started_at: datetime,
+        duration_ms: int,
+        inference_duration_ms: int,
+        segments: list[dict[str, object]],
+    ) -> None:
+        payload: dict[str, object] = {
+            "message_id": str(job.message_id),
+            "model_name": job.model_sha256,
+            "prompt_version": "v1",
+            "total_windows": 1,
+            "duration_ms": duration_ms,
+            "inference_duration_ms": inference_duration_ms,
+            "started_at": started_at.isoformat().replace("+00:00", "Z"),
+            "completed_at": datetime.now(started_at.tzinfo).isoformat().replace("+00:00", "Z"),
+            "segments": segments,
+        }
+        self._request(
+            "PUT",
+            f"/api/v1/internal/ai-jobs/{job.job_id}/attempts/{job.attempt}/action-result",
+            job,
+            payload,
+        )
+
     def submit_failure(
         self,
         job: AiJob,
@@ -297,7 +323,7 @@ class CoreApiClient:
         )
 
     def _request(
-        self, method: str, path: str, job: AiJob, body: dict[str, object]
+        self, method: str, path: str, job: AiJob | ActionJob, body: dict[str, object]
     ) -> httpx.Response:
         try:
             response = self._client.request(
