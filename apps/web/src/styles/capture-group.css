@@ -103,6 +103,81 @@
   cursor: pointer;
 }
 
+.capture-group-human-label-setup {
+  min-width: 0;
+  width: 100%;
+}
+
+.capture-group-quick-admission {
+  margin-bottom: var(--app-space-16);
+  padding: var(--app-space-16);
+  background: var(--app-color-background-elevated);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-card);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.capture-group-quick-admission-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
+  margin-bottom: var(--app-space-8);
+}
+
+.capture-group-quick-admission-title {
+  font-weight: 600;
+  font-size: var(--app-font-size-subheading);
+  color: var(--app-color-foreground-strong);
+}
+
+.capture-group-quick-admission-desc {
+  margin: 0 0 var(--app-space-12) 0;
+  font-size: var(--app-font-size-helper);
+  line-height: 1.5;
+  color: var(--app-color-foreground-muted);
+}
+
+.capture-group-quick-admission-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-8);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.capture-group-quick-admission-actions .ant-btn {
+  width: 100%;
+  white-space: normal;
+  height: auto;
+  min-height: 38px;
+  padding: 6px 12px;
+}
+
+.quality-review-advanced {
+  border-top: 1px solid var(--app-color-border-subtle);
+  padding-top: var(--app-space-12);
+  margin-top: var(--app-space-12);
+}
+
+.quality-review-advanced-summary {
+  cursor: pointer;
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  user-select: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.quality-review-advanced-summary:hover {
+  color: var(--app-color-primary);
+}
+
 .capture-group-current-action {
   min-width: 0;
   align-content: start;
@@ -684,6 +759,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
   padding: var(--app-space-8) var(--app-space-12);
   margin-bottom: var(--app-space-12);
   background: var(--app-color-surface-muted);
@@ -695,6 +772,7 @@
   display: flex;
   align-items: center;
   gap: var(--app-space-8);
+  flex-wrap: wrap;
 }
 
 .capture-group-annotation-summary-text {
@@ -704,7 +782,9 @@
 
 .capture-group-annotation-quick-buttons {
   display: flex;
+  align-items: center;
   gap: var(--app-space-8);
+  flex-wrap: wrap;
 }
 
 .capture-group-timeline-overview {
@@ -717,7 +797,7 @@
 
 .capture-group-timeline-track-bar {
   position: relative;
-  height: 20px;
+  height: 24px;
   background: var(--app-color-surface-muted);
   border-radius: var(--app-radius-sm);
   overflow: hidden;
@@ -727,16 +807,54 @@
   position: absolute;
   top: 2px;
   bottom: 2px;
-  border-radius: 2px;
+  border-radius: 4px;
   cursor: pointer;
-  opacity: 0.85;
-  transition: opacity 0.15s, transform 0.15s;
+  opacity: 0.88;
+  transition:
+    opacity 0.15s,
+    transform 0.15s,
+    filter 0.15s;
 }
 
 .capture-group-timeline-slice:hover {
   opacity: 1;
-  transform: scaleY(1.15);
+  transform: scaleY(1.1);
+  filter: brightness(1.08);
   z-index: 2;
+}
+
+.capture-group-timeline-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  z-index: 4;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background-color 0.15s;
+}
+
+.capture-group-timeline-slice:hover .capture-group-timeline-handle,
+.capture-group-timeline-handle:hover {
+  opacity: 1;
+}
+
+.capture-group-timeline-handle.handle-left {
+  left: 0;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 1px 0 2px rgba(0, 0, 0, 0.25);
+}
+
+.capture-group-timeline-handle.handle-right {
+  right: 0;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: -1px 0 2px rgba(0, 0, 0, 0.25);
 }
 
 .capture-group-timeline-playhead {
@@ -804,7 +922,10 @@
   border-radius: var(--app-radius-md);
   margin-bottom: var(--app-space-8);
   background: var(--app-color-surface);
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.2s;
 }
 
 .capture-group-segment-row.is-playing-active {

@@ -19,6 +19,7 @@ import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
 import { StatusBadge } from '@/components/StatusBadge'
 
 const managementRoutePatterns = [
+  paths.annotationLabelLibrary(),
   '/projects/:projectId/members',
   paths.uploads,
   paths.accounts,
@@ -128,17 +129,6 @@ export default function AppShell() {
                 <FolderKanban {...iconProps} />
                 <span className="sidebar-label">项目</span>
               </NavLink>
-              {isAdministrator ? (
-                <NavLink
-                  end
-                  to={paths.annotationLabelLibrary()}
-                  aria-label="标签库"
-                  title="标签库"
-                >
-                  <ListChecks {...iconProps} />
-                  <span className="sidebar-label">标签库</span>
-                </NavLink>
-              ) : null}
               {projectId ? (
                 <Link
                   to={paths.captureGroups(projectId)}
@@ -166,6 +156,10 @@ export default function AppShell() {
                   <Settings {...iconProps} />
                   <span className="sidebar-label">设置</span>
                 </summary>
+                <NavLink end to={paths.annotationLabelLibrary()} aria-label="标签库" title="标签库">
+                  <ListChecks {...iconProps} />
+                  <span className="sidebar-label">标签库</span>
+                </NavLink>
                 {projectId && isAdministrator ? (
                   <NavLink
                     end

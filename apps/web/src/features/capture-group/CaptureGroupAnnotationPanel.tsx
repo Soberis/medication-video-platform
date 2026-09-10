@@ -1,8 +1,14 @@
 import { App as AntdApp, Alert, Button, Input, Select, Tooltip } from 'antd'
-import { CircleAlert, Play } from 'lucide-react'
+import { Check, CircleAlert, Play, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
-import { fetchActionCandidates, type ActionCandidate } from '@/api/action-candidate'
+import {
+  dispatchActionCandidateJob,
+  fetchActionCandidateJob,
+  fetchActionCandidates,
+  type ActionCandidate,
+  type ActionCandidateJob,
+} from '@/api/action-candidate'
 import {
   AnnotationTaskApiError,
   selectAnnotationPrimaryView,
@@ -22,6 +28,7 @@ import {
   formatHumanFriendlyTime,
   formatSegmentDurationLabel,
   formatTaskStatus,
+  generateIntelligentDraftSegments,
   getActionStyle,
   groupViewDecision,
   initialDraftSegments,
@@ -87,6 +94,13 @@ export function CaptureGroupAnnotationPanel({
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
   const [isLoadingAi, setIsLoadingAi] = useState(false)
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
+  const [actionJob, setActionJob] = useState<ActionCandidateJob | null>(null)
+  const [isDispatchingJob, setIsDispatchingJob] = useState(false)
+  const trackBarRef = useRef<HTMLDivElement | null>(null)
+  const [draggingHandle, setDraggingHandle] = useState<{
+    draftId: number
+    field: 'start_ms' | 'end_ms'
+  } | null>(null)
   const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -143,10 +157,43 @@ export function CaptureGroupAnnotationPanel({
       .catch(() => {
         // AI candidates are auxiliary
       })
+
+    fetchActionCandidateJob(projectId, captureGroupId)
+      .then((job) => {
+        if (isSubscribed) {
+          setActionJob(job)
+        }
+      })
+      .catch(() => {
+        // AI job is auxiliary
+      })
+
     return () => {
       isSubscribed = false
     }
   }, [projectId, captureGroupId])
+
+  useEffect(() => {
+    if (!actionJob || (actionJob.status !== 'QUEUED' && actionJob.status !== 'RUNNING')) {
+      return
+    }
+    const timer = setInterval(() => {
+      fetchActionCandidateJob(projectId, captureGroupId)
+        .then((job) => {
+          setActionJob(job)
+          if (job?.status === 'SUCCEEDED') {
+            fetchActionCandidates(projectId, captureGroupId)
+              .then((candidates) => {
+                setActionCandidates(candidates)
+                void message.success('Qwen3-VL 动作预标注已就绪，已刷新候选列表！')
+              })
+              .catch(() => {})
+          }
+        })
+        .catch(() => {})
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [actionJob, projectId, captureGroupId, message])
 
   if (!isDirty && appliedContext !== draftContext) {
     setAppliedContext(draftContext)
@@ -334,19 +381,104 @@ export function CaptureGroupAnnotationPanel({
           ),
         )
         setHasAutoLoadedAiDraft(true)
-        void message.success(`成功载入 ${candidates.length} 个 AI 预标注动作`)
+        void message.success(`成功载入 ${candidates.length} 个 Qwen3-VL 动作预标注片段`)
       } else {
-        void message.info(
-          fetched.length > 0
-            ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
-            : '暂无可用 AI 预标注候选，可继续人工标注。',
-        )
+        const synthesized = generateIntelligentDraftSegments(totalDurationMs, sortedLabels)
+        if (synthesized.length > 0) {
+          setIsDirty(true)
+          setDraftSegments(synthesized)
+          setHasAutoLoadedAiDraft(true)
+          void message.success(
+            `已基于配药标准流程与全片时长推荐 ${synthesized.length} 个动作时段，请核对微调`,
+          )
+        } else {
+          void message.info(
+            fetched.length > 0
+              ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
+              : '暂无可用 AI 预标注候选，可继续人工标注。',
+          )
+        }
       }
     } catch {
       void message.error('获取 AI 预标注候选失败，请稍后重试。')
     } finally {
       setIsLoadingAi(false)
     }
+  }
+
+  async function handleDispatchActionJob() {
+    if (!task?.primary_clip_asset_id) {
+      void message.warning('请先指定主视图机位')
+      return
+    }
+    setIsDispatchingJob(true)
+    try {
+      const job = await dispatchActionCandidateJob(projectId, captureGroupId)
+      setActionJob(job)
+      void message.success('已启动 Qwen3-VL 动作预标注分析，请稍候...')
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : '启动动作预标注失败')
+    } finally {
+      setIsDispatchingJob(false)
+    }
+  }
+
+  const handlePointerDown = (
+    e: React.PointerEvent,
+    draftId: number,
+    field: 'start_ms' | 'end_ms',
+  ) => {
+    if (!canSubmitRevision || !totalDurationMs || totalDurationMs <= 0 || !trackBarRef.current) {
+      return
+    }
+    e.stopPropagation()
+    e.preventDefault()
+
+    const trackElem = trackBarRef.current
+    const trackRect = trackElem.getBoundingClientRect()
+    const trackWidth = trackRect.width
+    if (trackWidth <= 0) return
+
+    const targetSeg = draftSegments.find((s) => s.draftId === draftId)
+    if (!targetSeg) return
+
+    const initialStartMs = targetSeg.start_ms ?? 0
+    const initialEndMs = targetSeg.end_ms ?? 0
+    const startClientX = e.clientX
+
+    setDraggingHandle({ draftId, field })
+
+    const handlePointerMove = (moveEv: PointerEvent) => {
+      const deltaX = moveEv.clientX - startClientX
+      const deltaMs = Math.round((deltaX / trackWidth) * totalDurationMs)
+
+      setDraftSegments((prev) =>
+        prev.map((seg) => {
+          if (seg.draftId !== draftId) return seg
+          if (field === 'start_ms') {
+            const maxAllowed = (seg.end_ms ?? initialEndMs) - 100
+            const newStart = Math.max(0, Math.min(maxAllowed, initialStartMs + deltaMs))
+            onSeekToMs?.(newStart)
+            return { ...seg, start_ms: newStart }
+          } else {
+            const minAllowed = (seg.start_ms ?? initialStartMs) + 100
+            const newEnd = Math.min(totalDurationMs, Math.max(minAllowed, initialEndMs + deltaMs))
+            onSeekToMs?.(newEnd)
+            return { ...seg, end_ms: newEnd }
+          }
+        }),
+      )
+      setIsDirty(true)
+    }
+
+    const handlePointerUp = () => {
+      setDraggingHandle(null)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
   }
 
   return (
@@ -449,7 +581,49 @@ export function CaptureGroupAnnotationPanel({
                     type="warning"
                     showIcon
                     title="MediaPipe 在采样帧中未检测到手"
-                    description="这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。"
+                    description={
+                      <div
+                        style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}
+                      >
+                        <span>
+                          这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。
+                        </span>
+                        {canSubmitRevision &&
+                        draftSegments.length <= 1 &&
+                        totalDurationMs &&
+                        totalDurationMs > 0 ? (
+                          <div>
+                            <Button
+                              size="small"
+                              type="dashed"
+                              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+                              onClick={() => {
+                                const idleLabel =
+                                  sortedLabels.find(
+                                    (l) =>
+                                      l.label_id.includes('prepare') ||
+                                      l.label_id.includes('workspace') ||
+                                      l.label_id.includes('review'),
+                                  )?.label_id || sortedLabels[0]?.label_id
+                                if (idleLabel) {
+                                  setDraftSegments([
+                                    createDraftSegment({
+                                      start_ms: 0,
+                                      end_ms: totalDurationMs,
+                                      label: idleLabel,
+                                    }),
+                                  ])
+                                  setIsDirty(true)
+                                  void message.info('已快速标记全片范围，您可直接微调或提交')
+                                }
+                              }}
+                            >
+                              快速标记为全片无操作/准备阶段
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    }
                   />
                 </div>
               )}
@@ -472,6 +646,55 @@ export function CaptureGroupAnnotationPanel({
                   </span>
                 </div>
                 <div className="capture-group-annotation-quick-buttons">
+                  {actionJob?.status === 'RUNNING' || actionJob?.status === 'QUEUED' ? (
+                    <Tooltip
+                      title={
+                        actionJob.status === 'QUEUED'
+                          ? '任务已在独立队列中排队，等待 4090 算力机连接消费；不影响人工标注。'
+                          : '4090 算力机正在使用 Qwen3-VL 执行视频动作理解推理...'
+                      }
+                    >
+                      <Button
+                        type="default"
+                        size="small"
+                        loading
+                        disabled
+                        icon={<Sparkles size={13} />}
+                      >
+                        {actionJob.status === 'QUEUED' ? '4090 等待连接...' : '4090 推理中...'}
+                      </Button>
+                    </Tooltip>
+                  ) : actionJob?.status === 'FAILED' &&
+                    canSubmitRevision &&
+                    !task.annotation_revision ? (
+                    <Tooltip title="4090 推理异常，请检查 4090 算力机网络与 Worker，点击可重新下发">
+                      <Button
+                        type="dashed"
+                        size="small"
+                        danger
+                        loading={isDispatchingJob}
+                        onClick={() => void handleDispatchActionJob()}
+                        icon={<Sparkles size={13} />}
+                      >
+                        重试 4090 预标注
+                      </Button>
+                    </Tooltip>
+                  ) : actionCandidates.length === 0 &&
+                    canSubmitRevision &&
+                    !task.annotation_revision ? (
+                    <Tooltip title="需远程 4090 算力机开机并启动 Worker；点击向 Qwen3-VL 派发动作切片作业">
+                      <Button
+                        type="default"
+                        size="small"
+                        htmlType="button"
+                        loading={isDispatchingJob}
+                        onClick={() => void handleDispatchActionJob()}
+                        icon={<Sparkles size={13} style={{ color: 'var(--app-color-primary)' }} />}
+                      >
+                        调度 4090 动作预标注
+                      </Button>
+                    </Tooltip>
+                  ) : null}
                   <Button
                     type="default"
                     size="small"
@@ -479,10 +702,11 @@ export function CaptureGroupAnnotationPanel({
                     loading={isLoadingAi}
                     disabled={!canSubmitRevision || isDirty || Boolean(task.annotation_revision)}
                     onClick={() => void handleLoadAiCandidates()}
+                    icon={<Sparkles size={13} style={{ color: 'var(--app-color-primary)' }} />}
                     title={
                       isDirty || task.annotation_revision
                         ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
-                        : '将 Qwen3-VL 识别的动作片段一键载入为草稿'
+                        : '将 AI 识别的动作片段一键载入为草稿'
                     }
                   >
                     AI 自动填充
@@ -493,6 +717,7 @@ export function CaptureGroupAnnotationPanel({
                     htmlType="button"
                     disabled={!canSubmitRevision}
                     onClick={handleAddSegment}
+                    icon={<Plus size={13} />}
                   >
                     + 添加时间段
                   </Button>
@@ -502,6 +727,7 @@ export function CaptureGroupAnnotationPanel({
                     htmlType="button"
                     loading={isSubmittingRevision}
                     disabled={!canSubmitRevision}
+                    icon={<Check size={13} />}
                     onClick={() => {
                       if (typeof annotationFormRef.current?.requestSubmit === 'function') {
                         annotationFormRef.current.requestSubmit()
@@ -519,6 +745,7 @@ export function CaptureGroupAnnotationPanel({
               {totalDurationMs && totalDurationMs > 0 && draftSegments.length > 0 ? (
                 <div className="capture-group-timeline-overview" aria-label="全片动作时间轨">
                   <div
+                    ref={trackBarRef}
                     className="capture-group-timeline-track-bar"
                     onClick={(e) => {
                       if (e.target === e.currentTarget && totalDurationMs > 0) {
@@ -554,7 +781,7 @@ export function CaptureGroupAnnotationPanel({
                       return (
                         <Tooltip
                           key={seg.draftId}
-                          title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转播放`}
+                          title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转，两端可拖拽微调`}
                         >
                           <div
                             role="button"
@@ -577,7 +804,34 @@ export function CaptureGroupAnnotationPanel({
                                 onPlaySegment?.(seg.start_ms, seg.end_ms)
                               }
                             }}
-                          />
+                          >
+                            {canSubmitRevision ? (
+                              <>
+                                <span
+                                  className={`capture-group-timeline-handle handle-left ${
+                                    draggingHandle?.draftId === seg.draftId &&
+                                    draggingHandle?.field === 'start_ms'
+                                      ? 'is-dragging'
+                                      : ''
+                                  }`}
+                                  title="拖拽微调开始时间"
+                                  onPointerDown={(e) =>
+                                    handlePointerDown(e, seg.draftId, 'start_ms')
+                                  }
+                                />
+                                <span
+                                  className={`capture-group-timeline-handle handle-right ${
+                                    draggingHandle?.draftId === seg.draftId &&
+                                    draggingHandle?.field === 'end_ms'
+                                      ? 'is-dragging'
+                                      : ''
+                                  }`}
+                                  title="拖拽微调结束时间"
+                                  onPointerDown={(e) => handlePointerDown(e, seg.draftId, 'end_ms')}
+                                />
+                              </>
+                            ) : null}
+                          </div>
                         </Tooltip>
                       )
                     })}

@@ -150,7 +150,6 @@ describe('CaptureGroup annotation workflow', () => {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
-    await user.click(await screen.findByRole('button', { name: '标注' }))
     const start = await screen.findByLabelText('开始时间（毫秒）')
     await user.clear(start)
     await user.type(start, '123')

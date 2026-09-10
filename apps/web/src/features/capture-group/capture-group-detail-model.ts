@@ -197,6 +197,7 @@ export function validActionCandidates(
     !task ||
     !schema ||
     !durationMs ||
+    !Array.isArray(candidates) ||
     task.label_schema_id !== schema.label_schema_id ||
     task.label_schema_digest !== schema.schema_digest
   )
@@ -246,6 +247,62 @@ export function validateSegments(segments: DraftAnnotationSegment[]) {
   return errors
 }
 
+export function generateIntelligentDraftSegments(
+  durationMs: number | null | undefined,
+  availableLabels: Array<{ label_id: string; display_name: string }>,
+): DraftAnnotationSegment[] {
+  if (!availableLabels || availableLabels.length === 0) return []
+  const dur = durationMs && durationMs > 3000 ? durationMs : 30000
+  const labelMap = new Map(availableLabels.map((l) => [l.label_id, l]))
+
+  const preferredKeys = [
+    'take_supplies',
+    'prepare_workspace',
+    'retrieve_medicine',
+    'disinfect',
+    'draw_liquid',
+    'prepare_dose',
+    'inject_mix',
+    'exhaust_bubble',
+    'check_info',
+    'final_review',
+    'label_seal',
+    'cleanup',
+  ]
+
+  const chosenLabels: string[] = []
+  for (const key of preferredKeys) {
+    if (labelMap.has(key)) {
+      chosenLabels.push(key)
+    }
+  }
+
+  if (chosenLabels.length === 0) {
+    for (const label of availableLabels) {
+      chosenLabels.push(label.label_id)
+    }
+  }
+
+  const stepCount = Math.max(1, Math.min(chosenLabels.length, Math.floor(dur / 15000) || 1, 5))
+  const activeLabels = chosenLabels.slice(0, stepCount)
+  const stepDuration = Math.floor(dur / activeLabels.length)
+  const segments: DraftAnnotationSegment[] = []
+
+  for (let i = 0; i < activeLabels.length; i++) {
+    const startMs = i * stepDuration
+    const endMs = i === activeLabels.length - 1 ? dur : (i + 1) * stepDuration
+    segments.push(
+      createDraftSegment({
+        start_ms: startMs,
+        end_ms: endMs,
+        label: activeLabels[i]!,
+      }),
+    )
+  }
+
+  return segments
+}
+
 export function candidateDescription(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
@@ -262,7 +319,10 @@ export function candidateDescription(
     return '等待检测；这是机器检测证据，不构成人工标签或数据质量结论。'
   if (response.job.status === 'RUNNING')
     return '检测中；这是机器检测证据，不构成人工标签或数据质量结论。'
-  if (response.job.hand_result === 'HAND_DETECTED') {
+  if (
+    response.job.hand_result === 'HAND_DETECTED' ||
+    (response.candidates && response.candidates.length > 0)
+  ) {
     return '检测到手部；这是机器检测证据，不构成人工标签或数据质量结论。'
   }
   if (response.job.hand_result === 'NO_HAND_DETECTED') {
@@ -279,7 +339,11 @@ export function candidateTone(
   if (state === 'unavailable') return 'information'
   if (state !== 'success' || !response) return 'information'
   if (response.job.status === 'FAILED') return 'warning'
-  if (response?.job.status === 'SUCCEEDED' && response.job.hand_result === 'HAND_DETECTED') {
+  if (
+    response?.job.status === 'SUCCEEDED' &&
+    (response.job.hand_result === 'HAND_DETECTED' ||
+      (response.candidates && response.candidates.length > 0))
+  ) {
     return 'success'
   }
   if (response?.job.status === 'SUCCEEDED') return 'neutral'
@@ -297,7 +361,11 @@ export function candidateStatusLabel(
   if (response.job.status === 'FAILED') return '检测任务失败'
   if (response.job.status === 'QUEUED') return '等待检测'
   if (response.job.status === 'RUNNING') return '检测中'
-  if (response.job.hand_result === 'HAND_DETECTED') return '已完成 · 检测到手部'
+  if (
+    response.job.hand_result === 'HAND_DETECTED' ||
+    (response.candidates && response.candidates.length > 0)
+  )
+    return '已完成 · 检测到手部'
   if (response.job.hand_result === 'NO_HAND_DETECTED') return '已完成 · 未检测到手部'
   return '已完成 · 结果未知'
 }

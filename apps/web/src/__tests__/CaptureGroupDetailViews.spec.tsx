@@ -42,9 +42,8 @@ describe('CaptureGroup detail views', () => {
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '人工标签任务' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '开始标注' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '标注' }))
-    expect(screen.getByRole('heading', { name: '标注前检查' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: '标注前检查' })).toBeVisible()
+    await user.click(await screen.findByText('高级质检选项与审计详情'))
     expect(await screen.findByText('整体质量')).toBeVisible()
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review'))).toBe(
       true,
@@ -75,7 +74,6 @@ describe('CaptureGroup detail views', () => {
 
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '标注' }))
     await user.click(await screen.findByRole('button', { name: '开始标注' }))
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
     expect(
@@ -134,7 +132,7 @@ describe('CaptureGroup detail views', () => {
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: '标注' }))
+    await user.click(await screen.findByText('高级质检选项与审计详情'))
     expect(await screen.findByRole('combobox', { name: '整体质量结论' })).toBeInTheDocument()
   })
 

@@ -43,8 +43,7 @@ export default function CaptureGroupDetailView() {
   const [panelOverride, setPanelOverride] = useState<{ locationKey: string; open: boolean } | null>(
     null,
   )
-  const isPanelOpen =
-    panelOverride?.locationKey === location.key ? panelOverride.open : Boolean(focus)
+  const isPanelOpen = panelOverride?.locationKey === location.key ? panelOverride.open : true
   const [hasUnsavedAnnotation, setHasUnsavedAnnotation] = useState(false)
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>

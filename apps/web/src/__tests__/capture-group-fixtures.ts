@@ -236,6 +236,8 @@ export function stubGroupDetail(
     reviewResponse?: Partial<AnnotationReview>
     reviewError?: { status: number; body: object }
     cleaningRecheckResponse?: CaptureGroupCleaning
+    actionCandidates?: unknown[]
+    actionCandidateJob?: unknown | null
   },
 ) {
   let taskResponseIndex = 0
@@ -421,6 +423,28 @@ export function stubGroupDetail(
           revision_number: 1,
           submitted_by: 'reviewer',
           submitted_at: '2026-08-20T01:00:00Z',
+        }),
+      )
+    }
+    if (url.endsWith('/action-candidates')) {
+      return Promise.resolve(jsonResponse(options.actionCandidates ?? []))
+    }
+    if (url.endsWith('/action-candidate-job')) {
+      return Promise.resolve(jsonResponse(options.actionCandidateJob ?? null))
+    }
+    if (url.endsWith('/action-candidate-jobs') && init?.method === 'POST') {
+      return Promise.resolve(
+        jsonResponse({
+          job_id: 'synthetic-action-job',
+          project_id: projectId,
+          capture_group_id: group.capture_group_id,
+          clip_asset_id: group.streams[0]?.clip_asset_id ?? '',
+          status: 'QUEUED',
+          algorithm_key: 'QWEN3_VL_ACTION',
+          error_code: null,
+          error_message: null,
+          created_at: '2026-09-10T00:00:00Z',
+          updated_at: '2026-09-10T00:00:00Z',
         }),
       )
     }
@@ -1073,7 +1097,7 @@ function mediaReport(group: CaptureGroup, url: string) {
   }
 }
 
-export function jsonResponse(body: object, init?: ResponseInit) {
+export function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
