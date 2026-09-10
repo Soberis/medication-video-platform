@@ -6,9 +6,9 @@
 
 | 需求 | Owner module | 后续验证 | 状态 |
 | --- | --- | --- | --- |
-| V34-FR-001 独立动作预标注 | aicandidate / ai-worker | 不依赖 MediaPipe、失败可恢复且不阻塞人工 | DRAFT / 待实施 |
+| V34-FR-001 独立动作预标注 | aicandidate / ai-worker | 准入与任务不同到达顺序自动派发一次；手动触发不绕过守卫；不依赖 MediaPipe | DRAFT / 待实施 |
 | V34-FR-002 候选校验 | aicandidate | 格式、区间、标签、输入版本、幂等及契约 | DRAFT / 待实施 |
-| V34-FR-003 载入与编辑 | apps/web | 保护已有修改、补标、拆分合并、键盘操作 | DRAFT / 待实施 |
+| V34-FR-003 初始化与编辑 | apps/web | 有效候选自动呈现；保护未保存修改与已清空草稿；部分失败不可采纳；补标、拆分合并、键盘操作 | DRAFT / 待实施 |
 | V34-FR-004 人工提交与复核 | annotationreview | 候选来源可追溯、不可变版本、权限守卫 | DRAFT / 待实施 |
 | V34-FR-005 配套导出 | datasetexport | 复用既有 HDF5；回读边界与来源失效测试 | 既有代码可复用 / 新链路待验证 |
 
