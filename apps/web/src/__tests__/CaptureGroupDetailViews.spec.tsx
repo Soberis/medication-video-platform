@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,6 +41,35 @@ describe('CaptureGroup detail views', () => {
           String(input).endsWith('/action-candidate-jobs') && init?.method === 'POST',
       ),
     ).toBe(false)
+  })
+
+  it('starts action pre-annotation when AI autofill is explicitly requested without an existing job', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'UNKNOWN',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'AI 自动填充' }))
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([input, init]) =>
+            String(input).endsWith('/action-candidate-jobs') && init?.method === 'POST',
+        ),
+      ).toBe(true),
+    )
   })
 
   it('keeps the default detail path focused on receipt, media and machine evidence', async () => {

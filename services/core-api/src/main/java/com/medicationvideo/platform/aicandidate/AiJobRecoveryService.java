@@ -74,6 +74,17 @@ class AiJobRecoveryService {
 				LOGGER.warn("Lease recovery skipped AI job {}: {}", jobId, exception.getMessage());
 			}
 		}
+		for (var jobId : this.attemptRepository.findUndeliveredQueuedJobIds(cutoff, this.batchSize)) {
+			try {
+				var changed = this.transactionTemplate.execute(status -> recoverUndeliveredQueued(jobId, cutoff, now));
+				if (Boolean.TRUE.equals(changed)) {
+					recovered++;
+				}
+			}
+			catch (RuntimeException exception) {
+				LOGGER.warn("Queued AI job recovery skipped AI job {}: {}", jobId, exception.getMessage());
+			}
+		}
 		return recovered;
 	}
 
@@ -100,6 +111,26 @@ class AiJobRecoveryService {
 		}
 
 		job.requeueAfterLostAttempt(now);
+		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
+		return true;
+	}
+
+	private boolean recoverUndeliveredQueued(UUID jobId, Instant cutoff, Instant now) {
+		var job = this.jobRepository.findForUpdate(jobId).orElse(null);
+		if (job == null) {
+			return false;
+		}
+		var attempt = this.attemptRepository.findCurrentForUpdate(jobId).orElse(null);
+		if (attempt == null || job.getStatus() != AiCandidateJobStatus.QUEUED
+				|| attempt.getStatus() != AiCandidateJobAttemptStatus.QUEUED
+				|| attempt.getCreatedAt().isAfter(cutoff)) {
+			return false;
+		}
+		attempt.abandonUndelivered(now);
+		if (attempt.getAttempt() >= this.maxAttempts) {
+			job.fail(now);
+			return true;
+		}
 		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
 		return true;
 	}

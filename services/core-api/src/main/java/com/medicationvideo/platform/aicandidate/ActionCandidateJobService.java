@@ -12,6 +12,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,10 +57,27 @@ public class ActionCandidateJobService {
 
 	private final ActionJobEnvelopeFactory actionEnvelopeFactory;
 
+	private final AiCandidateJobAttemptQueueService attemptQueue;
+
+	private final int maxAttempts;
+
 	ActionCandidateJobService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
 			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
 		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, null, null, null, null, null, null,
-				new ActionJobEnvelopeFactory(null, null));
+				new ActionJobEnvelopeFactory(null, null), null, 3);
+	}
+
+	ActionCandidateJobService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
+			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+			@Autowired(required = false) ProjectAccessService projectAccessService,
+			@Autowired(required = false) AssetCatalogQueryService assetCatalog,
+			@Autowired(required = false) AiCandidateJobIdempotencyReceiptRepository receiptRepository,
+			@Autowired(required = false) AuditEventRecorder auditRecorder,
+			@Autowired(required = false) AiJobDispatchPort dispatchPort,
+			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory,
+			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory) {
+		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, projectAccessService, assetCatalog,
+				receiptRepository, auditRecorder, dispatchPort, capabilityFactory, actionEnvelopeFactory, null, 3);
 	}
 
 	@Autowired
@@ -71,7 +89,9 @@ public class ActionCandidateJobService {
 			@Autowired(required = false) AuditEventRecorder auditRecorder,
 			@Autowired(required = false) AiJobDispatchPort dispatchPort,
 			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory,
-			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory) {
+			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory,
+			@Autowired(required = false) AiCandidateJobAttemptQueueService attemptQueue,
+			@Value("${platform.ai.hand-pose.max-attempts:3}") int maxAttempts) {
 		this.jobRepository = jobRepository;
 		this.attemptRepository = attemptRepository;
 		this.jdbcTemplate = jdbcTemplate;
@@ -84,6 +104,9 @@ public class ActionCandidateJobService {
 		this.capabilityFactory = capabilityFactory;
 		this.actionEnvelopeFactory = actionEnvelopeFactory != null ? actionEnvelopeFactory
 				: new ActionJobEnvelopeFactory(assetCatalog, null);
+		this.attemptQueue = attemptQueue;
+		HandPoseRetryPolicy.validateMaxAttempts(maxAttempts);
+		this.maxAttempts = maxAttempts;
 	}
 
 	@Transactional
@@ -307,6 +330,10 @@ public class ActionCandidateJobService {
 						|| candidate.getStatus() == AiCandidateJobStatus.SUCCEEDED) {
 					return response(candidate, captureGroupId);
 				}
+				if (candidate.getStatus() == AiCandidateJobStatus.FAILED) {
+					return retryFailedActionJob(projectId, captureGroupId, actorId, idempotencyKey, requestId, traceId,
+							candidate, fingerprint, receiptKey, auditActorType, authorizationReference);
+				}
 			}
 		}
 
@@ -349,6 +376,48 @@ public class ActionCandidateJobService {
 							"algorithm_key", AiCandidateJob.ACTION_ALGORITHM_KEY)));
 		}
 
+		return response(job, captureGroupId);
+	}
+
+	private ActionCandidateJobResponse retryFailedActionJob(UUID projectId, UUID captureGroupId, String actorId,
+			String idempotencyKey, String requestId, String traceId, AiCandidateJob candidate, String fingerprint,
+			String receiptKey, AuditActorType auditActorType, String authorizationReference) {
+		if (this.attemptQueue == null) {
+			throw new HandPoseJobException("AI_ACTION_RETRY_UNAVAILABLE",
+					"The action candidate retry service is not configured.", 503);
+		}
+		var job = this.jobRepository.findForUpdate(candidate.getAiJobId()).orElse(candidate);
+		var attempt = this.attemptQueue.latest(job.getAiJobId());
+		if (attempt == null || attempt.getStatus() != AiCandidateJobAttemptStatus.FAILED) {
+			throw new HandPoseJobException("AI_ACTION_RETRY_STATE_CONFLICT",
+					"Only a failed action candidate attempt can be retried.", 409);
+		}
+		if (attempt.getAttempt() >= this.maxAttempts) {
+			throw new HandPoseJobException("AI_ACTION_RETRY_LIMIT_REACHED",
+					"The maximum number of action candidate attempts has been reached.", 409);
+		}
+		if (!attempt.isRetryable()) {
+			throw new HandPoseJobException("AI_ACTION_RETRY_NOT_ALLOWED",
+					"This action candidate failure is not eligible for manual retry.", 409);
+		}
+
+		var now = Instant.now();
+		job.requeueForManualRetry(now);
+		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
+		if (this.receiptRepository != null) {
+			this.receiptRepository.save(
+					AiCandidateJobIdempotencyReceipt.record(projectId, receiptKey, fingerprint, job.getAiJobId(), now));
+		}
+		if (this.auditRecorder != null) {
+			this.auditRecorder.record(new AuditEventCommand(now, auditActorType, actorId, projectId,
+					"AI_ACTION_CANDIDATE_JOB_MANUAL_RETRY_QUEUED", "AIJob", job.getAiJobId().toString(),
+					Integer.toString(attempt.getAttempt() + 1), AuditOutcome.SUCCEEDED,
+					attempt.getFailureReason() == null ? "ACTION_CANDIDATE_RETRY" : attempt.getFailureReason(),
+					requestId, traceId, authorizationReference,
+					Map.of("capture_group_id", captureGroupId.toString(), "clip_asset_id",
+							job.getClipAssetId().toString(), "source_attempt",
+							Integer.toString(attempt.getAttempt()))));
+		}
 		return response(job, captureGroupId);
 	}
 

@@ -181,6 +181,22 @@ class AiCandidateJobAttempt {
 		this.updatedAt = now;
 	}
 
+	/**
+	 * A broker message was confirmed by the outbox relay, but no Worker ever acquired its
+	 * queued attempt. Retire that capability before publishing a fresh attempt so a late
+	 * delivery of the old message cannot run alongside it.
+	 */
+	void abandonUndelivered(Instant now) {
+		if (this.status != AiCandidateJobAttemptStatus.QUEUED) {
+			throw new HandPoseJobException("STALE_ATTEMPT", "The AI job attempt is no longer queued.", 409);
+		}
+		this.status = AiCandidateJobAttemptStatus.FAILED;
+		this.failureReason = "AI_WORKER_MESSAGE_UNDELIVERED";
+		this.retryable = true;
+		this.completedAt = now;
+		this.updatedAt = now;
+	}
+
 	boolean isRecoverableAt(Instant cutoff) {
 		return this.status == AiCandidateJobAttemptStatus.RUNNING && this.leaseUntil != null
 				&& !this.leaseUntil.isAfter(cutoff);

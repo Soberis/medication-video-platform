@@ -22,7 +22,7 @@ class AiJobRecoveryScheduler {
 	void recoverExpiredAttempts() {
 		var recovered = this.service.recoverExpiredAttempts();
 		if (recovered > 0) {
-			log.info("Recovered {} expired AI hand pose attempt(s).", recovered);
+			log.info("Recovered {} AI attempt(s).", recovered);
 		}
 	}
 

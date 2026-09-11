@@ -72,6 +72,21 @@ class AiJobRecoveryServiceTests {
 		verify(fixture.queue, never()).enqueue(any(), any(Integer.class), any());
 	}
 
+	@Test
+	void republishesAQueuedAttemptWhosePublishedMessageWasLost() {
+		var fixture = fixture(3);
+		var job = queuedJob(NOW.minus(Duration.ofMinutes(20)));
+		var attempt = queuedAttempt(job, 1, NOW.minus(Duration.ofMinutes(20)));
+		fixture.prepareQueued(job, attempt);
+
+		assertEquals(1, fixture.service.recoverExpiredAttempts(NOW));
+		assertEquals(AiCandidateJobStatus.QUEUED, job.getStatus());
+		assertEquals(AiCandidateJobAttemptStatus.FAILED, attempt.getStatus());
+		assertEquals("AI_WORKER_MESSAGE_UNDELIVERED", attempt.getFailureReason());
+		assertTrue(attempt.isRetryable());
+		verify(fixture.queue).enqueue(job, 2, NOW);
+	}
+
 	private static AiCandidateJob queuedJob(Instant createdAt) {
 		return AiCandidateJob.queue(PROJECT_ID, CLIP_ASSET_ID, "a".repeat(64), "b".repeat(64), 128, "video/mp4",
 				"idempotency-key-0001", "c".repeat(64), "synthetic", createdAt);
@@ -98,6 +113,15 @@ class AiJobRecoveryServiceTests {
 		void prepare(AiCandidateJob job, AiCandidateJobAttempt attempt, boolean expiredLeaseCandidate) {
 			when(this.attempts.findRecoverableJobIds(any(), any(Integer.class)))
 				.thenReturn(expiredLeaseCandidate ? List.of(job.getAiJobId()) : List.of());
+			when(this.attempts.findUndeliveredQueuedJobIds(any(), any(Integer.class))).thenReturn(List.of());
+			when(this.jobs.findForUpdate(job.getAiJobId())).thenReturn(Optional.of(job));
+			when(this.attempts.findCurrentForUpdate(job.getAiJobId())).thenReturn(Optional.of(attempt));
+		}
+
+		void prepareQueued(AiCandidateJob job, AiCandidateJobAttempt attempt) {
+			when(this.attempts.findRecoverableJobIds(any(), any(Integer.class))).thenReturn(List.of());
+			when(this.attempts.findUndeliveredQueuedJobIds(any(), any(Integer.class)))
+				.thenReturn(List.of(job.getAiJobId()));
 			when(this.jobs.findForUpdate(job.getAiJobId())).thenReturn(Optional.of(job));
 			when(this.attempts.findCurrentForUpdate(job.getAiJobId())).thenReturn(Optional.of(attempt));
 		}

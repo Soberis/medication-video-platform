@@ -33,6 +33,32 @@ interface AiCandidateJobAttemptRepository extends JpaRepository<AiCandidateJobAt
 			""", nativeQuery = true)
 	List<UUID> findRecoverableJobIds(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
+	@Query(value = """
+			SELECT a.ai_job_id
+			FROM ai_job_attempt a
+			JOIN ai_job j ON j.ai_job_id = a.ai_job_id
+			WHERE a.status = 'QUEUED'
+			  AND j.status = 'QUEUED'
+			  AND a.created_at <= :cutoff
+			  AND NOT EXISTS (
+			      SELECT 1
+			      FROM ai_job_attempt newer
+			      WHERE newer.ai_job_id = a.ai_job_id
+			        AND newer.attempt > a.attempt)
+			  AND EXISTS (
+			      SELECT 1
+			      FROM outbox_event event
+			      WHERE event.aggregate_id = a.ai_job_id
+			        AND event.aggregate_type = 'AiJob'
+			        AND event.event_type IN ('AiHandPoseJobRequestedV1', 'AiActionJobRequestedV1')
+			        AND event.schema_version IN ('ai-hand-pose-job.v1', 'ai-action-job.v1')
+			        AND event.published_at IS NOT NULL
+			        AND event.payload_json ->> 'message_id' = a.message_id::text)
+			ORDER BY a.created_at, a.ai_job_id
+			LIMIT :batchSize
+			""", nativeQuery = true)
+	List<UUID> findUndeliveredQueuedJobIds(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			SELECT attempt FROM AiCandidateJobAttempt attempt

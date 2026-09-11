@@ -452,6 +452,27 @@ export function CaptureGroupAnnotationPanel({
     if (!canSubmitRevision || isDirty || task?.annotation_revision || isLoadingAi) return
     setIsLoadingAi(true)
     try {
+      // A newly ingested clip has no action job yet.  The load action is the
+      // explicit user opt-in for Qwen inference, so create the job before
+      // looking for candidates instead of reporting an empty result as a
+      // worker failure.
+      let currentJob = actionJob
+      if (!currentJob) {
+        currentJob = await fetchActionCandidateJob(projectId, captureGroupId)
+        if (currentJob) setActionJob(currentJob)
+      }
+      if (!currentJob) {
+        await handleDispatchActionJob()
+        return
+      }
+      if (currentJob.status === 'QUEUED' || currentJob.status === 'RUNNING') {
+        void message.info('动作预标注任务仍在处理中，请稍候再载入候选。')
+        return
+      }
+      if (currentJob.status === 'FAILED') {
+        void message.info('上一次动作预标注未完成，请点击“重试检测”重新投递。')
+        return
+      }
       const fetched = await fetchActionCandidates(projectId, captureGroupId)
       if (latestDraft.current.isDirty || latestDraft.current.draftContext !== draftContext) return
       const candidates = validActionCandidates(
@@ -479,7 +500,7 @@ export function CaptureGroupAnnotationPanel({
         void message.info(
           fetched.length > 0
             ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
-            : '暂无可用 AI 动作候选（4090 节点尚未完成推理），请稍候重试或进行人工标注。',
+            : '动作预标注已完成但没有可采纳候选，请继续人工标注。',
         )
       }
     } catch {
@@ -489,20 +510,22 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
-  async function handleDispatchActionJob() {
+  async function handleDispatchActionJob(): Promise<ActionCandidateJob | null> {
     if (!effectivePrimaryClipAssetId) {
       void message.warning('请先指定主视图机位')
-      return
+      return null
     }
     setIsDispatchingJob(true)
     try {
       const job = await dispatchActionCandidateJob(projectId, captureGroupId)
       setActionJob(job)
       void message.success('已提交动作预标注任务，等待算力机返回结果...')
+      return job
     } catch (err) {
       void message.error(
         err instanceof Error ? err.message : '启动动作预标注失败，请检查 4090 算力机与网络',
       )
+      return null
     } finally {
       setIsDispatchingJob(false)
     }
