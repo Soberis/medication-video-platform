@@ -336,9 +336,12 @@ public class ActionCandidateJobService {
 		}
 
 		if (this.auditRecorder != null) {
+			var resolvedRequestId = (requestId != null && !requestId.isBlank()) ? requestId
+					: UUID.randomUUID().toString();
+			var resolvedTraceId = (traceId != null && !traceId.isBlank()) ? traceId : resolvedRequestId;
 			this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 					"AI_ACTION_CANDIDATE_JOB_QUEUED", "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
-					AiCandidateJob.ACTION_ALGORITHM_KEY, requestId, traceId, "ROLE_MEMBER",
+					AiCandidateJob.ACTION_ALGORITHM_KEY, resolvedRequestId, resolvedTraceId, "ROLE_MEMBER",
 					Map.of("capture_group_id", captureGroupId.toString(), "clip_asset_id", clipAssetId.toString(),
 							"algorithm_key", AiCandidateJob.ACTION_ALGORITHM_KEY)));
 		}

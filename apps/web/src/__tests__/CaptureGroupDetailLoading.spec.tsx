@@ -345,6 +345,9 @@ function stubPrimaryDetail(group: CaptureGroup, taskResponse: Promise<Response>)
         jsonResponse({ clip_asset_id: clipAssetId, content_type: 'video/mp4', status: 'INGESTED' }),
       )
     }
+    if (url.endsWith('/annotation-label-schema')) {
+      return Promise.resolve(jsonResponse(labelSchema()))
+    }
     return Promise.reject(new Error(`Unexpected fetch: ${url}`))
   })
   vi.stubGlobal('fetch', fetchMock)

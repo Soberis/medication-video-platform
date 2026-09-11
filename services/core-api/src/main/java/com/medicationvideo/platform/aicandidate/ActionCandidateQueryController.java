@@ -63,8 +63,10 @@ class ActionCandidateQueryController {
 		var actor = requireActor(authentication);
 		var idempotencyKey = idempotencyKeyHeader != null && !idempotencyKeyHeader.isBlank() ? idempotencyKeyHeader
 				: "action-job-" + captureGroupId + "-" + UUID.randomUUID();
+		var resolvedRequestId = (requestId != null && !requestId.isBlank()) ? requestId : UUID.randomUUID().toString();
+		var resolvedTraceId = (traceId != null && !traceId.isBlank()) ? traceId : resolvedRequestId;
 		var response = this.service.queueActionCandidateJob(projectId, captureGroupId, actor.actorId(), idempotencyKey,
-				requestId, traceId);
+				resolvedRequestId, resolvedTraceId);
 		return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(response);
 	}
 

@@ -542,4 +542,62 @@ describe('CaptureGroup annotation workflow', () => {
     expect(play).toHaveBeenCalledTimes(1)
     expect(pause).toHaveBeenCalledTimes(1)
   })
+
+  it('renders AI action candidate suggestion cards and allows adopting an individual segment', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const candidateItem = {
+      action_candidate_id: 'cand-test-1',
+      ai_job_id: 'job-test-1',
+      project_id: projectId,
+      capture_group_id: groupId,
+      clip_asset_id: group.streams[0]!.clip_asset_id,
+      start_ms: 1000,
+      end_ms: 4000,
+      action_label: 'PREPARE',
+      confidence: 0.92,
+      source_window: 1,
+      stitched_windows: [],
+      created_at: '2026-09-10T00:00:00Z',
+    }
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+      actionCandidates: [candidateItem],
+      actionCandidateJob: {
+        job_id: 'job-test-1',
+        project_id: projectId,
+        capture_group_id: groupId,
+        clip_asset_id: group.streams[0]!.clip_asset_id,
+        status: 'SUCCEEDED',
+        algorithm_key: 'QWEN3_VL_ACTION',
+        error_code: null,
+        error_message: null,
+        created_at: '2026-09-10T00:00:00Z',
+        updated_at: '2026-09-10T00:00:00Z',
+      },
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+    })
+
+    expect(await screen.findByText('已生成 1 条建议')).toBeInTheDocument()
+    expect(screen.getByText('置信度 92%')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '播放核对' })).toBeInTheDocument()
+
+    const adoptBtn = screen.getByRole('button', { name: '采纳此段' })
+    expect(adoptBtn).toBeEnabled()
+    await user.click(adoptBtn)
+
+    expect(await screen.findByRole('button', { name: '已采纳' })).toBeDisabled()
+    expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1000)
+    expect(screen.getByLabelText('结束时间（毫秒）')).toHaveValue(4000)
+  })
 })

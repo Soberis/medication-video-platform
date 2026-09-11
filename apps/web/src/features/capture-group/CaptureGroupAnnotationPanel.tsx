@@ -1,5 +1,5 @@
-import { App as AntdApp, Alert, Button, Input, Select, Tooltip } from 'antd'
-import { CircleAlert, Play, Plus, Sparkles } from 'lucide-react'
+import { App as AntdApp, Alert, Button, Input, Select, Tag, Tooltip } from 'antd'
+import { Check, CircleAlert, Play, Plus, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -34,7 +34,6 @@ import {
   formatHumanFriendlyTime,
   formatSegmentDurationLabel,
   formatTaskStatus,
-  generateProtocolScaffoldSegments,
   getActionStyle,
   groupViewDecision,
   initialDraftSegments,
@@ -108,10 +107,6 @@ export function CaptureGroupAnnotationPanel({
   const [actionJob, setActionJob] = useState<ActionCandidateJob | null>(null)
   const [isDispatchingJob, setIsDispatchingJob] = useState(false)
   const trackBarRef = useRef<HTMLDivElement | null>(null)
-  const [draggingHandle, setDraggingHandle] = useState<{
-    draftId: number
-    field: 'start_ms' | 'end_ms'
-  } | null>(null)
   const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -495,20 +490,11 @@ export function CaptureGroupAnnotationPanel({
         setHasAutoLoadedAiDraft(true)
         void message.success(`成功载入 ${candidates.length} 个动作预标注候选片段，请逐段核对`)
       } else {
-        const scaffold = generateProtocolScaffoldSegments(totalDurationMs, sortedLabels)
-        if (scaffold.length > 0) {
-          setIsDirty(true)
-          setDraftSegments(scaffold)
-          void message.info(
-            `未发现可用的动作预标注候选，已按配药标准流程生成 ${scaffold.length} 个空时段骨架（非推理结果），请逐段核对标签与时间`,
-          )
-        } else {
-          void message.info(
-            fetched.length > 0
-              ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
-              : '暂无可用 AI 预标注候选，可继续人工标注。',
-          )
-        }
+        void message.info(
+          fetched.length > 0
+            ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
+            : '暂无可用 AI 动作候选（4090 节点尚未完成推理），请稍候重试或进行人工标注。',
+        )
       }
     } catch {
       void message.error('获取 AI 预标注候选失败，请稍后重试。')
@@ -536,62 +522,28 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
-  const handlePointerDown = (
-    e: React.PointerEvent,
-    draftId: number,
-    field: 'start_ms' | 'end_ms',
-  ) => {
-    if (!canSubmitRevision || !totalDurationMs || totalDurationMs <= 0 || !trackBarRef.current) {
-      return
-    }
-    e.stopPropagation()
-    e.preventDefault()
-
-    const trackElem = trackBarRef.current
-    const trackRect = trackElem.getBoundingClientRect()
-    const trackWidth = trackRect.width
-    if (trackWidth <= 0) return
-
-    const targetSeg = draftSegments.find((s) => s.draftId === draftId)
-    if (!targetSeg) return
-
-    const initialStartMs = targetSeg.start_ms ?? 0
-    const initialEndMs = targetSeg.end_ms ?? 0
-    const startClientX = e.clientX
-
-    setDraggingHandle({ draftId, field })
-
-    const handlePointerMove = (moveEv: PointerEvent) => {
-      const deltaX = moveEv.clientX - startClientX
-      const deltaMs = Math.round((deltaX / trackWidth) * totalDurationMs)
-
-      setDraftSegments((prev) =>
-        prev.map((seg) => {
-          if (seg.draftId !== draftId) return seg
-          if (field === 'start_ms') {
-            const maxAllowed = (seg.end_ms ?? initialEndMs) - 100
-            const newStart = Math.max(0, Math.min(maxAllowed, initialStartMs + deltaMs))
-            onSeekToMs?.(newStart)
-            return { ...seg, start_ms: newStart }
-          } else {
-            const minAllowed = (seg.start_ms ?? initialStartMs) + 100
-            const newEnd = Math.min(totalDurationMs, Math.max(minAllowed, initialEndMs + deltaMs))
-            onSeekToMs?.(newEnd)
-            return { ...seg, end_ms: newEnd }
-          }
-        }),
-      )
-      setIsDirty(true)
-    }
-
-    const handlePointerUp = () => {
-      setDraggingHandle(null)
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
+  function handleAdoptCandidate(candidate: ActionCandidate) {
+    if (!canSubmitRevision) return
+    setIsDirty(true)
+    setDraftSegments((prev) => {
+      const newSegment = createDraftSegment({
+        start_ms: candidate.start_ms,
+        end_ms: candidate.end_ms,
+        label: candidate.action_label,
+      })
+      if (
+        prev.length === 1 &&
+        prev[0] &&
+        !prev[0].label &&
+        (prev[0].start_ms === 0 || prev[0].start_ms === null)
+      ) {
+        return [newSegment]
+      }
+      return [...prev, newSegment]
+    })
+    void message.success(
+      `已采纳动作建议：${formatHumanFriendlyTime(candidate.start_ms)} ~ ${formatHumanFriendlyTime(candidate.end_ms)}`,
+    )
   }
 
   return (
@@ -671,17 +623,17 @@ export function CaptureGroupAnnotationPanel({
           className="capture-group-annotation-form"
           onSubmit={(event) => void submitRevision(event)}
         >
-          {/* AI 动作预标注（Qwen3-VL）状态卡片 */}
+          {/* AI 动作预标注（Qwen3-VL）建议卡片 */}
           <div className="capture-group-ai-preannotation-card" aria-label="AI 动作预标注">
             <div className="capture-group-ai-preannotation-header">
               <div className="capture-group-ai-title-row">
                 <Sparkles size={15} style={{ color: 'var(--app-color-primary)' }} />
-                <strong>AI 动作预标注（Qwen3-VL）</strong>
-              </div>
-              <div>
+                <strong>AI 动作预标注建议</strong>
                 {actionJob?.status === 'SUCCEEDED' ? (
                   <StatusBadge tone="success">
-                    已就绪 · 已载入 {actionCandidates.length} 个候选时段
+                    {actionCandidates.length > 0
+                      ? `已生成 ${actionCandidates.length} 条建议`
+                      : '检测已完成'}
                   </StatusBadge>
                 ) : actionJob?.status === 'RUNNING' ? (
                   <StatusBadge tone="info">4090 推理中...</StatusBadge>
@@ -693,106 +645,138 @@ export function CaptureGroupAnnotationPanel({
                   <StatusBadge tone="default">就绪检测</StatusBadge>
                 )}
               </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Button
+                  type="default"
+                  size="small"
+                  disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
+                  loading={isLoadingAi}
+                  onClick={() => void handleLoadAiCandidates()}
+                >
+                  载入候选
+                </Button>
+                <Button
+                  type={actionJob?.status === 'FAILED' ? 'primary' : 'default'}
+                  danger={actionJob?.status === 'FAILED'}
+                  size="small"
+                  loading={isDispatchingJob}
+                  onClick={() => void handleDispatchActionJob()}
+                  icon={<Sparkles size={12} />}
+                >
+                  {actionJob?.status === 'SUCCEEDED' ? '重新检测' : '再次检测'}
+                </Button>
+              </div>
             </div>
 
-            {actionJob?.status === 'FAILED' ? (
+            {actionCandidates.length > 0 ? (
+              <div className="capture-group-ai-candidate-list" style={{ marginTop: 8 }}>
+                {actionCandidates.map((candidate) => {
+                  const style = getActionStyle(candidate.action_label)
+                  const labelDef = schema?.labels.find((l) => l.label_id === candidate.action_label)
+                  const labelName = labelDef?.display_name ?? candidate.action_label
+                  const durationSeconds = ((candidate.end_ms - candidate.start_ms) / 1000).toFixed(
+                    1,
+                  )
+                  const isAdopted = draftSegments.some(
+                    (s) =>
+                      s.label === candidate.action_label &&
+                      s.start_ms === candidate.start_ms &&
+                      s.end_ms === candidate.end_ms,
+                  )
+                  return (
+                    <div
+                      key={candidate.action_candidate_id}
+                      className="capture-group-ai-candidate-card"
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: style.dot,
+                            display: 'inline-block',
+                          }}
+                        />
+                        <span style={{ fontWeight: 600 }}>{labelName}</span>
+                        <Tag style={{ margin: 0 }}>{candidate.action_label}</Tag>
+                        <span
+                          style={{
+                            color: 'var(--app-color-foreground-secondary)',
+                            fontSize: 13,
+                          }}
+                        >
+                          {formatHumanFriendlyTime(candidate.start_ms)} ~{' '}
+                          {formatHumanFriendlyTime(candidate.end_ms)}
+                          <span
+                            style={{
+                              color: 'var(--app-color-foreground-muted)',
+                              marginLeft: 4,
+                            }}
+                          >
+                            ({durationSeconds}s)
+                          </span>
+                        </span>
+                        {typeof candidate.confidence === 'number' && (
+                          <Tag color="blue" variant="filled" style={{ fontSize: 11, margin: 0 }}>
+                            置信度 {Math.round(candidate.confidence * 100)}%
+                          </Tag>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<Play size={12} />}
+                          onClick={() => {
+                            onSeekToMs?.(candidate.start_ms)
+                            onPlaySegment?.(candidate.start_ms, candidate.end_ms)
+                          }}
+                        >
+                          播放核对
+                        </Button>
+                        <Button
+                          type={isAdopted ? 'default' : 'primary'}
+                          ghost={!isAdopted}
+                          size="small"
+                          disabled={!canSubmitRevision || isAdopted}
+                          onClick={() => handleAdoptCandidate(candidate)}
+                          icon={isAdopted ? <Check size={12} /> : <Plus size={12} />}
+                        >
+                          {isAdopted ? '已采纳' : '采纳此段'}
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : actionJob?.status === 'FAILED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-failed">
                 <span>
-                  4090 算力机离线或预标注未完成（可能 4090 尚未开机）。开机启动后可点击重试：
+                  算力机服务暂未响应或预标注未完成，可点击“再次检测”重试，或直接进行人工标注。
                 </span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Button
-                    type="default"
-                    size="small"
-                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                    loading={isLoadingAi}
-                    onClick={() => void handleLoadAiCandidates()}
-                  >
-                    载入预标注候选
-                  </Button>
-                  <Button
-                    type="primary"
-                    danger
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                    icon={<Sparkles size={12} />}
-                  >
-                    再次检测
-                  </Button>
-                </div>
               </div>
             ) : actionJob?.status === 'QUEUED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-queued">
-                <span>任务已在队列等待，4090 算力机开机后将自动连接并完成推理。</span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Button
-                    type="default"
-                    size="small"
-                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                    loading={isLoadingAi}
-                    onClick={() => void handleLoadAiCandidates()}
-                  >
-                    载入预标注候选
-                  </Button>
-                  <Button
-                    type="default"
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                  >
-                    再次检测
-                  </Button>
-                </div>
+                <span>任务已在队列等待，计算节点接入后将自动处理。</span>
               </div>
-            ) : actionJob?.status === 'SUCCEEDED' ? (
-              <div className="capture-group-ai-banner capture-group-ai-banner-succeeded">
-                <span>
-                  预标注候选时段已填充至下方时间轴。这只是待核对草稿，不是已确认标注；请在时间轴两端直接拖拽微调。
-                </span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Button
-                    type="default"
-                    size="small"
-                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                    loading={isLoadingAi}
-                    onClick={() => void handleLoadAiCandidates()}
-                  >
-                    载入预标注候选
-                  </Button>
-                  <Button
-                    type="link"
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                    style={{ padding: 0 }}
-                  >
-                    重新检测
-                  </Button>
-                </div>
+            ) : actionJob?.status === 'RUNNING' ? (
+              <div className="capture-group-ai-banner">
+                <span>AI 模型推理中，正在分析主视图视频动作切片，请稍候...</span>
               </div>
             ) : (
               <div className="capture-group-ai-banner">
-                <span>就绪检测完成。可载入服务端预标注候选，或重新派发算力机检测：</span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Button
-                    type="default"
-                    size="small"
-                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                    loading={isLoadingAi}
-                    onClick={() => void handleLoadAiCandidates()}
-                  >
-                    载入预标注候选
-                  </Button>
-                  <Button
-                    type="default"
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                  >
-                    再次检测
-                  </Button>
-                </div>
+                <span>
+                  暂未生成动作候选建议。可点击“再次检测”发起 AI
+                  分析，或点击“载入候选”获取服务端已有建议。
+                </span>
               </div>
             )}
           </div>
@@ -949,7 +933,7 @@ export function CaptureGroupAnnotationPanel({
                   return (
                     <Tooltip
                       key={seg.draftId}
-                      title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转，两端可拖拽微调`}
+                      title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转播放`}
                     >
                       <div
                         role="button"
@@ -972,32 +956,7 @@ export function CaptureGroupAnnotationPanel({
                             onPlaySegment?.(seg.start_ms, seg.end_ms)
                           }
                         }}
-                      >
-                        {canSubmitRevision ? (
-                          <>
-                            <span
-                              className={`capture-group-timeline-handle handle-left ${
-                                draggingHandle?.draftId === seg.draftId &&
-                                draggingHandle?.field === 'start_ms'
-                                  ? 'is-dragging'
-                                  : ''
-                              }`}
-                              title="拖拽微调开始时间"
-                              onPointerDown={(e) => handlePointerDown(e, seg.draftId, 'start_ms')}
-                            />
-                            <span
-                              className={`capture-group-timeline-handle handle-right ${
-                                draggingHandle?.draftId === seg.draftId &&
-                                draggingHandle?.field === 'end_ms'
-                                  ? 'is-dragging'
-                                  : ''
-                              }`}
-                              title="拖拽微调结束时间"
-                              onPointerDown={(e) => handlePointerDown(e, seg.draftId, 'end_ms')}
-                            />
-                          </>
-                        ) : null}
-                      </div>
+                      />
                     </Tooltip>
                   )
                 })}

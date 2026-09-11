@@ -1,6 +1,8 @@
 package com.medicationvideo.platform.aicandidate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -19,10 +21,13 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
+import com.medicationvideo.platform.governance.AuditEventCommand;
+import com.medicationvideo.platform.governance.AuditEventRecorder;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -221,6 +226,33 @@ class ActionCandidateJobServiceTests {
 
 		assertEquals(0, results.size());
 		verify(this.jdbcTemplate).query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID));
+	}
+
+	@Test
+	void queueActionCandidateJobResolvesNullRequestIdAndTraceId() {
+		var auditRecorder = mock(AuditEventRecorder.class);
+		var serviceWithAudit = new ActionCandidateJobService(this.jobRepository, this.attemptRepository,
+				this.jdbcTemplate, this.objectMapper, null, this.assetCatalog, null, auditRecorder, null, null,
+				this.actionEnvelopeFactory);
+
+		when(this.assetCatalog.resolvePrimaryClipAssetId(CAPTURE_GROUP_ID)).thenReturn(CLIP_ASSET_ID);
+		when(this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID))
+			.thenReturn(List.of());
+		var queuedJob = AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256,
+				"a".repeat(64), 1000L, "video/mp4", "idemp-1234567890123456", "b".repeat(64), "actor-1", Instant.now());
+		when(this.jobRepository.save(any())).thenReturn(queuedJob);
+
+		var response = serviceWithAudit.queueActionCandidateJob(PROJECT_ID, CAPTURE_GROUP_ID, "actor-1",
+				"idemp-1234567890123456", null, null);
+
+		assertNotNull(response);
+		var captor = ArgumentCaptor.forClass(AuditEventCommand.class);
+		verify(auditRecorder).record(captor.capture());
+		var recorded = captor.getValue();
+		assertNotNull(recorded.requestId());
+		assertFalse(recorded.requestId().isBlank());
+		assertNotNull(recorded.traceId());
+		assertFalse(recorded.traceId().isBlank());
 	}
 
 }

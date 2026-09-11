@@ -79,6 +79,9 @@ export async function dispatchActionCandidateJob(
       method: 'POST',
       headers: {
         Accept: 'application/json',
+        ...(typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? { 'X-Request-ID': crypto.randomUUID() }
+          : {}),
         ...csrfHeaders(),
       },
     },

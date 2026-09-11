@@ -268,10 +268,7 @@ function validateSegment(
   return errors
 }
 
-export function validateSegments(
-  segments: DraftAnnotationSegment[],
-  durationMs?: number | null,
-) {
+export function validateSegments(segments: DraftAnnotationSegment[], durationMs?: number | null) {
   const errors: Record<number, SegmentValidationErrors> = {}
   for (const segment of segments) {
     const current = validateSegment(segment, durationMs)

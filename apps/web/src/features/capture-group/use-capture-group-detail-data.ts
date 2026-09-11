@@ -100,7 +100,7 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         const [qualityResult, historyResult, schemaResult] = await Promise.allSettled([
           getCaptureGroupQualityReview(projectId, captureGroupId, request.signal),
           listCaptureGroupQualityReviewHistory(projectId, captureGroupId, request.signal),
-          nextTask ? getAnnotationLabelSchema(projectId, request.signal) : Promise.resolve(null),
+          getAnnotationLabelSchema(projectId, request.signal),
         ])
         if (!isCurrent()) return
 
