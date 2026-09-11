@@ -6,11 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import com.medicationvideo.platform.assetcapture.HandPoseSchedulingPort;
 
 /**
@@ -25,11 +25,20 @@ class HandPoseAutoSchedulingService implements HandPoseSchedulingPort {
 
 	private final HandPoseJobService handPoseJobService;
 
+	private final ActionCandidateJobService actionCandidateJobService;
+
 	private final TransactionTemplate requiresNewTransaction;
 
 	HandPoseAutoSchedulingService(HandPoseJobService handPoseJobService,
 			PlatformTransactionManager transactionManager) {
+		this(handPoseJobService, null, transactionManager);
+	}
+
+	@Autowired
+	HandPoseAutoSchedulingService(HandPoseJobService handPoseJobService,
+			ActionCandidateJobService actionCandidateJobService, PlatformTransactionManager transactionManager) {
 		this.handPoseJobService = handPoseJobService;
+		this.actionCandidateJobService = actionCandidateJobService;
 		this.requiresNewTransaction = new TransactionTemplate(transactionManager);
 		this.requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 	}
@@ -70,6 +79,23 @@ class HandPoseAutoSchedulingService implements HandPoseSchedulingPort {
 		catch (RuntimeException exception) {
 			LOGGER.warn(
 					"Automatic hand-pose scheduling failed for project {} clip asset {} without changing INGESTED state",
+					projectId, clipAssetId, exception);
+		}
+		if (this.actionCandidateJobService == null) {
+			return;
+		}
+		try {
+			this.requiresNewTransaction.executeWithoutResult(status -> {
+				this.actionCandidateJobService.queueAfterMediaIngested(projectId, clipAssetId);
+			});
+		}
+		catch (HandPoseJobException exception) {
+			LOGGER.info("Automatic action-candidate scheduling skipped for project {} clip asset {}: {}", projectId,
+					clipAssetId, exception.getErrorCode());
+		}
+		catch (RuntimeException exception) {
+			LOGGER.warn(
+					"Automatic action-candidate scheduling failed for project {} clip asset {} without changing INGESTED state",
 					projectId, clipAssetId, exception);
 		}
 	}

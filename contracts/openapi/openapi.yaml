@@ -7761,8 +7761,8 @@ components:
         input_size_bytes: { type: integer, format: int64, minimum: 1 }
         content_type: { type: string }
         model_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-        sampling_fps: { type: integer, const: 10 }
-        profile_sha256: { type: string, enum: [3a3be8035ec8a9756a32f43b007a4bb2cc2e2c0468d744d248f19c692fd90626, 239a403b289c6b379af660988516f752daf1899ce2a05613e333a67a6f95af09] }
+        sampling_fps: { type: integer, minimum: 1 }
+        profile_sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
     AiWorkerHeartbeatResponse:
       type: object
       additionalProperties: false

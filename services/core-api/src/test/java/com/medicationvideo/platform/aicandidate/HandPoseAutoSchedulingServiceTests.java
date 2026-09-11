@@ -43,6 +43,27 @@ class HandPoseAutoSchedulingServiceTests {
 	}
 
 	@Test
+	void schedulesActionCandidatesWithTheSamePostCommitBoundary() {
+		var handPoseJobService = mock(HandPoseJobService.class);
+		var actionJobService = mock(ActionCandidateJobService.class);
+		var service = new HandPoseAutoSchedulingService(handPoseJobService, actionJobService, transactionManager());
+
+		TransactionSynchronizationManager.initSynchronization();
+		try {
+			service.scheduleAfterMediaIngested(PROJECT_ID, CLIP_ASSET_ID);
+
+			verifyNoInteractions(handPoseJobService, actionJobService);
+			TransactionSynchronizationManager.getSynchronizations().get(0).afterCommit();
+
+			verify(handPoseJobService).queueAfterMediaIngested(PROJECT_ID, CLIP_ASSET_ID);
+			verify(actionJobService).queueAfterMediaIngested(PROJECT_ID, CLIP_ASSET_ID);
+		}
+		finally {
+			TransactionSynchronizationManager.clearSynchronization();
+		}
+	}
+
+	@Test
 	void swallowsExpectedAutomaticEligibilityFailures() {
 		var jobService = mock(HandPoseJobService.class);
 		doThrow(new HandPoseJobException("AI_HAND_POSE_FEATURE_NOT_ENABLED", "disabled", 409)).when(jobService)

@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
+import com.medicationvideo.platform.assetcapture.ClipAssetInputSummary;
+import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
 import com.medicationvideo.platform.governance.AuditActorType;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
@@ -29,6 +31,8 @@ import tools.jackson.databind.ObjectMapper;
 public class ActionCandidateJobService {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ActionCandidateJobService.class);
+
+	private static final String AUTO_AFTER_MEDIA_INGESTED_ACTOR = "AUTO_AFTER_MEDIA_INGESTED";
 
 	static final int MAX_RESULT_SEGMENTS = 2000;
 
@@ -263,23 +267,42 @@ public class ActionCandidateJobService {
 		if (this.projectAccessService != null) {
 			this.projectAccessService.lockAndRequireMember(projectId, actorId);
 		}
-		var clipAssetId = resolvePrimaryClipAssetId(captureGroupId);
+		return queueActionCandidateJobInternal(projectId, captureGroupId, null, actorId, idempotencyKey, requestId,
+				traceId, AuditActorType.USER, "ROLE_MEMBER", "AI_ACTION_CANDIDATE_JOB_QUEUED");
+	}
+
+	/**
+	 * System path used after a successful media ingest. The action worker is a
+	 * project-agnostic queue consumer; project and capture-group context remains in the
+	 * job for authorization, audit and result ownership.
+	 */
+	@Transactional
+	ActionCandidateJobResponse queueAfterMediaIngested(UUID projectId, UUID clipAssetId) {
+		var captureGroupId = resolveCaptureGroupId(clipAssetId);
+		if (captureGroupId == null) {
+			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
+					"The ingested clip does not belong to a capture group.", 409);
+		}
+		var idempotencyKey = "auto-action-after-media-ingested-" + clipAssetId;
+		return queueActionCandidateJobInternal(projectId, captureGroupId, clipAssetId, AUTO_AFTER_MEDIA_INGESTED_ACTOR,
+				idempotencyKey, idempotencyKey, null, AuditActorType.SYSTEM, "SYSTEM/AUTO_AFTER_MEDIA_INGESTED",
+				"AI_ACTION_CANDIDATE_JOB_AUTO_QUEUED");
+	}
+
+	private ActionCandidateJobResponse queueActionCandidateJobInternal(UUID projectId, UUID captureGroupId,
+			UUID requestedClipAssetId, String actorId, String idempotencyKey, String requestId, String traceId,
+			AuditActorType auditActorType, String authorizationReference, String auditAction) {
+		var clipAssetId = requestedClipAssetId != null ? requestedClipAssetId
+				: resolvePrimaryClipAssetId(captureGroupId);
 		if (clipAssetId == null) {
 			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
 					"No primary video stream found for capture group " + captureGroupId, 404);
 		}
 
-		var inputDigest = "0000000000000000000000000000000000000000000000000000000000000000";
-		long inputSize = 1000L;
-		var contentType = "video/mp4";
-		if (this.assetCatalog != null) {
-			var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
-			if (input != null) {
-				inputDigest = input.inputDigest();
-				inputSize = input.inputSizeBytes();
-				contentType = input.contentType();
-			}
-		}
+		var input = requireEligibleInput(projectId, clipAssetId);
+		var inputDigest = input.inputDigest();
+		long inputSize = input.inputSizeBytes();
+		var contentType = input.contentType();
 
 		var now = Instant.now();
 		var fingerprint = HandPoseProfile.sha256(projectId + ":" + clipAssetId + ":" + idempotencyKey);
@@ -339,14 +362,28 @@ public class ActionCandidateJobService {
 			var resolvedRequestId = (requestId != null && !requestId.isBlank()) ? requestId
 					: UUID.randomUUID().toString();
 			var resolvedTraceId = (traceId != null && !traceId.isBlank()) ? traceId : resolvedRequestId;
-			this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
-					"AI_ACTION_CANDIDATE_JOB_QUEUED", "AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
-					AiCandidateJob.ACTION_ALGORITHM_KEY, resolvedRequestId, resolvedTraceId, "ROLE_MEMBER",
+			this.auditRecorder.record(new AuditEventCommand(now, auditActorType, actorId, projectId, auditAction,
+					"AIJob", job.getAiJobId().toString(), "1", AuditOutcome.SUCCEEDED,
+					AiCandidateJob.ACTION_ALGORITHM_KEY, resolvedRequestId, resolvedTraceId, authorizationReference,
 					Map.of("capture_group_id", captureGroupId.toString(), "clip_asset_id", clipAssetId.toString(),
 							"algorithm_key", AiCandidateJob.ACTION_ALGORITHM_KEY)));
 		}
 
 		return response(job, captureGroupId);
+	}
+
+	private ClipAssetInputSummary requireEligibleInput(UUID projectId, UUID clipAssetId) {
+		if (this.assetCatalog == null) {
+			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID", "The action candidate source is unavailable.",
+					409);
+		}
+		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
+		if (input == null || input.status() != ClipAssetStatus.INGESTED || input.contentType() == null
+				|| !input.contentType().startsWith("video/")) {
+			throw new HandPoseJobException("CLIP_ASSET_NOT_READY_FOR_AI_CANDIDATES",
+					"Only a media-processed video clip asset can receive action candidates.", 409);
+		}
+		return input;
 	}
 
 	@Transactional(readOnly = true)

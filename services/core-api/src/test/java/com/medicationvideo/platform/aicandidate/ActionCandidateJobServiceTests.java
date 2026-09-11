@@ -26,6 +26,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
+import com.medicationvideo.platform.assetcapture.ClipAssetInputSummary;
+import com.medicationvideo.platform.assetcapture.ClipAssetStatus;
 import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 
@@ -50,6 +52,8 @@ class ActionCandidateJobServiceTests {
 	private static final UUID CAPTURE_GROUP_ID = UUID.fromString("00000000-0000-0000-0000-000000000003");
 
 	private static final UUID CLIP_ASSET_ID = UUID.fromString("00000000-0000-0000-0000-000000000004");
+
+	private static final UUID OTHER_CLIP_ASSET_ID = UUID.fromString("00000000-0000-0000-0000-000000000005");
 
 	private AssetCatalogQueryService assetCatalog;
 
@@ -236,6 +240,9 @@ class ActionCandidateJobServiceTests {
 				this.actionEnvelopeFactory);
 
 		when(this.assetCatalog.resolvePrimaryClipAssetId(CAPTURE_GROUP_ID)).thenReturn(CLIP_ASSET_ID);
+		when(this.assetCatalog.getClipAssetInputSummary(PROJECT_ID, CLIP_ASSET_ID))
+			.thenReturn(new ClipAssetInputSummary(CLIP_ASSET_ID, PROJECT_ID, "video/mp4", 1000L, "a".repeat(64),
+					ClipAssetStatus.INGESTED, "OVERVIEW", true, Instant.EPOCH, Instant.EPOCH));
 		when(this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID))
 			.thenReturn(List.of());
 		var queuedJob = AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256,
@@ -253,6 +260,27 @@ class ActionCandidateJobServiceTests {
 		assertFalse(recorded.requestId().isBlank());
 		assertNotNull(recorded.traceId());
 		assertFalse(recorded.traceId().isBlank());
+	}
+
+	@Test
+	void automaticQueueProcessesTheIngestedClipEvenWhenItIsNotThePrimaryClip() {
+		when(this.assetCatalog.resolveCaptureGroupId(CLIP_ASSET_ID)).thenReturn(CAPTURE_GROUP_ID);
+		when(this.assetCatalog.resolvePrimaryClipAssetId(CAPTURE_GROUP_ID)).thenReturn(OTHER_CLIP_ASSET_ID);
+		when(this.assetCatalog.getClipAssetInputSummary(PROJECT_ID, CLIP_ASSET_ID))
+			.thenReturn(new ClipAssetInputSummary(CLIP_ASSET_ID, PROJECT_ID, "video/mp4", 1000L, "a".repeat(64),
+					ClipAssetStatus.INGESTED, "SECONDARY", true, Instant.EPOCH, Instant.EPOCH));
+		when(this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID))
+			.thenReturn(List.of());
+		var queuedJob = AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256,
+				"a".repeat(64), 1000L, "video/mp4", "auto-action-after-media-ingested-" + CLIP_ASSET_ID, "b".repeat(64),
+				"AUTO_AFTER_MEDIA_INGESTED", Instant.now());
+		when(this.jobRepository.save(any())).thenReturn(queuedJob);
+
+		var response = this.service.queueAfterMediaIngested(PROJECT_ID, CLIP_ASSET_ID);
+
+		assertNotNull(response);
+		assertEquals(CLIP_ASSET_ID, response.clipAssetId());
+		verify(this.jobRepository).findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID);
 	}
 
 }
