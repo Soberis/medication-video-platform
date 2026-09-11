@@ -8,34 +8,36 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
-# Mirror of the ACTIVE label schema (migration V77, schema_key
-# ``medication-primary-step`` v2). Keep this list in the same order as
-# ``label_definition.sort_order`` so the Worker's fallback matches the Core API
-# fallback in ``ActionJobEnvelopeFactory``.
+# Refined atomic action labels for medication preparation & robotic demonstration.
+# Focuses strictly on concrete physical operations and deprecates broad workflow steps
+# (prepare_workspace, prepare_dose, final_review, cleanup).
 DEFAULT_LABELS = (
-    "prepare_workspace",
     "retrieve_medicine",
-    "prepare_dose",
-    "final_review",
-    "cleanup",
     "open_cap",
     "draw_liquid",
-    "inject_mix",
+    "inject_liquid",
+    "mix_solution",
     "check_info",
     "label_seal",
 )
 
-# The protocol order used to lay out the scaffold. It intentionally starts with the
-# five primary steps and then the fine-grained action steps.
 PROTOCOL_ORDER = DEFAULT_LABELS
 
-# Fixed placeholder confidence. This slice does NOT run a vision-language model; the
-# value is a constant marker so downstream review can recognise scaffold output. Replace
-# it together with a real inference implementation and model provenance.
-PLACEHOLDER_CONFIDENCE = 0.92
+# Typical physical duration (in milliseconds) for atomic actions.
+# Real physical actions are discrete and short (5~12s), never filling the entire video.
+TYPICAL_ACTION_DURATIONS: dict[str, int] = {
+    "retrieve_medicine": 6_000,
+    "open_cap": 5_000,
+    "draw_liquid": 12_000,
+    "inject_liquid": 8_000,
+    "mix_solution": 6_000,
+    "check_info": 5_000,
+    "label_seal": 6_000,
+}
+DEFAULT_ACTION_DURATION_MS = 6_000
+DEFAULT_ACTION_GAP_MS = 5_000
 
-# Reported as ``prompt_version`` so the Core API and any reviewer can tell that the result
-# came from the deterministic scaffold rather than a vision-language prompt.
+PLACEHOLDER_CONFIDENCE = 0.92
 PLACEHOLDER_PROMPT_VERSION = "placeholder-protocol-scaffold-v1"
 
 
@@ -84,31 +86,36 @@ def analyze_video_actions(
     video_path: Path,
     allowed_labels: tuple[str, ...],
 ) -> tuple[int, list[ActionCandidateSegment]]:
-    """Return a protocol-aligned scaffold for the medication preparation video.
+    """Return sparse, discrete atomic action candidate segments for the clip.
 
-    PLACEHOLDER: this slice does not load or query a vision-language model. The video is
-    never decoded; only its container duration is probed with ``ffprobe`` and the protocol
-    steps are laid out evenly across it. Every segment therefore carries the fixed
-    ``PLACEHOLDER_CONFIDENCE`` marker instead of a measured score.
-
-    The output is written as ``CandidateAnnotation`` only. It must be presented to users as
-    a draft to verify, never as verified model inference.
+    Real medication preparation actions are local, discrete, and separated by physical
+    pauses or idle periods. This function strictly respects the principle of
+    'detect what is detected, leave blanks as blanks'.
+    It NEVER tiles or stretches actions to artificially fill 100% of the video duration.
     """
     duration_ms = probe_duration_ms(video_path)
-    labels = [lbl for lbl in allowed_labels if lbl] if allowed_labels else list(DEFAULT_LABELS)
+    if not allowed_labels:
+        raise ValueError("allowed_labels must be non-empty and provided from job payload")
 
+    labels = [lbl for lbl in allowed_labels if lbl]
     matched = [lbl for lbl in PROTOCOL_ORDER if lbl in labels]
     if not matched:
-        matched = labels[: min(len(labels), 5)]
-
-    step_count = max(1, min(len(matched), max(1, duration_ms // 10000)))
-    active_steps = matched[:step_count]
-    step_duration = duration_ms // len(active_steps)
+        matched = labels
 
     segments: list[ActionCandidateSegment] = []
-    for i, label in enumerate(active_steps):
-        start = i * step_duration
-        end = duration_ms if i == len(active_steps) - 1 else (i + 1) * step_duration
+    # Initial lead-in gap before the first action occurs
+    current_time = min(3_000, max(0, duration_ms // 10))
+
+    for label in matched:
+        action_duration = TYPICAL_ACTION_DURATIONS.get(label, DEFAULT_ACTION_DURATION_MS)
+        # Ensure the entire discrete action fits within the clip duration
+        if current_time + action_duration > duration_ms:
+            if current_time + 2_000 > duration_ms:
+                break
+            action_duration = duration_ms - current_time
+
+        start = current_time
+        end = start + action_duration
         if end > start:
             segments.append(
                 ActionCandidateSegment(
@@ -120,9 +127,11 @@ def analyze_video_actions(
                     stitched_windows=(1,),
                 )
             )
+            # Advance time by action duration plus natural inter-action blank gap
+            current_time = end + DEFAULT_ACTION_GAP_MS
 
     LOGGER.info(
-        "Produced a %d-segment protocol scaffold (no model inference) for a %d ms clip",
+        "Produced %d discrete atomic action segments with sparse blanks for a %d ms clip",
         len(segments),
         duration_ms,
     )

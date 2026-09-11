@@ -50,9 +50,9 @@ def test_scaffold_ignores_labels_outside_the_frozen_protocol_order(
 ) -> None:
     _pin_duration(monkeypatch, 60_000)
 
-    _, segments = analyze_video_actions(Path("synthetic.mp4"), ("invented_label", "cleanup"))
+    _, segments = analyze_video_actions(Path("synthetic.mp4"), ("invented_label", "open_cap"))
 
-    assert {segment.label for segment in segments} == {"cleanup"}
+    assert {segment.label for segment in segments} == {"open_cap"}
 
 
 def test_scaffold_falls_back_to_the_offered_labels_for_an_unknown_protocol(
@@ -63,6 +63,30 @@ def test_scaffold_falls_back_to_the_offered_labels_for_an_unknown_protocol(
     _, segments = analyze_video_actions(Path("synthetic.mp4"), ("alpha", "beta"))
 
     assert [segment.label for segment in segments] == ["alpha", "beta"]
+
+
+def test_atomic_actions_have_short_durations_and_natural_gaps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _pin_duration(monkeypatch, 168_000)
+
+    duration_ms, segments = analyze_video_actions(Path("synthetic.mp4"), DEFAULT_LABELS)
+
+    assert duration_ms == 168_000
+    assert len(segments) > 0
+    # Segments must be short discrete atomic actions, not 33s chunks
+    for seg in segments:
+        duration = seg.end_ms - seg.start_ms
+        assert 3_000 <= duration <= 15_000
+
+    # Ensure natural gaps exist between segments (not contiguous tiling)
+    for i in range(1, len(segments)):
+        gap = segments[i].start_ms - segments[i - 1].end_ms
+        assert gap > 0
+
+    # Total action time must NOT cover 100% of video
+    total_action_time = sum(seg.end_ms - seg.start_ms for seg in segments)
+    assert total_action_time < duration_ms * 0.7
 
 
 def test_placeholder_result_is_flagged_as_non_model_output() -> None:

@@ -817,7 +817,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对本次已配制剂量。\"}"))
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.schema_version").value("p0-primary-step.v3"))
+			.andExpect(jsonPath("$.schema_version").value("p0-atomic-action.v4"))
 			.andExpect(jsonPath("$.labels[?(@.label_id == 'verify_dose')].display_name").value("核对剂量"))
 			.andReturn();
 		var publishedSchemaId = UUID
@@ -906,7 +906,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", key("submit-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"prepare_workspace\"}]}"
+				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"retrieve_medicine\"}]}"
 					.formatted(endMs)));
 	}
 

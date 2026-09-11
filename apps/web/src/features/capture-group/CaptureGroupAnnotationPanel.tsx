@@ -844,45 +844,9 @@ export function CaptureGroupAnnotationPanel({
                 showIcon
                 title="MediaPipe 在采样帧中未检测到手"
                 description={
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                    <span>
-                      这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。
-                    </span>
-                    {canSubmitRevision &&
-                    draftSegments.length <= 1 &&
-                    totalDurationMs &&
-                    totalDurationMs > 0 ? (
-                      <div>
-                        <Button
-                          size="small"
-                          type="dashed"
-                          style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-                          onClick={() => {
-                            const idleLabel =
-                              sortedLabels.find(
-                                (l) =>
-                                  l.label_id.includes('prepare') ||
-                                  l.label_id.includes('workspace') ||
-                                  l.label_id.includes('review'),
-                              )?.label_id || sortedLabels[0]?.label_id
-                            if (idleLabel) {
-                              setDraftSegments([
-                                createDraftSegment({
-                                  start_ms: 0,
-                                  end_ms: totalDurationMs,
-                                  label: idleLabel,
-                                }),
-                              ])
-                              setIsDirty(true)
-                              void message.info('已快速标记全片范围，您可直接微调或提交')
-                            }
-                          }}
-                        >
-                          快速标记为全片无操作/准备阶段
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
+                  <span>
+                    这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。
+                  </span>
                 }
               />
             </div>

@@ -84,12 +84,19 @@ export const ACTION_PALETTE: Record<
   string,
   { bg: string; border: string; text: string; dot: string; label: string }
 > = {
+  retrieve_medicine: {
+    bg: '#feffe6',
+    border: '#fffb8f',
+    text: '#d4b106',
+    dot: '#fadb14',
+    label: '拿取药瓶/耗材',
+  },
   open_cap: {
     bg: '#fff7e6',
     border: '#ffd591',
     text: '#d46b08',
     dot: '#fa8c16',
-    label: '操作瓶盖',
+    label: '开启瓶塞/针帽',
   },
   draw_liquid: {
     bg: '#e6f4ff',
@@ -98,12 +105,26 @@ export const ACTION_PALETTE: Record<
     dot: '#1677ff',
     label: '抽取药液',
   },
+  inject_liquid: {
+    bg: '#f9f0ff',
+    border: '#d3adf7',
+    text: '#531dab',
+    dot: '#722ed1',
+    label: '推注药液',
+  },
   inject_mix: {
     bg: '#f9f0ff',
     border: '#d3adf7',
     text: '#531dab',
     dot: '#722ed1',
     label: '注入混匀',
+  },
+  mix_solution: {
+    bg: '#f0f5ff',
+    border: '#adc6ff',
+    text: '#1d39c4',
+    dot: '#2f54eb',
+    label: '晃动混匀',
   },
   check_info: {
     bg: '#f6ffed',
@@ -117,37 +138,8 @@ export const ACTION_PALETTE: Record<
     border: '#87e8de',
     text: '#08979c',
     dot: '#13c2c2',
-    label: '贴签封包',
+    label: '粘贴标签/封签',
   },
-  prepare_workspace: {
-    bg: '#f0f5ff',
-    border: '#adc6ff',
-    text: '#1d39c4',
-    dot: '#2f54eb',
-    label: '准备工位',
-  },
-  retrieve_medicine: {
-    bg: '#feffe6',
-    border: '#fffb8f',
-    text: '#d4b106',
-    dot: '#fadb14',
-    label: '取药',
-  },
-  prepare_dose: {
-    bg: '#fff0f6',
-    border: '#ffadd2',
-    text: '#c41d7f',
-    dot: '#eb2f96',
-    label: '剂量配制',
-  },
-  final_review: {
-    bg: '#fcffe6',
-    border: '#eaff8f',
-    text: '#7cb305',
-    dot: '#a0d911',
-    label: '最终复核',
-  },
-  cleanup: { bg: '#f5f5f5', border: '#d9d9d9', text: '#595959', dot: '#8c8c8c', label: '清理废弃' },
 }
 
 export function getActionStyle(labelKey: string) {
@@ -277,67 +269,7 @@ export function validateSegments(segments: DraftAnnotationSegment[], durationMs?
   return errors
 }
 
-/**
- * Builds a deterministic starter skeleton by splitting the clip evenly across the
- * canonical medication protocol steps.
- *
- * This is NOT model output. No inference is performed and no footage is inspected; the
- * result is a fixed-duration scaffold that only exists so an annotator has editable rows
- * to adjust. Callers must present it as a manual template, never as an AI suggestion.
- */
-export function generateProtocolScaffoldSegments(
-  durationMs: number | null | undefined,
-  availableLabels: Array<{ label_id: string; display_name: string }>,
-): DraftAnnotationSegment[] {
-  if (!availableLabels || availableLabels.length === 0) return []
-  const dur = durationMs && durationMs > 3000 ? durationMs : 30000
-  const labelMap = new Map(availableLabels.map((l) => [l.label_id, l]))
 
-  const protocolOrder = [
-    'prepare_workspace',
-    'retrieve_medicine',
-    'prepare_dose',
-    'final_review',
-    'cleanup',
-    'open_cap',
-    'draw_liquid',
-    'inject_mix',
-    'check_info',
-    'label_seal',
-  ]
-
-  const chosenLabels: string[] = []
-  for (const key of protocolOrder) {
-    if (labelMap.has(key)) {
-      chosenLabels.push(key)
-    }
-  }
-
-  if (chosenLabels.length === 0) {
-    for (const label of availableLabels) {
-      chosenLabels.push(label.label_id)
-    }
-  }
-
-  const stepCount = Math.max(1, Math.min(chosenLabels.length, Math.floor(dur / 15000) || 1, 5))
-  const activeLabels = chosenLabels.slice(0, stepCount)
-  const stepDuration = Math.floor(dur / activeLabels.length)
-  const segments: DraftAnnotationSegment[] = []
-
-  for (let i = 0; i < activeLabels.length; i++) {
-    const startMs = i * stepDuration
-    const endMs = i === activeLabels.length - 1 ? dur : (i + 1) * stepDuration
-    segments.push(
-      createDraftSegment({
-        start_ms: startMs,
-        end_ms: endMs,
-        label: activeLabels[i]!,
-      }),
-    )
-  }
-
-  return segments
-}
 
 export function candidateDescription(
   state: CandidateLoadState,
