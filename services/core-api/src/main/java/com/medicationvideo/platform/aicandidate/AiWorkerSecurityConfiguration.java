@@ -25,7 +25,7 @@ class AiWorkerSecurityConfiguration {
 	SecurityFilterChain aiWorkerSecurityFilterChain(HttpSecurity http,
 			@Value("${platform.security.local-ai-worker-bearer-token:}") String bearerToken,
 			@Value("${platform.security.local-ai-worker-bearer-token-file:}") String bearerTokenFile,
-			@Value("${platform.security.local-ai-worker-id:local-ai-worker}") String workerId,
+			@Value("${platform.security.local-ai-worker-id:ai-worker-local-1}") String workerId,
 			@Value("${platform.security.local-worker-bearer-token:}") String mediaBearerToken) throws Exception {
 		var resolvedBearerToken = resolveBearerToken(bearerToken, bearerTokenFile);
 		requireDistinctWorkerTokens(resolvedBearerToken, mediaBearerToken);
