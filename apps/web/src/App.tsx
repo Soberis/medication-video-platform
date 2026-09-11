@@ -9,7 +9,7 @@ import {
   UsersRound,
   Video,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
@@ -27,13 +27,26 @@ const managementRoutePatterns = [
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
 
+const UPLOAD_ACTIVITY_AUTO_DISMISS_MS = 6000
+
 function LocalUploadActivity() {
   const { tasks, uploadState, resetUpload } = useLocalUpload()
   const location = useLocation()
-  if (tasks.length === 0 || location.pathname === paths.localUpload) return null
 
   const completedTaskCount = tasks.filter((task) => task.status === 'COMPLETED').length
   const failedTaskCount = tasks.filter((task) => task.status === 'FAILED').length
+  const isAllCompleted = uploadState === 'completed' && failedTaskCount === 0 && tasks.length > 0
+  const isOutsideUploadPage = location.pathname !== paths.localUpload
+
+  useEffect(() => {
+    if (!isAllCompleted || !isOutsideUploadPage) return
+    const timer = window.setTimeout(() => {
+      resetUpload()
+    }, UPLOAD_ACTIVITY_AUTO_DISMISS_MS)
+    return () => window.clearTimeout(timer)
+  }, [isAllCompleted, isOutsideUploadPage, resetUpload])
+
+  if (tasks.length === 0 || location.pathname === paths.localUpload) return null
 
   return (
     <aside className="app-upload-activity" aria-live="polite">
@@ -47,7 +60,7 @@ function LocalUploadActivity() {
       <Link className="text-link" to={paths.localUpload}>
         查看上传进度
       </Link>
-      {uploadState === 'completed' && failedTaskCount === 0 ? (
+      {isAllCompleted ? (
         <Button size="small" type="text" onClick={resetUpload}>
           知道了
         </Button>

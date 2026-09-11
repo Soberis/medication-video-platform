@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -386,6 +386,63 @@ describe('LocalUploadView', () => {
     await view.router.navigate('/projects')
     expect(await screen.findByRole('link', { name: '查看上传进度' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '知道了' }))
+    expect(screen.queryByRole('link', { name: '查看上传进度' })).not.toBeInTheDocument()
+  })
+
+  it('automatically dismisses successful upload activity after timeout', async () => {
+    let timerCallback: (() => void) | null = null
+    const originalSetTimeout = window.setTimeout
+    vi.spyOn(window, 'setTimeout').mockImplementation(((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (typeof callback === 'function' && delay === 6000) {
+        timerCallback = callback as () => void
+      }
+      return originalSetTimeout(callback, delay, ...args)
+    }) as typeof window.setTimeout)
+
+    vi.spyOn(localUploadApi, 'uploadPlatformLocalVideo').mockResolvedValue({
+      batchId: '30000000-0000-4000-8000-000000000001',
+      captureSessionId: '40000000-0000-4000-8000-000000000001',
+      clipAssetId: '50000000-0000-4000-8000-000000000001',
+    })
+    stubCatalog([project])
+    const user = userEvent.setup()
+    const view = renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'uploads/new', element: <LocalUploadView /> },
+            { path: 'projects', element: <div>其他页面</div> },
+          ],
+        },
+      ],
+      ['/uploads/new'],
+      { username: 'admin', role: 'ADMIN' },
+    )
+
+    await selectProject(user, '合成测试项目')
+    await user.upload(
+      screen.getByLabelText('视频文件'),
+      new File(['synthetic-video'], 'synthetic.mp4', { type: 'video/mp4' }),
+    )
+    await user.click(screen.getByRole('button', { name: '开始上传' }))
+    expect(await screen.findByText('已确认完成')).toBeInTheDocument()
+
+    expect(timerCallback).toBeNull()
+
+    await view.router.navigate('/projects')
+    expect(await screen.findByRole('link', { name: '查看上传进度' })).toBeInTheDocument()
+    expect(timerCallback).toBeTypeOf('function')
+
+    act(() => {
+      timerCallback!()
+    })
+
     expect(screen.queryByRole('link', { name: '查看上传进度' })).not.toBeInTheDocument()
   })
 

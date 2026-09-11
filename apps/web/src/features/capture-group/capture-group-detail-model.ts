@@ -263,8 +263,6 @@ export function validateSegments(segments: DraftAnnotationSegment[], durationMs?
   return errors
 }
 
-
-
 export function candidateDescription(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
