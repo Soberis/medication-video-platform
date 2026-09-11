@@ -112,13 +112,7 @@ export const ACTION_PALETTE: Record<
     dot: '#722ed1',
     label: '推注药液',
   },
-  inject_mix: {
-    bg: '#f9f0ff',
-    border: '#d3adf7',
-    text: '#531dab',
-    dot: '#722ed1',
-    label: '注入混匀',
-  },
+
   mix_solution: {
     bg: '#f0f5ff',
     border: '#adc6ff',

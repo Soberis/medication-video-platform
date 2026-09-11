@@ -140,7 +140,7 @@ describe('annotation task API', () => {
                 revision_number: 1,
                 annotation_document: {
                   schema_version: 'annotation-document.v1',
-                  segments: [{ start_ms: 0, end_ms: 1000, label: 'prepare_workspace' }],
+                  segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
                 },
                 submitted_by: 'local-synthetic-uploader',
                 submitted_at: '2026-07-26T01:00:00Z',

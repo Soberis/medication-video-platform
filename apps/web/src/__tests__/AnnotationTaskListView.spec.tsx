@@ -20,7 +20,7 @@ const completedRevision = {
   revision_number: 1,
   annotation_document: {
     schema_version: 'annotation-document.v1',
-    segments: [{ start_ms: 0, end_ms: 1000, label: 'prepare_workspace' }],
+    segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
   },
   submitted_by: 'local-synthetic-uploader',
   submitted_at: '2026-07-26T01:00:00Z',
@@ -45,7 +45,7 @@ const completedRevision = {
 const labelSchema = {
   label_schema_id: labelSchemaId,
   schema_key: 'medication-primary-step',
-  schema_version: 'p0-primary-step.v1',
+  schema_version: 'p0-atomic-action.v3',
   schema_digest: labelSchemaDigest,
   layer: 'primary_step',
   labels: [
@@ -53,13 +53,13 @@ const labelSchema = {
       label_id: 'retrieve_medicine',
       display_name: '拿取药品',
       description: '从工作区取得本次配制所需药品。',
-      sort_order: 20,
+      sort_order: 10,
     },
     {
-      label_id: 'prepare_workspace',
-      display_name: '准备工作区',
-      description: '准备本次配制所需的工作区域。',
-      sort_order: 10,
+      label_id: 'open_cap',
+      display_name: '开启瓶塞/针帽',
+      description: '开启或掰开瓶盖、铝盖、胶塞、保护盖或拔下针帽。',
+      sort_order: 20,
     },
   ],
 }
@@ -368,7 +368,7 @@ describe('annotation task list view', () => {
     await user.click(annotationDetails)
     expect(within(completedRow).getByText('00:00 → 00:01')).toBeInTheDocument()
     expect(within(completedRow).getByText('原始值：0–1000 毫秒')).toBeInTheDocument()
-    expect(within(completedRow).getByText('准备工作区')).toBeInTheDocument()
+    expect(within(completedRow).getByText('拿取药品')).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看详情')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
