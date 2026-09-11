@@ -181,20 +181,6 @@ export function CaptureGroupAnnotationPanel({
       .then((job) => {
         if (!isSubscribed) return
         setActionJob(job)
-        // Auto-dispatch if no job exists yet and stream is ready
-        if (!job && group.receipt_state !== 'RECEIVING' && effectivePrimaryClipAssetId) {
-          setIsDispatchingJob(true)
-          dispatchActionCandidateJob(projectId, captureGroupId)
-            .then((newJob) => {
-              if (isSubscribed) setActionJob(newJob)
-            })
-            .catch(() => {
-              // 4090 or worker may be offline
-            })
-            .finally(() => {
-              if (isSubscribed) setIsDispatchingJob(false)
-            })
-        }
       })
       .catch(() => {
         // AI job is auxiliary
@@ -203,7 +189,7 @@ export function CaptureGroupAnnotationPanel({
     return () => {
       isSubscribed = false
     }
-  }, [projectId, captureGroupId, group.receipt_state, effectivePrimaryClipAssetId])
+  }, [projectId, captureGroupId])
 
   useEffect(() => {
     if (!actionJob || (actionJob.status !== 'QUEUED' && actionJob.status !== 'RUNNING')) {
@@ -793,7 +779,8 @@ export function CaptureGroupAnnotationPanel({
             ) : (
               <div className="capture-group-ai-banner">
                 <span>
-                  视频已就绪，AI 动作预标注将在后台自动处理；也可直接进行人工标注。
+                  视频已就绪；如需动作预标注，请点击“AI
+                  自动填充”。手部检测由独立后台流程处理，不受此操作影响。
                 </span>
               </div>
             )}

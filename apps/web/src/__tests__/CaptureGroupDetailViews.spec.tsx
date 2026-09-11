@@ -16,6 +16,33 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
+  it('keeps optional action pre-annotation manual while hand detection remains independent', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'UNKNOWN',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeEnabled()
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith('/action-candidate-jobs') && init?.method === 'POST',
+      ),
+    ).toBe(false)
+  })
+
   it('keeps the default detail path focused on receipt, media and machine evidence', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
@@ -121,7 +148,7 @@ describe('CaptureGroup detail views', () => {
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(await screen.findByText('4090 等待连接...')).toBeInTheDocument()
+    expect(await screen.findByText('就绪检测')).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {

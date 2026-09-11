@@ -32,8 +32,6 @@ public class ActionCandidateJobService {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ActionCandidateJobService.class);
 
-	private static final String AUTO_AFTER_MEDIA_INGESTED_ACTOR = "AUTO_AFTER_MEDIA_INGESTED";
-
 	static final int MAX_RESULT_SEGMENTS = 2000;
 
 	private final AiCandidateJobRepository jobRepository;
@@ -269,24 +267,6 @@ public class ActionCandidateJobService {
 		}
 		return queueActionCandidateJobInternal(projectId, captureGroupId, null, actorId, idempotencyKey, requestId,
 				traceId, AuditActorType.USER, "ROLE_MEMBER", "AI_ACTION_CANDIDATE_JOB_QUEUED");
-	}
-
-	/**
-	 * System path used after a successful media ingest. The action worker is a
-	 * project-agnostic queue consumer; project and capture-group context remains in the
-	 * job for authorization, audit and result ownership.
-	 */
-	@Transactional
-	ActionCandidateJobResponse queueAfterMediaIngested(UUID projectId, UUID clipAssetId) {
-		var captureGroupId = resolveCaptureGroupId(clipAssetId);
-		if (captureGroupId == null) {
-			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
-					"The ingested clip does not belong to a capture group.", 409);
-		}
-		var idempotencyKey = "auto-action-after-media-ingested-" + clipAssetId;
-		return queueActionCandidateJobInternal(projectId, captureGroupId, clipAssetId, AUTO_AFTER_MEDIA_INGESTED_ACTOR,
-				idempotencyKey, idempotencyKey, null, AuditActorType.SYSTEM, "SYSTEM/AUTO_AFTER_MEDIA_INGESTED",
-				"AI_ACTION_CANDIDATE_JOB_AUTO_QUEUED");
 	}
 
 	private ActionCandidateJobResponse queueActionCandidateJobInternal(UUID projectId, UUID captureGroupId,
