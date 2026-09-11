@@ -1,5 +1,5 @@
 import { App as AntdApp, Alert, Button, Input, Select, Tag, Tooltip } from 'antd'
-import { Check, CircleAlert, Play, Plus, Sparkles } from 'lucide-react'
+import { Check, CircleAlert, Play, Plus, RotateCw, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -652,19 +652,38 @@ export function CaptureGroupAnnotationPanel({
                   disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
                   loading={isLoadingAi}
                   onClick={() => void handleLoadAiCandidates()}
+                  icon={<Sparkles size={12} style={{ color: 'var(--app-color-primary)' }} />}
+                  title={
+                    isDirty || task?.annotation_revision
+                      ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
+                      : '将 AI 识别的动作片段一键载入为草稿'
+                  }
                 >
-                  载入候选
+                  AI 自动填充
                 </Button>
-                <Button
-                  type={actionJob?.status === 'FAILED' ? 'primary' : 'default'}
-                  danger={actionJob?.status === 'FAILED'}
-                  size="small"
-                  loading={isDispatchingJob}
-                  onClick={() => void handleDispatchActionJob()}
-                  icon={<Sparkles size={12} />}
-                >
-                  {actionJob?.status === 'SUCCEEDED' ? '重新检测' : '再次检测'}
-                </Button>
+                {actionJob?.status === 'FAILED' ? (
+                  <Button
+                    type="primary"
+                    danger
+                    size="small"
+                    loading={isDispatchingJob}
+                    onClick={() => void handleDispatchActionJob()}
+                    icon={<RotateCw size={12} />}
+                  >
+                    重试检测
+                  </Button>
+                ) : actionJob?.status === 'SUCCEEDED' ? (
+                  <Button
+                    type="text"
+                    size="small"
+                    loading={isDispatchingJob}
+                    onClick={() => void handleDispatchActionJob()}
+                    icon={<RotateCw size={12} />}
+                    title="重新派发 AI 任务进行再次分析"
+                  >
+                    重新检测
+                  </Button>
+                ) : null}
               </div>
             </div>
 
@@ -760,12 +779,12 @@ export function CaptureGroupAnnotationPanel({
             ) : actionJob?.status === 'FAILED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-failed">
                 <span>
-                  算力机服务暂未响应或预标注未完成，可点击“再次检测”重试，或直接进行人工标注。
+                  算力机服务暂未响应或预标注未完成，可点击“重试检测”，或直接进行人工标注。
                 </span>
               </div>
             ) : actionJob?.status === 'QUEUED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-queued">
-                <span>任务已在队列等待，计算节点接入后将自动处理。</span>
+                <span>任务已在队列等待，计算节点接入后将自动处理并预填草稿。</span>
               </div>
             ) : actionJob?.status === 'RUNNING' ? (
               <div className="capture-group-ai-banner">
@@ -774,8 +793,7 @@ export function CaptureGroupAnnotationPanel({
             ) : (
               <div className="capture-group-ai-banner">
                 <span>
-                  暂未生成动作候选建议。可点击“再次检测”发起 AI
-                  分析，或点击“载入候选”获取服务端已有建议。
+                  视频已就绪，AI 动作预标注将在后台自动处理；也可直接进行人工标注。
                 </span>
               </div>
             )}
@@ -808,22 +826,6 @@ export function CaptureGroupAnnotationPanel({
                   </span>
                 )}
               </div>
-              <Button
-                type="default"
-                size="small"
-                htmlType="button"
-                loading={isLoadingAi}
-                disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                onClick={() => void handleLoadAiCandidates()}
-                icon={<Sparkles size={12} style={{ color: 'var(--app-color-primary)' }} />}
-                title={
-                  isDirty || task?.annotation_revision
-                    ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
-                    : '将 AI 识别的动作片段一键载入为草稿'
-                }
-              >
-                AI 自动填充
-              </Button>
             </div>
           </div>
           {hasAutoLoadedAiDraft &&
