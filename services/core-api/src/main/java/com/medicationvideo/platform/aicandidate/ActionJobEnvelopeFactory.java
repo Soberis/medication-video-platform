@@ -19,8 +19,9 @@ class ActionJobEnvelopeFactory {
 
 	private static final String SCHEMA_VERSION = "ai-action-job.v1";
 
-	private static final List<String> FALLBACK_LABELS = List.of("retrieve_medicine", "open_cap", "draw_liquid",
-			"inject_liquid", "mix_solution", "check_info", "label_seal");
+	private static final List<String> FALLBACK_LABELS = List.of("acquire_item", "open_container", "disinfect_access",
+			"insert_needle", "draw_liquid", "transfer_liquid", "agitate_solution", "discard_sharps",
+			"label_prepared_medication");
 
 	private final AssetCatalogQueryService assetCatalog;
 

@@ -84,6 +84,70 @@ export const ACTION_PALETTE: Record<
   string,
   { bg: string; border: string; text: string; dot: string; label: string }
 > = {
+  acquire_item: {
+    bg: '#feffe6',
+    border: '#fffb8f',
+    text: '#d4b106',
+    dot: '#fadb14',
+    label: '拿取容器/工具',
+  },
+  open_container: {
+    bg: '#fff7e6',
+    border: '#ffd591',
+    text: '#d46b08',
+    dot: '#fa8c16',
+    label: '开启容器',
+  },
+  insert_needle: {
+    bg: '#e6fffb',
+    border: '#87e8de',
+    text: '#08979c',
+    dot: '#13c2c2',
+    label: '针头进入容器',
+  },
+  draw_liquid: {
+    bg: '#e6f4ff',
+    border: '#91caff',
+    text: '#0958d9',
+    dot: '#1677ff',
+    label: '抽取药液',
+  },
+  transfer_liquid: {
+    bg: '#f9f0ff',
+    border: '#d3adf7',
+    text: '#531dab',
+    dot: '#722ed1',
+    label: '转移药液',
+  },
+  disinfect_access: {
+    bg: '#f0f5ff',
+    border: '#adc6ff',
+    text: '#1d39c4',
+    dot: '#2f54eb',
+    label: '消毒容器接口',
+  },
+  agitate_solution: {
+    bg: '#f0f5ff',
+    border: '#adc6ff',
+    text: '#1d39c4',
+    dot: '#2f54eb',
+    label: '混匀药液',
+  },
+  discard_sharps: {
+    bg: '#fff1f0',
+    border: '#ffa39e',
+    text: '#cf1322',
+    dot: '#f5222d',
+    label: '处置锐器',
+  },
+  label_prepared_medication: {
+    bg: '#e6fffb',
+    border: '#87e8de',
+    text: '#08979c',
+    dot: '#13c2c2',
+    label: '给成品贴签',
+  },
+  // Legacy v3 schema fallbacks: historical tasks retain their original labels.
   retrieve_medicine: {
     bg: '#feffe6',
     border: '#fffb8f',
@@ -98,13 +162,6 @@ export const ACTION_PALETTE: Record<
     dot: '#fa8c16',
     label: '开启瓶塞/针帽',
   },
-  draw_liquid: {
-    bg: '#e6f4ff',
-    border: '#91caff',
-    text: '#0958d9',
-    dot: '#1677ff',
-    label: '抽取药液',
-  },
   inject_liquid: {
     bg: '#f9f0ff',
     border: '#d3adf7',
@@ -112,7 +169,6 @@ export const ACTION_PALETTE: Record<
     dot: '#722ed1',
     label: '推注药液',
   },
-
   mix_solution: {
     bg: '#f0f5ff',
     border: '#adc6ff',

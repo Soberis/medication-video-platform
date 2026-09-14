@@ -46,7 +46,7 @@ class ActionJobEnvelopeFactoryTests {
 
 	@Test
 	void envelopeSerialisesExactlyTheFrozenContractFields() {
-		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("retrieve_medicine", "open_cap"));
+		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("open_container", "insert_needle"));
 
 		var envelope = this.factory.create(actionJob(), CAPTURE_GROUP_ID, 2, MESSAGE_ID, "L".repeat(43), REQUESTED_AT);
 
@@ -60,7 +60,7 @@ class ActionJobEnvelopeFactoryTests {
 
 	@Test
 	void envelopeCarriesTheQueuedAlgorithmProfileAndResolvedLabels() {
-		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("retrieve_medicine", "open_cap"));
+		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("open_container", "insert_needle"));
 		var job = actionJob();
 
 		var envelope = this.factory.create(job, CAPTURE_GROUP_ID, 2, MESSAGE_ID, "L".repeat(43), REQUESTED_AT);
@@ -77,7 +77,7 @@ class ActionJobEnvelopeFactoryTests {
 		assertEquals(2, envelope.attempt());
 		assertEquals(MESSAGE_ID, envelope.messageId());
 		assertEquals("L".repeat(43), envelope.leaseToken());
-		assertEquals(List.of("retrieve_medicine", "open_cap"), envelope.allowedLabels());
+		assertEquals(List.of("open_container", "insert_needle"), envelope.allowedLabels());
 		assertEquals(REQUESTED_AT, envelope.requestedAt());
 	}
 
@@ -87,17 +87,15 @@ class ActionJobEnvelopeFactoryTests {
 
 		var labels = this.factory.resolveAllowedLabels();
 
-		assertEquals(7, labels.size());
-		assertEquals("retrieve_medicine", labels.getFirst());
-		assertEquals("mix_solution", labels.get(4));
-		assertEquals("label_seal", labels.getLast());
+		assertEquals(List.of("acquire_item", "open_container", "disinfect_access", "insert_needle", "draw_liquid",
+				"transfer_liquid", "agitate_solution", "discard_sharps", "label_prepared_medication"), labels);
 	}
 
 	@Test
 	void allowedLabelsFallBackWhenTheActiveSchemaHasNoDefinitions() {
 		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of());
 
-		assertEquals(7, this.factory.resolveAllowedLabels().size());
+		assertEquals(9, this.factory.resolveAllowedLabels().size());
 	}
 
 	@Test
