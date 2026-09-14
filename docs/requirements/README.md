@@ -25,24 +25,10 @@ V1.29 是前序 DRAFT 需求方向：平台以由上游明确归属的 `CaptureG
 
 V1.28 仍是上一正式运行时基线，直到后续版本满足其冻结条件。V1.28 定义的唯一公开导出为按当前 CameraStream/ClipAsset 和 MediaPipe Candidate 生成的 `hand-landmarks.v1` detection evidence CSV；V1.30 曾增加人工标注 CSV，V1.31 随后收敛为唯一 `human-demonstration-hdf5.v1`，V1.33 调整选择范围，V1.34 继承该边界，不恢复旧 CSV。真实 UAT、生产和医院部署证据仍待完成。
 
-## 更早正式版本
+## 历史与迁移参考
 
-- [V1.27 配药视频数据管理平台需求基线（单一 CaptureGroup 路径）](./baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)：前一正式基线；V1.28 仅继承其中仍适用的领域事实，不继承其旧事件 manifest 兼容性承诺。
+历史版本不定义当前范围；仅在迁移、兼容性或审计任务需要时读取[历史索引](./history-index.md)。
 
-- [V1.26 配药视频数据管理平台需求基线（统一视频管理、极简工作台与可证自动化）](./baselines/V1.26/配药视频数据管理平台需求文档_V1.26.md)：历史前序基线；V1.27 仅继承其中仍适用的领域事实，不继承其单视频兼容性承诺。
-
-- [V1.25 配药视频数据管理平台需求基线（多机位 CaptureGroup 工作流）](./baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)：历史前序基线，保留 V1.27 继承的 CaptureGroup 领域参考。
-
-- [V1.24 配药视频数据管理平台需求基线（FLOW-FIRST P0 自动任务衔接）](./baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)：V1.24-compatible 运行时和历史行为参考。
-
-- [V1.23 配药视频数据管理平台需求基线（FLOW-FIRST P0 Physical Reduction）](./baselines/V1.23/配药视频数据管理平台需求文档_V1.23.md)：V1.24 的正式继承基线。
-
-- [V1.21 配药视频数据管理平台需求基线（FLOW-FIRST MINIMAL EXPORT）](./baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)：V1.23 的正式继承基线。
-
-- [V1.20](./baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md)：LEAN-P0 单视频闭环基础；已由 V1.21 的流程优先与最小导出条款替代为继承基线。
-- [V1.18](./baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md)：历史继承基础。
-- [V1.17](./baselines/V1.17/配药视频数据管理平台需求文档_V1.17.md)：方向校正版本；已被 V1.18 的范围与语义冻结条款替代。
-- V1.19（DRAFT）：见 [drafts/V1.19](./drafts/V1.19/)，当前 DEFERRED。
 
 ## 归档与完整性
 

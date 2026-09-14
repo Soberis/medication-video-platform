@@ -28,16 +28,9 @@
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |
 | [Web 前端与用户体验设计规范](./web-ux-and-frontend-guidelines.md) | 信息架构、页面状态、组件与状态管理启用门槛、可访问性和前端验收 |
 
-## 历史参考（不得覆盖当前规范）
+## 历史参考（按需读取）
 
-| 文档 | 历史用途 |
-| --- | --- |
-| [历史需求追踪矩阵](./requirements-traceability-history.md) | V1.17 及以前的实施记录、证据和历史结论 |
-| [V1.26 极简配药事件工作台设计](./v1.26-medication-event-workbench-design.md) | V1.26 历史产品 IA 和工作台设计；当前范围以 V1.34 及其继承基线为准 |
-| [配药平台技术设计](./配药平台技术设计.md) | 历史总体设计参考；当前范围以 V1.28 当前规范为准 |
-| [Hand Pose PoC](./history/hand-pose-poc.md) | 历史本地推理参考；不定义当前产品语言 |
-| [Hand Pose Candidate Phase B](./history/hand-pose-candidate-phase-b.md) | 历史候选机制设计；不定义当前范围 |
-| [舱内多机位 Hand Pose Analysis 编排](./history/hand-pose-analysis-orchestration.md) | V1.16 历史编排参考；当前范围以 V1.34 及其继承基线为准 |
+历史架构和迁移资料不得覆盖当前规范；仅在迁移、兼容性或审计任务需要时读取[历史索引](./history-index.md)。
 
 ## 维护规则
 

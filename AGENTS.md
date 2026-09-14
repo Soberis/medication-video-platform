@@ -8,16 +8,16 @@
 
 ## Sources Of Truth
 
-这不是每次任务的全量阅读清单；先读 [需求入口](docs/requirements/README.md)，再按改动类型读取：
+这不是每次任务的全量阅读清单；按改动类型读取相关入口，无关分支直接跳过：
 
-- 需求、验收或导出语义：读取入口指向的当前 DRAFT；当前方向为 V1.34，V1.28 是上一正式运行时基线。历史 V1.x 只在迁移、兼容性或审计需要时读取，不从历史推断当前范围。
+- 需求、验收或导出语义：先读 [需求入口](docs/requirements/README.md) 指向的当前 DRAFT；当前方向为 V1.34，V1.28 是上一正式运行时基线。历史 V1.x 只在迁移、兼容性或审计需要时读取，不从历史推断当前范围。
 - UI/UX：读取 `docs/DESIGN_SYSTEM.md`；只有需要领域交互、状态或前端验收规则时再读 `docs/architecture/web-ux-and-frontend-guidelines.md`。
 - 架构决策、API、事件、Schema 或数据库：分别读取相关 `docs/adr/`、`contracts/`、迁移和专题文档。
 - 真实代码、数据库迁移和实际测试结果用于核对实现事实；发现冲突时说明影响，不自行猜测或扩大范围。
 
 只有用户确认改变需求基线、公开契约或验收语义时，才新增版本化需求基线；普通 bugfix、局部 UI、文档勘误和指令维护不要求新增业务版本。`docs/DESIGN_SYSTEM.md` 是唯一视觉权威，`web-ux-and-frontend-guidelines.md` 只补充领域 UX、实现与验收规则，均不覆盖业务需求和正式契约。
 
-UI 复用 `docs/DESIGN_SYSTEM.md` 的视觉语言、Token 和现有组件；确需改变时先修订设计系统。设计技能的审美建议和默认 `DESIGN.md` 路径不覆盖此权威。
+UI 改动复用 `docs/DESIGN_SYSTEM.md` 的视觉语言、Token 和现有组件；确需改变时先修订设计系统。设计技能的审美建议和默认 `DESIGN.md` 路径不覆盖此权威。
 
 ## Frontend Design Identity
 
