@@ -175,6 +175,23 @@ class HandPoseJobServiceTests {
 		assertEquals(2, fixture.latestAttempt.get().getAttempt());
 		assertEquals(AiCandidateJobAttemptStatus.QUEUED, fixture.latestAttempt.get().getStatus());
 		verify(fixture.dispatch).enqueue(any(), any());
+		verify(fixture.repository).findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(PROJECT_ID,
+				CLIP_ASSET_ID, HandPoseProfile.ALGORITHM_KEY);
+	}
+
+	@Test
+	void retryFindsNoHandPoseJobWhenOnlyAnActionJobExists() {
+		var fixture = fixture(3, true);
+		fixture.prepare(failedJob(), failedAttempt(1, "AI_HAND_POSE_INFERENCE_FAILED", true));
+		when(fixture.repository.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(PROJECT_ID,
+				CLIP_ASSET_ID, HandPoseProfile.ALGORITHM_KEY))
+			.thenReturn(Optional.empty());
+
+		var exception = assertThrows(HandPoseJobException.class, () -> fixture.service.retry(PROJECT_ID, CLIP_ASSET_ID,
+				"actor", "retry-key-action-only", "request", "trace"));
+
+		assertEquals("AI_HAND_POSE_JOB_NOT_FOUND", exception.getErrorCode());
+		verify(fixture.dispatch, org.mockito.Mockito.never()).enqueue(any(), any());
 	}
 
 	@Test
@@ -347,7 +364,8 @@ class HandPoseJobServiceTests {
 			when(this.durationQueryService.findLatestVerifiedDurationFact(PROJECT_ID, CLIP_ASSET_ID))
 				.thenReturn(Optional.of(new MediaDurationQueryService.VerifiedDurationFact(UUID.randomUUID(), INPUT_SHA,
 						"c".repeat(64), 1_000_000, Instant.EPOCH)));
-			when(this.repository.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID))
+			when(this.repository.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(PROJECT_ID,
+					CLIP_ASSET_ID, HandPoseProfile.ALGORITHM_KEY))
 				.thenReturn(Optional.of(job));
 			when(this.repository.findById(job.getAiJobId())).thenReturn(Optional.of(job));
 			var receipt = new AtomicReference<AiCandidateJobIdempotencyReceipt>();

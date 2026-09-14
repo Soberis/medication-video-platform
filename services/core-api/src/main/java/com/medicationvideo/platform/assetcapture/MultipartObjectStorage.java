@@ -14,6 +14,15 @@ public interface MultipartObjectStorage {
 
 	URI authorizeRead(ObjectReference object, Duration lifetime);
 
+	/**
+	 * Issues a read authorization for a Worker that runs on another machine. Deployments
+	 * whose object storage is published on an address the host itself cannot hairpin to
+	 * configure that endpoint separately; the default keeps the primary endpoint.
+	 */
+	default URI authorizeWorkerRead(ObjectReference object, Duration lifetime) {
+		return authorizeRead(object, lifetime);
+	}
+
 	Optional<StoredPart> findPart(CreatedUpload upload, int partNumber);
 
 	List<StoredPart> listParts(CreatedUpload upload);

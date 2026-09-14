@@ -65,8 +65,14 @@ class AiJobExecutionService {
 		requireLease(attempt, leaseToken);
 		attempt.acquire(authenticatedWorkerId, now, this.leaseDuration);
 		job.start(now);
-		var grant = this.assetRead.authorize(job.getProjectId(), job.getClipAssetId(), job.getInputSha256(),
-				this.inputAuthorizationLifetime, now);
+		// Action pre-annotation runs on the remote GPU worker, so its media download must
+		// use
+		// the worker-reachable object storage endpoint; other jobs keep the primary one.
+		var grant = AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())
+				? this.assetRead.authorizeForRemoteWorker(job.getProjectId(), job.getClipAssetId(),
+						job.getInputSha256(), this.inputAuthorizationLifetime, now)
+				: this.assetRead.authorize(job.getProjectId(), job.getClipAssetId(), job.getInputSha256(),
+						this.inputAuthorizationLifetime, now);
 		return new AiWorkerLeaseResponse(job.getAiJobId(), attempt.getAttempt(), grant.inputUrl(), grant.expiresAt(),
 				attempt.getLeaseUntil(), this.heartbeatInterval.toSeconds(), job.getInputSha256(),
 				job.getInputSizeBytes(), job.getContentType(), job.getModelSha256(), job.getSamplingFps(),

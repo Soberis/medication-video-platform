@@ -42,7 +42,9 @@ class HandPoseCandidateQueryService {
 	@Transactional(readOnly = true)
 	HandPoseCandidateResponse getLatest(UUID projectId, UUID clipAssetId, String actorId) {
 		this.projectAccessService.requireMember(projectId, actorId);
-		var job = this.jobRepository.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, clipAssetId)
+		var job = this.jobRepository
+			.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(projectId, clipAssetId,
+					HandPoseProfile.ALGORITHM_KEY)
 			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_JOB_NOT_FOUND",
 					"No hand pose candidate job exists for this clip asset.", 404));
 		var candidates = this.jdbcTemplate.query("""

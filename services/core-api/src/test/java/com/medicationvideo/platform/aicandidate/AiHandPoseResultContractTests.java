@@ -48,6 +48,9 @@ class AiHandPoseResultContractTests {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@Autowired
+	private AiCandidateJobRepository jobRepository;
+
 	@BeforeEach
 	void clearState() {
 		this.jdbcTemplate.update("DELETE FROM candidate_annotation");
@@ -62,6 +65,26 @@ class AiHandPoseResultContractTests {
 	@AfterEach
 	void cleanUpState() {
 		clearState();
+	}
+
+	@Test
+	void latestHandPoseJobIgnoresANewerActionJobForTheSameClip() {
+		var handJobId = UUID.randomUUID();
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		insertRunningJob(handJobId, UUID.randomUUID(), UUID.randomUUID(), "a".repeat(64), now);
+		this.jdbcTemplate.update(
+				"UPDATE ai_job SET status = 'SUCCEEDED', hand_result = 'HAND_DETECTED' WHERE ai_job_id = ?", handJobId);
+		this.jobRepository.save(AiCandidateJob.queueAction(this.lastInsertedProjectId, this.lastInsertedClipAssetId,
+				MODEL_SHA256, INPUT_SHA256, 100, "video/mp4", "action-query-key-0001", "c".repeat(64), "actor",
+				now.plusSeconds(1)));
+
+		var latestHandJob = this.jobRepository
+			.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(this.lastInsertedProjectId,
+					this.lastInsertedClipAssetId, HandPoseProfile.ALGORITHM_KEY)
+			.orElseThrow();
+
+		assertEquals(handJobId, latestHandJob.getAiJobId());
+		assertEquals(HandPoseResult.HAND_DETECTED, latestHandJob.getHandResult());
 	}
 
 	@Test

@@ -11,6 +11,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import com.medicationvideo.platform.assetcapture.MultipartObjectStorage;
@@ -40,11 +41,16 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 
 	private final S3Presigner presigner;
 
+	/** Presigner configured to produce URLs the remote GPU worker can download. */
+	private final S3Presigner workerPresigner;
+
 	private final String bucket;
 
-	S3MultipartObjectStorage(S3Client s3Client, S3Presigner presigner, S3ObjectStorageProperties properties) {
+	S3MultipartObjectStorage(S3Client s3Client, S3Presigner presigner,
+			@Qualifier("workerS3Presigner") S3Presigner workerPresigner, S3ObjectStorageProperties properties) {
 		this.s3Client = s3Client;
 		this.presigner = presigner;
+		this.workerPresigner = workerPresigner;
 		this.bucket = properties.bucket();
 	}
 
@@ -98,6 +104,28 @@ class S3MultipartObjectStorage implements MultipartObjectStorage {
 		}
 		catch (SdkException exception) {
 			throw failure("Object storage did not authorize the completed object.", exception);
+		}
+	}
+
+	/**
+	 * Issues a presigned GET URL signed with the worker-reachable endpoint so that the
+	 * SigV4 {@code Host} header in the signature matches what the remote GPU worker
+	 * actually sends. Using the primary (localhost) presigner and rewriting only the URL
+	 * authority afterwards would break the signature because SigV4 binds the {@code Host}
+	 * canonical header at signing time.
+	 */
+	@Override
+	public URI authorizeWorkerRead(ObjectReference object, Duration lifetime) {
+		try {
+			var request = GetObjectRequest.builder().bucket(object.bucket()).key(object.objectKey()).build();
+			return URI.create(this.workerPresigner
+				.presignGetObject(
+						GetObjectPresignRequest.builder().signatureDuration(lifetime).getObjectRequest(request).build())
+				.url()
+				.toExternalForm());
+		}
+		catch (SdkException exception) {
+			throw failure("Object storage did not authorize the worker read.", exception);
 		}
 	}
 

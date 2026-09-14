@@ -3,6 +3,7 @@ package com.medicationvideo.platform.integration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -27,10 +28,34 @@ class S3ObjectStorageConfiguration {
 			.build();
 	}
 
+	/**
+	 * Default presigner, bound to the primary endpoint. Marked {@link Primary} because
+	 * two presigners exist and the primary one is what every unqualified injection point
+	 * means.
+	 */
 	@Bean
+	@Primary
 	S3Presigner s3Presigner(S3ObjectStorageProperties properties) {
+		return presigner(properties, properties.endpoint());
+	}
+
+	/**
+	 * Presigner used exclusively for Worker-facing download URLs. SigV4 binds the
+	 * {@code Host} header at signing time, so a URL that a Worker on another machine
+	 * dials must be signed for <em>that</em> endpoint; rewriting the authority of a URL
+	 * signed for the primary endpoint cannot validate and the object storage answers
+	 * {@code 403 SignatureDoesNotMatch}. Falls back to the primary endpoint when no
+	 * worker endpoint is configured.
+	 */
+	@Bean
+	S3Presigner workerS3Presigner(S3ObjectStorageProperties properties) {
+		var workerEndpoint = properties.workerEndpoint();
+		return presigner(properties, workerEndpoint == null ? properties.endpoint() : workerEndpoint);
+	}
+
+	private static S3Presigner presigner(S3ObjectStorageProperties properties, java.net.URI endpoint) {
 		return S3Presigner.builder()
-			.endpointOverride(properties.endpoint())
+			.endpointOverride(endpoint)
 			.region(Region.of(properties.region()))
 			.credentialsProvider(credentials(properties))
 			.serviceConfiguration(serviceConfiguration(properties))

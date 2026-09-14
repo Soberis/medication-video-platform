@@ -163,7 +163,9 @@ class HandPoseJobService {
 		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
 		ensureEligible(input);
 		ensureCapacity(input, projectId, clipAssetId);
-		var job = this.repository.findTopByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, clipAssetId)
+		var job = this.repository
+			.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(projectId, clipAssetId,
+					HandPoseProfile.ALGORITHM_KEY)
 			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_JOB_NOT_FOUND",
 					"No hand pose job exists for this video.", 404));
 		if (idempotencyKey.equals(job.getIdempotencyKey())) {

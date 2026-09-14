@@ -69,8 +69,12 @@ class S3MultipartCompatibilityTests {
 						.build()) {
 				var key = "synthetic/compatibility.bin";
 				var properties = new S3ObjectStorageProperties(endpoint, Region.US_EAST_1.id(), BUCKET, ACCESS_KEY,
-						SECRET_KEY, true);
-				var storage = new S3MultipartObjectStorage(s3, presigner, properties);
+						SECRET_KEY, true, null);
+				// No separate worker endpoint here, so a worker read must behave exactly
+				// like a
+				// primary read. S3WorkerReadSignatureTests covers the split-endpoint
+				// case.
+				var storage = new S3MultipartObjectStorage(s3, presigner, presigner, properties);
 				var created = storage.create(key, "application/octet-stream");
 				assertFalse(created.uploadId().isBlank());
 				assertFalse(storage.findCompletedObject(created).isPresent());
