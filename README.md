@@ -2,40 +2,40 @@
 
 平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
 
-当前需求方向：V1.34 DRAFT（配药视频动作时序预标注与人机协同），继承 V1.33/V1.32/V1.31/V1.30/V1.29。V1.28 仍是上一正式运行时基线；DRAFT 不表示现有 runtime 已被删除。
+当前唯一需求入口：V1.35 Consolidated Baseline（文档目标已冻结，D1–D5 实施门禁待决）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或已授权删除。
 
-V1.34 DRAFT 的处理关系（动作预标注待实现）：
+V1.35 的唯一主链：
 
 ```text
-External Ingest / Upload
-→ CaptureGroup → CameraStream / ClipAsset
+数据接收
+→ CaptureGroup
 → Media Probe
-  ├─ MediaPipe 检测事实 ───────────────────────┐
-  └─ 可选人工标注任务 → 可选 AI 草稿 → 人工修改与确认 ┤
-                                              ↓
-                         既有准入校验 → Human Demonstration HDF5
+  ├─ MediaPipe 手部事实
+  └─ Action Candidate 动作候选
+→ 必要时人工标注 / 确认
+→ Export Eligibility
+→ human-demonstration-hdf5.v1
 ```
 
-`ClipAsset` 仍是物理视频证据对象，但不再是独立的产品工作流对象。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
+`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象。`CaptureGroup` 是一次采集记录；`CameraStream` 是记录中的视频视角，不是平台管理的物理摄像头资产。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。每路视频按既有规则执行 Media Probe 和幂等 MediaPipe 手部检测；V1.34 拟在任务主视频就绪后，由授权用户主动触发动作时序提取，无需等待手部检测；Candidate 只提供辅助证据，不能直接写入人工质量、正式 Revision、Review 或 Cleaning。人工质量、任务、Revision、Review 和标签适用性校验只在项目需要 human ground truth 时启用。当前仅提供 `human-demonstration-hdf5.v1` 导出：校验主视频身份与来源后，将落入已批准人工区间的现有手部样本关联标签；不保证每帧有检测结果，不自动对齐参考机位。旧 `hand-landmarks.v1` CSV 为历史格式，V1.34 不恢复该入口。旧事件 manifest 出口、`training-data.v2`、单视频任务和单视频 Cleaning 已从当前产品范围删除。
+采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。MediaPipe 与 Action Candidate 是两条独立 AI 证据链；Candidate 只提供机器辅助证据，不能直接成为人工 Ground Truth、Review、Cleaning 或导出结论。人工标注仅在项目需要 human ground truth 时启用。当前只提供 `human-demonstration-hdf5.v1` 导出，后端下载时重新执行 fail-closed 准入；旧 CSV、事件 manifest、`training-data.v2` 和独立 single-video 流程不属于当前产品。
 
 当前规范：
 
-- [V1.34 DRAFT 需求基线（时序动作预标注与人机协同）](./docs/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)
-- [配药视频时序动作预标注与人机协同技术设计](./docs/architecture/v1.34-action-annotation.md)
-- [V1.33 DRAFT 需求基线（导出选择范围）](./docs/requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)
-- [V1.30 需求基线（浅色专业工作区与视频优先体验）](./docs/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)
-- [V1.29 数据组主线收敛需求基线](./docs/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)
-- [V1.28 上一正式需求基线](./docs/requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)
-- [V1.28 上一正式导出边界设计](./docs/architecture/v1.28-single-export-consolidation.md)
-- [当前需求追踪矩阵](./docs/architecture/requirements-traceability.md)
-- [V1.27 AI evidence pipeline audit](./docs/architecture/v1.27-ai-evidence-audit.md)
-- [V1.27 training traceability audit](./docs/architecture/v1.27-training-traceability.md)
-- [V1.27 hand detection policy](./docs/architecture/v1.27-hand-detection-policy.md)
-- [V1.26 历史工作台设计](./docs/architecture/v1.26-medication-event-workbench-design.md)
-- [V1.25 历史 CaptureGroup 技术参考](./docs/architecture/capture-group-multicamera-workflow-technical-design.md)
-- [V1.24 历史需求与组件参考](./docs/requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)
+- [V1.35 Consolidated Baseline（当前唯一需求）](./docs/requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)
+- [需求基线入口与版本 manifest](./docs/requirements/README.md)
+- [当前架构文档入口](./docs/architecture/README.md)
+- [动作候选技术设计（支持性 DRAFT）](./docs/architecture/v1.34-action-annotation.md)
+- [领域模型与数据所有权](./docs/architecture/domain-model-and-data-ownership.md)
+- [异步作业协议](./docs/architecture/asynchronous-job-protocol.md)
+- [状态机与领域守卫](./docs/architecture/state-machines.md)
+- [安全、隐私与保留销毁](./docs/architecture/security-privacy-retention.md)
+- [部署、容量与灾难恢复](./docs/architecture/deployment-capacity-and-dr.md)
+- [前端设计系统](./docs/DESIGN_SYSTEM.md)
+- [Web 前端与用户体验设计规范](./docs/architecture/web-ux-and-frontend-guidelines.md)
+- [当前需求追踪与实现证据](./docs/architecture/requirements-traceability.md)
+- [Platform 文档 Active / History 清理清单](./docs/audits/v1.35-platform-document-active-history-inventory.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
 
 ## 本地运行

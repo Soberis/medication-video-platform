@@ -1,8 +1,8 @@
-# 需求追踪矩阵：V1.34 设计与前序实现证据
+# 需求追踪矩阵：V1.35 当前基线与前序实现证据
 
-## V1.34 新增方向（DRAFT，未验收）
+## V1.35 Consolidated Baseline（当前需求；实现未验收）
 
-需求定义及部署、评估方法见 [V1.34](../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)。本表仅登记待实现要求，不使用历史测试证明新增能力已完成。
+需求定义、主链和验收方法见 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)。本表正在从 V1.34 逐项重标到 V1.35；历史测试不证明 V1.35 新增或收敛要求已完成。
 
 | 需求 | Owner module | 后续验证 | 状态 |
 | --- | --- | --- | --- |
@@ -12,11 +12,13 @@
 | V34-FR-004 人工提交与复核 | annotationreview | 候选来源可追溯、不可变版本、权限守卫 | DRAFT / 待实施 |
 | V34-FR-005 配套导出 | datasetexport | 复用既有 HDF5；回读边界与来源失效测试 | 既有代码可复用 / 新链路待验证 |
 
+上表中的 V34-FR 条目保留为动作链实施证据索引，不构成第二份需求。V1.35 的完整验收 ID 和决策门禁以 V1.35 第 16–18 节为准。
+
 ## 前序实现与历史证据
 
-> 当前导出选择：[V1.33 项目级候选选择](../requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)；独立完整读取项目候选，单选、多选与全选均发送明确 ID。回归入口：`HumanDemonstrationHdf5ExportButton.spec.tsx`、`CaptureGroupListView.spec.tsx` 和 `capture-group.spec.ts`；用户验收待完成。
+> 历史导出选择实现证据：[V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 已重新定义当前语义；本段保留既有组件回归入口 `HumanDemonstrationHdf5ExportButton.spec.tsx`、`CaptureGroupListView.spec.tsx` 和 `capture-group.spec.ts`，不要求阅读旧版本才能理解当前产品。
 
-> 前序视觉 DRAFT 需求方向：[V1.30 浅色专业工作区与视频优先体验重构](../requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)；继承 V1.29 未变更边界。V30-UX-001 至 V30-UX-006 已实施，自动化证据与待验收项见该基线第 7–8 节；尚未标记 CURRENT。当前导出继承 V1.31 唯一 HDF5 与 V1.33 选择规则；以下 V1.28 CSV 描述为历史基线，不构成当前入口或兼容承诺。<br>
+> 以下链接和说明仅用于历史实现证据、迁移和审计，不构成当前需求入口；当前视觉和导出语义以 V1.35、设计系统与当前 Web UX 规范为准。<br>
 > 上一正式运行时基线：[V1.28 单一 CaptureGroup 路径与唯一手部检测导出](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)<br>
 > 上一正式技术设计：[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md)<br>
 > 上一基线与审计参考：[V1.27 单一 CaptureGroup 产品路径](./v1.27-single-capture-group-workflow.md)、[AI evidence pipeline audit](./v1.27-ai-evidence-audit.md)与[training traceability audit](./v1.27-training-traceability.md)<br>
@@ -25,7 +27,7 @@
 > 历史实现与 UAT 记录：[历史需求追踪矩阵](./requirements-traceability-history.md)<br>
 > 最后更新：2026-09-04
 
-下文记录 V1.28 时期的需求与实现证据，不定义 V1.34 的完成状态。V1.29 将默认产品链收敛为数据组、媒体检查、MediaPipe evidence 与导出，并将人工链降为可选 human-label 能力；在该 DRAFT 冻结和后续审计完成前，本矩阵所述 V1.28 runtime 仅为当时实现记录，不能据此推断现状或删除项。V1.28 当时的唯一公开导出是 MediaPipe `hand-landmarks.v1` detection evidence CSV，支持项目或单一事件范围。旧事件资格 manifest 出口已从当前运行时、公开契约、Web 和合成工具删除，历史行仅保留为上一版本实现证据。批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
+下文记录 V1.28 时期的需求与实现证据，不定义 V1.35 的完成状态。V1.28 runtime、V1.29–V1.34 需求和历史导出语义均只作为上一阶段证据；它们不构成 V1.35 当前入口、实现完成声明或额外兼容承诺。批准设计但尚未完整实现的条目统一使用 `D1`。状态含义：`D1` 为已设计未实施；`PI` 为已有部分实现但当前验收未闭合；`I` 为实现与自动测试通过；`UAT` 为经批准的验收完成。代码或接口存在不等于 `UAT`。
 
 V1.28 继续保留 `CaptureSession`、`CameraSet`、`CameraStream`、`ClipAsset`、Media Probe、MediaPipe Candidate、权限、审计和 provenance 等低层事实，但不再把旧单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 作为当前业务流程。V1.27 的实现状态和历史导出语义只作为上一基线证据，不自动转化为兼容要求。
 
