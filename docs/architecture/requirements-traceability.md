@@ -2,17 +2,25 @@
 
 ## V1.35 Consolidated Baseline（当前需求；实现未验收）
 
-需求定义、主链和验收方法见 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)。本表正在从 V1.34 逐项重标到 V1.35；历史测试不证明 V1.35 新增或收敛要求已完成。
+需求定义、主链和验收方法见 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)。以下为 dev `f2f038f` 的静态核对；本轮仅验证文档，历史测试不证明 V1.35 已完成。
 
 | 需求 | Owner module | 后续验证 | 状态 |
 | --- | --- | --- | --- |
-| V34-FR-001 独立动作预标注 | aicandidate / ai-worker | 准入与任务不同到达顺序自动派发一次；手动触发不绕过守卫；不依赖 MediaPipe | DRAFT / 待实施 |
-| V34-FR-002 候选校验 | aicandidate | 格式、区间、标签、输入版本、幂等及契约 | DRAFT / 待实施 |
-| V34-FR-003 初始化与编辑 | apps/web | 有效候选自动呈现；保护未保存修改与已清空草稿；部分失败不可采纳；补标、拆分合并、键盘操作 | DRAFT / 待实施 |
-| V34-FR-004 人工提交与复核 | annotationreview | 候选来源可追溯、不可变版本、权限守卫 | DRAFT / 待实施 |
-| V34-FR-005 配套导出 | datasetexport | 复用既有 HDF5；回读边界与来源失效测试 | 既有代码可复用 / 新链路待验证 |
+| V35-FR-001 产品边界 | assetcapture / iamproject | CaptureGroup、CameraStream、ClipAsset 与项目权限；N=1/N>1 同链 | 已有对象；当前验收待完成 |
+| V35-FR-002 唯一主链 | Core API / Worker / Web | 合成端到端区分接收、两个 AI 分支、可选人工与唯一 HDF5 | 部分实现；不把候选失败设为人工阻断 |
+| V35-FR-003 AI 事实隔离 | aicandidate / Web | 无手、读取失败、执行失败分开；两条证据链独立 | 已有实现；边界回归待验证 |
+| V35-FR-004 Schema 与版本 | annotationreview / aicandidate | 任务不可变 schema、区间校验、append-only revision | 部分实现；动作 adapter 当前仍取 global current |
+| V35-FR-005 来源追溯 | aicandidate / annotationreview | job/attempt、schema、model/input/result 和采纳来源可查询 | 执行元数据与人工采纳来源仍有缺口 |
+| V35-FR-006 导出选择 | apps/web | 完整 PROJECT 分页、显式 ID、取消、失败和全选 | 已有组件；当前验收待完成 |
+| V35-FR-007 最终准入 | annotationreview / datasetexport | 当前 approved revision、媒体与 MediaPipe provenance、样本存在、整批拒绝 | 现役 Java 链；技术质量谓词 D2 待决，旧 SQL 已退休 |
+| V35-FR-008 HDF5 | datasetexport | samples 区间端点、无样本、参考机位、不补坐标与回读 | 已有 exporter；D3 待决，现有 layout 保留 |
+| V35-FR-009 可靠性 | 各作业模块 | 权限、outbox/inbox、租约、迟到、重试、输入漂移 | 现役机制保留；专项验证待实施 |
+| V35-FR-010 显式任务 / 自动候选 | annotationreview / aicandidate | 单独合格不建任务；已有合法任务满足条件只派发一次 | 显式 assignment 已有；动作自动派发待实现；synthetic 工具需对齐 |
+| V35-FR-011 初始化与编辑 | apps/web | 已编辑含清空草稿的保护、部分失败、空白、时间轴与键盘 | 已有部分交互；完整来源守卫待验证 |
+| V35-FR-012 授权与返工 | annotationreview / Web | 成员分配范围、管理员同人确认、输入变更、参考机位禁取时 | 已有代码；当前验收待完成 |
+| V35-FR-013 资源与效果 | 动作 Worker / 人工评估 | 锁定配置、真实时间映射、独立质量、人工总耗时与不确定性 | 待实测；占位 Worker 不算模型验收 |
 
-上表中的 V34-FR 条目保留为动作链实施证据索引，不构成第二份需求。V1.35 的完整验收 ID 和决策门禁以 V1.35 第 16–18 节为准。
+代码证据入口：[显式任务与 Review](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/CaptureGroupAnnotationWorkflow.java)、[动作 schema adapter](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/AnnotationActionAllowedLabelsAdapter.java)、[动作 job service](../../services/core-api/src/main/java/com/medicationvideo/platform/aicandidate/ActionCandidateJobService.java)、[已批准人工标注查询](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/ApprovedHumanAnnotationQueryService.java)、[HDF5 exporter](../../services/core-api/src/main/java/com/medicationvideo/platform/datasetexport/HumanDemonstrationHdf5ExportService.java)、[V75 退役视图](../../services/core-api/src/main/resources/db/migration/V75__retire_capture_group_manifest_views.sql)。完整验收 ID 和决策门禁以 V1.35 第 16–18 节为准。
 
 ## 前序实现与历史证据
 

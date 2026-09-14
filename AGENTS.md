@@ -44,7 +44,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 
 ## Delivery Order
 
-接入事实按下列顺序建立；媒体就绪后的动作预标注不等待 MediaPipe，按需在人工任务内由授权用户触发。两个候选分支可独立运行，之后才进入既有准入：
+接入事实按下列顺序建立；人工任务由显式授权操作创建，质量合格不自动建任务。V1.35 要求已有合法任务满足准入时自动派发动作候选，异常场景保留手动兜底；自动调度仍需实现验证，不等待 MediaPipe。两个候选分支独立运行，之后才进入导出准入：
 
 ```text
 External Ingest / Upload
@@ -67,7 +67,7 @@ MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 
 - 能在一个 Core API 数据库事务内可靠完成的操作，不引入消息、缓存或额外进程。耗时、跨进程或需要重试的工作才建立异步作业。
 - 默认优先交付一个可运行、可测试、可回退的纵向切片；用户明确要求的多个独立变更仍可在同一任务内完成，不因首个切片完成而提前结束。
 - UI 优先使用浏览器和现有组件库的原生能力；没有明确需求时，不引入新的设计系统、状态管理、播放器框架或动画库。
-- V1.35 Consolidated Baseline 不恢复未接线的 CaptureSync runtime，不新增 `CaptureGroupView`、持久化 `next_action` / `blockers` 或通用工作流引擎；不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；现有 runtime 的具体收缩或删除必须等待 D1–D5 决策和后续专项授权。
+- V1.35 Consolidated Baseline 不恢复未接线的 CaptureSync runtime，不新增持久化工作流投影、`next_action` / `blockers` 或通用工作流引擎；现役 `CaptureGroupView` 只读模型与前端派生提示保留。不恢复独立单视频任务、单视频 Cleaning、旧事件 manifest 或 `training-data.v2` 产品路径。V1.22 Draft、3D、标定和 DatasetVersion 仍为历史/延后方向。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 等接入事实仍必须保留；runtime 收缩按对应 D1–D5 决策及任务授权执行，各项决策不构成全部工作的统一阻塞条件。
 
 ## Data And Safety
 

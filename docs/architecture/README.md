@@ -8,9 +8,6 @@
 | --- | --- |
 | [V1.35 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) | 当前唯一完整产品需求；D1–D5 为实施前决策门禁 |
 | [动作候选技术设计（支持性 DRAFT）](./v1.34-action-annotation.md) | 解释动作候选、Worker、时间映射和人工编辑的实现边界；不得覆盖 V1.35 |
-| [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 聚合、表所有权、跨模块引用和事务边界 |
-| [状态机与领域守卫](./state-machines.md) | 状态迁移、守卫、角色、幂等和事件 |
-| [异步作业协议](./asynchronous-job-protocol.md) | Outbox/Inbox、Worker 回传、租约、重试、取消和 DLQ |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |
@@ -18,6 +15,16 @@
 | [当前需求追踪与实现证据](./requirements-traceability.md) | V1.35 需求对应的实现/审计证据；未验收条目不得视为完成 |
 
 ## 历史参考（按需读取）
+
+以下混合文档暂列 NEEDS_DECISION / 待校订参考，不作为完整当前规范：
+
+| 文档 | 保留价值与需校订内容 |
+| --- | --- |
+| [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 保留模块所有权与事务边界；旧 V1.28 CSV 产品描述待更新 |
+| [状态机与领域守卫](./state-machines.md) | 保留事实与守卫依据；自动建任务、旧导出和旧复核规则待按当前代码校订 |
+| [异步作业协议](./asynchronous-job-protocol.md) | 保留 outbox/inbox、lease/heartbeat 与重试；旧导出类型描述待更新 |
+
+V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠这些旧段落补足需求。D1–D5 各自只约束相关实施项，审计中的方案不能当作批准记录。
 
 历史架构和迁移资料不得覆盖当前规范；仅在迁移、兼容性或审计任务需要时读取[历史索引](./history-index.md)。
 

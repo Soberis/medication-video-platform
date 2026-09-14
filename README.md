@@ -2,7 +2,7 @@
 
 平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
 
-当前唯一需求入口：V1.35 Consolidated Baseline（文档目标已冻结，D1–D5 实施门禁待决）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或已授权删除。
+当前唯一需求入口：V1.35 Consolidated Baseline（已确定需求已收敛，D1–D5 分别约束相关待决实施项）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或已授权删除。
 
 V1.35 的唯一主链：
 
@@ -27,9 +27,6 @@ V1.35 的唯一主链：
 - [需求基线入口与版本 manifest](./docs/requirements/README.md)
 - [当前架构文档入口](./docs/architecture/README.md)
 - [动作候选技术设计（支持性 DRAFT）](./docs/architecture/v1.34-action-annotation.md)
-- [领域模型与数据所有权](./docs/architecture/domain-model-and-data-ownership.md)
-- [异步作业协议](./docs/architecture/asynchronous-job-protocol.md)
-- [状态机与领域守卫](./docs/architecture/state-machines.md)
 - [安全、隐私与保留销毁](./docs/architecture/security-privacy-retention.md)
 - [部署、容量与灾难恢复](./docs/architecture/deployment-capacity-and-dr.md)
 - [前端设计系统](./docs/DESIGN_SYSTEM.md)
@@ -37,6 +34,8 @@ V1.35 的唯一主链：
 - [当前需求追踪与实现证据](./docs/architecture/requirements-traceability.md)
 - [Platform 文档 Active / History 清理清单](./docs/audits/v1.35-platform-document-active-history-inventory.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
+
+领域模型、状态机和异步协议的旧产品段落待校订，统一从架构入口的待校订参考访问。人工任务由显式授权操作创建；动作候选自动调度是已有合法任务上的目标能力。未启用人工标注的记录可以保留 AI 证据，但当前唯一 HDF5 仍要求人工 APPROVED Revision 与同源 MediaPipe 样本。
 
 ## 本地运行
 
