@@ -9,6 +9,7 @@
 - `architecture/`：日期化审查与标注实施计划。
 - `design/`：V1.27 连续工作流设计。
 - `plans/`：V1.29 简化实施计划。
+- `audits/`：V1.29 断舍离与运行时表面审计。
 - `validation/`：V1.19 G0 与 V1.25 冻结验证记录。
 - `runbooks/`：旧版 P0 与 V1.25 UAT 手册。
 
