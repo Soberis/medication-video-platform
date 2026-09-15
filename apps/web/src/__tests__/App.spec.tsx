@@ -124,22 +124,22 @@ describe('App', () => {
     expect(await screen.findByText('已更新项目')).toBeInTheDocument()
   })
 
-  it('requires the exact project name before archiving', async () => {
-    const project = projectFixture('待归档项目')
+  it('uses a second explicit confirmation before archiving', async () => {
+    const project = projectFixture('待归档项目——2026 年第 09 批次 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
     const fetchMock = projectListFetch([project], false)
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
     renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
 
-    await user.click(await screen.findByRole('button', { name: '管理项目：待归档项目' }))
+    await user.click(
+      await screen.findByRole('button', { name: `管理项目：${project.display_name}` }),
+    )
     await user.click(await screen.findByRole('menuitem', { name: '归档项目' }))
     const dialog = await screen.findByRole('dialog', { name: '归档项目' })
-    const input = within(dialog).getByRole('textbox')
-    await user.type(input, '待归档')
-    await user.click(within(dialog).getByRole('button', { name: '确认归档' }))
-    expect(
-      await within(dialog).findByText('输入的项目名称与当前项目不一致，未执行归档。'),
-    ).toBeInTheDocument()
+    expect(within(dialog).getByText(project.display_name)).toBeInTheDocument()
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
+    const confirmButton = within(dialog).getByRole('button', { name: '确认归档' })
+    expect(confirmButton).toHaveClass('ant-btn-dangerous')
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -148,9 +148,7 @@ describe('App', () => {
       ),
     ).toBe(false)
 
-    await user.clear(input)
-    await user.type(input, '待归档项目')
-    await user.click(within(dialog).getByRole('button', { name: '确认归档' }))
+    await user.click(confirmButton)
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         `/api/v1/projects/${project.project_id}`,

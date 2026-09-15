@@ -82,10 +82,12 @@ export function PromptProvider({ children }: PropsWithChildren) {
         cancelText="取消"
         onOk={confirm}
         onCancel={() => close(null)}
+        closable={{ 'aria-label': '关闭' }}
+        className="prompt-dialog"
         destroyOnHidden
       >
-        <p>{activePrompt?.description}</p>
-        <label className="visually-hidden" htmlFor={promptInputId}>
+        <p className="prompt-dialog-description">{activePrompt?.description}</p>
+        <label className="prompt-input-label" htmlFor={promptInputId}>
           {activePrompt?.inputLabel ?? '输入内容'}
         </label>
         <Input
@@ -93,6 +95,7 @@ export function PromptProvider({ children }: PropsWithChildren) {
           autoFocus
           value={value}
           placeholder={activePrompt?.placeholder}
+          autoComplete="off"
           status={error ? 'error' : undefined}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? promptErrorId : undefined}
@@ -103,7 +106,7 @@ export function PromptProvider({ children }: PropsWithChildren) {
           onPressEnter={confirm}
         />
         {error ? (
-          <p id={promptErrorId} className="field-error" role="alert">
+          <p id={promptErrorId} className="field-error prompt-field-error" role="alert">
             {error}
           </p>
         ) : null}

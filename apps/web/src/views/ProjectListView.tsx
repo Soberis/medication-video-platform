@@ -1,7 +1,7 @@
 import { App as AntdApp, Button, Dropdown } from 'antd'
 import { FolderKanban, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
 import {
@@ -20,8 +20,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeed
 type LoadState = 'loading' | 'success' | 'error'
 
 export default function ProjectListView() {
-  const { message } = AntdApp.useApp()
-  const navigate = useNavigate()
+  const { message, modal } = AntdApp.useApp()
   const prompt = usePromptDialog()
   const [projects, setProjects] = useState<DataProject[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -122,33 +121,41 @@ export default function ProjectListView() {
     }
   }
 
-  async function archiveDataProject(project: DataProject) {
+  function archiveDataProject(project: DataProject) {
     if (archivingProjectId) return
-    const value = await prompt({
+    modal.confirm({
       title: '归档项目',
-      description:
-        '归档后将立即停止项目访问并从日常列表移除；视频、对象和审计记录不会被物理删除。请输入完整项目名称确认。',
-      confirmText: '确认归档',
-      inputLabel: '项目名称（用于确认归档）',
-      placeholder: project.display_name,
-      validate: (input) =>
-        input.trim() === project.display_name
-          ? null
-          : '输入的项目名称与当前项目不一致，未执行归档。',
+      content: (
+        <div className="project-archive-confirmation">
+          <p>归档后将立即停止项目访问并从日常列表移除；视频、对象和审计记录不会被物理删除。</p>
+          <div className="project-archive-target">
+            <span className="project-archive-target-label">将要归档的项目</span>
+            <strong title={project.display_name}>{project.display_name}</strong>
+          </div>
+        </div>
+      ),
+      okText: '确认归档',
+      okType: 'danger',
+      cancelText: '取消',
+      focusable: { autoFocusButton: 'cancel' },
+      closable: { 'aria-label': '关闭' },
+      mask: { closable: false },
+      async onOk() {
+        setArchivingProjectId(project.project_id)
+        try {
+          await archiveProject(project.project_id)
+          void message.success('项目已归档，视频和审计记录仍被保留。')
+          await loadProjects()
+        } catch (error) {
+          void message.error(
+            error instanceof CatalogApiError ? error.message : '项目未归档，请稍后重试。',
+          )
+          throw error
+        } finally {
+          setArchivingProjectId(null)
+        }
+      },
     })
-    if (value === null) return
-    setArchivingProjectId(project.project_id)
-    try {
-      await archiveProject(project.project_id)
-      void message.success('项目已归档，视频和审计记录仍被保留。')
-      await loadProjects()
-    } catch (error) {
-      void message.error(
-        error instanceof CatalogApiError ? error.message : '项目未归档，请稍后重试。',
-      )
-    } finally {
-      setArchivingProjectId(null)
-    }
   }
 
   return (
@@ -184,16 +191,15 @@ export default function ProjectListView() {
         <section className="project-list-surface working-surface" aria-label="项目列表">
           <ul className="project-list" aria-label="已加入项目">
             {projects.map((project) => (
-              <li
-                key={project.project_id}
-                className="project-list-item is-interactive"
-                onClick={() => void navigate(paths.captureGroups(project.project_id))}
-              >
+              <li key={project.project_id} className="project-list-item">
                 <div className="project-list-name">
                   <div className="project-list-heading">
                     <FolderKanban aria-hidden="true" size={16} strokeWidth={1.8} />
-                    <strong>{project.display_name}</strong>
-                    <StatusBadge tone={project.current_role === 'ADMIN' ? 'info' : 'default'}>
+                    <strong title={project.display_name}>{project.display_name}</strong>
+                    <StatusBadge
+                      className="project-role-badge"
+                      tone={project.current_role === 'ADMIN' ? 'info' : 'default'}
+                    >
                       {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                     </StatusBadge>
                   </div>
@@ -203,7 +209,7 @@ export default function ProjectListView() {
                       : '已加入项目'}
                   </p>
                 </div>
-                <div className="project-list-actions" onClick={(event) => event.stopPropagation()}>
+                <div className="project-list-actions">
                   <Link
                     className="project-open-link"
                     to={paths.captureGroups(project.project_id)}
