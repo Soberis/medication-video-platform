@@ -9,6 +9,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record ActionCandidateSegmentItem(@NotNull @Min(0) Long startMs, @NotNull @Min(1) Long endMs,
-		@NotBlank String label, @NotNull @DecimalMin("0.0") @DecimalMax("1.0") Double confidence, Integer sourceWindow,
+		@NotBlank String label, @DecimalMin("0.0") @DecimalMax("1.0") Double confidence, Integer sourceWindow,
 		List<Integer> stitchedWindows) {
 }

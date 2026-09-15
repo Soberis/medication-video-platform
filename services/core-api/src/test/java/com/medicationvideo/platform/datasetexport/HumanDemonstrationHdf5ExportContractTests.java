@@ -104,7 +104,7 @@ class HumanDemonstrationHdf5ExportContractTests {
 			assertEquals(group.captureGroupId().toString(), episode.getAttribute("capture_group_id").getData());
 			assertEquals(revisionId.toString(), episode.getAttribute("annotation_revision_id").getData());
 			assertEquals(SHA256, episode.getAttribute("primary_clip_asset_sha256").getData());
-			assertEquals("retrieve_medicine",
+			assertEquals("acquire_item",
 					((String[]) file.getDatasetByPath("/data/demo_000000/annotations/label").getData())[0]);
 			assertEquals(900L,
 					((long[]) file.getDatasetByPath("/data/demo_000000/annotations/segment_end_ms").getData())[0]);
@@ -198,8 +198,8 @@ class HumanDemonstrationHdf5ExportContractTests {
 				.header("Idempotency-Key", key(prefix))
 				.header("X-Request-Id", key(prefix + "-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"retrieve_medicine\"}]}"
-					.formatted(endMs)));
+				.content(
+						"{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"acquire_item\"}]}".formatted(endMs)));
 	}
 
 	private UUID taskId(GroupFixture group) {

@@ -2,6 +2,7 @@ package com.medicationvideo.platform.aicandidate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +44,23 @@ class ActionJobEnvelopeFactoryTests {
 	private final ActionAllowedLabelsPort labelsPort = mock(ActionAllowedLabelsPort.class);
 
 	private final ActionJobEnvelopeFactory factory = new ActionJobEnvelopeFactory(this.assetCatalog, this.labelsPort);
+
+	@Test
+	void scopedJobRejectsMissingTaskSchemaInsteadOfUsingGlobalLabels() {
+		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("draw_liquid"));
+		assertThrows(HandPoseJobException.class, () -> this.factory.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID));
+	}
+
+	@Test
+	void retriesUseStoredLabelsEvenAfterGlobalSchemaChanges() {
+		var snapshot = new ActionLabelSnapshot(UUID.randomUUID(), UUID.randomUUID(), "c".repeat(64),
+				List.of("draw_liquid"));
+		var job = AiCandidateJob.queueAction(PROJECT_ID, CLIP_ASSET_ID, AiCandidateJob.ACTION_MODEL_SHA256,
+				"a".repeat(64), 2048L, "video/mp4", "queue-key", "b".repeat(64), "tester", REQUESTED_AT, snapshot);
+		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("new_label"));
+		assertEquals(List.of("draw_liquid"),
+				this.factory.create(job, CAPTURE_GROUP_ID, 2, MESSAGE_ID, "token", REQUESTED_AT).allowedLabels());
+	}
 
 	@Test
 	void envelopeSerialisesExactlyTheFrozenContractFields() {

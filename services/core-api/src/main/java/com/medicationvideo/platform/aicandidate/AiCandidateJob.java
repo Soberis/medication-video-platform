@@ -1,7 +1,12 @@
 package com.medicationvideo.platform.aicandidate;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -33,6 +38,23 @@ class AiCandidateJob {
 
 	@Column(name = "clip_asset_id", nullable = false, updatable = false)
 	private UUID clipAssetId;
+
+	@Column(name = "annotation_task_id", updatable = false)
+	private UUID annotationTaskId;
+
+	@Column(name = "label_schema_id", updatable = false)
+	private UUID labelSchemaId;
+
+	@Column(name = "label_schema_digest", length = 64, updatable = false)
+	private String labelSchemaDigest;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "allowed_labels", columnDefinition = "jsonb", updatable = false)
+	private List<String> allowedLabels;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "execution_metadata", columnDefinition = "jsonb")
+	private Map<String, Object> executionMetadata;
 
 	@Column(name = "algorithm_key", nullable = false, length = 64, updatable = false)
 	private String algorithmKey;
@@ -121,10 +143,23 @@ class AiCandidateJob {
 	static AiCandidateJob queueAction(UUID projectId, UUID clipAssetId, String modelSha256, String inputSha256,
 			long inputSizeBytes, String contentType, String idempotencyKey, String requestFingerprint,
 			String requestedBy, Instant createdAt) {
+		return queueAction(projectId, clipAssetId, modelSha256, inputSha256, inputSizeBytes, contentType,
+				idempotencyKey, requestFingerprint, requestedBy, createdAt, null);
+	}
+
+	static AiCandidateJob queueAction(UUID projectId, UUID clipAssetId, String modelSha256, String inputSha256,
+			long inputSizeBytes, String contentType, String idempotencyKey, String requestFingerprint,
+			String requestedBy, Instant createdAt, ActionLabelSnapshot labelSnapshot) {
 		var job = new AiCandidateJob();
 		job.aiJobId = UUID.randomUUID();
 		job.projectId = projectId;
 		job.clipAssetId = clipAssetId;
+		if (labelSnapshot != null) {
+			job.annotationTaskId = labelSnapshot.annotationTaskId();
+			job.labelSchemaId = labelSnapshot.labelSchemaId();
+			job.labelSchemaDigest = labelSnapshot.schemaDigest();
+			job.allowedLabels = labelSnapshot.allowedLabels();
+		}
 		job.algorithmKey = ACTION_ALGORITHM_KEY;
 		job.algorithmVersion = "v1";
 		job.modelSha256 = (modelSha256 != null && modelSha256.matches("^[a-f0-9]{64}$")) ? modelSha256
@@ -186,6 +221,30 @@ class AiCandidateJob {
 
 	String getProfileSha256() {
 		return this.profileSha256;
+	}
+
+	UUID getAnnotationTaskId() {
+		return this.annotationTaskId;
+	}
+
+	UUID getLabelSchemaId() {
+		return this.labelSchemaId;
+	}
+
+	String getLabelSchemaDigest() {
+		return this.labelSchemaDigest;
+	}
+
+	List<String> getAllowedLabels() {
+		return this.allowedLabels == null ? List.of() : this.allowedLabels;
+	}
+
+	Map<String, Object> getExecutionMetadata() {
+		return this.executionMetadata;
+	}
+
+	void recordActionExecutionMetadata(Map<String, Object> metadata) {
+		this.executionMetadata = Map.copyOf(metadata);
 	}
 
 	AiCandidateJobStatus getStatus() {

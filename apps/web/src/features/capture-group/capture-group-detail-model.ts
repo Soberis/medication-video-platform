@@ -287,6 +287,11 @@ export function validActionCandidates(
       (!targetProjectId || candidate.project_id === targetProjectId) &&
       (!targetGroupId || candidate.capture_group_id === targetGroupId) &&
       (!targetClipAssetId || candidate.clip_asset_id === targetClipAssetId) &&
+      (candidate.annotation_task_id == null ||
+        candidate.annotation_task_id === task?.annotation_task_id) &&
+      (candidate.label_schema_id == null || candidate.label_schema_id === schema.label_schema_id) &&
+      (candidate.label_schema_digest == null ||
+        candidate.label_schema_digest === schema.schema_digest) &&
       candidate.ai_job_id === ordered[0]?.ai_job_id &&
       labels.has(candidate.action_label) &&
       Number.isSafeInteger(candidate.start_ms) &&

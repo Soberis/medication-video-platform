@@ -1,10 +1,10 @@
 # 部署、容量与灾难恢复
 
-> 文档状态：P0 运行设计（评审稿）  
-> 最后更新：2026-07-21
+> 文档状态：P0 运行设计（评审稿，V1.35 对齐待校订）
+> 最后更新：2026-09-15
 
-当前产品边界以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
-[V1.28 单一导出边界设计](../history/architecture/v1.28-single-export-consolidation.md) 为准；本文件只描述部署、容量与恢复边界。
+当前产品边界以 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 和
+[自动标注与异常人工接管 ADR](../adr/0004-automatic-annotation-approval-policy.md) 为准；本文件只描述部署、容量与恢复边界。正文中保留的 V1.28、旧 CSV 和旧导出名称仅作历史部署证据，不能覆盖 V1.35 的唯一 HDF5 与草稿准备与显式提交目标。
 
 ## 1. 决策边界
 
@@ -13,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.28 当前不部署 Dataset Export Worker；唯一的 `hand-landmarks.v1` current CameraStream detection evidence CSV preview/download 在 Core API 内以只读事务完成，不构成独立 Worker 工作负载。
+- V1.35 当前不部署独立 Dataset Export Worker；唯一的 `human-demonstration-hdf5.v1` 由 Core API 在最终准入通过后受控生成，不构成独立 Worker 工作负载。自动标注的真实模型推理由受控 AI Worker 执行，草稿来源记录仍由 Core API 持有。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载
@@ -27,9 +27,9 @@
 | Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
-| Hand Landmark Export | `hand-landmarks.v1` current CameraStream detection evidence preview/download | 否，只读投影并返回受控 CSV |
+| HDF5 Export / Eligibility | `human-demonstration-hdf5.v1` 最终准入和受控生成 | 是，Core API 重新校验并生成导出 |
 | PostgreSQL | 关系业务真值、Outbox/Inbox 和审计索引 | 是 |
-| S3 兼容存储 | raw、variant、frames、reports | 保存字节事实，不保存关系状态；当前 hand-landmarks.v1 由 Core API 同步返回，不落导出对象 |
+| S3 兼容存储 | raw、variant、frames、reports | 保存字节事实，不保存关系状态；当前 HDF5 由 Core API 受控返回，不改变对象存储业务真值边界 |
 | RabbitMQ | 作业和事件传递 | 否 |
 | Redis（可选） | 缓存、限流、短锁、短期进度；有测量证据后启用 | 否 |
 | CVAT | Object 标注外部工具 | 外部工作副本，正式 revision 仍在平台 |
@@ -42,16 +42,16 @@
 | --- | --- | --- |
 | Sprint 0 | Core API、Web、PostgreSQL、本地 S3 兼容对象存储、平台账号会话 | RabbitMQ、Redis、CVAT、Worker、外部 IdP |
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
-| 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、Export/AI Worker |
-| 隐私与标注 | 平台账号会话、CVAT | Export/AI Worker、无证据的 Redis、未批准的外部 IdP |
-| hand-landmarks.v1 | Core API 同步只读导出 | DatasetVersion/Export Worker、无证据的 Redis |
-| 手部预标注 | AI Worker、RabbitMQ、获批准的本地模型 | 批量与自动预标注策略 |
+| 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、独立 Export Worker |
+| 隐私与标注 | 平台账号会话、人工接管能力 | 无证据的 Redis、未批准的外部 IdP |
+| human-demonstration-hdf5.v1 | Core API 最终准入和受控导出 | DatasetVersion/Export Worker、无证据的 Redis |
+| 自动标注 | AI Worker、RabbitMQ、获批准的本地模型、Core API 草稿初始化规则 | 未验收的批量放量和无人工回退策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。
 
 ### 2.3 后续能力
 
-- 显式批量和自动手部预标注；
+- 真实 Action Worker 与草稿初始化规则的受控放量；
 - 模型离线仓库/批准清单；
 - 算法效果评估作业。
 
@@ -204,7 +204,7 @@ required_workers = worker_hours_day / effective_worker_hours_day
 ## 8. 对象存储运行要求
 
 - S3 API 能力测试：multipart、checksum、versioning、object lock、lifecycle、SSE/KMS、range GET、并发和错误语义。
-- 原始、工作和隔离对象有独立生命周期策略；当前 hand-landmarks.v1 不生成持久化导出对象。
+- 原始、工作和隔离对象有独立生命周期策略；当前 `human-demonstration-hdf5.v1` 不改变关系型业务真值，具体导出对象持久化方式由现役 exporter 事实决定。
 - 未完成 multipart 和 job 临时前缀有清理任务及积压告警。
 - 上传过期扫描和对象清理属于破坏性调度，默认关闭；每个环境须在隔离 bucket、最小权限、告警 owner 和运行手册确认后显式启用 `UPLOAD_CLEANUP_ENABLED=true`。
 - 调度关闭或 API 重启时，已提交的 `upload_cleanup_task` 必须保留；claim lease 到期后允许其他实例恢复，达到有限重试上限后进入可告警的 `FAILED`，不得静默丢弃。
@@ -249,7 +249,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 | --- | --- | --- | --- | --- |
 | 上传接收 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
 | 标注/复核 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
-| hand-landmarks.v1 preview/download | 待确认 | 待确认 | 待确认 | 当前视图、ClipAsset 和 Candidate provenance 校验 |
+| human-demonstration-hdf5.v1 export | 待确认 | 待确认 | 待确认 | 当前记录、批准结果、ClipAsset 和 MediaPipe provenance 校验 |
 | 权限/审计 | 待确认 | 待确认 | 待确认 | PITR 和审计链校验 |
 
 冻结数值后反推 WAL、快照、对象备份频率、异地副本、HA 和值班要求。
@@ -276,7 +276,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 1. 数据库 schema/Flyway 版本检查；
 2. 对象引用、version、size 和 SHA-256 抽样/全量分层核验；
 3. Outbox/Inbox 和作业 attempt 去重检查；
-4. AnnotationRevision、CleaningRun、hand-landmarks provenance 完整性；
+4. AnnotationRevision、CleaningRun、AI job/attempt、批准结果和 HDF5 provenance 完整性；
 5. 权限、审批、撤销和过期状态检查；
 6. 审计链连续性；
 7. 端到端合成 session 验证；
@@ -295,7 +295,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 - RabbitMQ 丢失后从 DB job/outbox 恢复；
 - Worker 大量重投、lease 过期和 DLQ 积压；
 - 密钥不可用/轮换失败；
-- 错误 hand-landmarks 证据导出或隐私放行撤销；
+- 错误 HDF5 批准结果导出或隐私放行撤销；
 - 整个站点不可用时的替代恢复位置；
 - 从备份恢复出已销毁/已撤销数据后的再处置。
 
@@ -310,7 +310,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 - PostgreSQL：连接、锁、慢查询、WAL、复制/备份、磁盘和 vacuum；
 - S3：容量、增长、错误、延迟、临时对象和生命周期失败；
 - RabbitMQ：ready/unacked、消费者、publish confirm、DLQ；
-- hand-landmarks：preview/download 时延、行数和 provenance 拒绝；
+- HDF5：最终准入时延、导出记录数和 provenance 拒绝；自动标注：草稿可用率、异常转人工率和误通过率；
 - 安全：认证失败、越权拒绝、raw 访问、外连尝试和审计投递失败。
 
 ### 14.2 告警原则

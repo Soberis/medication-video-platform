@@ -44,7 +44,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 
 ## Delivery Order
 
-接入事实按下列顺序建立；人工任务由显式授权操作创建，质量合格不自动建任务。V1.35 要求已有合法任务满足准入时自动派发动作候选，异常场景保留手动兜底；自动调度仍需实现验证，不等待 MediaPipe。两个候选分支独立运行，之后才进入导出准入：
+接入事实按下列顺序建立。V1.35 目标为自动准备任务与候选、人工可修改、最后显式提交；自动建任务和派发须单独实现验收，当前显式分配入口保留。动作候选使用合法任务的 schema，不等待 MediaPipe；候选初始化不创建正式 Revision 或 Review。
 
 ```text
 External Ingest / Upload
@@ -52,7 +52,7 @@ External Ingest / Upload
 → CameraStream / ClipAsset
 → Media Probe
    ├─ MediaPipe detection evidence
-   └─ optional action annotation → optional AI draft → human edit/confirm
+   └─ action candidate → editable draft → explicit human submit → existing review
                               ↓
                     existing admission → HDF5 Export
 ```

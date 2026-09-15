@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -152,7 +153,8 @@ public class ActionCandidateJobService {
 		}
 
 		var receivedAt = Timestamp.from(now);
-		requireAcceptableSegments(request.segments(), request.durationMs());
+		requireAcceptableSegments(job, request.segments(), request.durationMs());
+		job.recordActionExecutionMetadata(actionExecutionMetadata(request, request.segments().size()));
 
 		for (var seg : request.segments()) {
 			String stitchedJson = "[]";
@@ -167,11 +169,13 @@ public class ActionCandidateJobService {
 			this.jdbcTemplate.update("""
 					INSERT INTO action_candidate (
 					    action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id,
+					    annotation_task_id, label_schema_id, label_schema_digest,
 					    start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?)
 					""", UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), captureGroupId, job.getClipAssetId(),
-					seg.startMs(), seg.endMs(), seg.label(), seg.confidence(),
-					seg.sourceWindow() != null ? seg.sourceWindow() : 1, stitchedJson, receivedAt);
+					job.getAnnotationTaskId(), job.getLabelSchemaId(), job.getLabelSchemaDigest(), seg.startMs(),
+					seg.endMs(), seg.label(), seg.confidence(), seg.sourceWindow() != null ? seg.sourceWindow() : 1,
+					stitchedJson, receivedAt);
 		}
 
 		this.jdbcTemplate.update(
@@ -185,13 +189,26 @@ public class ActionCandidateJobService {
 
 	@Transactional(readOnly = true)
 	public List<ActionCandidateResponse> listByCaptureGroup(UUID projectId, UUID captureGroupId) {
+		return listByCaptureGroup(projectId, captureGroupId,
+				this.actionEnvelopeFactory.resolveTaskPrimaryClipAssetId(projectId, captureGroupId));
+	}
+
+	@Transactional(readOnly = true)
+	public List<ActionCandidateResponse> listByCaptureGroup(UUID projectId, UUID captureGroupId, UUID clipAssetId) {
+		if (clipAssetId == null) {
+			return List.of();
+		}
 		var sql = """
-				SELECT action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id,
+				SELECT c.action_candidate_id, c.ai_job_id, c.project_id, c.capture_group_id, c.clip_asset_id,
+				       c.annotation_task_id, c.label_schema_id, c.label_schema_digest,
 				       start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at
-				  FROM action_candidate
-				 WHERE project_id = ? AND capture_group_id = ?
-				   AND ai_job_id IN (SELECT ai_job_id FROM ai_job
-				                       WHERE algorithm_key = 'QWEN3_VL_ACTION' AND status = 'SUCCEEDED')
+				  FROM action_candidate c
+				 WHERE c.project_id = ? AND c.capture_group_id = ? AND c.clip_asset_id = ?
+				   AND c.ai_job_id = (SELECT j.ai_job_id FROM ai_job j
+				                       WHERE j.project_id = c.project_id AND j.clip_asset_id = c.clip_asset_id
+				                         AND j.algorithm_key = 'QWEN3_VL_ACTION'
+				                       ORDER BY j.created_at DESC, j.ai_job_id DESC LIMIT 1)
+				   AND EXISTS (SELECT 1 FROM ai_job j WHERE j.ai_job_id = c.ai_job_id AND j.status = 'SUCCEEDED')
 				 ORDER BY start_ms ASC, end_ms ASC
 				""";
 		return this.jdbcTemplate.query(sql, (rs, rowNum) -> {
@@ -210,13 +227,15 @@ public class ActionCandidateJobService {
 			catch (Exception ignored) {
 			}
 
+			var confidence = rs.getBigDecimal("confidence");
 			return new ActionCandidateResponse(rs.getObject("action_candidate_id", UUID.class),
 					rs.getObject("ai_job_id", UUID.class), rs.getObject("project_id", UUID.class),
 					rs.getObject("capture_group_id", UUID.class), rs.getObject("clip_asset_id", UUID.class),
-					rs.getLong("start_ms"), rs.getLong("end_ms"), rs.getString("action_label"),
-					rs.getDouble("confidence"), rs.getInt("source_window"), stitched,
-					rs.getTimestamp("created_at").toInstant());
-		}, projectId, captureGroupId);
+					rs.getObject("annotation_task_id", UUID.class), rs.getObject("label_schema_id", UUID.class),
+					rs.getString("label_schema_digest"), rs.getLong("start_ms"), rs.getLong("end_ms"),
+					rs.getString("action_label"), confidence == null ? null : confidence.doubleValue(),
+					rs.getInt("source_window"), stitched, rs.getTimestamp("created_at").toInstant());
+		}, projectId, captureGroupId, clipAssetId);
 	}
 
 	private UUID resolveCaptureGroupId(UUID clipAssetId) {
@@ -252,12 +271,19 @@ public class ActionCandidateJobService {
 	 * labels outside the active schema, intervals beyond the reported duration, and
 	 * overlapping intervals (the product rule allows blank gaps instead of overlaps).
 	 */
-	private void requireAcceptableSegments(List<ActionCandidateSegmentItem> segments, Long durationMs) {
+	private void requireAcceptableSegments(AiCandidateJob job, List<ActionCandidateSegmentItem> segments,
+			Long durationMs) {
 		if (segments.size() > MAX_RESULT_SEGMENTS) {
 			throw new HandPoseJobException("AI_ACTION_RESULT_TOO_LARGE",
 					"An action result may not contain more than " + MAX_RESULT_SEGMENTS + " segments.", 400);
 		}
-		var allowedLabels = this.actionEnvelopeFactory.resolveAllowedLabels();
+		var allowedLabels = job.getAllowedLabels().isEmpty() ? this.actionEnvelopeFactory.resolveAllowedLabels()
+				: job.getAllowedLabels();
+		for (var segment : segments) {
+			if (segment == null || segment.startMs() == null || segment.endMs() == null) {
+				throw new HandPoseJobException("INVALID_SEGMENT_INTERVAL", "Action segment bounds are required.", 400);
+			}
+		}
 		var ordered = new ArrayList<>(segments);
 		ordered.sort(Comparator.comparingLong(ActionCandidateSegmentItem::startMs));
 		var previousEnd = -1L;
@@ -282,6 +308,21 @@ public class ActionCandidateJobService {
 		}
 	}
 
+	private static Map<String, Object> actionExecutionMetadata(ActionCandidateResultRequest request, int segmentCount) {
+		var metadata = new LinkedHashMap<String, Object>();
+		metadata.put("model_name", request.modelName());
+		if (request.promptVersion() != null && !request.promptVersion().isBlank()) {
+			metadata.put("prompt_version", request.promptVersion());
+		}
+		metadata.put("total_windows", request.totalWindows());
+		metadata.put("duration_ms", request.durationMs());
+		metadata.put("inference_duration_ms", request.inferenceDurationMs());
+		metadata.put("started_at", request.startedAt().toString());
+		metadata.put("completed_at", request.completedAt().toString());
+		metadata.put("segment_count", segmentCount);
+		return metadata;
+	}
+
 	@Transactional
 	public ActionCandidateJobResponse queueActionCandidateJob(UUID projectId, UUID captureGroupId, String actorId,
 			String idempotencyKey, String requestId, String traceId) {
@@ -295,8 +336,8 @@ public class ActionCandidateJobService {
 	private ActionCandidateJobResponse queueActionCandidateJobInternal(UUID projectId, UUID captureGroupId,
 			UUID requestedClipAssetId, String actorId, String idempotencyKey, String requestId, String traceId,
 			AuditActorType auditActorType, String authorizationReference, String auditAction) {
-		var clipAssetId = requestedClipAssetId != null ? requestedClipAssetId
-				: resolvePrimaryClipAssetId(captureGroupId);
+		var labelSnapshot = this.actionEnvelopeFactory.resolveLabelSnapshot(projectId, captureGroupId);
+		var clipAssetId = labelSnapshot.primaryClipAssetId();
 		if (clipAssetId == null) {
 			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
 					"No primary video stream found for capture group " + captureGroupId, 404);
@@ -324,7 +365,10 @@ public class ActionCandidateJobService {
 		var existingList = this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId,
 				clipAssetId);
 		for (var candidate : existingList) {
-			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(candidate.getAlgorithmKey())) {
+			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(candidate.getAlgorithmKey())
+					&& inputDigest.equals(candidate.getInputSha256())
+					&& java.util.Objects.equals(labelSnapshot.annotationTaskId(), candidate.getAnnotationTaskId())
+					&& java.util.Objects.equals(labelSnapshot.schemaDigest(), candidate.getLabelSchemaDigest())) {
 				if (candidate.getStatus() == AiCandidateJobStatus.QUEUED
 						|| candidate.getStatus() == AiCandidateJobStatus.RUNNING
 						|| candidate.getStatus() == AiCandidateJobStatus.SUCCEEDED) {
@@ -339,7 +383,7 @@ public class ActionCandidateJobService {
 
 		var job = this.jobRepository
 			.save(AiCandidateJob.queueAction(projectId, clipAssetId, AiCandidateJob.ACTION_MODEL_SHA256, inputDigest,
-					inputSize, contentType, idempotencyKey, fingerprint, actorId, now));
+					inputSize, contentType, idempotencyKey, fingerprint, actorId, now, labelSnapshot));
 
 		if (this.receiptRepository != null) {
 			this.receiptRepository.save(
@@ -437,7 +481,7 @@ public class ActionCandidateJobService {
 
 	@Transactional(readOnly = true)
 	public ActionCandidateJobResponse getJobStatus(UUID projectId, UUID captureGroupId) {
-		var clipAssetId = resolvePrimaryClipAssetId(captureGroupId);
+		var clipAssetId = this.actionEnvelopeFactory.resolveTaskPrimaryClipAssetId(projectId, captureGroupId);
 		if (clipAssetId == null) {
 			return null;
 		}

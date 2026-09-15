@@ -817,7 +817,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对本次已配制剂量。\"}"))
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.schema_version").value("p0-atomic-action.v4"))
+			.andExpect(jsonPath("$.schema_version").value("p0-atomic-action.v5"))
 			.andExpect(jsonPath("$.labels[?(@.label_id == 'verify_dose')].display_name").value("核对剂量"))
 			.andReturn();
 		var publishedSchemaId = UUID
@@ -906,8 +906,8 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", key("submit-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"retrieve_medicine\"}]}"
-					.formatted(endMs)));
+				.content(
+						"{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"acquire_item\"}]}".formatted(endMs)));
 	}
 
 	private ResultActions recordViewQuality(UUID clipAssetId, String token, String decision, String reasonCode,

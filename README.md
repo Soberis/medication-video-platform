@@ -12,14 +12,14 @@ V1.35 的唯一主链：
 → Media Probe
   ├─ MediaPipe 手部事实
   └─ Action Candidate 动作候选
-→ 必要时人工标注 / 确认
+→ 自动标注 / 必要时人工确认
 → Export Eligibility
 → human-demonstration-hdf5.v1
 ```
 
 `ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象。`CaptureGroup` 是一次采集记录；`CameraStream` 是记录中的视频视角，不是平台管理的物理摄像头资产。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 
-采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。MediaPipe 与 Action Candidate 是两条独立 AI 证据链；Candidate 只提供机器辅助证据，不能直接成为人工 Ground Truth、Review、Cleaning 或导出结论。人工标注仅在项目需要 human ground truth 时启用。当前只提供 `human-demonstration-hdf5.v1` 导出，后端下载时重新执行 fail-closed 准入；旧 CSV、事件 manifest、`training-data.v2` 和独立 single-video 流程不属于当前产品。
+采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。MediaPipe 与 Action Candidate 独立运行。系统自动准备标注草稿，正确片段无需逐段采纳，用户可修改并最后显式提交；已提交 Revision 经现有 Review APPROVED 后才进入 HDF5 最终准入。当前唯一导出为 `human-demonstration-hdf5.v1`。
 
 当前规范：
 
@@ -27,6 +27,7 @@ V1.35 的唯一主链：
 - [需求基线入口与版本 manifest](./docs/requirements/README.md)
 - [当前架构文档入口](./docs/architecture/README.md)
 - [动作候选技术设计（支持性 DRAFT）](./docs/architecture/v1.34-action-annotation.md)
+- [自动标注与异常人工接管 ADR](./docs/adr/0004-automatic-annotation-approval-policy.md)
 - [安全、隐私与保留销毁](./docs/architecture/security-privacy-retention.md)
 - [部署、容量与灾难恢复](./docs/architecture/deployment-capacity-and-dr.md)
 - [前端设计系统](./docs/DESIGN_SYSTEM.md)
@@ -35,7 +36,7 @@ V1.35 的唯一主链：
 - [Platform 文档 Active / History 清理清单](./docs/audits/v1.35-platform-document-active-history-inventory.md)
 - [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
 
-领域模型、状态机和异步协议的旧产品段落待校订，统一从架构入口的待校订参考访问。人工任务由显式授权操作创建；动作候选自动调度是已有合法任务上的目标能力。未启用人工标注的记录可以保留 AI 证据，但当前唯一 HDF5 仍要求人工 APPROVED Revision 与同源 MediaPipe 样本。
+领域模型、状态机和异步协议中的历史产品段落仅供参考。自动建任务与派发是待验收目标；现有显式分配、提交和复核入口保留。自动化准备不代替提交和复核，不覆盖人工修改。
 
 ## 本地运行
 
@@ -73,7 +74,7 @@ pnpm dev
 ./scripts/start-local.sh --media-worker-concurrency 1 --ai-worker-concurrency 1
 ```
 
-如需更高吞吐量，可以在确认本机 CPU、内存和模型容量后提高到最多 8 个副本。副本数只提高后台吞吐量；不会创建批量预标注入口，也不会绕过人工质量判断、动作标注、复核或清洗。
+如需更高吞吐量，可以在确认本机 CPU、内存和模型容量后提高到最多 8 个副本。副本数只提高后台吞吐量；不会创建批量预标注入口，也不会绕过媒体/组级质量、草稿初始化规则、异常人工接管或最终导出校验。
 
 ## 验证
 

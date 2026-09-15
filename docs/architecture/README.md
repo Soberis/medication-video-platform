@@ -8,6 +8,7 @@
 | --- | --- |
 | [V1.35 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) | 当前唯一完整产品需求；D1–D5 为实施前决策门禁 |
 | [动作候选技术设计（支持性 DRAFT）](./v1.34-action-annotation.md) | 解释动作候选、Worker、时间映射和人工编辑的实现边界；不得覆盖 V1.35 |
+| [自动标注与显式提交 ADR](../adr/0004-automatic-annotation-approval-policy.md) | 自动生成草稿、可选修改、最后显式提交；复用现有 Revision / Review |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
 | [部署、容量与灾难恢复](./deployment-capacity-and-dr.md) | 拓扑、容量、性能、备份、RPO/RTO 和恢复演练 |
 | [前端设计系统](../DESIGN_SYSTEM.md) | 唯一前端视觉权威、Token、AppShell、共享布局和通用交互语言 |

@@ -9,7 +9,10 @@ export interface ActionCandidate {
   start_ms: number
   end_ms: number
   action_label: string
-  confidence: number
+  annotation_task_id?: string | null
+  label_schema_id?: string | null
+  label_schema_digest?: string | null
+  confidence: number | null
   source_window: number
   stitched_windows: number[]
   created_at: string

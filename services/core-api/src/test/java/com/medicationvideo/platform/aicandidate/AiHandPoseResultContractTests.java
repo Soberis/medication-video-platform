@@ -51,6 +51,46 @@ class AiHandPoseResultContractTests {
 	@Autowired
 	private AiCandidateJobRepository jobRepository;
 
+	@Autowired
+	private AiCandidateJobAttemptRepository attemptRepository;
+
+	@Test
+	@org.springframework.transaction.annotation.Transactional
+	void actionResultPersistsOptionalConfidenceAndContextWithoutSubmittingAnnotations() {
+		var jobId = UUID.randomUUID();
+		var messageId = UUID.randomUUID();
+		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+		var lease = "A".repeat(43);
+		insertRunningJob(jobId, UUID.randomUUID(), messageId, AiLeaseCapabilityFactory.sha256(lease), now);
+		var taskId = UUID.randomUUID();
+		var schemaId = UUID.randomUUID();
+		var groupId = UUID.randomUUID();
+		this.jdbcTemplate.update("""
+				UPDATE ai_job SET algorithm_key = 'QWEN3_VL_ACTION', annotation_task_id = ?,
+				label_schema_id = ?, label_schema_digest = ?, allowed_labels = '["draw_liquid"]'::jsonb
+				WHERE ai_job_id = ?
+				""", taskId, schemaId, "c".repeat(64), jobId);
+		var assets = org.mockito.Mockito.mock(com.medicationvideo.platform.assetcapture.AssetCatalogQueryService.class);
+		org.mockito.Mockito.when(assets.resolveCaptureGroupId(this.lastInsertedClipAssetId)).thenReturn(groupId);
+		var service = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
+				new tools.jackson.databind.ObjectMapper(), null, assets, null, null, null, null, null);
+		var revisionCount = this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision", Long.class);
+		var request = new ActionCandidateResultRequest(messageId, "synthetic-action-model", "synthetic-v1", 1, 19000L,
+				1L, now, now, List.of(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", null, 1, List.of(1))));
+		service.acceptResult(jobId, 1, lease, request, "synthetic-ai-worker");
+		service.acceptResult(jobId, 1, lease, request, "synthetic-ai-worker");
+		this.jobRepository.flush();
+		var candidates = service.listByCaptureGroup(this.lastInsertedProjectId, groupId, this.lastInsertedClipAssetId);
+		assertEquals(1, candidates.size());
+		assertEquals(taskId, candidates.getFirst().annotationTaskId());
+		org.junit.jupiter.api.Assertions.assertNull(candidates.getFirst().confidence());
+		assertEquals("synthetic-action-model", this.jdbcTemplate.queryForObject(
+				"SELECT execution_metadata->>'model_name' FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
+		assertEquals(revisionCount,
+				this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision", Long.class));
+		this.jdbcTemplate.update("DELETE FROM action_candidate WHERE ai_job_id = ?", jobId);
+	}
+
 	@BeforeEach
 	void clearState() {
 		this.jdbcTemplate.update("DELETE FROM candidate_annotation");

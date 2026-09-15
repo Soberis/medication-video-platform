@@ -175,6 +175,30 @@ class ActionCandidateJobServiceTests {
 	}
 
 	@Test
+	void rejectsMissingBoundsBeforeSortingSegments() {
+		var messageId = UUID.randomUUID();
+		prepareRunningJob(messageId);
+		var request = result(messageId,
+				List.of(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", null, 1, List.of()),
+						new ActionCandidateSegmentItem(null, 200L, "draw_liquid", null, 1, List.of())));
+		var exception = assertThrows(HandPoseJobException.class,
+				() -> this.service.acceptResult(JOB_ID, 1, "token", request, "worker"));
+		assertEquals("INVALID_SEGMENT_INTERVAL", exception.getErrorCode());
+	}
+
+	@Test
+	void confidenceIsOptionalButCannotExceedItsRange() {
+		try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+			var validator = factory.getValidator();
+			assertEquals(0,
+					validator.validate(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", null, 1, List.of()))
+						.size());
+			assertFalse(validator.validate(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", 1.1, 1, List.of()))
+				.isEmpty());
+		}
+	}
+
+	@Test
 	void rejectsSegmentsBeyondTheReportedDuration() {
 		var messageId = UUID.randomUUID();
 		prepareRunningJob(messageId);
@@ -221,17 +245,24 @@ class ActionCandidateJobServiceTests {
 	@Test
 	@SuppressWarnings("unchecked")
 	void listByCaptureGroupQueriesRepository() {
-		when(this.jdbcTemplate.query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID)))
+		when(this.actionEnvelopeFactory.resolveTaskPrimaryClipAssetId(PROJECT_ID, CAPTURE_GROUP_ID))
+			.thenReturn(CLIP_ASSET_ID);
+		when(this.jdbcTemplate.query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID),
+				eq(CLIP_ASSET_ID)))
 			.thenReturn(List.of());
 
 		var results = this.service.listByCaptureGroup(PROJECT_ID, CAPTURE_GROUP_ID);
 
 		assertEquals(0, results.size());
-		verify(this.jdbcTemplate).query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID));
+		verify(this.jdbcTemplate).query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID),
+				eq(CLIP_ASSET_ID));
 	}
 
 	@Test
 	void queueActionCandidateJobResolvesNullRequestIdAndTraceId() {
+		when(this.actionEnvelopeFactory.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID))
+			.thenReturn(new ActionLabelSnapshot(UUID.randomUUID(), UUID.randomUUID(), "c".repeat(64),
+					List.of("draw_liquid"), CLIP_ASSET_ID));
 		var auditRecorder = mock(AuditEventRecorder.class);
 		var serviceWithAudit = new ActionCandidateJobService(this.jobRepository, this.attemptRepository,
 				this.jdbcTemplate, this.objectMapper, null, this.assetCatalog, null, auditRecorder, null, null,

@@ -2,23 +2,32 @@
 
 ## V1.35 Consolidated Baseline（当前需求；实现未验收）
 
-需求定义、主链和验收方法见 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)。以下为 dev `f2f038f` 的静态核对；本轮仅验证文档，历史测试不证明 V1.35 已完成。
+需求定义、主链和验收方法见 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)。本表于 2026-09-15 按当前 dev 工作区更新；历史测试不证明 V1.35 全部完成。
 
 | 需求 | Owner module | 后续验证 | 状态 |
 | --- | --- | --- | --- |
 | V35-FR-001 产品边界 | assetcapture / iamproject | CaptureGroup、CameraStream、ClipAsset 与项目权限；N=1/N>1 同链 | 已有对象；当前验收待完成 |
 | V35-FR-002 唯一主链 | Core API / Worker / Web | 合成端到端区分接收、两个 AI 分支、可选人工与唯一 HDF5 | 部分实现；不把候选失败设为人工阻断 |
 | V35-FR-003 AI 事实隔离 | aicandidate / Web | 无手、读取失败、执行失败分开；两条证据链独立 | 已有实现；边界回归待验证 |
-| V35-FR-004 Schema 与版本 | annotationreview / aicandidate | 任务不可变 schema、区间校验、append-only revision | 部分实现；动作 adapter 当前仍取 global current |
-| V35-FR-005 来源追溯 | aicandidate / annotationreview | job/attempt、schema、model/input/result 和采纳来源可查询 | 执行元数据与人工采纳来源仍有缺口 |
+| V35-FR-004 Schema 与版本 | annotationreview / aicandidate | 任务绑定 schema、区间合法、草稿与不可变 Revision 分开 | schema 快照链在本轮补齐；真实模型仍待验证 |
+| V35-FR-005 来源追溯 | aicandidate / annotationreview | job/attempt、schema、model/input/result、草稿来源记录和采纳来源可查询 | 执行元数据、草稿来源记录与人工采纳来源仍有缺口 |
 | V35-FR-006 导出选择 | apps/web | 完整 PROJECT 分页、显式 ID、取消、失败和全选 | 已有组件；当前验收待完成 |
-| V35-FR-007 最终准入 | annotationreview / datasetexport | 当前 approved revision、媒体与 MediaPipe provenance、样本存在、整批拒绝 | 现役 Java 链；技术质量谓词 D2 待决，旧 SQL 已退休 |
+| V35-FR-007 最终准入 | annotationreview / datasetexport | 当前已提交且 Review APPROVED 的 Revision、媒体与 MediaPipe、样本存在、整批拒绝 | 复用现役 Java 链；技术质量谓词 D2 仍待决 |
 | V35-FR-008 HDF5 | datasetexport | samples 区间端点、无样本、参考机位、不补坐标与回读 | 已有 exporter；D3 待决，现有 layout 保留 |
 | V35-FR-009 可靠性 | 各作业模块 | 权限、outbox/inbox、租约、迟到、重试、输入漂移 | 现役机制保留；专项验证待实施 |
-| V35-FR-010 显式任务 / 自动候选 | annotationreview / aicandidate | 单独合格不建任务；已有合法任务满足条件只派发一次 | 显式 assignment 已有；动作自动派发待实现；synthetic 工具需对齐 |
+| V35-FR-010 自动任务 / 自动候选 | annotationreview / aicandidate | 自动策略启用时幂等创建/复用唯一任务并派发 AI；不同到达顺序只收敛一次，异常转人工 | 当前仍以显式 assignment 和手动动作入口为主；自动任务、自动派发和人工兜底待实现 |
 | V35-FR-011 初始化与编辑 | apps/web | 已编辑含清空草稿的保护、部分失败、空白、时间轴与键盘 | 已有部分交互；完整来源守卫待验证 |
 | V35-FR-012 授权与返工 | annotationreview / Web | 成员分配范围、管理员同人确认、输入变更、参考机位禁取时 | 已有代码；当前验收待完成 |
 | V35-FR-013 资源与效果 | 动作 Worker / 人工评估 | 锁定配置、真实时间映射、独立质量、人工总耗时与不确定性 | 待实测；占位 Worker 不算模型验收 |
+| V35-FR-014 显式提交 | annotationreview / aicandidate | 候选初始化不提交；用户可修改并提交整份草稿，沿用既有复核 | 提交与复核已有分离实现；自动建任务和派发仍待验收 |
+
+### 自动化策略的当前状态
+
+V1.35 当前目标为自动准备草稿、人工可修改、最后显式提交；沿用现有 Revision、Review APPROVED 和导出准入。自动建任务与派发尚需验收。
+
+本矩阵不把文档口径更新当作 runtime 完成。自动建任务、动作自动派发、人工采纳来源持久化及 Worker 真实推理仍待完成。
+
+2026-09-15 定向验证：Java 六个测试类共 65 项通过、零跳过，覆盖动作快照/重试、可选 confidence 的数据库写入与读取、重复回传不创建 Revision、人工提交/复核及 HDF5 回读；测试使用独立 Testcontainers PostgreSQL，并执行 V1–V80 迁移。前端标注测试 30 项通过，覆盖编辑/提交与候选任务/schema 不匹配拒绝；OpenAPI lint 与类型检查通过。不是完整质量门禁或真实模型质量验收。
 
 代码证据入口：[显式任务与 Review](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/CaptureGroupAnnotationWorkflow.java)、[动作 schema adapter](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/AnnotationActionAllowedLabelsAdapter.java)、[动作 job service](../../services/core-api/src/main/java/com/medicationvideo/platform/aicandidate/ActionCandidateJobService.java)、[已批准人工标注查询](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/ApprovedHumanAnnotationQueryService.java)、[HDF5 exporter](../../services/core-api/src/main/java/com/medicationvideo/platform/datasetexport/HumanDemonstrationHdf5ExportService.java)、[V75 退役视图](../../services/core-api/src/main/resources/db/migration/V75__retire_capture_group_manifest_views.sql)。完整验收 ID 和决策门禁以 V1.35 第 16–18 节为准。
 

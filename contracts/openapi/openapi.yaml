@@ -3824,9 +3824,10 @@ paths:
       tags: [AI Candidates]
       summary: Read stored action candidates for a project capture group
       description: >-
-        Requires active project membership. This initial endpoint returns stored candidates,
-        not an attestation of current task provenance. Qwen dispatch and task snapshot binding
-        are pending implementation; do not treat these records as approved annotations.
+        Requires active project membership. Returns candidates only from the latest successful
+        action job on the annotation task's selected primary clip. A newer unfinished job
+        suppresses older results. Returns an empty list when no task primary exists.
+        Stored candidates are drafts, never submitted or approved annotations.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -3853,7 +3854,7 @@ paths:
       summary: Read latest action candidate job status for a capture group
       description: >-
         Requires active project membership. Returns 200 with the latest action candidate
-        job if one has been dispatched, or 204 No Content if none exists.
+        job on the task's selected primary clip, or 204 No Content if none exists.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -3880,7 +3881,9 @@ paths:
       summary: Manually queue or retry an action candidate job for a project capture group
       description: >-
         Requires active project membership. Queues a new Qwen action candidate job
-        targeting the primary clip asset of the capture group.
+        targeting the annotation task's selected primary clip, using its frozen label schema.
+        Missing task schema is rejected with 409; a missing primary clip is rejected with 404.
+        Automatic task creation and dispatch remain separate implementation work.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -3900,6 +3903,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /internal/ai-jobs/{ai_job_id}/attempts/{attempt}/action-result:
     put:
       operationId: acceptActionCandidateResult
@@ -7673,7 +7677,7 @@ components:
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
     ActionCandidate:
       type: object
-      required: [action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id, start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at]
+      required: [action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id, start_ms, end_ms, action_label, source_window, stitched_windows, created_at]
       properties:
         action_candidate_id: { type: string, format: uuid }
         ai_job_id: { type: string, format: uuid }
@@ -7683,7 +7687,10 @@ components:
         start_ms: { type: integer, format: int64, minimum: 0 }
         end_ms: { type: integer, format: int64, minimum: 1 }
         action_label: { type: string }
-        confidence: { type: number, minimum: 0, maximum: 1 }
+        annotation_task_id: { type: [string, 'null'], format: uuid }
+        label_schema_id: { type: [string, 'null'], format: uuid }
+        label_schema_digest: { type: [string, 'null'] }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
         source_window: { type: integer }
         stitched_windows: { type: array, items: { type: integer } }
         created_at: { type: string, format: date-time }
@@ -7728,12 +7735,12 @@ components:
     ActionCandidateSegmentItem:
       type: object
       additionalProperties: false
-      required: [start_ms, end_ms, label, confidence]
+      required: [start_ms, end_ms, label]
       properties:
         start_ms: { type: integer, format: int64, minimum: 0 }
         end_ms: { type: integer, format: int64, minimum: 1 }
         label: { type: string, minLength: 1 }
-        confidence: { type: number, minimum: 0, maximum: 1 }
+        confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
         source_window: { type: [integer, 'null'] }
         stitched_windows: { type: [array, 'null'], items: { type: integer } }
     AiWorkerLeaseRequest:

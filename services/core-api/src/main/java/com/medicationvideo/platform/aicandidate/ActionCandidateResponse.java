@@ -5,6 +5,6 @@ import java.util.List;
 import java.util.UUID;
 
 public record ActionCandidateResponse(UUID actionCandidateId, UUID aiJobId, UUID projectId, UUID captureGroupId,
-		UUID clipAssetId, long startMs, long endMs, String actionLabel, double confidence, int sourceWindow,
-		List<Integer> stitchedWindows, Instant createdAt) {
+		UUID clipAssetId, UUID annotationTaskId, UUID labelSchemaId, String labelSchemaDigest, long startMs, long endMs,
+		String actionLabel, Double confidence, int sourceWindow, List<Integer> stitchedWindows, Instant createdAt) {
 }
