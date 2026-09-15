@@ -13,6 +13,17 @@ import jakarta.persistence.LockModeType;
 
 interface CaptureGroupQualityReviewRepository extends JpaRepository<CaptureGroupQualityReview, UUID> {
 
+	@Query("""
+			select review from CaptureGroupQualityReview review
+			where review.projectId = :projectId
+			and not exists (select newer from CaptureGroupQualityReview newer
+			where newer.projectId = review.projectId and newer.captureGroupId = review.captureGroupId
+			and newer.revision > review.revision)
+			order by review.captureGroupId
+			""")
+	List<CaptureGroupQualityReview> findCurrentPage(@Param("projectId") UUID projectId,
+			org.springframework.data.domain.Pageable pageable);
+
 	Optional<CaptureGroupQualityReview> findByProjectIdAndCaptureGroupIdAndReviewerActorIdAndIdempotencyKey(
 			UUID projectId, UUID captureGroupId, String reviewerActorId, String idempotencyKey);
 

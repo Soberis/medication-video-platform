@@ -333,6 +333,23 @@ public class ActionCandidateJobService {
 				traceId, AuditActorType.USER, "ROLE_MEMBER", "AI_ACTION_CANDIDATE_JOB_QUEUED");
 	}
 
+	@Transactional
+	public void queueAutomatically(UUID projectId, UUID captureGroupId, String authorizedAssignee) {
+		this.projectAccessService.lockAndRequireMember(projectId, authorizedAssignee);
+		var snapshot = this.actionEnvelopeFactory.resolveLabelSnapshot(projectId, captureGroupId);
+		// Automatic reconciliation never spends another attempt on a terminal failure.
+		if (this.jobRepository
+			.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, snapshot.primaryClipAssetId())
+			.stream()
+			.anyMatch(job -> AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())
+					&& java.util.Objects.equals(snapshot.annotationTaskId(), job.getAnnotationTaskId())
+					&& java.util.Objects.equals(snapshot.schemaDigest(), job.getLabelSchemaDigest())))
+			return;
+		queueActionCandidateJobInternal(projectId, captureGroupId, null, "AUTO_ACTION_PREPARATION",
+				"auto-action-" + snapshot.annotationTaskId(), "auto-action-" + captureGroupId, null,
+				AuditActorType.SYSTEM, "DEPLOYMENT_ACTION_AUTO_POLICY", "AI_ACTION_CANDIDATE_JOB_AUTO_QUEUED");
+	}
+
 	private ActionCandidateJobResponse queueActionCandidateJobInternal(UUID projectId, UUID captureGroupId,
 			UUID requestedClipAssetId, String actorId, String idempotencyKey, String requestId, String traceId,
 			AuditActorType auditActorType, String authorizationReference, String auditAction) {
