@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { paths } from '@/app/paths'
 import {
   formatAnnotationTime,
+  getActionDisplayName,
   validActionCandidates,
   validateSegments,
 } from '@/features/capture-group/capture-group-detail-model'
@@ -34,7 +35,7 @@ describe('action candidate draft validation', () => {
     clip_asset_id: task.primary_clip_asset_id!,
     start_ms: 0,
     end_ms: 1000,
-    action_label: 'PREPARE',
+    action_label: 'acquire_item',
     confidence: 0.8,
     source_window: 1,
     stitched_windows: [],
@@ -120,6 +121,16 @@ describe('formatAnnotationTime', () => {
     ).toEqual({
       2: { end: '结束时间不能超出视频时长（最大 1000 毫秒）。' },
     })
+  })
+})
+
+describe('action label presentation', () => {
+  it('prefers the immutable schema name and falls back to the palette for legacy labels', () => {
+    const schema = labelSchema()
+
+    expect(getActionDisplayName('acquire_item', schema)).toBe('拿取容器/工具')
+    expect(getActionDisplayName('retrieve_medicine', null)).toBe('拿取药瓶/耗材')
+    expect(getActionDisplayName('unknown_action', null)).toBe('unknown_action')
   })
 })
 
@@ -236,7 +247,7 @@ describe('CaptureGroup annotation workflow', () => {
     })
     const task = groupTask(groupId, true, { revision: true })
     task.annotation_revision!.annotation_document.segments = [
-      { start_ms: 12345, end_ms: 18760, label: 'PREPARE' },
+      { start_ms: 12345, end_ms: 18760, label: 'acquire_item' },
     ]
     stubGroupDetail(group, {
       task,
@@ -557,7 +568,7 @@ describe('CaptureGroup annotation workflow', () => {
       clip_asset_id: group.streams[0]!.clip_asset_id,
       start_ms: 1000,
       end_ms: 4000,
-      action_label: 'PREPARE',
+      action_label: 'acquire_item',
       confidence: 0.92,
       source_window: 1,
       stitched_windows: [],

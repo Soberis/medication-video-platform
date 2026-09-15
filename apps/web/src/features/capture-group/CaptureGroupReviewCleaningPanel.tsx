@@ -21,6 +21,7 @@ import {
   cleaningLabel,
   cleaningTone,
   formatAnnotationTime,
+  getActionDisplayName,
 } from '@/features/capture-group/capture-group-detail-model'
 import {
   groupQualityDisplayLabel,
@@ -462,9 +463,7 @@ function FormalAnnotationIntervals({
       {segments.length ? (
         <ol>
           {segments.map((segment, index) => {
-            const labelName = schema?.labels.find(
-              (label) => label.label_id === segment.label,
-            )?.display_name
+            const labelName = getActionDisplayName(segment.label, schema)
             const formattedStart = formatAnnotationTime(segment.start_ms)
             const formattedEnd = formatAnnotationTime(segment.end_ms)
             return (
@@ -691,9 +690,7 @@ function CleaningPrimaryInterval({
         <ol>
           {primaryInterval.map((interval, index) => {
             const label = stringValue(interval, 'label')
-            const labelName = schema?.labels.find(
-              (candidate) => candidate.label_id === label,
-            )?.display_name
+            const labelName = label ? getActionDisplayName(label, schema) : null
             const startMs = numberValue(interval, 'start_ms')
             const endMs = numberValue(interval, 'end_ms')
             const formattedStart = formatAnnotationTime(startMs)

@@ -65,7 +65,7 @@ def _action_payload() -> dict[str, object]:
         "project_id": str(UUID("00000000-0000-0000-0000-000000000023")),
         "capture_group_id": str(UUID("00000000-0000-0000-0000-000000000024")),
         "clip_asset_id": str(UUID("00000000-0000-0000-0000-000000000025")),
-        "allowed_labels": ["prepare", "draw_liquid", "cleanup"],
+        "allowed_labels": ["acquire_item", "draw_liquid", "transfer_liquid"],
         "input_sha256": "c" * 64,
         "input_size_bytes": 2048,
         "content_type": "video/mp4",
@@ -84,7 +84,7 @@ def test_action_job_contract_parses_valid_payload() -> None:
     raw = json.dumps(_action_payload()).encode()
     job = ActionJob.from_bytes(raw)
     assert job.algorithm_key == "QWEN3_VL_ACTION"
-    assert job.allowed_labels == ("prepare", "draw_liquid", "cleanup")
+    assert job.allowed_labels == ("acquire_item", "draw_liquid", "transfer_liquid")
     assert job.sampling_fps == 1
 
 
@@ -112,7 +112,7 @@ def test_action_job_contract_rejects_blank_provenance_fields() -> None:
 def test_action_job_contract_rejects_an_unusable_label_set() -> None:
     from medication_ai_worker.contracts import ActionJob
 
-    for labels in ([], ["prepare", " "], ["prepare", 3]):
+    for labels in ([], ["acquire_item", " "], ["acquire_item", 3]):
         payload = _action_payload()
         payload["allowed_labels"] = labels
 
@@ -146,4 +146,3 @@ def test_action_job_example_matches_the_declared_schema_fields() -> None:
     from medication_ai_worker.contracts import ACTION_FIELDS
 
     assert set(_action_payload()) == set(ACTION_FIELDS)
-

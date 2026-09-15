@@ -8,27 +8,39 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 
-# Refined atomic action labels for medication preparation & robotic demonstration.
-# Focuses strictly on concrete physical operations and deprecates broad workflow steps
-# (prepare_workspace, prepare_dose, final_review, cleanup).
+# Unified business action labels for medication preparation video annotation.
+# The worker emits observable, physical operations only. Robot execution primitives
+# (move_to, grasp, insert, push_plunger, and similar controls) stay outside this list.
 DEFAULT_LABELS = (
-    "retrieve_medicine",
-    "open_cap",
+    "acquire_item",
+    "open_container",
+    "disinfect_access",
+    "insert_needle",
     "draw_liquid",
-    "inject_liquid",
-    "mix_solution",
-    "check_info",
-    "label_seal",
+    "transfer_liquid",
+    "agitate_solution",
+    "discard_sharps",
+    "label_prepared_medication",
 )
 
 PROTOCOL_ORDER = DEFAULT_LABELS
 
 # Typical physical duration (in milliseconds) for atomic actions.
-# Real physical actions are discrete and short (5~12s), never filling the entire video.
+# Real physical actions are discrete and short (4~12s), never filling the entire video.
 TYPICAL_ACTION_DURATIONS: dict[str, int] = {
+    "acquire_item": 6_000,
+    "open_container": 5_000,
+    "disinfect_access": 4_000,
+    "insert_needle": 4_000,
+    "draw_liquid": 12_000,
+    "transfer_liquid": 8_000,
+    "agitate_solution": 6_000,
+    "discard_sharps": 5_000,
+    "label_prepared_medication": 6_000,
+    # Historical schemas remain processable when an existing task dispatches an
+    # action job with its frozen v3 labels.
     "retrieve_medicine": 6_000,
     "open_cap": 5_000,
-    "draw_liquid": 12_000,
     "inject_liquid": 8_000,
     "mix_solution": 6_000,
     "check_info": 5_000,

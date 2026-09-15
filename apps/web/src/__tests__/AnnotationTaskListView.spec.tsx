@@ -20,7 +20,7 @@ const completedRevision = {
   revision_number: 1,
   annotation_document: {
     schema_version: 'annotation-document.v1',
-    segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
+    segments: [{ start_ms: 0, end_ms: 1000, label: 'acquire_item' }],
   },
   submitted_by: 'local-synthetic-uploader',
   submitted_at: '2026-07-26T01:00:00Z',
@@ -45,21 +45,66 @@ const completedRevision = {
 const labelSchema = {
   label_schema_id: labelSchemaId,
   schema_key: 'medication-primary-step',
-  schema_version: 'p0-atomic-action.v3',
+  schema_version: 'p0-atomic-action.v4',
   schema_digest: labelSchemaDigest,
   layer: 'primary_step',
   labels: [
     {
-      label_id: 'retrieve_medicine',
-      display_name: '拿取药品',
-      description: '从工作区取得本次配制所需药品。',
-      sort_order: 10,
+      label_id: 'acquire_item',
+      display_name: '拿取容器/工具',
+      description:
+        '手明确到达并取得将参与配药的容器或工具，物体离开原稳定位置并进入操作区；不标持续持有、调整位置或重复抓握',
+      sort_order: 1,
     },
     {
-      label_id: 'open_cap',
-      display_name: '开启瓶塞/针帽',
-      description: '开启或掰开瓶盖、铝盖、胶塞、保护盖或拔下针帽。',
-      sort_order: 20,
+      label_id: 'open_container',
+      display_name: '开启容器',
+      description:
+        '明确打开药品主容器，如掰开安瓿或移除西林瓶/输液容器的保护部件；不包括拆注射器包装',
+      sort_order: 2,
+    },
+    {
+      label_id: 'disinfect_access',
+      display_name: '消毒容器接口',
+      description: '看到棉签或其他消毒用品实际擦拭瓶塞、安瓿颈或容器接口；仅出现用品不构成该动作',
+      sort_order: 3,
+    },
+    {
+      label_id: 'insert_needle',
+      display_name: '针头进入容器',
+      description: '清楚看到针头穿过瓶塞或接口并进入目标药品容器；仅靠近或被遮挡时不标注',
+      sort_order: 4,
+    },
+    {
+      label_id: 'draw_liquid',
+      display_name: '抽取药液',
+      description: '针头已进入容器且活塞向后移动，能看到药液进入注射器；仅进针没有抽液证据时不标注',
+      sort_order: 5,
+    },
+    {
+      label_id: 'transfer_liquid',
+      display_name: '转移药液',
+      description:
+        '使用注射器把药液从一个容器推入另一个目标容器；要求能确认来源、目标和推注方向，不表示面向患者给药',
+      sort_order: 6,
+    },
+    {
+      label_id: 'agitate_solution',
+      display_name: '混匀药液',
+      description: '明确摇晃、翻转或振荡装有药液的容器以混匀；仅拿着或移动容器不标注',
+      sort_order: 7,
+    },
+    {
+      label_id: 'discard_sharps',
+      display_name: '处置锐器',
+      description: '明确把针头、安瓿或其他锐器放入锐器盒；仅出现锐器盒或丢弃普通耗材不标注',
+      sort_order: 8,
+    },
+    {
+      label_id: 'label_prepared_medication',
+      display_name: '给成品贴签',
+      description: '看到标签实际粘贴到注射器、药瓶或成品输液容器；仅查看、拿着标签或成品包装不标注',
+      sort_order: 9,
     },
   ],
 }
@@ -368,7 +413,7 @@ describe('annotation task list view', () => {
     await user.click(annotationDetails)
     expect(within(completedRow).getByText('00:00 → 00:01')).toBeInTheDocument()
     expect(within(completedRow).getByText('原始值：0–1000 毫秒')).toBeInTheDocument()
-    expect(within(completedRow).getByText('拿取药品')).toBeInTheDocument()
+    expect(within(completedRow).getByText('拿取容器/工具')).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看详情')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)
@@ -490,7 +535,7 @@ describe('annotation task list view', () => {
         review: {
           ...completedRevision.review,
           decision: 'REJECTED',
-          review_note: '请补充完整的拿取药品时间段。',
+          review_note: '请补充完整的拿取容器/工具时间段。',
         },
         capture_group_cleaning: null,
       },
@@ -501,9 +546,9 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('listitem', { name: /待返工/ })
     expect(taskRow).toHaveTextContent('复核未通过')
-    expect(screen.queryByText('请补充完整的拿取药品时间段。')).not.toBeVisible()
+    expect(screen.queryByText('请补充完整的拿取容器/工具时间段。')).not.toBeVisible()
     await user.click(within(taskRow).getByText('查看详情'))
-    expect(screen.getByText('请补充完整的拿取药品时间段。')).toBeVisible()
+    expect(screen.getByText('请补充完整的拿取容器/工具时间段。')).toBeVisible()
     await user.click(within(taskRow).getByRole('link', { name: /修改标注/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),

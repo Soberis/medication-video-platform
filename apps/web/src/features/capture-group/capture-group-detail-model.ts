@@ -205,6 +205,17 @@ export function getActionStyle(labelKey: string) {
   )
 }
 
+export function getActionDisplayName(
+  labelKey: string,
+  schema?: AnnotationLabelSchema | null,
+): string {
+  const normalizedKey = labelKey.trim().toLowerCase()
+  return (
+    schema?.labels.find((label) => label.label_id.toLowerCase() === normalizedKey)?.display_name ??
+    getActionStyle(labelKey).label
+  )
+}
+
 export function initialDraftSegments(
   task: AnnotationTask | null,
   candidates?: ActionCandidate[],

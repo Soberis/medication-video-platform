@@ -34,6 +34,7 @@ import {
   formatHumanFriendlyTime,
   formatSegmentDurationLabel,
   formatTaskStatus,
+  getActionDisplayName,
   getActionStyle,
   groupViewDecision,
   initialDraftSegments,
@@ -595,8 +596,7 @@ export function CaptureGroupAnnotationPanel({
 
   function renderCandidateCard(candidate: ActionCandidate) {
     const style = getActionStyle(candidate.action_label)
-    const labelDef = schema?.labels.find((l) => l.label_id === candidate.action_label)
-    const labelName = labelDef?.display_name ?? candidate.action_label
+    const labelName = getActionDisplayName(candidate.action_label, schema)
     const durationSeconds = ((candidate.end_ms - candidate.start_ms) / 1000).toFixed(1)
     const isAdopted = draftSegments.some(
       (s) =>
@@ -987,8 +987,7 @@ export function CaptureGroupAnnotationPanel({
                     Math.min(100 - leftPercent, (Math.max(0, endSec - startSec) / durSec) * 100),
                   )
                   const style = getActionStyle(seg.label)
-                  const schemaLabel = sortedLabels.find((l) => l.label_id === seg.label)
-                  const displayName = schemaLabel?.display_name ?? style.label
+                  const displayName = getActionDisplayName(seg.label, schema)
                   const isSliceActive =
                     currentPlaybackTimeMs !== null &&
                     Number.isFinite(seg.start_ms) &&
@@ -1391,10 +1390,7 @@ export function CaptureGroupAnnotationPanel({
                       原始值：{segment.start_ms}–{segment.end_ms} 毫秒
                     </small>
                   </div>
-                  <span>
-                    {schema?.labels.find((label) => label.label_id === segment.label)
-                      ?.display_name ?? segment.label}
-                  </span>
+                  <span>{getActionDisplayName(segment.label, schema)}</span>
                 </li>
               )
             })}

@@ -18,7 +18,10 @@ import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/S
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
-import { formatAnnotationTime } from '@/features/capture-group/capture-group-detail-model'
+import {
+  formatAnnotationTime,
+  getActionDisplayName,
+} from '@/features/capture-group/capture-group-detail-model'
 import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
@@ -322,9 +325,7 @@ export default function AnnotationTaskListView({
                         <h3>标注时间段</h3>
                         <ol className="task-annotation-list">
                           {revision.annotation_document.segments.map((segment, index) => {
-                            const label =
-                              labelSchema?.labels.find((item) => item.label_id === segment.label)
-                                ?.display_name ?? segment.label
+                            const label = getActionDisplayName(segment.label, labelSchema)
                             const formattedStart = formatAnnotationTime(segment.start_ms)
                             const formattedEnd = formatAnnotationTime(segment.end_ms)
                             return (

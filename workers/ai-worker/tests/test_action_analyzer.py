@@ -22,6 +22,17 @@ def test_scaffold_labels_stay_inside_the_active_label_schema(
 ) -> None:
     _pin_duration(monkeypatch, 60_000)
 
+    assert DEFAULT_LABELS == (
+        "acquire_item",
+        "open_container",
+        "disinfect_access",
+        "insert_needle",
+        "draw_liquid",
+        "transfer_liquid",
+        "agitate_solution",
+        "discard_sharps",
+        "label_prepared_medication",
+    )
     _, segments = analyze_video_actions(Path("synthetic.mp4"), DEFAULT_LABELS)
 
     assert segments
@@ -50,9 +61,11 @@ def test_scaffold_ignores_labels_outside_the_frozen_protocol_order(
 ) -> None:
     _pin_duration(monkeypatch, 60_000)
 
-    _, segments = analyze_video_actions(Path("synthetic.mp4"), ("invented_label", "open_cap"))
+    _, segments = analyze_video_actions(
+        Path("synthetic.mp4"), ("invented_label", "open_container")
+    )
 
-    assert {segment.label for segment in segments} == {"open_cap"}
+    assert {segment.label for segment in segments} == {"open_container"}
 
 
 def test_scaffold_falls_back_to_the_offered_labels_for_an_unknown_protocol(
@@ -97,4 +110,3 @@ def test_placeholder_result_is_flagged_as_non_model_output() -> None:
 def test_probe_duration_ms_raises_when_ffprobe_fails() -> None:
     with pytest.raises(RuntimeError, match="Failed to probe video duration"):
         action_analyzer.probe_duration_ms(Path("non-existent-video.mp4"))
-

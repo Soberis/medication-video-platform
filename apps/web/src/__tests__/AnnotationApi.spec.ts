@@ -140,7 +140,7 @@ describe('annotation task API', () => {
                 revision_number: 1,
                 annotation_document: {
                   schema_version: 'annotation-document.v1',
-                  segments: [{ start_ms: 0, end_ms: 1000, label: 'retrieve_medicine' }],
+                  segments: [{ start_ms: 0, end_ms: 1000, label: 'acquire_item' }],
                 },
                 submitted_by: 'local-synthetic-uploader',
                 submitted_at: '2026-07-26T01:00:00Z',
@@ -212,15 +212,16 @@ describe('annotation task API', () => {
       jsonResponse({
         label_schema_id: labelSchemaId,
         schema_key: 'medication-primary-step',
-        schema_version: 'p0-primary-step.v1',
+        schema_version: 'p0-atomic-action.v4',
         schema_digest: labelSchemaDigest,
         layer: 'primary_step',
         labels: [
           {
-            label_id: 'retrieve_medicine',
-            display_name: '拿取药品',
-            description: '从工作区取得本次配制所需药品。',
-            sort_order: 20,
+            label_id: 'acquire_item',
+            display_name: '拿取容器/工具',
+            description:
+              '手明确到达并取得将参与配药的容器或工具，物体离开原稳定位置并进入操作区；不标持续持有、调整位置或重复抓握',
+            sort_order: 1,
           },
         ],
       }),
@@ -230,7 +231,7 @@ describe('annotation task API', () => {
     await expect(getAnnotationLabelSchema(projectId, signal)).resolves.toMatchObject({
       label_schema_id: labelSchemaId,
       layer: 'primary_step',
-      labels: [{ label_id: 'retrieve_medicine', display_name: '拿取药品' }],
+      labels: [{ label_id: 'acquire_item', display_name: '拿取容器/工具' }],
     })
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/v1/projects/${projectId}/annotation-label-schema`,
@@ -318,7 +319,7 @@ describe('annotation task API', () => {
       submitAnnotationRevision(
         projectId,
         taskId,
-        [{ start_ms: 100, end_ms: 900, label: 'retrieve_medicine' }],
+        [{ start_ms: 100, end_ms: 900, label: 'acquire_item' }],
         '合成验证',
       ),
     ).resolves.toMatchObject({ annotation_task_id: taskId, revision_number: 1 })
@@ -328,7 +329,7 @@ describe('annotation task API', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          segments: [{ start_ms: 100, end_ms: 900, label: 'retrieve_medicine' }],
+          segments: [{ start_ms: 100, end_ms: 900, label: 'acquire_item' }],
           note: '合成验证',
         }),
         headers: expect.objectContaining({
@@ -441,7 +442,7 @@ describe('annotation task API', () => {
         group_quality_revision: 1,
         primary_clip_asset_id: assetId,
         primary_camera_number: 1,
-        primary_interval: [{ start_ms: 100, end_ms: 900, label: 'PREPARE' }],
+        primary_interval: [{ start_ms: 100, end_ms: 900, label: 'acquire_item' }],
         view_evidence: [],
         participating_views: [],
         excluded_views: [],

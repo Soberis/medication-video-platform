@@ -73,7 +73,7 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
 
   const visibleText = await page.locator('body').innerText()
   expect(visibleText).not.toContain('synthetic-annotator')
-  expect(visibleText).not.toMatch(/\b(?:ASSIGNED|SUBMITTED|COMPLETED|PREPARE)\b/)
+  expect(visibleText).not.toMatch(/\b(?:ASSIGNED|SUBMITTED|COMPLETED|acquire_item)\b/)
 
   await expectNoSeriousAxeViolations(page)
   await expect(page).toHaveScreenshot('annotation-task-list-1440.png', {
