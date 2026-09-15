@@ -23,4 +23,4 @@ V1.28 是上一正式运行时基线；它的历史导出和旧流程不构成 V
 
 ## 归档与完整性
 
-历史基线与草案保存在 [`baselines/`](./baselines/) 和 [`drafts/`](./drafts/)；摘要按 UTF-8 文件字节计算 SHA-256（CRLF 统一为 LF）；当前 Consolidated Baseline、上一正式运行时基线与前一版本的摘要由 [requirements-manifest.json](./requirements-manifest.json) 记录。更新基线时必须重新计算摘要、更新 manifest，并同步 `AGENTS.md`、当前技术设计和当前追踪矩阵。
+历史基线与草案保存在 [`history/requirements/baselines/`](../history/requirements/baselines/) 和 [`history/requirements/drafts/`](../history/requirements/drafts/)；摘要按 UTF-8 文件字节计算 SHA-256（CRLF 统一为 LF）；当前 Consolidated Baseline、上一正式运行时基线与前一版本的摘要由 [requirements-manifest.json](./requirements-manifest.json) 记录。更新基线时必须重新计算摘要、更新 manifest，并同步 `AGENTS.md`、当前技术设计和当前追踪矩阵。

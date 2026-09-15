@@ -4,13 +4,13 @@
 
 ## V1.28–V1.34 当前时代历史
 
-- [V1.34 配药视频数据处理平台需求文档](./baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)：V1.35 之前的最近 DRAFT；保留为审计和迁移证据。
-- [V1.33 配药视频数据处理平台需求文档](./baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)：V1.34 之前的历史 DRAFT。
-- [V1.32 配药视频数据处理平台需求文档](./baselines/V1.32/配药视频数据处理平台需求文档_V1.32.md)：V1.33 之前的历史 DRAFT。
-- [V1.31 配药视频数据处理平台需求文档](./baselines/V1.31/配药视频数据处理平台需求文档_V1.31.md)：V1.32 之前的历史 DRAFT。
-- [V1.30 配药视频数据处理平台需求文档](./baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)：V1.31 之前的历史 DRAFT。
-- [V1.29 配药视频数据处理平台需求文档](./baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)：V1.30 之前的历史 DRAFT。
-- [V1.29 视频工作台 UX 补充](./baselines/V1.29/v1.29-video-workspace-ux.md)：V1.29 的历史 UX 补充文档。
+- [V1.34 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)：V1.35 之前的最近 DRAFT；保留为审计和迁移证据。
+- [V1.33 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.33/配药视频数据处理平台需求文档_V1.33.md)：V1.34 之前的历史 DRAFT。
+- [V1.32 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.32/配药视频数据处理平台需求文档_V1.32.md)：V1.33 之前的历史 DRAFT。
+- [V1.31 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.31/配药视频数据处理平台需求文档_V1.31.md)：V1.32 之前的历史 DRAFT。
+- [V1.30 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.30/配药视频数据处理平台需求文档_V1.30.md)：V1.31 之前的历史 DRAFT。
+- [V1.29 配药视频数据处理平台需求文档](../history/requirements/baselines/V1.29/配药视频数据处理平台需求文档_V1.29.md)：V1.30 之前的历史 DRAFT。
+- [V1.29 视频工作台 UX 补充](../history/requirements/baselines/V1.29/v1.29-video-workspace-ux.md)：V1.29 的历史 UX 补充文档。
 - [V1.28 配药视频数据管理平台需求文档](./baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md)：上一正式运行时基线；当前产品语义以 V1.35 为准。
 
 ## 更早正式版本
@@ -24,4 +24,4 @@
 - [V1.20](./baselines/V1.20/配药视频数据管理平台需求文档_V1.20.md)：LEAN-P0 单视频闭环基础；已由 V1.21 的流程优先与最小导出条款替代为继承基线。
 - [V1.18](./baselines/V1.18/配药视频数据管理平台需求文档_V1.18.md)：历史继承基础。
 - [V1.17](./baselines/V1.17/配药视频数据管理平台需求文档_V1.17.md)：方向校正版本；已被 V1.18 的范围与语义冻结条款替代。
-- V1.19（DRAFT）：见 [drafts/V1.19](./drafts/V1.19/)，当前 DEFERRED。
+- V1.19（DRAFT）：见 [history/requirements/drafts/V1.19](../history/requirements/drafts/V1.19/)，当前 DEFERRED。

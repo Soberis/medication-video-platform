@@ -3,7 +3,7 @@
 > 版本：TD-MULTIVIEW-HUMAN-DEMONSTRATION-V1.22-DRAFT.1<br>
 > 状态：**DRAFT — 架构评审材料，不授权代码、DB、OpenAPI、Worker、真实设备或生产 profile 变更**<br>
 > 日期：2026-08-18<br>
-> 对齐需求：[V1.22 固定多视角 Human Demonstration 需求草案](../../requirements/drafts/V1.22/配药视频数据管理平台需求文档_V1.22_DRAFT.md)<br>
+> 对齐需求：[V1.22 固定多视角 Human Demonstration 需求草案](../requirements/drafts/V1.22/配药视频数据管理平台需求文档_V1.22_DRAFT.md)<br>
 > 继承基线：[V1.21 FLOW-FIRST MINIMAL EXPORT](../../requirements/baselines/V1.21/配药视频数据管理平台需求文档_V1.21.md)（FINAL FREEZE）<br>
 > 评估对象：[V1.19 固定多相机同步逐帧训练数据技术设计](./multi-camera-synchronized-training-data-v1.19.md)、[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、当前 `CaptureSync` 实现与 `synchronized-frame.v1` 契约。
 
