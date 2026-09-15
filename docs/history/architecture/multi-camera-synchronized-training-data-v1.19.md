@@ -3,10 +3,10 @@
 > 版本：TD-MULTICAMERA-SYNC-V1.19-DRAFT.4<br>
 > 状态：**DEFERRED** —— 多相机同步方向暂缓，不作为当前交付目标（当前基线为 V1.20 LEAN-P0）；本文保留作历史设计记录，不授权后续开发<br>
 > 日期：2026-08-12  
-> 对齐需求：[V1.19 需求草案](../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)  
-> G0 证据：[V1.19 G0 Golden Capture 验证报告](../history/validation/v1.19-g0-golden-capture.md)
+> 对齐需求：[V1.19 需求草案](../../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)<br>
+> G0 证据：[V1.19 G0 Golden Capture 验证报告](../validation/v1.19-g0-golden-capture.md)
 > 当前正式设计：[V1.20 LEAN-P0 手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
-> 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](./asynchronous-job-protocol.md)、[领域模型与数据所有权](./domain-model-and-data-ownership.md)
+> 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](../../architecture/asynchronous-job-protocol.md)、[领域模型与数据所有权](../../architecture/domain-model-and-data-ownership.md)
 > 修订说明：DRAFT.4 依据 G0 A.1 冻结跨相机 anchor/offset/drift 正反仿射映射、Capture 域 `sync_error_ns` 和无可信时基拒绝规则。timeline rate、reference 来源、tolerance 数值、Parquet 物理布局和 Worker 容量继续作为版本化生产 profile/部署参数 `PENDING`，不再阻塞参数化 B/S2；没有批准的生产 profile 时只能运行 `TEST/G0`。
 
 ## 1. 设计结论

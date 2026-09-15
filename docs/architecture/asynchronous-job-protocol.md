@@ -5,7 +5,7 @@
 > 最后更新：2026-09-01
 
 当前需求口径以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
-[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) 为准。V1.26 及之前的单视频和
+[V1.28 单一导出边界设计](../history/architecture/v1.28-single-export-consolidation.md) 为准。V1.26 及之前的单视频和
 数据集作业协议只作为历史迁移/审计材料，不构成当前 API、队列或 Worker 承诺。
 
 ## 1. 核心决策

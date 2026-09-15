@@ -4,7 +4,7 @@
 > 最后更新：2026-07-21
 
 当前产品边界以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
-[V1.28 单一导出边界设计](./v1.28-single-export-consolidation.md) 为准；本文件只描述部署、容量与恢复边界。
+[V1.28 单一导出边界设计](../history/architecture/v1.28-single-export-consolidation.md) 为准；本文件只描述部署、容量与恢复边界。
 
 ## 1. 决策边界
 

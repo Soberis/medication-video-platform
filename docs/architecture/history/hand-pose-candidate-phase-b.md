@@ -5,7 +5,7 @@
 > 对齐需求：V1.15 FR-042B  
 > 日期：2026-08-10
 
-> 历史状态：SUPERSEDED。`Ego` 为历史内部命名；当前产品语言和实施规则以 [V1.18 当前技术设计](../video-hand-pose-mvp-technical-design.md) 为准。
+> 历史状态：SUPERSEDED。`Ego` 为历史内部命名；当前产品语言和实施规则以 [V1.18 当前技术设计](../../history/architecture/video-hand-pose-mvp-technical-design.md) 为准。
 
 ## 1. 目的与当前状态
 

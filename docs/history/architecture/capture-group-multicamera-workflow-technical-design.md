@@ -4,7 +4,7 @@
 > 本文保留已批准的 V1.25 领域目标、边界与实施顺序；V1.27 当前产品信息架构和工作台展示以[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)为准。本文不替代代码、迁移、OpenAPI、事件、Worker 和运行时的实际证据。
 > V1.27 是当前正式需求基线；V1.25 业务与科学语义作为历史领域参考，V1.24 代码和单视频事实不再构成当前兼容承诺。
 
-本文基于 [V1.25 需求基线](../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[V1.24 前一正式基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[V1.24 手部组件参考](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../contracts/schemas/external-video-ingest-v1.schema.json) 和历史 `tools/minimal-export` 导出说明（当前路径已退役）。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
+本文基于 [V1.25 需求基线](../../requirements/baselines/V1.25/配药视频数据管理平台需求文档_V1.25.md)、[V1.24 前一正式基线](../../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)、[V1.24 手部组件参考](video-hand-pose-mvp-technical-design.md)、[external-video-ingest-v1 契约](../../../contracts/schemas/external-video-ingest-v1.schema.json) 和历史 `tools/minimal-export` 导出说明（当前路径已退役）。V1.22 多视角、CaptureSync 和复杂数据集文档仍是历史/延后设计。
 
 ## 1. 设计结论
 

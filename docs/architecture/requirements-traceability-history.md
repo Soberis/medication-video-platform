@@ -5,7 +5,7 @@
 > 文档状态：V1.17 实施追踪基线（评审稿）
 > 当前需求基线：`docs/requirements/baselines/V1.17/配药视频数据管理平台需求文档_V1.17.md`
 > 继承需求基线：V1.16、V1.15、V1.14、V1.13、V1.12、V1.11 及其历史继承基线
-> 总体设计：`docs/architecture/配药平台技术设计.md`
+> 总体设计：`docs/history/architecture/配药平台技术设计.md`
 > 最后更新：2026-08-10
 
 ## 1. 目的

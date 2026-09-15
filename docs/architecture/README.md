@@ -30,7 +30,7 @@ V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠�
 
 ## Active / History 清理清单
 
-[Platform 文档 Active / History 清理清单](../audits/v1.35-platform-document-active-history-inventory.md) 记录当前文档分类、历史化建议和仍需决策的提案。本阶段只更新入口与清单，不移动或删除任何文档。
+[Platform 文档 Active / History 清理清单](../audits/v1.35-platform-document-active-history-inventory.md) 记录当前文档分类、历史化建议和仍需决策的提案。本阶段只做可追溯的文档归档，不删除内容或修改 runtime。
 
 ## 维护规则
 

@@ -9,7 +9,7 @@
 本轮是部署与 smoke 就绪检查，不是 UAT，也不改变产品业务语义。
 
 当前产品范围以 [V1.28 正式需求基线](../requirements/baselines/V1.28/配药视频数据管理平台需求文档_V1.28.md) 和
-[V1.28 单一导出边界设计](../architecture/v1.28-single-export-consolidation.md) 为准。
+[V1.28 单一导出边界设计](../history/architecture/v1.28-single-export-consolidation.md) 为准。
 
 ## 运行时拓扑（以当前代码为准）
 

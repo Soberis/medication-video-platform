@@ -3,7 +3,7 @@
 > 版本：TD-VIDEO-DATA-V1<br>
 > 状态：历史组件参考；V1.24 已实现单视频技术基线，V1.25-V1.27 仅继承候选边界<br>
 > 日期：2026-08-20<br>
-> 当前对齐需求：[V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)和[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)；本文继续保留[V1.24 基线](../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)的单视频实现参考
+> 当前对齐需求：[V1.27 正式需求基线](../../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md)和[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)；本文继续保留[V1.24 基线](../../requirements/baselines/V1.24/配药视频数据管理平台需求文档_V1.24.md)的单视频实现参考
 
 本文保留 V1.24-compatible 单视频闭环的已实现组件事实。Media Probe、MediaPipe 和 `CandidateAnnotation` 的候选隔离、人工边界及 provenance 行为作为 V1.27 的继承组件；V1.24 的“单视频质量合格后自动创建并分配任务”仅是冻结单视频运行时的历史所有权规则。CaptureGroup 任务/修订归属与事件级 Cleaning 以 [V1.25 多机位技术设计](capture-group-multicamera-workflow-technical-design.md)为历史领域参考，当前产品路径以[V1.27 单一 CaptureGroup 产品路径](v1.27-single-capture-group-workflow.md)为准。CaptureSession、CameraSet、CameraStream 和 DeclaredSyncStatus 保留为接入事实；CaptureSync Core API runtime 及其无生产者的外围 artifact worker、消息/Frame schema 和 G0 tooling 已按独立 Physical Reduction 批次退役。V1.19 多机位同步、V1.22 多视角 Draft、DatasetVersion/复杂 Export 与 AI Evaluation 平台化均为 DEFERRED。
 
@@ -46,7 +46,7 @@ flowchart LR
 
 ### 3.1 对接契约
 
-V1.18 冻结 [`external-video-ingest-v1`](../../contracts/schemas/external-video-ingest-v1.schema.json) 作为目标版本化 Manifest 契约。它必须在 OpenAPI 接入和契约测试完成后才可供真实医院边端使用；当前既有上传接口保持兼容但不得假称已采用该 Manifest。每个上传批次必须携带 `source_system`、`source_device_id`、显式 `capture_group_key`、`key_source`、采集时间与时区、预期相机编号集合，以及每路视频的 `camera_number`、文件名、声明大小和 SHA-256。
+V1.18 冻结 [`external-video-ingest-v1`](../../../contracts/schemas/external-video-ingest-v1.schema.json) 作为目标版本化 Manifest 契约。它必须在 OpenAPI 接入和契约测试完成后才可供真实医院边端使用；当前既有上传接口保持兼容但不得假称已采用该 Manifest。每个上传批次必须携带 `source_system`、`source_device_id`、显式 `capture_group_key`、`key_source`、采集时间与时区、预期相机编号集合，以及每路视频的 `camera_number`、文件名、声明大小和 SHA-256。
 
 上游 `external_capture_session_id` 存在时作为 `capture_group_key`；否则必须提供稳定的 `UPSTREAM_MANIFEST_KEY`。平台禁止以文件名、时间邻近、上传顺序或相机号猜测多相机归组。`camera_number` 在同组内唯一、正整数、建立后稳定；预期相机 2 缺失时仍显示“相机 2 缺失”，不得重编号。
 
