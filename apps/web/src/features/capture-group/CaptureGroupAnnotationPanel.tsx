@@ -549,6 +549,11 @@ export function CaptureGroupAnnotationPanel({
   }
 
   async function handleDispatchActionJob(): Promise<ActionCandidateJob | null> {
+    if (isDispatchingJob) return null
+    if (!task?.annotation_task_id || !task.label_schema_id || !task.label_schema_digest) {
+      void message.warning('请先由项目管理员分配标注任务，绑定标签规范后再启动动作预标注。')
+      return null
+    }
     if (!effectivePrimaryClipAssetId) {
       void message.warning('请先指定主视图机位')
       return null
@@ -560,9 +565,7 @@ export function CaptureGroupAnnotationPanel({
       void message.success('已提交动作预标注任务，等待算力机返回结果...')
       return job
     } catch (err) {
-      void message.error(
-        err instanceof Error ? err.message : '启动动作预标注失败，请检查 4090 算力机与网络',
-      )
+      void message.error(err instanceof Error ? err.message : '动作预标注请求未完成，请稍后重试。')
       return null
     } finally {
       setIsDispatchingJob(false)
@@ -644,7 +647,7 @@ export function CaptureGroupAnnotationPanel({
           </span>
           {typeof candidate.confidence === 'number' && (
             <Tag color="blue" variant="filled" style={{ fontSize: 11, margin: 0 }}>
-              置信度 {Math.round(candidate.confidence * 100)}%
+              模型分数 {candidate.confidence.toFixed(2)}（仅供参考）
             </Tag>
           )}
         </div>
@@ -705,7 +708,7 @@ export function CaptureGroupAnnotationPanel({
           {task ? (
             <StatusIndicator tone={taskStatusTone(task)}>{formatTaskStatus(task)}</StatusIndicator>
           ) : (
-            <StatusIndicator tone="neutral">动作核验中 · 提交后自动归档</StatusIndicator>
+            <StatusIndicator tone="neutral">尚未分配标注任务</StatusIndicator>
           )}
         </div>
       </div>
@@ -765,31 +768,35 @@ export function CaptureGroupAnnotationPanel({
                       : '检测已完成'}
                   </StatusBadge>
                 ) : actionJob?.status === 'RUNNING' ? (
-                  <StatusBadge tone="info">4090 推理中...</StatusBadge>
+                  <StatusBadge tone="info">动作分析中</StatusBadge>
                 ) : actionJob?.status === 'QUEUED' ? (
-                  <StatusBadge tone="warning">4090 等待连接...</StatusBadge>
+                  <StatusBadge tone="info">等待处理</StatusBadge>
                 ) : actionJob?.status === 'FAILED' ? (
-                  <StatusBadge tone="error">算力机离线 / 未完成</StatusBadge>
+                  <StatusBadge tone="error">动作分析失败</StatusBadge>
                 ) : (
-                  <StatusBadge tone="default">就绪检测</StatusBadge>
+                  <StatusBadge tone="default">未启动</StatusBadge>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <Button
-                  type="default"
-                  size="small"
-                  disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                  loading={isLoadingAi}
-                  onClick={() => void handleLoadAiCandidates()}
-                  icon={<Sparkles size={12} style={{ color: 'var(--app-color-primary)' }} />}
-                  title={
-                    isDirty || task?.annotation_revision
-                      ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
-                      : '将 AI 识别的动作片段一键载入为草稿'
-                  }
-                >
-                  AI 自动填充
-                </Button>
+                {actionJob?.status === 'SUCCEEDED' &&
+                !allCandidatesAdopted &&
+                actionCandidates.length > 0 ? (
+                  <Button
+                    type="default"
+                    size="small"
+                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
+                    loading={isLoadingAi}
+                    onClick={() => void handleLoadAiCandidates()}
+                    icon={<Sparkles size={12} style={{ color: 'var(--app-color-primary)' }} />}
+                    title={
+                      isDirty || task?.annotation_revision
+                        ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
+                        : '将 AI 识别的动作片段一键载入为草稿'
+                    }
+                  >
+                    载入动作草稿
+                  </Button>
+                ) : null}
                 {actionJob?.status === 'FAILED' ? (
                   <Button
                     type="primary"
@@ -799,31 +806,20 @@ export function CaptureGroupAnnotationPanel({
                     onClick={() => void handleDispatchActionJob()}
                     icon={<RotateCw size={12} />}
                   >
-                    再次标注
-                  </Button>
-                ) : actionJob?.status === 'SUCCEEDED' ? (
-                  <Button
-                    type="text"
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                    icon={<RotateCw size={12} />}
-                    title="重新派发 AI 任务进行再次分析"
-                  >
-                    再次标注
+                    重试动作分析
                   </Button>
                 ) : !actionJob ? (
                   <Button
                     type="primary"
                     size="small"
-                    disabled={!effectivePrimaryClipAssetId || !canSubmitRevision}
+                    disabled={!task?.primary_clip_asset_id || !canSubmitRevision}
                     loading={isDispatchingJob}
                     onClick={() => void handleDispatchActionJob()}
                     icon={<Sparkles size={12} />}
                     title={
                       !effectivePrimaryClipAssetId
                         ? '请先指定主视图机位'
-                        : '向 4090 算力机发起动作预标注推理任务'
+                        : '生成动作候选，核对或修改后提交'
                     }
                   >
                     启动自动标注
@@ -848,7 +844,7 @@ export function CaptureGroupAnnotationPanel({
                     >
                       {showCandidateDetails
                         ? '收起候选明细 ▴'
-                        : `查看置信度明细 (${actionCandidates.length}) ▾`}
+                        : `查看候选明细 (${actionCandidates.length}) ▾`}
                     </Button>
                   </div>
                   {showCandidateDetails ? (
@@ -870,9 +866,7 @@ export function CaptureGroupAnnotationPanel({
               )
             ) : actionJob?.status === 'FAILED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-failed">
-                <span>
-                  算力机服务暂未响应或预标注未完成，可点击“再次标注”，或直接进行人工标注。
-                </span>
+                <span>动作分析失败，可尝试“重试动作分析”，也可继续人工标注。</span>
               </div>
             ) : actionJob?.status === 'QUEUED' ? (
               <div className="capture-group-ai-banner capture-group-ai-banner-queued">
@@ -885,8 +879,11 @@ export function CaptureGroupAnnotationPanel({
             ) : (
               <div className="capture-group-ai-banner">
                 <span>
-                  视频已就绪；如需动作预标注，请点击“AI
-                  自动填充”。手部检测由独立后台流程处理，不受此操作影响。
+                  {actionJob?.status === 'SUCCEEDED'
+                    ? '动作分析已完成，暂无候选。可继续人工标注；空结果不代表视频没有动作。'
+                    : !task
+                      ? '动作预标注需要先分配标注任务并选择主视频。手部检测独立运行。'
+                      : '点击“启动自动标注”生成动作草稿；核对或修改后提交。手部检测独立运行。'}
                 </span>
               </div>
             )}

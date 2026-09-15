@@ -158,9 +158,10 @@ describe('CaptureGroup annotation workflow', () => {
     await waitFor(() =>
       expect(document.body.textContent).toContain('MediaPipe 在采样帧中未检测到手'),
     )
-    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '启动自动标注' })).toBeEnabled()
     await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
-    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '载入动作草稿' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1)
   })
   it('preserves unsaved segments in permanent workspace and blocks leaving until confirmed', async () => {
     const group = captureGroupFixture(groupId, {
@@ -603,7 +604,7 @@ describe('CaptureGroup annotation workflow', () => {
     })
 
     expect(await screen.findByText('已生成 1 条建议')).toBeInTheDocument()
-    expect(screen.getByText('置信度 92%')).toBeInTheDocument()
+    expect(screen.getByText('模型分数 0.92（仅供参考）')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '播放核对' })).toBeInTheDocument()
 
     const adoptBtn = screen.getByRole('button', { name: '采纳此段' })

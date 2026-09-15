@@ -34,7 +34,8 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'AI 自动填充' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '启动自动标注' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'AI 自动填充' })).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(
         ([input, init]) =>
@@ -43,14 +44,14 @@ describe('CaptureGroup detail views', () => {
     ).toBe(false)
   })
 
-  it('starts action pre-annotation when AI autofill is explicitly requested without an existing job', async () => {
+  it('starts action pre-annotation for a task with a bound schema and primary video', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
       receipt: 'COMPLETE',
     })
     const fetchMock = stubGroupDetail(group, {
-      task: null,
+      task: groupTask(groupId, true),
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'UNKNOWN',
     })
@@ -61,7 +62,7 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
 
-    await user.click(await screen.findByRole('button', { name: 'AI 自动填充' }))
+    await user.click(await screen.findByRole('button', { name: '启动自动标注' }))
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(
@@ -177,7 +178,7 @@ describe('CaptureGroup detail views', () => {
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(await screen.findByText('就绪检测')).toBeInTheDocument()
+    expect(await screen.findByText('未启动')).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {
