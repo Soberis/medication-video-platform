@@ -10,7 +10,6 @@ import {
   type ActionCandidateJob,
 } from '@/api/action-candidate'
 import {
-  AnnotationTaskApiError,
   assignCaptureGroupHumanLabelTask,
   selectAnnotationPrimaryView,
   submitAnnotationRevision,
@@ -23,7 +22,7 @@ import {
   type CaptureGroup,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
-import { recordQualityReview, type QualityReview } from '@/api/quality'
+import { type QualityReview } from '@/api/quality'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
@@ -73,6 +72,7 @@ interface CaptureGroupAnnotationPanelProps {
   onDirtyChange?: (dirty: boolean) => void
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
   onDiscardVideo?: () => Promise<void> | void
+  canPrepareTask?: boolean
 }
 
 export function CaptureGroupAnnotationPanel({
@@ -94,6 +94,7 @@ export function CaptureGroupAnnotationPanel({
   onTaskChange,
   onRefresh,
   onDiscardVideo,
+  canPrepareTask = false,
 }: CaptureGroupAnnotationPanelProps) {
   const { message, modal } = AntdApp.useApp()
   const [isSelectingPrimary, setIsSelectingPrimary] = useState(false)
@@ -354,56 +355,11 @@ export function CaptureGroupAnnotationPanel({
     setSegmentErrors({})
     setIsSubmittingRevision(true)
     try {
-      let activeTaskId = task?.annotation_task_id
-      if (!activeTaskId) {
-        if (effectivePrimaryClipAssetId) {
-          const existingReview = viewReviews[effectivePrimaryClipAssetId]
-          if (existingReview?.decision !== 'QUALIFIED') {
-            await recordQualityReview(projectId, effectivePrimaryClipAssetId, {
-              decision: 'QUALIFIED',
-              reason_code: 'MEETS_REQUIREMENTS',
-              expected_version: existingReview?.version ?? 0,
-            })
-          }
-        }
-
-        let currentRevision = groupQuality?.revision ?? 0
-        if (!currentGroupQualityAdmitting(groupQuality)) {
-          const groupReview = await recordCaptureGroupQualityReview(
-            projectId,
-            captureGroupId,
-            'QUALIFIED',
-            '视频画面合格，AI检测通过，自动建单并开启动作标注',
-            currentRevision,
-          )
-          currentRevision = groupReview.revision
-        }
-
-        const assigned = await assignCaptureGroupHumanLabelTask(
-          projectId,
-          captureGroupId,
-          assigneeActorId || 'reviewer',
-        )
-        activeTaskId = assigned.annotation_task_id
-        onTaskChange(assigned)
-
-        if (
-          !assigned.primary_clip_asset_id &&
-          effectivePrimaryClipAssetId &&
-          assigned.can_select_primary
-        ) {
-          const updated = await selectAnnotationPrimaryView(
-            projectId,
-            assigned.annotation_task_id,
-            effectivePrimaryClipAssetId,
-          )
-          onTaskChange(updated)
-        }
-      }
+      const activeTask = await prepareAnnotationTask()
 
       await submitAnnotationRevision(
         projectId,
-        activeTaskId,
+        activeTask.annotation_task_id,
         draftSegments.map((segment) => ({
           start_ms: segment.start_ms,
           end_ms: segment.end_ms,
@@ -417,9 +373,7 @@ export function CaptureGroupAnnotationPanel({
         ? message.success('配药动作修订已提交；主视图现在锁定。')
         : message.warning('修订已提交，但最新事实暂未刷新；请手动刷新确认。'))
     } catch (error) {
-      void message.error(
-        error instanceof AnnotationTaskApiError ? error.message : '修订暂未提交，请稍后重试。',
-      )
+      void message.error(error instanceof Error ? error.message : '修订暂未提交，请稍后重试。')
     } finally {
       setIsSubmittingRevision(false)
     }
@@ -548,18 +502,43 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
+  async function prepareAnnotationTask(): Promise<AnnotationTask> {
+    let prepared = task
+    if (!prepared) {
+      if (!canPrepareTask || !assigneeActorId.trim()) {
+        throw new Error('请由项目管理员分配标注任务。')
+      }
+      if (!currentGroupQualityAdmitting(groupQuality)) {
+        throw new Error('请先完成视频与整体质量判断，再准备标注任务。')
+      }
+      prepared = await assignCaptureGroupHumanLabelTask(projectId, captureGroupId, assigneeActorId)
+      onTaskChange(prepared)
+    }
+    if (
+      !prepared.primary_clip_asset_id &&
+      effectivePrimaryClipAssetId &&
+      prepared.can_select_primary
+    ) {
+      prepared = await selectAnnotationPrimaryView(
+        projectId,
+        prepared.annotation_task_id,
+        effectivePrimaryClipAssetId,
+      )
+      onTaskChange(prepared)
+    }
+    if (!prepared.primary_clip_asset_id) throw new Error('请先为标注任务选择主视频。')
+    return prepared
+  }
+
   async function handleDispatchActionJob(): Promise<ActionCandidateJob | null> {
     if (isDispatchingJob) return null
-    if (!task?.annotation_task_id || !task.label_schema_id || !task.label_schema_digest) {
-      void message.warning('请先由项目管理员分配标注任务，绑定标签规范后再启动动作预标注。')
-      return null
-    }
     if (!effectivePrimaryClipAssetId) {
       void message.warning('请先指定主视图机位')
       return null
     }
     setIsDispatchingJob(true)
     try {
+      await prepareAnnotationTask()
       const job = await dispatchActionCandidateJob(projectId, captureGroupId)
       setActionJob(job)
       void message.success('已提交动作预标注任务，等待算力机返回结果...')
@@ -812,7 +791,11 @@ export function CaptureGroupAnnotationPanel({
                   <Button
                     type="primary"
                     size="small"
-                    disabled={!task?.primary_clip_asset_id || !canSubmitRevision}
+                    disabled={
+                      !effectivePrimaryClipAssetId ||
+                      !canSubmitRevision ||
+                      (!task && (!canPrepareTask || !currentGroupQualityAdmitting(groupQuality)))
+                    }
                     loading={isDispatchingJob}
                     onClick={() => void handleDispatchActionJob()}
                     icon={<Sparkles size={12} />}
@@ -882,7 +865,9 @@ export function CaptureGroupAnnotationPanel({
                   {actionJob?.status === 'SUCCEEDED'
                     ? '动作分析已完成，暂无候选。可继续人工标注；空结果不代表视频没有动作。'
                     : !task
-                      ? '动作预标注需要先分配标注任务并选择主视频。手部检测独立运行。'
+                      ? canPrepareTask && currentGroupQualityAdmitting(groupQuality)
+                        ? '启动后将为你准备标注任务并生成动作草稿；核对或修改后提交。'
+                        : '请先完成质量判断，并由项目管理员准备标注任务。手部检测独立运行。'
                       : '点击“启动自动标注”生成动作草稿；核对或修改后提交。手部检测独立运行。'}
                 </span>
               </div>

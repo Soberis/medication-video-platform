@@ -16,6 +16,42 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
+  it('prepares an admitted task before dispatch without writing quality conclusions', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      taskAfterAssignment: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      session: { username: 'reviewer', role: 'ADMIN' },
+    })
+    const user = userEvent.setup()
+    const button = await screen.findByRole('button', { name: '启动自动标注' })
+    await waitFor(() => expect(button).toBeEnabled())
+    await user.click(button)
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) =>
+            String(url).endsWith('/action-candidate-jobs') && init?.method === 'POST',
+        ),
+      ).toBe(true),
+    )
+    const writes = fetchMock.mock.calls.filter(
+      ([, init]) => init?.method === 'POST' || init?.method === 'PUT',
+    )
+    expect(String(writes[0]?.[0])).toContain('/annotation-tasks')
+    expect(writes.some(([url]) => String(url).includes('/quality-review'))).toBe(false)
+    expect(writes.some(([url]) => String(url).endsWith('/revisions'))).toBe(false)
+  })
   it('keeps optional action pre-annotation manual while hand detection remains independent', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

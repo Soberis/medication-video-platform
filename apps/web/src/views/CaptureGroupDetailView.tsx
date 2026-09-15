@@ -201,6 +201,7 @@ export default function CaptureGroupDetailView() {
         viewRows={viewRows}
         viewReviews={data.viewReviews}
         assigneeActorId={session?.username ?? ''}
+        canPrepareTask={session?.role === 'ADMIN' && data.taskVisibility === 'visible'}
         currentPlaybackTimeMs={
           data.selectedClipAssetId === activePrimaryId ? currentPlaybackTimeMs : null
         }
