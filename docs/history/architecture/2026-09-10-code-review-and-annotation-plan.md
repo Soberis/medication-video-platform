@@ -2,7 +2,7 @@
 
 审查范围：北京时间 2026-09-10 的四个提交 `4f1901a`、`6b3e125`、`2755dcb`、`5aebc82`，比较 `4f1901a^..5aebc82`，共 25 个文件。审查覆盖变更及相关调用链，不表示全仓库安全审计或模型效果验收。工作区中的其他任务改动不属于本报告。
 
-需求依据：[V1.34 DRAFT](../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)、[动作设计](v1.34-action-annotation.md)、[设计系统](../DESIGN_SYSTEM.md)。以下业务建议待用户决定，未新增或冻结业务基线，未修改 CURRENT。
+需求依据：[V1.34 DRAFT](../../requirements/baselines/V1.34/配药视频数据处理平台需求文档_V1.34.md)、[动作设计](../../architecture/v1.34-action-annotation.md)、[设计系统](../../DESIGN_SYSTEM.md)。以下业务建议待用户决定，未新增或冻结业务基线，未修改 CURRENT。
 
 ## 结论
 
@@ -26,7 +26,7 @@ MediaPipe 与 Qwen 互补、独立执行，共用视频身份和时间基准。�
 
 测试中另发现合成 fixture 将 `NO_HAND_DETECTED` 错放进 job status；已改为 `SUCCEEDED` + `hand_result=NO_HAND_DETECTED`，与真实契约一致。
 
-代码定位：[回传与查询](../../services/core-api/src/main/java/com/medicationvideo/platform/aicandidate/ActionCandidateJobService.java)、[标注面板](../../apps/web/src/features/capture-group/CaptureGroupAnnotationPanel.tsx)、[候选校验](../../apps/web/src/features/capture-group/capture-group-detail-model.ts)、[播放器绑定](../../apps/web/src/views/CaptureGroupDetailView.tsx)、[V77 迁移](../../services/core-api/src/main/resources/db/migration/V77__add_fine_grained_action_labels.sql)、[标签版本服务](../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/AnnotationLabelSchemaService.java)、[HDF5 同步](../../services/core-api/src/main/java/com/medicationvideo/platform/datasetexport/HumanDemonstrationHdf5ExportService.java)。
+代码定位：[回传与查询](../../../services/core-api/src/main/java/com/medicationvideo/platform/aicandidate/ActionCandidateJobService.java)、[标注面板](../../../apps/web/src/features/capture-group/CaptureGroupAnnotationPanel.tsx)、[候选校验](../../../apps/web/src/features/capture-group/capture-group-detail-model.ts)、[播放器绑定](../../../apps/web/src/views/CaptureGroupDetailView.tsx)、[V77 迁移](../../../services/core-api/src/main/resources/db/migration/V77__add_fine_grained_action_labels.sql)、[标签版本服务](../../../services/core-api/src/main/java/com/medicationvideo/platform/annotationreview/AnnotationLabelSchemaService.java)、[HDF5 同步](../../../services/core-api/src/main/java/com/medicationvideo/platform/datasetexport/HumanDemonstrationHdf5ExportService.java)。
 
 ## 尚未完成：不能当作已上线能力
 

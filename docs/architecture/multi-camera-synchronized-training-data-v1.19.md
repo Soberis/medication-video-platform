@@ -4,7 +4,7 @@
 > 状态：**DEFERRED** —— 多相机同步方向暂缓，不作为当前交付目标（当前基线为 V1.20 LEAN-P0）；本文保留作历史设计记录，不授权后续开发<br>
 > 日期：2026-08-12  
 > 对齐需求：[V1.19 需求草案](../requirements/drafts/V1.19/配药视频数据管理平台需求文档_V1.19_DRAFT.md)  
-> G0 证据：[V1.19 G0 Golden Capture 验证报告](../validation/v1.19-g0-golden-capture.md)
+> G0 证据：[V1.19 G0 Golden Capture 验证报告](../history/validation/v1.19-g0-golden-capture.md)
 > 当前正式设计：[V1.20 LEAN-P0 手部预标注优先技术设计](./video-hand-pose-mvp-technical-design.md)<br>
 > 相关规范：[时间基准与多相机同步](./timebase-and-multicamera-sync.md)、[异步作业协议](./asynchronous-job-protocol.md)、[领域模型与数据所有权](./domain-model-and-data-ownership.md)
 > 修订说明：DRAFT.4 依据 G0 A.1 冻结跨相机 anchor/offset/drift 正反仿射映射、Capture 域 `sync_error_ns` 和无可信时基拒绝规则。timeline rate、reference 来源、tolerance 数值、Parquet 物理布局和 Worker 容量继续作为版本化生产 profile/部署参数 `PENDING`，不再阻塞参数化 B/S2；没有批准的生产 profile 时只能运行 `TEST/G0`。
@@ -385,7 +385,7 @@ V1.18 Candidate 使用 `clip_asset_id + frame_timestamp_ms`。V1.19 通过明确
 
 ## 7. Canonical Logical Row V1 与 Parquet 候选
 
-本节与可执行 [`synchronized-frame-v1.schema.json`](../../contracts/schemas/synchronized-frame-v1.schema.json) 冻结逻辑粒度、身份、状态、空值、排序和 provenance。G0 的 Python/PyArrow 物理类型验证没有覆盖跨语言或目标规模，不冻结文件名、具体物理类型、压缩、dictionary、row group、partition 或 writer/runtime。
+本节与历史可执行 `synchronized-frame-v1.schema.json`（当前仓库已不再保留）冻结逻辑粒度、身份、状态、空值、排序和 provenance。G0 的 Python/PyArrow 物理类型验证没有覆盖跨语言或目标规模，不冻结文件名、具体物理类型、压缩、dictionary、row group、partition 或 writer/runtime。
 
 ### 7.1 主表粒度与排序
 

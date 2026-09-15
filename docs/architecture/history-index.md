@@ -9,7 +9,7 @@
 | [V1.34 Action Annotation 支持设计](./v1.34-action-annotation.md) | V1.35 的 Action Candidate 支持证据；当前语义以 V1.35 为准。 |
 | [V1.34 跨仓库断舍离审计](../audits/v1.34-cross-repo-subtraction-audit.md) | 当前实现事实与兼容性风险证据；不替代 V1.35 需求。 |
 | [V1.34 Action Pipeline Gap Analysis](../audits/v1.34-action-pipeline-gap-analysis.md) | Action Candidate 缺口证据；不替代 V1.35 需求。 |
-| [V1.29 简化实施计划](../plans/v1.29-simplification-implementation-plan.md) | 已完成阶段的历史计划，后续是否归档或删除由文档清单决定。 |
+| [V1.29 简化实施计划](../history/plans/v1.29-simplification-implementation-plan.md) | 已归档的历史计划，仅用于迁移和审计回溯。 |
 | [V1.28 单一导出整合](./v1.28-single-export-consolidation.md) | V1.28 历史导出整合设计；当前导出语义以 V1.35 为准。 |
 | [V1.27 单 CaptureGroup 工作流](./v1.27-single-capture-group-workflow.md) | V1.27 历史工作流设计；当前主链以 V1.35 为准。 |
 | [内部数据复核播放切片](./slices/internal-data-review-playback-slice.md) | 历史切片设计；是否保留为当前播放契约仍需决策。 |

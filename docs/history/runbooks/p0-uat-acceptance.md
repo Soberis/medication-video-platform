@@ -1,6 +1,6 @@
 # P0 Web 与数据闭环 UAT
 
-> 状态：HISTORICAL / V1.11 运行手册。本文保留旧版本 UAT 证据口径，不是 V1.27 当前验收基线；V1.27 当前业务链、事件级验收和 `training-data.v3` 边界以 [V1.27 正式需求基线](../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 与 [V1.27 单一 CaptureGroup 产品路径](../architecture/v1.27-single-capture-group-workflow.md) 为准。
+> 状态：HISTORICAL / V1.11 运行手册。本文保留旧版本 UAT 证据口径，不是 V1.27 当前验收基线；V1.27 当前业务链、事件级验收和 `training-data.v3` 边界以 [V1.27 正式需求基线](../../requirements/baselines/V1.27/配药视频数据管理平台需求文档_V1.27.md) 与 [V1.27 单一 CaptureGroup 产品路径](../../architecture/v1.27-single-capture-group-workflow.md) 为准。
 
 ## 目的与边界
 
@@ -47,4 +47,4 @@
 - U4～U5 的页面和审计证据分开留存：审计由环境负责人通过受控只读查询仅核对 action、对象标识、actor、outcome 和 reason code。视频操作记录是 ClipAsset 范围投影，不能替代训练数据准入事实。
 - 所有适用项通过，且没有未解释的权限、状态机、数据完整性或安全问题，才可将相应需求条目附上 `UAT` 证据；不是把整张追踪矩阵一次性改为通过。
 - 任何失败均记录最小复现步骤、时间、错误码、request ID（如可安全记录）和关联提交；保留脱敏日志，不保存下载地址、凭据或原始视频。
-- UAT 结束后将结果链接回[需求追踪矩阵](../architecture/requirements-traceability.md)，并明确尚未覆盖的生产容量、恢复、TLS、对象存储和医院网络验证。
+- UAT 结束后将结果链接回[需求追踪矩阵](../../architecture/requirements-traceability.md)，并明确尚未覆盖的生产容量、恢复、TLS、对象存储和医院网络验证。
