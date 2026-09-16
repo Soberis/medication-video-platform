@@ -1,16 +1,39 @@
 import { Button } from 'antd'
-import type { ButtonProps } from 'antd'
 import { RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-export interface RefreshButtonProps extends Omit<ButtonProps, 'children' | 'icon'> {
+export interface RefreshButtonProps {
+  loading?: boolean
+  onClick?: () => void
   label?: ReactNode
+  className?: string
+  size?: 'small' | 'middle' | 'large'
+  disabled?: boolean
+  title?: string
+  'aria-label'?: string
 }
 
-/** Shared page refresh action with one icon, size, and loading treatment. */
-export function RefreshButton({ label = '刷新', ...props }: RefreshButtonProps) {
+export function RefreshButton({
+  loading = false,
+  onClick,
+  label = '刷新',
+  className,
+  size,
+  disabled,
+  title,
+  'aria-label': ariaLabel,
+}: RefreshButtonProps) {
   return (
-    <Button {...props} icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}>
+    <Button
+      className={className}
+      disabled={disabled}
+      icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+      loading={loading}
+      onClick={onClick}
+      size={size}
+      title={title}
+      aria-label={ariaLabel}
+    >
       {label}
     </Button>
   )
