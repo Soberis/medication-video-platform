@@ -81,7 +81,6 @@ export default function AnnotationLabelLibraryView() {
         description="新增标签会发布新的不可变规范；已有标注任务和导出数据继续保留原规范。"
         actions={
           <Button
-            type="text"
             icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
             loading={state === 'loading'}
             onClick={() => void load()}

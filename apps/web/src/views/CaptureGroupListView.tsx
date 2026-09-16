@@ -288,7 +288,6 @@ export default function CaptureGroupListView() {
               </>
             ) : null}
             <Button
-              type="text"
               icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
               loading={loadingMode === 'refresh'}
               onClick={() => {

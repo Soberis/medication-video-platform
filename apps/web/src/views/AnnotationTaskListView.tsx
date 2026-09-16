@@ -1,4 +1,5 @@
 import { Button } from 'antd'
+import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -212,7 +213,11 @@ export default function AnnotationTaskListView({
           titleId="annotation-task-title"
           title="标注任务"
           actions={
-            <Button size="small" loading={loadState === 'loading'} onClick={() => void loadTasks()}>
+            <Button
+              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+              loading={loadState === 'loading'}
+              onClick={() => void loadTasks()}
+            >
               刷新
             </Button>
           }

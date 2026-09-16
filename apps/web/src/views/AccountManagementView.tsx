@@ -128,7 +128,6 @@ export default function AccountManagementView() {
         description="平台账号加入项目后，才可访问项目数据。"
         actions={
           <Button
-            type="text"
             icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
             loading={loadState === 'loading'}
             onClick={() => void loadAccounts()}
