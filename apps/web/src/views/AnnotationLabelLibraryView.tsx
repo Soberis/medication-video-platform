@@ -57,7 +57,7 @@ export default function AnnotationLabelLibraryView() {
     if (saving) return
     setSaving(true)
     try {
-      const result = await createAnnotationLabel(null, {
+      const result = await createAnnotationLabel({
         label_id: values.labelId.trim(),
         display_name: values.displayName.trim(),
         description: values.description.trim(),

@@ -22,7 +22,11 @@ import {
   formatAnnotationTime,
   getActionDisplayName,
 } from '@/features/capture-group/capture-group-detail-model'
-import { captureGroupTaskDestination } from '@/features/capture-group-presentation'
+import {
+  annotationTaskStatusLabel,
+  annotationTaskStatusTone,
+  captureGroupTaskDestination,
+} from '@/features/capture-group-presentation'
 
 const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
@@ -38,17 +42,7 @@ const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
   VIEW_NOT_REVIEWABLE: '采集记录机位当前不可复核',
   VIEW_QUALITY_NOT_QUALIFIED: '采集记录机位质量未通过',
 }
-function taskStatusLabel(task: AnnotationTask) {
-  if (task.status === 'COMPLETED') return '已完成'
-  if (task.status === 'SUBMITTED') return '待复核'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return '待返工'
-  return '待标注'
-}
-function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
-  if (task.status === 'COMPLETED') return 'neutral'
-  if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
-  return 'information'
-}
+
 function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefined) {
   if (task.status === 'COMPLETED') return '当前无需操作'
   if (task.status === 'SUBMITTED') {
@@ -198,9 +192,9 @@ export default function AnnotationTaskListView({
 
   const visibleItems = items.filter((task) => {
     if (filter === 'mine') return task.can_submit || task.can_select_primary || task.can_review
-    if (filter === 'assigned') return taskStatusLabel(task) === '待标注'
+    if (filter === 'assigned') return annotationTaskStatusLabel(task) === '待标注'
     if (filter === 'submitted') return task.status === 'SUBMITTED'
-    if (filter === 'rework') return taskStatusLabel(task) === '待返工'
+    if (filter === 'rework') return annotationTaskStatusLabel(task) === '待返工'
     if (filter === 'completed') return task.status === 'COMPLETED'
     return true
   })
@@ -390,7 +384,7 @@ export default function AnnotationTaskListView({
                 ) : null
               return (
                 <li
-                  aria-label={`${taskSubject} · ${taskStatusLabel(row)}`}
+                  aria-label={`${taskSubject} · ${annotationTaskStatusLabel(row)}`}
                   className="annotation-task-row"
                   key={row.annotation_task_id}
                   data-status={row.status}
@@ -419,8 +413,8 @@ export default function AnnotationTaskListView({
                     </strong>
                   </header>
                   <div className="annotation-task-row-status">
-                    <StatusIndicator className="annotation-task-status" tone={taskStatusTone(row)}>
-                      {taskStatusLabel(row)}
+                    <StatusIndicator className="annotation-task-status" tone={annotationTaskStatusTone(row)}>
+                      {annotationTaskStatusLabel(row)}
                     </StatusIndicator>
                   </div>
                   <div className="annotation-task-row-evidence">

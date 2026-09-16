@@ -155,6 +155,23 @@ export function isHumanAnnotationExportReady(
   return task?.status === 'COMPLETED' && task.annotation_revision?.review?.decision === 'APPROVED'
 }
 
+export function annotationTaskStatusLabel(
+  task: Pick<AnnotationTask, 'status' | 'annotation_revision'>,
+): string {
+  if (task.status === 'COMPLETED') return '已完成'
+  if (task.status === 'SUBMITTED') return '待复核'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return '待返工'
+  return '待标注'
+}
+
+export function annotationTaskStatusTone(
+  task: Pick<AnnotationTask, 'status' | 'annotation_revision'>,
+): StatusIndicatorTone {
+  if (task.status === 'COMPLETED') return 'neutral'
+  if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
+  return 'information'
+}
+
 export function captureGroupTaskDestination(
   task: Pick<
     AnnotationTask,

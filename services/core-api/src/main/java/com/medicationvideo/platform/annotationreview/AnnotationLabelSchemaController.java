@@ -37,18 +37,6 @@ class AnnotationLabelSchemaController {
 			.body(this.service.getCurrent(projectId, requireActor(authentication).actorId()));
 	}
 
-	@PostMapping("/labels")
-	ResponseEntity<AnnotationLabelSchemaResponse> addLabel(@PathVariable UUID projectId,
-			@RequestHeader(name = "X-Request-Id", required = false) String requestId,
-			@Valid @RequestBody AnnotationLabelCreateRequest request, Authentication authentication) {
-		var actor = requireActor(authentication);
-		return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
-			.cacheControl(CacheControl.noStore())
-			.body(this.service.addPrimaryStepLabel(projectId, actor.actorId(), request.labelId().trim(),
-					request.displayName().trim(), request.description().trim(),
-					requestId == null ? UUID.randomUUID().toString() : requestId, org.slf4j.MDC.get("traceId")));
-	}
-
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_ACCESS_DENIED",

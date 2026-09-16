@@ -792,15 +792,6 @@ class CaptureGroupQualityAnnotationContractTests {
 		var existingSchemaId = this.jdbcTemplate.queryForObject(
 				"SELECT label_schema_id FROM annotation_task WHERE annotation_task_id = ?", UUID.class, existingTaskId);
 
-		this.mockMvc
-			.perform(post("/api/v1/projects/{projectId}/annotation-label-schema/labels", PROJECT_ID)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN)
-				.header("X-Request-Id", key("member-label"))
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"label_id\":\"verify_dose\",\"display_name\":\"核对剂量\",\"description\":\"核对本次已配制剂量。\"}"))
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
-
 		this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ? AND actor_id = ?", PROJECT_ID,
 				ProjectMembershipTestData.ADMIN_ACTOR);
 		this.mockMvc.perform(get("/api/v1/annotation-label-schema").header("Authorization", "Bearer " + MEMBER_TOKEN))

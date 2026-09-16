@@ -239,39 +239,13 @@ describe('annotation task API', () => {
     )
   })
 
-  it('publishes a new immutable label schema', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ label_schema_id: labelSchemaId, labels: [] }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      createAnnotationLabel(projectId, {
-        label_id: 'verify_dose',
-        display_name: '核对剂量',
-        description: '核对本次已配制剂量。',
-      }),
-    ).resolves.toMatchObject({ label_schema_id: labelSchemaId })
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/annotation-label-schema/labels`,
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          label_id: 'verify_dose',
-          display_name: '核对剂量',
-          description: '核对本次已配制剂量。',
-        }),
-      }),
-    )
-  })
-
   it('reads and publishes the global library without project context', async () => {
     const fetchMock = vi
       .fn()
       .mockImplementation(() => Promise.resolve(jsonResponse({ labels: [] })))
     vi.stubGlobal('fetch', fetchMock)
     await getAnnotationLabelSchema(null)
-    await createAnnotationLabel(null, {
+    await createAnnotationLabel({
       label_id: 'verify_dose',
       display_name: '核对剂量',
       description: '核对剂量。',

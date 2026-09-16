@@ -51,7 +51,7 @@ function taskDescription(task: LocalUploadTask) {
   return task.progress ? phaseLabels[task.progress.phase] : '正在准备上传。'
 }
 
-function taskStatusLabel(task: LocalUploadTask) {
+function uploadTaskStatusLabel(task: LocalUploadTask) {
   if (task.status === 'QUEUED') return '等待处理'
   if (task.status === 'FAILED') return '处理失败'
   if (task.status === 'COMPLETED') return '已确认完成'
@@ -397,7 +397,7 @@ export default function LocalUploadView() {
                   <h3 id={`local-upload-task-${task.id}-title`}>{task.file.name}</h3>
                 </div>
                 <StatusBadge tone={uploadTaskTone(task.status)}>
-                  {taskStatusLabel(task)}
+                  {uploadTaskStatusLabel(task)}
                 </StatusBadge>
               </div>
               <div

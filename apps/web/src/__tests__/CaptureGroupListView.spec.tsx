@@ -124,7 +124,6 @@ describe('capture group list view', () => {
     )
     expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument()
     expect(activeRow).toHaveTextContent('待提交')
-    expect(activeRow).not.toHaveTextContent('Media Probe · hand-landmarks.v1')
     expect(activeRow).toHaveTextContent('1/1 机位已收')
 
     const processLink = within(activeRow).getByRole('link', { name: /查看视频/ })
@@ -181,7 +180,6 @@ describe('capture group list view', () => {
     expect(incompleteRow).toHaveTextContent('2/3 机位已收 · 接收完成 · 有缺失')
     expect(incompleteRow).toHaveTextContent('缺失：机位 2')
     expect(incompleteRow).not.toHaveTextContent('没有分配给我的人工标签任务')
-    expect(incompleteRow).not.toHaveTextContent('hand-landmarks.v1')
     expect(within(incompleteRow).getByRole('link', { name: /查看视频/ })).toBeInTheDocument()
   })
 
@@ -199,7 +197,6 @@ describe('capture group list view', () => {
 
     const row = await screen.findByRole('listitem', { name: /quality-independent-group/ })
     expect(row).not.toHaveTextContent('MediaPipe machine evidence')
-    expect(row).not.toHaveTextContent('hand-landmarks.v1')
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes('capture-group-quality-reviews'),

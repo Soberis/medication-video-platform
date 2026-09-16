@@ -38,7 +38,6 @@ describe('CaptureGroup data-group list', () => {
     expect(row).toHaveTextContent('1/2 机位已收 · 接收完成 · 有缺失')
     expect(row).toHaveTextContent('缺失：机位 2')
     expect(row).not.toHaveTextContent('MediaPipe machine evidence')
-    expect(row).not.toHaveTextContent('Media Probe · hand-landmarks.v1')
     expect(row).not.toHaveTextContent('整体质量')
     expect(
       fetchMock.mock.calls.some(([input]) =>

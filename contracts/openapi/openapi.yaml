@@ -2839,47 +2839,6 @@ paths:
           description: The project is not visible to the caller.
           content:
             application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/annotation-label-schema/labels:
-    post:
-      operationId: addAnnotationPrimaryStepLabel
-      tags:
-        - Annotation Tasks
-      summary: Publish a new immutable primary-Step label schema
-      description: >-
-        Requires an ACTIVE ADMIN membership. The supplied stable label is appended to a newly published immutable
-        schema; existing tasks, revisions and exports retain their previous schema and digest.
-      security:
-        - sessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-        - $ref: "#/components/parameters/OptionalRequestId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnnotationLabelCreateRequest"
-      responses:
-        "201":
-          description: The newly published immutable label schema.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/NoStore"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnnotationLabelSchema"
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "409":
-          description: The stable label_id is already present in the active label schema.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-tasks:
     get:
       operationId: listAnnotationTasks

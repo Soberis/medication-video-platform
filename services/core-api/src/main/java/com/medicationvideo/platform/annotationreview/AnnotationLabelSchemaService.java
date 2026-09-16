@@ -54,13 +54,6 @@ class AnnotationLabelSchemaService {
 	}
 
 	@Transactional
-	AnnotationLabelSchemaResponse addPrimaryStepLabel(UUID projectId, String actorId, String labelId,
-			String displayName, String description, String requestId, String traceId) {
-		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
-		return publishLabel(projectId, actorId, labelId, displayName, description, requestId, traceId);
-	}
-
-	@Transactional
 	AnnotationLabelSchemaResponse addGlobalLabel(String actorId, String labelId, String displayName, String description,
 			String requestId, String traceId) {
 		return publishLabel(null, actorId, labelId, displayName, description, requestId, traceId);

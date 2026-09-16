@@ -225,24 +225,18 @@ export async function getAnnotationLabelSchema(
 }
 
 export async function createAnnotationLabel(
-  projectId: string | null,
   request: CreateAnnotationLabelRequest,
 ): Promise<AnnotationLabelSchema> {
-  const response = await fetch(
-    projectId === null
-      ? '/api/v1/annotation-label-schema/labels'
-      : `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-label-schema/labels`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...csrfHeaders(),
-      },
-      cache: 'no-store',
-      body: JSON.stringify(request),
+  const response = await fetch('/api/v1/annotation-label-schema/labels', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
     },
-  )
+    cache: 'no-store',
+    body: JSON.stringify(request),
+  })
   if (response.ok) return (await response.json()) as AnnotationLabelSchema
   throw await annotationTaskApiError(response)
 }
