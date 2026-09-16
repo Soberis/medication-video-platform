@@ -238,6 +238,20 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: /配药动作标注工作台/ })).not.toBeInTheDocument()
   })
 
+  it('routes to task destination when clicking on the task card row directly', async () => {
+    stubTasks([assignedGroupTask], labelSchema)
+    const { router } = renderView()
+    const user = userEvent.setup()
+
+    const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*待标注/ })
+    await user.click(within(taskRow).getByText(/采集记录/))
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
+      expect(router.state.location.search).toBe('?focus=annotation')
+    })
+  })
+
   it('routes an assigned CaptureGroup task without a primary view to primary selection', async () => {
     const task = {
       ...assignedGroupTask,

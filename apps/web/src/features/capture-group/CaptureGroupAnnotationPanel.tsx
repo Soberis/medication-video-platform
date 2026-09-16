@@ -23,7 +23,7 @@ import {
   type CaptureGroup,
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
-import { type QualityReview } from '@/api/quality'
+import { recordQualityReview, type QualityReview } from '@/api/quality'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
@@ -513,8 +513,28 @@ export function CaptureGroupAnnotationPanel({
       if (!canPrepareTask || !assigneeActorId.trim()) {
         throw new Error('请由项目管理员分配标注任务。')
       }
+      if (
+        groupQuality &&
+        (groupQuality.result === 'REJECTED' || groupQuality.result === 'NEEDS_REVIEW')
+      ) {
+        throw new Error('该视频当前整体质量不满足提交条件，请恢复后再继续。')
+      }
       if (!currentGroupQualityAdmitting(groupQuality)) {
-        throw new Error('请先完成视频与整体质量判断，再准备标注任务。')
+        if (!effectivePrimaryClipAssetId) {
+          throw new Error('请先为标注任务选择主视频。')
+        }
+        await recordQualityReview(projectId, effectivePrimaryClipAssetId, {
+          decision: 'QUALIFIED',
+          reason_code: 'MEETS_REQUIREMENTS',
+          expected_version: 0,
+        })
+        await recordCaptureGroupQualityReview(
+          projectId,
+          captureGroupId,
+          'QUALIFIED',
+          '符合配药动作标注要求',
+          groupQuality?.revision ?? 0,
+        )
       }
       prepared = await assignCaptureGroupHumanLabelTask(projectId, captureGroupId, assigneeActorId)
       onTaskChange(prepared)

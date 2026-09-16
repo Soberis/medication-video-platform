@@ -1,7 +1,7 @@
 import { App as AntdApp, Button, Dropdown } from 'antd'
 import { FolderKanban, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
 import {
@@ -21,6 +21,7 @@ type LoadState = 'loading' | 'success' | 'error'
 
 export default function ProjectListView() {
   const { message, modal } = AntdApp.useApp()
+  const navigate = useNavigate()
   const prompt = usePromptDialog()
   const [projects, setProjects] = useState<DataProject[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
@@ -191,11 +192,28 @@ export default function ProjectListView() {
         <section className="project-list-surface working-surface" aria-label="项目列表">
           <ul className="project-list" aria-label="已加入项目">
             {projects.map((project) => (
-              <li key={project.project_id} className="project-list-item">
+              <li
+                key={project.project_id}
+                className="project-list-item"
+                onClick={(event) => {
+                  const target = event.target as HTMLElement
+                  if (
+                    target.closest('a') ||
+                    target.closest('button') ||
+                    target.closest('.ant-dropdown-trigger') ||
+                    (window.getSelection()?.toString().length ?? 0) > 0
+                  ) {
+                    return
+                  }
+                  void navigate(paths.captureGroups(project.project_id))
+                }}
+              >
                 <div className="project-list-name">
                   <div className="project-list-heading">
                     <FolderKanban aria-hidden="true" size={16} strokeWidth={1.8} />
-                    <strong title={project.display_name}>{project.display_name}</strong>
+                    <strong title={project.display_name} className="project-title-clickable">
+                      {project.display_name}
+                    </strong>
                     <StatusBadge
                       className="project-role-badge"
                       tone={project.current_role === 'ADMIN' ? 'info' : 'default'}
@@ -209,7 +227,7 @@ export default function ProjectListView() {
                       : '已加入项目'}
                   </p>
                 </div>
-                <div className="project-list-actions">
+                <div className="project-list-actions" onClick={(event) => event.stopPropagation()}>
                   <Link
                     className="project-open-link"
                     to={paths.captureGroups(project.project_id)}

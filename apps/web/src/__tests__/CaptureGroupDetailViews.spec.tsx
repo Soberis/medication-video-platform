@@ -10,7 +10,8 @@ import {
   qualityFixture,
   stubGroupDetail,
 } from './capture-group-fixtures'
-import { renderRoute } from '@/test/render'
+import { paths } from '@/app/paths'
+import { renderRoute, renderRouter } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -208,5 +209,37 @@ describe('CaptureGroup detail views', () => {
         ([input, init]) => String(input).endsWith('/receipt/finalize') && init?.method === 'POST',
       ),
     ).toBe(true)
+  })
+
+  it('renders a return to video list button that navigates to the project capture groups', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'UNKNOWN',
+    })
+    const { router } = renderRouter(
+      [
+        {
+          path: '/projects/:projectId/capture-groups/:captureGroupId',
+          element: <CaptureGroupDetailView />,
+        },
+        {
+          path: '/projects/:projectId/capture-groups',
+          element: <div>Capture Groups List</div>,
+        },
+      ],
+      [`/projects/${projectId}/capture-groups/${groupId}`],
+    )
+    const backBtn = await screen.findByRole('button', { name: /返回视频列表/ })
+    expect(backBtn).toBeInTheDocument()
+    await userEvent.setup().click(backBtn)
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(paths.captureGroups(projectId))
+    })
   })
 })

@@ -379,6 +379,30 @@ describe('App', () => {
     expect(screen.queryByText('归档项目')).not.toBeInTheDocument()
   })
 
+  it('navigates to capture groups when clicking the project row or title', async () => {
+    const project = projectFixture('临床试验项目')
+    vi.stubGlobal('fetch', projectListFetch([project], false))
+    const user = userEvent.setup()
+    const { router } = renderRouter(
+      [
+        { path: '/projects', element: <ProjectListView /> },
+        {
+          path: '/projects/:projectId/capture-groups',
+          element: <div>采集记录页面</div>,
+        },
+      ],
+      ['/projects'],
+    )
+
+    expect(await screen.findByText('临床试验项目')).toBeInTheDocument()
+    await user.click(screen.getByText('临床试验项目'))
+
+    expect(await screen.findByText('采集记录页面')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(
+      `/projects/${project.project_id}/capture-groups`,
+    )
+  })
+
   it('returns to login after logout succeeds', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
     const user = userEvent.setup()

@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   AnnotationTaskApiError,
@@ -142,6 +142,7 @@ export default function AnnotationTaskListView({
   embedded?: boolean
 }) {
   const { projectId = '' } = useParams()
+  const navigate = useNavigate()
   const { session } = useAuth()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
@@ -395,9 +396,27 @@ export default function AnnotationTaskListView({
                   className="annotation-task-row"
                   key={row.annotation_task_id}
                   data-status={row.status}
+                  onClick={(event) => {
+                    const target = event.target as HTMLElement
+                    if (
+                      target.closest('a') ||
+                      target.closest('button') ||
+                      target.closest('details') ||
+                      (window.getSelection()?.toString().length ?? 0) > 0
+                    ) {
+                      return
+                    }
+                    const destination = taskDestination
+                      ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
+                      : paths.captureGroup(projectId, captureGroupId)
+                    void navigate(destination)
+                  }}
                 >
                   <header className="annotation-task-row-identity">
-                    <strong className="mono-wrap" title={captureGroupId}>
+                    <strong
+                      className="mono-wrap annotation-task-title-clickable"
+                      title={captureGroupId}
+                    >
                       {taskSubject}
                     </strong>
                   </header>

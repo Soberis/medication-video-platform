@@ -1,5 +1,5 @@
 import { Alert, Button, Modal } from 'antd'
-import { RefreshCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -257,6 +257,14 @@ export default function CaptureGroupDetailView() {
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
+            <Button
+              icon={<ArrowLeft aria-hidden="true" size={14} strokeWidth={1.8} />}
+              onClick={() =>
+                void navigate(paths.captureGroups(projectId), { state: location.state })
+              }
+            >
+              返回视频列表
+            </Button>
             {data.group?.receipt_state === 'RECEIVING' ? (
               <Button
                 ref={receiptFinalizeTrigger}
