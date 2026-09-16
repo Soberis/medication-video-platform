@@ -1,5 +1,5 @@
 import { Button, Input, Pagination, Segmented } from 'antd'
-import { ArrowRight, RefreshCw, Search, Video } from 'lucide-react'
+import { ArrowRight, Search, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import AnnotationTaskListView from '@/views/AnnotationTaskListView'
@@ -15,6 +15,7 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
@@ -287,17 +288,14 @@ export default function CaptureGroupListView() {
                 ) : null}
               </>
             ) : null}
-            <Button
-              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+            <RefreshButton
               loading={loadingMode === 'refresh'}
               onClick={() => {
                 setRefreshEpoch((v) => v + 1)
                 void loadGroups()
                 void loadTasks()
               }}
-            >
-              刷新
-            </Button>
+            />
           </>
         }
       />

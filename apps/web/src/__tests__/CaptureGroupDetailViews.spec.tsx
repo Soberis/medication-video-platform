@@ -131,6 +131,63 @@ describe('CaptureGroup detail views', () => {
     expect(await screen.findByText('接收与采集事实')).toBeVisible()
   })
 
+  it('condenses the normal single-camera detail facts', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    group.device_id = 'PLATFORM_LOCAL'
+    group.streams[0]!.camera_role = 'PLATFORM_LOCAL'
+    group.streams[0]!.mount_position = 'PLATFORM_LOCAL'
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'UNKNOWN',
+    })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await userEvent.setup().click(await screen.findByText('更多信息'))
+    const inspector = screen.getByRole('complementary', { name: '记录详情' })
+    expect(within(inspector).getByText('单机位（机位 1）')).toBeInTheDocument()
+    expect(within(inspector).getAllByText('本地导入').length).toBeGreaterThan(0)
+    expect(within(inspector).queryByText('应收机位')).not.toBeInTheDocument()
+    expect(within(inspector).queryByText('缺失')).not.toBeInTheDocument()
+    expect(within(inspector).queryByText('PLATFORM_LOCAL')).not.toBeInTheDocument()
+  })
+
+  it('shortens long input versions without changing the copied value', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const fullVersion = 'capture-group-view-set.v1:' + '4b30d8ed'.padEnd(64, 'a')
+    const task = groupTask(groupId, true)
+    task.group_input_version = fullVersion
+    const quality = qualityFixture(group, 'QUALIFIED')
+    quality.input_version = fullVersion
+    stubGroupDetail(group, { task, quality, candidateStatus: 'UNKNOWN' })
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    await userEvent.setup().click(await screen.findByText('更多信息'))
+    const compactVersion = 'v1:4b30d8ed…'
+    expect(screen.getAllByText(compactVersion).length).toBeGreaterThan(0)
+    expect(screen.queryByText(fullVersion)).not.toBeInTheDocument()
+    await userEvent
+      .setup()
+      .click(screen.getAllByRole('button', { name: `复制版本 ${fullVersion}` })[0]!)
+    expect(await navigator.clipboard.readText()).toBe(fullVersion)
+  })
+
   it('lets a project administrator opt into the human annotation task after quality admission', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

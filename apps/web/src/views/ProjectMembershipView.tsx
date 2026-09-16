@@ -1,5 +1,4 @@
 import { Alert, App as AntdApp, Button, Form, Select, Table } from 'antd'
-import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
@@ -15,6 +14,7 @@ import {
 } from '@/api/projects'
 import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -136,13 +136,7 @@ export default function ProjectMembershipView() {
         title="项目成员"
         description="维护当前项目的成员和角色。"
         actions={
-          <Button
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={loadState === 'loading'}
-            onClick={() => void loadMemberships()}
-          >
-            刷新
-          </Button>
+          <RefreshButton loading={loadState === 'loading'} onClick={() => void loadMemberships()} />
         }
       />
       {canManageMembers ? (

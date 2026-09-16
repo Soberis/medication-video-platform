@@ -17,6 +17,7 @@ import type {
   MediaReport,
 } from '@/api/catalog'
 import { HandPoseOverlay } from '@/components/HandPoseOverlay'
+import { StatusBadge } from '@/components/StatusBadge'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { LoadingState } from '@/components/WorkspaceFeedback'
 import {
@@ -412,13 +413,16 @@ export function MediaReportCard({
           ]}
         />
         {warnings.length > 0 ? (
-          <Alert
-            className="media-report-warnings"
-            type="warning"
-            title="检测发现需关注项"
-            description={warnings.map((code) => mediaWarningLabels[code] ?? code).join('；')}
-            showIcon
-          />
+          <div className="media-report-warning-tags" aria-label="媒体附加信息">
+            <span className="media-report-warning-label">附加信息</span>
+            <div className="media-report-warning-list">
+              {warnings.map((code) => (
+                <StatusBadge key={code} tone="default">
+                  {mediaWarningLabels[code] ?? code}
+                </StatusBadge>
+              ))}
+            </div>
+          </div>
         ) : null}
       </>
     )

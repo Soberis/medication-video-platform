@@ -1,5 +1,5 @@
 import { Alert, Button, Modal } from 'antd'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
@@ -7,6 +7,7 @@ import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
 import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
+import { RefreshButton } from '@/components/RefreshButton'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
@@ -275,13 +276,10 @@ export default function CaptureGroupDetailView() {
                 结束接收
               </Button>
             ) : null}
-            <Button
-              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+            <RefreshButton
               loading={data.groupLoadState === 'loading'}
               onClick={() => void data.refresh()}
-            >
-              刷新
-            </Button>
+            />
           </>
         }
       />

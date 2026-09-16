@@ -1,5 +1,5 @@
 import { Alert, Button, Progress, Select } from 'antd'
-import { RefreshCw, UploadCloud, Video } from 'lucide-react'
+import { UploadCloud, Video } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -15,6 +15,7 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -215,14 +216,12 @@ export default function LocalUploadView() {
         title="上传视频"
         description="选择项目和视频，开始上传。"
         actions={
-          <Button
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
+          <RefreshButton
+            label="刷新项目"
             loading={projectLoadState === 'loading'}
             disabled={isUploading}
             onClick={() => void loadProjects()}
-          >
-            刷新项目
-          </Button>
+          />
         }
       />
       {errorMessage ? (

@@ -339,28 +339,26 @@ export function candidateDescription(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
-  if (state === 'loading') return '正在读取手部检测；这不会阻止人工查看或标注。'
-  if (state === 'error') return '检测结果读取失败；检测状态暂不可用，这不会阻止人工查看或标注。'
-  if (state === 'unavailable') return '暂无手部检测结果；当前暂不可用，这不会阻止人工查看或标注。'
-  if (!response) return '仅在媒体入库完成后读取手部检测。'
+  if (state === 'loading') return '正在读取手部检测。'
+  if (state === 'error') return '检测结果读取失败。'
+  if (state === 'unavailable') return '暂无手部检测结果。'
+  if (!response) return '媒体入库完成后读取手部检测。'
   if (response.job.status === 'FAILED') {
     const failureReason = response.job.run_summary?.failure_reason
-    return `检测任务失败${failureReason ? `；失败原因：${failureReason}` : ''}。这是机器检测证据，不构成人工标签或数据质量结论。`
+    return `检测任务失败${failureReason ? `；失败原因：${failureReason}` : ''}。`
   }
-  if (response.job.status === 'QUEUED')
-    return '等待检测；这是机器检测证据，不构成人工标签或数据质量结论。'
-  if (response.job.status === 'RUNNING')
-    return '检测中；这是机器检测证据，不构成人工标签或数据质量结论。'
+  if (response.job.status === 'QUEUED') return '等待检测。'
+  if (response.job.status === 'RUNNING') return '检测中。'
   if (
     response.job.hand_result === 'HAND_DETECTED' ||
     (response.candidates && response.candidates.length > 0)
   ) {
-    return '检测到手部；这是机器检测证据，不构成人工标签或数据质量结论。'
+    return '检测到手部。'
   }
   if (response.job.hand_result === 'NO_HAND_DETECTED') {
-    return '未检测到手部；这是机器检测证据，不构成人工标签或数据质量结论。'
+    return '未检测到手部。'
   }
-  return '结果未知；这是机器检测证据，不构成人工标签或数据质量结论。'
+  return '结果未知。'
 }
 
 export function candidateTone(

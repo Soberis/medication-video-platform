@@ -1604,8 +1604,23 @@
   width: min(100%, 980px);
 }
 
-.media-report-warnings {
-  margin-top: var(--app-space-16);
+.media-report-warning-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
+  margin-top: var(--app-space-8);
+}
+
+.media-report-warning-label {
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+}
+
+.media-report-warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-4);
 }
 
 .quality-review-actions .ant-select {

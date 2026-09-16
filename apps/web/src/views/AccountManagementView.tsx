@@ -1,5 +1,4 @@
 import { App as AntdApp, Button, Form, Input, Table } from 'antd'
-import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -10,6 +9,7 @@ import {
   type PlatformAccount,
 } from '@/api/admin'
 import { PageHeader } from '@/components/PageHeader'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -127,13 +127,7 @@ export default function AccountManagementView() {
         title="平台账号"
         description="平台账号加入项目后，才可访问项目数据。"
         actions={
-          <Button
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={loadState === 'loading'}
-            onClick={() => void loadAccounts()}
-          >
-            刷新
-          </Button>
+          <RefreshButton loading={loadState === 'loading'} onClick={() => void loadAccounts()} />
         }
       />
       <Section

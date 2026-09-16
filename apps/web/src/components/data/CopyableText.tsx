@@ -1,6 +1,12 @@
 import { App as AntdApp, Button } from 'antd'
 
-export function CopyableText({ value, label = '复制' }: { value: string; label?: string }) {
+interface CopyableTextProps {
+  displayValue?: string
+  label?: string
+  value: string
+}
+
+export function CopyableText({ value, displayValue = value, label = '复制' }: CopyableTextProps) {
   const { message } = AntdApp.useApp()
 
   async function copy() {
@@ -14,7 +20,7 @@ export function CopyableText({ value, label = '复制' }: { value: string; label
 
   return (
     <span className="copyable-text">
-      <code>{value}</code>
+      <code title={displayValue === value ? undefined : value}>{displayValue}</code>
       <Button type="link" size="small" aria-label={`${label} ${value}`} onClick={() => void copy()}>
         {label}
       </Button>

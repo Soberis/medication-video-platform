@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { MetadataList } from '@/components/data/MetadataList'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 
 describe('workspace data and status primitives', () => {
@@ -30,5 +31,13 @@ describe('workspace data and status primitives', () => {
     const indicator = screen.getByText('处理中').closest('.status-indicator')
     expect(indicator).toHaveAttribute('data-tone', 'information')
     expect(indicator?.querySelector('.status-indicator-dot')).toBeInTheDocument()
+  })
+
+  it('uses the shared refresh action label and icon', () => {
+    render(<RefreshButton label="刷新" />)
+
+    const button = screen.getByRole('button', { name: '刷新' })
+    expect(button).toBeInTheDocument()
+    expect(button.querySelector('svg')).toBeInTheDocument()
   })
 })

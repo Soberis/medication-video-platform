@@ -32,4 +32,19 @@ describe('copyable identifiers', () => {
     expect(await screen.findByText('复制未完成，请手动选择文本。')).toBeInTheDocument()
     expect(screen.getByText('synthetic-identifier')).toBeInTheDocument()
   })
+
+  it('shows a compact version while copying the full value', async () => {
+    const user = userEvent.setup()
+    const fullValue = 'capture-group-view-set.v1:' + '4b30d8ed'.padEnd(64, 'a')
+    render(
+      <AntdApp>
+        <CopyableText value={fullValue} displayValue="v1:4b30d8ed…" label="复制版本" />
+      </AntdApp>,
+    )
+
+    expect(screen.getByText('v1:4b30d8ed…')).toBeInTheDocument()
+    expect(screen.queryByText(fullValue)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: `复制版本 ${fullValue}` }))
+    expect(await navigator.clipboard.readText()).toBe(fullValue)
+  })
 })

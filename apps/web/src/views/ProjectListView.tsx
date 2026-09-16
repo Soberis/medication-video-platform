@@ -1,5 +1,5 @@
 import { App as AntdApp, Button, Dropdown } from 'antd'
-import { FolderKanban, RefreshCw } from 'lucide-react'
+import { FolderKanban } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
@@ -14,6 +14,7 @@ import {
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { usePromptDialog } from '@/components/PromptDialog'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
@@ -167,18 +168,12 @@ export default function ProjectListView() {
         title="项目"
         actions={
           <>
-            <Button
-              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-              loading={loadState === 'loading'}
-              onClick={() => void loadProjects()}
-            >
-              刷新
-            </Button>
             {canCreateProjects ? (
               <Button type="primary" loading={isCreating} onClick={() => void createDataProject()}>
                 新建项目
               </Button>
             ) : null}
+            <RefreshButton loading={loadState === 'loading'} onClick={() => void loadProjects()} />
           </>
         }
       />

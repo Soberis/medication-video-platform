@@ -1,5 +1,5 @@
 import { Alert, App as AntdApp, Button, Form, Input, Table, Tag } from 'antd'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -9,6 +9,7 @@ import {
   type AnnotationLabelSchema,
 } from '@/api/annotation'
 import { PageHeader } from '@/components/PageHeader'
+import { RefreshButton } from '@/components/RefreshButton'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 
@@ -79,15 +80,7 @@ export default function AnnotationLabelLibraryView() {
         eyebrow="全局标注规范"
         title="标签库"
         description="新增标签会发布新的不可变规范；已有标注任务和导出数据继续保留原规范。"
-        actions={
-          <Button
-            icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-            loading={state === 'loading'}
-            onClick={() => void load()}
-          >
-            刷新
-          </Button>
-        }
+        actions={<RefreshButton loading={state === 'loading'} onClick={() => void load()} />}
       />
       {state === 'loading' && !schema ? <LoadingState>正在读取标签库…</LoadingState> : null}
       {state === 'error' ? (

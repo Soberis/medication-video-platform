@@ -1,5 +1,3 @@
-import { Button } from 'antd'
-import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -15,6 +13,7 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
+import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
@@ -213,13 +212,7 @@ export default function AnnotationTaskListView({
           titleId="annotation-task-title"
           title="标注任务"
           actions={
-            <Button
-              icon={<RefreshCw aria-hidden="true" size={14} strokeWidth={1.8} />}
-              loading={loadState === 'loading'}
-              onClick={() => void loadTasks()}
-            >
-              刷新
-            </Button>
+            <RefreshButton loading={loadState === 'loading'} onClick={() => void loadTasks()} />
           }
         />
       ) : null}

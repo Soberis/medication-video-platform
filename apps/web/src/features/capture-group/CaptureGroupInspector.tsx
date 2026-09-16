@@ -31,6 +31,33 @@ import {
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
+const captureValueLabels: Record<string, string> = {
+  EXTERNAL_CAPTURE_SESSION_ID: '外部采集会话',
+  PLATFORM_LOCAL: '本地导入',
+  PRIMARY: '主机位',
+  SUPPORTING: '辅助机位',
+  UPSTREAM_MANIFEST_KEY: '上游清单',
+}
+
+function friendlyCaptureValue(value: string | null | undefined) {
+  if (!value) return null
+  return captureValueLabels[value] ?? value
+}
+
+function compactInputVersion(value: string) {
+  const separator = value.indexOf(':')
+  if (separator < 0) return value
+  const schema = value.slice(0, separator)
+  const digest = value.slice(separator + 1)
+  if (digest.length <= 16) return value
+  const version = schema.split('.').pop() ?? schema
+  return `${version}:${digest.slice(0, 8)}…`
+}
+
+function InputVersionValue({ value }: { value: string }) {
+  return <CopyableText value={value} displayValue={compactInputVersion(value)} label="复制版本" />
+}
+
 interface CaptureGroupInspectorProps {
   projectId: string
   captureGroupId: string
@@ -57,6 +84,25 @@ export function CaptureGroupInspector({
   const revision = task?.annotation_revision ?? null
   const review = revision?.review ?? null
   const cleaning = revision?.capture_group_cleaning ?? null
+  const deviceLabel = friendlyCaptureValue(group.device_id)
+  const expectedCameraNumbers = group.expected_camera_numbers
+  const receivedCameraNumbers = group.received_camera_numbers
+  const isSingleCameraComplete =
+    expectedCameraNumbers.length === 1 &&
+    receivedCameraNumbers.length === 1 &&
+    group.missing_camera_numbers.length === 0
+  const cameraModeLabel = expectedCameraNumbers.length === 1 ? '单机位' : '多机位'
+  const selectedCameraRole = selectedStream
+    ? friendlyCaptureValue(selectedStream.camera_role)
+    : null
+  const selectedMountPosition = selectedStream
+    ? friendlyCaptureValue(selectedStream.mount_position)
+    : null
+  const showMountPosition = Boolean(
+    selectedMountPosition &&
+      selectedMountPosition !== deviceLabel &&
+      selectedMountPosition !== selectedCameraRole,
+  )
   const taskFocus =
     groupQuality &&
     groupQuality.result !== 'QUALIFIED' &&
@@ -67,11 +113,7 @@ export function CaptureGroupInspector({
         : 'annotation'
 
   return (
-    <aside
-      className="capture-group-inspector"
-      aria-label="事实、历史与审计"
-      aria-labelledby="capture-group-inspector-title"
-    >
+    <aside className="capture-group-inspector" aria-labelledby="capture-group-inspector-title">
       <header className="capture-group-inspector-heading">
         <h2 id="capture-group-inspector-title">记录详情</h2>
       </header>
@@ -86,50 +128,75 @@ export function CaptureGroupInspector({
                 label: '采集记录 ID',
                 value: <CopyableText value={group.capture_group_id} />,
               },
-              { id: 'capture-key', label: '归组键', value: group.capture_group_key ?? '未提供' },
-              {
-                id: 'key-source',
-                label: '归组来源',
-                value: group.capture_group_key_source ?? '未提供',
-              },
-              {
-                id: 'capture-time',
-                label: '拍摄时间',
-                value: formatDateTime(group.device_time_utc),
-              },
+              ...(group.capture_group_key
+                ? [{ id: 'capture-key', label: '归组键', value: group.capture_group_key }]
+                : []),
+              ...(group.capture_group_key_source
+                ? [
+                    {
+                      id: 'key-source',
+                      label: '归组来源',
+                      value: friendlyCaptureValue(group.capture_group_key_source),
+                    },
+                  ]
+                : []),
+              ...(group.device_time_utc
+                ? [
+                    {
+                      id: 'capture-time',
+                      label: '拍摄时间',
+                      value: formatDateTime(group.device_time_utc),
+                    },
+                  ]
+                : []),
               {
                 id: 'receive-time',
                 label: '服务端接收时间',
                 value: formatDateTime(group.server_receive_time),
               },
               { id: 'batch', label: '上传批次', value: <code>{group.batch_id}</code> },
-              { id: 'device', label: '设备', value: group.device_id },
-            ]}
-          />
-          <Descriptions
-            column={1}
-            items={[
+              ...(deviceLabel ? [{ id: 'device', label: '设备', value: deviceLabel }] : []),
               {
-                key: 'expected',
-                label: '机位集合',
-                children: `应 ${group.expected_camera_numbers.map((number) => `机位 ${number}`).join('、')}`,
-              },
-              {
-                key: 'received',
-                label: '已接收',
-                children: group.received_camera_numbers.length
-                  ? group.received_camera_numbers.map((number) => `机位 ${number}`).join('、')
-                  : '暂无',
-              },
-              {
-                key: 'missing',
-                label: '缺失',
-                children: group.missing_camera_numbers.length
-                  ? group.missing_camera_numbers.map((number) => `机位 ${number}`).join('、')
-                  : '无',
+                id: 'camera-status',
+                label: '机位状态',
+                value: isSingleCameraComplete
+                  ? `单机位（机位 ${expectedCameraNumbers[0]}）`
+                  : group.missing_camera_numbers.length
+                    ? `${cameraModeLabel} · 缺失 ${group.missing_camera_numbers.length} 个`
+                    : `${cameraModeLabel} · 已接收 ${receivedCameraNumbers.length}/${expectedCameraNumbers.length}`,
               },
             ]}
           />
+          {!isSingleCameraComplete ? (
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: 'expected',
+                  label: '应收机位',
+                  children: expectedCameraNumbers.map((number) => `机位 ${number}`).join('、'),
+                },
+                {
+                  key: 'received',
+                  label: '已接收',
+                  children: receivedCameraNumbers.length
+                    ? receivedCameraNumbers.map((number) => `机位 ${number}`).join('、')
+                    : '暂无',
+                },
+                ...(group.missing_camera_numbers.length
+                  ? [
+                      {
+                        key: 'missing',
+                        label: '缺失',
+                        children: group.missing_camera_numbers
+                          .map((number) => `机位 ${number}`)
+                          .join('、'),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          ) : null}
         </InspectorSection>
       </ProgressiveDetail>
 
@@ -145,19 +212,27 @@ export function CaptureGroupInspector({
                 {
                   id: 'camera',
                   label: '机位',
-                  value: `机位 ${selectedStream.camera_number} · ${selectedStream.camera_role}`,
+                  value: [`机位 ${selectedStream.camera_number}`, selectedCameraRole]
+                    .filter(Boolean)
+                    .join(' · '),
                 },
-                { id: 'mount', label: '安装位置', value: selectedStream.mount_position },
+                ...(showMountPosition
+                  ? [{ id: 'mount', label: '安装位置', value: selectedMountPosition }]
+                  : []),
                 {
                   id: 'asset',
                   label: '视频资产',
                   value: <code>{selectedStream.clip_asset_id}</code>,
                 },
-                {
-                  id: 'record-start',
-                  label: '拍摄开始',
-                  value: formatDateTime(selectedStream.record_start_utc),
-                },
+                ...(selectedStream.record_start_utc
+                  ? [
+                      {
+                        id: 'record-start',
+                        label: '拍摄开始',
+                        value: formatDateTime(selectedStream.record_start_utc),
+                      },
+                    ]
+                  : []),
                 {
                   id: 'stream-status',
                   label: '媒体流',
@@ -201,7 +276,6 @@ export function CaptureGroupInspector({
           summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
         >
           <InspectorSection title="人工标签质量事实" titleId="capture-group-quality-facts">
-            <p className="form-hint">人工记录的人工标签质量结论与自动检测事实分开保存。</p>
             <div className="capture-group-inspector-status">
               <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
                 {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
@@ -216,24 +290,24 @@ export function CaptureGroupInspector({
             {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
             {groupQualityVisibility === 'unavailable' ? (
               <div className="capture-group-inspector-status" role="status">
-                <strong>人工标签质量暂不可用</strong>
-                <span>人工标签质量暂不可用，请刷新后重试</span>
+                <span>暂时无法读取人工标签质量，请刷新后重试。</span>
               </div>
             ) : null}
             {groupQualityVisibility === 'forbidden' ? (
               <div className="capture-group-inspector-status" role="status">
-                <strong>人工标签质量无权查看</strong>
-                <span>人工标签质量按当前权限不可见</span>
-                <span>当前账号不能读取或修改人工标签质量。</span>
+                <span>当前账号无权查看人工标签质量。</span>
               </div>
             ) : null}
             {groupQuality?.confirmed_view_set ? (
               <div className="capture-group-confirmed-view-set capture-group-stack">
                 <strong>本次结论使用的机位集合</strong>
-                <span>
-                  {formatViewQualitySummary(groupQuality)} · 确认输入版本{' '}
-                  {groupQuality.input_version ?? '未提供'}
-                </span>
+                <span>{formatViewQualitySummary(groupQuality)}</span>
+                {groupQuality.input_version ? (
+                  <span>
+                    确认输入版本：
+                    <InputVersionValue value={groupQuality.input_version} />
+                  </span>
+                ) : null}
                 <ul>
                   {groupQuality.confirmed_view_set.views.map((view) => (
                     <li key={view.camera_number}>
@@ -253,8 +327,8 @@ export function CaptureGroupInspector({
                       <StatusIndicator tone={groupQualityTone(entry.result)}>
                         第 {entry.revision} 次 · {groupQualityLabels[entry.result]}
                       </StatusIndicator>
-                      <span>{entry.reason ?? '未提供理由'}</span>
-                      <small>{formatDateTime(entry.decided_at)}</small>
+                      {entry.reason ? <span>{entry.reason}</span> : null}
+                      {entry.decided_at ? <small>{formatDateTime(entry.decided_at)}</small> : null}
                     </li>
                   ))}
                 </ol>
@@ -296,7 +370,7 @@ export function CaptureGroupInspector({
                   {
                     id: 'task-input-version',
                     label: '确认输入版本',
-                    value: task.group_input_version ?? '未提供',
+                    value: <InputVersionValue value={task.group_input_version} />,
                   },
                 ]}
               />
@@ -308,7 +382,10 @@ export function CaptureGroupInspector({
                     第 {revision.revision_number} 次 · {revision.submitted_by} ·{' '}
                     {formatDateTime(revision.submitted_at)}
                   </span>
-                  <span>确认输入版本：{revision.input_version ?? '未提供'}</span>
+                  <span>
+                    确认输入版本：
+                    <InputVersionValue value={revision.input_version} />
+                  </span>
                   {review ? (
                     <StatusIndicator tone={review.decision === 'APPROVED' ? 'success' : 'warning'}>
                       人工复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}
@@ -338,20 +415,6 @@ export function CaptureGroupInspector({
           </InspectorSection>
         </ProgressiveDetail>
       ) : null}
-
-      <ProgressiveDetail title="审计与受限操作" summary="保留原始事实">
-        <InspectorSection
-          title={<span className="visually-hidden">审计与受限操作详情</span>}
-          titleId="capture-group-audit-facts"
-        >
-          <p className="form-hint">
-            本页只展示已授权的服务端事实。删除、隐私放行、数据集冻结和导出等高风险操作不在此处隐式执行。
-          </p>
-          <p className="form-hint">
-            人工标签质量历史采用追加记录；当前页面不会因工作台展示而删除或改写历史事实。
-          </p>
-        </InspectorSection>
-      </ProgressiveDetail>
     </aside>
   )
 }

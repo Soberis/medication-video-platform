@@ -174,11 +174,7 @@ export function CaptureGroupFocusedView({
         grant={playbackGrant}
         isRecoveringMediaProbe={false}
         isRequestingPlayback={isRequestingPlayback}
-        mediaProbeMessage={
-          selectedDetail?.status === 'INGEST_FAILED'
-            ? '媒体检测失败是媒体事实；不改变接收状态，也不自动判定机位质量。'
-            : ''
-        }
+        mediaProbeMessage={selectedDetail?.status === 'INGEST_FAILED' ? '媒体检测失败。' : ''}
         playbackMessage={playbackMessage}
         playbackState={playbackState}
         externalVideoRef={videoRef}

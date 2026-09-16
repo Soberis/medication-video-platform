@@ -290,23 +290,22 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         : selectedDetail.status === 'INGEST_FAILED'
           ? {
               title: '媒体检测失败',
-              description:
-                '媒体检测失败不会改变接收状态；若播放授权仍可用，可继续人工查看，但不能记录机位质量。',
+              description: '可继续人工查看，但不能记录机位质量。',
               type: 'error',
             }
           : {
               title: mediaStatusLabels[selectedDetail.status] ?? '媒体尚未就绪',
-              description: '媒体事实尚未完成；当前不允许记录机位质量。',
+              description: '媒体事实尚未完成，暂不能记录机位质量。',
               type: 'warning',
             }
       : {
           title: '正在读取当前机位',
-          description: '读取完成后才会显示播放与媒体事实。',
+          description: '正在读取播放与媒体事实。',
           type: 'info',
         }
     : {
         title: '选择一路已接收机位',
-        description: '缺失机位保留在列表中，但不会加载播放器。',
+        description: '缺失机位不能加载播放器。',
         type: 'info',
       }
 
