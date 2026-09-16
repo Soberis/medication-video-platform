@@ -63,6 +63,14 @@ class HumanDemonstrationHdf5SampleTableTests {
 			assertEquals(1, landmarks.length);
 			assertEquals(21, landmarks[0].length);
 			assertEquals(3, landmarks[0][0].length);
+			var samplesGroup = file.getByPath("/data/demo_000000/samples");
+			assertEquals(MODEL_SHA, samplesGroup.getAttribute("model_sha256").getData());
+			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("input_sha256"));
+			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("profile_sha256"));
+			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("result_sha256"));
+			var annotationsGroup = file.getByPath("/data/demo_000000/annotations");
+			assertEquals("f".repeat(64), annotationsGroup.getAttribute("document_sha256").getData());
+			org.junit.jupiter.api.Assertions.assertNotNull(annotationsGroup.getAttribute("annotation_revision_id"));
 		}
 	}
 

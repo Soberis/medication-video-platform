@@ -146,18 +146,14 @@ class HumanDemonstrationHdf5ExportService {
 		episode.putAttribute("label_schema_id", first.labelSchemaId().toString());
 		episode.putAttribute("label_schema_digest", first.labelSchemaDigest());
 		var annotations = episode.putGroup("annotations");
+		annotations.putAttribute("annotation_revision_id", first.annotationRevisionId().toString());
+		annotations.putAttribute("document_sha256", first.documentSha256());
 		annotations.putDataset("segment_start_ms",
 				orderedSegments.stream().mapToLong(HumanAnnotationExportSegment::segmentStartMs).toArray());
 		annotations.putDataset("segment_end_ms",
 				orderedSegments.stream().mapToLong(HumanAnnotationExportSegment::segmentEndMs).toArray());
 		annotations.putDataset("label",
 				orderedSegments.stream().map(HumanAnnotationExportSegment::label).toArray(String[]::new));
-		annotations.putDataset("annotation_revision_id",
-				orderedSegments.stream()
-					.map(segment -> segment.annotationRevisionId().toString())
-					.toArray(String[]::new));
-		annotations.putDataset("document_sha256",
-				orderedSegments.stream().map(HumanAnnotationExportSegment::documentSha256).toArray(String[]::new));
 
 		var views = group.views()
 			.stream()
@@ -239,11 +235,6 @@ class HumanDemonstrationHdf5ExportService {
 		samples.putAttribute("algorithm_key", evidence.algorithmKey());
 		samples.putAttribute("algorithm_version", evidence.algorithmVersion());
 		samples.putAttribute("model_sha256", evidence.modelSha256());
-		samples.putAttribute("profile_sha256", evidence.profileSha256());
-		samples.putAttribute("input_sha256", evidence.inputSha256());
-		samples.putAttribute("result_sha256", evidence.resultSha256());
-		samples.putDataset("candidate_annotation_id",
-				rows.stream().map(row -> row.candidate().candidateAnnotationId().toString()).toArray(String[]::new));
 		samples.putDataset("frame_timestamp_ms",
 				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
 		samples.putDataset("hand_index", rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
@@ -294,9 +285,6 @@ class HumanDemonstrationHdf5ExportService {
 		output.putAttribute("algorithm_key", evidence.algorithmKey());
 		output.putAttribute("algorithm_version", evidence.algorithmVersion());
 		output.putAttribute("model_sha256", evidence.modelSha256());
-		output.putAttribute("profile_sha256", evidence.profileSha256());
-		output.putAttribute("input_sha256", evidence.inputSha256());
-		output.putAttribute("result_sha256", evidence.resultSha256());
 		var candidates = evidence.candidates();
 		if (candidates.isEmpty()) {
 			throw invalid("A successful MediaPipe hand result has no candidate samples.");
@@ -317,8 +305,6 @@ class HumanDemonstrationHdf5ExportService {
 			copyLandmarks(ordered.get(index), landmarks[index]);
 		}
 		var candidateGroup = output.putGroup("candidates");
-		candidateGroup.putDataset("candidate_annotation_id",
-				ordered.stream().map(candidate -> candidate.candidateAnnotationId().toString()).toArray(String[]::new));
 		candidateGroup.putDataset("frame_timestamp_ms",
 				ordered.stream().mapToLong(CandidateAnnotationSnapshot::frameTimestampMs).toArray());
 		candidateGroup.putDataset("hand_index",
