@@ -617,4 +617,68 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1000)
     expect(screen.getByLabelText('结束时间（毫秒）')).toHaveValue(4000)
   })
+
+  it('allows fine-tuning segment start and end times via nudge buttons and arrow keys', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+    })
+
+    const startInput = await screen.findByLabelText('开始时间（毫秒）')
+    expect(startInput).toHaveValue(0)
+
+    // Click +100 button on start time
+    const startPlus100 = screen.getByRole('button', {
+      name: '第 1 个时间段：开始时间增加 100 毫秒',
+    })
+    await user.click(startPlus100)
+    expect(startInput).toHaveValue(100)
+
+    // Click -100 button on start time
+    const startMinus100 = screen.getByRole('button', {
+      name: '第 1 个时间段：开始时间减少 100 毫秒',
+    })
+    await user.click(startMinus100)
+    expect(startInput).toHaveValue(0)
+
+    // Arrow keys inside start input: ArrowUp -> +100
+    fireEvent.keyDown(startInput, { key: 'ArrowUp' })
+    expect(startInput).toHaveValue(100)
+
+    // Shift + ArrowUp inside start input: +500 -> 600
+    fireEvent.keyDown(startInput, { key: 'ArrowUp', shiftKey: true })
+    expect(startInput).toHaveValue(600)
+
+    // ArrowDown inside start input: -100 -> 500
+    fireEvent.keyDown(startInput, { key: 'ArrowDown' })
+    expect(startInput).toHaveValue(500)
+
+    // Shift + ArrowDown: -500 -> 0
+    fireEvent.keyDown(startInput, { key: 'ArrowDown', shiftKey: true })
+    expect(startInput).toHaveValue(0)
+
+    // End time nudging
+    const endInput = screen.getByLabelText('结束时间（毫秒）')
+    expect(endInput).toHaveValue(1000)
+
+    const endPlus100 = screen.getByRole('button', { name: '第 1 个时间段：结束时间增加 100 毫秒' })
+    await user.click(endPlus100)
+    expect(endInput).toHaveValue(1100)
+
+    const endMinus100 = screen.getByRole('button', { name: '第 1 个时间段：结束时间减少 100 毫秒' })
+    await user.click(endMinus100)
+    expect(endInput).toHaveValue(1000)
+  })
 })

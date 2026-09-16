@@ -430,6 +430,23 @@ export function CaptureGroupAnnotationPanel({
     updateSegment(draftId, field, Math.max(0, Math.round(currentPlaybackTimeMs)))
   }
 
+  function nudgeSegmentTime(draftId: number, field: 'start_ms' | 'end_ms', delta: number) {
+    if (!canSubmitRevision) return
+    let updatedMs = 0
+    setIsDirty(true)
+    setDraftSegments((current) =>
+      current.map((segment) => {
+        if (segment.draftId !== draftId) return segment
+        const currentVal = segment[field]
+        const base = Number.isFinite(currentVal) ? currentVal : 0
+        const updated = Math.max(0, base + delta)
+        updatedMs = updated
+        return { ...segment, [field]: updated }
+      }),
+    )
+    onSeekToMs?.(updatedMs)
+  }
+
   function handleAddSegment() {
     setIsDirty(true)
     setDraftSegments((current) => {
@@ -936,6 +953,9 @@ export function CaptureGroupAnnotationPanel({
                 ) ?? '未读取'}
               </strong>
             </div>
+            <span className="capture-group-keyboard-hints" title="键盘操作提示">
+              空格 播放/暂停 · 输入框内 ↑/↓ 步进 100ms（按住 Shift 500ms）
+            </span>
           </div>
           {totalDurationMs && totalDurationMs > 0 && draftSegments.length > 0 ? (
             <div className="capture-group-timeline-overview" aria-label="全片动作时间轨">
@@ -1176,7 +1196,41 @@ export function CaptureGroupAnnotationPanel({
                                     : Number(event.target.value),
                                 )
                               }
+                              onKeyDown={(event) => {
+                                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                  event.preventDefault()
+                                  const multiplier = event.key === 'ArrowUp' ? 1 : -1
+                                  const delta = (event.shiftKey ? 500 : 100) * multiplier
+                                  nudgeSegmentTime(segment.draftId, 'start_ms', delta)
+                                }
+                              }}
                             />
+                            <button
+                              type="button"
+                              className="capture-group-segment-nudge-btn"
+                              disabled={!canSubmitRevision}
+                              aria-label={`第 ${index + 1} 个时间段：开始时间减少 100 毫秒`}
+                              title="微调 -100ms（按住 Shift 微调 -500ms）"
+                              onClick={(e) => {
+                                const delta = e.shiftKey ? -500 : -100
+                                nudgeSegmentTime(segment.draftId, 'start_ms', delta)
+                              }}
+                            >
+                              -100
+                            </button>
+                            <button
+                              type="button"
+                              className="capture-group-segment-nudge-btn"
+                              disabled={!canSubmitRevision}
+                              aria-label={`第 ${index + 1} 个时间段：开始时间增加 100 毫秒`}
+                              title="微调 +100ms（按住 Shift 微调 +500ms）"
+                              onClick={(e) => {
+                                const delta = e.shiftKey ? 500 : 100
+                                nudgeSegmentTime(segment.draftId, 'start_ms', delta)
+                              }}
+                            >
+                              +100
+                            </button>
                             <Button
                               type="text"
                               size="small"
@@ -1234,7 +1288,41 @@ export function CaptureGroupAnnotationPanel({
                                     : Number(event.target.value),
                                 )
                               }
+                              onKeyDown={(event) => {
+                                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                  event.preventDefault()
+                                  const multiplier = event.key === 'ArrowUp' ? 1 : -1
+                                  const delta = (event.shiftKey ? 500 : 100) * multiplier
+                                  nudgeSegmentTime(segment.draftId, 'end_ms', delta)
+                                }
+                              }}
                             />
+                            <button
+                              type="button"
+                              className="capture-group-segment-nudge-btn"
+                              disabled={!canSubmitRevision}
+                              aria-label={`第 ${index + 1} 个时间段：结束时间减少 100 毫秒`}
+                              title="微调 -100ms（按住 Shift 微调 -500ms）"
+                              onClick={(e) => {
+                                const delta = e.shiftKey ? -500 : -100
+                                nudgeSegmentTime(segment.draftId, 'end_ms', delta)
+                              }}
+                            >
+                              -100
+                            </button>
+                            <button
+                              type="button"
+                              className="capture-group-segment-nudge-btn"
+                              disabled={!canSubmitRevision}
+                              aria-label={`第 ${index + 1} 个时间段：结束时间增加 100 毫秒`}
+                              title="微调 +100ms（按住 Shift 微调 +500ms）"
+                              onClick={(e) => {
+                                const delta = e.shiftKey ? 500 : 100
+                                nudgeSegmentTime(segment.draftId, 'end_ms', delta)
+                              }}
+                            >
+                              +100
+                            </button>
                             <Button
                               type="text"
                               size="small"

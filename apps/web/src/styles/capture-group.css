@@ -821,6 +821,13 @@
   font-weight: var(--app-font-weight-regular);
 }
 
+.capture-group-keyboard-hints {
+  font-size: var(--app-font-size-caption);
+  color: var(--app-color-foreground-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
 .capture-group-annotation-sticky-bar {
   position: sticky;
   top: 0;
@@ -1299,7 +1306,7 @@
 }
 
 .capture-group-segment-time-readable {
-  color: #0369a1;
+  color: var(--app-color-primary);
   font-family: var(--app-font-family-mono);
   font-size: 11px;
   font-weight: 500;
@@ -1321,7 +1328,7 @@
 
 .capture-group-segment-time-input-wrap:focus-within {
   border-color: var(--app-color-primary);
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
+  box-shadow: 0 0 0 2px var(--app-color-primary-subtle);
 }
 
 .capture-group-segment-time-input-wrap > input {
@@ -1343,6 +1350,39 @@
   background: var(--app-color-surface-muted);
 }
 
+.capture-group-segment-nudge-btn {
+  height: 28px;
+  padding: 0 4px;
+  min-width: 34px;
+  font-family: var(--app-font-family-mono);
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  border-left: 1px solid var(--app-color-border-subtle);
+  background: var(--app-color-surface-muted);
+  color: var(--app-color-foreground-secondary);
+  cursor: pointer;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+  user-select: none;
+}
+
+.capture-group-segment-nudge-btn:hover:not(:disabled) {
+  background: var(--app-color-primary-subtle);
+  color: var(--app-color-primary);
+}
+
+.capture-group-segment-nudge-btn:disabled {
+  cursor: not-allowed;
+  color: var(--app-color-foreground-muted);
+  opacity: 0.6;
+}
+
 .capture-group-segment-set-current-btn {
   height: 28px !important;
   padding: 0 6px !important;
@@ -1356,7 +1396,7 @@
 }
 
 .capture-group-segment-set-current-btn:hover:not(:disabled) {
-  background: #e6f4ff !important;
+  background: var(--app-color-primary-subtle) !important;
   color: var(--app-color-primary) !important;
 }
 
