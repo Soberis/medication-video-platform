@@ -413,7 +413,10 @@ export default function AnnotationTaskListView({
                     </strong>
                   </header>
                   <div className="annotation-task-row-status">
-                    <StatusIndicator className="annotation-task-status" tone={annotationTaskStatusTone(row)}>
+                    <StatusIndicator
+                      className="annotation-task-status"
+                      tone={annotationTaskStatusTone(row)}
+                    >
                       {annotationTaskStatusLabel(row)}
                     </StatusIndicator>
                   </div>

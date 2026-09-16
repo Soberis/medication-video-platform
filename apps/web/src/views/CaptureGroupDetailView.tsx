@@ -12,7 +12,7 @@ import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
-import { CaptureGroupReviewCleaningPanel } from '@/features/capture-group/CaptureGroupReviewCleaningPanel'
+import { CaptureGroupReviewPanel } from '@/features/capture-group/CaptureGroupReviewPanel'
 import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
   createGroupViewRows,
@@ -22,7 +22,7 @@ import { useCaptureGroupDetailData } from '@/features/capture-group/use-capture-
 import { useCaptureGroupView } from '@/features/capture-group/use-capture-group-view'
 import {
   captureGroupFocusFromLocation,
-  captureGroupReviewCleaningFallbackTargetId,
+  captureGroupReviewFallbackTargetId,
   captureGroupTaskDestination,
   captureGroupFocusTargetIds,
 } from '@/features/capture-group-presentation'
@@ -56,7 +56,7 @@ export default function CaptureGroupDetailView() {
   }, [hasUnsavedAnnotation])
   const focusTargetId = focus ? captureGroupFocusTargetIds[focus] : null
   const fallbackFocusTargetId =
-    focus === 'review' || focus === 'cleaning' ? captureGroupReviewCleaningFallbackTargetId : null
+    focus === 'review' || focus === 'cleaning' ? captureGroupReviewFallbackTargetId : null
   const viewRows = useMemo(() => createGroupViewRows(data.group), [data.group])
   const selectedView = useMemo<GroupViewRow | null>(
     () => viewRows.find((view) => view.stream?.clip_asset_id === data.selectedClipAssetId) ?? null,
@@ -173,7 +173,7 @@ export default function CaptureGroupDetailView() {
     if (!data.group) return null
     if (taskDestination?.focus === 'review' || taskDestination?.focus === 'cleaning') {
       return (
-        <CaptureGroupReviewCleaningPanel
+        <CaptureGroupReviewPanel
           projectId={projectId}
           group={data.group}
           groupQuality={data.groupQuality}

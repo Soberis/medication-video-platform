@@ -61,9 +61,7 @@ def test_scaffold_ignores_labels_outside_the_frozen_protocol_order(
 ) -> None:
     _pin_duration(monkeypatch, 60_000)
 
-    _, segments = analyze_video_actions(
-        Path("synthetic.mp4"), ("invented_label", "open_container")
-    )
+    _, segments = analyze_video_actions(Path("synthetic.mp4"), ("invented_label", "open_container"))
 
     assert {segment.label for segment in segments} == {"open_container"}
 

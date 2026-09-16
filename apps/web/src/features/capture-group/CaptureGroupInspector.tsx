@@ -398,9 +398,7 @@ export function CaptureGroupInspector({
                     <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
                       标注检查 · {cleaningLabel(cleaning.outcome)}
                     </StatusIndicator>
-                  ) : (
-                    <span>尚无标注检查结果。</span>
-                  )}
+                  ) : null}
                 </div>
               ) : (
                 <p className="form-hint">任务已存在，尚无正式修订。</p>

@@ -35,7 +35,7 @@ import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/
 
 type CleaningResult = CaptureGroupCleaning
 
-interface CaptureGroupReviewCleaningPanelProps {
+export interface CaptureGroupReviewPanelProps {
   projectId: string
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
@@ -45,7 +45,7 @@ interface CaptureGroupReviewCleaningPanelProps {
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
 }
 
-export function CaptureGroupReviewCleaningPanel({
+export function CaptureGroupReviewPanel({
   projectId,
   group,
   groupQuality,
@@ -53,7 +53,7 @@ export function CaptureGroupReviewCleaningPanel({
   task,
   schema,
   onRefresh,
-}: CaptureGroupReviewCleaningPanelProps) {
+}: CaptureGroupReviewPanelProps) {
   const { message, modal } = AntdApp.useApp()
   const [reviewingDecision, setReviewingDecision] = useState<AnnotationReview['decision'] | null>(
     null,
@@ -197,17 +197,19 @@ export function CaptureGroupReviewCleaningPanel({
           <li>
             <strong>修订 {revision.revision_number} · 已提交</strong>
             <span>
-              {revision.submitted_by} · {formatDateTime(revision.submitted_at)}
+              由 {revision.submitted_by} 提交于 {formatDateTime(revision.submitted_at)}
             </span>
-            <p>{revision.annotation_document.note ?? '未提供修订备注。'}</p>
+            {revision.annotation_document?.note ? (
+              <p>提交备注：{String(revision.annotation_document.note)}</p>
+            ) : null}
           </li>
           {review ? (
             <li>
-              <strong>复核 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
+              <strong>复核决定 · {review.decision === 'APPROVED' ? '已通过' : '已退回'}</strong>
               <span>
-                {review.reviewed_by} · {formatDateTime(review.reviewed_at)}
+                由 {review.reviewed_by} 决定于 {formatDateTime(review.reviewed_at)}
               </span>
-              <p>{review.review_note ?? '未提供复核备注。'}</p>
+              {review.review_note ? <p>复核说明：{review.review_note}</p> : null}
             </li>
           ) : null}
         </ol>
@@ -217,19 +219,17 @@ export function CaptureGroupReviewCleaningPanel({
 
   return (
     <Section
-      className="capture-group-review-cleaning-section capture-group-workflow-focus-target"
-      id="capture-group-review-cleaning"
+      className="capture-group-review-section capture-group-workflow-focus-target"
+      id="capture-group-review"
       tabIndex={-1}
       title="标注复核"
-      titleId="capture-group-review-cleaning-title"
+      titleId="capture-group-review-title"
     >
       {isReviewApproved ? (
         <Button
           type="link"
           size="small"
-          aria-controls={
-            isCompletedDetailOpen ? 'capture-group-review-cleaning-details' : undefined
-          }
+          aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
           aria-expanded={isCompletedDetailOpen}
           onClick={() => setIsCompletedDetailOpen((open) => !open)}
         >
@@ -240,13 +240,11 @@ export function CaptureGroupReviewCleaningPanel({
         <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
       ) : null}
       {!task ? (
-        <p className="form-hint">
-          当前没有可见的人工标签任务，暂不能读取修订、复核事实。
-        </p>
+        <p className="form-hint">当前没有可见的人工标签任务，暂不能读取修订、复核事实。</p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
       ) : !isReviewApproved || isCompletedDetailOpen ? (
-        <div id="capture-group-review-cleaning-details">
+        <div id="capture-group-review-details">
           <div className="capture-group-review-boundary" role="status">
             <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
             <div>
@@ -353,17 +351,21 @@ export function CaptureGroupReviewCleaningPanel({
             </p>
           )}
 
-          <CaptureGroupCleaningCheck
-            cleaning={cleaning}
-            primaryCameraNumber={primaryCameraNumber}
-            schema={schema}
-            review={review}
-          />
+          {cleaning ? (
+            <CaptureGroupCleaningCheck
+              cleaning={cleaning}
+              primaryCameraNumber={primaryCameraNumber}
+              schema={schema}
+            />
+          ) : null}
         </div>
       ) : null}
     </Section>
   )
 }
+
+/** 向后兼容别名 */
+export { CaptureGroupReviewPanel as CaptureGroupReviewCleaningPanel }
 
 interface ViewSetSummaryProps {
   viewSet: CaptureGroupViewSet | null | undefined
@@ -394,9 +396,9 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
               value: viewSet.capture_group_version,
             },
             {
-              id: 'view-set-snapshot',
-              label: '机位配置快照',
-              value: viewSet.camera_set_snapshot_id,
+              id: 'view-set-camera-set',
+              label: '相机集合快照',
+              value: shortEvidenceId(viewSet.camera_set_snapshot_id),
             },
             {
               id: 'view-set-receipt',
@@ -406,17 +408,10 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
           ]}
         />
       ) : (
-        <p className="form-hint">当前修订没有返回已确认机位集合摘要。</p>
+        <p className="form-hint">未提供已确认机位集合。</p>
       )}
     </div>
   )
-}
-
-interface EvidenceViewListProps {
-  title: string
-  views: CaptureGroupEvidence[] | null | undefined
-  emptyText: string
-  tone: 'success' | 'warning'
 }
 
 function FormalAnnotationIntervals({
@@ -426,22 +421,30 @@ function FormalAnnotationIntervals({
 }: {
   primaryCameraNumber: number | null
   schema: AnnotationLabelSchema | null
-  segments: AnnotationSegment[]
+  segments: AnnotationSegment[] | undefined
 }) {
+  const safeSegments = Array.isArray(segments) ? segments : []
+
   return (
-    <div className="capture-group-cleaning-interval capture-group-review-formal-intervals">
-      <strong>主视图正式动作时间段</strong>
-      <span>
-        {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}当前修订的正式动作时间轴
-      </span>
-      {segments.length ? (
-        <ol>
-          {segments.map((segment, index) => {
+    <div className="capture-group-formal-intervals">
+      <div className="capture-group-review-subheading">
+        <div>
+          <span className="app-eyebrow">正式标注动作</span>
+          <h3>正式动作区间</h3>
+        </div>
+        <span>
+          {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}
+          {safeSegments.length} 个动作段
+        </span>
+      </div>
+      {safeSegments.length ? (
+        <ol className="capture-group-formal-interval-list" aria-label="正式动作区间列表">
+          {safeSegments.map((segment, index) => {
             const labelName = getActionDisplayName(segment.label, schema)
             const formattedStart = formatAnnotationTime(segment.start_ms)
             const formattedEnd = formatAnnotationTime(segment.end_ms)
             return (
-              <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}-${index}`}>
+              <li key={`${segment.label}-${segment.start_ms}-${segment.end_ms}-${index}`}>
                 <div className="capture-group-readonly-time">
                   <strong>
                     {formattedStart && formattedEnd
@@ -458,35 +461,48 @@ function FormalAnnotationIntervals({
           })}
         </ol>
       ) : (
-        <span>当前修订没有正式动作时间段。</span>
+        <p className="form-hint">当前修订未包含正式标注动作区间。</p>
       )}
     </div>
   )
 }
 
+interface EvidenceViewListProps {
+  title: string
+  views: CaptureGroupEvidence[] | undefined
+  emptyText: string
+  tone: 'success' | 'warning'
+}
+
 function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListProps) {
   const safeViews = Array.isArray(views) ? views : []
+
   return (
-    <div className="capture-group-review-evidence-block">
+    <div className="capture-group-review-view-list">
       <div className="capture-group-review-subheading">
-        <h3>{title}</h3>
-        <span>{safeViews.length} 路</span>
+        <strong>{title}</strong>
+        <span>{safeViews.length} 个机位</span>
       </div>
       {safeViews.length ? (
         <ul className="capture-group-evidence-list" aria-label={title}>
           {safeViews.map((view, index) => {
-            const decision = viewQualityDecision(view)
+            const qualityDecision = viewQualityDecision(view)
+            const rejectionReason = stringValue(view, 'rejection_reason')
+            const primary = booleanValue(view, 'primary')
             return (
               <li key={evidenceKey(view, index)}>
-                <StatusIndicator tone={tone === 'success' ? 'success' : 'warning'}>
+                <strong>
                   {evidenceViewName(view, index)}
-                </StatusIndicator>
+                  {primary ? ' · 主视图' : ''}
+                </strong>
                 <span>
-                  {decision ? (viewQualityLabels[decision] ?? decision) : '机位事实已固定'}
-                  {stringValue(view, 'rejection_reason')
-                    ? ` · ${viewRejectionReasonLabel(stringValue(view, 'rejection_reason')!)}`
-                    : ''}
+                  {qualityDecision ? `质量判断：${viewQualityLabels[qualityDecision]}` : ''}
+                  {qualityDecision && rejectionReason ? ' · ' : ''}
+                  {rejectionReason ? viewRejectionReasonLabel(rejectionReason) : ''}
                 </span>
+                <StatusIndicator tone={tone}>
+                  {tone === 'success' ? '参与' : '排除'}
+                </StatusIndicator>
               </li>
             )
           })}
@@ -502,110 +518,97 @@ interface CaptureGroupCleaningCheckProps {
   cleaning: CleaningResult | null
   primaryCameraNumber: number | null
   schema: AnnotationLabelSchema | null
-  review: AnnotationReview | null
 }
 
 function CaptureGroupCleaningCheck({
   cleaning,
   primaryCameraNumber,
   schema,
-  review,
 }: CaptureGroupCleaningCheckProps) {
   const captureGroupCleaning = cleaning
+  if (!cleaning) return null
 
   return (
-    <div className="capture-group-cleaning-check" aria-label="标注检查">
+    <div className="capture-group-cleaning-check" aria-label="历史标注检查快照">
       <div className="capture-group-review-subheading">
         <div>
-          <span className="app-eyebrow">标注检查</span>
+          <span className="app-eyebrow">历史快照（只读）</span>
           <h3>标注检查</h3>
         </div>
-        {cleaning ? (
-          <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-            {cleaningLabel(cleaning.outcome)}
-          </StatusIndicator>
+        <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
+          {cleaningLabel(cleaning.outcome)}
+        </StatusIndicator>
+      </div>
+      <div className="capture-group-cleaning-summary">
+        <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
+          {cleaning.outcome === 'PASS' ? '标注检查通过' : '标注检查未通过'}
+        </StatusIndicator>
+        <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
+        {captureGroupCleaning?.evaluated_by ? (
+          <span>评估人：{captureGroupCleaning.evaluated_by}</span>
         ) : null}
       </div>
-      {cleaning ? (
-        <>
-          <div className="capture-group-cleaning-summary">
-            <StatusIndicator tone={cleaningTone(cleaning.outcome)}>
-              {cleaning.outcome === 'PASS' ? '标注检查通过' : '标注检查未通过'}
-            </StatusIndicator>
-            <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
-            {captureGroupCleaning?.evaluated_by ? (
-              <span>评估人：{captureGroupCleaning.evaluated_by}</span>
-            ) : null}
-          </div>
-          <MetadataList
-            ariaLabel="标注检查规则来源"
-            items={[
-              ...(cleaning.rule_set_key
-                ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
-                : []),
-              ...(cleaning.rule_set_version
-                ? [
-                    {
-                      id: 'cleaning-rule-version',
-                      label: '规则版本',
-                      value: cleaning.rule_set_version,
-                    },
-                  ]
-                : []),
-              ...(cleaning.rule_set_digest
-                ? [
-                    {
-                      id: 'cleaning-rule-digest',
-                      label: '规则摘要',
-                      value: <code>{cleaning.rule_set_digest}</code>,
-                    },
-                  ]
-                : []),
-              ...(captureGroupCleaning?.authorization_basis
-                ? [
-                    {
-                      id: 'cleaning-authorization',
-                      label: '授权依据',
-                      value: captureGroupCleaning.authorization_basis,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-          <CleaningList title="检查原因" items={cleaning.reason_codes} emptyText="没有阻断原因。" />
-          <CleaningList
-            title="已执行检查"
-            items={cleaning.executed_checks}
-            emptyText="未返回检查项。"
-          />
-          <div className="capture-group-cleaning-evidence-grid">
-            <EvidenceViewList
-              title="参与机位"
-              views={captureGroupCleaning?.participating_views}
-              emptyText="没有参与机位。"
-              tone="success"
-            />
-            <EvidenceViewList
-              title="排除机位"
-              views={captureGroupCleaning?.excluded_views}
-              emptyText="没有排除机位。"
-              tone="warning"
-            />
-          </div>
-          <CleaningPrimaryInterval
-            primaryCameraNumber={primaryCameraNumber}
-            primaryInterval={captureGroupCleaning?.primary_interval ?? []}
-            schema={schema}
-          />
-          <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
-        </>
-      ) : (
-        <p className="form-hint">
-          {review?.decision === 'APPROVED'
-            ? '人工复核已通过；当前修订未生成单独的标注检查快照。'
-            : '人工复核通过后将作为正式标注结论。'}
-        </p>
-      )}
+      <MetadataList
+        ariaLabel="标注检查规则来源"
+        items={[
+          ...(cleaning.rule_set_key
+            ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
+            : []),
+          ...(cleaning.rule_set_version
+            ? [
+                {
+                  id: 'cleaning-rule-version',
+                  label: '规则版本',
+                  value: cleaning.rule_set_version,
+                },
+              ]
+            : []),
+          ...(cleaning.rule_set_digest
+            ? [
+                {
+                  id: 'cleaning-rule-digest',
+                  label: '规则摘要',
+                  value: <code>{cleaning.rule_set_digest}</code>,
+                },
+              ]
+            : []),
+          ...(captureGroupCleaning?.authorization_basis
+            ? [
+                {
+                  id: 'cleaning-authorization',
+                  label: '授权依据',
+                  value: captureGroupCleaning.authorization_basis,
+                },
+              ]
+            : []),
+        ]}
+      />
+      <CleaningList title="检查原因" items={cleaning.reason_codes} emptyText="没有阻断原因。" />
+      <CleaningList
+        title="已执行检查"
+        items={cleaning.executed_checks}
+        emptyText="未返回检查项。"
+      />
+      <div className="capture-group-cleaning-evidence-grid">
+        <EvidenceViewList
+          title="参与机位"
+          views={captureGroupCleaning?.participating_views}
+          emptyText="没有参与机位。"
+          tone="success"
+        />
+        <EvidenceViewList
+          title="排除机位"
+          views={captureGroupCleaning?.excluded_views}
+          emptyText="没有排除机位。"
+          tone="warning"
+        />
+      </div>
+      <CleaningPrimaryInterval
+        primaryCameraNumber={primaryCameraNumber}
+        primaryInterval={captureGroupCleaning?.primary_interval ?? []}
+        schema={schema}
+      />
+      <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
     </div>
   )
 }

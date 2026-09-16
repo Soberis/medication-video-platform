@@ -398,9 +398,7 @@ describe('App', () => {
     await user.click(screen.getByText('临床试验项目'))
 
     expect(await screen.findByText('采集记录页面')).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe(
-      `/projects/${project.project_id}/capture-groups`,
-    )
+    expect(router.state.location.pathname).toBe(`/projects/${project.project_id}/capture-groups`)
   })
 
   it('returns to login after logout succeeds', async () => {

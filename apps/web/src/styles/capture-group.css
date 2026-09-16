@@ -1560,6 +1560,7 @@
   outline-offset: var(--app-space-4);
 }
 
+.capture-group-review-section,
 .capture-group-review-cleaning-section {
   display: grid;
   gap: var(--app-space-12);

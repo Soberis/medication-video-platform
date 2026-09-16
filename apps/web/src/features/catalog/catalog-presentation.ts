@@ -21,37 +21,6 @@ export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
   REJECT: '边端声明异常',
 }
 
-export const cleaningStatusLabels = {
-  NOT_STARTED: '待处理',
-  PASS: '标注检查通过',
-  WARNING: '标注检查需处理',
-  REJECT: '标注检查未通过',
-} as const
-
-export function statusTone(
-  status: string,
-): 'success' | 'warning' | 'error' | 'default' | 'processing' {
-  if (status === 'PASS' || status === 'COMPLETE' || status === 'INGESTED') {
-    return 'success'
-  }
-  if (status === 'WARNING' || status === 'ASSEMBLING' || status === 'INGESTING') {
-    return 'warning'
-  }
-  if (
-    status === 'REJECT' ||
-    status === 'INCOMPLETE' ||
-    status === 'INGEST_FAILED' ||
-    status === 'UNAVAILABLE'
-  ) {
-    return 'error'
-  }
-  return status === 'BOUND' || status === 'UPLOADED' ? 'processing' : 'default'
-}
-
-export function statusLabel(labels: Record<string, string>, status: string) {
-  return labels[status] ?? status
-}
-
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return '未提供'
   const date = new Date(value)

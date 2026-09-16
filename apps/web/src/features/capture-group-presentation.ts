@@ -200,10 +200,9 @@ export function captureGroupTaskDestination(
     return { focus: 'review', actionLabel: '复核标注' }
   }
 
-  // Completed task visibility is already authorized by the task list. The
-  // Recheck mutation remains guarded separately by can_recheck_capture_group_cleaning.
+  // Completed task visibility is already authorized by the task list.
   if (task.status === 'COMPLETED' && task.annotation_revision) {
-    return { focus: 'cleaning', actionLabel: '查看标注结果' }
+    return { focus: 'review', actionLabel: '查看标注结果' }
   }
 
   return null
@@ -211,11 +210,12 @@ export function captureGroupTaskDestination(
 
 export const captureGroupFocusTargetIds: Record<CaptureGroupFocus, string> = {
   annotation: 'capture-group-annotation',
-  review: 'capture-group-review-cleaning',
-  cleaning: 'capture-group-review-cleaning',
+  review: 'capture-group-review',
+  cleaning: 'capture-group-review',
 }
 
-export const captureGroupReviewCleaningFallbackTargetId = 'capture-group-review-cleaning-context'
+export const captureGroupReviewFallbackTargetId = 'capture-group-review-context'
+export const captureGroupReviewCleaningFallbackTargetId = captureGroupReviewFallbackTargetId
 
 export function captureGroupFocusFromLocation(
   search: string,

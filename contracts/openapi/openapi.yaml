@@ -2839,6 +2839,8 @@ paths:
           description: The project is not visible to the caller.
           content:
             application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /projects/{project_id}/annotation-tasks:
     get:
       operationId: listAnnotationTasks

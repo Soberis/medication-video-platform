@@ -340,7 +340,7 @@ describe('annotation task list view', () => {
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
-      expect(router.state.location.search).toBe('?focus=cleaning')
+      expect(router.state.location.search).toBe('?focus=review')
     })
   })
 
@@ -473,7 +473,7 @@ describe('annotation task list view', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
     )
-    expect(router.state.location.search).toBe('?focus=cleaning')
+    expect(router.state.location.search).toBe('?focus=review')
   })
 
   it('reloads the current task state from the server when the page is re-entered', async () => {
