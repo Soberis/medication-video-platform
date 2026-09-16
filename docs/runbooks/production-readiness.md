@@ -175,7 +175,7 @@ pnpm run synthetic-capture-group -- --scenario n1-complete
 5. 读取 `GET /api/v1/projects/{project_id}/clip-assets/{clip_asset_id}/media-report`，必要时申请短期 playback grant；确认媒体可读，绝不把 grant URL 写入证据。
 6. 分别读取 view quality `.../clip-assets/{clip_asset_id}/quality-review` 和 group quality `.../capture-groups/{capture_group_id}/quality-review`，确认两者不是同一事实。
 7. 读取任务列表，确认每个 CaptureGroup 至多一个任务；提交、复核状态与当前 Revision 一致。
-8. 使用合成 fixture 验证候选初始化不提交、人工修改不被覆盖、显式提交后才能复核。自动建任务与调度在相应实现完成后另行验收。
+8. 使用合成 fixture 验证媒体就绪后的自动派发、候选初始化不提交、人工修改不被覆盖、显式提交后才能复核。真实 Worker 接收、推理和回传仍须在受控环境另行验收。
 9. 在视频工作区执行 `human-demonstration-hdf5.v1` preview/download；核对导出范围、当前 CameraStream/ClipAsset、21 点样本、批准结果来源和 MediaPipe provenance。旧事件 manifest、旧 CSV 与历史单视频导出不列为 V1.35 验收目标。
 
 建议至少运行 `n1-complete`、`n5-complete`、`n5-missing-camera`、`n5-rejected-view` 和 `receiving-before-finalize`；`no-hand-detected`/`candidate-failure` 只有在 AI 模型和受控 fixture 就绪时才运行。`candidate-failure` 未运行不能解释为 UAT 通过。

@@ -215,7 +215,6 @@ export const captureGroupFocusTargetIds: Record<CaptureGroupFocus, string> = {
 }
 
 export const captureGroupReviewFallbackTargetId = 'capture-group-review-context'
-export const captureGroupReviewCleaningFallbackTargetId = captureGroupReviewFallbackTargetId
 
 export function captureGroupFocusFromLocation(
   search: string,

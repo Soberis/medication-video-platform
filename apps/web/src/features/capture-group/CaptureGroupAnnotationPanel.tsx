@@ -500,6 +500,9 @@ export function CaptureGroupAnnotationPanel({
           ),
         )
         setHasAutoLoadedAiDraft(true)
+        if (candidates[0]) {
+          onSeekToMs?.(candidates[0].start_ms)
+        }
         void message.success(`成功载入 ${candidates.length} 个动作预标注候选片段，请逐段核对`)
       } else {
         void message.info(
@@ -587,6 +590,7 @@ export function CaptureGroupAnnotationPanel({
     if (!canSubmitRevision) return
     setShowCandidateDetails(true)
     setIsDirty(true)
+    onSeekToMs?.(candidate.start_ms)
     setDraftSegments((prev) => {
       const newSegment = createDraftSegment({
         start_ms: candidate.start_ms,
@@ -620,55 +624,31 @@ export function CaptureGroupAnnotationPanel({
         s.end_ms === candidate.end_ms,
     )
     return (
-      <div key={candidate.action_candidate_id} className="capture-group-ai-candidate-card">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: style.dot,
-              display: 'inline-block',
-            }}
-          />
-          <span style={{ fontWeight: 600 }}>{labelName}</span>
-          <Tag style={{ margin: 0 }}>{candidate.action_label}</Tag>
+      <div
+        key={candidate.action_candidate_id}
+        className={`capture-group-ai-candidate-card${isAdopted ? ' is-adopted' : ''}`}
+      >
+        <div className="capture-group-ai-candidate-info">
+          <span className="capture-group-ai-candidate-dot" style={{ backgroundColor: style.dot }} />
+          <span className="capture-group-ai-candidate-name">{labelName}</span>
+          <Tag className="capture-group-ai-candidate-tag">{candidate.action_label}</Tag>
           {targetObjectLabel && (
-            <Tag color="cyan" style={{ margin: 0, fontWeight: 500 }}>
+            <Tag color="cyan" className="capture-group-ai-candidate-object">
               {targetObjectLabel}
             </Tag>
           )}
-          <span
-            style={{
-              color: 'var(--app-color-foreground-secondary)',
-              fontSize: 13,
-            }}
-          >
+          <span className="capture-group-ai-candidate-time">
             {formatHumanFriendlyTime(candidate.start_ms)} ~{' '}
             {formatHumanFriendlyTime(candidate.end_ms)}
-            <span
-              style={{
-                color: 'var(--app-color-foreground-muted)',
-                marginLeft: 4,
-              }}
-            >
-              ({durationSeconds}s)
-            </span>
+            <span className="capture-group-ai-candidate-duration">({durationSeconds}s)</span>
           </span>
           {typeof candidate.confidence === 'number' && (
-            <Tag color="blue" variant="filled" style={{ fontSize: 11, margin: 0 }}>
+            <Tag color="blue" variant="filled" className="capture-group-ai-candidate-confidence">
               模型分数 {candidate.confidence.toFixed(2)}（仅供参考）
             </Tag>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="capture-group-ai-candidate-actions">
           <Button
             type="text"
             size="small"
@@ -794,7 +774,7 @@ export function CaptureGroupAnnotationPanel({
                   <StatusBadge tone="default">等待自动分析</StatusBadge>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="capture-group-ai-header-actions">
                 {actionJob?.status === 'SUCCEEDED' &&
                 !allCandidatesAdopted &&
                 actionCandidates.length > 0 ? (
@@ -836,7 +816,7 @@ export function CaptureGroupAnnotationPanel({
             ) : null}
             {actionCandidates.length > 0 ? (
               allCandidatesAdopted ? (
-                <div className="capture-group-ai-adopted-box" style={{ marginTop: 8 }}>
+                <div className="capture-group-ai-adopted-box">
                   <div className="capture-group-ai-adopted-header">
                     <span className="capture-group-ai-adopted-text">
                       <Check size={14} style={{ color: 'var(--app-color-success)' }} />
@@ -854,19 +834,13 @@ export function CaptureGroupAnnotationPanel({
                     </Button>
                   </div>
                   {showCandidateDetails ? (
-                    <div
-                      className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll"
-                      style={{ marginTop: 8 }}
-                    >
+                    <div className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll">
                       {actionCandidates.map((candidate) => renderCandidateCard(candidate))}
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <div
-                  className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll"
-                  style={{ marginTop: 8 }}
-                >
+                <div className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll">
                   {actionCandidates.map((candidate) => renderCandidateCard(candidate))}
                 </div>
               )

@@ -364,9 +364,6 @@ export function CaptureGroupReviewPanel({
   )
 }
 
-/** 向后兼容别名 */
-export { CaptureGroupReviewPanel as CaptureGroupReviewCleaningPanel }
-
 interface ViewSetSummaryProps {
   viewSet: CaptureGroupViewSet | null | undefined
 }

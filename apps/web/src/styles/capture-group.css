@@ -843,13 +843,19 @@
   font-weight: 500;
 }
 
+.capture-group-ai-header-actions {
+  display: flex;
+  gap: var(--app-space-8);
+  align-items: center;
+}
+
 .capture-group-ai-adopted-box {
   display: flex;
   flex-direction: column;
   gap: var(--app-space-8);
-  padding: 8px 12px;
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
+  padding: var(--app-space-8) var(--app-space-12);
+  background: var(--app-color-success-surface, #eaf5ee);
+  border: 1px solid var(--app-color-success, #12643b);
   border-radius: var(--app-radius-sm);
   margin-top: var(--app-space-8);
 }
@@ -866,7 +872,7 @@
   align-items: center;
   gap: 6px;
   font-size: var(--app-font-size-caption, 12px);
-  color: #389e0d;
+  color: var(--app-color-success, #12643b);
   font-weight: 500;
 }
 
@@ -980,6 +986,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--app-space-8);
+  margin-top: var(--app-space-8);
 }
 
 .capture-group-ai-candidate-card {
@@ -998,8 +1005,65 @@
 }
 
 .capture-group-ai-candidate-card:hover {
-  border-color: var(--app-color-primary-subtle, #91caff);
+  border-color: var(--app-color-primary, #315e9b);
   background: var(--app-color-surface-hover, #f8fafc);
+}
+
+.capture-group-ai-candidate-card.is-adopted {
+  border-color: var(--app-color-border-subtle, #e2e8f0);
+  background: var(--app-color-surface-muted, #f3f4f6);
+  opacity: 0.88;
+}
+
+.capture-group-ai-candidate-info {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  flex-wrap: wrap;
+}
+
+.capture-group-ai-candidate-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.capture-group-ai-candidate-name {
+  font-weight: 600;
+  color: var(--app-color-foreground);
+}
+
+.capture-group-ai-candidate-tag {
+  margin: 0 !important;
+}
+
+.capture-group-ai-candidate-object {
+  margin: 0 !important;
+  font-weight: 500;
+}
+
+.capture-group-ai-candidate-time {
+  color: var(--app-color-foreground-secondary);
+  font-size: 13px;
+  font-family: var(--app-font-family-mono, monospace);
+}
+
+.capture-group-ai-candidate-duration {
+  color: var(--app-color-foreground-muted);
+  margin-left: 4px;
+}
+
+.capture-group-ai-candidate-confidence {
+  font-size: 11px !important;
+  margin: 0 !important;
+}
+
+.capture-group-ai-candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .capture-group-timeline-scale {
@@ -1560,8 +1624,7 @@
   outline-offset: var(--app-space-4);
 }
 
-.capture-group-review-section,
-.capture-group-review-cleaning-section {
+.capture-group-review-section {
   display: grid;
   gap: var(--app-space-12);
 }

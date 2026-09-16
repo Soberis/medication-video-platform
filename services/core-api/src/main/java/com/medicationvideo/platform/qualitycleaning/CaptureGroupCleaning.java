@@ -15,6 +15,14 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+/**
+ * Read-only historical CaptureGroup cleaning fact.
+ *
+ * <p>
+ * New cleaning facts are no longer produced. D1 keeps the table and query surface so
+ * previously recorded facts remain available for compatibility and audit display.
+ * </p>
+ */
 @Entity
 @Table(name = "capture_group_cleaning")
 class CaptureGroupCleaning {
@@ -117,46 +125,6 @@ class CaptureGroupCleaning {
 	private Instant evaluatedAt;
 
 	protected CaptureGroupCleaning() {
-	}
-
-	private CaptureGroupCleaning(CaptureGroupCleaningService.EvaluationCommand command,
-			CaptureGroupCleaningService.EligibilityEvaluation evaluation, String inputFingerprint,
-			Instant evaluatedAt) {
-		this.captureGroupCleaningId = UUID.randomUUID();
-		this.projectId = command.projectId();
-		this.captureGroupId = command.captureGroupId();
-		this.annotationRevisionId = command.annotationRevisionId();
-		this.annotationReviewId = command.annotationReviewId();
-		this.annotationReviewDecision = command.approvedReview() ? "APPROVED" : "REJECTED";
-		this.annotationReviewedBy = command.reviewedBy();
-		this.annotationReviewedAt = command.reviewedAt();
-		this.groupQualityReviewId = command.groupQualityReviewId();
-		this.groupQualityResult = command.groupQualityResult();
-		this.groupQualityRevision = command.groupQualityRevision();
-		this.primaryClipAssetId = command.primaryClipAssetId();
-		this.primaryCameraNumber = command.primaryCameraNumber();
-		this.primaryInterval = List.copyOf(evaluation.primaryInterval());
-		this.viewEvidence = List.copyOf(evaluation.viewEvidence());
-		this.participatingViews = List.copyOf(evaluation.participatingViews());
-		this.excludedViews = List.copyOf(evaluation.excludedViews());
-		this.mappingProvenance = List.copyOf(evaluation.mappingProvenance());
-		this.candidateProvenance = List.copyOf(command.candidateEvidence());
-		this.ruleSetKey = CaptureGroupCleaningService.RULE_SET_KEY;
-		this.ruleSetVersion = CaptureGroupCleaningService.RULE_SET_VERSION;
-		this.ruleSetDigest = CaptureGroupCleaningService.RULE_SET_DIGEST;
-		this.outcome = evaluation.outcome();
-		this.reasonCodes = List.copyOf(evaluation.reasonCodes());
-		this.executedChecks = List.copyOf(evaluation.executedChecks());
-		this.inputFingerprint = inputFingerprint;
-		this.evaluatedBy = command.actorId();
-		this.authorizationBasis = command.authorizationBasis();
-		this.evaluatedAt = evaluatedAt;
-	}
-
-	static CaptureGroupCleaning record(CaptureGroupCleaningService.EvaluationCommand command,
-			CaptureGroupCleaningService.EligibilityEvaluation evaluation, String inputFingerprint,
-			Instant evaluatedAt) {
-		return new CaptureGroupCleaning(command, evaluation, inputFingerprint, evaluatedAt);
 	}
 
 	UUID getCaptureGroupCleaningId() {

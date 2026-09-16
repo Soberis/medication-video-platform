@@ -116,7 +116,7 @@ P0 非目标：
 | `/projects/:projectId/assets/:id` | 仅供受控历史或诊断读取单路视频事实；当前组内资产进入事件工作台 | 项目隔离、媒体检测、短期播放授权、手部检测准入和质量判断契约具备 | 退役的单视频产品表面；不属于 V1.28 当前业务入口或独立工作台。管理员诊断/恢复入口不放入普通用户主界面。 |
 | `/projects/:projectId/capture-groups` | 按事件查询 CaptureGroup，并进入多视图事件工作台 | 服务端显式归组、项目隔离、收件与质量事实分离 | 当前“配药事件”默认业务入口；不从文件名、上传顺序或时间邻近推断相机或 Capture。 |
 | `/projects/:projectId/videos` | 仅供历史单路视频数据或迁移诊断读取 | 稳定游标、同条件汇总、项目隔离 | 退役的单视频产品表面；不属于 V1.28 当前导航、业务验收或兼容承诺。 |
-| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的 CaptureGroup 任务队列、进度和状态；自动策略可幂等创建唯一组任务，异常记录进入人工接管工作台 | 现有项目权限、质量守卫、LabelSchema、修订/复核/返工；自动建任务仍待实现验收 | 列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或清洗重核对。正确片段无需逐段采纳，整份标注仍须显式提交；沿用 `can_select_primary` 等服务端守卫。 |
+| `/projects/:projectId/annotation-tasks` | 查看当前用户可见的 CaptureGroup 任务队列、进度和状态；AI 自动派发不创建人工任务，异常或用户准备提交时才进入人工工作台 | 现有项目权限、质量守卫、LabelSchema、修订/复核/返工；媒体就绪后的 Action Candidate 自动派发已接线，真实 Worker 仍待验收 | 列表响应在同一一致读中返回当前可见任务及互斥进度计数，队列只负责找工作、理解状态和进入工作台，不直接执行复核或 Cleaning recheck。正确片段无需逐段采纳，整份标注仍须显式提交；沿用 `can_select_primary` 等服务端守卫。 |
 | `/uploads` | 上传批次、文件、Part 进度和稳定错误码 | 对应查询契约与权限已实现 | 已启用 |
 | `/uploads/new` | 从平台页面上传本机视频并展示真实上传进度 | 后端具备角色、项目和文件规则守卫 | 已启用；仅合成数据开发验证，不展示文件夹选择 |
 | `/` | 当前重定向到 `/projects`；聚合查询成熟后才可改为工作台 | 项目入口已实现；异常和待办聚合尚未实现 | 已启用 |
@@ -134,7 +134,7 @@ P0 非目标：
 - `/projects/:projectId/capture-groups` 是当前“配药事件”默认业务入口；事件列表和详情以服务端 CaptureGroup 事实为准，不自动播放或预加载视频；
 - `/projects/:projectId/videos` 是退役的历史单视频表面；不得把它作为 V1.28 兼容入口、当前导航或新事件跳转目标；
 - `/projects/:projectId/sessions` 与详情仅保留历史兼容路由和测试，不进入当前导航；不得继续增加同步、批量检测或 Dataset 草稿动作；
-- 每个单个已入库视频自动提交一个幂等的 MediaPipe 手部姿态检测；Action Candidate 由 V1.35 自动标注策略按准入派发。Candidate/handedness 不得伪造质量或阻断异常人工标注；
+- 每个单个已入库视频自动提交一个幂等的 MediaPipe 手部姿态检测；媒体就绪后 Action Candidate 也由后台按视频独立、幂等派发，不等待人工任务、负责人或人工质量。Candidate/handedness 不得伪造质量或阻断异常人工标注；
 - AssetFolder 管理 API 和页面已退出；旧 folder ID、`clip_asset.folder_id` 与上传字段已由 V65 退役，不进入 LEAN-P0 页面；
 - `/assets/:id` 详情只服务历史单视频数据或受控管理/诊断；属于 CaptureGroup 的资产必须进入事件工作台，不恢复独立资产工作流；
 - `/assets/:id` 只展示当前已持久化且获准返回的元数据。播放器、缩略图、下载和对象存储定位在授权契约完成前不得出现；
@@ -274,22 +274,15 @@ Web 视觉 Token 以 `src/theme/tokens.ts` 为唯一语义来源，`ConfigProvid
 - 视频列表和详情页提供删除入口；确认框明确显示视频名称、项目和影响。
 - 删除成功后刷新列表，删除失败时显示服务端返回的权限、引用或状态原因。
 
-### 7.6 标注复核与后置清洗
+### 7.6 标注复核与历史 Cleaning 展示
 
 - 标注任务状态必须来自服务端：`ASSIGNED` 显示待标注/待修改，`SUBMITTED` 显示等待管理员复核，
-  `COMPLETED` 显示复核和当前 post-clean 结果；前端不得仅根据点击“通过”本地推断完成。
-- 当前 V1.35 的默认自动入口是媒体和组级质量满足准入后的任务创建/复用与 AI 调度；自动流程不直接写人工 Revision 或 Review，异常才进入人工接管。授权用户手动触发只作为受控恢复或例外入口。
-- `APPROVED`、任务 `COMPLETED` 和 post-clean run/result 在同一服务端事务完成。请求失败时页面
-  保留原状态并重新加载，不显示一半成功的“复核通过”。
-- post-clean `PASS/WARNING/REJECT` 必须同时显示中文含义和稳定原因。缺少已验证媒体时长导致的
-  `WARNING` 应说明仍需处理或批准例外且不会自动准入；`REJECT` 应说明当前 revision 不具备后续
-  准入条件，但视频资产未被删除。
-- post-clean `PASS` 仅表示当前规则检查通过，不等同进入训练集。当前唯一 HDF5 从视频工作入口的项目级选择弹窗导出，遵循 V1.35 的完整读取和明确 ID 规则，并检查 已提交且 Review APPROVED 的 Revision 结果及同源 MediaPipe provenance；不恢复旧 CSV、DatasetVersion UI 或自动导出，不宣称真实模型训练成功。
-- 管理员可对已完成且 `APPROVED` 的 revision 点击“重新核对清洗”。服务端按当前人工质量版本、视频事实和
-  不可变标注文档决定是否产生新 run/result；输入未变化时返回既有结果，前端不得伪造新结果或把该操作写成
-  “已进入训练集”。
-- 当前切片不增加 `/cleaning` 页面、后台进度轮询、Worker 状态、队列提示或跨资产统计；这些能力
-  只有在批量/耗时清洗契约落地后才能启用。
+  `COMPLETED` 显示复核完成；前端不得仅根据点击“通过”本地推断完成。
+- 当前 V1.35 的默认自动入口是媒体就绪后的 Action Candidate 派发；它不创建人工 Revision、Review 或人工任务。进入人工提交路径时，授权用户准备或复用 CaptureGroup AnnotationTask，再显式提交整份标注。
+- `APPROVED` 和任务 `COMPLETED` 由服务端复核操作完成。请求失败时页面保留原状态并重新加载，不显示一半成功的“复核通过”。
+- 历史 Cleaning `PASS/WARNING/REJECT` 只读展示中文含义和稳定原因，不提供新建、自动重算或“重新核对清洗”操作；不把历史快照写成当前导出结论。
+- 当前唯一 HDF5 从视频工作入口的项目级选择弹窗导出，遵循 V1.35 的完整读取和明确 ID 规则，并检查已提交且 Review APPROVED 的 Revision 结果及同源 MediaPipe provenance；不恢复旧 CSV、DatasetVersion UI 或自动导出，不宣称真实模型训练成功。
+- 当前切片不增加 `/cleaning` 页面、后台进度轮询、Worker 状态、队列提示或跨资产统计；这些能力不属于当前产品主链。
 
 ### 7.7 Vite 与环境配置
 

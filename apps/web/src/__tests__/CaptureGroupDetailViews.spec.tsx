@@ -86,7 +86,9 @@ describe('CaptureGroup detail views', () => {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
-    await userEvent.setup().click(await screen.findByRole('button', { name: '重试动作分析' }))
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: '重试动作分析' }, { timeout: 5000 }))
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(

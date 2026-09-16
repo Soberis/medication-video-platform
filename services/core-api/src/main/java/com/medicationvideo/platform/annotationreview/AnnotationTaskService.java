@@ -330,9 +330,8 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				task.getStatus().name(), canSubmit(task, actorId, captureGroupQualityAdmitting),
 				canSelectPrimary(task, actorId, revision, captureGroupQualityAdmitting),
 				canReview(task, actorId, projectAdministrator, revision, review, captureGroupQualityAdmitting),
-				canRecheckCaptureGroupCleaning(task, projectAdministrator, revision, review,
-						captureGroupQualityAdmitting),
-				AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
+				// Kept as a false compatibility field; D1 removed the recheck capability.
+				false, AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
 				task.getUpdatedAt(), task.getVersion());
 	}
 
@@ -353,10 +352,6 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				&& review == null && captureGroupQualityAdmitting;
 	}
 
-	private static boolean canRecheckCaptureGroupCleaning(AnnotationTask task, boolean projectAdministrator,
-			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
-		return false;
-	}
 }
 
 record AnnotationTaskListResponse(List<AnnotationTaskResponse> items, AnnotationTaskProgressResponse progress) {

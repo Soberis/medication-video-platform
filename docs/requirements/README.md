@@ -4,7 +4,7 @@
 
 ## 当前需求（唯一 Consolidated Baseline）
 
-- [V1.35 Consolidated Baseline](./baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)：当前唯一完整产品需求，冻结产品边界、主链、AI/人工事实隔离和唯一 HDF5 导出语义；D1–D5 均为 PENDING，各自仅约束相关实施项。
+- [V1.35 Consolidated Baseline](./baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)：当前唯一完整产品需求，冻结产品边界、主链、AI/人工事实隔离和唯一 HDF5 导出语义；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍为 PENDING，各自仅约束相关实施项。
 
 manifest 的 `draft` 字段记录当前目标需求 V1.35，`current` 字段保留上一正式运行时基线 V1.28；这是既有工具字段约定，不表示产品仍须按 V1.28 理解，也不表示 V1.35 已完成发布验收。
 

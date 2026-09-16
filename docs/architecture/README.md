@@ -1,12 +1,12 @@
 # Architecture Documents
 
-本索引汇总配药视频数据处理平台的当前规范与历史参考。当前唯一需求入口是 V1.35 Consolidated Baseline：它冻结自包含的产品边界、CaptureGroup 主链、AI/人工事实隔离和唯一 HDF5 导出语义；D1–D5 是实施前决策门禁。V1.28 仍是上一正式运行时基线，V1.35 文档收敛不表示 runtime 已全部实现或已授权删除。Candidate、权限、审计和 provenance 边界继续有效。
+本索引汇总配药视频数据处理平台的当前规范与历史参考。当前唯一需求入口是 V1.35 Consolidated Baseline：它冻结自包含的产品边界、CaptureGroup 主链、AI/人工事实隔离和唯一 HDF5 导出语义；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍是相关实施的决策门禁。V1.28 仍是上一正式运行时基线，V1.35 文档收敛不表示 runtime 已全部实现或可随意删除兼容内容。Candidate、权限、审计和 provenance 边界继续有效。
 
 ## 当前规范
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [V1.35 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) | 当前唯一完整产品需求；D1–D5 为实施前决策门禁 |
+| [V1.35 Consolidated Baseline（当前唯一需求）](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) | 当前唯一完整产品需求；D1、D4 已实施首轮收缩，D2、D3、D5 仍为实施前决策门禁 |
 | [动作候选技术设计（支持性 DRAFT）](./v1.34-action-annotation.md) | 解释动作候选、Worker、时间映射和人工编辑的实现边界；不得覆盖 V1.35 |
 | [自动标注与显式提交 ADR](../adr/0004-automatic-annotation-approval-policy.md) | 自动生成草稿、可选修改、最后显式提交；复用现有 Revision / Review |
 | [安全、隐私与保留销毁](./security-privacy-retention.md) | 分级、授权、密钥、审计、保留和销毁 |
@@ -22,16 +22,16 @@
 | 文档 | 保留价值与需校订内容 |
 | --- | --- |
 | [领域模型与数据所有权](./domain-model-and-data-ownership.md) | 保留模块所有权与事务边界；旧 V1.28 CSV 产品描述待更新 |
-| [状态机与领域守卫](./state-machines.md) | 保留事实与守卫依据；自动建任务、旧导出和旧复核规则待按当前代码校订 |
+| [状态机与领域守卫](./state-machines.md) | 保留事实与守卫依据；旧导出、历史 Cleaning 和旧复核规则待按当前代码校订 |
 | [异步作业协议](./asynchronous-job-protocol.md) | 保留 outbox/inbox、lease/heartbeat 与重试；旧导出类型描述待更新 |
 
-V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠这些旧段落补足需求。D1–D5 各自只约束相关实施项，审计中的方案不能当作批准记录。
+V1.35 已自包含上述当前产品边界和必要可靠性约束；无需靠这些旧段落补足需求。D1、D4 已完成对应 dev 收缩，其余决策各自只约束相关实施项；审计中的方案不能当作批准记录。
 
 历史架构和迁移资料不得覆盖当前规范；仅在迁移、兼容性或审计任务需要时读取[历史索引](./history-index.md)。
 
 ## Active / History 清理清单
 
-[Platform 文档 Active / History 清理清单](../audits/v1.35-platform-document-active-history-inventory.md) 记录当前文档分类、历史化建议和仍需决策的提案。本阶段只做可追溯的文档归档，不删除内容或修改 runtime。
+[Platform 文档 Active / History 清理清单](../audits/v1.35-platform-document-active-history-inventory.md) 记录当前文档分类、历史化建议和仍需决策的提案；代码收缩与文档整理的实际状态以该清单和版本控制差异为准。
 
 ## 维护规则
 
