@@ -6,6 +6,7 @@ import {
   dispatchActionCandidateJob,
   fetchActionCandidateJob,
   fetchActionCandidates,
+  getTargetObjectLabel,
   type ActionCandidate,
   type ActionCandidateJob,
 } from '@/api/action-candidate'
@@ -205,10 +206,16 @@ export function CaptureGroupAnnotationPanel({
     canSubmitRevision && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
 
+  const actionJobStatus = actionJob?.status
   useEffect(() => {
+    if ((actionJobStatus === 'SUCCEEDED' || actionJobStatus === 'FAILED') && !actionReadFailed) {
+      return
+    }
+
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
     async function refresh() {
+      let shouldScheduleNext = true
       try {
         if (document.hidden) return
         const [job, candidates] = await Promise.all([
@@ -219,10 +226,21 @@ export function CaptureGroupAnnotationPanel({
         setActionJob(job)
         setActionCandidates(candidates)
         setActionReadFailed(false)
+        if (job?.status === 'SUCCEEDED' || job?.status === 'FAILED') {
+          shouldScheduleNext = false
+          if (
+            job.status === 'SUCCEEDED' &&
+            (actionJobStatus === 'QUEUED' || actionJobStatus === 'RUNNING')
+          ) {
+            void message.success('动作预标注任务已完成，已刷新候选列表，请逐段核对')
+          }
+        }
       } catch {
         if (!cancelled) setActionReadFailed(true)
       } finally {
-        if (!cancelled) timer = setTimeout(() => void refresh(), 5000)
+        if (!cancelled && shouldScheduleNext) {
+          timer = setTimeout(() => void refresh(), 5000)
+        }
       }
     }
     void refresh()
@@ -230,7 +248,14 @@ export function CaptureGroupAnnotationPanel({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [projectId, captureGroupId, effectivePrimaryClipAssetId])
+  }, [
+    projectId,
+    captureGroupId,
+    effectivePrimaryClipAssetId,
+    actionJobStatus,
+    actionReadFailed,
+    message,
+  ])
 
   if (!isDirty && appliedContext !== draftContext) {
     setAppliedContext(draftContext)
@@ -558,6 +583,7 @@ export function CaptureGroupAnnotationPanel({
   function renderCandidateCard(candidate: ActionCandidate) {
     const style = getActionStyle(candidate.action_label)
     const labelName = getActionDisplayName(candidate.action_label, schema)
+    const targetObjectLabel = getTargetObjectLabel(candidate.target_object)
     const durationSeconds = ((candidate.end_ms - candidate.start_ms) / 1000).toFixed(1)
     const isAdopted = draftSegments.some(
       (s) =>
@@ -586,6 +612,11 @@ export function CaptureGroupAnnotationPanel({
           />
           <span style={{ fontWeight: 600 }}>{labelName}</span>
           <Tag style={{ margin: 0 }}>{candidate.action_label}</Tag>
+          {targetObjectLabel && (
+            <Tag color="cyan" style={{ margin: 0, fontWeight: 500 }}>
+              {targetObjectLabel}
+            </Tag>
+          )}
           <span
             style={{
               color: 'var(--app-color-foreground-secondary)',

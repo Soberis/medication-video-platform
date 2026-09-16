@@ -243,6 +243,20 @@ class ActionCandidateJobServiceTests {
 	}
 
 	@Test
+	void targetObjectIsOptionalButConstrainedToMax64Chars() {
+		try (var factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+			var validator = factory.getValidator();
+			assertEquals(0,
+					validator
+						.validate(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", 0.8, 1, List.of(), "vial"))
+						.size());
+			assertFalse(validator
+				.validate(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", 0.8, 1, List.of(), "x".repeat(65)))
+				.isEmpty());
+		}
+	}
+
+	@Test
 	void rejectsSegmentsBeyondTheReportedDuration() {
 		var messageId = UUID.randomUUID();
 		prepareRunningJob(messageId);

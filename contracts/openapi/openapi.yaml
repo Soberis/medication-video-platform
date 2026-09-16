@@ -7691,6 +7691,7 @@ components:
         start_ms: { type: integer, format: int64, minimum: 0 }
         end_ms: { type: integer, format: int64, minimum: 1 }
         action_label: { type: string }
+        target_object: { type: [string, 'null'], maxLength: 64 }
         annotation_task_id: { type: [string, 'null'], format: uuid }
         label_schema_id: { type: [string, 'null'], format: uuid }
         label_schema_digest: { type: [string, 'null'] }
@@ -7744,6 +7745,7 @@ components:
         start_ms: { type: integer, format: int64, minimum: 0 }
         end_ms: { type: integer, format: int64, minimum: 1 }
         label: { type: string, minLength: 1 }
+        target_object: { type: [string, 'null'], maxLength: 64 }
         confidence: { type: [number, 'null'], minimum: 0, maximum: 1 }
         source_window: { type: [integer, 'null'] }
         stitched_windows: { type: [array, 'null'], items: { type: integer } }

@@ -9,6 +9,7 @@ export interface ActionCandidate {
   start_ms: number
   end_ms: number
   action_label: string
+  target_object?: string | null
   annotation_task_id?: string | null
   label_schema_id?: string | null
   label_schema_digest?: string | null
@@ -16,6 +17,22 @@ export interface ActionCandidate {
   source_window: number
   stitched_windows: number[]
   created_at: string
+}
+
+export const TARGET_OBJECT_LABELS: Record<string, string> = {
+  vial: '西林瓶/粉针瓶',
+  ampoule: '安瓿瓶',
+  syringe: '注射器',
+  infusion_bottle: '输液瓶/盐水袋',
+  needle: '针头/配药针',
+  cotton_swab: '棉签/消毒棒',
+  packaging: '外包装/托盘',
+  other_tool: '其他工具',
+}
+
+export function getTargetObjectLabel(targetObject?: string | null): string | null {
+  if (!targetObject) return null
+  return TARGET_OBJECT_LABELS[targetObject] || targetObject
 }
 
 export interface ActionCandidateJob {

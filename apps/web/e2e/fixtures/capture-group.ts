@@ -192,12 +192,43 @@ type AnnotationRevision = {
   } | null
 }
 
+export type ActionCandidateJob = {
+  ai_job_id: string
+  project_id: string
+  capture_group_id: string
+  clip_asset_id: string
+  status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  attempt: number
+  created_at: string
+  updated_at: string
+}
+
+export type ActionCandidate = {
+  action_candidate_id: string
+  ai_job_id: string
+  project_id: string
+  capture_group_id: string
+  clip_asset_id: string
+  start_ms: number
+  end_ms: number
+  action_label: string
+  annotation_task_id?: string | null
+  label_schema_id?: string | null
+  label_schema_digest?: string | null
+  confidence: number | null
+  source_window: number
+  stitched_windows: number[]
+  created_at: string
+}
+
 type MockData = {
   group: CaptureGroup | null
   groups: CaptureGroup[]
   qualities: Map<string, QualityReview>
   tasks: AnnotationTask[]
   candidateStatus: 'RUNNING' | 'SUCCEEDED'
+  actionJob?: ActionCandidateJob | null
+  actionCandidates?: ActionCandidate[]
 }
 
 const createdAt = '2026-08-20T01:00:02Z'
@@ -205,8 +236,12 @@ const capturedAt = '2026-08-20T01:00:00Z'
 const decidedAt = '2026-08-20T01:02:00Z'
 const schemaId = '80000000-0000-4000-8000-000000000001'
 
-export async function mockCaptureGroupApi(page: Page, scenario: CaptureGroupScenario) {
-  const data = buildScenario(scenario)
+export async function mockCaptureGroupApi(
+  page: Page,
+  scenario: CaptureGroupScenario,
+  overrides?: Partial<MockData>,
+) {
+  const data = { ...buildScenario(scenario), ...overrides }
   await page.route('**/api/v1/**', (route) => respondToApi(route, data))
 }
 
@@ -277,6 +312,27 @@ async function respondToApi(route: Route, data: MockData) {
   const candidateMatch = pathname.match(/\/videos\/([^/]+)\/hand-pose-candidates$/)
   if (candidateMatch) return json(route, handPoseResponse(candidateMatch[1]!, data))
 
+  if (pathname.endsWith('/action-candidate-job')) {
+    if (data.actionJob) return json(route, data.actionJob)
+    return route.fulfill({ status: 204 })
+  }
+  if (pathname.endsWith('/action-candidates')) {
+    return json(route, data.actionCandidates ?? [])
+  }
+  if (pathname.endsWith('/action-candidate-jobs') && request.method() === 'POST') {
+    const newJob: ActionCandidateJob = {
+      ai_job_id: 'synthetic-action-job-queued',
+      project_id: projectId,
+      capture_group_id: data.group?.capture_group_id ?? oneCameraGroupId,
+      clip_asset_id: data.group?.streams[0]?.clip_asset_id ?? '',
+      status: 'QUEUED',
+      attempt: 1,
+      created_at: createdAt,
+      updated_at: createdAt,
+    }
+    return json(route, newJob)
+  }
+
   return route.fulfill({
     status: 500,
     contentType: 'application/json',
@@ -304,6 +360,8 @@ function buildScenario(scenario: CaptureGroupScenario): MockData {
       ]),
       tasks: [createTask(active), createTask(completed, 'COMPLETED')],
       candidateStatus: 'RUNNING',
+      actionJob: null,
+      actionCandidates: [],
     }
   }
 
@@ -331,6 +389,20 @@ function buildScenario(scenario: CaptureGroupScenario): MockData {
         ? []
         : [createTask(group, scenario === 'completed' ? 'COMPLETED' : 'ASSIGNED')],
     candidateStatus: scenario === 'completed' ? 'SUCCEEDED' : 'RUNNING',
+    actionJob:
+      scenario === 'completed'
+        ? {
+            ai_job_id: 'synthetic-action-job-succeeded',
+            project_id: projectId,
+            capture_group_id: group.capture_group_id,
+            clip_asset_id: group.streams[0]?.clip_asset_id ?? '',
+            status: 'SUCCEEDED' as const,
+            attempt: 1,
+            created_at: createdAt,
+            updated_at: createdAt,
+          }
+        : null,
+    actionCandidates: [],
   }
 }
 

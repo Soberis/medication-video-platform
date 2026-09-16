@@ -134,7 +134,7 @@ test('Local Upload — load and select files', async ({ page }) => {
     mimeType: 'video/mp4',
     buffer: Buffer.from('synthetic-video'),
   })
-  await expect(page.getByText('已选择 1 个视频')).toBeVisible()
+  await expect(page.getByText('已选择 1 个视频', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '开始上传' })).toBeEnabled()
 
   await expectNoHorizontalPageOverflow(page)

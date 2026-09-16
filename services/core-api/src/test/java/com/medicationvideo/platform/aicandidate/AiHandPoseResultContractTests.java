@@ -76,7 +76,8 @@ class AiHandPoseResultContractTests {
 				new tools.jackson.databind.ObjectMapper(), null, assets, null, null, null, null, null);
 		var revisionCount = this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision", Long.class);
 		var request = new ActionCandidateResultRequest(messageId, "synthetic-action-model", "synthetic-v1", 1, 19000L,
-				1L, now, now, List.of(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", null, 1, List.of(1))));
+				1L, now, now,
+				List.of(new ActionCandidateSegmentItem(0L, 100L, "draw_liquid", null, 1, List.of(1), "vial")));
 		service.acceptResult(jobId, 1, lease, request, "synthetic-ai-worker");
 		service.acceptResult(jobId, 1, lease, request, "synthetic-ai-worker");
 		this.jobRepository.flush();
@@ -84,6 +85,7 @@ class AiHandPoseResultContractTests {
 		assertEquals(1, candidates.size());
 		assertEquals(taskId, candidates.getFirst().annotationTaskId());
 		org.junit.jupiter.api.Assertions.assertNull(candidates.getFirst().confidence());
+		assertEquals("vial", candidates.getFirst().targetObject());
 		assertEquals("synthetic-action-model", this.jdbcTemplate.queryForObject(
 				"SELECT execution_metadata->>'model_name' FROM ai_job WHERE ai_job_id = ?", String.class, jobId));
 		assertEquals(revisionCount,

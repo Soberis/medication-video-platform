@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { type ActionCandidateJob } from '@/api/action-candidate'
 import {
   expectNoHorizontalPageOverflow,
   expectNoSeriousAxeViolations,
@@ -436,6 +437,116 @@ test.describe('native playback controls', () => {
         )
         .toBe(true)
       await page.keyboard.press('Escape')
+    })
+  }
+})
+
+test.describe('automatic action candidate discovery and retry', () => {
+  for (const width of [1440, 720]) {
+    test(`${width} — automatically discovers background action job without human task assignment`, async ({
+      page,
+    }) => {
+      let hasDiscovered = false
+      await mockCaptureGroupApi(page, 'unassigned')
+
+      await page.route('**/action-candidate-job', (route) => {
+        if (!hasDiscovered) {
+          return route.fulfill({ status: 204 })
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ai_job_id: 'discovered-action-job',
+            project_id: projectId,
+            capture_group_id: oneCameraGroupId,
+            clip_asset_id: '50000000-0000-4000-8000-000000000001',
+            status: 'RUNNING',
+            attempt: 1,
+            created_at: '2026-08-20T01:00:02Z',
+            updated_at: '2026-08-20T01:00:02Z',
+          }),
+        })
+      })
+
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
+
+      await expect(page.getByRole('region', { name: '动作标注' })).toBeVisible()
+      await expect(page.getByText('等待自动分析')).toBeVisible()
+      await expect(page.getByRole('button', { name: '启动自动标注' })).toHaveCount(0)
+
+      hasDiscovered = true
+      await expect(page.getByText('动作分析中')).toBeVisible({ timeout: 15000 })
+      await expectNoHorizontalPageOverflow(page)
+      await expectNoSeriousAxeViolations(page)
+    })
+
+    test(`${width} — retries failed action job without creating or requiring an annotation task`, async ({
+      page,
+    }) => {
+      let retried = false
+      let currentJob: ActionCandidateJob = {
+        ai_job_id: 'failed-action-job',
+        project_id: projectId,
+        capture_group_id: oneCameraGroupId,
+        clip_asset_id: '50000000-0000-4000-8000-000000000001',
+        status: 'FAILED',
+        attempt: 1,
+        created_at: '2026-08-20T01:00:02Z',
+        updated_at: '2026-08-20T01:00:02Z',
+      }
+
+      await mockCaptureGroupApi(page, 'unassigned', {
+        actionJob: currentJob,
+      })
+
+      const taskCreations: string[] = []
+      page.on('request', (request) => {
+        if (request.url().includes('/annotation-tasks') && request.method() === 'POST') {
+          taskCreations.push(request.url())
+        }
+      })
+
+      await page.route('**/action-candidate-job', (route) => {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(currentJob),
+        })
+      })
+
+      await page.route('**/action-candidate-jobs', (route) => {
+        if (route.request().method() === 'POST') {
+          retried = true
+          currentJob = {
+            ...currentJob,
+            ai_job_id: 'retried-action-job',
+            status: 'QUEUED',
+            attempt: 2,
+          }
+          return route.fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: JSON.stringify(currentJob),
+          })
+        }
+        return route.continue()
+      })
+
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
+
+      await expect(page.getByText('动作分析失败', { exact: true })).toBeVisible()
+      const retryButton = page.getByRole('button', { name: '重试动作分析' })
+      await expect(retryButton).toBeVisible()
+      await retryButton.click()
+
+      await expect.poll(() => retried).toBe(true)
+      expect(taskCreations).toHaveLength(0)
+      await expect(page.getByText('等待处理', { exact: true })).toBeVisible()
+      await expectNoHorizontalPageOverflow(page)
+      await expectNoSeriousAxeViolations(page)
     })
   }
 })

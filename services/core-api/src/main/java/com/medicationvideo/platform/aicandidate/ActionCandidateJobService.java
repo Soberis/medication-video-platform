@@ -166,16 +166,18 @@ public class ActionCandidateJobService {
 			catch (Exception ignored) {
 			}
 
-			this.jdbcTemplate.update("""
-					INSERT INTO action_candidate (
-					    action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id,
-					    annotation_task_id, label_schema_id, label_schema_digest,
-					    start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?)
-					""", UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), captureGroupId, job.getClipAssetId(),
+			this.jdbcTemplate.update(
+					"""
+							INSERT INTO action_candidate (
+							    action_candidate_id, ai_job_id, project_id, capture_group_id, clip_asset_id,
+							    annotation_task_id, label_schema_id, label_schema_digest,
+							    start_ms, end_ms, action_label, target_object, confidence, source_window, stitched_windows, created_at)
+							VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), ?)
+							""",
+					UUID.randomUUID(), job.getAiJobId(), job.getProjectId(), captureGroupId, job.getClipAssetId(),
 					job.getAnnotationTaskId(), job.getLabelSchemaId(), job.getLabelSchemaDigest(), seg.startMs(),
-					seg.endMs(), seg.label(), seg.confidence(), seg.sourceWindow() != null ? seg.sourceWindow() : 1,
-					stitchedJson, receivedAt);
+					seg.endMs(), seg.label(), seg.targetObject(), seg.confidence(),
+					seg.sourceWindow() != null ? seg.sourceWindow() : 1, stitchedJson, receivedAt);
 		}
 
 		this.jdbcTemplate.update(
@@ -201,7 +203,7 @@ public class ActionCandidateJobService {
 		var sql = """
 				SELECT c.action_candidate_id, c.ai_job_id, c.project_id, c.capture_group_id, c.clip_asset_id,
 				       c.annotation_task_id, c.label_schema_id, c.label_schema_digest,
-				       start_ms, end_ms, action_label, confidence, source_window, stitched_windows, created_at
+				       start_ms, end_ms, action_label, target_object, confidence, source_window, stitched_windows, created_at
 				  FROM action_candidate c
 				 WHERE c.project_id = ? AND c.capture_group_id = ? AND c.clip_asset_id = ?
 				   AND c.ai_job_id = (SELECT j.ai_job_id FROM ai_job j
@@ -234,7 +236,8 @@ public class ActionCandidateJobService {
 					rs.getObject("annotation_task_id", UUID.class), rs.getObject("label_schema_id", UUID.class),
 					rs.getString("label_schema_digest"), rs.getLong("start_ms"), rs.getLong("end_ms"),
 					rs.getString("action_label"), confidence == null ? null : confidence.doubleValue(),
-					rs.getInt("source_window"), stitched, rs.getTimestamp("created_at").toInstant());
+					rs.getInt("source_window"), stitched, rs.getString("target_object"),
+					rs.getTimestamp("created_at").toInstant());
 		}, projectId, captureGroupId, clipAssetId);
 	}
 

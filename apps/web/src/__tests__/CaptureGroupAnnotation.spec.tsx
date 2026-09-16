@@ -573,6 +573,7 @@ describe('CaptureGroup annotation workflow', () => {
       start_ms: 1000,
       end_ms: 4000,
       action_label: 'acquire_item',
+      target_object: 'vial',
       confidence: 0.92,
       source_window: 1,
       stitched_windows: [],
@@ -605,6 +606,7 @@ describe('CaptureGroup annotation workflow', () => {
 
     expect(await screen.findByText('已生成 1 条建议')).toBeInTheDocument()
     expect(screen.getByText('模型分数 0.92（仅供参考）')).toBeInTheDocument()
+    expect(screen.getByText('西林瓶/粉针瓶')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '播放核对' })).toBeInTheDocument()
 
     const adoptBtn = screen.getByRole('button', { name: '采纳此段' })
