@@ -1,12 +1,11 @@
-import { App as AntdApp, Alert, Button, Input, Select, Tag, Tooltip } from 'antd'
-import { Check, CircleAlert, Play, Plus, RotateCw, Sparkles } from 'lucide-react'
+import { App as AntdApp, Alert, Button, Input, Select, Tooltip } from 'antd'
+import { CircleAlert, Play, Plus, RotateCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
   dispatchActionCandidateJob,
   fetchActionCandidateJob,
   fetchActionCandidates,
-  getTargetObjectLabel,
   type ActionCandidate,
   type ActionCandidateJob,
 } from '@/api/action-candidate'
@@ -76,6 +75,8 @@ interface CaptureGroupAnnotationPanelProps {
   canPrepareTask?: boolean
 }
 
+const AUTO_COLLAPSE_SEGMENT_THRESHOLD = 8
+
 export function CaptureGroupAnnotationPanel({
   projectId,
   captureGroupId,
@@ -105,30 +106,16 @@ export function CaptureGroupAnnotationPanel({
   const [annotationNote, setAnnotationNote] = useState('')
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
   const [isDiscarding, setIsDiscarding] = useState(false)
-  const [isLoadingAi, setIsLoadingAi] = useState(false)
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
   const [actionJob, setActionJob] = useState<ActionCandidateJob | null>(null)
   const [actionReadFailed, setActionReadFailed] = useState(false)
   const [isDispatchingJob, setIsDispatchingJob] = useState(false)
   const trackBarRef = useRef<HTMLDivElement | null>(null)
-  const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
   const annotationFormRef = useRef<HTMLFormElement | null>(null)
   const [isDirty, setIsDirty] = useState(false)
-  const [showCandidateDetails, setShowCandidateDetails] = useState(false)
   const [isAllCollapsed, setIsAllCollapsed] = useState(false)
   const [collapsedSegments, setCollapsedSegments] = useState<Record<number, boolean>>({})
-
-  const allCandidatesAdopted = useMemo(() => {
-    if (!actionCandidates.length) return false
-    return actionCandidates.every((candidate) =>
-      draftSegments.some(
-        (s) =>
-          s.label === candidate.action_label &&
-          s.start_ms === candidate.start_ms &&
-          s.end_ms === candidate.end_ms,
-      ),
-    )
-  }, [actionCandidates, draftSegments])
+  const autoCollapsedDraftContext = useRef<string | null>(null)
 
   function isSegmentCollapsed(draftId: number) {
     if (collapsedSegments[draftId] !== undefined) {
@@ -175,10 +162,6 @@ export function CaptureGroupAnnotationPanel({
     task?.annotation_revision?.annotation_revision_id ?? 'no-revision',
   ].join(':')
   const [appliedContext, setAppliedContext] = useState<string | null>(null)
-  const latestDraft = useRef({ draftContext, isDirty })
-  useEffect(() => {
-    latestDraft.current = { draftContext, isDirty }
-  }, [draftContext, isDirty])
   const contextChanged = isDirty && appliedContext !== draftContext
   const sortedLabels = useMemo(() => sortedSchemaLabels(schema), [schema])
   const groupQualityDowngraded =
@@ -205,6 +188,50 @@ export function CaptureGroupAnnotationPanel({
   const canUseCurrentPlaybackTime = Boolean(
     canSubmitRevision && currentPlaybackTimeMs !== null && Number.isFinite(currentPlaybackTimeMs),
   )
+  const validCandidates = useMemo(
+    () => validActionCandidates(task, actionCandidates, schema, totalDurationMs, fallbackContext),
+    [task, actionCandidates, schema, totalDurationMs, fallbackContext],
+  )
+  const pristineDraftSegments = useMemo(
+    () => initialDraftSegments(task, actionCandidates, schema, totalDurationMs, fallbackContext),
+    [task, actionCandidates, schema, totalDurationMs, fallbackContext],
+  )
+  const visibleDraftSegments = isDirty ? draftSegments : pristineDraftSegments
+  const hasAutoLoadedAiDraft = Boolean(
+    !isDirty && !task?.annotation_revision && validCandidates.length > 0,
+  )
+  const hasUnusableActionCandidates = actionCandidates.length > 0 && validCandidates.length === 0
+  const aiStatus = actionReadFailed
+    ? { tone: 'warning' as const, label: 'AI 状态读取中' }
+    : validCandidates.length > 0 && hasAutoLoadedAiDraft
+      ? { tone: 'success' as const, label: `AI 已预填 ${validCandidates.length} 段 · 待核对` }
+      : validCandidates.length > 0
+        ? { tone: 'default' as const, label: `AI 已生成 ${validCandidates.length} 条候选` }
+        : actionJob?.status === 'FAILED'
+          ? { tone: 'error' as const, label: 'AI 分析失败' }
+          : actionJob?.status === 'QUEUED'
+            ? { tone: 'info' as const, label: 'AI 等待处理' }
+            : actionJob?.status === 'RUNNING'
+              ? { tone: 'info' as const, label: 'AI 分析中' }
+              : actionJob?.status === 'SUCCEEDED'
+                ? hasUnusableActionCandidates
+                  ? { tone: 'warning' as const, label: 'AI 候选未载入' }
+                  : { tone: 'default' as const, label: 'AI 已完成 · 可直接标注' }
+                : { tone: 'default' as const, label: '等待 AI 自动分析' }
+
+  useEffect(() => {
+    if (
+      isDirty ||
+      !hasAutoLoadedAiDraft ||
+      validCandidates.length <= AUTO_COLLAPSE_SEGMENT_THRESHOLD ||
+      autoCollapsedDraftContext.current === draftContext
+    ) {
+      return
+    }
+    autoCollapsedDraftContext.current = draftContext
+    setIsAllCollapsed(true)
+    setCollapsedSegments({})
+  }, [draftContext, hasAutoLoadedAiDraft, isDirty, validCandidates.length])
 
   const actionJobStatus = actionJob?.status
   const actionQueryContext = `${projectId}:${captureGroupId}:${effectivePrimaryClipAssetId}`
@@ -264,33 +291,6 @@ export function CaptureGroupAnnotationPanel({
     actionReadFailed,
     message,
   ])
-
-  if (!isDirty && appliedContext !== draftContext) {
-    setAppliedContext(draftContext)
-    const initial = initialDraftSegments(
-      task,
-      actionCandidates,
-      schema,
-      totalDurationMs,
-      fallbackContext,
-    )
-    setDraftSegments(initial)
-    setSegmentErrors({})
-    setAnnotationNote('')
-    setHasAutoLoadedAiDraft(false)
-  } else if (
-    !isDirty &&
-    (!task || !task.annotation_revision) &&
-    canSubmitRevision &&
-    validActionCandidates(task, actionCandidates, schema, totalDurationMs, fallbackContext).length >
-      0 &&
-    !hasAutoLoadedAiDraft
-  ) {
-    setDraftSegments(
-      initialDraftSegments(task, actionCandidates, schema, totalDurationMs, fallbackContext),
-    )
-    setHasAutoLoadedAiDraft(true)
-  }
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
@@ -360,7 +360,7 @@ export function CaptureGroupAnnotationPanel({
   async function submitRevision(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmitRevision || isSubmittingRevision) return
-    const errors = validateSegments(draftSegments, totalDurationMs)
+    const errors = validateSegments(visibleDraftSegments, totalDurationMs)
     if (Object.keys(errors).length) {
       setSegmentErrors(errors)
       return
@@ -373,7 +373,7 @@ export function CaptureGroupAnnotationPanel({
       await submitAnnotationRevision(
         projectId,
         activeTask.annotation_task_id,
-        draftSegments.map((segment) => ({
+        visibleDraftSegments.map((segment) => ({
           start_ms: segment.start_ms,
           end_ms: segment.end_ms,
           label: segment.label,
@@ -416,10 +416,16 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
-  function updateSegment(draftId: number, field: keyof AnnotationSegment, value: string | number) {
+  function beginDraftEdit() {
     setIsDirty(true)
-    setDraftSegments((current) =>
-      current.map((segment) =>
+    setAppliedContext(draftContext)
+  }
+
+  function updateSegment(draftId: number, field: keyof AnnotationSegment, value: string | number) {
+    beginDraftEdit()
+    const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
+    setDraftSegments(
+      sourceSegments.map((segment) =>
         segment.draftId === draftId ? { ...segment, [field]: value } : segment,
       ),
     )
@@ -432,107 +438,41 @@ export function CaptureGroupAnnotationPanel({
 
   function nudgeSegmentTime(draftId: number, field: 'start_ms' | 'end_ms', delta: number) {
     if (!canSubmitRevision) return
-    let updatedMs = 0
-    setIsDirty(true)
-    setDraftSegments((current) =>
-      current.map((segment) => {
-        if (segment.draftId !== draftId) return segment
-        const currentVal = segment[field]
-        const base = Number.isFinite(currentVal) ? currentVal : 0
-        const updated = Math.max(0, base + delta)
-        updatedMs = updated
-        return { ...segment, [field]: updated }
-      }),
+    const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
+    const segment = sourceSegments.find((candidate) => candidate.draftId === draftId)
+    if (!segment) return
+    const currentVal = segment[field]
+    const base = Number.isFinite(currentVal) ? currentVal : 0
+    const updatedMs = Math.max(0, base + delta)
+    beginDraftEdit()
+    setDraftSegments(
+      sourceSegments.map((candidate) =>
+        candidate.draftId === draftId ? { ...candidate, [field]: updatedMs } : candidate,
+      ),
     )
     onSeekToMs?.(updatedMs)
   }
 
   function handleAddSegment() {
-    setIsDirty(true)
-    setDraftSegments((current) => {
-      const last = current[current.length - 1]
-      let nextStart = 0
-      if (last && Number.isFinite(last.end_ms) && last.end_ms > 0) {
-        nextStart = last.end_ms
-      } else if (
-        currentPlaybackTimeMs !== null &&
-        Number.isFinite(currentPlaybackTimeMs) &&
-        currentPlaybackTimeMs > 0
-      ) {
-        nextStart = Math.round(currentPlaybackTimeMs)
-      }
-      const defaultDuration = 3000
-      let nextEnd = nextStart + defaultDuration
-      if (totalDurationMs && totalDurationMs > nextStart) {
-        nextEnd = Math.min(nextStart + defaultDuration, totalDurationMs)
-      }
-      return [...current, createDraftSegment(undefined, nextStart, nextEnd)]
-    })
-  }
-
-  async function handleLoadAiCandidates() {
-    if (!canSubmitRevision || isDirty || task?.annotation_revision || isLoadingAi) return
-    setIsLoadingAi(true)
-    try {
-      // A newly ingested clip has no action job yet.  The load action is the
-      // explicit user opt-in for Qwen inference, so create the job before
-      // looking for candidates instead of reporting an empty result as a
-      // worker failure.
-      let currentJob = actionJob
-      if (!currentJob) {
-        currentJob = await fetchActionCandidateJob(projectId, captureGroupId)
-        if (currentJob) setActionJob(currentJob)
-      }
-      if (!currentJob) {
-        await handleDispatchActionJob()
-        return
-      }
-      if (currentJob.status === 'QUEUED' || currentJob.status === 'RUNNING') {
-        void message.info('动作预标注任务仍在处理中，请稍候再载入候选。')
-        return
-      }
-      if (currentJob.status === 'FAILED') {
-        void message.info('上一次动作预标注未完成，请点击“重试检测”重新投递。')
-        return
-      }
-      const fetched = await fetchActionCandidates(projectId, captureGroupId)
-      if (latestDraft.current.isDirty || latestDraft.current.draftContext !== draftContext) return
-      const candidates = validActionCandidates(
-        task,
-        fetched,
-        schema,
-        totalDurationMs,
-        fallbackContext,
-      )
-      if (candidates.length > 0) {
-        setActionCandidates(candidates)
-        setIsDirty(true)
-        setDraftSegments(
-          candidates.map((candidate) =>
-            createDraftSegment({
-              start_ms: candidate.start_ms,
-              end_ms: candidate.end_ms,
-              label: candidate.action_label,
-            }),
-          ),
-        )
-        setHasAutoLoadedAiDraft(true)
-        if (candidates[0]) {
-          onSeekToMs?.(candidates[0].start_ms)
-        }
-        void message.success(`成功载入 ${candidates.length} 个动作预标注候选片段，请逐段核对`)
-      } else {
-        void message.info(
-          fetched.length > 0
-            ? '候选来源、标签或时间区间与当前任务不匹配，请继续人工标注。'
-            : '动作预标注已完成但没有可采纳候选，请继续人工标注。',
-        )
-      }
-    } catch {
-      void message.error('获取 AI 预标注候选失败，请稍后重试。')
-    } finally {
-      setIsLoadingAi(false)
+    const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
+    const last = sourceSegments[sourceSegments.length - 1]
+    let nextStart = 0
+    if (last && Number.isFinite(last.end_ms) && last.end_ms > 0) {
+      nextStart = last.end_ms
+    } else if (
+      currentPlaybackTimeMs !== null &&
+      Number.isFinite(currentPlaybackTimeMs) &&
+      currentPlaybackTimeMs > 0
+    ) {
+      nextStart = Math.round(currentPlaybackTimeMs)
     }
+    const defaultDuration = 3000
+    let nextEnd = nextStart + defaultDuration
+    if (totalDurationMs && totalDurationMs > nextStart) {
+      nextEnd = Math.min(nextStart + defaultDuration, totalDurationMs)
+    }
+    beginDraftEdit()
+    setDraftSegments([...sourceSegments, createDraftSegment(undefined, nextStart, nextEnd)])
   }
 
   async function prepareAnnotationTask(): Promise<AnnotationTask> {
@@ -601,95 +541,6 @@ export function CaptureGroupAnnotationPanel({
     } finally {
       setIsDispatchingJob(false)
     }
-  }
-
-  function handleAdoptCandidate(candidate: ActionCandidate) {
-    if (!canSubmitRevision) return
-    setShowCandidateDetails(true)
-    setIsDirty(true)
-    onSeekToMs?.(candidate.start_ms)
-    setDraftSegments((prev) => {
-      const newSegment = createDraftSegment({
-        start_ms: candidate.start_ms,
-        end_ms: candidate.end_ms,
-        label: candidate.action_label,
-      })
-      if (
-        prev.length === 1 &&
-        prev[0] &&
-        !prev[0].label &&
-        (prev[0].start_ms === 0 || prev[0].start_ms === null)
-      ) {
-        return [newSegment]
-      }
-      return [...prev, newSegment]
-    })
-    void message.success(
-      `已采纳动作建议：${formatHumanFriendlyTime(candidate.start_ms)} ~ ${formatHumanFriendlyTime(candidate.end_ms)}`,
-    )
-  }
-
-  function renderCandidateCard(candidate: ActionCandidate) {
-    const style = getActionStyle(candidate.action_label)
-    const labelName = getActionDisplayName(candidate.action_label, schema)
-    const targetObjectLabel = getTargetObjectLabel(candidate.target_object)
-    const durationSeconds = ((candidate.end_ms - candidate.start_ms) / 1000).toFixed(1)
-    const isAdopted = draftSegments.some(
-      (s) =>
-        s.label === candidate.action_label &&
-        s.start_ms === candidate.start_ms &&
-        s.end_ms === candidate.end_ms,
-    )
-    return (
-      <div
-        key={candidate.action_candidate_id}
-        className={`capture-group-ai-candidate-card${isAdopted ? ' is-adopted' : ''}`}
-      >
-        <div className="capture-group-ai-candidate-info">
-          <span className="capture-group-ai-candidate-dot" style={{ backgroundColor: style.dot }} />
-          <span className="capture-group-ai-candidate-name">{labelName}</span>
-          <Tag className="capture-group-ai-candidate-tag">{candidate.action_label}</Tag>
-          {targetObjectLabel && (
-            <Tag color="cyan" className="capture-group-ai-candidate-object">
-              {targetObjectLabel}
-            </Tag>
-          )}
-          <span className="capture-group-ai-candidate-time">
-            {formatHumanFriendlyTime(candidate.start_ms)} ~{' '}
-            {formatHumanFriendlyTime(candidate.end_ms)}
-            <span className="capture-group-ai-candidate-duration">({durationSeconds}s)</span>
-          </span>
-          {typeof candidate.confidence === 'number' && (
-            <Tag color="blue" variant="filled" className="capture-group-ai-candidate-confidence">
-              模型分数 {candidate.confidence.toFixed(2)}（仅供参考）
-            </Tag>
-          )}
-        </div>
-        <div className="capture-group-ai-candidate-actions">
-          <Button
-            type="text"
-            size="small"
-            icon={<Play size={12} />}
-            onClick={() => {
-              onSeekToMs?.(candidate.start_ms)
-              onPlaySegment?.(candidate.start_ms, candidate.end_ms)
-            }}
-          >
-            播放核对
-          </Button>
-          <Button
-            type={isAdopted ? 'default' : 'primary'}
-            ghost={!isAdopted}
-            size="small"
-            disabled={!canSubmitRevision || isAdopted}
-            onClick={() => handleAdoptCandidate(candidate)}
-            icon={isAdopted ? <Check size={12} /> : <Plus size={12} />}
-          >
-            {isAdopted ? '已采纳' : '采纳此段'}
-          </Button>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -769,134 +620,35 @@ export function CaptureGroupAnnotationPanel({
           className="capture-group-annotation-form"
           onSubmit={(event) => void submitRevision(event)}
         >
-          {/* AI 动作预标注（Qwen3-VL）建议卡片 */}
-          <div className="capture-group-ai-preannotation-card" aria-label="AI 动作预标注">
-            <div className="capture-group-ai-preannotation-header">
-              <div className="capture-group-ai-title-row">
-                <Sparkles size={15} style={{ color: 'var(--app-color-primary)' }} />
-                <strong>AI 动作预标注建议</strong>
-                {actionJob?.status === 'SUCCEEDED' ? (
-                  <StatusBadge tone="success">
-                    {actionCandidates.length > 0
-                      ? `已生成 ${actionCandidates.length} 条建议`
-                      : '检测已完成'}
-                  </StatusBadge>
-                ) : actionJob?.status === 'RUNNING' ? (
-                  <StatusBadge tone="info">动作分析中</StatusBadge>
-                ) : actionJob?.status === 'QUEUED' ? (
-                  <StatusBadge tone="info">等待处理</StatusBadge>
-                ) : actionJob?.status === 'FAILED' ? (
-                  <StatusBadge tone="error">动作分析失败</StatusBadge>
-                ) : (
-                  <StatusBadge tone="default">等待自动分析</StatusBadge>
-                )}
-              </div>
-              <div className="capture-group-ai-header-actions">
-                {actionJob?.status === 'SUCCEEDED' &&
-                !allCandidatesAdopted &&
-                actionCandidates.length > 0 ? (
-                  <Button
-                    type="default"
-                    size="small"
-                    disabled={!canSubmitRevision || isDirty || Boolean(task?.annotation_revision)}
-                    loading={isLoadingAi}
-                    onClick={() => void handleLoadAiCandidates()}
-                    icon={<Sparkles size={12} style={{ color: 'var(--app-color-primary)' }} />}
-                    title={
-                      isDirty || task?.annotation_revision
-                        ? '保留当前人工草稿或历史修订，不能用 AI 候选覆盖'
-                        : '将 AI 识别的动作片段一键载入为草稿'
-                    }
-                  >
-                    载入动作草稿
-                  </Button>
-                ) : null}
-                {actionJob?.status === 'FAILED' ? (
-                  <Button
-                    type="primary"
-                    danger
-                    size="small"
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                    icon={<RotateCw size={12} />}
-                  >
-                    重试动作分析
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-
-            {actionReadFailed ? (
-              <div role="status" className="capture-group-ai-banner">
-                动作分析状态暂时无法读取，正在重试；这不表示 AI 作业失败。
-              </div>
-            ) : null}
-            {actionCandidates.length > 0 ? (
-              allCandidatesAdopted ? (
-                <div className="capture-group-ai-adopted-box">
-                  <div className="capture-group-ai-adopted-header">
-                    <span className="capture-group-ai-adopted-text">
-                      <Check size={14} style={{ color: 'var(--app-color-success)' }} />
-                      已自动载入全部 {actionCandidates.length} 条动作建议至时间轴草稿
-                    </span>
-                    <Button
-                      type="link"
-                      size="small"
-                      className="capture-group-ai-toggle-btn"
-                      onClick={() => setShowCandidateDetails((prev) => !prev)}
-                    >
-                      {showCandidateDetails
-                        ? '收起候选明细 ▴'
-                        : `查看候选明细 (${actionCandidates.length}) ▾`}
-                    </Button>
-                  </div>
-                  {showCandidateDetails ? (
-                    <div className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll">
-                      {actionCandidates.map((candidate) => renderCandidateCard(candidate))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="capture-group-ai-candidate-list capture-group-ai-candidate-scroll">
-                  {actionCandidates.map((candidate) => renderCandidateCard(candidate))}
-                </div>
-              )
-            ) : actionJob?.status === 'FAILED' ? (
-              <div className="capture-group-ai-banner capture-group-ai-banner-failed">
-                <span>动作分析失败，可尝试“重试动作分析”，也可继续人工标注。</span>
-              </div>
-            ) : actionJob?.status === 'QUEUED' ? (
-              <div className="capture-group-ai-banner capture-group-ai-banner-queued">
-                <span>任务已在队列等待，计算节点接入后将自动处理并预填草稿。</span>
-              </div>
-            ) : actionJob?.status === 'RUNNING' ? (
-              <div className="capture-group-ai-banner">
-                <span>AI 模型推理中，正在分析主视图视频动作切片，请稍候...</span>
-              </div>
-            ) : (
-              <div className="capture-group-ai-banner">
-                <span>
-                  {actionJob?.status === 'SUCCEEDED'
-                    ? '动作分析已完成，暂无候选。可继续人工标注；空结果不代表视频没有动作。'
-                    : '媒体就绪后后台自动生成动作草稿，无需分配负责人或手动启动。手部检测独立运行；最终标注仍需提交。'}
-                </span>
-              </div>
-            )}
-          </div>
-
           {/* --- STICKY TOOLBAR: Action Segments Heading & Quick Submit --- */}
           <div className="capture-group-annotation-sticky-bar">
             <div className="capture-group-annotation-sticky-summary">
               <h3 className="capture-group-annotation-sticky-title">动作时间段</h3>
-              {draftSegments.length > 0 && (
+              {visibleDraftSegments.length > 0 && (
                 <span className="capture-group-annotation-summary-text">
-                  ({draftSegments.length}段
-                  {totalDurationMs ? ` · ${formatHumanFriendlyTime(totalDurationMs)}` : ''})
+                  {visibleDraftSegments.length} 段
+                  {totalDurationMs ? ` · ${formatHumanFriendlyTime(totalDurationMs)}` : ''}
                 </span>
               )}
             </div>
             <div className="capture-group-annotation-sticky-actions">
-              {draftSegments.length > 1 && (
+              <span className="capture-group-ai-inline-status" role="status">
+                <StatusBadge tone={aiStatus.tone}>{aiStatus.label}</StatusBadge>
+              </span>
+              {actionJob?.status === 'FAILED' ? (
+                <Button
+                  type="primary"
+                  danger
+                  size="small"
+                  htmlType="button"
+                  loading={isDispatchingJob}
+                  onClick={() => void handleDispatchActionJob()}
+                  icon={<RotateCw size={12} />}
+                >
+                  重试动作分析
+                </Button>
+              ) : null}
+              {visibleDraftSegments.length > 1 && (
                 <Button
                   type="text"
                   size="small"
@@ -919,28 +671,13 @@ export function CaptureGroupAnnotationPanel({
               </Button>
             </div>
           </div>
-          {hasAutoLoadedAiDraft &&
-            actionCandidates.length > 0 &&
-            (!task || !task.annotation_revision) && (
-              <div style={{ marginBottom: 16 }}>
-                <Alert
-                  type="info"
-                  showIcon
-                  message={`已自动载入动作预标注草稿（共 ${actionCandidates.length} 个候选片段）。草稿未经人工确认，请在时间轴上核对起止时间与标签后提交。`}
-                />
-              </div>
-            )}
           {hasNoHandDetected && (
             <div style={{ marginBottom: 16 }}>
               <Alert
                 type="warning"
                 showIcon
                 title="MediaPipe 在采样帧中未检测到手"
-                description={
-                  <span>
-                    这不代表没有动作；遮挡、出画或漏检均可能导致该结果。请核对视频，动作标注仍可继续。
-                  </span>
-                }
+                description="请核对视频，动作标注仍可继续。"
               />
             </div>
           )}
@@ -957,7 +694,7 @@ export function CaptureGroupAnnotationPanel({
               空格 播放/暂停 · 输入框内 ↑/↓ 步进 100ms（按住 Shift 500ms）
             </span>
           </div>
-          {totalDurationMs && totalDurationMs > 0 && draftSegments.length > 0 ? (
+          {totalDurationMs && totalDurationMs > 0 && visibleDraftSegments.length > 0 ? (
             <div className="capture-group-timeline-overview" aria-label="全片动作时间轨">
               <div
                 ref={trackBarRef}
@@ -972,7 +709,7 @@ export function CaptureGroupAnnotationPanel({
                   }
                 }}
               >
-                {draftSegments.map((seg, idx) => {
+                {visibleDraftSegments.map((seg, idx) => {
                   const startSec = (seg.start_ms || 0) / 1000
                   const endSec = (seg.end_ms || 0) / 1000
                   const durSec = totalDurationMs / 1000
@@ -1036,7 +773,7 @@ export function CaptureGroupAnnotationPanel({
               </div>
             </div>
           ) : null}
-          {draftSegments.map((segment, index) => {
+          {visibleDraftSegments.map((segment, index) => {
             const errors = segmentErrors[segment.draftId] ?? {}
             const formattedStart = formatAnnotationTime(segment.start_ms)
             const formattedEnd = formatAnnotationTime(segment.end_ms)
@@ -1067,9 +804,10 @@ export function CaptureGroupAnnotationPanel({
               >
                 <div className="capture-group-segment-fields">
                   <div className="capture-group-segment-card-header">
-                    <div
+                    <button
+                      type="button"
                       className="capture-group-segment-badge-group"
-                      style={{ cursor: 'pointer' }}
+                      aria-expanded={!collapsed}
                       onClick={() => toggleSegmentCollapsed(segment.draftId)}
                       title="点击展开/折叠微调编辑"
                     >
@@ -1091,7 +829,10 @@ export function CaptureGroupAnnotationPanel({
                       <span className="capture-group-segment-human-time">
                         {formatSegmentDurationLabel(segment.start_ms, segment.end_ms)}
                       </span>
-                    </div>
+                      <span className="capture-group-segment-action-name">
+                        {segment.label ? getActionDisplayName(segment.label, schema) : '未选择动作'}
+                      </span>
+                    </button>
                     <div className="capture-group-segment-card-actions">
                       {onPlaySegment &&
                       Number.isFinite(segment.start_ms) &&
@@ -1109,7 +850,7 @@ export function CaptureGroupAnnotationPanel({
                           播放
                         </Button>
                       ) : null}
-                      {draftSegments.length > 1 ? (
+                      {visibleDraftSegments.length > 1 ? (
                         <Button
                           type="text"
                           danger
@@ -1118,9 +859,12 @@ export function CaptureGroupAnnotationPanel({
                           disabled={!canSubmitRevision}
                           aria-label={`删除第 ${index + 1} 个时间段`}
                           onClick={() => {
-                            setIsDirty(true)
-                            setDraftSegments((current) =>
-                              current.filter((candidate) => candidate.draftId !== segment.draftId),
+                            beginDraftEdit()
+                            const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
+                            setDraftSegments(
+                              sourceSegments.filter(
+                                (candidate) => candidate.draftId !== segment.draftId,
+                              ),
                             )
                           }}
                         >
@@ -1369,7 +1113,7 @@ export function CaptureGroupAnnotationPanel({
                 maxLength={1000}
                 autoSize={{ minRows: 1, maxRows: 3 }}
                 onChange={(event) => {
-                  setIsDirty(true)
+                  beginDraftEdit()
                   setAnnotationNote(event.target.value)
                 }}
               />

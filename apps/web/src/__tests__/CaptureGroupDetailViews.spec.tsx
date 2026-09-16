@@ -34,7 +34,7 @@ describe('CaptureGroup detail views', () => {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
-    await screen.findByText('检测已完成')
+    await screen.findByText('AI 已完成 · 可直接标注', {}, { timeout: 4000 })
     options.task = {
       ...options.task,
       primary_clip_asset_id: group.streams[1]!.clip_asset_id,
@@ -45,7 +45,7 @@ describe('CaptureGroup detail views', () => {
       clip_asset_id: group.streams[1]!.clip_asset_id,
     }
     await userEvent.setup().click(screen.getByRole('button', { name: /^刷新$/ }))
-    expect(await screen.findByText('动作分析中')).toBeInTheDocument()
+    expect(await screen.findByText('AI 分析中')).toBeInTheDocument()
   })
 
   it('waits for background analysis without assigning a task or writing quality', async () => {
@@ -63,7 +63,7 @@ describe('CaptureGroup detail views', () => {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
-    expect(await screen.findByText('等待自动分析')).toBeInTheDocument()
+    expect(await screen.findByText('等待 AI 自动分析')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '启动自动标注' })).not.toBeInTheDocument()
     expect(
       fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT'),
@@ -126,7 +126,9 @@ describe('CaptureGroup detail views', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: '视频', hidden: true }),
     ).toBeInTheDocument()
-    await user.click(await screen.findByText('查看检测与媒体信息'))
+    expect((await screen.findByText('查看检测与媒体信息')).closest('details')).toHaveAttribute(
+      'open',
+    )
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeVisible()
     await user.click(await screen.findByText('更多信息'))
@@ -262,10 +264,13 @@ describe('CaptureGroup detail views', () => {
 
     const selector = await screen.findByRole('group', { name: '采集记录机位选择' })
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
+    const details = (await screen.findByText('查看检测与媒体信息')).closest('details')
+    expect(details).toHaveAttribute('open')
     await user.click(await screen.findByText('查看检测与媒体信息'))
+    expect(details).not.toHaveAttribute('open')
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(await screen.findByText('等待自动分析')).toBeInTheDocument()
+    expect(await screen.findByText('等待 AI 自动分析')).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {

@@ -1,6 +1,6 @@
 import { Alert, Descriptions } from 'antd'
 import { Clock3, Video } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { AnnotationTask } from '@/api/annotation'
 import type { QualityReview } from '@/api/quality'
@@ -97,6 +97,7 @@ export function CaptureGroupFocusedView({
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
   const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(true)
 
   const focusedView = (
     <section
@@ -230,7 +231,11 @@ export function CaptureGroupFocusedView({
         </StatusIndicator>
       ) : null}
       {selectedDetail || selectedStream ? (
-        <details className="capture-group-focused-details">
+        <details
+          className="capture-group-focused-details"
+          open={isDetailsOpen}
+          onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
+        >
           <summary>查看检测与媒体信息</summary>
           <div className="capture-group-focused-details-content">
             {selectedSync && viewRows.length > 1 ? (

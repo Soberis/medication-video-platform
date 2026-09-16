@@ -138,7 +138,7 @@ describe('action label presentation', () => {
 })
 
 describe('CaptureGroup annotation workflow', () => {
-  it('allows AI loading after no-hand detection and protects an edited draft', async () => {
+  it('keeps automatic action drafting independent from no-hand detection and protects edits', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -179,7 +179,9 @@ describe('CaptureGroup annotation workflow', () => {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
-    const start = await screen.findByLabelText('开始时间（毫秒）')
+    await screen.findByLabelText('开始时间（毫秒）')
+    await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toBeEnabled())
+    const start = screen.getByLabelText('开始时间（毫秒）')
     await user.clear(start)
     await user.type(start, '123')
     await user.click(screen.getByRole('button', { name: '刷新' }))
@@ -374,7 +376,6 @@ describe('CaptureGroup annotation workflow', () => {
       candidateStatus: 'FAILED',
     })
     const user = userEvent.setup()
-
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
@@ -558,7 +559,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(pause).toHaveBeenCalledTimes(1)
   })
 
-  it('renders AI action candidate suggestion cards and allows adopting an individual segment', async () => {
+  it('automatically loads AI candidates into the timeline and keeps the workflow compact', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -571,7 +572,7 @@ describe('CaptureGroup annotation workflow', () => {
       capture_group_id: groupId,
       clip_asset_id: group.streams[0]!.clip_asset_id,
       start_ms: 1000,
-      end_ms: 4000,
+      end_ms: 1800,
       action_label: 'acquire_item',
       target_object: 'vial',
       confidence: 0.92,
@@ -597,25 +598,21 @@ describe('CaptureGroup annotation workflow', () => {
         updated_at: '2026-09-10T00:00:00Z',
       },
     })
-    const user = userEvent.setup()
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    expect(await screen.findByText('已生成 1 条建议')).toBeInTheDocument()
-    expect(screen.getByText('模型分数 0.92（仅供参考）')).toBeInTheDocument()
-    expect(screen.getByText('西林瓶/粉针瓶')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '播放核对' })).toBeInTheDocument()
-
-    const adoptBtn = screen.getByRole('button', { name: '采纳此段' })
-    expect(adoptBtn).toBeEnabled()
-    await user.click(adoptBtn)
-
-    expect(await screen.findByRole('button', { name: '已采纳' })).toBeDisabled()
-    expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1000)
-    expect(screen.getByLabelText('结束时间（毫秒）')).toHaveValue(4000)
+    expect(await screen.findByText('AI 已预填 1 段 · 待核对')).toBeInTheDocument()
+    expect(screen.queryByText('AI 动作预标注建议')).not.toBeInTheDocument()
+    expect(screen.getAllByLabelText('开始时间（毫秒）')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: '查看来源 (1)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '播放核对' })).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1000)
+      expect(screen.getByLabelText('结束时间（毫秒）')).toHaveValue(1800)
+    })
   })
 
   it('allows fine-tuning segment start and end times via nudge buttons and arrow keys', async () => {
@@ -636,7 +633,9 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    const startInput = await screen.findByLabelText('开始时间（毫秒）')
+    await screen.findByLabelText('开始时间（毫秒）')
+    await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toBeEnabled())
+    const startInput = screen.getByLabelText('开始时间（毫秒）')
     expect(startInput).toHaveValue(0)
 
     // Click +100 button on start time
