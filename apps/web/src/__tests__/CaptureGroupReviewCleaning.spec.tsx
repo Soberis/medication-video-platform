@@ -7,7 +7,6 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 import {
   approvedGroupTask,
-  captureGroupCleaningFixture,
   captureGroupFixture,
   groupId,
   projectId,
@@ -216,35 +215,23 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(screen.queryByText(/first_timestamp_ms|last_timestamp_ms/)).not.toBeInTheDocument()
   })
 
-  it('offers only the authorized server-side event cleaning recheck', async () => {
+  it('does not offer cleaning recheck actions after approval', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
       receipt: 'COMPLETE',
     })
-    const completed = approvedGroupTask(group, { canRecheck: true })
-    const cleaning = captureGroupCleaningFixture(group)
-    const fetchMock = stubGroupDetail(group, {
+    const completed = approvedGroupTask(group)
+    stubGroupDetail(group, {
       task: completed,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'NO_HAND_DETECTED',
-      cleaningRecheckResponse: cleaning,
     })
     const user = userEvent.setup()
     renderCaptureGroup()
 
     await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
-    await user.click(await screen.findByRole('button', { name: '重新执行标注检查' }))
-
-    await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) =>
-            String(input).endsWith('/capture-group-cleaning-rechecks') && init?.method === 'POST',
-        ),
-      ).toBe(true)
-    })
-    expect(screen.queryByRole('button', { name: '标注检查通过' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重新执行标注检查' })).not.toBeInTheDocument()
   })
 })
 

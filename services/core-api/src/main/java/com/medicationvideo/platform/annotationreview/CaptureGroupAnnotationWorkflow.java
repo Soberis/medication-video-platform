@@ -27,8 +27,6 @@ import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;
-import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningService;
-import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
 import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 
@@ -48,8 +46,6 @@ class CaptureGroupAnnotationWorkflow {
 
 	private final MediaDurationQueryService mediaDurationQueryService;
 
-	private final CaptureGroupCleaningService captureGroupCleaningService;
-
 	private final CandidateEvidenceQueryService candidateEvidenceQueryService;
 
 	private final AnnotationLabelSchemaService labelSchemaService;
@@ -67,7 +63,6 @@ class CaptureGroupAnnotationWorkflow {
 			CaptureGroupViewQueryService captureGroupViewQueryService,
 			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			MediaDurationQueryService mediaDurationQueryService,
-			CaptureGroupCleaningService captureGroupCleaningService,
 			CandidateEvidenceQueryService candidateEvidenceQueryService,
 			AnnotationLabelSchemaService labelSchemaService, AnnotationTaskRepository taskRepository,
 			AnnotationRevisionRepository revisionRepository, AnnotationReviewRepository reviewRepository,
@@ -78,7 +73,6 @@ class CaptureGroupAnnotationWorkflow {
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
 		this.mediaDurationQueryService = mediaDurationQueryService;
-		this.captureGroupCleaningService = captureGroupCleaningService;
 		this.candidateEvidenceQueryService = candidateEvidenceQueryService;
 		this.labelSchemaService = labelSchemaService;
 		this.taskRepository = taskRepository;
@@ -257,7 +251,6 @@ class CaptureGroupAnnotationWorkflow {
 			this.taskRepository.saveAndFlush(task);
 		}
 		else {
-			evaluateCaptureGroupCleaning(projectId, revision, task, review, actorId, requestId, traceId, reviewReason);
 			task.complete(now);
 			this.taskRepository.saveAndFlush(task);
 		}
@@ -271,28 +264,6 @@ class CaptureGroupAnnotationWorkflow {
 						Boolean.toString(review.getDecision() == AnnotationReviewDecision.REJECTED), "task_completed",
 						Boolean.toString(review.getDecision() == AnnotationReviewDecision.APPROVED))));
 		return AnnotationReviewResponse.from(review);
-	}
-
-	@Transactional
-	CaptureGroupCleaningResponse recheckCleaning(UUID projectId, UUID annotationRevisionId, String actorId,
-			String requestId, String traceId) {
-		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
-		var revision = this.revisionRepository.findForUpdate(projectId, annotationRevisionId)
-			.orElseThrow(CaptureGroupAnnotationWorkflow::revisionNotFound);
-		var review = this.reviewRepository.findByAnnotationRevisionId(annotationRevisionId)
-			.orElseThrow(CaptureGroupAnnotationWorkflow::groupCleaningRecheckNotReady);
-		if (review.getDecision() != AnnotationReviewDecision.APPROVED) {
-			throw groupCleaningRecheckNotReady();
-		}
-		var task = this.taskRepository.findForUpdate(projectId, revision.getAnnotationTaskId())
-			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
-		if (task.getStatus() != AnnotationTaskStatus.COMPLETED) {
-			throw groupCleaningRecheckNotReady();
-		}
-		this.requireGroupReviewContext(projectId, revision, task);
-		validateRevisionBounds(projectId, revision);
-		return CaptureGroupCleaningResponse.from(evaluateCaptureGroupCleaning(projectId, revision, task, review,
-				actorId, requestId, traceId, "PROJECT_MEMBERSHIP_ADMIN"));
 	}
 
 	private GroupSubmissionContext requireGroupSubmissionContext(UUID projectId, AnnotationTask task) {
@@ -384,54 +355,6 @@ class CaptureGroupAnnotationWorkflow {
 				groupQuality.revision(), qualifiedViews, rejectedMissingViews, candidateEvidence);
 	}
 
-	private CaptureGroupCleaningSummary evaluateCaptureGroupCleaning(UUID projectId, AnnotationRevision revision,
-			AnnotationTask task, AnnotationReview review, String actorId, String requestId, String traceId,
-			String authorizationBasis) {
-		var groupQuality = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId,
-				revision.getCaptureGroupId());
-		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, revision.getCaptureGroupId());
-		var decisions = this.qualityReviewQueryService.findCurrentDecisions(projectId,
-				facts.views().stream().map(CaptureGroupView::clipAssetId).filter(Objects::nonNull).toList());
-		var command = new CaptureGroupCleaningService.EvaluationCommand(projectId, revision.getCaptureGroupId(),
-				revision.getAnnotationRevisionId(), review.getAnnotationReviewId(),
-				review.getDecision() == AnnotationReviewDecision.APPROVED, review.getReviewedBy(),
-				review.getReviewedAt(), groupQuality.captureGroupQualityReviewId(), groupQuality.result(),
-				groupQuality.revision(), revision.getPrimaryClipAssetId(), revision.getPrimaryCameraNumber(),
-				toGroupCleaningSegments(revision), toGroupCleaningViews(facts, decisions),
-				review.getCandidateEvidence() == null ? List.of() : review.getCandidateEvidence(), actorId,
-				authorizationBasis);
-		return this.captureGroupCleaningService.evaluate(command, requestId, traceId);
-	}
-
-	private static List<CaptureGroupCleaningService.SegmentSnapshot> toGroupCleaningSegments(
-			AnnotationRevision revision) {
-		var value = revision.getAnnotationDocument().get("segments");
-		if (!(value instanceof List<?> storedSegments)) {
-			return List.of();
-		}
-		return storedSegments.stream().map(CaptureGroupAnnotationWorkflow::toGroupCleaningSegment).toList();
-	}
-
-	private static CaptureGroupCleaningService.SegmentSnapshot toGroupCleaningSegment(Object value) {
-		if (!(value instanceof Map<?, ?> segment) || !(segment.get("start_ms") instanceof Number start)
-				|| !(segment.get("end_ms") instanceof Number end) || !(segment.get("label") instanceof String label)) {
-			return new CaptureGroupCleaningService.SegmentSnapshot(0, 0, "");
-		}
-		return new CaptureGroupCleaningService.SegmentSnapshot(start.longValue(), end.longValue(), label);
-	}
-
-	private static List<CaptureGroupCleaningService.ViewInput> toGroupCleaningViews(CaptureGroupFacts facts,
-			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions) {
-		return facts.views().stream().map(view -> {
-			var quality = view.clipAssetId() == null ? null : decisions.get(view.clipAssetId());
-			return new CaptureGroupCleaningService.ViewInput(view.cameraStreamId(), view.clipAssetId(),
-					view.cameraNumber(), view.present(), view.mediaStatus(), view.technicalQualityStatus(),
-					view.streamVersion(), view.clipAssetVersion(), view.assetAvailable(),
-					quality == null ? "UNREVIEWED" : quality.decision(), quality == null ? 0 : quality.version(),
-					view.declaredSyncStatus(), view.clipAssetSha256());
-		}).toList();
-	}
-
 	private void validateSegmentBounds(UUID projectId, UUID clipAssetId, List<AnnotationSegmentCommand> segments) {
 		var durationMicroseconds = this.mediaDurationQueryService.findVerifiedDurationMicroseconds(projectId,
 				clipAssetId);
@@ -449,10 +372,23 @@ class CaptureGroupAnnotationWorkflow {
 	}
 
 	private void validateRevisionBounds(UUID projectId, AnnotationRevision revision) {
-		validateSegmentBounds(projectId, revision.getPrimaryClipAssetId(),
-				toGroupCleaningSegments(revision).stream()
-					.map(segment -> new AnnotationSegmentCommand(segment.startMs(), segment.endMs(), segment.label()))
-					.toList());
+		validateSegmentBounds(projectId, revision.getPrimaryClipAssetId(), toRevisionSegments(revision));
+	}
+
+	private static List<AnnotationSegmentCommand> toRevisionSegments(AnnotationRevision revision) {
+		var value = revision.getAnnotationDocument().get("segments");
+		if (!(value instanceof List<?> storedSegments)) {
+			return List.of();
+		}
+		return storedSegments.stream().map(CaptureGroupAnnotationWorkflow::toRevisionSegment).toList();
+	}
+
+	private static AnnotationSegmentCommand toRevisionSegment(Object value) {
+		if (!(value instanceof Map<?, ?> segment) || !(segment.get("start_ms") instanceof Number start)
+				|| !(segment.get("end_ms") instanceof Number end) || !(segment.get("label") instanceof String label)) {
+			return new AnnotationSegmentCommand(0, 0, "");
+		}
+		return new AnnotationSegmentCommand(start.longValue(), end.longValue(), label);
 	}
 
 	static boolean viewSetStillCurrent(Map<String, Object> confirmedViewSet, CaptureGroupFacts facts,
@@ -637,11 +573,6 @@ class CaptureGroupAnnotationWorkflow {
 	private static AnnotationTaskException revisionNotFound() {
 		return new AnnotationTaskException("ANNOTATION_REVISION_NOT_FOUND",
 				"The annotation revision was not found in the current project.", 404);
-	}
-
-	private static AnnotationTaskException groupCleaningRecheckNotReady() {
-		return new AnnotationTaskException("ANNOTATION_GROUP_CLEANING_RECHECK_NOT_READY",
-				"Only an approved CaptureGroup revision for a completed annotation task can be cleaned.", 409);
 	}
 
 }

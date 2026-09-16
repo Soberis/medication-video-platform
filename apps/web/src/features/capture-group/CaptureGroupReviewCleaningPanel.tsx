@@ -3,7 +3,6 @@ import { CircleAlert, FileCheck2, History } from 'lucide-react'
 import { useState } from 'react'
 
 import {
-  recheckCaptureGroupCleaning,
   reviewAnnotationRevision,
   type AnnotationLabelSchema,
   type AnnotationReview,
@@ -59,7 +58,6 @@ export function CaptureGroupReviewCleaningPanel({
   const [reviewingDecision, setReviewingDecision] = useState<AnnotationReview['decision'] | null>(
     null,
   )
-  const [isRechecking, setIsRechecking] = useState(false)
   const revision = task?.annotation_revision ?? null
   const review = revision?.review ?? null
   const viewSet = revision?.confirmed_view_set ?? task?.confirmed_view_set ?? null
@@ -77,8 +75,7 @@ export function CaptureGroupReviewCleaningPanel({
   const cleaning = revision?.capture_group_cleaning ?? null
   const primaryClipAssetId = revision?.primary_clip_asset_id ?? task?.primary_clip_asset_id ?? null
   const primaryCameraNumber = revision?.primary_camera_number ?? task?.primary_camera_number ?? null
-  const hasCompletedReviewAndCleaning =
-    review?.decision === 'APPROVED' && cleaning?.outcome === 'PASS'
+  const isReviewApproved = review?.decision === 'APPROVED'
   const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
 
   function openReview(decision: AnnotationReview['decision']) {
@@ -134,24 +131,6 @@ export function CaptureGroupReviewCleaningPanel({
         }
       },
     })
-  }
-
-  async function recheckCleaning() {
-    if (!revision || !task?.can_recheck_capture_group_cleaning || isRechecking) return
-    setIsRechecking(true)
-    try {
-      await recheckCaptureGroupCleaning(projectId, revision.annotation_revision_id)
-      const refreshed = await onRefresh()
-      void (refreshed
-        ? message.success('标注检查已重新执行，服务端事实已刷新。')
-        : message.warning('标注检查已重新执行，但最新事实暂未刷新；请手动刷新确认。'))
-    } catch (error) {
-      void message.error(
-        error instanceof Error ? error.message : '标注检查暂未完成，请刷新后重试。',
-      )
-    } finally {
-      setIsRechecking(false)
-    }
   }
 
   const evidenceAndHistory = revision ? (
@@ -244,7 +223,7 @@ export function CaptureGroupReviewCleaningPanel({
       title="标注复核"
       titleId="capture-group-review-cleaning-title"
     >
-      {hasCompletedReviewAndCleaning ? (
+      {isReviewApproved ? (
         <Button
           type="link"
           size="small"
@@ -257,16 +236,16 @@ export function CaptureGroupReviewCleaningPanel({
           {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
         </Button>
       ) : null}
-      {hasCompletedReviewAndCleaning ? (
-        <p role="status">标注已确认并通过规则检查，可返回视频列表选择导出。</p>
+      {isReviewApproved ? (
+        <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
       ) : null}
       {!task ? (
         <p className="form-hint">
-          当前没有可见的人工标签任务，暂不能读取修订、复核或标注检查事实。
+          当前没有可见的人工标签任务，暂不能读取修订、复核事实。
         </p>
       ) : !revision ? (
         <p className="form-hint">尚无正式修订；提交后，授权的人工复核人可在此完成复核。</p>
-      ) : !hasCompletedReviewAndCleaning || isCompletedDetailOpen ? (
+      ) : !isReviewApproved || isCompletedDetailOpen ? (
         <div id="capture-group-review-cleaning-details">
           <div className="capture-group-review-boundary" role="status">
             <FileCheck2 aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -328,7 +307,7 @@ export function CaptureGroupReviewCleaningPanel({
             segments={revision.annotation_document.segments}
           />
 
-          {hasCompletedReviewAndCleaning ? (
+          {isReviewApproved ? (
             <details className="capture-group-review-detail-disclosure">
               <summary>查看已确认机位、检测证据与修订历史</summary>
               <div className="capture-group-review-detail-content">{evidenceAndHistory}</div>
@@ -379,11 +358,6 @@ export function CaptureGroupReviewCleaningPanel({
             primaryCameraNumber={primaryCameraNumber}
             schema={schema}
             review={review}
-            canRecheck={Boolean(
-              task.can_recheck_capture_group_cleaning && review?.decision === 'APPROVED',
-            )}
-            isRechecking={isRechecking}
-            onRecheck={() => void recheckCleaning()}
           />
         </div>
       ) : null}
@@ -529,9 +503,6 @@ interface CaptureGroupCleaningCheckProps {
   primaryCameraNumber: number | null
   schema: AnnotationLabelSchema | null
   review: AnnotationReview | null
-  canRecheck: boolean
-  isRechecking: boolean
-  onRecheck: () => void
 }
 
 function CaptureGroupCleaningCheck({
@@ -539,9 +510,6 @@ function CaptureGroupCleaningCheck({
   primaryCameraNumber,
   schema,
   review,
-  canRecheck,
-  isRechecking,
-  onRecheck,
 }: CaptureGroupCleaningCheckProps) {
   const captureGroupCleaning = cleaning
 
@@ -630,17 +598,12 @@ function CaptureGroupCleaningCheck({
             schema={schema}
           />
           <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
-          {canRecheck ? (
-            <Button type="link" size="small" loading={isRechecking} onClick={onRecheck}>
-              重新执行标注检查
-            </Button>
-          ) : null}
         </>
       ) : (
         <p className="form-hint">
           {review?.decision === 'APPROVED'
-            ? '人工复核已通过；服务端尚未返回标注检查结果。'
-            : '人工复核通过后，服务端会在同一事务内生成标注检查结果。这里不是第二个人工质量决定。'}
+            ? '人工复核已通过；当前修订未生成单独的标注检查快照。'
+            : '人工复核通过后将作为正式标注结论。'}
         </p>
       )}
     </div>

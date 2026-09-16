@@ -132,23 +132,6 @@ class AnnotationTaskController {
 			.body(response);
 	}
 
-	@PostMapping("/annotation-revisions/{annotationRevisionId}/capture-group-cleaning-rechecks")
-	ResponseEntity<CaptureGroupCleaningResponse> recheckCaptureGroupCleaning(@PathVariable UUID projectId,
-			@PathVariable UUID annotationRevisionId,
-			@RequestHeader(name = "X-Request-Id",
-					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody(required = false) CaptureGroupCleaningRequest request, Authentication authentication) {
-		var actor = requirePlatformAdministrator(authentication);
-		if (request != null && request.hasCallerMappings()) {
-			throw new AnnotationTaskException("ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED",
-					"Caller-provided supporting-view mappings are unsupported in V1.27; omit support_mappings or send an empty list. Declared synchronization is evidence only.",
-					422);
-		}
-		var response = this.service.recheckCaptureGroupCleaning(projectId, annotationRevisionId, actor.actorId(),
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
-		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
-	}
-
 	private static ProjectActor requireActor(Authentication authentication) {
 		if (authentication == null || !(authentication.getPrincipal() instanceof ProjectActor actor)) {
 			throw new AnnotationTaskException("ANNOTATION_TASK_ACCESS_DENIED",
@@ -194,22 +177,6 @@ record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long star
 
 record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
 		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
-}
-
-/**
- * Deprecated compatibility input for the removed caller-authoritative mapping contract.
- * V1.27 accepts an omitted or empty list only; non-empty mappings are rejected by the
- * controller before Cleaning is evaluated.
- */
-record CaptureGroupCleaningRequest(@Size(max = 64) List<Map<String, Object>> supportMappings) {
-
-	CaptureGroupCleaningRequest {
-		supportMappings = supportMappings == null ? List.of() : List.copyOf(supportMappings);
-	}
-
-	boolean hasCallerMappings() {
-		return !this.supportMappings.isEmpty();
-	}
 }
 
 record AnnotationTaskErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {

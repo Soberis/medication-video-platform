@@ -161,13 +161,6 @@ class AnnotationTaskService {
 				requestId, traceId, request);
 	}
 
-	@Transactional
-	CaptureGroupCleaningResponse recheckCaptureGroupCleaning(UUID projectId, UUID annotationRevisionId, String actorId,
-			String requestId, String traceId) {
-		return this.captureGroupAnnotationWorkflow.recheckCleaning(projectId, annotationRevisionId, actorId, requestId,
-				traceId);
-	}
-
 	private Map<String, Object> toAnnotationDocument(AnnotationRevisionSubmitCommand request) {
 		var segments = request.segments().stream().map(segment -> {
 			if (segment.endMs() <= segment.startMs()) {
@@ -362,9 +355,7 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 
 	private static boolean canRecheckCaptureGroupCleaning(AnnotationTask task, boolean projectAdministrator,
 			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
-		return task.getStatus() == AnnotationTaskStatus.COMPLETED && projectAdministrator && revision != null
-				&& review != null && review.getDecision() == AnnotationReviewDecision.APPROVED
-				&& captureGroupQualityAdmitting;
+		return false;
 	}
 }
 

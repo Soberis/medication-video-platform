@@ -235,7 +235,6 @@ export function stubGroupDetail(
     viewQualityAfterSaveByCamera?: Record<number, QualityReview>
     reviewResponse?: Partial<AnnotationReview>
     reviewError?: { status: number; body: object }
-    cleaningRecheckResponse?: CaptureGroupCleaning
     actionCandidates?: unknown[]
     actionCandidateJob?: unknown | null
   },
@@ -406,11 +405,6 @@ export function stubGroupDetail(
           review_note: request.review_note ?? null,
           ...options.reviewResponse,
         }),
-      )
-    }
-    if (url.endsWith('/capture-group-cleaning-rechecks') && init?.method === 'POST') {
-      return Promise.resolve(
-        jsonResponse(options.cleaningRecheckResponse ?? captureGroupCleaningFixture(group)),
       )
     }
     if (url.endsWith('/revisions') && init?.method === 'POST') {

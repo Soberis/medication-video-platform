@@ -342,23 +342,10 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.candidate_evidence[0].provenance_valid").value(true));
 
 		assertEquals(1, count("SELECT count(*) FROM annotation_review WHERE annotation_revision_id = ?", revisionId));
-		assertEquals(1,
+		assertEquals(0,
 				count("SELECT count(*) FROM capture_group_cleaning WHERE annotation_revision_id = ?", revisionId));
-		assertEquals("PASS",
-				this.jdbcTemplate.queryForObject(
-						"SELECT outcome FROM capture_group_cleaning WHERE annotation_revision_id = ?", String.class,
-						revisionId));
-		var evidence = this.jdbcTemplate.queryForObject(
-				"SELECT view_evidence::text FROM capture_group_cleaning WHERE annotation_revision_id = ?", String.class,
-				revisionId);
-		var excluded = this.jdbcTemplate.queryForObject(
-				"SELECT excluded_views::text FROM capture_group_cleaning WHERE annotation_revision_id = ?",
-				String.class, revisionId);
-		assertEquals(5, JsonPath.<Integer>read(evidence, "$.length()"));
-		assertEquals(2, JsonPath.<Integer>read(excluded, "$.length()"));
-		assertEquals(true, JsonPath.<Boolean>read(excluded, "$[0].retained"));
-		assertEquals(false, JsonPath.<Boolean>read(excluded, "$[0].downstream_included"));
-
+		assertEquals("COMPLETED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
 	}
 
 	@Test
@@ -391,7 +378,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void callerValidatedSupportMappingIsRejectedAndCannotCreateActionAlignedTime() throws Exception {
+	void approvedGroupReviewCompletesTaskWithoutCleaningSnapshot() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("mapping-quality"))
 			.andExpect(status().isOk());
@@ -409,21 +396,9 @@ class CaptureGroupQualityAnnotationContractTests {
 					.content("{\"decision\":\"APPROVED\"}"))
 			.andExpect(status().isCreated());
 
-		this.mockMvc.perform(
-				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/capture-group-cleaning-rechecks",
-						PROJECT_ID, revisionId)
-					.header("Authorization", "Bearer " + ADMIN_TOKEN)
-					.header("X-Request-Id", key("mapping-recheck-request"))
-					.contentType(MediaType.APPLICATION_JSON)
-					.content("""
-							{"support_mappings":[{"clip_asset_id":"%s","validated":true,
-							"mapping_version":"capture-map.v1","provenance":"synthetic-validated-mapping",
-							"intervals":[{"start_ms":120,"end_ms":420}]}]}
-							""".formatted(group.clipAssetIds().get(1))))
-			.andExpect(status().is(422))
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_GROUP_CLEANING_SUPPORT_MAPPINGS_UNSUPPORTED"));
-
-		assertEquals(1,
+		assertEquals("COMPLETED", this.jdbcTemplate.queryForObject(
+				"SELECT task_status FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId));
+		assertEquals(0,
 				count("SELECT count(*) FROM capture_group_cleaning WHERE annotation_revision_id = ?", revisionId));
 
 		this.mockMvc
@@ -431,17 +406,9 @@ class CaptureGroupQualityAnnotationContractTests {
 					"/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/capture-group-cleaning-rechecks",
 					PROJECT_ID, revisionId)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
-				.header("X-Request-Id", key("mapping-empty-recheck-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"support_mappings\":[]}"))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.outcome").value("PASS"))
-			.andExpect(jsonPath("$.primary_interval[0].start_ms").value(0))
-			.andExpect(jsonPath("$.primary_interval[0].end_ms").value(400))
-			.andExpect(jsonPath("$.mapping_provenance.length()").value(0))
-			.andExpect(jsonPath("$.participating_views[1].interval_source").value("EVENT_LEVEL_EVIDENCE"))
-			.andExpect(jsonPath("$.participating_views[1].action_aligned_interval").value(false))
-			.andExpect(jsonPath("$.participating_views[1].interval").doesNotExist());
+				.content("{}"))
+			.andExpect(status().isNotFound());
 	}
 
 	@Test

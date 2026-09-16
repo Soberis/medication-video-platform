@@ -339,22 +339,6 @@ export async function reviewAnnotationRevision(
   throw await annotationTaskApiError(response)
 }
 
-export async function recheckCaptureGroupCleaning(
-  projectId: string,
-  annotationRevisionId: string,
-): Promise<CaptureGroupCleaning> {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-revisions/${encodeURIComponent(annotationRevisionId)}/capture-group-cleaning-rechecks`,
-    {
-      method: 'POST',
-      headers: { Accept: 'application/json', ...csrfHeaders() },
-      cache: 'no-store',
-    },
-  )
-  if (response.ok) return (await response.json()) as CaptureGroupCleaning
-  throw await annotationTaskApiError(response)
-}
-
 export async function downloadHumanDemonstrationHdf5(
   projectId: string,
   captureGroupIds?: string[],
