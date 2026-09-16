@@ -514,10 +514,29 @@
   background: var(--app-color-surface);
 }
 
-.capture-group-compare-item:hover,
-.capture-group-compare-item:focus-visible,
+.capture-group-compare-item:hover {
+  border-color: var(--app-color-border);
+  background: var(--app-color-surface-hover);
+}
+
+.capture-group-compare-item:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: 2px;
+  border-color: var(--app-color-primary);
+}
+
 .capture-group-compare-item.is-current {
   border-color: var(--app-color-primary);
+  background: var(--app-color-primary-subtle);
+  box-shadow: inset 0 0 0 1px var(--app-color-primary);
+}
+
+.capture-group-compare-item.is-current strong {
+  color: var(--app-color-primary);
+}
+
+.capture-group-compare-item.is-current .capture-group-compare-thumbnail {
+  color: var(--app-color-primary);
 }
 
 .capture-group-compare-thumbnail {

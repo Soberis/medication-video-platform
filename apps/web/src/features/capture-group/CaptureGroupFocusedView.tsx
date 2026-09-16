@@ -20,6 +20,7 @@ interface CaptureGroupFocusedViewProps {
   onPlaybackTimeChange?: (timeMs: number | null) => void
   isCompleted?: boolean
   externalVideoRef?: React.RefObject<HTMLVideoElement | null>
+  initialPlaybackTimeMs?: number | null
 }
 
 export function CaptureGroupFocusedView({
@@ -31,6 +32,7 @@ export function CaptureGroupFocusedView({
   onPlaybackTimeChange,
   isCompleted = false,
   externalVideoRef,
+  initialPlaybackTimeMs,
 }: CaptureGroupFocusedViewProps) {
   const {
     selectedStream,
@@ -148,6 +150,33 @@ export function CaptureGroupFocusedView({
                     .join(' · ')}
                   title={[mediaLabel, qualityLabel].filter(Boolean).join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key !== 'ArrowLeft' &&
+                      event.key !== 'ArrowRight' &&
+                      event.key !== 'ArrowUp' &&
+                      event.key !== 'ArrowDown'
+                    ) {
+                      return
+                    }
+                    const available = viewRows.filter((v) => Boolean(v.stream))
+                    const currentIndex = available.findIndex(
+                      (v) => v.stream?.clip_asset_id === stream?.clip_asset_id,
+                    )
+                    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                      event.preventDefault()
+                      if (currentIndex >= 0 && currentIndex < available.length - 1) {
+                        const next = available[currentIndex + 1]
+                        if (next?.stream) onSelectView(next.stream.clip_asset_id)
+                      }
+                    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                      event.preventDefault()
+                      if (currentIndex > 0) {
+                        const prev = available[currentIndex - 1]
+                        if (prev?.stream) onSelectView(prev.stream.clip_asset_id)
+                      }
+                    }
+                  }}
                 >
                   <span className="capture-group-compare-thumbnail" aria-hidden="true">
                     <Video size={16} strokeWidth={1.7} />
@@ -178,6 +207,7 @@ export function CaptureGroupFocusedView({
         playbackMessage={playbackMessage}
         playbackState={playbackState}
         externalVideoRef={videoRef}
+        initialPlaybackTimeMs={initialPlaybackTimeMs}
         onPlaybackTimeChange={onPlaybackTimeChange ?? undefined}
         onClose={() => {
           onPlaybackTimeChange?.(null)

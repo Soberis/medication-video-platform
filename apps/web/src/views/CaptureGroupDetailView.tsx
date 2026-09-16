@@ -63,8 +63,17 @@ export default function CaptureGroupDetailView() {
     [data.selectedClipAssetId, viewRows],
   )
   const [currentPlaybackTimeMs, setCurrentPlaybackTimeMs] = useState<number | null>(null)
+  const [preservedPlaybackTimeMs, setPreservedPlaybackTimeMs] = useState<number | null>(null)
+  const shouldAutoStartPlaybackRef = useRef(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const segmentStopListenerRef = useRef<(() => void) | null>(null)
+
+  const handlePlaybackTimeChange = useCallback((timeMs: number | null) => {
+    setCurrentPlaybackTimeMs(timeMs)
+    if (timeMs !== null) {
+      setPreservedPlaybackTimeMs(timeMs)
+    }
+  }, [])
 
   const handlePlaySegment = useCallback((startMs: number, endMs: number) => {
     const video = videoRef.current
@@ -106,12 +115,59 @@ export default function CaptureGroupDetailView() {
   }, [])
 
   const viewState = useCaptureGroupView(projectId, selectedView)
+  const {
+    canPlay,
+    isRequestingPlayback,
+    playbackGrant,
+    playbackState,
+    selectedDetail,
+    selectedMediaReport,
+    selectedStream,
+    startPlayback,
+  } = viewState
+
   const totalDurationMs = useMemo(() => {
-    if (viewState.selectedMediaReport?.duration_microseconds) {
-      return Math.floor(viewState.selectedMediaReport.duration_microseconds / 1000)
+    if (selectedMediaReport?.duration_microseconds) {
+      return Math.floor(selectedMediaReport.duration_microseconds / 1000)
     }
     return null
-  }, [viewState.selectedMediaReport])
+  }, [selectedMediaReport])
+
+  const handleSelectView = useCallback(
+    (clipAssetId: string) => {
+      const wasPlaybackActive = Boolean(playbackGrant || playbackState === 'ready')
+      data.setSelectedClipAssetId(clipAssetId)
+      if (wasPlaybackActive) {
+        shouldAutoStartPlaybackRef.current = true
+      }
+    },
+    [data, playbackGrant, playbackState],
+  )
+
+  useEffect(() => {
+    if (
+      shouldAutoStartPlaybackRef.current &&
+      data.selectedClipAssetId &&
+      selectedStream?.clip_asset_id === data.selectedClipAssetId &&
+      selectedDetail?.status === 'INGESTED' &&
+      canPlay &&
+      !playbackGrant &&
+      !isRequestingPlayback &&
+      playbackState === 'idle'
+    ) {
+      shouldAutoStartPlaybackRef.current = false
+      void startPlayback()
+    }
+  }, [
+    canPlay,
+    data.selectedClipAssetId,
+    isRequestingPlayback,
+    playbackGrant,
+    playbackState,
+    selectedDetail?.status,
+    selectedStream?.clip_asset_id,
+    startPlayback,
+  ])
 
   const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
   const humanTask = data.taskVisibility === 'visible' ? data.task : null
@@ -323,11 +379,9 @@ export default function CaptureGroupDetailView() {
                 viewReviews={data.viewReviews}
                 viewState={viewState}
                 externalVideoRef={videoRef}
-                onSelectView={(clipAssetId) => {
-                  setCurrentPlaybackTimeMs(null)
-                  data.setSelectedClipAssetId(clipAssetId)
-                }}
-                onPlaybackTimeChange={setCurrentPlaybackTimeMs}
+                initialPlaybackTimeMs={preservedPlaybackTimeMs}
+                onSelectView={handleSelectView}
+                onPlaybackTimeChange={handlePlaybackTimeChange}
                 isCompleted={humanTask?.status === 'COMPLETED'}
               />
             </div>

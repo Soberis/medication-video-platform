@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -326,10 +326,47 @@ describe('CaptureGroup detail views', () => {
       [`/projects/${projectId}/capture-groups/${groupId}`],
     )
     const backBtn = await screen.findByRole('button', { name: /返回视频列表/ })
-    expect(backBtn).toBeInTheDocument()
     await userEvent.setup().click(backBtn)
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(paths.captureGroups(projectId))
     })
+  })
+
+  it('supports keyboard arrow navigation between camera streams and preserves active selection', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+
+    const selector = await screen.findByRole('group', { name: '采集记录机位选择' })
+    const cam1Btn = within(selector).getByRole('button', { name: /机位 1/ })
+    const cam2Btn = within(selector).getByRole('button', { name: /机位 2/ })
+    expect(cam1Btn).toHaveAttribute('aria-current', 'true')
+    expect(cam2Btn).not.toHaveAttribute('aria-current')
+
+    await user.click(cam1Btn)
+    fireEvent.keyDown(cam1Btn, { key: 'ArrowRight' })
+    await waitFor(() => {
+      expect(cam2Btn).toHaveAttribute('aria-current', 'true')
+    })
+    expect(cam1Btn).not.toHaveAttribute('aria-current')
+
+    fireEvent.keyDown(cam2Btn, { key: 'ArrowLeft' })
+    await waitFor(() => {
+      expect(cam1Btn).toHaveAttribute('aria-current', 'true')
+    })
+    expect(cam2Btn).not.toHaveAttribute('aria-current')
   })
 })

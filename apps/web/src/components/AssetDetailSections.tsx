@@ -66,6 +66,7 @@ interface PlaybackCardProps {
   playbackMessage: string
   playbackState: PlaybackState
   externalVideoRef?: MutableRefObject<HTMLVideoElement | null>
+  initialPlaybackTimeMs?: number | null
   onPlaybackTimeChange?: (timeMs: number) => void
   onClose: () => void
   onLoadedMetadata: () => void
@@ -87,6 +88,7 @@ export function PlaybackCard({
   playbackMessage,
   playbackState,
   externalVideoRef,
+  initialPlaybackTimeMs,
   onPlaybackTimeChange,
   onClose,
   onLoadedMetadata,
@@ -262,8 +264,19 @@ export function PlaybackCard({
                 aria-label="视频预览"
                 src={grant.media_url}
                 onLoadedMetadata={(event) => {
-                  setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
-                  onPlaybackTimeChange?.(event.currentTarget.currentTime * 1000)
+                  if (initialPlaybackTimeMs && initialPlaybackTimeMs > 0) {
+                    const seekSec = Math.max(0, initialPlaybackTimeMs / 1000)
+                    const targetSec = event.currentTarget.duration
+                      ? Math.min(seekSec, event.currentTarget.duration)
+                      : seekSec
+                    event.currentTarget.currentTime = targetSec
+                    const resolvedMs = Math.round(targetSec * 1000)
+                    setPlaybackTimeMs(resolvedMs)
+                    onPlaybackTimeChange?.(resolvedMs)
+                  } else {
+                    setPlaybackTimeMs(event.currentTarget.currentTime * 1000)
+                    onPlaybackTimeChange?.(event.currentTarget.currentTime * 1000)
+                  }
                   onLoadedMetadata()
                 }}
                 onTimeUpdate={(event) => {
