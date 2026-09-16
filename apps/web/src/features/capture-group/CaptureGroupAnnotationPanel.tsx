@@ -207,8 +207,14 @@ export function CaptureGroupAnnotationPanel({
   )
 
   const actionJobStatus = actionJob?.status
+  const actionQueryContext = `${projectId}:${captureGroupId}:${effectivePrimaryClipAssetId}`
+  const lastActionQueryContext = useRef<string | null>(null)
   useEffect(() => {
-    if ((actionJobStatus === 'SUCCEEDED' || actionJobStatus === 'FAILED') && !actionReadFailed) {
+    if (
+      lastActionQueryContext.current === actionQueryContext &&
+      (actionJobStatus === 'SUCCEEDED' || actionJobStatus === 'FAILED') &&
+      !actionReadFailed
+    ) {
       return
     }
 
@@ -223,6 +229,7 @@ export function CaptureGroupAnnotationPanel({
           fetchActionCandidates(projectId, captureGroupId),
         ])
         if (cancelled) return
+        lastActionQueryContext.current = actionQueryContext
         setActionJob(job)
         setActionCandidates(candidates)
         setActionReadFailed(false)
@@ -252,6 +259,7 @@ export function CaptureGroupAnnotationPanel({
     projectId,
     captureGroupId,
     effectivePrimaryClipAssetId,
+    actionQueryContext,
     actionJobStatus,
     actionReadFailed,
     message,

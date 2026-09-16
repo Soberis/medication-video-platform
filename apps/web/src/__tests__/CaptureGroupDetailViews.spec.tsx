@@ -17,6 +17,37 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
+  it('discovers the new primary video job after the previous job reached a terminal state', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const options = {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'UNKNOWN' as const,
+      actionCandidateJob: { status: 'SUCCEEDED', clip_asset_id: group.streams[0]!.clip_asset_id },
+    }
+    stubGroupDetail(group, options)
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+    await screen.findByText('检测已完成')
+    options.task = {
+      ...options.task,
+      primary_clip_asset_id: group.streams[1]!.clip_asset_id,
+      primary_camera_number: 2,
+    }
+    options.actionCandidateJob = {
+      status: 'RUNNING',
+      clip_asset_id: group.streams[1]!.clip_asset_id,
+    }
+    await userEvent.setup().click(screen.getByRole('button', { name: /^刷新$/ }))
+    expect(await screen.findByText('动作分析中')).toBeInTheDocument()
+  })
+
   it('waits for background analysis without assigning a task or writing quality', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
