@@ -83,6 +83,50 @@ class ActionCandidateJobServiceTests {
 	}
 
 	@Test
+	void automaticallyQueuesWithoutTaskAssigneeOrQualityAndDoesNotDuplicate() {
+		var access = mock(com.medicationvideo.platform.iamproject.ProjectAccessService.class);
+		var dispatch = mock(AiJobDispatchPort.class);
+		var labels = mock(ActionAllowedLabelsPort.class);
+		var snapshot = new ActionLabelSnapshot(null, UUID.randomUUID(), "c".repeat(64), List.of("draw_liquid"));
+		when(labels.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID)).thenReturn(snapshot);
+		when(this.assetCatalog.resolveCaptureGroupId(CLIP_ASSET_ID)).thenReturn(CAPTURE_GROUP_ID);
+		when(this.assetCatalog.getClipAssetInputSummary(PROJECT_ID, CLIP_ASSET_ID))
+			.thenReturn(new ClipAssetInputSummary(CLIP_ASSET_ID, PROJECT_ID, "video/mp4", 1000L, "a".repeat(64),
+					ClipAssetStatus.INGESTED, "OVERVIEW", true, Instant.EPOCH, Instant.EPOCH));
+		var stored = new ArrayList<AiCandidateJob>();
+		when(this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, CLIP_ASSET_ID))
+			.thenAnswer(call -> List.copyOf(stored));
+		when(this.jobRepository.save(any())).thenAnswer(call -> {
+			AiCandidateJob job = call.getArgument(0);
+			stored.add(job);
+			return job;
+		});
+		var automatic = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
+				this.objectMapper, access, this.assetCatalog, null, null, dispatch, null,
+				new ActionJobEnvelopeFactory(this.assetCatalog, labels));
+		automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID);
+		automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID);
+		assertEquals(1, stored.size());
+		org.junit.jupiter.api.Assertions.assertNull(stored.getFirst().getAnnotationTaskId());
+		assertEquals(snapshot.schemaDigest(), stored.getFirst().getLabelSchemaDigest());
+		verify(dispatch).enqueueAction(any(), any());
+		verify(access, org.mockito.Mockito.never()).lockAndRequireMember(any(), any());
+		verifyNoInteractions(this.jdbcTemplate);
+	}
+
+	@Test
+	void automaticDispatchRetainsProjectArchiveGuard() {
+		var access = mock(com.medicationvideo.platform.iamproject.ProjectAccessService.class);
+		org.mockito.Mockito.doThrow(new IllegalStateException("archived"))
+			.when(access)
+			.lockActiveProjectForSystemProcessing(PROJECT_ID);
+		var automatic = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
+				this.objectMapper, access, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory);
+		assertThrows(IllegalStateException.class, () -> automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID));
+		verifyNoInteractions(this.jobRepository, this.assetCatalog);
+	}
+
+	@Test
 	void rejectsHandPoseJobWithoutReadingOrWritingResults() {
 		var job = mock(AiCandidateJob.class);
 		when(job.getAlgorithmKey()).thenReturn(HandPoseProfile.ALGORITHM_KEY);

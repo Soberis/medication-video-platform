@@ -7,9 +7,9 @@ import java.util.UUID;
  * Immutable label context captured when an action-candidate job is queued.
  *
  * <p>
- * The snapshot keeps a job tied to the annotation task's label schema even when the
- * platform publishes a newer global schema later. The schema identity is optional only
- * for legacy jobs created before V1.34 closed this provenance gap.
+ * The snapshot keeps a job tied to its dispatch-time label schema even when the platform
+ * publishes a newer global schema later. The schema identity is optional only for legacy
+ * jobs created before V1.34 closed this provenance gap. A human task is optional.
  * </p>
  */
 public record ActionLabelSnapshot(UUID annotationTaskId, UUID labelSchemaId, String schemaDigest,

@@ -9,6 +9,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AssetCatalogQueryService {
 
+	public record ActionProcessingInput(UUID projectId, UUID clipAssetId) {
+	}
+
+	/** System-only read projection; no human quality or assignment prerequisites. */
+	@Transactional(readOnly = true)
+	public java.util.List<ActionProcessingInput> findActionProcessingInputs(int page, int size) {
+		return this.clipAssetRepository
+			.findActionProcessingInputs(org.springframework.data.domain.PageRequest.of(page, Math.min(size, 100)))
+			.stream()
+			.map(asset -> new ActionProcessingInput(asset.getProjectId(), asset.getClipAssetId()))
+			.toList();
+	}
+
 	private final CameraSetSnapshotMemberRepository snapshotMemberRepository;
 
 	private final CameraStreamRepository streamRepository;

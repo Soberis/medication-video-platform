@@ -107,6 +107,7 @@ export function CaptureGroupAnnotationPanel({
   const [isLoadingAi, setIsLoadingAi] = useState(false)
   const [actionCandidates, setActionCandidates] = useState<ActionCandidate[]>([])
   const [actionJob, setActionJob] = useState<ActionCandidateJob | null>(null)
+  const [actionReadFailed, setActionReadFailed] = useState(false)
   const [isDispatchingJob, setIsDispatchingJob] = useState(false)
   const trackBarRef = useRef<HTMLDivElement | null>(null)
   const [hasAutoLoadedAiDraft, setHasAutoLoadedAiDraft] = useState(false)
@@ -205,52 +206,31 @@ export function CaptureGroupAnnotationPanel({
   )
 
   useEffect(() => {
-    let isSubscribed = true
-    fetchActionCandidates(projectId, captureGroupId)
-      .then((candidates) => {
-        if (isSubscribed) {
-          setActionCandidates(candidates)
-        }
-      })
-      .catch(() => {
-        // AI candidates are auxiliary
-      })
-
-    fetchActionCandidateJob(projectId, captureGroupId)
-      .then((job) => {
-        if (!isSubscribed) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    async function refresh() {
+      try {
+        if (document.hidden) return
+        const [job, candidates] = await Promise.all([
+          fetchActionCandidateJob(projectId, captureGroupId),
+          fetchActionCandidates(projectId, captureGroupId),
+        ])
+        if (cancelled) return
         setActionJob(job)
-      })
-      .catch(() => {
-        // AI job is auxiliary
-      })
-
+        setActionCandidates(candidates)
+        setActionReadFailed(false)
+      } catch {
+        if (!cancelled) setActionReadFailed(true)
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void refresh(), 5000)
+      }
+    }
+    void refresh()
     return () => {
-      isSubscribed = false
+      cancelled = true
+      clearTimeout(timer)
     }
-  }, [projectId, captureGroupId])
-
-  useEffect(() => {
-    if (!actionJob || (actionJob.status !== 'QUEUED' && actionJob.status !== 'RUNNING')) {
-      return
-    }
-    const timer = setInterval(() => {
-      fetchActionCandidateJob(projectId, captureGroupId)
-        .then((job) => {
-          setActionJob(job)
-          if (job?.status === 'SUCCEEDED') {
-            fetchActionCandidates(projectId, captureGroupId)
-              .then((candidates) => {
-                setActionCandidates(candidates)
-                void message.success('动作预标注任务已完成，已刷新候选列表，请逐段核对')
-              })
-              .catch(() => {})
-          }
-        })
-        .catch(() => {})
-    }, 3000)
-    return () => clearInterval(timer)
-  }, [actionJob, projectId, captureGroupId, message])
+  }, [projectId, captureGroupId, effectivePrimaryClipAssetId])
 
   if (!isDirty && appliedContext !== draftContext) {
     setAppliedContext(draftContext)
@@ -538,7 +518,6 @@ export function CaptureGroupAnnotationPanel({
     }
     setIsDispatchingJob(true)
     try {
-      await prepareAnnotationTask()
       const job = await dispatchActionCandidateJob(projectId, captureGroupId)
       setActionJob(job)
       void message.success('已提交动作预标注任务，等待算力机返回结果...')
@@ -753,7 +732,7 @@ export function CaptureGroupAnnotationPanel({
                 ) : actionJob?.status === 'FAILED' ? (
                   <StatusBadge tone="error">动作分析失败</StatusBadge>
                 ) : (
-                  <StatusBadge tone="default">未启动</StatusBadge>
+                  <StatusBadge tone="default">等待自动分析</StatusBadge>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -787,30 +766,15 @@ export function CaptureGroupAnnotationPanel({
                   >
                     重试动作分析
                   </Button>
-                ) : !actionJob ? (
-                  <Button
-                    type="primary"
-                    size="small"
-                    disabled={
-                      !effectivePrimaryClipAssetId ||
-                      !canSubmitRevision ||
-                      (!task && (!canPrepareTask || !currentGroupQualityAdmitting(groupQuality)))
-                    }
-                    loading={isDispatchingJob}
-                    onClick={() => void handleDispatchActionJob()}
-                    icon={<Sparkles size={12} />}
-                    title={
-                      !effectivePrimaryClipAssetId
-                        ? '请先指定主视图机位'
-                        : '生成动作候选，核对或修改后提交'
-                    }
-                  >
-                    启动自动标注
-                  </Button>
                 ) : null}
               </div>
             </div>
 
+            {actionReadFailed ? (
+              <div role="status" className="capture-group-ai-banner">
+                动作分析状态暂时无法读取，正在重试；这不表示 AI 作业失败。
+              </div>
+            ) : null}
             {actionCandidates.length > 0 ? (
               allCandidatesAdopted ? (
                 <div className="capture-group-ai-adopted-box" style={{ marginTop: 8 }}>
@@ -864,11 +828,7 @@ export function CaptureGroupAnnotationPanel({
                 <span>
                   {actionJob?.status === 'SUCCEEDED'
                     ? '动作分析已完成，暂无候选。可继续人工标注；空结果不代表视频没有动作。'
-                    : !task
-                      ? canPrepareTask && currentGroupQualityAdmitting(groupQuality)
-                        ? '启动后将为你准备标注任务并生成动作草稿；核对或修改后提交。'
-                        : '请先完成质量判断，并由项目管理员准备标注任务。手部检测独立运行。'
-                      : '点击“启动自动标注”生成动作草稿；核对或修改后提交。手部检测独立运行。'}
+                    : '媒体就绪后后台自动生成动作草稿，无需分配负责人或手动启动。手部检测独立运行；最终标注仍需提交。'}
                 </span>
               </div>
             )}

@@ -3881,9 +3881,12 @@ paths:
       summary: Manually queue or retry an action candidate job for a project capture group
       description: >-
         Requires active project membership. Queues a new Qwen action candidate job
-        targeting the annotation task's selected primary clip, using its frozen label schema.
-        Missing task schema is rejected with 409; a missing primary clip is rejected with 404.
-        Automatic task creation and dispatch remain separate implementation work.
+        targeting the task's selected primary clip, or the first camera-index clip without one.
+        Uses the task's frozen schema when present, otherwise snapshots the published global schema.
+        A human task, assignee and human quality approval are not dispatch prerequisites.
+        Missing published schema returns 409; missing video returns 404. By default the backend
+        automatically queues media-processed videos across active projects. This endpoint remains
+        an authorized manual fallback and retry; it never creates a human revision or review.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -3912,7 +3915,8 @@ paths:
       description: >-
         Requires QWEN3_VL_ACTION, the leased worker, matching lease and attempt message ID.
         Exact receipt replay is idempotent; changed payload returns 409. This endpoint does
-        not create or dispatch Qwen jobs. Frozen task provenance validation remains pending.
+        not create or dispatch Qwen jobs. Validates labels against the job's frozen schema snapshot;
+        a human task may be absent. Accepted results remain machine candidates only.
       security: [{ aiWorkerBearerAuth: [] }]
       parameters:
         - $ref: "#/components/parameters/AiJobId"

@@ -13,6 +13,16 @@ import jakarta.persistence.LockModeType;
 
 interface ClipAssetRepository extends JpaRepository<ClipAsset, UUID> {
 
+	@Query("""
+			SELECT asset FROM ClipAsset asset
+			WHERE asset.status = com.medicationvideo.platform.assetcapture.ClipAssetStatus.INGESTED
+			  AND asset.deletedAt IS NULL AND asset.contentType LIKE 'video/%'
+			  AND EXISTS (SELECT stream.cameraStreamId FROM CameraStream stream
+			              WHERE stream.clipAssetId = asset.clipAssetId)
+			ORDER BY asset.createdAt, asset.clipAssetId
+			""")
+	List<ClipAsset> findActionProcessingInputs(org.springframework.data.domain.Pageable pageable);
+
 	List<ClipAsset> findAllByBatchIdOrderByClientFileIdAsc(UUID batchId);
 
 	Optional<ClipAsset> findByClipAssetIdAndProjectId(UUID clipAssetId, UUID projectId);

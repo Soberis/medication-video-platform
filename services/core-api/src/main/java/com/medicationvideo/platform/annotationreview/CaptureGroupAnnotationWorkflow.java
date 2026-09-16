@@ -143,61 +143,6 @@ class CaptureGroupAnnotationWorkflow {
 		return AnnotationTaskResponse.from(task, actorId, true, null, null, null, true);
 	}
 
-	/** Deployment-authorized preparation; never writes quality, Revision or Review. */
-	@Transactional
-	boolean prepareAutomatic(UUID projectId, UUID captureGroupId, String defaultAssignee) {
-		this.projectAccessService.lockAndRequireMember(projectId, defaultAssignee);
-		var current = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId, captureGroupId);
-		if (!current.isAdmitting())
-			return false;
-		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, captureGroupId);
-		var decisions = this.qualityReviewQueryService.findCurrentDecisions(projectId,
-				facts.views().stream().map(CaptureGroupView::clipAssetId).filter(Objects::nonNull).toList());
-		if (!viewSetStillCurrent(current.confirmedViewSet(), facts, decisions))
-			return false;
-		var existing = this.taskRepository.findForUpdateByProjectIdAndCaptureGroupId(projectId, captureGroupId);
-		var task = existing.orElse(null);
-		if (task != null) {
-			this.projectAccessService.lockAndRequireMember(projectId, task.getAssigneeActorId());
-			if (task.getStatus() != AnnotationTaskStatus.ASSIGNED
-					|| !Objects.equals(task.getGroupInputVersion(), current.inputVersion())
-					|| this.revisionRepository
-						.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(task.getAnnotationTaskId())
-						.isPresent())
-				return false;
-		}
-		var selectedId = task == null ? null : task.getPrimaryClipAssetId();
-		var eligible = facts.views()
-			.stream()
-			.filter(view -> view.present() && view.assetAvailable() && "INGESTED".equals(view.mediaStatus())
-					&& decisions.get(view.clipAssetId()) != null && decisions.get(view.clipAssetId()).isQualified()
-					&& (selectedId == null || selectedId.equals(view.clipAssetId())))
-			.toList();
-		if (eligible.size() != 1)
-			return false;
-		var primary = eligible.getFirst();
-		if (!this.assetQueryService.lockAndGetReviewFacts(projectId, primary.clipAssetId()).reviewable())
-			return false;
-		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		if (task == null) {
-			task = AnnotationTask.createForCaptureGroup(projectId, captureGroupId, defaultAssignee,
-					"AUTO_ACTION_PREPARATION", "auto-action-" + captureGroupId,
-					this.labelSchemaService.currentBinding(), current.captureGroupQualityReviewId(), current.revision(),
-					current.confirmedViewSet(), current.inputVersion(), now);
-		}
-		if (!task.hasPrimaryView()) {
-			task.selectPrimaryView(primary.clipAssetId(), primary.cameraNumber(), now);
-			this.taskRepository.saveAndFlush(task);
-			this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.SYSTEM, "AUTO_ACTION_PREPARATION",
-					projectId, "ANNOTATION_TASK_AUTO_PREPARED", "AnnotationTask", task.getAnnotationTaskId().toString(),
-					Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "CURRENT_QUALITY_ADMITTED",
-					"auto-action-" + captureGroupId, null, "DEPLOYMENT_ACTION_AUTO_POLICY",
-					Map.of("capture_group_id", captureGroupId.toString(), "assignee_actor_id",
-							task.getAssigneeActorId(), "primary_clip_asset_id", primary.clipAssetId().toString())));
-		}
-		return true;
-	}
-
 	AnnotationRevisionResponse submitRevision(UUID projectId, AnnotationTask task, String actorId,
 			String idempotencyKey, String requestId, String traceId, AnnotationRevisionSubmitCommand request,
 			Map<String, Object> document, String documentSha256) {

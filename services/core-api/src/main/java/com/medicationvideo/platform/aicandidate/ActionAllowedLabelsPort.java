@@ -14,8 +14,8 @@ public interface ActionAllowedLabelsPort {
 
 	/**
 	 * Resolves the immutable label context attached to the CaptureGroup's annotation
-	 * task. New scoped jobs require a task-bound snapshot; absent context must not be
-	 * replaced with a newer global schema. The default supports legacy unscoped callers.
+	 * task, or snapshots the published global schema when no task exists. Running jobs
+	 * retain their stored snapshot. The default supports legacy unscoped callers.
 	 */
 	default ActionLabelSnapshot resolveLabelSnapshot(UUID projectId, UUID captureGroupId) {
 		return new ActionLabelSnapshot(null, null, null, this.resolveAllowedLabels());

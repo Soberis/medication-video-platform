@@ -46,9 +46,18 @@ class ActionJobEnvelopeFactoryTests {
 	private final ActionJobEnvelopeFactory factory = new ActionJobEnvelopeFactory(this.assetCatalog, this.labelsPort);
 
 	@Test
-	void scopedJobRejectsMissingTaskSchemaInsteadOfUsingGlobalLabels() {
+	void scopedJobRejectsMissingPublishedSchemaInsteadOfUsingHardcodedLabels() {
 		when(this.labelsPort.resolveAllowedLabels()).thenReturn(List.of("draw_liquid"));
 		assertThrows(HandPoseJobException.class, () -> this.factory.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID));
+	}
+
+	@Test
+	void publishedSchemaAndDefaultVideoAreAvailableWithoutHumanTask() {
+		var snapshot = new ActionLabelSnapshot(null, UUID.randomUUID(), "c".repeat(64), List.of("draw_liquid"));
+		when(this.labelsPort.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID)).thenReturn(snapshot);
+		when(this.assetCatalog.resolvePrimaryClipAssetId(CAPTURE_GROUP_ID)).thenReturn(CLIP_ASSET_ID);
+		assertEquals(snapshot, this.factory.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID));
+		assertEquals(CLIP_ASSET_ID, this.factory.resolveTaskPrimaryClipAssetId(PROJECT_ID, CAPTURE_GROUP_ID));
 	}
 
 	@Test

@@ -29,16 +29,6 @@ public class CaptureGroupQualityQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<CurrentDecision> getCurrentPage(UUID projectId, int page, int size) {
-		return this.repository
-			.findCurrentPage(projectId,
-					org.springframework.data.domain.PageRequest.of(page, Math.min(100, Math.max(1, size))))
-			.stream()
-			.map(CurrentDecision::from)
-			.toList();
-	}
-
-	@Transactional(readOnly = true)
 	public List<CurrentDecision> getCurrentDecisions(UUID projectId, List<UUID> captureGroupIds) {
 		var distinctIds = captureGroupIds.stream().distinct().toList();
 		if (distinctIds.isEmpty()) {

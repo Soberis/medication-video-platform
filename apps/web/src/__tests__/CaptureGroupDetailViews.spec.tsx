@@ -16,7 +16,7 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
-  it('prepares an admitted task before dispatch without writing quality conclusions', async () => {
+  it('waits for background analysis without assigning a task or writing quality', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -24,19 +24,37 @@ describe('CaptureGroup detail views', () => {
     })
     const fetchMock = stubGroupDetail(group, {
       task: null,
-      taskAfterAssignment: groupTask(groupId, true),
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'UNKNOWN',
     })
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
       route: `/projects/${projectId}/capture-groups/${groupId}`,
-      session: { username: 'reviewer', role: 'ADMIN' },
     })
-    const user = userEvent.setup()
-    const button = await screen.findByRole('button', { name: '启动自动标注' })
-    await waitFor(() => expect(button).toBeEnabled())
-    await user.click(button)
+    expect(await screen.findByText('等待自动分析')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '启动自动标注' })).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT'),
+    ).toHaveLength(0)
+  })
+
+  it('retries a failed action job without creating a human task', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const fetchMock = stubGroupDetail(group, {
+      task: null,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+      actionCandidateJob: { job_id: 'synthetic-action-job', status: 'FAILED' },
+    })
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}`,
+    })
+    await userEvent.setup().click(await screen.findByRole('button', { name: '重试动作分析' }))
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.some(
@@ -48,65 +66,7 @@ describe('CaptureGroup detail views', () => {
     const writes = fetchMock.mock.calls.filter(
       ([, init]) => init?.method === 'POST' || init?.method === 'PUT',
     )
-    expect(String(writes[0]?.[0])).toContain('/annotation-tasks')
-    expect(writes.some(([url]) => String(url).includes('/quality-review'))).toBe(false)
-    expect(writes.some(([url]) => String(url).endsWith('/revisions'))).toBe(false)
-  })
-  it('keeps optional action pre-annotation manual while hand detection remains independent', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    const fetchMock = stubGroupDetail(group, {
-      task: null,
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'UNKNOWN',
-    })
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '启动自动标注' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'AI 自动填充' })).not.toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.some(
-        ([input, init]) =>
-          String(input).endsWith('/action-candidate-jobs') && init?.method === 'POST',
-      ),
-    ).toBe(false)
-  })
-
-  it('starts action pre-annotation for a task with a bound schema and primary video', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    const fetchMock = stubGroupDetail(group, {
-      task: groupTask(groupId, true),
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'UNKNOWN',
-    })
-    const user = userEvent.setup()
-
-    renderRoute(<CaptureGroupDetailView />, {
-      path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
-    })
-
-    await user.click(await screen.findByRole('button', { name: '启动自动标注' }))
-    await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) =>
-            String(input).endsWith('/action-candidate-jobs') && init?.method === 'POST',
-        ),
-      ).toBe(true),
-    )
+    expect(writes.every(([url]) => String(url).endsWith('/action-candidate-jobs'))).toBe(true)
   })
 
   it('keeps the default detail path focused on receipt, media and machine evidence', async () => {
@@ -214,7 +174,7 @@ describe('CaptureGroup detail views', () => {
     await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(await screen.findByText('未启动')).toBeInTheDocument()
+    expect(await screen.findByText('等待自动分析')).toBeInTheDocument()
   })
 
   it('requires explicit confirmation before finalizing a receiving group', async () => {

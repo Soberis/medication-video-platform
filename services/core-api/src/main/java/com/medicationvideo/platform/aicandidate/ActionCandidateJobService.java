@@ -334,27 +334,31 @@ public class ActionCandidateJobService {
 	}
 
 	@Transactional
-	public void queueAutomatically(UUID projectId, UUID captureGroupId, String authorizedAssignee) {
-		this.projectAccessService.lockAndRequireMember(projectId, authorizedAssignee);
-		var snapshot = this.actionEnvelopeFactory.resolveLabelSnapshot(projectId, captureGroupId);
+	public void queueAutomatically(UUID projectId, UUID clipAssetId) {
+		this.projectAccessService.lockActiveProjectForSystemProcessing(projectId);
+		var input = requireEligibleInput(projectId, clipAssetId);
+		var captureGroupId = resolveCaptureGroupId(clipAssetId);
+		if (captureGroupId == null)
+			return;
 		// Automatic reconciliation never spends another attempt on a terminal failure.
-		if (this.jobRepository
-			.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, snapshot.primaryClipAssetId())
+		if (this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(projectId, clipAssetId)
 			.stream()
 			.anyMatch(job -> AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())
-					&& java.util.Objects.equals(snapshot.annotationTaskId(), job.getAnnotationTaskId())
-					&& java.util.Objects.equals(snapshot.schemaDigest(), job.getLabelSchemaDigest())))
+					&& input.inputDigest().equals(job.getInputSha256())))
 			return;
-		queueActionCandidateJobInternal(projectId, captureGroupId, null, "AUTO_ACTION_PREPARATION",
-				"auto-action-" + snapshot.annotationTaskId(), "auto-action-" + captureGroupId, null,
-				AuditActorType.SYSTEM, "DEPLOYMENT_ACTION_AUTO_POLICY", "AI_ACTION_CANDIDATE_JOB_AUTO_QUEUED");
+		queueActionCandidateJobInternal(projectId, captureGroupId, clipAssetId, "AUTO_ACTION_PREPARATION",
+				"auto-action-" + clipAssetId, "auto-action-" + captureGroupId, null, AuditActorType.SYSTEM,
+				"MEDIA_INGESTED", "AI_ACTION_CANDIDATE_JOB_AUTO_QUEUED");
 	}
 
 	private ActionCandidateJobResponse queueActionCandidateJobInternal(UUID projectId, UUID captureGroupId,
 			UUID requestedClipAssetId, String actorId, String idempotencyKey, String requestId, String traceId,
 			AuditActorType auditActorType, String authorizationReference, String auditAction) {
 		var labelSnapshot = this.actionEnvelopeFactory.resolveLabelSnapshot(projectId, captureGroupId);
-		var clipAssetId = labelSnapshot.primaryClipAssetId();
+		var clipAssetId = requestedClipAssetId != null ? requestedClipAssetId
+				: this.actionEnvelopeFactory.resolveTaskPrimaryClipAssetId(projectId, captureGroupId);
+		if (clipAssetId == null)
+			clipAssetId = labelSnapshot.primaryClipAssetId();
 		if (clipAssetId == null) {
 			throw new HandPoseJobException("AI_ACTION_SOURCE_INVALID",
 					"No primary video stream found for capture group " + captureGroupId, 404);
@@ -384,7 +388,6 @@ public class ActionCandidateJobService {
 		for (var candidate : existingList) {
 			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(candidate.getAlgorithmKey())
 					&& inputDigest.equals(candidate.getInputSha256())
-					&& java.util.Objects.equals(labelSnapshot.annotationTaskId(), candidate.getAnnotationTaskId())
 					&& java.util.Objects.equals(labelSnapshot.schemaDigest(), candidate.getLabelSchemaDigest())) {
 				if (candidate.getStatus() == AiCandidateJobStatus.QUEUED
 						|| candidate.getStatus() == AiCandidateJobStatus.RUNNING

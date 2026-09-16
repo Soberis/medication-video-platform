@@ -39,12 +39,21 @@ public class ProjectAccessService {
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
+		lockActiveProjectForSystemProcessing(projectId);
+		return requireActiveMembership(projectId, actorId).getRole();
+	}
+
+	/**
+	 * Internal background processing only; does not grant user access or submission
+	 * rights.
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void lockActiveProjectForSystemProcessing(UUID projectId) {
 		var project = this.projectRepository.findForUpdate(projectId)
 			.orElseThrow(ProjectAccessService::projectNotFound);
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
 			throw projectNotFound();
 		}
-		return requireActiveMembership(projectId, actorId).getRole();
 	}
 
 	@Transactional(propagation = Propagation.MANDATORY)

@@ -44,17 +44,18 @@ class ActionJobEnvelopeFactory {
 
 	UUID resolveTaskPrimaryClipAssetId(UUID projectId, UUID captureGroupId) {
 		var snapshot = this.labelsPort == null ? null : this.labelsPort.resolveLabelSnapshot(projectId, captureGroupId);
-		return snapshot == null ? null : snapshot.primaryClipAssetId();
+		return snapshot != null && snapshot.primaryClipAssetId() != null ? snapshot.primaryClipAssetId()
+				: this.assetCatalog == null ? null : this.assetCatalog.resolvePrimaryClipAssetId(captureGroupId);
 	}
 
 	ActionLabelSnapshot resolveLabelSnapshot(UUID projectId, UUID captureGroupId) {
 		if (projectId != null && captureGroupId != null) {
 			var snapshot = this.labelsPort == null ? null
 					: this.labelsPort.resolveLabelSnapshot(projectId, captureGroupId);
-			if (snapshot == null || snapshot.annotationTaskId() == null || snapshot.labelSchemaId() == null
-					|| snapshot.schemaDigest() == null || snapshot.allowedLabels().isEmpty()) {
-				throw new HandPoseJobException("AI_ACTION_TASK_SCHEMA_REQUIRED",
-						"A task-bound label schema is required before generating action candidates.", 409);
+			if (snapshot == null || snapshot.labelSchemaId() == null || snapshot.schemaDigest() == null
+					|| snapshot.allowedLabels().isEmpty()) {
+				throw new HandPoseJobException("AI_ACTION_SCHEMA_REQUIRED",
+						"A published label schema is required before generating action candidates.", 409);
 			}
 			return snapshot;
 		}

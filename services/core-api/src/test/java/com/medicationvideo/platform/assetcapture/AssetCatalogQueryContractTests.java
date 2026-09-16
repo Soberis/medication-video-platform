@@ -44,6 +44,12 @@ class AssetCatalogQueryContractTests {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Autowired
+	private AssetCatalogQueryService assetCatalog;
+
+	@Autowired
+	private com.medicationvideo.platform.aicandidate.ActionCandidateJobService actionJobs;
+
 	@BeforeEach
 	void clearState() {
 		deleteAllState();
@@ -102,6 +108,32 @@ class AssetCatalogQueryContractTests {
 
 		assertEquals(1, migrationCount);
 		assertEquals(2, indexCount);
+	}
+
+	@Test
+	void mediaReadyVideosQueueAcrossProjectsWithoutHumanTasksAndAreReadable() throws Exception {
+		var first = insertSessionGraph(PROJECT_ID, "synthetic-auto-a", "HANDS", Instant.now());
+		var second = insertSessionGraph(OTHER_PROJECT_ID, "synthetic-auto-b", "HANDS", Instant.now());
+		insertSessionGraph(PROJECT_ID, "synthetic-pending", "HANDS", Instant.now());
+		this.jdbcTemplate.update("UPDATE clip_asset SET asset_status = 'INGESTED' WHERE clip_asset_id IN (?, ?)",
+				first.clipAssetId(), second.clipAssetId());
+		var inputs = this.assetCatalog.findActionProcessingInputs(0, 100);
+		assertEquals(2, inputs.size());
+		for (var input : inputs) {
+			this.actionJobs.queueAutomatically(input.projectId(), input.clipAssetId());
+			this.actionJobs.queueAutomatically(input.projectId(), input.clipAssetId());
+		}
+		assertEquals(2, this.jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM ai_job WHERE algorithm_key = 'QWEN3_VL_ACTION' AND annotation_task_id IS NULL AND label_schema_id IS NOT NULL",
+				Integer.class));
+		assertEquals(2, this.jdbcTemplate.queryForObject("SELECT count(*) FROM ai_job_attempt", Integer.class));
+		assertEquals(2, this.jdbcTemplate
+			.queryForObject("SELECT count(*) FROM outbox_event WHERE aggregate_type = 'AiJob'", Integer.class));
+		assertEquals(0, this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_task", Integer.class));
+		authorizedProjectGet("/capture-groups/" + first.captureSessionId() + "/action-candidate-job")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("QUEUED"))
+			.andExpect(jsonPath("$.clip_asset_id").value(first.clipAssetId().toString()));
 	}
 
 	private SessionGraph insertSessionGraph(UUID projectId, String deviceId, String cameraRole, Instant deviceTime) {
@@ -239,6 +271,13 @@ class AssetCatalogQueryContractTests {
 	}
 
 	private void deleteAllState() {
+		this.jdbcTemplate.update("DELETE FROM action_candidate");
+		this.jdbcTemplate.update("DELETE FROM candidate_annotation");
+		this.jdbcTemplate.update("DELETE FROM ai_job_result_inbox");
+		this.jdbcTemplate.update("DELETE FROM ai_job_attempt");
+		this.jdbcTemplate.update("DELETE FROM ai_job_idempotency_receipt");
+		this.jdbcTemplate.update("DELETE FROM ai_job");
+		this.jdbcTemplate.update("DELETE FROM outbox_event WHERE aggregate_type = 'AiJob'");
 		this.jdbcTemplate.update("DELETE FROM camera_stream");
 		this.jdbcTemplate.update("DELETE FROM camera_set_snapshot_member");
 		this.jdbcTemplate.update("DELETE FROM camera_set_snapshot");

@@ -98,6 +98,7 @@ export async function dispatchActionCandidateJob(
       // Proxies may return a non-JSON response.
     }
     const messages: Record<string, string> = {
+      AI_ACTION_SCHEMA_REQUIRED: '暂无可用的动作标签规范，请联系管理员发布标签。',
       AI_ACTION_TASK_SCHEMA_REQUIRED:
         '请先由项目管理员分配标注任务，绑定标签规范后再启动动作预标注。',
       AI_ACTION_SOURCE_INVALID: '请先为标注任务选择有效的主视频。',

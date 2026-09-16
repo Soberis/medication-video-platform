@@ -44,11 +44,13 @@ class AnnotationActionAllowedLabelsAdapter implements ActionAllowedLabelsPort {
 				return new ActionLabelSnapshot(value.getAnnotationTaskId(), value.getLabelSchemaId(),
 						value.getLabelSchemaDigest(), labels, value.getPrimaryClipAssetId());
 			}
-			return null;
 		}
 		var schema = this.schemaService.getGlobalCurrent();
 		return new ActionLabelSnapshot(null, schema.labelSchemaId(), schema.schemaDigest(),
-				schema.labels().stream().map(AnnotationLabelDefinitionResponse::labelId).toList());
+				this.schemaService.allowedPrimaryStepLabels(schema.labelSchemaId(), schema.schemaDigest())
+					.stream()
+					.sorted()
+					.toList());
 	}
 
 }

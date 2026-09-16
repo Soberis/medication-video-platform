@@ -44,7 +44,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 
 ## Delivery Order
 
-接入事实按下列顺序建立。V1.35 目标为自动准备任务与候选、人工可修改、最后显式提交；自动建任务和派发须单独实现验收，当前显式分配入口保留。动作候选使用合法任务的 schema，不等待 MediaPipe；候选初始化不创建正式 Revision 或 Review。
+接入事实按下列顺序建立。V1.35 目标为媒体就绪后默认自动生成候选、人工可修改、最后显式提交。AI 不依赖人工任务、负责人或人工质量；所有 ACTIVE 项目适用。已有任务使用绑定 schema，无任务时冻结已发布全局 schema，不等待 MediaPipe。人工任务在提交步骤按既有权限准备；候选初始化不创建正式 Revision 或 Review。真实 Worker 联调单独验收。
 
 ```text
 External Ingest / Upload

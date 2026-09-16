@@ -1,30 +1,22 @@
-# 后台自动动作任务准备
+# 媒体就绪后的自动动作分析
 
-启用后，Core API 在页面关闭时仍定期检查指定项目的现有质量事实。每轮最多读取 100 条，分页循环；重启后重新扫描。首次启用也会处理该项目已经满足条件的记录。
+依据：V1.35 §6.3 与 ADR 0004。机器预标注不需要负责人或人工任务；最终标签仍需显式人工提交、既有复核与导出准入。
 
-## 部署配置
+## 当前实现
 
-```properties
-platform.ai.action.auto.enabled=true
-platform.ai.action.auto.project-id=<目标项目 UUID>
-platform.ai.action.auto.assignee=<该项目现有成员账号>
-platform.ai.action.auto.poll-delay=PT10S
-```
+- `AutomaticActionSchedulingService` 默认开启，每 10 秒扫描最多 100 条媒体就绪视频，分页循环。扫描所有项目，逐条事务内检查项目 ACTIVE；归档项目不新建作业。
+- `AssetCatalogQueryService` 提供所属项目、视频 ID 的只读投影，仅选择未删除、INGESTED、有 CameraStream 绑定的视频。不依赖人工质量或 MediaPipe。
+- `ActionCandidateJobService.queueAutomatically` 在项目锁内去重，事务内写入 job、attempt、receipt 与 outbox。事务失败后下轮重试，某条失败不阻塞其他视频；重启后从头扫描，因此同时覆盖已有的未派发媒体。
+- 每个视角单独分析；已有任务使用其冻结 schema，无任务则快照已发布全局 PRIMARY_STEP 标签。机器作业不创建 AnnotationTask、Revision、Review 或质量结论。
+- 已有同源动作 job 不因扫描、创建任务或发布新标签再次创建；终态失败不会每轮自动花费新 attempt。既有 attempt 重试与授权重试 API 保留。
+- 页面自动查询候选；无任务时读取最小 camera index，有人工主视图时读取该视图。未编辑草稿可初始化；读取故障与作业失败分开提示，不覆盖人工编辑。
 
-默认关闭。启用时必须明确项目和负责人；不能猜测账号。需同时运行现有 RabbitMQ outbox relay 和 Action Worker。关闭 enabled 可停止新的自动准备；已经排队的作业仍按既有机制运行。
+## 运维
 
-## 行为与边界
+默认无需设置任何项目或负责人。全局暂停：`platform.ai.action.auto.enabled=false`；扫描间隔：`platform.ai.action.auto.poll-delay=PT10S`。运行现有 outbox relay、RabbitMQ 和 Action Worker 才能完成推理。
 
-- MediaPipe 仍在媒体入库后独立自动派发。
-- Action Candidate 等待当前有效的组级人工质量准入；不会自动写入“质量合格”。因此本功能实现的是准入之后的无人操作准备，未取消质量判断。
-- 无任务时使用配置的负责人；已有任务保持负责人、schema 和输入版本。失效输入须由管理员显式返工。
-- 仅有一个合格且媒体可用的视图时自动选为主视频。多个可选视图需要先明确选择。
-- 任务准备、作业与 outbox 写入在同一事务完成，失败回滚，下轮重查。项目锁串行化并发准备。
-- 已提交或有历史 Revision 的任务不自动重建或覆盖；已有动作作业不重复创建，失败作业通过既有受控重试处理。
-- Worker 结果仍只进入候选。用户打开页面后读取有效候选，生成可编辑草稿，最后显式提交。
+启用新版会为现有 ACTIVE 项目的尚未分析就绪视频排队，应预估积压与 Worker 容量；暂停调度不取消已经入队的作业。无需新增 migration 或消息字段，沿用 `ai-action-job.v1` 与既有 outbox、租约和结果契约。
 
-## 联调验收
+## 验证边界
 
-使用隔离合成视频：先完成媒体与质量准入，关闭页面，确认一个任务、一份绑定 schema 的动作 job 和 outbox；等待 Worker 消费、回写 SUCCEEDED；打开页面确认草稿。重复扫描不得增加作业，人工编辑不得被候选覆盖，未提交不得导出。
-
-真实模型准确率、GPU 执行和部署连通性必须由真实运行证据确认，单元测试仅验证调度和状态边界。
+合成测试覆盖无人工任务派发、跨项目扫描、重复派发、归档阻断、标签冻结与候选不创建人工事实。真实 Worker 的接收、推理、回传及模型质量仍需在获授权的合成联调环境验收；本地测试不能替代它。

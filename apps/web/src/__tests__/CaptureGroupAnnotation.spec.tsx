@@ -158,7 +158,7 @@ describe('CaptureGroup annotation workflow', () => {
     await waitFor(() =>
       expect(document.body.textContent).toContain('MediaPipe 在采样帧中未检测到手'),
     )
-    expect(screen.getByRole('button', { name: '启动自动标注' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '启动自动标注' })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
     expect(screen.queryByRole('button', { name: '载入动作草稿' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('开始时间（毫秒）')).toHaveValue(1)
