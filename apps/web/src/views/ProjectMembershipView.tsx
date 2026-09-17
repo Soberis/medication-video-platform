@@ -250,12 +250,11 @@ export default function ProjectMembershipView() {
                 rowKey="membership_id"
                 pagination={false}
                 tableLayout="fixed"
-                scroll={{ x: 500 }}
                 columns={[
                   {
                     title: '平台账号',
                     dataIndex: 'actor_id',
-                    width: 240,
+                    width: 200,
                     render: (actorId: string) => (
                       <span className="account-user-cell">
                         <span className="account-user-avatar" aria-hidden="true">
@@ -269,7 +268,7 @@ export default function ProjectMembershipView() {
                   },
                   {
                     title: '项目角色',
-                    width: 140,
+                    width: 120,
                     render: (_, row) => (
                       <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
                         {row.role === 'ADMIN' ? '项目管理员' : '成员'}

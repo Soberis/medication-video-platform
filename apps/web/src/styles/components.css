@@ -1736,6 +1736,7 @@
   gap: var(--app-space-24);
   align-items: start;
   margin-top: var(--app-space-16);
+  max-width: 1440px;
 }
 
 /* 网格子项一律允许收缩：`1fr` 的隐式最小尺寸是 auto，被卡片内容顶开时
