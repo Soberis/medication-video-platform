@@ -143,14 +143,14 @@ test('AccountManagement — management table columns stay bounded', async ({ pag
   ).toBeVisible()
   await expect(page.getByText('管理员不可停用')).toBeVisible()
 
-  // 双栏必须齐平：`.table-card` 的 16px margin-top 曾把右栏整卡推低，
-  // 两栏标题又因基线对齐再差 3px。
-  const leftCard = await page.locator('.account-create-panel').boundingBox()
-  const rightCard = await page.locator('.account-table-card').boundingBox()
-  expect(Math.abs(leftCard!.y - rightCard!.y)).toBeLessThanOrEqual(1)
-  const leftTitle = await page.getByRole('heading', { name: '创建账号' }).boundingBox()
-  const rightTitle = await page.getByRole('heading', { name: '平台账号列表' }).boundingBox()
-  expect(Math.abs(leftTitle!.y - rightTitle!.y)).toBeLessThanOrEqual(1)
+  // 单栏全宽工作台：创建入口整合在顶部，点击唤起模态弹窗，取消即关闭
+  const createButton = page.getByRole('button', { name: '创建账号' })
+  await expect(createButton).toBeVisible()
+  await createButton.click()
+  const modalDialog = page.getByRole('dialog', { name: '创建平台账号' })
+  await expect(modalDialog).toBeVisible()
+  await page.getByRole('button', { name: '取消' }).click()
+  await expect(modalDialog).toBeHidden()
 
   await expectNoHorizontalPageOverflow(page)
   await expectNoSeriousAxeViolations(page)
@@ -190,16 +190,10 @@ test('AccountManagement — no page-level horizontal scroll on narrow viewports'
     await page.goto('/admin/users')
     await expect(page.getByRole('heading', { name: '平台账号列表' })).toBeVisible()
 
-    // 窄屏不许出现页面级横滚：卡片自身必须收进视口，溢出只留给 antd 的表格容器。
-    // 1140 以下应改为上下堆叠；左卡若停在屏幕外，说明网格子项把整行顶开了。
-    const leftCard = await page.locator('.account-create-panel').boundingBox()
-    const rightCard = await page.locator('.account-table-card').boundingBox()
-    expect(leftCard!.x, `${width}: 左卡左缘应在视口内`).toBeGreaterThanOrEqual(0)
-    expect(leftCard!.x + leftCard!.width, `${width}: 左卡右缘应在视口内`).toBeLessThanOrEqual(width)
-    expect(rightCard!.x + rightCard!.width, `${width}: 右卡右缘应在视口内`).toBeLessThanOrEqual(width)
-    if (width < 1140) {
-      expect(Math.abs(leftCard!.x - rightCard!.x), `${width}: 应改为上下堆叠`).toBeLessThanOrEqual(1)
-    }
+    // 窄屏不许出现页面级横滚：卡片自身必须收进视口，操作始终可达。
+    const card = await page.locator('.account-table-card').boundingBox()
+    expect(card!.x, `${width}: 卡片左缘应在视口内`).toBeGreaterThanOrEqual(0)
+    expect(card!.x + card!.width, `${width}: 卡片右缘应在视口内`).toBeLessThanOrEqual(width)
 
     await expectNoHorizontalPageOverflow(page)
   }

@@ -1,5 +1,5 @@
-import { App as AntdApp, Button, Form, Input, Table } from 'antd'
-import { Lock, Search, User } from 'lucide-react'
+import { App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
+import { Lock, Plus, Search, User } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -31,6 +31,7 @@ export default function AccountManagementView() {
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isChanging, setIsChanging] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
@@ -66,6 +67,16 @@ export default function AccountManagementView() {
     }
   }, [loadAccounts])
 
+  function handleOpenCreate() {
+    form.resetFields()
+    setIsCreateModalOpen(true)
+  }
+
+  function handleCloseCreate() {
+    setIsCreateModalOpen(false)
+    form.resetFields()
+  }
+
   async function createAccount(values: AccountFields) {
     if (isSubmitting) return
     const username = values.username.trim()
@@ -80,7 +91,7 @@ export default function AccountManagementView() {
     setIsSubmitting(true)
     try {
       await createPlatformAccount(username, values.password)
-      form.resetFields()
+      handleCloseCreate()
       void message.success('账号已创建，请在项目成员页分配项目角色。')
       await loadAccounts()
     } catch (error) {
@@ -133,176 +144,193 @@ export default function AccountManagementView() {
         title="平台账号"
         description="平台账号加入项目后，才可访问项目数据。"
         actions={
-          <RefreshButton loading={loadState === 'loading'} onClick={() => void loadAccounts()} />
-        }
-      />
-      <div className="account-management-grid">
-        <Section
-          className="account-create-panel working-surface"
-          title="创建账号"
-          titleId="account-create-title"
-        >
-          <Form<AccountFields>
-            form={form}
-            layout="vertical"
-            className="account-form"
-            onFinish={(values) => void createAccount(values)}
-          >
-            <div className="account-form-fields">
-              <Form.Item
-                label="账号"
-                name="username"
-                validateFirst
-                rules={[
-                  { required: true, whitespace: true, message: '请输入账号。' },
-                  {
-                    validator: (_, value: unknown) => {
-                      if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
-                      return usernamePattern.test(value.trim())
-                        ? Promise.resolve()
-                        : Promise.reject(new Error(usernameConstraintMessage))
-                    },
-                  },
-                ]}
-                extra="3 至 128 位；仅限字母、数字和 . _ : @ -"
-              >
-                <Input
-                  prefix={<User size={14} className="account-field-icon" />}
-                  autoComplete="username"
-                  maxLength={128}
-                  placeholder="输入平台账号"
-                />
-              </Form.Item>
-              <Form.Item
-                label="初始密码"
-                name="password"
-                validateFirst
-                rules={[
-                  { required: true, message: '请输入初始密码。' },
-                  {
-                    validator: (_, value: unknown) => {
-                      if (typeof value !== 'string' || value.length === 0) return Promise.resolve()
-                      return value.length >= 12 && value.length <= 72
-                        ? Promise.resolve()
-                        : Promise.reject(new Error(passwordConstraintMessage))
-                    },
-                  },
-                ]}
-                extra="12 至 72 个字符"
-              >
-                <Input.Password
-                  prefix={<Lock size={14} className="account-field-icon" />}
-                  autoComplete="new-password"
-                  maxLength={72}
-                  placeholder="输入初始密码"
-                />
-              </Form.Item>
-            </div>
-            <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>
+          <>
             <Button
-              className="account-create-submit"
-              htmlType="submit"
               type="primary"
-              loading={isSubmitting}
+              icon={<Plus size={14} />}
+              onClick={handleOpenCreate}
             >
               创建账号
             </Button>
-          </Form>
-        </Section>
-        <div className="account-list-column">
-          {loadState === 'loading' ? (
-            <LoadingState>正在加载平台账号…</LoadingState>
-          ) : null}
-          {loadState === 'error' ? (
-            <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
-          ) : null}
-          {loadState === 'success' && accounts.length === 0 ? (
-            <EmptyState description="当前没有平台账号。" />
-          ) : null}
-          {loadState === 'success' && accounts.length > 0 ? (
-            <Section
-              className="table-card account-table-card working-surface"
-              title="平台账号列表"
-              titleId="account-list-title"
-              actions={
-                <div className="account-table-toolbar">
-                  <Input
-                    size="small"
-                    className="account-search-input"
-                    placeholder="搜索账号…"
-                    prefix={<Search size={13} className="account-search-icon" />}
-                    allowClear
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ width: 160 }}
-                  />
-                  <span className="account-count-badge">共 {accounts.length} 个账号</span>
-                </div>
-              }
-            >
-              <Table<PlatformAccount>
-                dataSource={filteredAccounts}
-                rowKey="username"
-                pagination={false}
-                tableLayout="fixed"
-                columns={[
-                  {
-                    title: '账号',
-                    dataIndex: 'username',
-                    width: 200,
-                    render: (username: string) => (
-                      <span className="account-user-cell">
-                        <span className="account-user-avatar" aria-hidden="true">
-                          {username.slice(0, 1).toUpperCase()}
-                        </span>
-                        <strong className="account-username" title={username}>
-                          {username}
-                        </strong>
-                      </span>
-                    ),
-                  },
-                  {
-                    title: '全局角色',
-                    width: 110,
-                    render: (_, row) => (
-                      <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
-                        {row.role === 'ADMIN' ? '管理员' : '成员'}
-                      </StatusBadge>
-                    ),
-                  },
-                  {
-                    title: '登录状态',
-                    width: 100,
-                    render: (_, row) => (
-                      <StatusBadge tone={row.enabled ? 'success' : 'error'}>
-                        {row.enabled ? '启用' : '停用'}
-                      </StatusBadge>
-                    ),
-                  },
-                  {
-                    // 末列不给宽度：自适应吸收空间，保证左侧账号与角色、状态相邻，且无横滚条。
-                    title: '操作',
-                    render: (_, row) =>
-                      row.role === 'MEMBER' ? (
-                        <Button
-                          type="link"
-                          danger={row.enabled}
-                          disabled={isChanging}
-                          aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
-                          onClick={() => toggleEnabled(row)}
-                        >
-                          {row.enabled ? '停用' : '启用'}
-                        </Button>
-                      ) : (
-                        <span className="cell-secondary">管理员不可停用</span>
-                      ),
-                  },
-                ]}
+            <RefreshButton loading={loadState === 'loading'} onClick={() => void loadAccounts()} />
+          </>
+        }
+      />
+
+      {loadState === 'loading' ? (
+        <LoadingState>正在加载平台账号…</LoadingState>
+      ) : null}
+
+      {loadState === 'error' ? (
+        <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
+      ) : null}
+
+      {loadState === 'success' && accounts.length === 0 ? (
+        <EmptyState description="当前没有平台账号。">
+          <Button type="primary" icon={<Plus size={14} />} onClick={handleOpenCreate}>
+            创建账号
+          </Button>
+        </EmptyState>
+      ) : null}
+
+      {loadState === 'success' && accounts.length > 0 ? (
+        <Section
+          className="table-card account-table-card working-surface"
+          title="平台账号列表"
+          titleId="account-list-title"
+          actions={
+            <div className="account-table-toolbar">
+              <Input
+                size="small"
+                className="account-search-input"
+                placeholder="搜索账号…"
+                prefix={<Search size={13} className="account-search-icon" />}
+                allowClear
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ width: 180 }}
               />
-            </Section>
-          ) : null}
-        </div>
-      </div>
+              <span className="account-count-badge">共 {accounts.length} 个账号</span>
+            </div>
+          }
+        >
+          <Table<PlatformAccount>
+            dataSource={filteredAccounts}
+            rowKey="username"
+            pagination={false}
+            tableLayout="fixed"
+            columns={[
+              {
+                title: '账号',
+                dataIndex: 'username',
+                width: 240,
+                render: (username: string) => (
+                  <span className="account-user-cell">
+                    <span className="account-user-avatar" aria-hidden="true">
+                      {username.slice(0, 1).toUpperCase()}
+                    </span>
+                    <strong className="account-username" title={username}>
+                      {username}
+                    </strong>
+                  </span>
+                ),
+              },
+              {
+                title: '全局角色',
+                width: 120,
+                render: (_, row) => (
+                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                    {row.role === 'ADMIN' ? '管理员' : '成员'}
+                  </StatusBadge>
+                ),
+              },
+              {
+                title: '登录状态',
+                width: 120,
+                render: (_, row) => (
+                  <StatusBadge tone={row.enabled ? 'success' : 'error'}>
+                    {row.enabled ? '启用' : '停用'}
+                  </StatusBadge>
+                ),
+              },
+              {
+                // 末列不给宽度：自适应吸收空间，保证左侧账号与角色、状态相邻，且无横滚条。
+                title: '操作',
+                render: (_, row) =>
+                  row.role === 'MEMBER' ? (
+                    <Button
+                      type="link"
+                      danger={row.enabled}
+                      disabled={isChanging}
+                      aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
+                      onClick={() => toggleEnabled(row)}
+                    >
+                      {row.enabled ? '停用' : '启用'}
+                    </Button>
+                  ) : (
+                    <span className="cell-secondary">管理员不可停用</span>
+                  ),
+              },
+            ]}
+          />
+        </Section>
+      ) : null}
+
+      <Modal
+        title="创建平台账号"
+        open={isCreateModalOpen}
+        onCancel={handleCloseCreate}
+        footer={null}
+        destroyOnHidden
+        width={480}
+      >
+        <Form<AccountFields>
+          form={form}
+          layout="vertical"
+          className="management-modal-form"
+          onFinish={(values) => void createAccount(values)}
+        >
+          <Form.Item
+            label="账号"
+            name="username"
+            validateFirst
+            rules={[
+              { required: true, whitespace: true, message: '请输入账号。' },
+              {
+                validator: (_, value: unknown) => {
+                  if (typeof value !== 'string' || value.trim() === '') return Promise.resolve()
+                  return usernamePattern.test(value.trim())
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(usernameConstraintMessage))
+                },
+              },
+            ]}
+            extra="3 至 128 位；仅限字母、数字和 . _ : @ -"
+          >
+            <Input
+              prefix={<User size={14} className="account-field-icon" />}
+              autoComplete="username"
+              maxLength={128}
+              placeholder="输入平台账号"
+            />
+          </Form.Item>
+          <Form.Item
+            label="初始密码"
+            name="password"
+            validateFirst
+            rules={[
+              { required: true, message: '请输入初始密码。' },
+              {
+                validator: (_, value: unknown) => {
+                  if (typeof value !== 'string' || value.length === 0) return Promise.resolve()
+                  return value.length >= 12 && value.length <= 72
+                    ? Promise.resolve()
+                    : Promise.reject(new Error(passwordConstraintMessage))
+                },
+              },
+            ]}
+            extra="12 至 72 个字符"
+          >
+            <Input.Password
+              prefix={<Lock size={14} className="account-field-icon" />}
+              autoComplete="new-password"
+              maxLength={72}
+              placeholder="输入初始密码"
+            />
+          </Form.Item>
+          <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>
+          <div className="management-modal-actions">
+            <Button onClick={handleCloseCreate}>取消</Button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={isSubmitting}
+            >
+              确认创建
+            </Button>
+          </div>
+        </Form>
+      </Modal>
     </div>
   )
 }

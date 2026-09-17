@@ -294,6 +294,35 @@ describe('App', () => {
     expect(within(navigation).queryByText('上传排障')).not.toBeInTheDocument()
   })
 
+  it('preserves the active project context in the sidebar when navigating to account management', () => {
+    const testProjectId = '30000000-0000-4000-8000-000000000001'
+    sessionStorage.setItem('mvp:active_project_id', testProjectId)
+    renderRouter(
+      [
+        {
+          path: '/',
+          element: <AppShell />,
+          children: [
+            { path: 'admin/users', element: <div>平台账号页面</div> },
+            { path: 'projects/:projectId/members', element: <div>项目成员页面</div> },
+          ],
+        },
+      ],
+      ['/admin/users'],
+      { username: 'platform-admin', role: 'ADMIN' },
+    )
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '项目成员' })).toHaveAttribute(
+      'href',
+      paths.memberships(testProjectId),
+    )
+    expect(within(navigation).getByRole('link', { name: '视频' })).toHaveAttribute(
+      'href',
+      paths.captureGroups(testProjectId),
+    )
+  })
+
   it('lets users collapse and expand the canonical sidebar', async () => {
     renderRouter(
       [

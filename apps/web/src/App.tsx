@@ -80,14 +80,47 @@ export default function AppShell() {
   const isManagementRoute = managementRoutePatterns.some(
     (path) => matchPath({ path, end: true }, location.pathname) !== null,
   )
+
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('mvp:active_project_id') ?? ''
+    } catch {
+      return ''
+    }
+  })
+
+  // 当当前路由携带明确的项目标识时，在渲染周期同步活跃项目，免去额外 effect 与级联重渲染
+  if (projectId && projectId !== activeProjectId) {
+    setActiveProjectId(projectId)
+    try {
+      sessionStorage.setItem('mvp:active_project_id', projectId)
+    } catch {
+      // ignore
+    }
+  }
+
+  // 当用户显式回到项目选择总览根页（/projects）时，不固化特定项目的视频和成员上下文；
+  // 但在跨入账号管理、标签库、上传等全局设置/管理页时，延续此前正在处理的项目上下文，
+  // 避免“点击账号管理后项目成员消失、必须重新进入项目”的割裂感。
+  const isProjectSelectionRoot =
+    matchPath({ path: paths.projects, end: true }, location.pathname) !== null
+  const contextualProjectId = isProjectSelectionRoot ? '' : projectId || activeProjectId
+
   const isVideoManagementContext =
-    Boolean(projectId) &&
-    [paths.captureGroups(projectId), '/projects/:projectId/capture-groups/:captureGroupId'].some(
-      (path) => matchPath({ path, end: true }, location.pathname) !== null,
-    )
+    Boolean(contextualProjectId) &&
+    [
+      paths.captureGroups(contextualProjectId),
+      '/projects/:projectId/capture-groups/:captureGroupId',
+    ].some((path) => matchPath({ path, end: true }, location.pathname) !== null)
 
   async function handleLogout() {
     try {
+      try {
+        sessionStorage.removeItem('mvp:active_project_id')
+      } catch {
+        // ignore
+      }
+      setActiveProjectId('')
       await auth.logout()
       await navigate(paths.login, { replace: true })
     } catch {
@@ -142,9 +175,9 @@ export default function AppShell() {
                 <FolderKanban {...iconProps} />
                 <span className="sidebar-label">项目</span>
               </NavLink>
-              {projectId ? (
+              {contextualProjectId ? (
                 <Link
-                  to={paths.captureGroups(projectId)}
+                  to={paths.captureGroups(contextualProjectId)}
                   aria-current={isVideoManagementContext ? 'page' : undefined}
                   aria-label="视频"
                   title="视频"
@@ -173,10 +206,10 @@ export default function AppShell() {
                   <ListChecks {...iconProps} />
                   <span className="sidebar-label">标签库</span>
                 </NavLink>
-                {projectId && isAdministrator ? (
+                {contextualProjectId && isAdministrator ? (
                   <NavLink
                     end
-                    to={paths.memberships(projectId)}
+                    to={paths.memberships(contextualProjectId)}
                     aria-label="项目成员"
                     title="项目成员"
                   >

@@ -295,13 +295,14 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--app-space-8);
+  gap: var(--app-space-12);
 }
 
 .page-heading-actions {
   max-width: 100%;
   min-width: 0;
   justify-content: flex-end;
+  gap: var(--app-space-12);
 }
 
 .page-toolbar > * {
@@ -1035,17 +1036,19 @@
 }
 
 .status-badge {
+  display: inline-flex;
+  align-items: center;
   max-width: 100%;
   margin-inline-end: 0;
   padding: 2px var(--app-space-8);
-  border-radius: 999px;
+  border-radius: var(--app-radius-xs);
   color: var(--app-color-foreground-secondary);
   background: var(--app-color-neutral-surface);
   font-size: var(--app-font-size-caption);
   font-weight: var(--app-font-weight-label);
   line-height: var(--app-line-height-caption);
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .status-badge-success {
@@ -1726,6 +1729,10 @@
 
 .account-management-page,
 .project-membership-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-16);
+  max-width: 1440px;
   width: 100%;
 }
 
@@ -1758,23 +1765,28 @@
 /* 表格卡片让溢出可见：`overflow: hidden` 会裁掉 antd 的 scroll.x 滚动条，
    导致窄栏下末列（操作）被裁且无法滚动。圆角由 `.ant-table` 自身承担。 */
 .account-management-grid .table-card,
-.membership-management-grid .table-card {
+.membership-management-grid .table-card,
+.account-table-card,
+.membership-list-panel,
+.membership-table-card {
   overflow: visible;
 }
 
-/* 双栏对齐：`.table-card` 自带的 16px margin-top 是给「表格卡片紧跟上方内容」
-   的单栏页面用的间距；放进双栏网格后它只把右栏卡片整体推低，与左栏卡片错开。
-   网格本身已有 margin-top，这里归零，两栏卡片顶边齐平。 */
+/* 对齐与间距：单栏全宽浑然一体，卡片顶边紧跟页面头部。 */
 .account-management-grid .table-card,
-.membership-management-grid .table-card {
+.membership-management-grid .table-card,
+.account-table-card,
+.membership-list-panel,
+.membership-table-card {
   margin-top: 0;
 }
 
-/* 两栏标题同一水平线：左栏标题直接坐在卡片内边距上（行高 = 标题行高），
-   右栏标题行还要容纳 28px 的检索框，按基线对齐会把标题压得比左栏低 3px。
-   统一行高为控件高度并居中，两栏标题因此落在同一条基线上。 */
+/* 两栏标题同一水平线：统一行高为控件高度并居中。 */
 .account-management-grid .workspace-section-heading,
-.membership-management-grid .workspace-section-heading {
+.membership-management-grid .workspace-section-heading,
+.account-table-card .workspace-section-heading,
+.membership-list-panel .workspace-section-heading,
+.membership-table-card .workspace-section-heading {
   align-items: center;
   min-height: var(--app-control-height-compact);
 }
@@ -1820,6 +1832,35 @@
   font-size: var(--app-font-size-helper);
   color: var(--app-color-foreground-muted);
   white-space: nowrap;
+}
+
+.table-cell-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-12);
+}
+
+.table-cell-actions .ant-btn-link {
+  padding: 0;
+  height: auto;
+  line-height: inherit;
+}
+
+.management-modal-form {
+  margin-top: var(--app-space-8);
+}
+
+.management-modal-form .form-hint {
+  margin: var(--app-space-12) 0 var(--app-space-16);
+  font-size: var(--app-font-size-helper);
+  color: var(--app-color-foreground-muted);
+}
+
+.management-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--app-space-12);
+  margin-top: var(--app-space-24);
 }
 
 .account-user-cell {

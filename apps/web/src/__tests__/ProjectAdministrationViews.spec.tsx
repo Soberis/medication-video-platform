@@ -20,6 +20,7 @@ describe('ProjectMembershipView', () => {
     renderMembership('ADMIN')
 
     expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '添加成员' }))
     await user.click(screen.getByRole('button', { name: '保存成员' }))
 
     expect(await screen.findByText('请选择平台账号。')).toBeInTheDocument()
@@ -39,6 +40,7 @@ describe('ProjectMembershipView', () => {
     renderMembership('ADMIN')
 
     expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '添加成员' }))
     await user.click(screen.getByRole('combobox', { name: '平台账号' }))
     await user.click(
       await screen.findByText('reviewer（平台成员）', {
@@ -67,7 +69,7 @@ describe('ProjectMembershipView', () => {
     renderMembership('ADMIN')
 
     expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '保存成员' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '添加成员' })).toBeInTheDocument()
     expect(screen.getByText('项目管理员')).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '状态' })).not.toBeInTheDocument()
     expect(screen.queryByText('有效')).not.toBeInTheDocument()
@@ -79,7 +81,7 @@ describe('ProjectMembershipView', () => {
 
     expect(await screen.findByText('当前账号无权管理成员')).toBeInTheDocument()
     expect(screen.getByText('只有项目管理员可以添加、修改或移除成员。')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '保存成员' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '添加成员' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: '操作' })).not.toBeInTheDocument()
   })
 
@@ -113,6 +115,7 @@ describe('AccountManagementView', () => {
 
     await screen.findByRole('heading', { name: '平台账号列表' })
     await user.click(screen.getByRole('button', { name: '创建账号' }))
+    await user.click(screen.getByRole('button', { name: '确认创建' }))
 
     expect(await screen.findByText('请输入账号。')).toBeInTheDocument()
   })
@@ -123,8 +126,9 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
-    await user.type(screen.getByLabelText('账号'), 'reviewer')
     await user.click(screen.getByRole('button', { name: '创建账号' }))
+    await user.type(screen.getByLabelText('账号'), 'reviewer')
+    await user.click(screen.getByRole('button', { name: '确认创建' }))
 
     expect(await screen.findByText('请输入初始密码。')).toBeInTheDocument()
   })
@@ -135,9 +139,10 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
+    await user.click(screen.getByRole('button', { name: '创建账号' }))
     await user.type(screen.getByLabelText('账号'), 'invalid username')
     await user.type(screen.getByLabelText('初始密码'), 'short')
-    await user.click(screen.getByRole('button', { name: '创建账号' }))
+    await user.click(screen.getByRole('button', { name: '确认创建' }))
 
     expect(
       await screen.findByText('账号需为 3 至 128 位字母、数字或 . _ : @ -。'),
@@ -170,9 +175,10 @@ describe('AccountManagementView', () => {
     renderRoute(<AccountManagementView />, { route: '/admin/users', path: '/admin/users' })
 
     await screen.findByRole('heading', { name: '平台账号列表' })
+    await user.click(screen.getByRole('button', { name: '创建账号' }))
     await user.type(screen.getByLabelText('账号'), 'reviewer')
     await user.type(screen.getByLabelText('初始密码'), 'synthetic-password')
-    await user.click(screen.getByRole('button', { name: '创建账号' }))
+    await user.click(screen.getByRole('button', { name: '确认创建' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
