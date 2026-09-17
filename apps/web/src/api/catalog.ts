@@ -37,20 +37,6 @@ export interface ClipAssetRead {
   updated_at: string
 }
 
-export interface ClipAssetActivityItem {
-  event_id: string
-  occurred_at_utc: string
-  actor_type: 'USER' | 'SERVICE' | 'SYSTEM'
-  actor_id: string
-  action: string
-  object_type: string
-  object_id: string
-  object_version: string | null
-  outcome: 'SUCCEEDED' | 'DENIED' | 'FAILED'
-  reason_code: string
-  request_id: string
-}
-
 export interface ClipAssetPlaybackGrant {
   grant_id: string
   purpose: 'DATA_REVIEW'
@@ -144,11 +130,6 @@ export interface MediaReport {
   created_at: string
 }
 
-export interface CatalogPage<T> {
-  items: T[]
-  next_cursor: string | null
-}
-
 interface ApiErrorBody {
   error_code?: unknown
   error_message?: unknown
@@ -157,7 +138,6 @@ interface ApiErrorBody {
 }
 
 const errorMessages: Record<string, string> = {
-  INVALID_CURSOR: '分页位置已经失效，请重新加载第一页。',
   INVALID_TIME_RANGE: '时间范围无效，开始时间必须早于结束时间。',
   CAPTURE_SESSION_NOT_FOUND: '未找到该采集记录，或它不属于当前项目。',
   CLIP_ASSET_NOT_FOUND: '未找到该视频，或它不属于当前项目。',
@@ -212,20 +192,6 @@ export function getClipAsset(projectId: string, clipAssetId: string, signal?: Ab
   )
 }
 
-export function listClipAssetActivity(
-  projectId: string,
-  clipAssetId: string,
-  cursor: string | null,
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams({ limit: '20' })
-  add(query, 'cursor', cursor ?? undefined)
-  return readJson<CatalogPage<ClipAssetActivityItem>>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/activity?${query.toString()}`,
-    signal,
-  )
-}
-
 export function getClipAssetMediaReport(
   projectId: string,
   clipAssetId: string,
@@ -235,25 +201,6 @@ export function getClipAssetMediaReport(
     `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-report`,
     signal,
   )
-}
-
-export async function deleteClipAsset(projectId: string, clipAssetId: string, reason: string) {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}`,
-    {
-      method: 'DELETE',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'Idempotency-Key': crypto.randomUUID(),
-        ...csrfHeaders(),
-      },
-      body: JSON.stringify({ reason }),
-      cache: 'no-store',
-    },
-  )
-  if (response.status === 204) return
-  throw await toCatalogError(response)
 }
 
 export async function authorizeClipAssetPlayback(
@@ -355,9 +302,3 @@ async function toCatalogError(response: Response): Promise<CatalogApiError> {
   )
 }
 
-function add(query: URLSearchParams, name: string, value: string | undefined) {
-  const normalized = value?.trim()
-  if (normalized) {
-    query.set(name, normalized)
-  }
-}

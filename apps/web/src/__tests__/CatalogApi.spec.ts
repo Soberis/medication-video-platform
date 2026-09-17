@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   authorizeClipAssetPlayback,
-  deleteClipAsset,
-  listClipAssetActivity,
   requestHandPoseCandidates,
   requestClipAssetMediaProbe,
 } from '@/api/catalog'
@@ -14,24 +12,6 @@ const clipAssetId = '50000000-0000-4000-8000-000000000001'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('catalog API', () => {
-  it('soft deletes a clip asset with a fresh idempotency key and a reason', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
-    vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValue('delete-idempotency-key-0001') })
-
-    await expect(deleteClipAsset(projectId, clipAssetId, '上传错误')).resolves.toBeUndefined()
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}`,
-      expect.objectContaining({
-        method: 'DELETE',
-        body: JSON.stringify({ reason: '上传错误' }),
-        headers: expect.objectContaining({
-          'Idempotency-Key': 'delete-idempotency-key-0001',
-        }),
-      }),
-    )
-  })
 
   it('requests a no-store data-review playback grant without persisting the URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
@@ -127,48 +107,5 @@ describe('catalog API', () => {
       }),
     )
   })
-
-  it('reads minimized asset activity with an opaque cursor and no-store semantics', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              event_id: '71000000-0000-4000-8000-000000000001',
-              occurred_at_utc: '2026-07-29T02:00:00Z',
-              actor_type: 'USER',
-              actor_id: 'reviewer',
-              action: 'CLIP_ASSET_PLAYBACK_GRANTED',
-              object_type: 'ClipAsset',
-              object_id: clipAssetId,
-              object_version: '1',
-              outcome: 'SUCCEEDED',
-              reason_code: 'DATA_REVIEW',
-              request_id: 'playback-request-0001',
-            },
-          ],
-          next_cursor: 'opaque-next-cursor',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    const controller = new AbortController()
-
-    await expect(
-      listClipAssetActivity(projectId, clipAssetId, 'opaque-previous-cursor', controller.signal),
-    ).resolves.toMatchObject({
-      items: [{ action: 'CLIP_ASSET_PLAYBACK_GRANTED' }],
-      next_cursor: 'opaque-next-cursor',
-    })
-
-    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
-    const requestUrl = new URL(url, 'http://localhost')
-    expect(requestUrl.pathname).toBe(
-      `/api/v1/projects/${projectId}/clip-assets/${clipAssetId}/activity`,
-    )
-    expect(requestUrl.searchParams.get('limit')).toBe('20')
-    expect(requestUrl.searchParams.get('cursor')).toBe('opaque-previous-cursor')
-    expect(options).toMatchObject({ method: 'GET', cache: 'no-store', signal: controller.signal })
-  })
 })
+

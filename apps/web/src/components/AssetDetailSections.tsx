@@ -69,8 +69,8 @@ export function PlaybackCard({
   const videoStageRef = useRef<HTMLDivElement | null>(null)
   const [playbackTimeMs, setPlaybackTimeMs] = useState(0)
   const [viewportSize, setViewportSize] = useState(() => ({
-    width: typeof window === 'undefined' ? 1440 : window.innerWidth,
-    height: typeof window === 'undefined' ? 900 : window.innerHeight,
+    width: typeof window === 'undefined' || !window.innerWidth ? 1440 : window.innerWidth,
+    height: typeof window === 'undefined' || !window.innerHeight ? 900 : window.innerHeight,
   }))
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState('')
@@ -83,8 +83,12 @@ export function PlaybackCard({
     // The stage should use the available work-column width. Active annotation
     // keeps a viewport-height cap so the editor remains close at hand; completed
     // read-only evidence can expand to the full workspace width.
-    const maxWidth = Math.max(320, viewportSize.width - 80)
-    const maxHeight = Math.min(600, Math.max(280, viewportSize.height - 240))
+    const safeWidth =
+      Number.isFinite(viewportSize.width) && viewportSize.width > 0 ? viewportSize.width : 1440
+    const safeHeight =
+      Number.isFinite(viewportSize.height) && viewportSize.height > 0 ? viewportSize.height : 900
+    const maxWidth = Math.max(320, safeWidth - 80)
+    const maxHeight = Math.min(600, Math.max(280, safeHeight - 240))
     let width = maxWidth
     let height = width / aspectRatio
     if (!expandToWorkspace && height > maxHeight) {
@@ -93,8 +97,8 @@ export function PlaybackCard({
     }
     return {
       aspectRatio,
-      height: Math.round(height),
-      width: Math.round(width),
+      height: Math.round(height) || 360,
+      width: Math.round(width) || 640,
     }
   }, [expandToWorkspace, viewportSize])
 
@@ -138,7 +142,10 @@ export function PlaybackCard({
 
   useEffect(() => {
     const onResize = () => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight })
+      setViewportSize({
+        width: window.innerWidth || 1440,
+        height: window.innerHeight || 900,
+      })
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
