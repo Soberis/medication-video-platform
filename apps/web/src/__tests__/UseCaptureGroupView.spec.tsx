@@ -205,6 +205,37 @@ describe('useCaptureGroupView MediaPipe refresh', () => {
     expect(result.current.playbackState).toBe('waiting')
   })
 
+  it('renews playback before a grant expires without entering an expired state', async () => {
+    const initialGrant = {
+      ...playbackGrant(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    }
+    const renewedGrant = {
+      ...playbackGrant(),
+      grant_id: 'grant-renewed',
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    }
+    vi.mocked(authorizeClipAssetPlayback)
+      .mockResolvedValueOnce(initialGrant)
+      .mockResolvedValueOnce(renewedGrant)
+
+    const { result } = renderHook(() => useCaptureGroupView(projectId, view(firstClipAssetId, 1)))
+    await settleInitialView()
+
+    await act(async () => {
+      await result.current.startPlayback()
+    })
+    expect(result.current.playbackGrant).toBe(initialGrant)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(31_000)
+    })
+
+    expect(authorizeClipAssetPlayback).toHaveBeenCalledTimes(2)
+    expect(result.current.playbackGrant).toBe(renewedGrant)
+    expect(result.current.playbackState).toBe('waiting')
+  })
+
   it('polls a queued job and continues while it is running', async () => {
     latestCandidateMock()
       .mockResolvedValueOnce(candidateResponse(firstClipAssetId, 'QUEUED'))

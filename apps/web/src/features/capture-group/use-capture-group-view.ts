@@ -51,6 +51,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
   const playbackRequest = useRef<AbortController | null>(null)
   const selectedClipAssetIdRef = useRef(selectedClipAssetId)
   const playbackExpiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renewPlaybackGrantRef = useRef<() => void>(() => undefined)
 
   useEffect(() => {
     selectedClipAssetIdRef.current = selectedClipAssetId
@@ -72,6 +73,44 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     setPlaybackMessage('')
     setIsRequestingPlayback(false)
   }, [clearPlaybackExpiryTimer])
+
+  const schedulePlaybackRenewal = useCallback(
+    (expiresAt: string) => {
+      clearPlaybackExpiryTimer()
+      const remaining = new Date(expiresAt).getTime() - Date.now()
+      const renewalDelay = Number.isFinite(remaining) ? Math.max(1_000, remaining - 30_000) : 1_000
+      playbackExpiryTimer.current = setTimeout(() => {
+        playbackExpiryTimer.current = null
+        renewPlaybackGrantRef.current()
+      }, renewalDelay)
+    },
+    [clearPlaybackExpiryTimer],
+  )
+
+  const renewPlaybackGrant = useCallback(async () => {
+    if (!selectedClipAssetId || isRequestingPlayback) return
+    const requestedClipAssetId = selectedClipAssetId
+    setIsRequestingPlayback(true)
+    try {
+      const grant = await authorizeClipAssetPlayback(projectId, requestedClipAssetId)
+      if (selectedClipAssetIdRef.current !== requestedClipAssetId) return
+      setPlaybackGrant(grant)
+      setPlaybackState('waiting')
+      setPlaybackMessage('')
+      schedulePlaybackRenewal(grant.expires_at)
+    } catch {
+      playbackExpiryTimer.current = setTimeout(() => {
+        playbackExpiryTimer.current = null
+        renewPlaybackGrantRef.current()
+      }, 15_000)
+    } finally {
+      setIsRequestingPlayback(false)
+    }
+  }, [isRequestingPlayback, projectId, schedulePlaybackRenewal, selectedClipAssetId])
+
+  useEffect(() => {
+    renewPlaybackGrantRef.current = () => void renewPlaybackGrant()
+  }, [renewPlaybackGrant])
 
   const loadSelectedView = useCallback(
     async ({ preservePlayback = false } = {}) => {
@@ -249,17 +288,7 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         return
       setPlaybackGrant(grant)
       setPlaybackState('waiting')
-      const remaining = new Date(grant.expires_at).getTime() - Date.now()
-      if (!Number.isFinite(remaining) || remaining <= 0) {
-        setPlaybackState('expired')
-        setPlaybackMessage('播放链接已过期，点击“重新加载视频”继续。')
-      } else {
-        playbackExpiryTimer.current = setTimeout(() => {
-          playbackExpiryTimer.current = null
-          setPlaybackState('expired')
-          setPlaybackMessage('播放链接已过期，点击“重新加载视频”继续。')
-        }, remaining)
-      }
+      schedulePlaybackRenewal(grant.expires_at)
     } catch (error) {
       if (
         request.signal.aborted ||
@@ -277,7 +306,14 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         setIsRequestingPlayback(false)
       }
     }
-  }, [isRequestingPlayback, projectId, resetPlayback, selectedClipAssetId, selectedDetail])
+  }, [
+    isRequestingPlayback,
+    projectId,
+    resetPlayback,
+    schedulePlaybackRenewal,
+    selectedClipAssetId,
+    selectedDetail,
+  ])
 
   const playbackAvailability: PlaybackAvailability | null = selectedStream
     ? selectedDetail

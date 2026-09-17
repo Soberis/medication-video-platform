@@ -5,6 +5,7 @@
   min-width: 320px;
   min-height: 100vh;
   background: var(--app-color-background);
+  overflow-x: clip;
 }
 
 .skip-link {
@@ -249,6 +250,7 @@
   display: grid;
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
+  overflow-x: clip;
 }
 
 .workspace[data-has-inspector='true'] {
@@ -259,6 +261,7 @@
   min-width: 0;
   min-height: 100vh;
   outline: none;
+  overflow-x: clip;
 }
 
 .workspace-content {

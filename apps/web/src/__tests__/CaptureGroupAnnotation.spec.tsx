@@ -604,7 +604,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    expect(await screen.findByText('AI 已预填 1 段 · 待核对')).toBeInTheDocument()
+    expect(await screen.findByText('AI 预填待核对')).toBeInTheDocument()
     expect(screen.queryByText('AI 动作预标注建议')).not.toBeInTheDocument()
     expect(screen.getAllByLabelText('开始时间（毫秒）')).toHaveLength(1)
     expect(screen.queryByRole('button', { name: '查看来源 (1)' })).not.toBeInTheDocument()
@@ -680,4 +680,44 @@ describe('CaptureGroup annotation workflow', () => {
     await user.click(endMinus100)
     expect(endInput).toHaveValue(1000)
   })
+
+  it('directly triggers video playback and mounts video when clicking segment play button while video is idle', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    stubGroupDetail(group, {
+      task: groupTask(groupId, true),
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+      playbackGrant: {
+        grant_id: 'playback-grant-direct-slice',
+        purpose: 'DATA_REVIEW',
+        media_url: '/synthetic/authorized-direct-slice.mp4',
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        content_type: 'video/mp4',
+      },
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+    })
+
+    // Video placeholder is ready
+    await screen.findByRole('button', { name: '播放视频' })
+
+    const playSegmentBtn = await screen.findByRole('button', { name: '播放第 1 个时间段' })
+    expect(playSegmentBtn).toBeInTheDocument()
+
+    // Click segment play button
+    await user.click(playSegmentBtn)
+
+    // Verify video is now mounted / loaded
+    const video = await screen.findByLabelText('视频预览', {}, { timeout: 5000 })
+    expect(video).toBeInTheDocument()
+  })
 })
+

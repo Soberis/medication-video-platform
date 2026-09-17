@@ -65,6 +65,8 @@ export default function CaptureGroupDetailView() {
   const [currentPlaybackTimeMs, setCurrentPlaybackTimeMs] = useState<number | null>(null)
   const [preservedPlaybackTimeMs, setPreservedPlaybackTimeMs] = useState<number | null>(null)
   const shouldAutoStartPlaybackRef = useRef(false)
+  const pendingPlaySegmentRef = useRef<{ startMs: number; endMs: number } | null>(null)
+  const pendingPlayAtMsRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const segmentStopListenerRef = useRef<(() => void) | null>(null)
 
@@ -75,9 +77,19 @@ export default function CaptureGroupDetailView() {
     }
   }, [])
 
-  const handlePlaySegment = useCallback((startMs: number, endMs: number) => {
-    const video = videoRef.current
-    if (!video) return
+  const viewState = useCaptureGroupView(projectId, selectedView)
+  const {
+    canPlay,
+    isRequestingPlayback,
+    playbackGrant,
+    playbackState,
+    selectedDetail,
+    selectedMediaReport,
+    selectedStream,
+    startPlayback,
+  } = viewState
+
+  const executePlaySegment = useCallback((video: HTMLVideoElement, startMs: number, endMs: number) => {
     if (segmentStopListenerRef.current) {
       segmentStopListenerRef.current()
       segmentStopListenerRef.current = null
@@ -97,6 +109,85 @@ export default function CaptureGroupDetailView() {
     }
   }, [])
 
+  const handlePlaySegment = useCallback(
+    (startMs: number, endMs: number) => {
+      setPreservedPlaybackTimeMs(Math.max(0, startMs))
+      const video = videoRef.current
+      if (!video || playbackState !== 'ready') {
+        pendingPlaySegmentRef.current = { startMs, endMs }
+        pendingPlayAtMsRef.current = null
+        if (canPlay && !isRequestingPlayback && (playbackState === 'idle' || !playbackGrant)) {
+          shouldAutoStartPlaybackRef.current = true
+          void startPlayback()
+        }
+        return
+      }
+      executePlaySegment(video, startMs, endMs)
+    },
+    [canPlay, executePlaySegment, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+  )
+
+  const handlePlayAtMs = useCallback(
+    (timeMs: number) => {
+      const validMs = Math.max(0, timeMs)
+      setPreservedPlaybackTimeMs(validMs)
+      if (segmentStopListenerRef.current) {
+        segmentStopListenerRef.current()
+        segmentStopListenerRef.current = null
+      }
+      const video = videoRef.current
+      if (!video || playbackState !== 'ready') {
+        pendingPlayAtMsRef.current = validMs
+        pendingPlaySegmentRef.current = null
+        if (canPlay && !isRequestingPlayback && (playbackState === 'idle' || !playbackGrant)) {
+          shouldAutoStartPlaybackRef.current = true
+          void startPlayback()
+        }
+        return
+      }
+      video.currentTime = validMs / 1000
+      void video.play().catch(() => undefined)
+    },
+    [canPlay, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+  )
+
+  const handleSeekToMs = useCallback(
+    (timeMs: number) => {
+      setPreservedPlaybackTimeMs(Math.max(0, timeMs))
+      const video = videoRef.current
+      if (!video || playbackState !== 'ready') {
+        if (canPlay && !isRequestingPlayback && (playbackState === 'idle' || !playbackGrant)) {
+          shouldAutoStartPlaybackRef.current = true
+          void startPlayback()
+        }
+        return
+      }
+      segmentStopListenerRef.current?.()
+      segmentStopListenerRef.current = null
+      video.currentTime = Math.max(0, timeMs / 1000)
+    },
+    [canPlay, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+  )
+
+  useEffect(() => {
+    if (playbackState === 'ready' && videoRef.current) {
+      if (pendingPlayAtMsRef.current !== null) {
+        const targetMs = pendingPlayAtMsRef.current
+        pendingPlayAtMsRef.current = null
+        if (segmentStopListenerRef.current) {
+          segmentStopListenerRef.current()
+          segmentStopListenerRef.current = null
+        }
+        videoRef.current.currentTime = targetMs / 1000
+        void videoRef.current.play().catch(() => undefined)
+      } else if (pendingPlaySegmentRef.current) {
+        const { startMs, endMs } = pendingPlaySegmentRef.current
+        pendingPlaySegmentRef.current = null
+        executePlaySegment(videoRef.current, startMs, endMs)
+      }
+    }
+  }, [executePlaySegment, playbackState])
+
   useEffect(() => {
     return () => {
       if (segmentStopListenerRef.current) {
@@ -105,26 +196,6 @@ export default function CaptureGroupDetailView() {
       }
     }
   }, [data.selectedClipAssetId])
-
-  const handleSeekToMs = useCallback((timeMs: number) => {
-    const video = videoRef.current
-    if (!video) return
-    segmentStopListenerRef.current?.()
-    segmentStopListenerRef.current = null
-    video.currentTime = Math.max(0, timeMs / 1000)
-  }, [])
-
-  const viewState = useCaptureGroupView(projectId, selectedView)
-  const {
-    canPlay,
-    isRequestingPlayback,
-    playbackGrant,
-    playbackState,
-    selectedDetail,
-    selectedMediaReport,
-    selectedStream,
-    startPlayback,
-  } = viewState
 
   const totalDurationMs = useMemo(() => {
     if (selectedMediaReport?.duration_microseconds) {
@@ -164,6 +235,7 @@ export default function CaptureGroupDetailView() {
     isRequestingPlayback,
     playbackGrant,
     playbackState,
+    preservedPlaybackTimeMs,
     selectedDetail?.status,
     selectedStream?.clip_asset_id,
     startPlayback,
@@ -247,6 +319,27 @@ export default function CaptureGroupDetailView() {
       viewRows.find((view) => view.stream?.clip_asset_id)?.stream?.clip_asset_id ??
       null
 
+    const handlePlaySegmentForAnnotation = (startMs: number, endMs: number) => {
+      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+        handleSelectView(activePrimaryId)
+      }
+      handlePlaySegment(startMs, endMs)
+    }
+
+    const handlePlayAtMsForAnnotation = (timeMs: number) => {
+      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+        handleSelectView(activePrimaryId)
+      }
+      handlePlayAtMs(timeMs)
+    }
+
+    const handleSeekToMsForAnnotation = (timeMs: number) => {
+      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+        handleSelectView(activePrimaryId)
+      }
+      handleSeekToMs(timeMs)
+    }
+
     return (
       <CaptureGroupAnnotationPanel
         projectId={projectId}
@@ -268,8 +361,9 @@ export default function CaptureGroupDetailView() {
           viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
           viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
         }
-        onPlaySegment={data.selectedClipAssetId === activePrimaryId ? handlePlaySegment : undefined}
-        onSeekToMs={data.selectedClipAssetId === activePrimaryId ? handleSeekToMs : undefined}
+        onPlaySegment={handlePlaySegmentForAnnotation}
+        onPlayAtMs={handlePlayAtMsForAnnotation}
+        onSeekToMs={handleSeekToMsForAnnotation}
         onDirtyChange={setHasUnsavedAnnotation}
         onTaskChange={data.setTask}
         onRefresh={data.refresh}

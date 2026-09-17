@@ -1,5 +1,5 @@
 import { App as AntdApp, Alert, Button, Input, Select, Tooltip } from 'antd'
-import { CircleAlert, Play, Plus, RotateCw } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, CircleAlert, Clock, Play, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -67,6 +67,7 @@ interface CaptureGroupAnnotationPanelProps {
   totalDurationMs?: number | null
   hasNoHandDetected?: boolean
   onPlaySegment?: (startMs: number, endMs: number) => void
+  onPlayAtMs?: (timeMs: number) => void
   onSeekToMs?: (timeMs: number) => void
   onTaskChange: (task: AnnotationTask) => void
   onDirtyChange?: (dirty: boolean) => void
@@ -91,6 +92,7 @@ export function CaptureGroupAnnotationPanel({
   totalDurationMs,
   hasNoHandDetected,
   onPlaySegment,
+  onPlayAtMs,
   onSeekToMs,
   onDirtyChange,
   onTaskChange,
@@ -201,23 +203,27 @@ export function CaptureGroupAnnotationPanel({
     !isDirty && !task?.annotation_revision && validCandidates.length > 0,
   )
   const hasUnusableActionCandidates = actionCandidates.length > 0 && validCandidates.length === 0
-  const aiStatus = actionReadFailed
-    ? { tone: 'warning' as const, label: 'AI 状态读取中' }
+  const aiStatus: { tone: 'warning' | 'success' | 'default' | 'error' | 'info'; label: string; tooltip?: string } = actionReadFailed
+    ? { tone: 'warning', label: 'AI 状态读取中' }
     : validCandidates.length > 0 && hasAutoLoadedAiDraft
-      ? { tone: 'success' as const, label: `AI 已预填 ${validCandidates.length} 段 · 待核对` }
+      ? {
+          tone: 'success',
+          label: 'AI 预填待核对',
+          tooltip: `AI 已预填 ${validCandidates.length} 段候选，可直接核对微调`,
+        }
       : validCandidates.length > 0
-        ? { tone: 'default' as const, label: `AI 已生成 ${validCandidates.length} 条候选` }
+        ? { tone: 'default', label: `AI 已生成 ${validCandidates.length} 条候选` }
         : actionJob?.status === 'FAILED'
-          ? { tone: 'error' as const, label: 'AI 分析失败' }
+          ? { tone: 'error', label: 'AI 分析失败' }
           : actionJob?.status === 'QUEUED'
-            ? { tone: 'info' as const, label: 'AI 等待处理' }
+            ? { tone: 'info', label: 'AI 等待处理' }
             : actionJob?.status === 'RUNNING'
-              ? { tone: 'info' as const, label: 'AI 分析中' }
+              ? { tone: 'info', label: 'AI 分析中' }
               : actionJob?.status === 'SUCCEEDED'
                 ? hasUnusableActionCandidates
-                  ? { tone: 'warning' as const, label: 'AI 候选未载入' }
-                  : { tone: 'default' as const, label: 'AI 已完成 · 可直接标注' }
-                : { tone: 'default' as const, label: '等待 AI 自动分析' }
+                  ? { tone: 'warning', label: 'AI 候选未载入' }
+                  : { tone: 'default', label: 'AI 已完成 · 可直接标注' }
+                : { tone: 'default', label: '等待 AI 自动分析' }
 
   useEffect(() => {
     if (
@@ -423,12 +429,12 @@ export function CaptureGroupAnnotationPanel({
 
   function updateSegment(draftId: number, field: keyof AnnotationSegment, value: string | number) {
     beginDraftEdit()
-    const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
-    setDraftSegments(
-      sourceSegments.map((segment) =>
+    setDraftSegments((prev) => {
+      const sourceSegments = prev.length > 0 ? prev : visibleDraftSegments
+      return sourceSegments.map((segment) =>
         segment.draftId === draftId ? { ...segment, [field]: value } : segment,
-      ),
-    )
+      )
+    })
   }
 
   function setSegmentPlaybackTime(draftId: number, field: 'start_ms' | 'end_ms') {
@@ -438,18 +444,19 @@ export function CaptureGroupAnnotationPanel({
 
   function nudgeSegmentTime(draftId: number, field: 'start_ms' | 'end_ms', delta: number) {
     if (!canSubmitRevision) return
-    const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
-    const segment = sourceSegments.find((candidate) => candidate.draftId === draftId)
-    if (!segment) return
-    const currentVal = segment[field]
-    const base = Number.isFinite(currentVal) ? currentVal : 0
-    const updatedMs = Math.max(0, base + delta)
+    let updatedMs = 0
     beginDraftEdit()
-    setDraftSegments(
-      sourceSegments.map((candidate) =>
+    setDraftSegments((prev) => {
+      const sourceSegments = prev.length > 0 ? prev : visibleDraftSegments
+      const segment = sourceSegments.find((candidate) => candidate.draftId === draftId)
+      if (!segment) return sourceSegments
+      const currentVal = segment[field]
+      const base = Number.isFinite(currentVal) ? currentVal : 0
+      updatedMs = Math.max(0, base + delta)
+      return sourceSegments.map((candidate) =>
         candidate.draftId === draftId ? { ...candidate, [field]: updatedMs } : candidate,
-      ),
-    )
+      )
+    })
     onSeekToMs?.(updatedMs)
   }
 
@@ -569,14 +576,46 @@ export function CaptureGroupAnnotationPanel({
         />
       ) : null}
       <div className="capture-group-task-banner">
-        <div>
-          {task ? (
-            <StatusIndicator tone={taskStatusTone(task)}>{formatTaskStatus(task)}</StatusIndicator>
-          ) : (
-            <StatusIndicator tone="neutral">尚未分配标注任务</StatusIndicator>
-          )}
+        <div className="capture-group-task-banner-inner">
+          <div className="capture-group-task-banner-left">
+            {task ? (
+              <StatusIndicator tone={taskStatusTone(task)}>{formatTaskStatus(task)}</StatusIndicator>
+            ) : (
+              <StatusIndicator tone="neutral">尚未分配标注任务</StatusIndicator>
+            )}
+          </div>
+          <div className="capture-group-task-banner-right">
+            <Tooltip title={aiStatus.tooltip}>
+              <span className="capture-group-ai-inline-status" role="status">
+                <StatusBadge tone={aiStatus.tone}>{aiStatus.label}</StatusBadge>
+              </span>
+            </Tooltip>
+            {actionJob?.status === 'FAILED' ? (
+              <Button
+                type="primary"
+                danger
+                size="small"
+                htmlType="button"
+                loading={isDispatchingJob}
+                onClick={() => void handleDispatchActionJob()}
+                icon={<RotateCw size={12} />}
+              >
+                重试动作分析
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
+      {hasNoHandDetected && (
+        <div style={{ marginBottom: 8 }}>
+          <Alert
+            type="warning"
+            showIcon
+            title="MediaPipe 在采样帧中未检测到手"
+            description="请核对视频，动作标注仍可继续。"
+          />
+        </div>
+      )}
       {groupQualityDowngraded ? (
         <Alert
           type="warning"
@@ -622,157 +661,159 @@ export function CaptureGroupAnnotationPanel({
         >
           {/* --- STICKY TOOLBAR: Action Segments Heading & Quick Submit --- */}
           <div className="capture-group-annotation-sticky-bar">
-            <div className="capture-group-annotation-sticky-summary">
-              <h3 className="capture-group-annotation-sticky-title">动作时间段</h3>
-              {visibleDraftSegments.length > 0 && (
-                <span className="capture-group-annotation-summary-text">
-                  {visibleDraftSegments.length} 段
-                  {totalDurationMs ? ` · ${formatHumanFriendlyTime(totalDurationMs)}` : ''}
-                </span>
-              )}
-            </div>
-            <div className="capture-group-annotation-sticky-actions">
-              <span className="capture-group-ai-inline-status" role="status">
-                <StatusBadge tone={aiStatus.tone}>{aiStatus.label}</StatusBadge>
-              </span>
-              {actionJob?.status === 'FAILED' ? (
+            <div className="capture-group-annotation-sticky-main">
+              <div className="capture-group-annotation-sticky-summary">
+                <h3 className="capture-group-annotation-sticky-title">动作时间段</h3>
+                {visibleDraftSegments.length > 0 && (
+                  <span className="capture-group-annotation-summary-text">
+                    {visibleDraftSegments.length} 段
+                  </span>
+                )}
+              </div>
+              <div className="capture-group-annotation-sticky-actions">
+                {visibleDraftSegments.length > 1 && (
+                  <Button
+                    type="text"
+                    size="small"
+                    className="capture-group-collapse-btn"
+                    onClick={handleToggleAllCollapse}
+                    icon={
+                      isAllCollapsed ? (
+                        <ChevronDown size={13} strokeWidth={2} />
+                      ) : (
+                        <ChevronUp size={13} strokeWidth={2} />
+                      )
+                    }
+                    title={isAllCollapsed ? '展开全部时间段微调' : '折叠为紧凑列表'}
+                  >
+                    {isAllCollapsed ? '展开全部' : '折叠全部'}
+                  </Button>
+                )}
                 <Button
                   type="primary"
-                  danger
                   size="small"
-                  htmlType="button"
-                  loading={isDispatchingJob}
-                  onClick={() => void handleDispatchActionJob()}
-                  icon={<RotateCw size={12} />}
+                  htmlType="submit"
+                  aria-label="提交标注"
+                  className="capture-group-sticky-submit-btn"
+                  icon={<Check size={13} strokeWidth={2.2} />}
+                  loading={isSubmittingRevision}
+                  disabled={!canSubmitRevision}
                 >
-                  重试动作分析
+                  提交标注
                 </Button>
-              ) : null}
-              {visibleDraftSegments.length > 1 && (
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={handleToggleAllCollapse}
-                  title={isAllCollapsed ? '展开全部时间段微调' : '折叠为紧凑列表'}
+              </div>
+            </div>
+            {totalDurationMs && totalDurationMs > 0 && visibleDraftSegments.length > 0 ? (
+              <div className="capture-group-timeline-overview" aria-label="全片动作时间轨">
+                <div
+                  ref={trackBarRef}
+                  className="capture-group-timeline-track-bar"
+                  onClick={(e) => {
+                    if (totalDurationMs > 0) {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      const clickX = e.clientX - rect.left
+                      const percent = Math.max(0, Math.min(1, clickX / rect.width))
+                      const targetMs = Math.round(percent * totalDurationMs)
+                      if (onPlayAtMs) {
+                        onPlayAtMs(targetMs)
+                      } else {
+                        onSeekToMs?.(targetMs)
+                      }
+                    }
+                  }}
                 >
-                  {isAllCollapsed ? '展开全部' : '折叠全部'}
-                </Button>
-              )}
-              <Button
-                type="primary"
-                size="middle"
-                htmlType="submit"
-                aria-label="提交标注"
-                className="capture-group-sticky-submit-btn"
-                loading={isSubmittingRevision}
-                disabled={!canSubmitRevision}
-              >
-                提交标注
-              </Button>
-            </div>
-          </div>
-          {hasNoHandDetected && (
-            <div style={{ marginBottom: 16 }}>
-              <Alert
-                type="warning"
-                showIcon
-                title="MediaPipe 在采样帧中未检测到手"
-                description="请核对视频，动作标注仍可继续。"
-              />
-            </div>
-          )}
-          <div className="capture-group-playback-position" aria-label="当前播放位置">
-            <div>
-              <span className="app-eyebrow">当前播放位置</span>
-              <strong>
-                {formatAnnotationTime(
-                  currentPlaybackTimeMs === null ? null : Math.round(currentPlaybackTimeMs),
-                ) ?? '未读取'}
-              </strong>
-            </div>
-            <span className="capture-group-keyboard-hints" title="键盘操作提示">
-              空格 播放/暂停 · 输入框内 ↑/↓ 步进 100ms（按住 Shift 500ms）
-            </span>
-          </div>
-          {totalDurationMs && totalDurationMs > 0 && visibleDraftSegments.length > 0 ? (
-            <div className="capture-group-timeline-overview" aria-label="全片动作时间轨">
-              <div
-                ref={trackBarRef}
-                className="capture-group-timeline-track-bar"
-                onClick={(e) => {
-                  if (e.target === e.currentTarget && totalDurationMs > 0) {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const clickX = e.clientX - rect.left
-                    const percent = Math.max(0, Math.min(1, clickX / rect.width))
-                    const targetMs = Math.round(percent * totalDurationMs)
-                    onSeekToMs?.(targetMs)
-                  }
-                }}
-              >
-                {visibleDraftSegments.map((seg, idx) => {
-                  const startSec = (seg.start_ms || 0) / 1000
-                  const endSec = (seg.end_ms || 0) / 1000
-                  const durSec = totalDurationMs / 1000
-                  const leftPercent = Math.max(0, Math.min(100, (startSec / durSec) * 100))
-                  const widthPercent = Math.max(
-                    0.8,
-                    Math.min(100 - leftPercent, (Math.max(0, endSec - startSec) / durSec) * 100),
-                  )
-                  const style = getActionStyle(seg.label)
-                  const displayName = getActionDisplayName(seg.label, schema)
-                  const isSliceActive =
-                    currentPlaybackTimeMs !== null &&
-                    Number.isFinite(seg.start_ms) &&
-                    Number.isFinite(seg.end_ms) &&
-                    currentPlaybackTimeMs >= seg.start_ms &&
-                    currentPlaybackTimeMs < seg.end_ms
-                  return (
-                    <Tooltip
-                      key={seg.draftId}
-                      title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转播放`}
-                    >
-                      <div
-                        role="button"
-                        aria-label={`播放时间段 ${idx + 1}：${displayName}`}
-                        tabIndex={0}
-                        className={`capture-group-timeline-slice ${isSliceActive ? 'is-active-slice' : ''}`}
-                        style={{
-                          left: `${leftPercent}%`,
-                          width: `${widthPercent}%`,
-                          backgroundColor: style.dot,
-                        }}
-                        onClick={() => {
-                          onSeekToMs?.(seg.start_ms)
-                          onPlaySegment?.(seg.start_ms, seg.end_ms)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            onSeekToMs?.(seg.start_ms)
-                            onPlaySegment?.(seg.start_ms, seg.end_ms)
-                          }
-                        }}
-                      />
-                    </Tooltip>
-                  )
-                })}
-                {currentPlaybackTimeMs !== null && currentPlaybackTimeMs >= 0 ? (
-                  <div
-                    className="capture-group-timeline-playhead"
-                    style={{
-                      left: `${Math.max(0, Math.min(100, (currentPlaybackTimeMs / totalDurationMs) * 100))}%`,
-                    }}
-                    title={`当前播放: ${formatHumanFriendlyTime(currentPlaybackTimeMs)}`}
-                  />
+                  {visibleDraftSegments.map((seg, idx) => {
+                    const startSec = (seg.start_ms || 0) / 1000
+                    const endSec = (seg.end_ms || 0) / 1000
+                    const durSec = totalDurationMs / 1000
+                    const leftPercent = Math.max(0, Math.min(100, (startSec / durSec) * 100))
+                    const widthPercent = Math.max(
+                      0.8,
+                      Math.min(100 - leftPercent, (Math.max(0, endSec - startSec) / durSec) * 100),
+                    )
+                    const style = getActionStyle(seg.label)
+                    const displayName = getActionDisplayName(seg.label, schema)
+                    const isSliceActive =
+                      currentPlaybackTimeMs !== null &&
+                      Number.isFinite(seg.start_ms) &&
+                      Number.isFinite(seg.end_ms) &&
+                      currentPlaybackTimeMs >= seg.start_ms &&
+                      currentPlaybackTimeMs < seg.end_ms
+                    return (
+                      <Tooltip
+                        key={seg.draftId}
+                        title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转播放`}
+                      >
+                        <div
+                          role="button"
+                          aria-label={`播放时间段 ${idx + 1}：${displayName}`}
+                          tabIndex={0}
+                          className={`capture-group-timeline-slice ${isSliceActive ? 'is-active-slice' : ''}`}
+                          style={{
+                            left: `${leftPercent}%`,
+                            width: `${widthPercent}%`,
+                            backgroundColor: style.dot,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onPlayAtMs) {
+                              onPlayAtMs(seg.start_ms)
+                            } else {
+                              onSeekToMs?.(seg.start_ms)
+                              onPlaySegment?.(seg.start_ms, seg.end_ms)
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (onPlayAtMs) {
+                                onPlayAtMs(seg.start_ms)
+                              } else {
+                                onSeekToMs?.(seg.start_ms)
+                                onPlaySegment?.(seg.start_ms, seg.end_ms)
+                              }
+                            }
+                          }}
+                        />
+                      </Tooltip>
+                    )
+                  })}
+                  {currentPlaybackTimeMs !== null && currentPlaybackTimeMs >= 0 ? (
+                    <div
+                      className="capture-group-timeline-playhead"
+                      style={{
+                        left: `${Math.max(0, Math.min(100, (currentPlaybackTimeMs / totalDurationMs) * 100))}%`,
+                      }}
+                      title={`当前播放: ${formatHumanFriendlyTime(currentPlaybackTimeMs)}`}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div className="capture-group-playback-position" aria-label="当前播放位置">
+              <div className="capture-group-playback-counter">
+                <span className="capture-group-playback-label">当前进度</span>
+                <strong className="capture-group-playback-time">
+                  {currentPlaybackTimeMs !== null && currentPlaybackTimeMs >= 0
+                    ? formatHumanFriendlyTime(currentPlaybackTimeMs)
+                    : '00:00'}
+                </strong>
+                {totalDurationMs && totalDurationMs > 0 ? (
+                  <span className="capture-group-playback-total">
+                    / {formatHumanFriendlyTime(totalDurationMs)}
+                  </span>
                 ) : null}
               </div>
-              <div className="capture-group-timeline-scale">
-                <span>00:00</span>
-                <span>当前播放: {formatHumanFriendlyTime(currentPlaybackTimeMs)}</span>
-                <span>{formatHumanFriendlyTime(totalDurationMs)}</span>
-              </div>
+              <span
+                className="capture-group-keyboard-hints"
+                title="空格：播放/暂停；←/→：快退/快进 1 秒（按住 Shift 5 秒）；输入框内 ↑/↓ 步进 100ms"
+              >
+                <kbd className="capture-group-kbd">空格</kbd> 播放 ·{' '}
+                <kbd className="capture-group-kbd">←/→</kbd> 快进退
+              </span>
             </div>
-          ) : null}
+          </div>
           {visibleDraftSegments.map((segment, index) => {
             const errors = segmentErrors[segment.draftId] ?? {}
             const formattedStart = formatAnnotationTime(segment.start_ms)
@@ -804,83 +845,101 @@ export function CaptureGroupAnnotationPanel({
               >
                 <div className="capture-group-segment-fields">
                   <div className="capture-group-segment-card-header">
-                    <button
-                      type="button"
-                      className="capture-group-segment-badge-group"
-                      aria-expanded={!collapsed}
-                      onClick={() => toggleSegmentCollapsed(segment.draftId)}
-                      title="点击展开/折叠微调编辑"
-                    >
-                      <span
-                        className="capture-group-segment-dot"
-                        style={{
-                          display: 'inline-block',
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          backgroundColor: segmentStyle.dot,
-                          flexShrink: 0,
-                        }}
-                        aria-hidden="true"
-                      />
-                      <strong className="capture-group-segment-index-title">
-                        时间段 {index + 1}
-                      </strong>
-                      <span className="capture-group-segment-human-time">
-                        {formatSegmentDurationLabel(segment.start_ms, segment.end_ms)}
-                      </span>
-                      <span className="capture-group-segment-action-name">
-                        {segment.label ? getActionDisplayName(segment.label, schema) : '未选择动作'}
-                      </span>
-                    </button>
-                    <div className="capture-group-segment-card-actions">
-                      {onPlaySegment &&
-                      Number.isFinite(segment.start_ms) &&
-                      Number.isFinite(segment.end_ms) &&
-                      segment.end_ms > segment.start_ms ? (
-                        <Button
-                          type="text"
-                          size="small"
-                          htmlType="button"
-                          className="capture-group-segment-play-btn"
-                          icon={<Play size={11} fill="currentColor" />}
-                          onClick={() => onPlaySegment(segment.start_ms, segment.end_ms)}
-                          title={`播放 ${formatHumanFriendlyTime(segment.start_ms)} ~ ${formatHumanFriendlyTime(segment.end_ms)}`}
-                        >
-                          播放
-                        </Button>
-                      ) : null}
-                      {visibleDraftSegments.length > 1 ? (
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          htmlType="button"
-                          disabled={!canSubmitRevision}
-                          aria-label={`删除第 ${index + 1} 个时间段`}
-                          onClick={() => {
-                            beginDraftEdit()
-                            const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
-                            setDraftSegments(
-                              sourceSegments.filter(
-                                (candidate) => candidate.draftId !== segment.draftId,
-                              ),
-                            )
+                    <div className="capture-group-segment-card-main">
+                      <button
+                        type="button"
+                        className="capture-group-segment-badge-group"
+                        aria-expanded={!collapsed}
+                        onClick={() => toggleSegmentCollapsed(segment.draftId)}
+                        title={collapsed ? '点击展开微调' : '点击折叠'}
+                      >
+                        <span
+                          className="capture-group-segment-dot"
+                          style={{
+                            display: 'inline-block',
+                            width: 7,
+                            height: 7,
+                            borderRadius: '50%',
+                            backgroundColor: segmentStyle.dot,
+                            flexShrink: 0,
                           }}
+                          aria-hidden="true"
+                        />
+                        <strong className="capture-group-segment-index-title">
+                          #{String(index + 1).padStart(2, '0')}
+                        </strong>
+                        <span
+                          className="capture-group-segment-action-name"
+                          title={
+                            segment.label
+                              ? getActionDisplayName(segment.label, schema)
+                              : '未选择动作'
+                          }
                         >
-                          删除
-                        </Button>
-                      ) : null}
+                          {segment.label
+                            ? getActionDisplayName(segment.label, schema)
+                            : '未选择动作'}
+                        </span>
+                        <span
+                          className="capture-group-segment-human-time"
+                          title={formatSegmentDurationLabel(segment.start_ms, segment.end_ms)}
+                        >
+                          {collapsed
+                            ? `${formatHumanFriendlyTime(segment.start_ms)} ~ ${formatHumanFriendlyTime(segment.end_ms)}`
+                            : formatSegmentDurationLabel(segment.start_ms, segment.end_ms)}
+                        </span>
+                      </button>
+                      <div className="capture-group-segment-card-actions">
+                        {onPlaySegment &&
+                        Number.isFinite(segment.start_ms) &&
+                        Number.isFinite(segment.end_ms) &&
+                        segment.end_ms > segment.start_ms ? (
+                          <Button
+                            type="text"
+                            size="small"
+                            htmlType="button"
+                            className="capture-group-segment-play-btn"
+                            icon={<Play size={12} fill="currentColor" />}
+                            aria-label={`播放第 ${index + 1} 个时间段`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onPlaySegment(segment.start_ms, segment.end_ms)
+                            }}
+                            title={`播放时间段 (${formatHumanFriendlyTime(segment.start_ms)} ~ ${formatHumanFriendlyTime(segment.end_ms)})`}
+                          />
+                        ) : null}
+                        {visibleDraftSegments.length > 1 ? (
+                          <Button
+                            type="text"
+                            size="small"
+                            htmlType="button"
+                            className="capture-group-segment-delete-btn"
+                            icon={<Trash2 size={12} />}
+                            disabled={!canSubmitRevision}
+                            aria-label={`删除第 ${index + 1} 个时间段`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              beginDraftEdit()
+                              const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
+                              setDraftSegments(
+                                sourceSegments.filter(
+                                  (candidate) => candidate.draftId !== segment.draftId,
+                                ),
+                              )
+                            }}
+                            title={`删除第 ${index + 1} 个时间段`}
+                          />
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                  <div className="capture-group-segment-edit-body">
                     <label
-                      className="capture-group-segment-label"
+                      className="capture-group-segment-inline-label"
                       htmlFor={`segment-${segment.draftId}-label`}
                     >
                       <span>动作标签</span>
                       <Select
                         id={`segment-${segment.draftId}-label`}
+                        size="small"
                         aria-label={`第 ${index + 1} 个时间段动作标签`}
                         aria-invalid={errors.label ? true : undefined}
                         aria-describedby={
@@ -901,6 +960,8 @@ export function CaptureGroupAnnotationPanel({
                         </small>
                       ) : null}
                     </label>
+                  </div>
+                  <div className="capture-group-segment-edit-body">
                     <fieldset className="capture-group-segment-time-range">
                       <legend className="capture-group-segment-legend">时间范围</legend>
                       <div className="capture-group-segment-time-controls">
@@ -980,11 +1041,13 @@ export function CaptureGroupAnnotationPanel({
                               size="small"
                               htmlType="button"
                               className="capture-group-segment-set-current-btn"
+                              icon={<Clock size={11} strokeWidth={2} />}
                               disabled={!canUseCurrentPlaybackTime}
                               aria-label={`第 ${index + 1} 个时间段：使用当前时间作为开始`}
+                              title="使用当前播放时间作为开始时间"
                               onClick={() => setSegmentPlaybackTime(segment.draftId, 'start_ms')}
                             >
-                              设为当前
+                              当前
                             </Button>
                           </div>
                           {errors.start ? (
@@ -1072,11 +1135,13 @@ export function CaptureGroupAnnotationPanel({
                               size="small"
                               htmlType="button"
                               className="capture-group-segment-set-current-btn"
+                              icon={<Clock size={11} strokeWidth={2} />}
                               disabled={!canUseCurrentPlaybackTime}
                               aria-label={`第 ${index + 1} 个时间段：使用当前时间作为结束`}
+                              title="使用当前播放时间作为结束时间"
                               onClick={() => setSegmentPlaybackTime(segment.draftId, 'end_ms')}
                             >
-                              设为当前
+                              当前
                             </Button>
                           </div>
                           {errors.end ? (

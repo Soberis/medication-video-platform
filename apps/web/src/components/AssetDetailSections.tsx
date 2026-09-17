@@ -259,7 +259,7 @@ export function PlaybackCard({
                 controls
                 controlsList="nodownload nofullscreen noremoteplayback"
                 disablePictureInPicture
-                preload="none"
+                preload="auto"
                 playsInline
                 aria-label="视频预览"
                 src={grant.media_url}

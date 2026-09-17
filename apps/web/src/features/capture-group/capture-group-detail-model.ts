@@ -77,7 +77,7 @@ export function formatSegmentDurationLabel(startMs: number, endMs: number): stri
     return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)}`
   }
   const durationSec = Math.max(0, (endMs - startMs) / 1000)
-  return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)} · 持续 ${durationSec.toFixed(1)} 秒`
+  return `${formatHumanFriendlyTime(startMs)} ~ ${formatHumanFriendlyTime(endMs)} (${durationSec.toFixed(1)}s)`
 }
 
 export const ACTION_PALETTE: Record<

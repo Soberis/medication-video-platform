@@ -62,37 +62,75 @@ export function CaptureGroupFocusedView({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.code !== 'Space' && event.key !== ' ') || event.defaultPrevented || event.repeat) {
+      const isSpace = event.code === 'Space' || event.key === ' '
+      const isArrowLeft = event.key === 'ArrowLeft'
+      const isArrowRight = event.key === 'ArrowRight'
+      const isKeyJ = event.code === 'KeyJ'
+      const isKeyK = event.code === 'KeyK'
+      const isKeyL = event.code === 'KeyL'
+
+      if (!isSpace && !isArrowLeft && !isArrowRight && !isKeyJ && !isKeyK && !isKeyL) {
         return
       }
+
       const target = event.target instanceof HTMLElement ? event.target : document.activeElement
       if (
         target instanceof HTMLElement &&
-        target.closest(
-          'input, textarea, select, button, a, summary, video, [contenteditable="true"], [role="combobox"], [role="listbox"]',
-        )
+        target.closest('input, textarea, [contenteditable="true"]')
       ) {
         return
       }
+
+      if (target instanceof HTMLElement && target.closest('button, a, summary')) {
+        if (isSpace || isArrowLeft || isArrowRight) {
+          event.preventDefault()
+          target.blur()
+        }
+      }
+
       const video = videoRef.current
       if (!video || !playbackGrant || playbackState === 'error' || playbackState === 'expired') {
+        if (isSpace && canPlay && !isRequestingPlayback && playbackState === 'idle') {
+          event.preventDefault()
+          void startPlayback()
+        }
         return
       }
-      event.preventDefault()
-      if (video.paused) {
-        try {
-          void video.play().catch(() => undefined)
-        } catch {
-          // Keep native playback errors in the existing player state.
+
+      if (isSpace || isKeyK) {
+        event.preventDefault()
+        if (video.paused) {
+          try {
+            void video.play().catch(() => undefined)
+          } catch {
+            // Keep native playback errors in the existing player state.
+          }
+        } else {
+          video.pause()
         }
-      } else {
-        video.pause()
+        return
+      }
+
+      if (isArrowLeft || isKeyJ) {
+        event.preventDefault()
+        const deltaSec = event.shiftKey ? 5 : 1
+        video.currentTime = Math.max(0, video.currentTime - deltaSec)
+        return
+      }
+
+      if (isArrowRight || isKeyL) {
+        event.preventDefault()
+        const deltaSec = event.shiftKey ? 5 : 1
+        const maxSec =
+          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Infinity
+        video.currentTime = Math.min(maxSec, video.currentTime + deltaSec)
+        return
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [playbackGrant, playbackState, videoRef])
+  }, [canPlay, isRequestingPlayback, playbackGrant, playbackState, startPlayback, videoRef])
   const isPrimary = Boolean(
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
