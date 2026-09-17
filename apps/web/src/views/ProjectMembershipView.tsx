@@ -164,7 +164,6 @@ export default function ProjectMembershipView() {
         <span>项目成员</span>
       </ProjectBreadcrumb>
       <PageHeader
-        eyebrow="项目访问范围"
         titleId="members-title"
         title="项目成员"
         description="维护当前项目的成员和角色。"

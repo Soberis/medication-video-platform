@@ -425,9 +425,18 @@ describe('annotation task list view', () => {
     const completedRow = screen.getAllByRole('listitem')[0]!
     const annotationDetails = within(completedRow).getByText('查看详情')
     await user.click(annotationDetails)
-    expect(within(completedRow).getByText('00:00 → 00:01')).toBeInTheDocument()
-    expect(within(completedRow).getByText('原始值：0–1000 毫秒')).toBeInTheDocument()
-    expect(within(completedRow).getByText('拿取容器/工具')).toBeInTheDocument()
+    expect(
+      within(completedRow).getByText(
+        (_, el) =>
+          el?.tagName === 'P' &&
+          (el?.textContent?.includes('共记录 1 个动作标注时间段') ?? false),
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(completedRow).getByRole('link', {
+        name: /在标注工作台查看动作时间轴与视频同步回放/,
+      }),
+    ).toBeInTheDocument()
     const evidenceDetails = screen.getAllByText('查看详情')
     expect(evidenceDetails).toHaveLength(4)
     await user.click(evidenceDetails[1]!)

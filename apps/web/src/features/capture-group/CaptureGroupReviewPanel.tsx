@@ -1,5 +1,5 @@
 import { Alert, App as AntdApp, Button, Input } from 'antd'
-import { CircleAlert, FileCheck2, History } from 'lucide-react'
+import { Check, CircleAlert, FileCheck2, History } from 'lucide-react'
 import { useState } from 'react'
 
 import {
@@ -226,18 +226,21 @@ export function CaptureGroupReviewPanel({
       titleId="capture-group-review-title"
     >
       {isReviewApproved ? (
-        <Button
-          type="link"
-          size="small"
-          aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
-          aria-expanded={isCompletedDetailOpen}
-          onClick={() => setIsCompletedDetailOpen((open) => !open)}
-        >
-          {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
-        </Button>
-      ) : null}
-      {isReviewApproved ? (
-        <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
+        <div className="capture-group-review-approved-banner">
+          <div className="banner-status">
+            <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
+            <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
+          </div>
+          <Button
+            type="link"
+            size="small"
+            aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
+            aria-expanded={isCompletedDetailOpen}
+            onClick={() => setIsCompletedDetailOpen((open) => !open)}
+          >
+            {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
+          </Button>
+        </div>
       ) : null}
       {!task ? (
         <p className="form-hint">当前没有可见的人工标签任务，暂不能读取修订、复核事实。</p>
@@ -421,6 +424,10 @@ function FormalAnnotationIntervals({
   segments: AnnotationSegment[] | undefined
 }) {
   const safeSegments = Array.isArray(segments) ? segments : []
+  const [isExpanded, setIsExpanded] = useState(false)
+  const INITIAL_VISIBLE_COUNT = 6
+  const hasMore = safeSegments.length > INITIAL_VISIBLE_COUNT
+  const displayedSegments = isExpanded ? safeSegments : safeSegments.slice(0, INITIAL_VISIBLE_COUNT)
 
   return (
     <div className="capture-group-formal-intervals">
@@ -429,30 +436,36 @@ function FormalAnnotationIntervals({
           <span className="app-eyebrow">正式标注动作</span>
           <h3>正式动作区间</h3>
         </div>
-        <span>
-          {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}
-          {safeSegments.length} 个动作段
-        </span>
+        <div className="capture-group-intervals-actions">
+          <span>
+            {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}
+            共 {safeSegments.length} 个动作段
+          </span>
+          {hasMore ? (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => setIsExpanded((prev) => !prev)}
+            >
+              {isExpanded ? '收起' : `展开全部 (${safeSegments.length})`}
+            </Button>
+          ) : null}
+        </div>
       </div>
       {safeSegments.length ? (
         <ol className="capture-group-formal-interval-list" aria-label="正式动作区间列表">
-          {safeSegments.map((segment, index) => {
+          {displayedSegments.map((segment, index) => {
             const labelName = getActionDisplayName(segment.label, schema)
             const formattedStart = formatAnnotationTime(segment.start_ms)
             const formattedEnd = formatAnnotationTime(segment.end_ms)
             return (
               <li key={`${segment.label}-${segment.start_ms}-${segment.end_ms}-${index}`}>
-                <div className="capture-group-readonly-time">
-                  <strong>
-                    {formattedStart && formattedEnd
-                      ? `${formattedStart} → ${formattedEnd}`
-                      : '时间暂不可用'}
-                  </strong>
-                  <small>
-                    原始值：{segment.start_ms}–{segment.end_ms} 毫秒
-                  </small>
-                </div>
-                <span>{labelName ?? segment.label}</span>
+                <span className="capture-group-time-pill">
+                  {formattedStart && formattedEnd
+                    ? `${formattedStart} → ${formattedEnd}`
+                    : '时间暂不可用'}
+                </span>
+                <span className="capture-group-action-name">{labelName ?? segment.label}</span>
               </li>
             )
           })}
@@ -511,6 +524,15 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
   )
 }
 
+const executedCheckMeta: Record<string, { label: string; desc: string }> = {
+  REVIEW_APPROVED: { label: '人工复核通过', desc: '经授权复核人审核确认' },
+  GROUP_QUALITY_ADMITTING: { label: '整体质量准入', desc: '采集记录综合质量评定通过' },
+  PRIMARY_VIEW_AUTHORITATIVE_INTERVAL: { label: '主机位权威区间有效', desc: '动作时间段与主机位基准对齐' },
+  QUALIFIED_VIEWS_ONLY: { label: '已排除不合格机位', desc: '非合格视角不参与动作计算' },
+  SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE: { label: '辅机位参考证据就绪', desc: '多视角事件级同步证据已记录' },
+  RAW_MEDIA_RETAINED: { label: '原始视频资产完整', desc: '原始媒体已安全归档' },
+}
+
 interface CaptureGroupCleaningCheckProps {
   cleaning: CleaningResult | null
   primaryCameraNumber: number | null
@@ -565,7 +587,7 @@ function CaptureGroupCleaningCheck({
                 {
                   id: 'cleaning-rule-digest',
                   label: '规则摘要',
-                  value: <code>{cleaning.rule_set_digest}</code>,
+                  value: <code>{shortEvidenceId(cleaning.rule_set_digest)}</code>,
                 },
               ]
             : []),
@@ -581,11 +603,7 @@ function CaptureGroupCleaningCheck({
         ]}
       />
       <CleaningList title="检查原因" items={cleaning.reason_codes} emptyText="没有阻断原因。" />
-      <CleaningList
-        title="已执行检查"
-        items={cleaning.executed_checks}
-        emptyText="未返回检查项。"
-      />
+      <CleaningChecksList items={cleaning.executed_checks} />
       <div className="capture-group-cleaning-evidence-grid">
         <EvidenceViewList
           title="参与机位"
@@ -636,6 +654,33 @@ function CleaningList({
   )
 }
 
+function CleaningChecksList({ items }: { items: string[] | null | undefined }) {
+  const safeItems = Array.isArray(items) ? items : []
+  return (
+    <div className="capture-group-cleaning-list">
+      <strong>已执行检查</strong>
+      {safeItems.length ? (
+        <div className="capture-group-checks-grid" role="list" aria-label="已执行检查">
+          {safeItems.map((item) => {
+            const meta = executedCheckMeta[item]
+            return (
+              <div key={item} className="capture-group-check-item" role="listitem">
+                <Check size={13} className="capture-group-check-icon" aria-hidden="true" />
+                <div className="capture-group-check-info">
+                  <strong>{meta?.label ?? item}</strong>
+                  <code className="capture-group-check-code">{item}</code>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <span>未返回检查项。</span>
+      )}
+    </div>
+  )
+}
+
 function CleaningPrimaryInterval({
   primaryCameraNumber,
   primaryInterval,
@@ -645,13 +690,32 @@ function CleaningPrimaryInterval({
   primaryInterval: CaptureGroupEvidence[]
   schema: AnnotationLabelSchema | null
 }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const INITIAL_COUNT = 4
+  const safeIntervals = primaryInterval
+  const hasMore = safeIntervals.length > INITIAL_COUNT
+  const displayed = isExpanded ? safeIntervals : safeIntervals.slice(0, INITIAL_COUNT)
+
   return (
     <div className="capture-group-cleaning-interval">
-      <strong>主视图正式时间轴</strong>
-      <span>{primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}只展示正式动作时间段</span>
-      {primaryInterval.length ? (
-        <ol>
-          {primaryInterval.map((interval, index) => {
+      <div className="capture-group-cleaning-interval-header">
+        <div>
+          <strong>主视图正式时间轴</strong>
+          <span>{primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}只展示正式动作时间段</span>
+        </div>
+        {hasMore ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() => setIsExpanded((prev) => !prev)}
+          >
+            {isExpanded ? '收起' : `展开全部 (${safeIntervals.length})`}
+          </Button>
+        ) : null}
+      </div>
+      {safeIntervals.length ? (
+        <ol className="capture-group-formal-interval-list">
+          {displayed.map((interval, index) => {
             const label = stringValue(interval, 'label')
             const labelName = label ? getActionDisplayName(label, schema) : null
             const startMs = numberValue(interval, 'start_ms')
@@ -660,19 +724,12 @@ function CleaningPrimaryInterval({
             const formattedEnd = formatAnnotationTime(endMs)
             return (
               <li key={evidenceKey(interval, index)}>
-                <div className="capture-group-readonly-time">
-                  <strong>
-                    {formattedStart && formattedEnd
-                      ? `${formattedStart} → ${formattedEnd}`
-                      : '时间暂不可用'}
-                  </strong>
-                  {startMs !== null && endMs !== null ? (
-                    <small>
-                      原始值：{startMs}–{endMs} 毫秒
-                    </small>
-                  ) : null}
-                </div>
-                <span>{labelName ?? label ?? '未提供标签'}</span>
+                <span className="capture-group-time-pill">
+                  {formattedStart && formattedEnd
+                    ? `${formattedStart} → ${formattedEnd}`
+                    : '时间暂不可用'}
+                </span>
+                <span className="capture-group-action-name">{labelName ?? label ?? '未提供标签'}</span>
               </li>
             )
           })}

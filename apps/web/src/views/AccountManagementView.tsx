@@ -138,8 +138,14 @@ export default function AccountManagementView() {
 
   return (
     <div className="account-management-page">
+      <nav className="breadcrumb" aria-label="面包屑导航">
+        <span>设置</span>
+        <span className="breadcrumb-separator" aria-hidden="true">
+          /
+        </span>
+        <span>平台账号</span>
+      </nav>
       <PageHeader
-        eyebrow="内部访问控制"
         titleId="accounts-title"
         title="平台账号"
         description="平台账号加入项目后，才可访问项目数据。"
@@ -201,7 +207,7 @@ export default function AccountManagementView() {
             tableLayout="fixed"
             columns={[
               {
-                title: '账号',
+                title: '平台账号',
                 dataIndex: 'username',
                 width: 240,
                 render: (username: string) => (

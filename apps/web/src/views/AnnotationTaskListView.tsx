@@ -20,10 +20,6 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeed
 import { Section } from '@/components/workspace/Section'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import {
-  formatAnnotationTime,
-  getActionDisplayName,
-} from '@/features/capture-group/capture-group-detail-model'
-import {
   annotationTaskStatusLabel,
   annotationTaskStatusTone,
   captureGroupTaskDestination,
@@ -222,19 +218,16 @@ export default function AnnotationTaskListView({
           className="annotation-task-overview"
           aria-label={progress.scope === 'PROJECT' ? '项目标注任务进度' : '我的标注任务进度'}
         >
-          <strong>{progress.total} 个任务</strong>
-          <span aria-hidden="true">·</span>
-          <span>{progress.completed} 个已完成</span>
-          <span aria-hidden="true">·</span>
-          <span>
-            {progress.awaiting_submission + progress.rework_required + progress.awaiting_review}{' '}
-            个待处理
-          </span>
-          <p className="form-hint">
-            {progress.scope === 'PROJECT'
-              ? '以下任务来自服务端授权的项目范围查询，不受当前视频分页限制。'
-              : '以下任务仅包含分配给你的记录，不受当前视频分页限制。'}
-          </p>
+          <div className="task-overview-metrics">
+            <strong>{progress.total} 个任务</strong>
+            <span className="task-overview-dot" aria-hidden="true">·</span>
+            <span>{progress.completed} 个已完成</span>
+            <span className="task-overview-dot" aria-hidden="true">·</span>
+            <span>
+              {progress.awaiting_submission + progress.rework_required + progress.awaiting_review}{' '}
+              个待处理
+            </span>
+          </div>
         </section>
       ) : null}
       {loadState === 'success' && visibleItems.length ? (
@@ -323,37 +316,33 @@ export default function AnnotationTaskListView({
                     ) : null}
                     {revision ? (
                       <div className="task-details-block">
-                        <h3>标注时间段</h3>
-                        <ol className="task-annotation-list">
-                          {revision.annotation_document.segments.map((segment, index) => {
-                            const label = getActionDisplayName(segment.label, labelSchema)
-                            const formattedStart = formatAnnotationTime(segment.start_ms)
-                            const formattedEnd = formatAnnotationTime(segment.end_ms)
-                            return (
-                              <li key={`${segment.start_ms}-${segment.end_ms}-${segment.label}`}>
-                                <div className="task-annotation-time">
-                                  <span className="task-annotation-range">
-                                    时间段 {index + 1} ·{' '}
-                                    <strong>
-                                      {formattedStart && formattedEnd
-                                        ? `${formattedStart} → ${formattedEnd}`
-                                        : '时间暂不可用'}
-                                    </strong>
-                                  </span>
-                                  <small>
-                                    原始值：{segment.start_ms}–{segment.end_ms} 毫秒
-                                  </small>
-                                </div>
-                                <span>{label}</span>
-                              </li>
-                            )
-                          })}
-                        </ol>
-                        {revision.annotation_document.note ? (
-                          <p className="task-annotation-note">
-                            标注备注：{revision.annotation_document.note}
-                          </p>
-                        ) : null}
+                        <h3>标注详情</h3>
+                        <div className="task-segments-callout">
+                          <div className="task-segments-summary-row">
+                            <p className="task-segments-summary-text">
+                              共记录 <strong>{revision.annotation_document.segments.length}</strong> 个动作标注时间段
+                            </p>
+                            {labelSchema ? (
+                              <span className="task-segments-schema-tag">
+                                规范版本：{labelSchema.schema_version}
+                              </span>
+                            ) : null}
+                          </div>
+                          {revision.annotation_document.note ? (
+                            <p className="task-annotation-note">
+                              标注备注：{revision.annotation_document.note}
+                            </p>
+                          ) : null}
+                          {taskDestination ? (
+                            <Link
+                              className="task-workbench-direct-link"
+                              to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
+                            >
+                              <span>在标注工作台查看动作时间轴与视频同步回放</span>
+                              <ArrowRight aria-hidden="true" size={13} />
+                            </Link>
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
                     {presentation ? (

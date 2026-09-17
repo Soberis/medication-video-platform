@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Form, Input, Table } from 'antd'
+import { Alert, App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -27,6 +27,7 @@ export default function AnnotationLabelLibraryView() {
   const [schema, setSchema] = useState<AnnotationLabelSchema | null>(null)
   const [state, setState] = useState<'loading' | 'success' | 'error'>('loading')
   const [saving, setSaving] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const requestRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -66,6 +67,7 @@ export default function AnnotationLabelLibraryView() {
       })
       setSchema(result)
       form.resetFields()
+      setIsModalOpen(false)
       void message.success('标签已发布为新的不可变标注规范。')
     } catch (error) {
       void message.error(
@@ -77,12 +79,30 @@ export default function AnnotationLabelLibraryView() {
   }
 
   return (
-    <>
+    <div className="label-library-page">
+      <nav className="breadcrumb" aria-label="面包屑导航">
+        <span>设置</span>
+        <span className="breadcrumb-separator" aria-hidden="true">
+          /
+        </span>
+        <span>标签库</span>
+      </nav>
       <PageHeader
-        eyebrow="全局标注规范"
+        titleId="label-library-title"
         title="标签库"
         description="新增标签会发布新的不可变规范；已有标注任务和导出数据继续保留原规范。"
-        actions={<RefreshButton loading={state === 'loading'} onClick={() => void load()} />}
+        actions={
+          <>
+            <Button
+              type="primary"
+              icon={<Plus size={14} />}
+              onClick={() => setIsModalOpen(true)}
+            >
+              新增标签
+            </Button>
+            <RefreshButton loading={state === 'loading'} onClick={() => void load()} />
+          </>
+        }
       />
       {state === 'loading' && !schema ? <LoadingState>正在读取标签库…</LoadingState> : null}
       {state === 'error' ? (
@@ -91,110 +111,124 @@ export default function AnnotationLabelLibraryView() {
         </ErrorState>
       ) : null}
       {schema ? (
-        <div className="workspace-stack">
-          <Section
-            className="table-card working-surface"
-            title="当前标签"
-            actions={
-              <StatusBadge tone="info" className="label-version-tag">
-                规范版本: {schema.schema_version}
-              </StatusBadge>
-            }
-          >
-            <Table
-              rowKey="label_id"
-              pagination={false}
-              dataSource={schema.labels}
-              columns={[
-                {
-                  title: '稳定标签 ID',
-                  dataIndex: 'label_id',
-                  width: 220,
-                  render: (value: string) => <code className="label-code-tag">{value}</code>,
+        <Section
+          className="table-card working-surface"
+          title="当前标签"
+          titleId="label-library-table-title"
+          actions={
+            <StatusBadge tone="info" className="label-version-tag">
+              规范版本: {schema.schema_version}
+            </StatusBadge>
+          }
+        >
+          <Table
+            rowKey="label_id"
+            pagination={false}
+            dataSource={schema.labels}
+            columns={[
+              {
+                title: '稳定标签 ID',
+                dataIndex: 'label_id',
+                width: 220,
+                render: (value: string) => <code className="label-code-tag">{value}</code>,
+              },
+              {
+                title: '显示名称',
+                dataIndex: 'display_name',
+                width: 180,
+                render: (text: string, row) => {
+                  const style = getActionStyle(row.label_id)
+                  return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: style.dot,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <strong>{text}</strong>
+                    </span>
+                  )
                 },
-                {
-                  title: '显示名称',
-                  dataIndex: 'display_name',
-                  width: 180,
-                  render: (text: string, row) => {
-                    const style = getActionStyle(row.label_id)
-                    return (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: style.dot,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <strong>{text}</strong>
-                      </span>
-                    )
-                  },
-                },
-                { title: '说明', dataIndex: 'description' },
-              ]}
-            />
-          </Section>
-          <Section className="account-create-panel working-surface" title="新增动作标签">
-            <p className="form-hint" style={{ marginBottom: 12 }}>
-              发布后不能编辑、删除或重新排序。
-            </p>
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message="新建标注任务会使用新规范；历史任务继续绑定已有规范。"
-            />
-            <Form
-              form={form}
-              layout="vertical"
-              className="label-create-form"
-              onFinish={(values) => void submit(values)}
-            >
-              <div className="label-create-form-row">
-                <Form.Item
-                  label="稳定标签 ID"
-                  name="labelId"
-                  rules={[
-                    { required: true, message: '请输入稳定标签 ID。' },
-                    { pattern: /^[a-z][a-z0-9_]{0,63}$/, message: '使用小写字母、数字和下划线。' },
-                  ]}
-                  extra="如 verify_dose"
-                >
-                  <Input autoComplete="off" placeholder="例如 verify_dose" />
-                </Form.Item>
-                <Form.Item
-                  label="中文显示名称"
-                  name="displayName"
-                  rules={[{ required: true, message: '请输入显示名称。' }]}
-                  extra="在标注工作区中显示的中文操作名"
-                >
-                  <Input autoComplete="off" maxLength={128} placeholder="例如 确认剂量" />
-                </Form.Item>
-              </div>
-              <Form.Item
-                label="动作说明"
-                name="description"
-                rules={[{ required: true, message: '请输入说明。' }]}
-                extra="详细描述动作开始、进行与结束的标准，供标注员参考"
-              >
-                <Input.TextArea
-                  autoSize={{ minRows: 2, maxRows: 4 }}
-                  maxLength={512}
-                  placeholder="详细说明动作的标准判定依据…"
-                />
-              </Form.Item>
-              <Button type="primary" htmlType="submit" loading={saving} icon={<Plus size={14} />}>
-                发布标签
-              </Button>
-            </Form>
-          </Section>
-        </div>
+              },
+              { title: '说明', dataIndex: 'description' },
+            ]}
+          />
+        </Section>
       ) : null}
-    </>
+
+      <Modal
+        title="新增动作标签"
+        open={isModalOpen}
+        onCancel={() => {
+          setIsModalOpen(false)
+          form.resetFields()
+        }}
+        footer={null}
+        destroyOnClose
+        centered
+        width={520}
+      >
+        <p className="form-hint" style={{ marginBottom: 12 }}>
+          发布后不能编辑、删除或重新排序。
+        </p>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="新建标注任务会使用新规范；历史任务继续绑定已有规范。"
+        />
+        <Form
+          form={form}
+          layout="vertical"
+          className="management-modal-form"
+          onFinish={(values) => void submit(values)}
+        >
+          <div className="label-create-form-row">
+            <Form.Item
+              label="稳定标签 ID"
+              name="labelId"
+              rules={[
+                { required: true, message: '请输入稳定标签 ID。' },
+                { pattern: /^[a-z][a-z0-9_]{0,63}$/, message: '使用小写字母、数字和下划线。' },
+              ]}
+              extra="如 verify_dose"
+            >
+              <Input autoComplete="off" placeholder="例如 verify_dose" />
+            </Form.Item>
+            <Form.Item
+              label="中文显示名称"
+              name="displayName"
+              rules={[{ required: true, message: '请输入显示名称。' }]}
+              extra="在标注工作区中显示的中文操作名"
+            >
+              <Input autoComplete="off" maxLength={128} placeholder="例如 确认剂量" />
+            </Form.Item>
+          </div>
+          <Form.Item
+            label="动作说明"
+            name="description"
+            rules={[{ required: true, message: '请输入说明。' }]}
+            extra="详细描述动作开始、进行与结束的标准，供标注员参考"
+          >
+            <Input.TextArea
+              autoSize={{ minRows: 3, maxRows: 5 }}
+              maxLength={512}
+              placeholder="详细说明动作的标准判定依据…"
+            />
+          </Form.Item>
+          <div className="management-modal-actions">
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" htmlType="submit" loading={saving} icon={<Plus size={14} />}>
+              发布标签
+            </Button>
+          </div>
+        </Form>
+      </Modal>
+    </div>
   )
 }
