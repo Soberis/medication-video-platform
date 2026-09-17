@@ -142,7 +142,6 @@ afterEach(() => vi.unstubAllGlobals())
 describe('annotation task list view', () => {
   it('loads the task queue and keeps annotation navigation as a top-level context', async () => {
     const fetchMock = stubTasks([assignedTask], labelSchema)
-    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('尚未提交')).toBeInTheDocument()
     const progressSummary = await screen.findByLabelText('项目标注任务进度')
@@ -157,9 +156,6 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '面包屑导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '任务队列' })).toBeInTheDocument()
-    await user.click(screen.getByText('查看详情'))
-    expect(screen.getByText('local-synthetic-uploader')).toBeInTheDocument()
-    expect(screen.getByText(/a0000000.*0001/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /继续标注/ })).toBeInTheDocument()
     expect(screen.queryByText('更多项目操作')).not.toBeInTheDocument()
     expect(
@@ -174,9 +170,9 @@ describe('annotation task list view', () => {
       'annotation-task-list-surface',
     )
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/annotation-label-schema`,
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/annotation-label-schema'),
+      expect.anything(),
     )
   })
 
@@ -418,37 +414,9 @@ describe('annotation task list view', () => {
       },
     }))
     stubTasks(tasks, labelSchema)
-    const user = userEvent.setup()
     renderView()
     expect(await screen.findByText('复核已通过 · 标注检查通过')).toBeInTheDocument()
     for (const { expected } of outcomes) expect(screen.getByText(expected)).toBeInTheDocument()
-    const completedRow = screen.getAllByRole('listitem')[0]!
-    const annotationDetails = within(completedRow).getByText('查看详情')
-    await user.click(annotationDetails)
-    expect(
-      within(completedRow).getByText(
-        (_, el) =>
-          el?.tagName === 'P' &&
-          (el?.textContent?.includes('共记录 1 个动作标注时间段') ?? false),
-      ),
-    ).toBeInTheDocument()
-    expect(
-      within(completedRow).getByRole('link', {
-        name: /在标注工作台查看动作时间轴与视频同步回放/,
-      }),
-    ).toBeInTheDocument()
-    const evidenceDetails = screen.getAllByText('查看详情')
-    expect(evidenceDetails).toHaveLength(4)
-    await user.click(evidenceDetails[1]!)
-    expect(evidenceDetails[1]?.closest('details')).toHaveAttribute('open')
-    expect(within(completedRow).getByText('提交人')).toBeInTheDocument()
-    expect(within(completedRow).getByText('复核人')).toBeInTheDocument()
-    expect(await screen.findByText('标注检查需处理，请补充事实后重试。')).toBeInTheDocument()
-    expect(screen.getByText(/缺少主视图正式时间段/)).toBeInTheDocument()
-    expect(screen.getByText(/其他标注检查原因（FUTURE_RULE_CHECK）/)).toBeInTheDocument()
-    await user.click(evidenceDetails[2]!)
-    expect(await screen.findByText(/标注检查未通过；视频未删除/)).toBeInTheDocument()
-    expect(screen.getByText(/主视图正式时间段存在重叠/)).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /查看标注结果/ })).toHaveLength(4)
     expect(screen.queryByRole('button', { name: /通过复核/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /退回修改/ })).not.toBeInTheDocument()
@@ -541,12 +509,6 @@ describe('annotation task list view', () => {
     expect(screen.getByText('管理员自审')).toBeInTheDocument()
     const taskRow = screen.getByRole('listitem', { name: /已完成/ })
     expect(within(taskRow).getByText('复核已通过 · 标注检查通过')).toBeInTheDocument()
-    const user = userEvent.setup()
-    await user.click(within(taskRow).getByText('查看详情'))
-    expect(within(taskRow).getByText('执行人')).toBeInTheDocument()
-    expect(within(taskRow).getByText('提交人')).toBeInTheDocument()
-    expect(within(taskRow).getByText('复核人')).toBeInTheDocument()
-    expect(within(taskRow).getAllByText('local-synthetic-admin')).toHaveLength(4)
     expect(taskRow).toHaveTextContent('（管理员自审）')
   })
 
@@ -569,9 +531,6 @@ describe('annotation task list view', () => {
 
     const taskRow = await screen.findByRole('listitem', { name: /待返工/ })
     expect(taskRow).toHaveTextContent('复核未通过')
-    expect(screen.queryByText('请补充完整的拿取容器/工具时间段。')).not.toBeVisible()
-    await user.click(within(taskRow).getByText('查看详情'))
-    expect(screen.getByText('请补充完整的拿取容器/工具时间段。')).toBeVisible()
     await user.click(within(taskRow).getByRole('link', { name: /修改标注/ }))
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId)),
@@ -611,21 +570,21 @@ describe('annotation task list view', () => {
     expect(screen.queryByRole('button', { name: '预览手部关键点导出' })).not.toBeInTheDocument()
   })
 
-  it('shows the whole page as failed when the label schema cannot be loaded', async () => {
+  it('shows the whole page as failed when loading annotation tasks fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi
         .fn()
         .mockImplementation((input: RequestInfo | URL) =>
           Promise.resolve(
-            String(input).endsWith('/annotation-label-schema')
-              ? jsonResponse({ error_code: 'ANNOTATION_LABEL_SCHEMA_NOT_FOUND' }, { status: 404 })
-              : jsonResponse(taskList([assignedTask])),
+            String(input).endsWith('/annotation-tasks')
+              ? jsonResponse({ error_code: 'ANNOTATION_TASK_NOT_FOUND' }, { status: 404 })
+              : jsonResponse({}),
           ),
         ),
     )
     renderView()
-    expect(await screen.findByText('ANNOTATION_LABEL_SCHEMA_NOT_FOUND')).toBeInTheDocument()
+    expect(await screen.findByText('ANNOTATION_TASK_NOT_FOUND')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 })

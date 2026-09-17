@@ -40,7 +40,7 @@ describe('capture group list view', () => {
       paths.captureGroupFocus(projectId, outsideId, 'annotation'),
     )
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(taskRow.querySelector(':scope > .task-details')).not.toBeNull()
+    expect(taskRow.querySelector('.annotation-task-row-identity')).not.toBeNull()
   })
 
   it('allows one or multiple selections and hides records without approved annotation', async () => {

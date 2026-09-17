@@ -80,12 +80,6 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
     fullPage: true,
     animations: 'disabled',
   })
-  await taskRows.nth(1).getByText('查看详情', { exact: true }).click()
-  const expanded = taskRows.nth(1).locator(':scope > details')
-  await expect(expanded).toHaveAttribute('open', '')
-  const rowBox = await taskRows.nth(1).boundingBox()
-  const detailsBox = await expanded.boundingBox()
-  expect(detailsBox!.width).toBeGreaterThan(rowBox!.width * 0.9)
   await expectNoHorizontalPageOverflow(page)
   await page.getByText('待标注', { exact: true }).first().click()
   await expect(taskRows).toHaveCount(1)

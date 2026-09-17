@@ -4,41 +4,23 @@ import { Link, useNavigate, useParams } from 'react-router'
 
 import {
   AnnotationTaskApiError,
-  getAnnotationLabelSchema,
   listAnnotationTasks,
-  type AnnotationLabelSchema,
   type AnnotationTask,
   type AnnotationTaskProgress,
 } from '@/api/annotation'
 import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
-import { MetadataList } from '@/components/data/MetadataList'
 import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
-import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
+import { shortId } from '@/features/catalog/catalog-presentation'
 import {
   annotationTaskStatusLabel,
   annotationTaskStatusTone,
   captureGroupTaskDestination,
 } from '@/features/capture-group-presentation'
-
-const captureGroupCleaningReasonLabels: Readonly<Record<string, string>> = {
-  REVIEW_NOT_APPROVED: '未绑定已通过的管理员复核',
-  GROUP_QUALITY_NOT_ADMITTING: '采集记录整体质量结论不满足标注检查条件',
-  PRIMARY_VIEW_MISSING: '缺少主视图',
-  PRIMARY_VIEW_NOT_QUALIFIED: '主视图当前未通过机位质量检查',
-  PRIMARY_INTERVAL_MISSING: '缺少主视图正式时间段',
-  PRIMARY_INTERVAL_INVALID: '主视图存在无效的正式时间段',
-  PRIMARY_INTERVAL_OVERLAP: '主视图正式时间段存在重叠',
-  NO_QUALIFIED_VIEWS: '采集记录没有可参与的合格机位',
-  VIEW_SET_DUPLICATE_CAMERA_NUMBER: '采集记录机位编号重复',
-  MISSING_VIEW: '采集记录机位缺失',
-  VIEW_NOT_REVIEWABLE: '采集记录机位当前不可复核',
-  VIEW_QUALITY_NOT_QUALIFIED: '采集记录机位质量未通过',
-}
 
 function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefined) {
   if (task.status === 'COMPLETED') return '当前无需操作'
@@ -54,53 +36,18 @@ function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefi
   if (task.annotation_revision?.review?.decision === 'REJECTED') return '等待任务执行人返工'
   return '等待任务执行人处理'
 }
+
 function captureGroupCleaningPresentation(task: AnnotationTask): {
   label: string
   tone: StatusIndicatorTone
-  description: string
-  reasons: string[]
-  evaluatedAt: string | null
 } | null {
   const revision = task.annotation_revision
   if (revision?.review?.decision !== 'APPROVED') return null
   const result = revision.capture_group_cleaning
-  const reasons = (result?.reason_codes ?? []).map((code) => {
-    return (
-      captureGroupCleaningReasonLabels[code] ??
-      `其他标注检查原因（${/^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'UNKNOWN_REASON'}）`
-    )
-  })
-  if (result?.outcome === 'PASS')
-    return {
-      label: '通过',
-      tone: 'success',
-      description: '标注检查通过。',
-      reasons,
-      evaluatedAt: result.evaluated_at,
-    }
-  if (result?.outcome === 'WARNING')
-    return {
-      label: '需处理',
-      tone: 'warning',
-      description: '标注检查需处理，请补充事实后重试。',
-      reasons,
-      evaluatedAt: result.evaluated_at,
-    }
-  if (result?.outcome === 'REJECT')
-    return {
-      label: '未通过',
-      tone: 'destructive',
-      description: '标注检查未通过；视频未删除。',
-      reasons,
-      evaluatedAt: result.evaluated_at,
-    }
-  return {
-    label: '待处理',
-    tone: 'neutral',
-    description: '尚无标注检查结论。',
-    reasons,
-    evaluatedAt: null,
-  }
+  if (result?.outcome === 'PASS') return { label: '通过', tone: 'success' }
+  if (result?.outcome === 'WARNING') return { label: '需处理', tone: 'warning' }
+  if (result?.outcome === 'REJECT') return { label: '未通过', tone: 'destructive' }
+  return { label: '待处理', tone: 'neutral' }
 }
 
 function taskEvidenceLabel(
@@ -137,7 +84,6 @@ export default function AnnotationTaskListView({
   const { session } = useAuth()
   const [items, setItems] = useState<AnnotationTask[]>([])
   const [progress, setProgress] = useState<AnnotationTaskProgress | null>(null)
-  const [labelSchema, setLabelSchema] = useState<AnnotationLabelSchema | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorCode, setErrorCode] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
@@ -149,18 +95,13 @@ export default function AnnotationTaskListView({
     activeRequest.current = request
     setLoadState('loading')
     setProgress(null)
-    setLabelSchema(null)
     setErrorCode('')
     setErrorMessage('')
     try {
-      const [taskList, schema] = await Promise.all([
-        listAnnotationTasks(projectId, request.signal),
-        getAnnotationLabelSchema(projectId, request.signal),
-      ])
+      const taskList = await listAnnotationTasks(projectId, request.signal)
       if (activeRequest.current !== request) return
       setItems(taskList.items)
       setProgress(taskList.progress)
-      setLabelSchema(schema)
       setLoadState('success')
     } catch (error) {
       if (request.signal.aborted || activeRequest.current !== request) return
@@ -250,116 +191,6 @@ export default function AnnotationTaskListView({
               const revision = row.annotation_revision
               const presentation = captureGroupCleaningPresentation(row)
               const taskDestination = captureGroupTaskDestination(row)
-              const taskDetails = (
-                <details className="task-details">
-                  <summary>查看详情</summary>
-                  <div className="task-details-content">
-                    <MetadataList
-                      className="task-details-metadata"
-                      ariaLabel={`${taskSubject} 的任务详情`}
-                      items={[
-                        {
-                          id: 'task-id',
-                          label: '任务 ID',
-                          value: (
-                            <code title={row.annotation_task_id}>
-                              {shortId(row.annotation_task_id)}
-                            </code>
-                          ),
-                        },
-                        { id: 'created-by', label: '创建者', value: row.created_by },
-                        {
-                          id: 'created-at',
-                          label: '创建时间',
-                          value: formatDateTime(row.created_at),
-                        },
-                        {
-                          id: 'assignee',
-                          label: '执行人',
-                          value: row.assignee_actor_id,
-                        },
-                        ...(revision
-                          ? [
-                              {
-                                id: 'submitted-by',
-                                label: '提交人',
-                                value: revision.submitted_by,
-                              },
-                              {
-                                id: 'submitted-at',
-                                label: '提交时间',
-                                value: formatDateTime(revision.submitted_at),
-                              },
-                              ...(revision.review
-                                ? [
-                                    {
-                                      id: 'reviewed-by',
-                                      label: '复核人',
-                                      value: revision.review.reviewed_by,
-                                    },
-                                    {
-                                      id: 'reviewed-at',
-                                      label: '复核时间',
-                                      value: formatDateTime(revision.review.reviewed_at),
-                                    },
-                                  ]
-                                : []),
-                            ]
-                          : []),
-                      ]}
-                    />
-                    {revision?.review?.review_note ? (
-                      <div className="task-details-block">
-                        <h3>复核意见</h3>
-                        <p className="task-review-note">{revision.review.review_note}</p>
-                      </div>
-                    ) : null}
-                    {revision ? (
-                      <div className="task-details-block">
-                        <h3>标注详情</h3>
-                        <div className="task-segments-callout">
-                          <div className="task-segments-summary-row">
-                            <p className="task-segments-summary-text">
-                              共记录 <strong>{revision.annotation_document.segments.length}</strong> 个动作标注时间段
-                            </p>
-                            {labelSchema ? (
-                              <span className="task-segments-schema-tag">
-                                规范版本：{labelSchema.schema_version}
-                              </span>
-                            ) : null}
-                          </div>
-                          {revision.annotation_document.note ? (
-                            <p className="task-annotation-note">
-                              标注备注：{revision.annotation_document.note}
-                            </p>
-                          ) : null}
-                          {taskDestination ? (
-                            <Link
-                              className="task-workbench-direct-link"
-                              to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
-                            >
-                              <span>在标注工作台查看动作时间轴与视频同步回放</span>
-                              <ArrowRight aria-hidden="true" size={13} />
-                            </Link>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-                    {presentation ? (
-                      <div className="task-details-block">
-                        <h3>标注检查说明</h3>
-                        <p>{presentation.description}</p>
-                        {presentation.evaluatedAt ? (
-                          <p>最近核对：{formatDateTime(presentation.evaluatedAt)}</p>
-                        ) : null}
-                        {presentation.reasons.length ? (
-                          <p>原因：{presentation.reasons.join('；')}</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </details>
-              )
               const taskAction =
                 row.status !== 'COMPLETED' && taskDestination ? (
                   <Link
@@ -393,7 +224,6 @@ export default function AnnotationTaskListView({
                     if (
                       target.closest('a') ||
                       target.closest('button') ||
-                      target.closest('details') ||
                       (window.getSelection()?.toString().length ?? 0) > 0
                     ) {
                       return
@@ -406,7 +236,7 @@ export default function AnnotationTaskListView({
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return
                     const target = event.target as HTMLElement
-                    if (target.closest('a') || target.closest('button') || target.closest('details')) return
+                    if (target.closest('a') || target.closest('button')) return
                     event.preventDefault()
                     const destination = taskDestination
                       ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
@@ -479,7 +309,6 @@ export default function AnnotationTaskListView({
                           ))}
                     </div>
                   </footer>
-                  {taskDetails}
                 </li>
               )
             })}
