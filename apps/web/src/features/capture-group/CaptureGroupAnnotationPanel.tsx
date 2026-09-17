@@ -762,6 +762,10 @@ export function CaptureGroupAnnotationPanel({
                               onSeekToMs?.(seg.start_ms)
                               onPlaySegment?.(seg.start_ms, seg.end_ms)
                             }
+                            const rowEl = document.getElementById(`segment-row-${seg.draftId}`)
+                            if (rowEl) {
+                              rowEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                            }
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -772,6 +776,10 @@ export function CaptureGroupAnnotationPanel({
                               } else {
                                 onSeekToMs?.(seg.start_ms)
                                 onPlaySegment?.(seg.start_ms, seg.end_ms)
+                              }
+                              const rowEl = document.getElementById(`segment-row-${seg.draftId}`)
+                              if (rowEl) {
+                                rowEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
                               }
                             }
                           }}
@@ -840,6 +848,7 @@ export function CaptureGroupAnnotationPanel({
             const collapsed = isSegmentCollapsed(segment.draftId)
             return (
               <div
+                id={`segment-row-${segment.draftId}`}
                 className={`capture-group-segment-row ${isPlayingActive ? 'is-playing-active' : ''} ${collapsed ? 'is-collapsed' : 'is-expanded'}`}
                 key={segment.draftId}
               >

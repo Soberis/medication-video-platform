@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
+import { getActionStyle } from '@/features/capture-group/capture-group-detail-model'
 
 interface LabelFields {
   labelId: string
@@ -114,7 +115,24 @@ export default function AnnotationLabelLibraryView() {
                   title: '显示名称',
                   dataIndex: 'display_name',
                   width: 180,
-                  render: (text: string) => <strong>{text}</strong>,
+                  render: (text: string, row) => {
+                    const style = getActionStyle(row.label_id)
+                    return (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: style.dot,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <strong>{text}</strong>
+                      </span>
+                    )
+                  },
                 },
                 { title: '说明', dataIndex: 'description' },
               ]}

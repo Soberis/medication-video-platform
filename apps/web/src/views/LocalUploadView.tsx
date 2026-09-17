@@ -1,5 +1,5 @@
 import { Alert, Button, Progress, Select } from 'antd'
-import { UploadCloud, Video } from 'lucide-react'
+import { ArrowRight, UploadCloud, Video } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -378,6 +378,18 @@ export default function LocalUploadView() {
               tasks.length,
             )}
           </p>
+          {uploadState === 'completed' && completedTaskCount > 0 && selectedProjectId ? (
+            <div className="local-upload-completion-cta" style={{ marginTop: 12, marginBottom: 16 }}>
+              <Link
+                className="ant-btn ant-btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', height: 32 }}
+                to={paths.captureGroups(selectedProjectId)}
+              >
+                <span>前往视频列表查看已上传视频</span>
+                <ArrowRight aria-hidden="true" size={14} style={{ marginLeft: 6 }} />
+              </Link>
+            </div>
+          ) : null}
           <p className="section-description">进度仅表示已传输字节；完成以平台校验结果为准。</p>
           {tasks.map((task) => (
             <article
