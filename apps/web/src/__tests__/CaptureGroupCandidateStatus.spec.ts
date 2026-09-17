@@ -6,7 +6,6 @@ import { classifyCandidateReadError } from '@/features/catalog/hand-pose-candida
 import {
   candidateDescription,
   candidateLiveStatusLabel,
-  candidateStatusLabel,
 } from '@/features/capture-group/capture-group-detail-model'
 
 function response(
@@ -91,7 +90,6 @@ describe('capture group Candidate status', () => {
     ['success', response('SUCCEEDED', 'NO_HAND_DETECTED'), '已完成 · 未检测到手部'],
     ['success', response('SUCCEEDED', 'UNKNOWN'), '已完成 · 结果未知'],
   ] as const)('maps %s to %s', (state, candidate, expected) => {
-    expect(candidateStatusLabel(state, candidate)).toBe(expected)
     expect(candidateLiveStatusLabel(state, candidate)).toBe(expected)
   })
 })

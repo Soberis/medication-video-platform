@@ -335,7 +335,6 @@ export default function CaptureGroupListView() {
                 setSearchQuery(e.target.value)
                 setCurrentPage(1)
               }}
-              style={{ width: 220 }}
             />
             <span className="capture-group-list-count">
               {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}

@@ -1,26 +1,3 @@
-import type { CameraStreamStatus, CaptureQualityStatus, DeclaredSyncStatus } from '@/api/catalog'
-
-export const qualityStatusLabels: Record<CaptureQualityStatus, string> = {
-  PENDING: '待检测',
-  PASS: '已通过',
-  WARNING: '需关注',
-  REJECT: '未通过',
-}
-
-export const streamStatusLabels: Record<CameraStreamStatus, string> = {
-  BOUND: '已绑定，待媒体入库',
-  INGESTED: '媒体已入库',
-  INGEST_FAILED: '媒体入库失败',
-  UNAVAILABLE: '视频已删除，不可用',
-}
-
-export const declaredSyncStatusLabels: Record<DeclaredSyncStatus, string> = {
-  UNKNOWN: '边端未判定',
-  PASS: '边端声明正常',
-  WARNING: '边端声明需关注',
-  REJECT: '边端声明异常',
-}
-
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return '未提供'
   const date = new Date(value)

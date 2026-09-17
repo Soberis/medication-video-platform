@@ -447,7 +447,8 @@
   white-space: nowrap;
 }
 
-.project-list-search {
+.project-list-search,
+.capture-group-list-search {
   width: 220px !important;
   height: 32px !important;
 }
@@ -1245,25 +1246,11 @@
   border-radius: var(--app-radius-xs);
 }
 
-.playback-meta,
 .playback-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--app-space-8);
-}
-
-.playback-meta {
-  justify-self: start;
-  margin-top: 0;
-  padding: 0;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-control);
-}
-
-.playback-meta time {
-  color: var(--app-color-foreground-muted);
 }
 
 .video-stage {
@@ -1369,21 +1356,6 @@
   background: var(--app-color-media-stage-background);
 }
 
-.playback-supporting-note {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--app-space-4) var(--app-space-16);
-  margin-top: var(--app-space-8);
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-metadata);
-}
-
-.playback-supporting-note strong {
-  color: var(--app-color-foreground-secondary);
-  font-weight: var(--app-font-weight-semibold);
-}
-
 .playback-start-action,
 .playback-feedback {
   margin-top: var(--app-space-16);
@@ -1393,12 +1365,6 @@
   margin-top: var(--app-space-12);
 }
 
-.media-probe-toolbar {
-  margin-top: var(--app-space-16);
-}
-
-.quality-review-summary,
-.quality-review-actions,
 .media-report-summary {
   display: flex;
   align-items: center;
@@ -1583,7 +1549,7 @@
 .task-workbench-direct-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--app-space-6);
+  gap: var(--app-space-8);
   color: var(--app-color-primary);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-medium);
@@ -1607,10 +1573,6 @@
 .muted-text {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-base);
-}
-
-.quality-review-summary {
-  margin: 0;
 }
 
 .media-report-summary {
@@ -1638,10 +1600,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--app-space-4);
-}
-
-.quality-review-actions .ant-select {
-  width: min(100%, 300px);
 }
 
 .mono-wrap {
@@ -1743,75 +1701,24 @@
   width: 100%;
 }
 
-.account-management-grid,
-.membership-management-grid {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: var(--app-space-24);
-  align-items: start;
-  margin-top: var(--app-space-16);
-  width: 100%;
-}
-
-/* 网格子项一律允许收缩：`1fr` 的隐式最小尺寸是 auto，被卡片内容顶开时
-   整行会超出容器，在窄屏上表现为整页横滚（左卡被推到屏幕外）。 */
-.account-management-grid > *,
-.membership-management-grid > * {
-  min-width: 0;
-}
-
-/* 1024 及以下改上下堆叠。断点取 1139：双栏在 1140 以下不足以容纳
-   「340 左栏 + 20 间距 + 表格 scroll.x 的 640」，强行双栏会出横滚。 */
-@media (max-width: 1139px) {
-  .account-management-grid,
-  .membership-management-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* 表格卡片让溢出可见：`overflow: hidden` 会裁掉 antd 的 scroll.x 滚动条，
    导致窄栏下末列（操作）被裁且无法滚动。圆角由 `.ant-table` 自身承担。 */
-.account-management-grid .table-card,
-.membership-management-grid .table-card,
 .account-table-card,
-.membership-list-panel,
-.membership-table-card {
+.membership-list-panel {
   overflow: visible;
 }
 
 /* 对齐与间距：单栏全宽浑然一体，卡片顶边紧跟页面头部。 */
-.account-management-grid .table-card,
-.membership-management-grid .table-card,
 .account-table-card,
-.membership-list-panel,
-.membership-table-card {
+.membership-list-panel {
   margin-top: 0;
 }
 
 /* 两栏标题同一水平线：统一行高为控件高度并居中。 */
-.account-management-grid .workspace-section-heading,
-.membership-management-grid .workspace-section-heading,
 .account-table-card .workspace-section-heading,
-.membership-list-panel .workspace-section-heading,
-.membership-table-card .workspace-section-heading {
+.membership-list-panel .workspace-section-heading {
   align-items: center;
   min-height: var(--app-control-height-compact);
-}
-
-.account-form,
-.membership-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  width: 100%;
-  gap: 0;
-}
-
-.account-form-fields,
-.membership-form-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  width: 100%;
 }
 
 .app-search-icon,
@@ -1821,14 +1728,6 @@
   color: var(--app-color-foreground-muted);
 }
 
-.account-create-submit,
-.membership-save-btn {
-  width: 100%;
-  height: var(--app-control-height);
-  font-weight: var(--app-font-weight-medium);
-}
-
-.app-table-toolbar,
 .account-table-toolbar,
 .membership-table-toolbar,
 .label-table-toolbar {
@@ -1837,7 +1736,6 @@
   gap: var(--app-space-12);
 }
 
-.app-table-search,
 .account-search-input,
 .membership-search-input,
 .label-search-input {
@@ -1845,7 +1743,6 @@
   height: 32px !important;
 }
 
-.app-table-count,
 .account-count-badge,
 .membership-count-badge,
 .label-count-badge {
@@ -1901,7 +1798,7 @@
   background: var(--app-color-primary-subtle);
   color: var(--app-color-primary);
   font-size: 11px;
-  font-weight: var(--app-font-weight-bold);
+  font-weight: var(--app-font-weight-semibold);
   flex-shrink: 0;
 }
 
@@ -1919,7 +1816,7 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--app-radius-sm);
-  background: var(--app-color-surface-subtle);
+  background: var(--app-color-surface-muted);
   border: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-foreground);
   font-family: var(--app-font-family-mono);
@@ -1932,10 +1829,6 @@
   font-size: var(--app-font-size-helper);
 }
 
-.label-create-form {
-  max-width: 720px;
-}
-
 .label-create-form-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1945,26 +1838,6 @@
 @media (max-width: 640px) {
   .label-create-form-row {
     grid-template-columns: 1fr;
-  }
-}
-
-.account-form .form-hint,
-.membership-form .membership-form-hint {
-  grid-column: 1 / -1;
-  margin-bottom: var(--app-space-16);
-}
-
-.account-create-panel,
-.membership-create-panel {
-  width: 100%;
-  padding: var(--app-space-16);
-}
-
-@media (min-width: 1025px) {
-  .account-create-panel,
-  .membership-create-panel {
-    position: sticky;
-    top: var(--app-space-16);
   }
 }
 
@@ -2034,6 +1907,21 @@
 
 .local-upload-form .ant-select {
   width: 100%;
+}
+
+.local-upload-completion-cta {
+  margin-top: var(--app-space-12);
+  margin-bottom: var(--app-space-16);
+}
+
+.local-upload-completion-cta .ant-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+}
+
+.local-upload-completion-cta .ant-btn svg {
+  margin-left: var(--app-space-2);
 }
 
 .local-file-input {
@@ -2216,7 +2104,7 @@
 .dropzone-text {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: var(--app-space-4);
 }
 
 .dropzone-primary-action {
@@ -2415,16 +2303,8 @@
 
   .batch-form-row,
   .file-meta-grid,
-  .account-form,
-  .membership-form,
   .local-upload-form {
     grid-template-columns: 1fr;
-  }
-
-  .account-form .form-hint,
-  .account-form > .ant-btn,
-  .membership-form > .ant-btn {
-    grid-column: 1;
   }
 
   .batch-form-row > .ant-btn {
@@ -2434,7 +2314,6 @@
   .local-upload-actions,
   .upload-recovery-actions,
   .local-upload-task-actions,
-  .quality-review-actions,
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
@@ -2442,11 +2321,6 @@
 
   .selected-file-list li span {
     text-align: left;
-  }
-
-  .quality-review-actions .ant-select,
-  .quality-review-actions .ant-btn {
-    width: 100%;
   }
 
   .file-heading {

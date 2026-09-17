@@ -32,27 +32,6 @@ export interface QualityReviewCommand {
   expected_version: number
 }
 
-export const qualityDecisionLabels: Record<QualityReviewDecision, string> = {
-  UNREVIEWED: '待判断',
-  QUALIFIED: '合格',
-  REJECTED: '不合格',
-  NEEDS_REVIEW: '需复核',
-}
-
-export const qualityReasonLabels: Record<QualityReviewReasonCode, string> = {
-  MEETS_REQUIREMENTS: '符合训练数据要求',
-  SENSITIVE_CONTENT: '出现敏感内容',
-  BLURRY_OR_OUT_OF_FOCUS: '严重模糊或失焦',
-  BLACK_OR_CORRUPTED_FRAMES: '黑屏或画面损坏',
-  SEVERE_OCCLUSION: '严重遮挡',
-  INCOMPLETE_ACTION: '操作过程不完整',
-  WRONG_SCENE: '场景不符合要求',
-  DUPLICATE: '重复视频',
-  OTHER_QUALITY_FAILURE: '其他质量问题',
-  UNCERTAIN_QUALITY: '质量结论不确定',
-  METADATA_MISMATCH: '视频与元数据疑似不一致',
-}
-
 export class QualityReviewApiError extends Error {
   readonly errorCode: string
 

@@ -124,10 +124,6 @@ export const appTokens = {
     md: 8,
     lg: 10,
   },
-  shadow: {
-    floating: '0 12px 28px rgb(17 24 39 / 14%)',
-    overlay: '0 20px 48px rgb(17 24 39 / 18%)',
-  },
   typography: typographyTokens,
   control: {
     compact: 28,

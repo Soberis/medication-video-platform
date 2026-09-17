@@ -1,4 +1,4 @@
-import { App as AntdApp, ConfigProvider } from 'antd'
+﻿import { App as AntdApp, ConfigProvider } from 'antd'
 import { act, renderHook, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -391,7 +391,7 @@ function stubHookDetail(
       if (reviewGroup) {
         return Promise.resolve(
           jsonResponse(
-            viewQuality(reviewGroup, clipAssetId, qualityFixture(reviewGroup, 'QUALIFIED')),
+            viewQuality(clipAssetId, qualityFixture(reviewGroup, 'QUALIFIED')),
           ),
         )
       }

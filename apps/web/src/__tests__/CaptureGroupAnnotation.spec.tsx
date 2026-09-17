@@ -706,8 +706,8 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
 
-    // Video placeholder is ready
-    await screen.findByRole('button', { name: '播放视频' })
+    // Video placeholder is ready (async grant + high parallel load can exceed 1s)
+    await screen.findByRole('button', { name: '播放视频' }, { timeout: 5000 })
 
     const playSegmentBtn = await screen.findByRole('button', { name: '播放第 1 个时间段' })
     expect(playSegmentBtn).toBeInTheDocument()

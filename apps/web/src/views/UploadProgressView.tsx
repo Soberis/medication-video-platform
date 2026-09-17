@@ -19,7 +19,7 @@ import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 import { SummaryStrip } from '@/components/SummaryStrip'
-import { formatBytes, shortId } from '@/features/catalog/catalog-presentation'
+import { formatBytes, formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const batchStatusLabels: Record<UploadBatchStatus, string> = {
@@ -44,12 +44,8 @@ const fileKindLabels: Record<UploadFileKind, string> = {
   METADATA: '元数据',
   EVENT_LOG: '事件日志',
 }
-const uploadDeviceDisplayLabels: Record<string, string> = {
-  PLATFORM_LOCAL: '上传视频',
-}
-
 function uploadDeviceDisplayLabel(deviceId: string) {
-  return uploadDeviceDisplayLabels[deviceId] ?? deviceId
+  return deviceId === 'PLATFORM_LOCAL' ? '上传视频' : deviceId
 }
 
 function batchStatusTone(status: UploadBatchStatus): StatusBadgeTone {
@@ -92,12 +88,6 @@ function fileErrorDescription(errorCode: string) {
 
 const percent = (value: number, total: number) =>
   total <= 0 ? 0 : Math.min(100, Math.max(0, Math.round((value / total) * 100)))
-const formatTime = (value: string | null) =>
-  value === null
-    ? '—'
-    : new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' }).format(
-        new Date(value),
-      )
 
 export default function UploadProgressView() {
   const [searchParams] = useSearchParams()
@@ -316,8 +306,8 @@ export default function UploadProgressView() {
                         },
                       ]
                     : []),
-                  { id: 'created-at', label: '创建时间', value: formatTime(batch.created_at) },
-                  { id: 'expires-at', label: '有效期至', value: formatTime(batch.expires_at) },
+                  { id: 'created-at', label: '创建时间', value: formatDateTime(batch.created_at) },
+                  { id: 'expires-at', label: '有效期至', value: formatDateTime(batch.expires_at) },
                 ]}
               />
             </details>
@@ -393,12 +383,12 @@ export default function UploadProgressView() {
                     {
                       id: 'updated-at',
                       label: '最后更新',
-                      value: formatTime(file.updated_at),
+                      value: formatDateTime(file.updated_at),
                     },
                     {
                       id: 'completed-at',
                       label: '完成时间',
-                      value: formatTime(file.completed_at),
+                      value: formatDateTime(file.completed_at),
                     },
                   ]}
                 />
@@ -429,7 +419,7 @@ export default function UploadProgressView() {
                       {
                         id: 'completion-started-at',
                         label: '校验开始',
-                        value: formatTime(file.completion_started_at),
+                        value: formatDateTime(file.completion_started_at),
                       },
                     ]}
                   />

@@ -56,12 +56,6 @@ class InferenceResult:
     summary: InferenceSummary
 
 
-def candidates_from_video(
-    path: Path, model_path: Path, sampling_fps: int
-) -> list[dict[str, object]]:
-    return analyze_video(path, model_path, sampling_fps).candidates
-
-
 def analyze_video(path: Path, model_path: Path, sampling_fps: int) -> InferenceResult:
     options = mp.tasks.vision.HandLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),

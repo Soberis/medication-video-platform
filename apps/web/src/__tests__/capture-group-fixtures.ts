@@ -324,7 +324,7 @@ export function stubGroupDetail(
       if (init?.method === 'PUT' && cameraNumber !== undefined) {
         const current =
           options.viewQualityByCamera?.[cameraNumber] ??
-          (viewQuality(group, clipAssetId ?? '', options.quality) as QualityReview)
+          (viewQuality(clipAssetId ?? '', options.quality) as QualityReview)
         const request = JSON.parse(String(init.body ?? '{}')) as {
           decision?: QualityReview['decision']
           reason_code?: QualityReview['reason_code']
@@ -346,8 +346,8 @@ export function stubGroupDetail(
         jsonResponse(
           cameraNumber !== undefined
             ? (options.viewQualityByCamera?.[cameraNumber] ??
-                (viewQuality(group, clipAssetId ?? '', options.quality) as QualityReview))
-            : viewQuality(group, clipAssetId ?? '', options.quality),
+                (viewQuality(clipAssetId ?? '', options.quality) as QualityReview))
+            : viewQuality(clipAssetId ?? '', options.quality),
         ),
       )
     }
@@ -580,7 +580,6 @@ export function qualityFixture(
 }
 
 export function viewQuality(
-  group: CaptureGroup,
   clipAssetId: string,
   quality: CaptureGroupQualityReview,
 ) {

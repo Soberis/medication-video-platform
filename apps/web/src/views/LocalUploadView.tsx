@@ -380,14 +380,13 @@ export default function LocalUploadView() {
             )}
           </p>
           {uploadState === 'completed' && completedTaskCount > 0 && selectedProjectId ? (
-            <div className="local-upload-completion-cta" style={{ marginTop: 12, marginBottom: 16 }}>
+            <div className="local-upload-completion-cta">
               <Link
                 className="ant-btn ant-btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', height: 32 }}
                 to={paths.captureGroups(selectedProjectId)}
               >
                 <span>前往视频列表查看已上传视频</span>
-                <ArrowRight aria-hidden="true" size={14} style={{ marginLeft: 6 }} />
+                <ArrowRight aria-hidden="true" size={14} />
               </Link>
             </div>
           ) : null}

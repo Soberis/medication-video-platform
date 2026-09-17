@@ -46,7 +46,6 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
   const [qualityErrorMessage, setQualityErrorMessage] = useState('')
   const [taskErrorMessage, setTaskErrorMessage] = useState('')
   const [viewQualityLoading, setViewQualityLoading] = useState(true)
-  const [refreshVersion, setRefreshVersion] = useState(0)
   const [isFinalizingReceipt, setIsFinalizingReceipt] = useState(false)
   const [selectedClipAssetId, setSelectedClipAssetId] = useState<string | null>(null)
   const groupRequest = useRef<AbortController | null>(null)
@@ -226,7 +225,6 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           if (current && presentIds.has(current)) return current
           return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
         })
-        setRefreshVersion((current) => current + 1)
         setGroupLoadState('success')
         void loadHumanContext(
           generation,
@@ -319,7 +317,6 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     qualityErrorMessage,
     taskErrorMessage,
     viewQualityLoading,
-    refreshVersion,
     selectedClipAssetId,
     isFinalizingReceipt,
     refresh,

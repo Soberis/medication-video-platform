@@ -414,6 +414,9 @@ function ViewSetSummary({ viewSet }: ViewSetSummaryProps) {
   )
 }
 
+const INITIAL_SEGMENT_VISIBLE_COUNT = 6
+const INITIAL_INTERVAL_VISIBLE_COUNT = 4
+
 function FormalAnnotationIntervals({
   primaryCameraNumber,
   schema,
@@ -425,9 +428,10 @@ function FormalAnnotationIntervals({
 }) {
   const safeSegments = Array.isArray(segments) ? segments : []
   const [isExpanded, setIsExpanded] = useState(false)
-  const INITIAL_VISIBLE_COUNT = 6
-  const hasMore = safeSegments.length > INITIAL_VISIBLE_COUNT
-  const displayedSegments = isExpanded ? safeSegments : safeSegments.slice(0, INITIAL_VISIBLE_COUNT)
+  const hasMore = safeSegments.length > INITIAL_SEGMENT_VISIBLE_COUNT
+  const displayedSegments = isExpanded
+    ? safeSegments
+    : safeSegments.slice(0, INITIAL_SEGMENT_VISIBLE_COUNT)
 
   return (
     <div className="capture-group-formal-intervals">
@@ -544,7 +548,6 @@ function CaptureGroupCleaningCheck({
   primaryCameraNumber,
   schema,
 }: CaptureGroupCleaningCheckProps) {
-  const captureGroupCleaning = cleaning
   if (!cleaning) return null
 
   return (
@@ -563,67 +566,73 @@ function CaptureGroupCleaningCheck({
           {cleaning.outcome === 'PASS' ? '标注检查通过' : '标注检查未通过'}
         </StatusIndicator>
         <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
-        {captureGroupCleaning?.evaluated_by ? (
-          <span>评估人：{captureGroupCleaning.evaluated_by}</span>
+        {cleaning?.evaluated_by ? (
+          <span>评估人：{cleaning.evaluated_by}</span>
         ) : null}
       </div>
-      <MetadataList
-        ariaLabel="标注检查规则来源"
-        items={[
-          ...(cleaning.rule_set_key
-            ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
-            : []),
-          ...(cleaning.rule_set_version
-            ? [
-                {
-                  id: 'cleaning-rule-version',
-                  label: '规则版本',
-                  value: cleaning.rule_set_version,
-                },
-              ]
-            : []),
-          ...(cleaning.rule_set_digest
-            ? [
-                {
-                  id: 'cleaning-rule-digest',
-                  label: '规则摘要',
-                  value: <code>{shortEvidenceId(cleaning.rule_set_digest)}</code>,
-                },
-              ]
-            : []),
-          ...(captureGroupCleaning?.authorization_basis
-            ? [
-                {
-                  id: 'cleaning-authorization',
-                  label: '授权依据',
-                  value: captureGroupCleaning.authorization_basis,
-                },
-              ]
-            : []),
-        ]}
-      />
-      <CleaningList title="检查原因" items={cleaning.reason_codes} emptyText="没有阻断原因。" />
-      <CleaningChecksList items={cleaning.executed_checks} />
-      <div className="capture-group-cleaning-evidence-grid">
-        <EvidenceViewList
-          title="参与机位"
-          views={captureGroupCleaning?.participating_views}
-          emptyText="没有参与机位。"
-          tone="success"
+      <details className="capture-group-progressive-detail capture-group-cleaning-detail">
+        <summary>
+          <span>完整检查记录</span>
+          <small>规则来源 · 原因 · 已执行检查 · 机位证据</small>
+        </summary>
+        <MetadataList
+          ariaLabel="标注检查规则来源"
+          items={[
+            ...(cleaning.rule_set_key
+              ? [{ id: 'cleaning-rule-key', label: '规则集', value: cleaning.rule_set_key }]
+              : []),
+            ...(cleaning.rule_set_version
+              ? [
+                  {
+                    id: 'cleaning-rule-version',
+                    label: '规则版本',
+                    value: cleaning.rule_set_version,
+                  },
+                ]
+              : []),
+            ...(cleaning.rule_set_digest
+              ? [
+                  {
+                    id: 'cleaning-rule-digest',
+                    label: '规则摘要',
+                    value: <code>{shortEvidenceId(cleaning.rule_set_digest)}</code>,
+                  },
+                ]
+              : []),
+            ...(cleaning?.authorization_basis
+              ? [
+                  {
+                    id: 'cleaning-authorization',
+                    label: '授权依据',
+                    value: cleaning.authorization_basis,
+                  },
+                ]
+              : []),
+          ]}
         />
-        <EvidenceViewList
-          title="排除机位"
-          views={captureGroupCleaning?.excluded_views}
-          emptyText="没有排除机位。"
-          tone="warning"
+        <CleaningList title="检查原因" items={cleaning.reason_codes} emptyText="没有阻断原因。" />
+        <CleaningChecksList items={cleaning.executed_checks} />
+        <div className="capture-group-cleaning-evidence-grid">
+          <EvidenceViewList
+            title="参与机位"
+            views={cleaning?.participating_views}
+            emptyText="没有参与机位。"
+            tone="success"
+          />
+          <EvidenceViewList
+            title="排除机位"
+            views={cleaning?.excluded_views}
+            emptyText="没有排除机位。"
+            tone="warning"
+          />
+        </div>
+        <CleaningPrimaryInterval
+          primaryCameraNumber={primaryCameraNumber}
+          primaryInterval={cleaning?.primary_interval ?? []}
+          schema={schema}
         />
-      </div>
-      <CleaningPrimaryInterval
-        primaryCameraNumber={primaryCameraNumber}
-        primaryInterval={captureGroupCleaning?.primary_interval ?? []}
-        schema={schema}
-      />
-      <EventLevelViewEvidence viewEvidence={captureGroupCleaning?.view_evidence ?? []} />
+        <EventLevelViewEvidence viewEvidence={cleaning?.view_evidence ?? []} />
+      </details>
     </div>
   )
 }
@@ -691,10 +700,9 @@ function CleaningPrimaryInterval({
   schema: AnnotationLabelSchema | null
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const INITIAL_COUNT = 4
   const safeIntervals = primaryInterval
-  const hasMore = safeIntervals.length > INITIAL_COUNT
-  const displayed = isExpanded ? safeIntervals : safeIntervals.slice(0, INITIAL_COUNT)
+  const hasMore = safeIntervals.length > INITIAL_INTERVAL_VISIBLE_COUNT
+  const displayed = isExpanded ? safeIntervals : safeIntervals.slice(0, INITIAL_INTERVAL_VISIBLE_COUNT)
 
   return (
     <div className="capture-group-cleaning-interval">

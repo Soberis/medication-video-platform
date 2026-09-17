@@ -76,10 +76,6 @@
   cursor: pointer;
 }
 
-.capture-group-inspector.is-completed .capture-group-progressive-detail:first-child {
-  border-top: 0;
-}
-
 .capture-group-supporting-warning {
   margin-top: var(--app-space-12);
 }
@@ -129,20 +125,6 @@
   gap: var(--app-space-8);
 }
 
-.capture-group-sync-note {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  padding: var(--app-space-12);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-information-surface);
-}
-
-.capture-group-sync-note > svg {
-  color: var(--app-color-primary);
-}
-
-.capture-group-sync-note p,
 .capture-group-candidate-facts p,
 .capture-group-sync-inspector p,
 .capture-group-focused-facts {
@@ -1102,7 +1084,6 @@
   overflow-wrap: anywhere;
 }
 
-.capture-group-inspector .descriptions,
 .capture-group-inspector .ant-descriptions {
   margin: 0;
 }
@@ -1438,7 +1419,7 @@
 
 .capture-group-time-pill {
   flex: none;
-  padding: 2px var(--app-space-6);
+  padding: 2px var(--app-space-8);
   background: var(--app-color-primary-subtle);
   color: var(--app-color-primary);
   font-family: var(--app-font-family-mono);
@@ -1486,7 +1467,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--app-space-8);
-  padding: var(--app-space-8) var(--app-space-10);
+  padding: var(--app-space-8) var(--app-space-12);
   background: var(--app-color-surface);
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-sm);

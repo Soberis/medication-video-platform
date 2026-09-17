@@ -81,13 +81,6 @@ export function syncReliabilityDisplayLabel(value: string) {
   return syncReliabilityLabels[value] ?? '未识别声明'
 }
 
-export const groupQualityReasons = [
-  '所有参与机位满足人工标签条件。',
-  '部分机位被排除，但剩余机位足以支持人工标注。',
-  '机位事实或质量结论需要人工进一步确认。',
-  '当前采集记录不满足人工标签条件。',
-] as const
-
 export function receiptTone(state: CaptureGroup['receipt_state']): StatusIndicatorTone {
   if (state === 'COMPLETE') return 'success'
   if (state === 'INCOMPLETE') return 'warning'
@@ -99,24 +92,6 @@ export function groupQualityTone(result: CaptureGroupQualityResult): StatusIndic
   if (result === 'NEEDS_REVIEW') return 'warning'
   if (result === 'REJECTED') return 'destructive'
   return 'neutral'
-}
-
-export function viewQualityTone(
-  decision: CaptureGroupQualityView['quality_review_decision'],
-): StatusIndicatorTone {
-  if (decision === 'QUALIFIED') return 'success'
-  if (decision === 'NEEDS_REVIEW') return 'warning'
-  if (decision === 'REJECTED') return 'destructive'
-  return 'neutral'
-}
-
-export function streamTone(stream: CaptureGroupStream | null): StatusIndicatorTone {
-  if (!stream) return 'destructive'
-  if (stream.stream_status === 'INGEST_FAILED' || stream.stream_status === 'UNAVAILABLE') {
-    return 'destructive'
-  }
-  if (stream.stream_status === 'INGESTED') return 'success'
-  return 'information'
 }
 
 export function formatViewQualitySummary(review: CaptureGroupQualityReview | null) {
@@ -238,7 +213,6 @@ export function syncSafety(stream: CaptureGroupStream) {
       label: '边端同步声明正常 · 仅供参考',
       tone: 'information' as const,
       detail: '边端声明仅作参考；当前没有已验证的可靠时间映射，参考视图不能按精确同步展示。',
-      referenceOnly: true,
     }
   }
   if (stream.sync_status === 'WARNING') {
@@ -246,7 +220,6 @@ export function syncSafety(stream: CaptureGroupStream) {
       label: '同步需关注 · 仅供参考',
       tone: 'warning' as const,
       detail: '仅作人工视觉对照，不代表精确时间对齐。',
-      referenceOnly: true,
     }
   }
   if (stream.sync_status === 'REJECT') {
@@ -254,7 +227,6 @@ export function syncSafety(stream: CaptureGroupStream) {
       label: '同步异常 · 仅供参考',
       tone: 'destructive' as const,
       detail: '不得依据该声明推导精确参考视图时间。',
-      referenceOnly: true,
     }
   }
   return {
@@ -263,13 +235,4 @@ export function syncSafety(stream: CaptureGroupStream) {
     detail: '当前没有后端验证映射；参考视图仅供采集记录级人工参考。',
     referenceOnly: true,
   }
-}
-
-export function qualityViewFromReview(
-  review: CaptureGroupQualityReview | null,
-  clipAssetId: string,
-) {
-  return (
-    review?.confirmed_view_set?.views.find((view) => view.clip_asset_id === clipAssetId) ?? null
-  )
 }

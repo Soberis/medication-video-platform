@@ -258,10 +258,6 @@ class CaptureGroupQualityReviewService {
 	}
 
 	record CaptureGroupQualityReviewCommand(CaptureGroupQualityResult result, String reason, long expectedRevision) {
-
-		boolean resultIsAdmitting() {
-			return this.result != null && this.result.isAdmitting();
-		}
 	}
 
 }

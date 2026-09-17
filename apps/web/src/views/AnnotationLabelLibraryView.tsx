@@ -134,7 +134,6 @@ export default function AnnotationLabelLibraryView() {
                 allowClear
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: 220 }}
               />
               <StatusBadge tone="info" className="label-version-tag">
                 规范版本: {schema.schema_version}

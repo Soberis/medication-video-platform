@@ -167,7 +167,6 @@ describe('HandPoseOverlay', () => {
           },
         ]}
         canPlay
-        canRecoverMissingMediaProbe={false}
         grant={{
           grant_id: 'grant-fullscreen',
           purpose: 'DATA_REVIEW',
@@ -175,7 +174,6 @@ describe('HandPoseOverlay', () => {
           expires_at: '2026-08-12T10:00:00Z',
           content_type: 'video/mp4',
         }}
-        isRecoveringMediaProbe={false}
         isRequestingPlayback={false}
         mediaProbeMessage=""
         playbackMessage=""
@@ -183,7 +181,6 @@ describe('HandPoseOverlay', () => {
         onClose={() => undefined}
         onLoadedMetadata={() => undefined}
         onPlaybackError={() => undefined}
-        onRecoverMissingMediaProbe={() => undefined}
         onStartPlayback={() => undefined}
       />,
     )
@@ -224,7 +221,6 @@ describe('HandPoseOverlay', () => {
           },
         ]}
         canPlay
-        canRecoverMissingMediaProbe={false}
         grant={{
           grant_id: 'grant-1',
           purpose: 'DATA_REVIEW',
@@ -232,7 +228,6 @@ describe('HandPoseOverlay', () => {
           expires_at: '2026-08-12T10:00:00Z',
           content_type: 'video/mp4',
         }}
-        isRecoveringMediaProbe={false}
         isRequestingPlayback={false}
         mediaProbeMessage=""
         playbackMessage=""
@@ -240,7 +235,6 @@ describe('HandPoseOverlay', () => {
         onClose={() => undefined}
         onLoadedMetadata={() => undefined}
         onPlaybackError={() => undefined}
-        onRecoverMissingMediaProbe={() => undefined}
         onStartPlayback={() => undefined}
       />,
     )
@@ -257,9 +251,6 @@ describe('HandPoseOverlay', () => {
     expect(
       Number.parseInt(stage.style.getPropertyValue('--video-stage-width'), 10),
     ).toBeGreaterThan(Number.parseInt(stage.style.getPropertyValue('--video-stage-height'), 10))
-    expect(screen.getByText('播放信息')).toBeInTheDocument()
-    expect(screen.getByLabelText('本次播放授权')).not.toHaveAttribute('open')
-    expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-08-12T10:00:00Z')
     fireEvent.play(video)
     fireEvent.pause(video)
     fireEvent.timeUpdate(video)

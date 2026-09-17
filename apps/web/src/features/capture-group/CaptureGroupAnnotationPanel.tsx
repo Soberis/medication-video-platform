@@ -48,7 +48,6 @@ import {
 import {
   groupQualityLabels,
   viewQualityLabels,
-  type CaptureGroupTaskVisibility,
 } from '@/features/capture-group-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
@@ -58,7 +57,6 @@ interface CaptureGroupAnnotationPanelProps {
   group: CaptureGroup
   groupQuality: CaptureGroupQualityReview | null
   task: AnnotationTask | null
-  taskVisibility?: CaptureGroupTaskVisibility
   schema: AnnotationLabelSchema | null
   viewRows: GroupViewRow[]
   viewReviews: Record<string, QualityReview>

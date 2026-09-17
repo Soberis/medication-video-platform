@@ -205,7 +205,6 @@ export default function ProjectListView() {
                   prefix={<Search size={14} className="app-search-icon" />}
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
-                  style={{ width: 220 }}
                 />
               ) : null}
               <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>

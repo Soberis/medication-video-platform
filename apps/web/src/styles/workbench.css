@@ -17,7 +17,7 @@
   min-height: clamp(240px, 36vh, 360px);
   padding: var(--app-space-24);
   border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-small);
+  border-radius: var(--app-radius-sm);
   background: var(--app-color-surface-muted);
   text-align: center;
 }
@@ -93,23 +93,6 @@
   justify-self: start;
 }
 
-.quality-review-editor {
-  border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.quality-review-editor > summary {
-  min-height: 40px;
-  padding-top: var(--app-space-8);
-  color: var(--app-color-primary-hover);
-  cursor: pointer;
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-semibold);
-}
-
-.quality-review-editor > .quality-review-actions {
-  padding: var(--app-space-8) 0;
-}
-
 /* Secondary disclosures keep technical facts and danger zone out of the first screen. */
 .detail-disclosure {
   margin-top: var(--app-space-16);
@@ -154,48 +137,10 @@
   font-weight: var(--app-font-weight-regular);
 }
 
-.danger-zone-inline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--app-space-16);
-  padding: var(--app-space-12) var(--app-space-4) var(--app-space-4);
-}
-
-.danger-zone-inline > div {
-  display: grid;
-  gap: var(--app-space-4);
-  min-width: 0;
-}
-
-.danger-zone-inline > div > strong {
-  color: var(--app-color-destructive);
-  font-size: var(--app-font-size-base);
-}
-
-.danger-zone-inline .form-hint {
-  font-size: var(--app-font-size-helper);
-}
-
-.annotation-task-created {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--app-space-8);
-  margin: 0;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-}
-
 @media (max-width: 720px) {
   .playback-idle-stage {
     min-height: 240px;
     padding: var(--app-space-16);
-  }
-
-  .danger-zone-inline {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .detail-disclosure > summary {

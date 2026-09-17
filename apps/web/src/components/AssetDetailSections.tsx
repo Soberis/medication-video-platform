@@ -18,7 +18,6 @@ import { HandPoseOverlay } from '@/components/HandPoseOverlay'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { LoadingState } from '@/components/WorkspaceFeedback'
-import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
 export type PlaybackState = 'idle' | 'waiting' | 'ready' | 'error' | 'expired'
 
@@ -28,23 +27,12 @@ export interface PlaybackAvailability {
   type: 'success' | 'warning' | 'error' | 'info'
 }
 
-function formatPlaybackExpiry(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return formatDateTime(value)
-  return new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
 interface PlaybackCardProps {
   availability: PlaybackAvailability | null
   candidateOverlay: HandPoseCandidate[]
   canPlay: boolean
-  canRecoverMissingMediaProbe: boolean
   expandToWorkspace?: boolean
   grant: ClipAssetPlaybackGrant | null
-  isRecoveringMediaProbe: boolean
   isRequestingPlayback: boolean
   mediaProbeMessage: string
   playbackMessage: string
@@ -55,7 +43,6 @@ interface PlaybackCardProps {
   onClose: () => void
   onLoadedMetadata: () => void
   onPlaybackError: () => void
-  onRecoverMissingMediaProbe: () => void
   onStartPlayback: () => void
 }
 
@@ -63,10 +50,8 @@ export function PlaybackCard({
   availability,
   candidateOverlay,
   canPlay,
-  canRecoverMissingMediaProbe,
   expandToWorkspace = false,
   grant,
-  isRecoveringMediaProbe,
   isRequestingPlayback,
   mediaProbeMessage,
   playbackMessage,
@@ -77,7 +62,6 @@ export function PlaybackCard({
   onClose,
   onLoadedMetadata,
   onPlaybackError,
-  onRecoverMissingMediaProbe,
   onStartPlayback,
 }: PlaybackCardProps) {
   const playbackFailed = playbackState === 'error' || playbackState === 'expired'
@@ -204,15 +188,6 @@ export function PlaybackCard({
       ) : null}
       {grant ? (
         <>
-          <details className="playback-meta" aria-label="本次播放授权">
-            <summary>播放信息</summary>
-            <time
-              dateTime={grant.expires_at}
-              title={`完整到期时间：${formatDateTime(grant.expires_at)}`}
-            >
-              有效至 {formatPlaybackExpiry(grant.expires_at)}
-            </time>
-          </details>
           {playbackMessage ? (
             <Alert
               className="playback-feedback"
@@ -285,14 +260,6 @@ export function PlaybackCard({
               </div>
             </div>
           ) : null}
-          {candidateOverlay.length > 0 ? (
-            <div className="playback-supporting-note" aria-label="骨架叠加说明">
-              <span>
-                <strong>骨架叠加</strong> · 21 个关键点与连接线
-              </span>
-              <span>左 / 右仅作方向辅助</span>
-            </div>
-          ) : null}
           {fullscreenError ? (
             <p className="form-hint playback-feedback" role="status">
               {fullscreenError}
@@ -310,14 +277,6 @@ export function PlaybackCard({
       ) : null}
       {mediaProbeMessage ? (
         <p className="form-hint media-probe-message">{mediaProbeMessage}</p>
-      ) : null}
-      {canRecoverMissingMediaProbe ? (
-        <div className="playback-toolbar media-probe-toolbar">
-          <Button loading={isRecoveringMediaProbe} onClick={onRecoverMissingMediaProbe}>
-            恢复丢失的检测任务
-          </Button>
-          <p className="form-hint">仅在确认原任务消息不存在时使用；将创建新的审计尝试。</p>
-        </div>
       ) : null}
     </section>
   )
@@ -372,7 +331,6 @@ export function MediaReportCard({
       <>
         <div className="media-report-summary">
           <StatusIndicator tone="success">完整解码已验证</StatusIndicator>
-          <span className="form-hint">完成时间：{formatDateTime(report.created_at)}</span>
         </div>
         <Descriptions
           column={{ xs: 1, sm: 2, lg: 3 }}

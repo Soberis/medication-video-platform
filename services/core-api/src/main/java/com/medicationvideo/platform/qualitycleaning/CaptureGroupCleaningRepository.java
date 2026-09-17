@@ -9,9 +9,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface CaptureGroupCleaningRepository extends JpaRepository<CaptureGroupCleaning, UUID> {
 
-	Optional<CaptureGroupCleaning> findByAnnotationRevisionIdAndInputFingerprint(UUID annotationRevisionId,
-			String inputFingerprint);
-
 	List<CaptureGroupCleaning> findAllByAnnotationRevisionIdIn(Collection<UUID> annotationRevisionIds);
 
 	Optional<CaptureGroupCleaning> findTopByProjectIdAndCaptureGroupIdOrderByEvaluatedAtDescCaptureGroupCleaningIdDesc(

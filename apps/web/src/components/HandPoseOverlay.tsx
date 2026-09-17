@@ -27,6 +27,7 @@ const HAND_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
 ]
 
 const OVERLAY_WINDOW_MS = 90
+const OVERLAY_COLOR = 'var(--app-color-media-overlay)'
 
 interface HandPoseOverlayProps {
   candidates: HandPoseCandidate[]
@@ -60,10 +61,6 @@ function currentFrame(candidates: HandPoseCandidate[], playbackTimeMs: number) {
     : []
 }
 
-function overlayColor() {
-  return 'var(--app-color-media-overlay)'
-}
-
 function handednessLabel(candidate: HandPoseCandidate) {
   if (candidate.handedness === 'LEFT') return 'Left'
   if (candidate.handedness === 'RIGHT') return 'Right'
@@ -90,7 +87,7 @@ export function HandPoseOverlay({ candidates, playbackTimeMs }: HandPoseOverlayP
     >
       <title>当前视频帧的手部检测结果</title>
       {frame.map((candidate) => {
-        const color = overlayColor()
+        const color = OVERLAY_COLOR
         const box = candidate.bounding_box
         const label = `手部 · ${handednessLabel(candidate)} ${candidate.handedness_score.toFixed(2)}`
         const labelX = Math.max(0, box.x * dimensions.width)

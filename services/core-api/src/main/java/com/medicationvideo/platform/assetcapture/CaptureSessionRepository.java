@@ -15,10 +15,6 @@ interface CaptureSessionRepository extends JpaRepository<CaptureSession, UUID> {
 
 	Optional<CaptureSession> findByBatchIdAndProjectId(UUID batchId, UUID projectId);
 
-	Optional<CaptureSession> findByCaptureSessionIdAndProjectId(UUID captureSessionId, UUID projectId);
-
-	List<CaptureSession> findAllByProjectIdOrderByCreatedAtDescCaptureSessionIdDesc(UUID projectId);
-
 	Optional<CaptureSession> findByCaptureSessionIdAndProjectIdAndCaptureGroupWorkflowTrue(UUID captureSessionId,
 			UUID projectId);
 

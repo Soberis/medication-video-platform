@@ -1,5 +1,5 @@
 import { Alert, Descriptions } from 'antd'
-import { Clock3, Video } from 'lucide-react'
+import { Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import type { AnnotationTask } from '@/api/annotation'
@@ -50,7 +50,6 @@ export function CaptureGroupFocusedView({
     playbackAvailability,
     isRequestingPlayback,
     canPlay,
-    selectedSync,
     resetPlayback,
     loadSelectedView,
     startPlayback,
@@ -237,10 +236,8 @@ export function CaptureGroupFocusedView({
         availability={playbackAvailability}
         candidateOverlay={candidateResponse?.candidates ?? []}
         canPlay={Boolean(canPlay)}
-        canRecoverMissingMediaProbe={false}
         expandToWorkspace={isCompleted}
         grant={playbackGrant}
-        isRecoveringMediaProbe={false}
         isRequestingPlayback={isRequestingPlayback}
         mediaProbeMessage={selectedDetail?.status === 'INGEST_FAILED' ? '媒体检测失败。' : ''}
         playbackMessage={playbackMessage}
@@ -257,89 +254,79 @@ export function CaptureGroupFocusedView({
           onPlaybackTimeChange?.(null)
           onPlaybackError()
         }}
-        onRecoverMissingMediaProbe={() => undefined}
         onStartPlayback={() => {
           onPlaybackTimeChange?.(null)
           void startPlayback()
         }}
       />
       {selectedDetail || selectedStream ? (
-        <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
-          手部检测：{currentCandidateLiveStatus}
-        </StatusIndicator>
-      ) : null}
-      {selectedDetail || selectedStream ? (
-        <details
-          className="capture-group-focused-details"
-          open={isDetailsOpen}
-          onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
-        >
-          <summary>查看检测与媒体信息</summary>
-          <div className="capture-group-focused-details-content">
-            {selectedSync && viewRows.length > 1 ? (
-              <div className="capture-group-sync-note capture-group-stack" role="status">
-                <Clock3 aria-hidden="true" size={16} strokeWidth={1.8} />
-                <div>
-                  <StatusIndicator tone={selectedSync.tone}>{selectedSync.label}</StatusIndicator>
-                  <p>{selectedSync.detail}</p>
-                </div>
+        <>
+          <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>
+            手部检测：{currentCandidateLiveStatus}
+          </StatusIndicator>
+          <details
+            className="capture-group-focused-details"
+            open={isDetailsOpen}
+            onToggle={(event) => setIsDetailsOpen(event.currentTarget.open)}
+          >
+            <summary>查看检测与媒体信息</summary>
+            <div className="capture-group-focused-details-content">
+              <div className="capture-group-focused-facts">
+                <Section title="手部检测" titleId="capture-group-candidate-title">
+                  <div className="capture-group-candidate-facts capture-group-stack">
+                    <p>{currentCandidateDescription}</p>
+                    {candidateResponse?.job.run_summary ? (
+                      <Descriptions
+                        column={{ xs: 1, sm: 2 }}
+                        items={[
+                          {
+                            key: 'frames',
+                            label: '分析帧数',
+                            children: candidateResponse.job.run_summary.inference_frame_count,
+                          },
+                          {
+                            key: 'hands',
+                            label: '发现手部帧',
+                            children: candidateResponse.job.run_summary.frames_with_hand,
+                          },
+                          {
+                            key: 'left',
+                            label: '左手检测次数',
+                            children: candidateResponse.job.run_summary.left_hand_detection_count,
+                          },
+                          {
+                            key: 'right',
+                            label: '右手检测次数',
+                            children: candidateResponse.job.run_summary.right_hand_detection_count,
+                          },
+                          ...(candidateResponse.job.run_summary.failure_reason
+                            ? [
+                                {
+                                  key: 'failure',
+                                  label: '失败原因',
+                                  children: candidateResponse.job.run_summary.failure_reason,
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
+                    ) : null}
+                  </div>
+                </Section>
+                {selectedDetail ? (
+                  <MediaReportCard
+                    detail={selectedDetail}
+                    errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
+                    errorMessage={selectedMediaReportError}
+                    loadState={selectedMediaReportState}
+                    onRetry={() => void loadSelectedView()}
+                    report={selectedMediaReport}
+                  />
+                ) : null}
               </div>
-            ) : null}
-            <div className="capture-group-focused-facts">
-              <Section title="手部检测" titleId="capture-group-candidate-title">
-                <div className="capture-group-candidate-facts capture-group-stack">
-                  <p>{currentCandidateDescription}</p>
-                  {candidateResponse?.job.run_summary ? (
-                    <Descriptions
-                      column={{ xs: 1, sm: 2 }}
-                      items={[
-                        {
-                          key: 'frames',
-                          label: '分析帧数',
-                          children: candidateResponse.job.run_summary.inference_frame_count,
-                        },
-                        {
-                          key: 'hands',
-                          label: '发现手部帧',
-                          children: candidateResponse.job.run_summary.frames_with_hand,
-                        },
-                        {
-                          key: 'left',
-                          label: '左手检测次数',
-                          children: candidateResponse.job.run_summary.left_hand_detection_count,
-                        },
-                        {
-                          key: 'right',
-                          label: '右手检测次数',
-                          children: candidateResponse.job.run_summary.right_hand_detection_count,
-                        },
-                        ...(candidateResponse.job.run_summary.failure_reason
-                          ? [
-                              {
-                                key: 'failure',
-                                label: '失败原因',
-                                children: candidateResponse.job.run_summary.failure_reason,
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  ) : null}
-                </div>
-              </Section>
-              {selectedDetail ? (
-                <MediaReportCard
-                  detail={selectedDetail}
-                  errorCode={selectedMediaReportState === 'error' ? 'MEDIA_REPORT_UNAVAILABLE' : ''}
-                  errorMessage={selectedMediaReportError}
-                  loadState={selectedMediaReportState}
-                  onRetry={() => void loadSelectedView()}
-                  report={selectedMediaReport}
-                />
-              ) : null}
             </div>
-          </div>
-        </details>
+          </details>
+        </>
       ) : null}
     </section>
   )

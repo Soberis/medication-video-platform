@@ -225,7 +225,6 @@ export default function ProjectMembershipView() {
                 allowClear
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: 220 }}
               />
               <span className="membership-count-badge">共 {memberships.length} 位成员</span>
             </div>

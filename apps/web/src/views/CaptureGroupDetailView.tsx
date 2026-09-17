@@ -13,7 +13,6 @@ import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGro
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
 import { CaptureGroupReviewPanel } from '@/features/capture-group/CaptureGroupReviewPanel'
-import { CaptureGroupHeaderStatus } from '@/features/capture-group/CaptureGroupOverview'
 import {
   createGroupViewRows,
   type GroupViewRow,
@@ -27,6 +26,31 @@ import {
   captureGroupFocusTargetIds,
 } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
+
+import type { CaptureGroup } from '@/api/capture-groups'
+import { StatusIndicator } from '@/components/status/StatusIndicator'
+import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
+import { formatDateTime } from '@/features/catalog/catalog-presentation'
+
+function CaptureGroupHeaderStatus({ group }: { group: CaptureGroup }) {
+  const captureTime = group.device_time_utc ?? group.created_at
+  const captureTimeLabel = group.device_time_utc ? '拍摄' : '记录'
+  const viewCount =
+    group.received_camera_count === group.expected_camera_count
+      ? `${group.expected_camera_count} 个机位`
+      : `已收到 ${group.received_camera_count}/${group.expected_camera_count} 个机位`
+
+  return (
+    <span className="capture-group-header-status">
+      <StatusIndicator tone={receiptTone(group.receipt_state)}>
+        {receiptStateLabels[group.receipt_state]}
+      </StatusIndicator>
+      <span>
+        {captureTimeLabel} {formatDateTime(captureTime)} · {viewCount}
+      </span>
+    </span>
+  )
+}
 
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()

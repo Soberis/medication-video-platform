@@ -21,7 +21,6 @@
     "contracts/events/ai-action-job-v1.schema.json",
     "contracts/events/ai-hand-pose-result-v2.schema.json",
     "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
-    "contracts/events/capture-group-quality-qualified-v1.schema.json",
     "contracts/profiles/media-probe-baseline-v1.json",
     "tools/synthetic-upload-client/index.mjs",
     "tools/synthetic-upload-client/upload-client.mjs",
@@ -121,11 +120,6 @@
       "path": "contracts/events/ai-hand-pose-dead-letter-v1.schema.json",
       "success": "AI hand-pose event JSON Schema is valid JSON: ai-hand-pose-dead-letter-v1.schema.json",
       "failure": "AI hand-pose event JSON Schema is invalid (ai-hand-pose-dead-letter-v1.schema.json)"
-    },
-    {
-      "path": "contracts/events/capture-group-quality-qualified-v1.schema.json",
-      "success": "CaptureGroup quality-qualified event JSON Schema is valid JSON",
-      "failure": "CaptureGroup quality-qualified event JSON Schema is invalid"
     }
   ],
   "brunoManifest": "api-tests/bruno/medication-platform/bruno.json",

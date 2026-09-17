@@ -5,41 +5,6 @@ export type CameraStreamStatus = 'BOUND' | 'INGESTED' | 'INGEST_FAILED' | 'UNAVA
 export type DeclaredSyncStatus = 'UNKNOWN' | 'PASS' | 'WARNING' | 'REJECT'
 export type ClipAssetStatus = 'UPLOADED' | 'INGESTING' | 'INGESTED' | 'INGEST_FAILED'
 
-export interface CameraSetSnapshotMember {
-  camera_channel_id: string
-  camera_index: number
-  camera_role: string
-  mount_position: string
-  enabled: boolean
-  enabled_for_hand_detection?: boolean
-}
-
-export interface CameraSetSnapshot {
-  camera_set_snapshot_id: string
-  source_camera_set_id: string
-  camera_set_key: string
-  configuration_version: number
-  layout_version: string
-  expected_camera_count: number
-  members: CameraSetSnapshotMember[]
-}
-
-export interface CameraStream {
-  camera_stream_id: string
-  clip_asset_id: string
-  client_file_id: string
-  camera_channel_id: string
-  camera_index: number
-  camera_role: string
-  mount_position: string
-  record_start_utc: string | null
-  time_offset_ms: number
-  sync_status: DeclaredSyncStatus
-  stream_status: CameraStreamStatus
-  quality_status: CaptureQualityStatus
-  enabled_for_hand_detection?: boolean
-}
-
 export interface ClipAssetSessionBinding {
   capture_session_id: string
   capture_group_id: string | null
@@ -155,16 +120,6 @@ export interface HandPoseCandidateResponse {
   candidates: HandPoseCandidate[]
 }
 
-export interface MediaJobDeliveryRecovery {
-  recovery_id: string
-  media_job_id: string
-  source_message_id: string
-  source_attempt: number
-  new_attempt: number
-  resulting_job_status: 'QUEUED'
-  created_at: string
-}
-
 export interface MediaReport {
   media_report_id: string
   media_job_id: string
@@ -221,12 +176,6 @@ const errorMessages: Record<string, string> = {
   AI_HAND_POSE_RETRY_LIMIT_REACHED: '手部检测已达到最大尝试次数，不能继续重试。',
   AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED: '本次手部检测请求与已提交请求冲突，请刷新后重试。',
   MEDIA_JOB_NOT_FOUND: '当前视频没有可恢复的媒体检测任务，请先发起检测或刷新状态。',
-  MEDIA_JOB_DELIVERY_RECOVERY_NOT_CONFIRMED:
-    '原检测任务尚未确认发布，不能执行恢复。请刷新状态后重试。',
-  MEDIA_JOB_DELIVERY_RECOVERY_STATE_CONFLICT:
-    '当前检测任务已不再处于可恢复的排队状态，请刷新后确认。',
-  MEDIA_JOB_DELIVERY_RECOVERY_SOURCE_REUSED: '当前检测任务已经恢复过，不能再次使用原消息。',
-  MEDIA_JOB_DELIVERY_RECOVERY_LIMIT_REACHED: '媒体检测已达到最大尝试次数，不能继续恢复。',
   PLAYBACK_UNSUPPORTED_MEDIA: '当前仅支持播放 MP4 格式的视频。',
   CLIP_ASSET_DELETED: '该视频已删除，不能再播放。',
   MEDIA_REPORT_NOT_FOUND: '媒体检测报告尚未就绪，请在检测完成后刷新状态。',
@@ -359,23 +308,6 @@ export async function requestHandPoseCandidates(projectId: string, videoId: stri
   throw await toCatalogError(response)
 }
 
-export async function retryHandPoseCandidates(projectId: string, videoId: string) {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/videos/${encodeURIComponent(videoId)}/hand-pose-detections/retry`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Idempotency-Key': crypto.randomUUID(),
-        ...csrfHeaders(),
-      },
-      cache: 'no-store',
-    },
-  )
-  if (response.ok) return (await response.json()) as HandPoseJob
-  throw await toCatalogError(response)
-}
-
 export async function getLatestHandPoseCandidates(
   projectId: string,
   videoId: string,
@@ -386,30 +318,6 @@ export async function getLatestHandPoseCandidates(
     { headers: { Accept: 'application/json' }, cache: 'no-store', signal },
   )
   if (response.ok) return (await response.json()) as HandPoseCandidateResponse
-  throw await toCatalogError(response)
-}
-
-export async function recoverCurrentClipAssetMediaProbeDelivery(
-  projectId: string,
-  clipAssetId: string,
-  changeReference: string,
-  idempotencyKey: string,
-) {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/clip-assets/${encodeURIComponent(clipAssetId)}/media-probe-delivery-recoveries`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
-        ...csrfHeaders(),
-      },
-      body: JSON.stringify({ change_reference: changeReference }),
-      cache: 'no-store',
-    },
-  )
-  if (response.ok) return (await response.json()) as MediaJobDeliveryRecovery
   throw await toCatalogError(response)
 }
 

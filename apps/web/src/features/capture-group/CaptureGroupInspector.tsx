@@ -246,11 +246,6 @@ export function CaptureGroupInspector({
                     technicalQualityLabels[selectedStream.quality_status] ??
                     selectedStream.quality_status,
                 },
-                {
-                  id: 'hand-enabled',
-                  label: '手部检测',
-                  value: selectedStream.enabled_for_hand_detection ? '已启用' : '未启用',
-                },
               ]}
             />
           ) : (

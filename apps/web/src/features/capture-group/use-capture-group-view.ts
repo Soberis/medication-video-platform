@@ -16,7 +16,7 @@ import {
   classifyCandidateReadError,
   type CandidateLoadState,
 } from '@/features/catalog/hand-pose-candidate-state'
-import { mediaStatusLabels, syncSafety } from '@/features/capture-group-presentation'
+import { mediaStatusLabels } from '@/features/capture-group-presentation'
 import {
   candidateDescription,
   candidateLiveStatusLabel,
@@ -352,7 +352,6 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     selectedMediaReportState,
     selectedMediaReportError,
     candidateResponse,
-    candidateState,
     candidateDescription: candidateDescription(candidateState, candidateResponse),
     candidateTone: candidateTone(candidateState, candidateResponse),
     candidateLiveStatus: candidateLiveStatusLabel(candidateState, candidateResponse),
@@ -362,10 +361,8 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
     playbackAvailability,
     isRequestingPlayback,
     canPlay: selectedDetail?.content_type === 'video/mp4',
-    selectedSync: selectedStream ? syncSafety(selectedStream) : null,
     resetPlayback,
     loadSelectedView,
-    refreshCandidate,
     startPlayback,
     onLoadedMetadata: () => {
       setPlaybackState('ready')

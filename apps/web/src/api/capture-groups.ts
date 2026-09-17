@@ -141,10 +141,6 @@ export interface CaptureGroupQualityReviewHistory {
   items: CaptureGroupQualityReview[]
 }
 
-export interface CaptureGroupQualityReviewBatchResponse {
-  items: CaptureGroupQualityReview[]
-}
-
 export class CaptureGroupApiError extends Error {
   readonly errorCode: string
   readonly status: number
@@ -247,21 +243,6 @@ export function getCaptureGroupQualityReview(
 ) {
   return readJson<CaptureGroupQualityReview>(
     `${path(projectId, captureGroupId)}/quality-review`,
-    signal,
-  )
-}
-
-export function listCaptureGroupQualityReviews(
-  projectId: string,
-  captureGroupIds: string[],
-  signal?: AbortSignal,
-) {
-  const query = new URLSearchParams()
-  for (const captureGroupId of captureGroupIds) {
-    query.append('capture_group_id', captureGroupId)
-  }
-  return readJson<CaptureGroupQualityReviewBatchResponse>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-group-quality-reviews?${query.toString()}`,
     signal,
   )
 }

@@ -6,11 +6,7 @@ import type {
   CaptureGroupStream,
 } from '@/api/capture-groups'
 import type { HandPoseCandidateResponse } from '@/api/catalog'
-import type {
-  QualityReview,
-  QualityReviewCommandDecision,
-  QualityReviewReasonCode,
-} from '@/api/quality'
+import type { QualityReview } from '@/api/quality'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-state'
 
@@ -380,7 +376,7 @@ export function candidateTone(
   return 'information'
 }
 
-export function candidateStatusLabel(
+export function candidateLiveStatusLabel(
   state: CandidateLoadState,
   response: HandPoseCandidateResponse | null,
 ) {
@@ -398,13 +394,6 @@ export function candidateStatusLabel(
     return '已完成 · 检测到手部'
   if (response.job.hand_result === 'NO_HAND_DETECTED') return '已完成 · 未检测到手部'
   return '已完成 · 结果未知'
-}
-
-export function candidateLiveStatusLabel(
-  state: CandidateLoadState,
-  response: HandPoseCandidateResponse | null,
-) {
-  return candidateStatusLabel(state, response)
 }
 
 export function formatTaskStatus(task: AnnotationTask) {
@@ -428,41 +417,8 @@ export function groupViewDecision(
   return viewReviews[view.stream.clip_asset_id]?.decision ?? 'UNREVIEWED'
 }
 
-export const qualityReasonsByDecision: Record<
-  QualityReviewCommandDecision,
-  QualityReviewReasonCode[]
-> = {
-  QUALIFIED: ['MEETS_REQUIREMENTS'],
-  REJECTED: [
-    'SENSITIVE_CONTENT',
-    'BLURRY_OR_OUT_OF_FOCUS',
-    'BLACK_OR_CORRUPTED_FRAMES',
-    'SEVERE_OCCLUSION',
-    'INCOMPLETE_ACTION',
-    'WRONG_SCENE',
-    'DUPLICATE',
-    'OTHER_QUALITY_FAILURE',
-  ],
-  NEEDS_REVIEW: ['UNCERTAIN_QUALITY', 'METADATA_MISMATCH'],
-}
-
 export function currentGroupQualityAdmitting(quality: CaptureGroupQualityReview | null) {
   return quality?.result === 'QUALIFIED' || quality?.result === 'QUALIFIED_WITH_EXCLUSIONS'
-}
-
-export function selectedQualityLoadState(
-  selectedStream: CaptureGroupStream | null,
-  viewReviews: Record<string, QualityReview>,
-  viewReviewErrors: Record<string, string>,
-  viewQualityLoading: boolean,
-) {
-  return selectedStream
-    ? viewReviewErrors[selectedStream.clip_asset_id]
-      ? 'error'
-      : viewQualityLoading || !viewReviews[selectedStream.clip_asset_id]
-        ? 'loading'
-        : 'success'
-    : 'success'
 }
 
 export function createGroupViewRows(group: CaptureGroup | null): GroupViewRow[] {

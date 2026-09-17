@@ -193,7 +193,6 @@ export default function AccountManagementView() {
                 allowClear
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: 220 }}
               />
               <span className="account-count-badge">共 {accounts.length} 个账号</span>
             </div>
