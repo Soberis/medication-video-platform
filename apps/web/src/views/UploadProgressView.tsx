@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Input } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -177,6 +177,7 @@ export default function UploadProgressView() {
     <>
       <PageHeader
         titleId="progress-title"
+        eyebrow="上传"
         title="上传状态"
         description="查看上传批次和文件状态。"
       />
@@ -195,13 +196,12 @@ export default function UploadProgressView() {
         >
           <label htmlFor="batch-id">上传批次 ID</label>
           <div className="batch-form-row">
-            <input
+            <Input
               id="batch-id"
               value={batchId}
               onChange={(event) => setBatchId(event.target.value)}
               name="batch-id"
               type="text"
-              inputMode="text"
               autoComplete="off"
               spellCheck={false}
               placeholder="例如：00000000-0000-4000-8000-000000000001"

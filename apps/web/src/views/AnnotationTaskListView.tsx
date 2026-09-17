@@ -398,6 +398,7 @@ export default function AnnotationTaskListView({
                   className="annotation-task-row"
                   key={row.annotation_task_id}
                   data-status={row.status}
+                  tabIndex={0}
                   onClick={(event) => {
                     const target = event.target as HTMLElement
                     if (
@@ -408,6 +409,16 @@ export default function AnnotationTaskListView({
                     ) {
                       return
                     }
+                    const destination = taskDestination
+                      ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
+                      : paths.captureGroup(projectId, captureGroupId)
+                    void navigate(destination)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    const target = event.target as HTMLElement
+                    if (target.closest('a') || target.closest('button') || target.closest('details')) return
+                    event.preventDefault()
                     const destination = taskDestination
                       ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
                       : paths.captureGroup(projectId, captureGroupId)

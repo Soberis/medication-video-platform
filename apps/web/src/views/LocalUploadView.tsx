@@ -213,6 +213,7 @@ export default function LocalUploadView() {
     <>
       <PageHeader
         titleId="local-upload-title"
+        eyebrow="上传"
         title="上传视频"
         description="选择项目和视频，开始上传。"
         actions={

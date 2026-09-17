@@ -244,22 +244,27 @@ export default function AccountManagementView() {
                 dataSource={filteredAccounts}
                 rowKey="username"
                 pagination={false}
+                tableLayout="fixed"
+                scroll={{ x: 640 }}
                 columns={[
                   {
                     title: '账号',
                     dataIndex: 'username',
+                    width: 240,
                     render: (username: string) => (
                       <span className="account-user-cell">
                         <span className="account-user-avatar" aria-hidden="true">
                           {username.slice(0, 1).toUpperCase()}
                         </span>
-                        <strong className="account-username">{username}</strong>
+                        <strong className="account-username" title={username}>
+                          {username}
+                        </strong>
                       </span>
                     ),
                   },
                   {
                     title: '全局角色',
-                    width: 120,
+                    width: 150,
                     render: (_, row) => (
                       <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
                         {row.role === 'ADMIN' ? '管理员' : '成员'}
@@ -268,7 +273,7 @@ export default function AccountManagementView() {
                   },
                   {
                     title: '登录状态',
-                    width: 110,
+                    width: 130,
                     render: (_, row) => (
                       <StatusBadge tone={row.enabled ? 'success' : 'error'}>
                         {row.enabled ? '启用' : '停用'}
@@ -276,8 +281,8 @@ export default function AccountManagementView() {
                     ),
                   },
                   {
+                    // 末列不给宽度：宽屏下的多余宽度由它吸收，保证左侧账号与角色、状态相邻。
                     title: '操作',
-                    width: 130,
                     render: (_, row) =>
                       row.role === 'MEMBER' ? (
                         <Button

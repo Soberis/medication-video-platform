@@ -118,6 +118,9 @@ export default function CaptureGroupListView() {
       if (requestMode === 'initial') {
         setRows([])
         setNextCursor(null)
+        setCurrentPage(1)
+      } else if (append) {
+        setCurrentPage(1)
       }
       setLoadingMode(requestMode)
       setLoadState('loading')
@@ -266,10 +269,13 @@ export default function CaptureGroupListView() {
 
   return (
     <>
-      <ProjectBreadcrumb projectId={projectId} currentProject={currentProject} />
+      <ProjectBreadcrumb projectId={projectId} currentProject={currentProject}>
+        <span>视频</span>
+      </ProjectBreadcrumb>
       <PageHeader
         className="capture-group-page-header"
         titleId="capture-group-list-title"
+        eyebrow="采集记录"
         title="视频"
         actions={
           <>
@@ -303,7 +309,10 @@ export default function CaptureGroupListView() {
         <Segmented
           aria-label="视频视图"
           value={activeView}
-          onChange={(value) => setSearchParams(value === 'all' ? {} : { view: value })}
+          onChange={(value) => {
+            setCurrentPage(1)
+            setSearchParams(value === 'all' ? {} : { view: value })
+          }}
           options={[
             { label: '全部视频', value: 'all' },
             { label: '待标注', value: 'assigned' },
@@ -408,6 +417,7 @@ export default function CaptureGroupListView() {
                         className="capture-group-list-row"
                         key={group.capture_group_id}
                         role="listitem"
+                        tabIndex={0}
                         aria-label={identityLabel}
                         onClick={(event) => {
                           const target = event.target as HTMLElement
@@ -418,6 +428,13 @@ export default function CaptureGroupListView() {
                           ) {
                             return
                           }
+                          openCaptureGroup(group.capture_group_id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          const target = event.target as HTMLElement
+                          if (target.closest('a') || target.closest('button')) return
+                          event.preventDefault()
                           openCaptureGroup(group.capture_group_id)
                         }}
                       >
@@ -509,7 +526,7 @@ export default function CaptureGroupListView() {
                   })}
                 </div>
               )}
-              {nextCursor || filteredRows.length > 10 ? (
+              {nextCursor || filteredRows.length > pageSize ? (
                 <div className="capture-group-list-pagination">
                   <div className="capture-group-list-pagination-left">
                     {nextCursor ? (
@@ -526,7 +543,7 @@ export default function CaptureGroupListView() {
                       </span>
                     )}
                   </div>
-                  {filteredRows.length > 10 ? (
+                  {!nextCursor && filteredRows.length > pageSize ? (
                     <Pagination
                       size="small"
                       current={currentPage}

@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Form, Input, Table, Tag } from 'antd'
+import { Alert, App as AntdApp, Button, Form, Input, Table } from 'antd'
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -10,6 +10,7 @@ import {
 } from '@/api/annotation'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
+import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { Section } from '@/components/workspace/Section'
 import { getActionStyle } from '@/features/capture-group/capture-group-detail-model'
@@ -95,9 +96,9 @@ export default function AnnotationLabelLibraryView() {
             className="table-card working-surface"
             title="当前标签"
             actions={
-              <Tag color="blue" bordered={false} className="label-version-tag">
+              <StatusBadge tone="info" className="label-version-tag">
                 规范版本: {schema.schema_version}
-              </Tag>
+              </StatusBadge>
             }
           >
             <Table

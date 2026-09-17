@@ -115,7 +115,7 @@
   margin-top: var(--app-space-16);
   overflow: hidden;
   border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
   background: var(--app-color-surface);
 }
 
@@ -152,21 +152,6 @@
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
   font-weight: var(--app-font-weight-regular);
-}
-
-.detail-disclosure-content {
-  padding: 0 var(--app-space-16) var(--app-space-16);
-  border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.detail-disclosure-content .workbench-panel,
-.detail-disclosure-content .detail-card {
-  margin-top: var(--app-space-16);
-}
-
-.detail-disclosure-content .workbench-panel + .workbench-panel,
-.detail-disclosure-content .detail-card + .detail-card {
-  margin-top: var(--app-space-12);
 }
 
 .danger-zone-inline {

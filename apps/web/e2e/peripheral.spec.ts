@@ -100,6 +100,111 @@ test('global labels are available without entering a project', async ({ page }) 
   await expectNoSeriousAxeViolations(page)
 })
 
+test('AccountManagement — management table columns stay bounded', async ({ page }) => {
+  await mockCaptureGroupApi(page, 'list')
+  await page.route('**/api/v1/admin/**', (route) => {
+    const { pathname } = new URL(route.request().url())
+    if (pathname === '/api/v1/admin/accounts') {
+      return json(route, {
+        items: [
+          {
+            username: 'synthetic-admin',
+            role: 'ADMIN',
+            enabled: true,
+            version: 1,
+            created_at: '2026-08-20T01:00:00Z',
+            updated_at: '2026-08-20T01:00:00Z',
+          },
+          {
+            username: 'synthetic-reviewer',
+            role: 'MEMBER',
+            enabled: false,
+            version: 2,
+            created_at: '2026-08-21T01:00:00Z',
+            updated_at: '2026-08-22T01:00:00Z',
+          },
+        ],
+      })
+    }
+    return route.abort()
+  })
+
+  await page.goto('/admin/users')
+  await expect(page.getByRole('heading', { name: '平台账号列表' })).toBeVisible()
+
+  // 账号列必须保持窄稳：一旦它吸收右栏多余宽度，角色/状态/操作会被顶到
+  // 1080p 屏幕的右端，视线要横跨半屏才能读完一行。
+  const accountHeader = await page.getByRole('columnheader', { name: '账号' }).boundingBox()
+  expect(accountHeader!.width).toBeLessThanOrEqual(320)
+
+  // 末列负责吸收多余宽度，所以每行的操作始终可达。
+  await expect(
+    page.getByRole('button', { name: '启用账号：synthetic-reviewer' }),
+  ).toBeVisible()
+  await expect(page.getByText('管理员不可停用')).toBeVisible()
+
+  // 双栏必须齐平：`.table-card` 的 16px margin-top 曾把右栏整卡推低，
+  // 两栏标题又因基线对齐再差 3px。
+  const leftCard = await page.locator('.account-create-panel').boundingBox()
+  const rightCard = await page.locator('.account-table-card').boundingBox()
+  expect(Math.abs(leftCard!.y - rightCard!.y)).toBeLessThanOrEqual(1)
+  const leftTitle = await page.getByRole('heading', { name: '创建账号' }).boundingBox()
+  const rightTitle = await page.getByRole('heading', { name: '平台账号列表' }).boundingBox()
+  expect(Math.abs(leftTitle!.y - rightTitle!.y)).toBeLessThanOrEqual(1)
+
+  await expectNoHorizontalPageOverflow(page)
+  await expectNoSeriousAxeViolations(page)
+})
+
+test('AccountManagement — no page-level horizontal scroll on narrow viewports', async ({ page }) => {
+  await mockCaptureGroupApi(page, 'list')
+  await page.route('**/api/v1/admin/**', (route) => {
+    const { pathname } = new URL(route.request().url())
+    if (pathname === '/api/v1/admin/accounts') {
+      return json(route, {
+        items: [
+          {
+            username: 'synthetic-admin',
+            role: 'ADMIN',
+            enabled: true,
+            version: 1,
+            created_at: '2026-08-20T01:00:00Z',
+            updated_at: '2026-08-20T01:00:00Z',
+          },
+          {
+            username: 'synthetic-reviewer',
+            role: 'MEMBER',
+            enabled: true,
+            version: 2,
+            created_at: '2026-08-21T01:00:00Z',
+            updated_at: '2026-08-22T01:00:00Z',
+          },
+        ],
+      })
+    }
+    return route.abort()
+  })
+
+  for (const width of [1280, 1100, 1024, 768, 500]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/admin/users')
+    await expect(page.getByRole('heading', { name: '平台账号列表' })).toBeVisible()
+
+    // 窄屏不许出现页面级横滚：卡片自身必须收进视口，溢出只留给 antd 的表格容器。
+    // 1140 以下应改为上下堆叠；左卡若停在屏幕外，说明网格子项把整行顶开了。
+    const leftCard = await page.locator('.account-create-panel').boundingBox()
+    const rightCard = await page.locator('.account-table-card').boundingBox()
+    expect(leftCard!.x, `${width}: 左卡左缘应在视口内`).toBeGreaterThanOrEqual(0)
+    expect(leftCard!.x + leftCard!.width, `${width}: 左卡右缘应在视口内`).toBeLessThanOrEqual(width)
+    expect(rightCard!.x + rightCard!.width, `${width}: 右卡右缘应在视口内`).toBeLessThanOrEqual(width)
+    if (width < 1140) {
+      expect(Math.abs(leftCard!.x - rightCard!.x), `${width}: 应改为上下堆叠`).toBeLessThanOrEqual(1)
+    }
+
+    await expectNoHorizontalPageOverflow(page)
+  }
+})
+
 test('Local Upload — load and select files', async ({ page }) => {
   await page.route('**/api/v1/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname

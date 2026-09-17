@@ -174,6 +174,7 @@ export default function ProjectListView() {
       <PageHeader
         className="project-page-heading"
         titleId="projects-title"
+        eyebrow="工作台"
         title="项目"
         actions={
           <>
@@ -241,7 +242,6 @@ export default function ProjectListView() {
                         >
                           {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                         </StatusBadge>
-                        <StatusBadge tone="success">活跃</StatusBadge>
                       </div>
                     </div>
                     {project.current_role === 'ADMIN' ? (

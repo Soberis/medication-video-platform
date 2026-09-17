@@ -19,7 +19,7 @@
 .upload-progress-summary {
   width: 100%;
   padding: var(--app-space-16);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
 }
 
 .section-description {
@@ -50,7 +50,7 @@
   min-height: var(--app-control-height);
   padding: 0 var(--app-space-12);
   border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-default);
+  border-radius: var(--app-radius-sm);
   color: var(--app-color-foreground);
   background: var(--app-color-surface);
 }
@@ -88,10 +88,10 @@
 .progress-block progress {
   display: block;
   width: 100%;
-  height: 12px;
+  height: 8px;
   overflow: hidden;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--app-radius-sm);
   background: var(--app-color-neutral-surface);
   accent-color: var(--app-color-primary);
 }
@@ -291,19 +291,11 @@
   overflow-wrap: anywhere;
 }
 
-.page-toolbar,
-.detail-actions {
+.page-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.page-toolbar {
   gap: var(--app-space-8);
-}
-
-.detail-actions {
-  gap: var(--app-space-12);
 }
 
 .page-heading-actions {
@@ -318,7 +310,7 @@
 
 .working-surface {
   border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
   background: var(--app-color-surface);
   box-shadow: none;
 }
@@ -379,83 +371,10 @@
   width: 100%;
 }
 
-.project-list-surface {
-  overflow: hidden;
-}
-
-.project-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.project-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--app-space-16);
-  padding: var(--app-space-12) var(--app-space-16);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.project-list-item + .project-list-item {
-  border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.project-list-item:hover,
-.project-list-item:focus-within {
-  background: var(--app-color-surface-hover);
-}
-
-.project-list-heading,
-.project-list-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--app-space-12);
-  min-width: 0;
-}
-
-.project-list-heading svg {
-  color: var(--app-color-foreground-muted);
-  flex-shrink: 0;
-}
-
-.project-list-name {
-  min-width: 0;
-}
-
-.project-list-heading strong {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  color: var(--app-color-foreground);
-  font-size: var(--app-font-size-heading-2);
-  font-weight: var(--app-font-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-.project-title-clickable:hover {
-  color: var(--app-color-primary);
-}
-
 .project-role-badge {
   flex-shrink: 0;
   overflow-wrap: normal;
   white-space: nowrap;
-}
-
-.project-list-name p {
-  margin: var(--app-space-4) 0 0;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-base);
-  line-height: var(--app-line-height-body);
-}
-
-.project-list-actions {
-  flex: none;
 }
 
 .project-open-link {
@@ -466,22 +385,24 @@
   width: 100%;
   height: 32px;
   padding: 0 var(--app-space-12);
-  border: 1px solid var(--app-color-border, #cbd5e1);
-  border-radius: var(--app-radius-sm, 6px);
-  color: var(--app-color-primary, #1677ff);
-  background: #f8fafc;
+  border: 1px solid var(--app-color-border);
+  border-radius: var(--app-radius-sm);
+  color: var(--app-color-primary);
+  background: var(--app-color-surface-muted);
   cursor: pointer;
   font-weight: var(--app-font-weight-medium, 500);
   font-size: 13px;
   text-decoration: none;
-  transition: all 0.15s ease-in-out;
+  transition:
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 .project-open-link:hover {
-  color: #ffffff;
-  background: var(--app-color-primary, #1677ff);
-  border-color: var(--app-color-primary, #1677ff);
-  box-shadow: 0 2px 6px rgba(22, 119, 255, 0.25);
+  color: var(--app-color-primary-foreground);
+  background: var(--app-color-primary);
+  border-color: var(--app-color-primary);
   text-decoration: none;
 }
 
@@ -494,7 +415,7 @@
 }
 
 .project-open-link:active {
-  background: var(--app-color-primary-hover, #0958d9);
+  background: var(--app-color-primary-hover);
 }
 
 .project-open-link:focus-visible {
@@ -537,21 +458,23 @@
   justify-content: space-between;
   gap: var(--app-space-16);
   padding: var(--app-space-16);
-  background: var(--app-color-surface, #ffffff);
-  border: 1px solid var(--app-color-border-subtle, #e2e8f0);
-  border-radius: var(--app-radius-lg, 10px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  background: var(--app-color-surface);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-lg);
   cursor: pointer;
   transition:
-    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 .project-card:hover {
-  transform: translateY(-2px);
-  border-color: #93c5fd;
-  box-shadow: 0 8px 24px rgba(22, 119, 255, 0.08);
+  background: var(--app-color-surface-hover);
+  border-color: var(--app-color-border);
+}
+
+.project-card:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: 2px;
 }
 
 .project-card-header {
@@ -567,10 +490,10 @@
   width: 38px;
   height: 38px;
   flex-shrink: 0;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
-  border-radius: var(--app-radius-md, 8px);
-  color: var(--app-color-primary, #1677ff);
+  background: var(--app-color-primary-subtle);
+  border: 1px solid var(--app-color-primary-subtle);
+  border-radius: var(--app-radius-md);
+  color: var(--app-color-primary);
 }
 
 .project-card-title-group {
@@ -588,11 +511,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 0.15s ease;
-}
-
-.project-card:hover .project-card-title {
-  color: var(--app-color-primary, #1677ff);
 }
 
 .project-card-badges {
@@ -607,7 +525,7 @@
   flex-direction: column;
   gap: var(--app-space-8);
   padding: var(--app-space-8) 0;
-  border-top: 1px solid var(--app-color-border-subtle, #f1f5f9);
+  border-top: 1px solid var(--app-color-border-subtle);
 }
 
 .project-card-meta-row {
@@ -696,10 +614,9 @@
   font-weight: var(--app-font-weight-semibold);
 }
 
-.table-card,
-.detail-card {
+.table-card {
   border-color: var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
 }
 
 .summary-strip {
@@ -944,7 +861,7 @@
 .annotation-task-overview .form-hint {
   margin: 0;
   font-size: var(--app-font-size-caption);
-  color: var(--app-color-foreground-subtle);
+  color: var(--app-color-foreground-muted);
   width: 100%;
 }
 
@@ -1022,6 +939,11 @@
 
 .annotation-task-row:hover {
   background: var(--app-color-surface-hover);
+}
+
+.annotation-task-row:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: -2px;
 }
 
 .annotation-task-row:hover .annotation-task-title-clickable {
@@ -1254,21 +1176,6 @@
   margin-top: var(--app-space-16);
 }
 
-.breadcrumb-root {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--app-space-4);
-  color: var(--app-color-foreground-muted);
-  font-weight: var(--app-font-weight-medium);
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-
-.breadcrumb-root:hover {
-  color: var(--app-color-primary);
-  text-decoration: none;
-}
-
 .breadcrumb-separator {
   color: var(--app-color-border);
   user-select: none;
@@ -1345,11 +1252,6 @@
   line-height: var(--app-line-height-control);
 }
 
-.playback-meta-label {
-  color: var(--app-color-foreground);
-  font-weight: var(--app-font-weight-semibold);
-}
-
 .playback-meta time {
   color: var(--app-color-foreground-muted);
 }
@@ -1364,7 +1266,7 @@
   overflow: hidden;
   border: 1px solid var(--app-color-media-stage-border);
   background: var(--app-color-media-stage-background);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
 }
 
 .video-stage.video-stage-fill {
@@ -1640,165 +1542,9 @@
   line-height: var(--app-line-height-metadata);
 }
 
-.hand-landmark-export-content {
-  display: grid;
-  gap: var(--app-space-12);
-}
-
-.hand-landmark-export-readiness {
-  display: grid;
-  gap: var(--app-space-8);
-  padding-bottom: var(--app-space-12);
-  border-bottom: 1px solid var(--app-color-border-subtle);
-}
-
-.hand-landmark-export-readiness .status-indicator {
-  justify-self: start;
-}
-
-.hand-landmark-export-readiness strong {
-  color: var(--app-color-foreground);
-  font-size: var(--app-font-size-body);
-  font-weight: var(--app-font-weight-semibold);
-  line-height: var(--app-line-height-body);
-}
-
-.hand-landmark-export-readiness p {
-  margin: 0;
-  color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-}
-
-.hand-landmark-export-empty {
-  padding-bottom: var(--app-space-16);
-}
-
-.hand-landmark-export-facts {
-  display: grid;
-  gap: var(--app-space-8);
-  margin: 0;
-}
-
-.hand-landmark-export-facts-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--app-space-8);
-  margin: 0;
-}
-
-.hand-landmark-export-facts-list > div {
-  min-width: 0;
-  padding: var(--app-space-8) 0;
-  border-bottom: 1px solid var(--app-color-border-subtle);
-}
-
-.hand-landmark-export-facts-list dt {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-compact);
-}
-
-.hand-landmark-export-facts-list dd {
-  margin: var(--app-space-4) 0 0;
-  color: var(--app-color-foreground);
-  font-size: var(--app-font-size-body);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--app-font-weight-semibold);
-  line-height: var(--app-line-height-body);
-  overflow-wrap: anywhere;
-}
-
-.annotation-submission-context {
-  display: grid;
-  gap: var(--app-space-12);
-  margin-bottom: var(--app-space-16);
-  padding: var(--app-space-12);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-surface-muted);
-}
-
-.annotation-submission-context .property-row {
-  grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
-  padding-block: var(--app-space-4);
-}
-
-.annotation-submission-context .property-row dd {
-  font-size: var(--app-font-size-helper);
-}
-
-.annotation-submission-state {
-  margin: 0;
-  color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-}
-
-.annotation-rework-notice {
-  margin: 0;
-}
-
-.annotation-review-confirmation {
-  display: grid;
-  gap: var(--app-space-12);
-}
-
-.annotation-review-confirmation p {
-  margin: 0;
-}
-
-.annotation-label-guide {
-  padding-top: var(--app-space-8);
-  border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.annotation-label-guide > summary {
-  color: var(--app-color-primary-hover);
-  cursor: pointer;
-  font-size: var(--app-font-size-helper);
-  font-weight: var(--app-font-weight-semibold);
-}
-
-.annotation-label-guide ul {
-  display: grid;
-  gap: var(--app-space-8);
-  margin: var(--app-space-8) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.annotation-label-guide li {
-  display: grid;
-  gap: var(--app-space-4);
-}
-
-.annotation-label-guide li strong {
-  color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-helper);
-}
-
-.annotation-label-guide li span {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  line-height: var(--app-line-height-body);
-}
-
-.annotation-segment-row {
-  display: grid;
-  grid-template-columns: 150px 150px minmax(180px, 1fr) auto;
-  align-items: end;
-  gap: var(--app-space-12);
-  margin-bottom: var(--app-space-12);
-}
-
 .muted-text {
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-base);
-}
-
-.annotation-segment-row .ant-form-item {
-  margin-bottom: 0;
 }
 
 .quality-review-summary {
@@ -1834,18 +1580,6 @@
 
 .quality-review-actions .ant-select {
   width: min(100%, 300px);
-}
-
-.annotation-submit-actions {
-  justify-content: flex-end;
-}
-
-.detail-card {
-  margin-top: var(--app-space-16);
-}
-
-.detail-card > .ant-card-head {
-  border-bottom: 0;
 }
 
 .mono-wrap {
@@ -1946,17 +1680,50 @@
 .account-management-grid,
 .membership-management-grid {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: 340px 1fr;
   gap: var(--app-space-20);
   align-items: start;
   margin-top: var(--app-space-16);
 }
 
-@media (max-width: 1024px) {
+/* 网格子项一律允许收缩：`1fr` 的隐式最小尺寸是 auto，被卡片内容顶开时
+   整行会超出容器，在窄屏上表现为整页横滚（左卡被推到屏幕外）。 */
+.account-management-grid > *,
+.membership-management-grid > * {
+  min-width: 0;
+}
+
+/* 1024 及以下改上下堆叠。断点取 1139：双栏在 1140 以下不足以容纳
+   「340 左栏 + 20 间距 + 表格 scroll.x 的 640」，强行双栏会出横滚。 */
+@media (max-width: 1139px) {
   .account-management-grid,
   .membership-management-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 表格卡片让溢出可见：`overflow: hidden` 会裁掉 antd 的 scroll.x 滚动条，
+   导致窄栏下末列（操作）被裁且无法滚动。圆角由 `.ant-table` 自身承担。 */
+.account-management-grid .table-card,
+.membership-management-grid .table-card {
+  overflow: visible;
+}
+
+/* 双栏对齐：`.table-card` 自带的 16px margin-top 是给「表格卡片紧跟上方内容」
+   的单栏页面用的间距；放进双栏网格后它只把右栏卡片整体推低，与左栏卡片错开。
+   网格本身已有 margin-top，这里归零，两栏卡片顶边齐平。 */
+.account-management-grid .table-card,
+.membership-management-grid .table-card {
+  margin-top: 0;
+}
+
+/* 两栏标题同一水平线：左栏标题直接坐在卡片内边距上（行高 = 标题行高），
+   右栏标题行还要容纳 28px 的检索框，按基线对齐会把标题压得比左栏低 3px。
+   统一行高为控件高度并居中，两栏标题因此落在同一条基线上。 */
+.account-management-grid .workspace-section-heading,
+.membership-management-grid .workspace-section-heading {
+  align-items: center;
+  min-height: var(--app-control-height-compact);
 }
 
 .account-form,
@@ -1975,23 +1742,10 @@
   width: 100%;
 }
 
-.account-form-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--app-space-16);
-  width: 100%;
-}
-
-@media (max-width: 640px) {
-  .account-form-row {
-    grid-template-columns: 1fr;
-  }
-}
-
 .account-field-icon,
 .membership-search-icon,
 .account-search-icon {
-  color: var(--app-color-foreground-subtle);
+  color: var(--app-color-foreground-muted);
 }
 
 .account-create-submit,
@@ -2016,9 +1770,11 @@
 }
 
 .account-user-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--app-space-8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .account-user-avatar {
@@ -2036,8 +1792,13 @@
 }
 
 .account-username {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-weight: var(--app-font-weight-semibold);
   color: var(--app-color-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .label-code-tag {
@@ -2097,25 +1858,20 @@
   width: 100%;
 }
 
-.membership-list-panel .ant-table-wrapper {
-  max-width: 100%;
-  overflow-x: auto;
-}
-
+.membership-list-panel .ant-table-wrapper,
 .account-table-card .ant-table-wrapper {
   max-width: 100%;
-  /* Let Ant Design own narrow-table scrolling without creating a second
-     vertical scroll region around the whole account list. */
+  /* 窄栏下的横向滚动交给 Ant Design 自己的 scroll.x 容器，
+     外层 wrapper 不再叠加一层滚动区域（会多出第二层纵向滚动）。
+     因此不能在 .ant-table 上写 min-width：那会把内部滚动容器一并撑开，
+     导致「操作」列被卡片裁掉且无法滚动。 */
   overflow: visible;
 }
 
-.membership-list-panel .ant-table {
-  min-width: 440px;
-}
-
-.account-table-card .ant-table {
-  min-width: 520px;
-}
+/* 管理表列宽策略（平台账号 / 项目成员共用）：
+   宽度只给前几列，末尾「操作」列不下宽度，由它吸收宽屏下的多余宽度。
+   这样账号名与角色、状态始终相邻，不会出现“第一列被撑到几百像素、
+   后面几列被顶到卡片最右端”的视线横跨；卡片本身铺满右栏，也不留脱节空白。 */
 
 .login-error {
   margin-top: var(--app-space-16);
@@ -2171,7 +1927,7 @@
   min-height: var(--app-control-height);
   padding: var(--app-space-4) var(--app-space-12);
   border: 1px solid var(--app-color-border);
-  border-radius: var(--app-radius-default);
+  border-radius: var(--app-radius-sm);
   background: var(--app-color-surface);
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-base);
@@ -2182,7 +1938,7 @@
 }
 
 .local-file-input:hover:not(:disabled) {
-  border-color: var(--app-color-border-hover);
+  border-color: var(--app-color-primary);
 }
 
 .local-file-input:focus-visible {
@@ -2293,7 +2049,7 @@
   justify-content: center;
   padding: var(--app-space-24) var(--app-space-16);
   border: 1.5px dashed var(--app-color-border);
-  border-radius: var(--app-radius-default);
+  border-radius: var(--app-radius-sm);
   background: var(--app-color-neutral-surface);
   cursor: pointer;
   transition:
@@ -2333,15 +2089,14 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--app-radius-full);
+  border-radius: 999px;
   background: var(--app-color-surface);
   border: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-primary);
-  transition: transform 0.2s ease;
 }
 
 .local-upload-dropzone:hover:not(.is-disabled) .dropzone-icon-box {
-  transform: translateY(-2px);
+  color: var(--app-color-primary-hover);
 }
 
 .dropzone-text {
@@ -2380,7 +2135,7 @@
   justify-content: space-between;
   gap: var(--app-space-16);
   padding: var(--app-space-12);
-  border-radius: var(--app-radius-default);
+  border-radius: var(--app-radius-sm);
   background: var(--app-color-surface-muted);
 }
 
@@ -2422,7 +2177,7 @@
   margin-top: var(--app-space-12);
   padding: var(--app-space-16);
   border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-large);
+  border-radius: var(--app-radius-lg);
   background: var(--app-color-surface);
 }
 
@@ -2498,8 +2253,7 @@
     flex-direction: column;
   }
 
-  .page-heading-actions,
-  .detail-actions {
+  .page-heading-actions {
     width: 100%;
     align-items: center;
     flex-direction: row;
@@ -2567,7 +2321,6 @@
   .upload-recovery-actions,
   .local-upload-task-actions,
   .quality-review-actions,
-  .project-list-item,
   .selected-file-list li {
     align-items: flex-start;
     flex-direction: column;
@@ -2575,15 +2328,6 @@
 
   .selected-file-list li span {
     text-align: left;
-  }
-
-  .project-list-heading {
-    flex-wrap: wrap;
-  }
-
-  .project-list-actions {
-    width: 100%;
-    justify-content: space-between;
   }
 
   .quality-review-actions .ant-select,
@@ -2617,19 +2361,4 @@
     justify-content: flex-start;
   }
 
-  .hand-landmark-export-facts-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .annotation-segment-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .annotation-segment-row .ant-form-item:nth-child(3) {
-    grid-column: 1 / -1;
-  }
-
-  .annotation-segment-row > .ant-btn {
-    justify-self: start;
-  }
 }

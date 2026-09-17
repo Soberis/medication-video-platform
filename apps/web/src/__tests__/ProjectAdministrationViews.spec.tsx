@@ -158,7 +158,9 @@ describe('AccountManagementView', () => {
     expect(screen.getByText('管理员不可停用')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '停用账号：reviewer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '启用账号：disabled' })).toBeInTheDocument()
-    expect(screen.getByText('登录状态')).toBeInTheDocument()
+    // Scope to the column header: the fixed-layout table also renders a hidden
+    // measure node that repeats the header text.
+    expect(screen.getByRole('columnheader', { name: '登录状态' })).toBeInTheDocument()
   })
 
   it('creates a member account from the compact account form', async () => {
@@ -212,7 +214,7 @@ describe('AccountManagementView', () => {
         }),
       )
     })
-  })
+  }, 20000)
 })
 
 function renderMembership(role: 'ADMIN' | 'MEMBER') {

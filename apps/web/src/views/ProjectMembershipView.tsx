@@ -249,16 +249,21 @@ export default function ProjectMembershipView() {
                 dataSource={filteredMemberships}
                 rowKey="membership_id"
                 pagination={false}
+                tableLayout="fixed"
+                scroll={{ x: 500 }}
                 columns={[
                   {
                     title: '平台账号',
                     dataIndex: 'actor_id',
+                    width: 240,
                     render: (actorId: string) => (
                       <span className="account-user-cell">
                         <span className="account-user-avatar" aria-hidden="true">
                           {actorId.slice(0, 1).toUpperCase()}
                         </span>
-                        <strong className="account-username">{actorId}</strong>
+                        <strong className="account-username" title={actorId}>
+                          {actorId}
+                        </strong>
                       </span>
                     ),
                   },
@@ -274,8 +279,8 @@ export default function ProjectMembershipView() {
                   ...(canManageMembers
                     ? [
                         {
+                          // 末列不给宽度：宽屏下的多余宽度由它吸收，保证账号与角色相邻。
                           title: '操作',
-                          width: 120,
                           render: (_: unknown, row: ProjectMembership) => (
                             <Button
                               type="link"
