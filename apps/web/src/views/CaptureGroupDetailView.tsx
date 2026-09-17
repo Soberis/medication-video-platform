@@ -249,7 +249,6 @@ export default function CaptureGroupDetailView() {
     navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
   }, [data, location.state, navigate, projectId])
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
-  const eventTitle = data.group?.capture_group_key ?? `视频 · ${shortId(captureGroupId)}`
 
   const confirmReceiptFinalization = async () => {
     if (receiptFinalizeRequest.current || data.isFinalizingReceipt) return
@@ -404,7 +403,8 @@ export default function CaptureGroupDetailView() {
       <PageHeader
         className="capture-group-page-header capture-group-detail-header"
         titleId="capture-group-detail-title"
-        title={eventTitle}
+        eyebrow="采集记录"
+        title={eventIdentity}
         description={data.group ? <CaptureGroupHeaderStatus group={data.group} /> : undefined}
         actions={
           <>
