@@ -529,7 +529,7 @@ const executedCheckMeta: Record<string, { label: string; desc: string }> = {
   GROUP_QUALITY_ADMITTING: { label: '整体质量准入', desc: '采集记录综合质量评定通过' },
   PRIMARY_VIEW_AUTHORITATIVE_INTERVAL: { label: '主机位权威区间有效', desc: '动作时间段与主机位基准对齐' },
   QUALIFIED_VIEWS_ONLY: { label: '已排除不合格机位', desc: '非合格视角不参与动作计算' },
-  SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE: { label: '辅机位参考证据就绪', desc: '多视角事件级同步证据已记录' },
+  SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE: { label: '辅机位参考证据就绪', desc: '多视角同步证据已记录' },
   RAW_MEDIA_RETAINED: { label: '原始视频资产完整', desc: '原始媒体已安全归档' },
 }
 
