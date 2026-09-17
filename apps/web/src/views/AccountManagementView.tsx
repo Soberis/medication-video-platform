@@ -187,14 +187,13 @@ export default function AccountManagementView() {
           actions={
             <div className="account-table-toolbar">
               <Input
-                size="small"
                 className="account-search-input"
                 placeholder="搜索账号…"
-                prefix={<Search size={13} className="account-search-icon" />}
+                prefix={<Search size={14} className="account-search-icon" />}
                 allowClear
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: 180 }}
+                style={{ width: 220 }}
               />
               <span className="account-count-badge">共 {accounts.length} 个账号</span>
             </div>

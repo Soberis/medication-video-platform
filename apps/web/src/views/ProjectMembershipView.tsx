@@ -219,14 +219,13 @@ export default function ProjectMembershipView() {
           actions={
             <div className="membership-table-toolbar">
               <Input
-                size="small"
                 className="membership-search-input"
                 placeholder="搜索成员…"
-                prefix={<Search size={13} className="membership-search-icon" />}
+                prefix={<Search size={14} className="membership-search-icon" />}
                 allowClear
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: 180 }}
+                style={{ width: 220 }}
               />
               <span className="membership-count-badge">共 {memberships.length} 位成员</span>
             </div>

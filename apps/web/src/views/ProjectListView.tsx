@@ -196,17 +196,20 @@ export default function ProjectListView() {
       {projects.length > 0 ? (
         <section className="project-list-section" aria-label="项目列表">
           <div className="project-list-toolbar">
-            <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
-            {projects.length > 2 || searchKeyword ? (
-              <Input
-                className="project-list-search"
-                placeholder="搜索项目名称..."
-                allowClear
-                prefix={<Search size={14} style={{ color: 'var(--app-color-foreground-muted)' }} />}
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-              />
-            ) : null}
+            <div className="project-list-toolbar-actions">
+              {projects.length > 2 || searchKeyword ? (
+                <Input
+                  className="project-list-search"
+                  placeholder="搜索项目名称…"
+                  allowClear
+                  prefix={<Search size={14} className="app-search-icon" />}
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  style={{ width: 220 }}
+                />
+              ) : null}
+              <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
+            </div>
           </div>
           {filteredProjects.length > 0 ? (
             <ul className="project-grid" aria-label="已加入项目">
