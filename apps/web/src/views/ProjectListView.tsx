@@ -1,6 +1,6 @@
-import { App as AntdApp, Button, Dropdown } from 'antd'
-import { FolderKanban } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { App as AntdApp, Button, Dropdown, Input } from 'antd'
+import { ArrowRight, Calendar, FolderKanban, Search, Settings } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { CatalogApiError } from '@/api/catalog'
@@ -32,6 +32,7 @@ export default function ProjectListView() {
   const [isCreating, setIsCreating] = useState(false)
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
   const [archivingProjectId, setArchivingProjectId] = useState<string | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
 
   const loadProjects = useCallback(async () => {
@@ -66,6 +67,14 @@ export default function ProjectListView() {
       activeRequest.current?.abort()
     }
   }, [loadProjects])
+
+  const filteredProjects = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    if (!keyword) return projects
+    return projects.filter((project) =>
+      project.display_name.toLowerCase().includes(keyword),
+    )
+  }, [projects, searchKeyword])
 
   async function createDataProject() {
     if (isCreating) return
@@ -184,88 +193,121 @@ export default function ProjectListView() {
         </ErrorState>
       ) : null}
       {projects.length > 0 ? (
-        <section className="project-list-surface working-surface" aria-label="项目列表">
-          <ul className="project-list" aria-label="已加入项目">
-            {projects.map((project) => (
-              <li
-                key={project.project_id}
-                className="project-list-item"
-                onClick={(event) => {
-                  const target = event.target as HTMLElement
-                  if (
-                    target.closest('a') ||
-                    target.closest('button') ||
-                    target.closest('.ant-dropdown-trigger') ||
-                    (window.getSelection()?.toString().length ?? 0) > 0
-                  ) {
-                    return
-                  }
-                  void navigate(paths.captureGroups(project.project_id))
-                }}
-              >
-                <div className="project-list-name">
-                  <div className="project-list-heading">
-                    <FolderKanban aria-hidden="true" size={16} strokeWidth={1.8} />
-                    <strong title={project.display_name} className="project-title-clickable">
-                      {project.display_name}
-                    </strong>
-                    <StatusBadge
-                      className="project-role-badge"
-                      tone={project.current_role === 'ADMIN' ? 'info' : 'default'}
-                    >
-                      {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
-                    </StatusBadge>
+        <section className="project-list-section" aria-label="项目列表">
+          <div className="project-list-toolbar">
+            <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
+            {projects.length > 2 || searchKeyword ? (
+              <Input
+                className="project-list-search"
+                placeholder="搜索项目名称..."
+                allowClear
+                prefix={<Search size={14} style={{ color: 'var(--app-color-foreground-muted)' }} />}
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+              />
+            ) : null}
+          </div>
+          {filteredProjects.length > 0 ? (
+            <ul className="project-grid" aria-label="已加入项目">
+              {filteredProjects.map((project) => (
+                <li
+                  key={project.project_id}
+                  className="project-card"
+                  onClick={(event) => {
+                    const target = event.target as HTMLElement
+                    if (
+                      target.closest('a') ||
+                      target.closest('button') ||
+                      target.closest('.ant-dropdown-trigger') ||
+                      (window.getSelection()?.toString().length ?? 0) > 0
+                    ) {
+                      return
+                    }
+                    void navigate(paths.captureGroups(project.project_id))
+                  }}
+                >
+                  <div className="project-card-header">
+                    <div className="project-card-avatar">
+                      <FolderKanban aria-hidden="true" size={20} strokeWidth={1.8} />
+                    </div>
+                    <div className="project-card-title-group">
+                      <strong title={project.display_name} className="project-card-title">
+                        {project.display_name}
+                      </strong>
+                      <div className="project-card-badges">
+                        <StatusBadge
+                          className="project-role-badge"
+                          tone={project.current_role === 'ADMIN' ? 'info' : 'default'}
+                        >
+                          {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
+                        </StatusBadge>
+                        <StatusBadge tone="success">活跃</StatusBadge>
+                      </div>
+                    </div>
+                    {project.current_role === 'ADMIN' ? (
+                      <div onClick={(event) => event.stopPropagation()}>
+                        <Dropdown
+                          trigger={['click']}
+                          menu={{
+                            items: [
+                              {
+                                key: 'rename',
+                                label: '修改名称',
+                                disabled: renamingProjectId === project.project_id,
+                              },
+                              {
+                                key: 'archive',
+                                label: '归档项目',
+                                danger: true,
+                                disabled: archivingProjectId === project.project_id,
+                              },
+                            ],
+                            onClick: ({ key }) =>
+                              void (key === 'rename'
+                                ? renameDataProject(project)
+                                : archiveDataProject(project)),
+                          }}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            className="project-card-more-btn"
+                            aria-label={`管理项目：${project.display_name}`}
+                            icon={<Settings size={14} strokeWidth={1.8} />}
+                          >
+                            管理
+                          </Button>
+                        </Dropdown>
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="project-list-meta">
-                    {project.created_at
-                      ? `创建时间：${project.created_at.slice(0, 10)}`
-                      : '已加入项目'}
-                  </p>
-                </div>
-                <div className="project-list-actions" onClick={(event) => event.stopPropagation()}>
-                  <Link
-                    className="project-open-link"
-                    to={paths.captureGroups(project.project_id)}
-                    aria-label={`进入项目：${project.display_name}`}
-                  >
-                    进入项目
-                  </Link>
-                  {project.current_role === 'ADMIN' ? (
-                    <Dropdown
-                      trigger={['click']}
-                      menu={{
-                        items: [
-                          {
-                            key: 'rename',
-                            label: '修改名称',
-                            disabled: renamingProjectId === project.project_id,
-                          },
-                          {
-                            key: 'archive',
-                            label: '归档项目',
-                            danger: true,
-                            disabled: archivingProjectId === project.project_id,
-                          },
-                        ],
-                        onClick: ({ key }) =>
-                          void (key === 'rename'
-                            ? renameDataProject(project)
-                            : archiveDataProject(project)),
-                      }}
+                  <div className="project-card-body">
+                    <div className="project-card-meta-row">
+                      <span className="project-card-meta-label">
+                        <Calendar size={13} strokeWidth={1.8} />
+                        创建时间
+                      </span>
+                      <span className="project-card-meta-value">
+                        {project.created_at ? project.created_at.slice(0, 10) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="project-card-footer" onClick={(event) => event.stopPropagation()}>
+                    <Link
+                      className="project-open-link"
+                      to={paths.captureGroups(project.project_id)}
+                      aria-label={`进入项目：${project.display_name}`}
                     >
-                      <Button
-                        type="link"
-                        size="small"
-                        aria-label={`管理项目：${project.display_name}`}
-                      >
-                        管理
-                      </Button>
-                    </Dropdown>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
+                      <span>进入项目</span>
+                      <ArrowRight aria-hidden="true" size={14} strokeWidth={2} />
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="project-search-empty">没有找到包含“{searchKeyword}”的项目</div>
+          )}
         </section>
       ) : loadState === 'success' ? (
         <EmptyState description="当前账号尚未加入项目。平台管理员可新建项目；成员需由项目管理员添加。">
