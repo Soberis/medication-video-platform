@@ -1,3 +1,4 @@
+import { ArrowRight } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
@@ -242,8 +243,15 @@ export default function AnnotationTaskListView({
           title="任务队列"
           titleId="annotation-task-queue-title"
         >
-          <ul className="annotation-task-list-surface" aria-label="标注任务列表">
-            {visibleItems.map((row) => {
+          <div className="annotation-task-container">
+            <div className="annotation-task-header" aria-hidden="true">
+              <span className="annotation-task-th-identity">采集记录</span>
+              <span className="annotation-task-th-status">任务状态</span>
+              <span className="annotation-task-th-evidence">标注与复核进展</span>
+              <span className="annotation-task-th-action">操作</span>
+            </div>
+            <ul className="annotation-task-list-surface" aria-label="标注任务列表">
+              {visibleItems.map((row) => {
               const captureGroupId = row.capture_group_id
               const taskSubject = `采集记录 ${shortId(captureGroupId)}`
               const revision = row.annotation_revision
@@ -366,20 +374,22 @@ export default function AnnotationTaskListView({
               const taskAction =
                 row.status !== 'COMPLETED' && taskDestination ? (
                   <Link
-                    className="annotation-task-action-link"
+                    className="capture-group-list-open annotation-task-action-link"
                     aria-label={taskDestination.actionLabel}
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    {taskDestination.actionLabel} <span aria-hidden="true">→</span>
+                    <span>{taskDestination.actionLabel}</span>
+                    <ArrowRight aria-hidden="true" size={13} />
                   </Link>
                 ) : null
               const completedTaskResult =
                 row.status === 'COMPLETED' && taskDestination ? (
                   <Link
-                    className="text-link annotation-task-result-link"
+                    className="capture-group-list-open annotation-task-result-link"
                     to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                   >
-                    查看标注结果 <span aria-hidden="true">→</span>
+                    <span>查看标注结果</span>
+                    <ArrowRight aria-hidden="true" size={13} />
                   </Link>
                 ) : null
               return (
@@ -474,6 +484,7 @@ export default function AnnotationTaskListView({
               )
             })}
           </ul>
+          </div>
         </Section>
       ) : null}
       {loadState === 'success' && !visibleItems.length ? (

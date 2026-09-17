@@ -210,12 +210,21 @@ export default function AccountManagementView() {
           </Form>
         </Section>
         <div className="account-list-column">
-          <Section
-            className="table-card account-table-card working-surface"
-            title="平台账号列表"
-            titleId="account-list-title"
-            actions={
-              accounts.length > 0 ? (
+          {loadState === 'loading' ? (
+            <LoadingState>正在加载平台账号…</LoadingState>
+          ) : null}
+          {loadState === 'error' ? (
+            <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
+          ) : null}
+          {loadState === 'success' && accounts.length === 0 ? (
+            <EmptyState description="当前没有平台账号。" />
+          ) : null}
+          {loadState === 'success' && accounts.length > 0 ? (
+            <Section
+              className="table-card account-table-card working-surface"
+              title="平台账号列表"
+              titleId="account-list-title"
+              actions={
                 <div className="account-table-toolbar">
                   <Input
                     size="small"
@@ -229,19 +238,8 @@ export default function AccountManagementView() {
                   />
                   <span className="account-count-badge">共 {accounts.length} 个账号</span>
                 </div>
-              ) : null
-            }
-          >
-            {loadState === 'loading' && accounts.length === 0 ? (
-              <LoadingState>正在加载平台账号…</LoadingState>
-            ) : null}
-            {loadState === 'error' && accounts.length === 0 ? (
-              <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
-            ) : null}
-            {loadState === 'success' && accounts.length === 0 ? (
-              <EmptyState description="当前没有平台账号。" />
-            ) : null}
-            {accounts.length > 0 ? (
+              }
+            >
               <Table<PlatformAccount>
                 dataSource={filteredAccounts}
                 rowKey="username"
@@ -297,8 +295,8 @@ export default function AccountManagementView() {
                   },
                 ]}
               />
-            ) : null}
-          </Section>
+            </Section>
+          ) : null}
         </div>
       </div>
     </div>

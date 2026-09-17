@@ -1,4 +1,5 @@
-import { Alert, App as AntdApp, Button, Form, Select, Table } from 'antd'
+import { Alert, App as AntdApp, Button, Form, Input, Select, Table } from 'antd'
+import { Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
@@ -38,6 +39,8 @@ export default function ProjectMembershipView() {
   const activeRequest = useRef<AbortController | null>(null)
   const canManageMembers = projectRole === 'ADMIN'
   const availableAccounts = useMemo(() => accounts.filter((account) => account.enabled), [accounts])
+
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadMemberships = useCallback(async () => {
     activeRequest.current?.abort()
@@ -125,8 +128,14 @@ export default function ProjectMembershipView() {
     })
   }
 
+  const filteredMemberships = searchQuery.trim()
+    ? memberships.filter((m) =>
+        m.actor_id.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+      )
+    : memberships
+
   return (
-    <>
+    <div className="project-membership-page">
       <ProjectBreadcrumb projectId={projectId} projectName={projectName} switchTarget="members">
         <span>项目成员</span>
       </ProjectBreadcrumb>
@@ -139,113 +148,154 @@ export default function ProjectMembershipView() {
           <RefreshButton loading={loadState === 'loading'} onClick={() => void loadMemberships()} />
         }
       />
-      {canManageMembers ? (
-        <Section
-          className="membership-create-panel working-surface"
-          title="添加或更新项目成员"
-          titleId="membership-create-title"
-        >
-          <Form<MembershipFields>
-            form={form}
-            className="membership-form"
-            layout="vertical"
-            initialValues={{ role: 'MEMBER' }}
-            onFinish={(values) => void saveMembership(values)}
-          >
-            <Form.Item
-              label="平台账号"
-              name="actorId"
-              rules={[{ required: true, message: '请选择平台账号。' }]}
+      <div className="membership-management-grid">
+        <div className="membership-create-column">
+          {canManageMembers ? (
+            <Section
+              className="membership-create-panel working-surface"
+              title="添加或更新项目成员"
+              titleId="membership-create-title"
             >
-              <Select
-                showSearch
-                placeholder="选择已启用账号"
-                options={availableAccounts.map((account) => ({
-                  value: account.username,
-                  label: `${account.username}（${account.role === 'ADMIN' ? '平台管理员' : '平台成员'}）`,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item
-              label="项目角色"
-              name="role"
-              rules={[{ required: true, message: '请选择项目角色。' }]}
+              <Form<MembershipFields>
+                form={form}
+                className="membership-form"
+                layout="vertical"
+                initialValues={{ role: 'MEMBER' }}
+                onFinish={(values) => void saveMembership(values)}
+              >
+                <div className="membership-form-fields">
+                  <Form.Item
+                    label="平台账号"
+                    name="actorId"
+                    rules={[{ required: true, message: '请选择平台账号。' }]}
+                  >
+                    <Select
+                      showSearch
+                      placeholder="选择已启用账号"
+                      options={availableAccounts.map((account) => ({
+                        value: account.username,
+                        label: `${account.username}（${account.role === 'ADMIN' ? '平台管理员' : '平台成员'}）`,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="项目角色"
+                    name="role"
+                    rules={[{ required: true, message: '请选择项目角色。' }]}
+                  >
+                    <Select
+                      options={[
+                        { label: '成员', value: 'MEMBER' },
+                        { label: '项目管理员', value: 'ADMIN' },
+                      ]}
+                    />
+                  </Form.Item>
+                </div>
+                <p className="form-hint membership-form-hint">
+                  平台账号是全局身份；项目角色仅对当前项目生效。
+                </p>
+                <Button
+                  className="membership-save-btn"
+                  htmlType="submit"
+                  type="primary"
+                  loading={isMutating}
+                >
+                  保存成员
+                </Button>
+              </Form>
+            </Section>
+          ) : loadState === 'success' ? (
+            <Alert
+              className="catalog-alert"
+              title="当前账号无权管理成员"
+              description="只有项目管理员可以添加、修改或移除成员。"
+              type="warning"
+              showIcon
+            />
+          ) : null}
+        </div>
+        <div className="membership-list-column">
+          {loadState === 'loading' ? (
+            <LoadingState>正在加载项目成员…</LoadingState>
+          ) : null}
+          {loadState === 'error' ? (
+            <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
+          ) : null}
+          {loadState === 'success' && memberships.length === 0 ? (
+            <EmptyState description="当前项目还没有成员。" />
+          ) : null}
+          {loadState === 'success' && memberships.length > 0 ? (
+            <Section
+              className="table-card membership-list-panel working-surface"
+              title="项目成员列表"
+              titleId="membership-list-title"
+              actions={
+                <div className="membership-table-toolbar">
+                  <Input
+                    size="small"
+                    className="membership-search-input"
+                    placeholder="搜索成员…"
+                    prefix={<Search size={13} className="membership-search-icon" />}
+                    allowClear
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: 160 }}
+                  />
+                  <span className="membership-count-badge">共 {memberships.length} 位成员</span>
+                </div>
+              }
             >
-              <Select
-                options={[
-                  { label: '成员', value: 'MEMBER' },
-                  { label: '项目管理员', value: 'ADMIN' },
+              <Table<ProjectMembership>
+                dataSource={filteredMemberships}
+                rowKey="membership_id"
+                pagination={false}
+                columns={[
+                  {
+                    title: '平台账号',
+                    dataIndex: 'actor_id',
+                    render: (actorId: string) => (
+                      <span className="account-user-cell">
+                        <span className="account-user-avatar" aria-hidden="true">
+                          {actorId.slice(0, 1).toUpperCase()}
+                        </span>
+                        <strong className="account-username">{actorId}</strong>
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '项目角色',
+                    width: 140,
+                    render: (_, row) => (
+                      <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                        {row.role === 'ADMIN' ? '项目管理员' : '成员'}
+                      </StatusBadge>
+                    ),
+                  },
+                  ...(canManageMembers
+                    ? [
+                        {
+                          title: '操作',
+                          width: 120,
+                          render: (_: unknown, row: ProjectMembership) => (
+                            <Button
+                              type="link"
+                              danger
+                              disabled={isMutating}
+                              aria-label={`移除项目成员：${row.actor_id}`}
+                              onClick={() => removeMembership(row)}
+                            >
+                              移除成员
+                            </Button>
+                          ),
+                        },
+                      ]
+                    : []),
                 ]}
               />
-            </Form.Item>
-            <p className="form-hint membership-form-hint">
-              平台账号是全局身份；项目角色仅对当前项目生效。
-            </p>
-            <Button htmlType="submit" type="primary" loading={isMutating}>
-              保存成员
-            </Button>
-          </Form>
-        </Section>
-      ) : loadState === 'success' ? (
-        <Alert
-          className="catalog-alert"
-          title="当前账号无权管理成员"
-          description="只有项目管理员可以添加、修改或移除成员。"
-          type="warning"
-          showIcon
-        />
-      ) : null}
-      {loadState === 'loading' ? <LoadingState>正在加载项目成员…</LoadingState> : null}
-      {loadState === 'error' ? (
-        <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
-      ) : null}
-      {loadState === 'success' && memberships.length > 0 ? (
-        <Section
-          className="table-card membership-list-panel working-surface"
-          title="项目成员列表"
-          titleId="membership-list-title"
-        >
-          <Table<ProjectMembership>
-            dataSource={memberships}
-            rowKey="membership_id"
-            pagination={false}
-            columns={[
-              { title: '平台账号', dataIndex: 'actor_id' },
-              {
-                title: '项目角色',
-                width: 140,
-                render: (_, row) => (
-                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
-                    {row.role === 'ADMIN' ? '项目管理员' : '成员'}
-                  </StatusBadge>
-                ),
-              },
-              ...(canManageMembers
-                ? [
-                    {
-                      title: '操作',
-                      width: 120,
-                      render: (_: unknown, row: ProjectMembership) => (
-                        <Button
-                          type="link"
-                          danger
-                          disabled={isMutating}
-                          aria-label={`移除项目成员：${row.actor_id}`}
-                          onClick={() => removeMembership(row)}
-                        >
-                          移除成员
-                        </Button>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </Section>
-      ) : null}
-      {loadState === 'success' && memberships.length === 0 ? (
-        <EmptyState description="当前项目还没有成员。" />
-      ) : null}
-    </>
+            </Section>
+          ) : null}
+        </div>
+      </div>
+    </div>
   )
 }

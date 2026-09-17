@@ -923,18 +923,29 @@
 }
 
 .annotation-task-queue {
-  width: min(100%, 1120px);
+  width: 100%;
   margin-top: var(--app-space-16);
 }
 
 .annotation-task-overview {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--app-space-8);
-  margin: var(--app-space-16) 0 0;
+  margin: var(--app-space-12) 0 0;
+  padding: var(--app-space-6) var(--app-space-12);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-color-surface-subtle);
+  border: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
+}
+
+.annotation-task-overview .form-hint {
+  margin: 0;
+  font-size: var(--app-font-size-caption);
+  color: var(--app-color-foreground-subtle);
+  width: 100%;
 }
 
 .annotation-task-overview strong {
@@ -945,6 +956,47 @@
 
 .annotation-task-overview span {
   font-variant-numeric: tabular-nums;
+}
+
+.annotation-task-container {
+  display: grid;
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-surface);
+  overflow: hidden;
+  margin-top: var(--app-space-8);
+}
+
+.annotation-task-header {
+  display: grid;
+  grid-template-areas: 'identity status evidence action';
+  grid-template-columns: minmax(200px, 1.2fr) minmax(120px, 0.6fr) minmax(200px, 1fr) auto;
+  align-items: center;
+  gap: var(--app-space-16);
+  padding: var(--app-space-8) var(--app-space-16);
+  background: var(--app-color-neutral-surface);
+  border-bottom: 1px solid var(--app-color-border-subtle);
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  font-weight: var(--app-font-weight-medium);
+}
+
+.annotation-task-th-identity {
+  grid-area: identity;
+}
+
+.annotation-task-th-status {
+  grid-area: status;
+}
+
+.annotation-task-th-evidence {
+  grid-area: evidence;
+}
+
+.annotation-task-th-action {
+  grid-area: action;
+  text-align: right;
+  min-width: 80px;
 }
 
 .annotation-task-list-surface {
@@ -958,18 +1010,18 @@
 .annotation-task-row {
   display: grid;
   grid-template-areas: 'identity status evidence action';
-  grid-template-columns: minmax(180px, 1.15fr) minmax(92px, 0.55fr) minmax(180px, 1fr) auto;
-  align-items: start;
+  grid-template-columns: minmax(200px, 1.2fr) minmax(120px, 0.6fr) minmax(200px, 1fr) auto;
+  align-items: center;
   gap: var(--app-space-16);
   min-width: 0;
-  padding: var(--app-space-12) var(--app-space-8);
+  padding: var(--app-space-12) var(--app-space-16);
   border-bottom: 1px solid var(--app-color-border-subtle);
   cursor: pointer;
   transition: background var(--app-transition-quick);
 }
 
 .annotation-task-row:hover {
-  background: var(--app-color-surface-muted);
+  background: var(--app-color-surface-hover);
 }
 
 .annotation-task-row:hover .annotation-task-title-clickable {
@@ -1886,16 +1938,41 @@
   outline-offset: 1px;
 }
 
-.account-management-page {
-  width: min(100%, 1120px);
+.account-management-page,
+.project-membership-page {
+  width: 100%;
 }
 
-.account-form {
+.account-management-grid,
+.membership-management-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--app-space-20);
+  align-items: start;
+  margin-top: var(--app-space-16);
+}
+
+@media (max-width: 1024px) {
+  .account-management-grid,
+  .membership-management-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-form,
+.membership-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  max-width: 720px;
+  width: 100%;
   gap: 0;
-  align-items: end;
+}
+
+.account-form-fields,
+.membership-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
 }
 
 .account-form-row {
@@ -1909,6 +1986,58 @@
   .account-form-row {
     grid-template-columns: 1fr;
   }
+}
+
+.account-field-icon,
+.membership-search-icon,
+.account-search-icon {
+  color: var(--app-color-foreground-subtle);
+}
+
+.account-create-submit,
+.membership-save-btn {
+  width: 100%;
+  height: var(--app-control-height);
+  font-weight: var(--app-font-weight-medium);
+}
+
+.account-table-toolbar,
+.membership-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-12);
+}
+
+.account-count-badge,
+.membership-count-badge {
+  font-size: var(--app-font-size-helper);
+  color: var(--app-color-foreground-muted);
+  white-space: nowrap;
+}
+
+.account-user-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.account-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-color-primary-subtle);
+  color: var(--app-color-primary);
+  font-size: 11px;
+  font-weight: var(--app-font-weight-bold);
+  flex-shrink: 0;
+}
+
+.account-username {
+  font-weight: var(--app-font-weight-semibold);
+  color: var(--app-color-foreground);
 }
 
 .label-code-tag {
@@ -1944,39 +2073,24 @@
   }
 }
 
-.membership-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-width: 720px;
-  gap: 0 var(--app-space-16);
-  align-items: end;
-}
-
 .account-form .form-hint,
-.membership-form .membership-form-hint,
-.account-form > .ant-btn,
-.membership-form > .ant-btn {
-  grid-column: 1 / -1;
-  justify-self: start;
-}
-
-.account-form .form-hint {
-  margin-bottom: var(--app-space-16);
-}
-
 .membership-form .membership-form-hint {
+  grid-column: 1 / -1;
   margin-bottom: var(--app-space-16);
 }
 
-.account-create-panel {
-  width: 100%;
-  padding: var(--app-space-16);
-}
-
+.account-create-panel,
 .membership-create-panel {
   width: 100%;
-  margin-top: var(--app-space-16);
   padding: var(--app-space-16);
+}
+
+@media (min-width: 1025px) {
+  .account-create-panel,
+  .membership-create-panel {
+    position: sticky;
+    top: var(--app-space-16);
+  }
 }
 
 .membership-list-panel {
