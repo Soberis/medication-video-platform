@@ -1,42 +1,79 @@
 # 配药视频数据处理平台
 
-平台接收外部采集端上传的视频数据，在云端完成数据归组、媒体检查、MediaPipe 分析、必要的人工训练数据处理和导出；不负责医院业务、患者、药品业务、摄像头控制、设备管理、采集侧运维或医院工作流。
+配药视觉质检体系的**中心调度与数据管理平台**。接收外部采集端上传的音视频数据，在云端完成数据归组（`CaptureGroup`）、媒体质检、MediaPipe 手部姿态分析、GPU 动作时序候选调度、自动标注草稿铺设/人工复核与 HDF5 数据集标准化导出。
 
-当前唯一需求入口：V1.35 Consolidated Baseline（需求已收敛；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍分别约束待决实施项）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或可随意删除兼容内容。
+---
+
+## 关联项目生态
+
+本项目与边缘采集端、GPU AI 推理节点构成端-云-算力闭环流水线：
+
+| 角色 | 仓库 | 核心技术栈 | 职责定位 |
+| :--- | :--- | :--- | :--- |
+| **边缘采集端** | [medication-camera](https://github.com/Soberis/medication-camera/tree/dev) | RK3588 / Orbbec SDK / C++ | 多机位同步录制、硬件/HTTP 触发、本地 Spool 缓冲池与 S3 批量断网直传 |
+| **中心平台** | **medication-video-platform**（本项目） | Java 21 / React / Docker | 接收归组、媒体质检、手部姿态事实、预标注调度、人机协同复核与 HDF5 导出 |
+| **动作推理节点** | [medication-action-worker](https://github.com/Soberis/medication-action-worker/tree/dev) | RTX 4090 / PyTorch / Qwen | 监听 RabbitMQ 任务，执行 Qwen3.5-4B 有界切片动作时序推理与租约回传 |
+
+### 系统整体拓扑与数据流向
+
+```mermaid
+flowchart LR
+    subgraph Edge["边缘采集端 (medication-camera)"]
+        CAM["多机位相机 / 硬件触发器"] --> REC["录制与转码"]
+        REC --> SPOOL["本地 Spool 缓冲池"]
+        SPOOL --> UPL["3D 阈值批量上传"]
+    end
+
+    subgraph Platform["中心数据平台 (medication-video-platform)"]
+        INGEST["CaptureGroup 入库"]
+        PROBE["Media Probe 质检"]
+        MP["MediaPipe 手部检测 (事实证据)"]
+        SCHED["Action Job 调度 (RabbitMQ)"]
+        UI["Web 工作台 (自动草稿/人工复核)"]
+        EXP["HDF5 数据集导出"]
+    end
+
+    subgraph GPU["AI 推理节点 (medication-action-worker)"]
+        QWEN["Qwen3.5-4B (RTX 4090)"]
+        CHUNK["24s+3s 有界切片推理"]
+    end
+
+    UPL -->|S3 Multipart + HTTP API| INGEST
+    INGEST --> PROBE
+    PROBE --> MP
+    PROBE --> SCHED
+    SCHED -->|RabbitMQ platform.ai.action-candidate.v1| QWEN
+    QWEN --> CHUNK
+    CHUNK -->|HTTP PUT 动作候选| SCHED
+    SCHED -->|铺设初始时间轴草稿| UI
+    MP --> EXP
+    UI -->|已批准人工标注| EXP
+```
+
+---
+
+## 核心业务基线（V1.35 Consolidated Baseline）
+
+当前唯一需求入口：**V1.35 Consolidated Baseline**（需求已收敛；D1、D4 已在 dev 完成首轮收缩，D2、D3、D5 仍分别约束待决实施项）。V1.35 正文自包含，不要求逐层阅读历史版本；V1.28 仍是上一正式运行时基线，需求收敛不表示现有 runtime 已全部实现或可随意删除兼容内容。
 
 V1.35 的唯一主链：
 
 ```text
-数据接收
-→ CaptureGroup
-→ Media Probe
-  ├─ MediaPipe 手部事实
-  └─ Action Candidate 动作候选
-→ 自动标注 / 必要时人工确认
-→ Export Eligibility
-→ human-demonstration-hdf5.v1
+数据接收 (medication-camera)
+→ CaptureGroup → CameraStream / ClipAsset
+→ Media Probe 媒体质检
+  ├─ MediaPipe 手部事实 (platform.ai.hand-pose.v1) ────────┐
+  └─ Action Candidate 动作候选 (medication-action-worker)    │
+→ 自动标注草稿铺设 / 必要时人工确认与复核 ─────────────────┤
+                                                          ↓
+                           Export Eligibility → human-demonstration-hdf5.v1
 ```
 
-`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象。`CaptureGroup` 是一次采集记录；`CameraStream` 是记录中的视频视角，不是平台管理的物理摄像头资产。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
-
-采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。MediaPipe 与 Action Candidate 独立运行。系统自动准备标注草稿，正确片段无需逐段采纳，用户可修改并最后显式提交；已提交 Revision 经现有 Review APPROVED 后才进入 HDF5 最终准入。当前唯一导出为 `human-demonstration-hdf5.v1`。
-
-当前规范：
-
-- [V1.35 Consolidated Baseline（当前唯一需求）](./docs/requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md)
-- [需求基线入口与版本 manifest](./docs/requirements/README.md)
-- [当前架构文档入口](./docs/architecture/README.md)
-- [动作候选技术设计（支持性 DRAFT）](./docs/architecture/v1.34-action-annotation.md)
-- [自动标注与异常人工接管 ADR](./docs/adr/0004-automatic-annotation-approval-policy.md)
-- [安全、隐私与保留销毁](./docs/architecture/security-privacy-retention.md)
-- [部署、容量与灾难恢复](./docs/architecture/deployment-capacity-and-dr.md)
-- [前端设计系统](./docs/DESIGN_SYSTEM.md)
-- [Web 前端与用户体验设计规范](./docs/architecture/web-ux-and-frontend-guidelines.md)
-- [当前需求追踪与实现证据](./docs/architecture/requirements-traceability.md)
-- [Platform 文档 Active / History 清理清单](./docs/audits/v1.35-platform-document-active-history-inventory.md)
-- [边端接收 Manifest 契约](./contracts/schemas/external-video-ingest-v1.schema.json)
-
-领域模型、状态机和异步协议中的历史产品段落仅供参考。媒体就绪后的 Action Candidate 自动派发已接线，真实 Worker 联调仍待验收；人工任务只在进入人工提交路径时准备。自动化准备不代替提交和复核，不覆盖人工修改。D1 已停止新的 Cleaning 写入与 recheck，历史 Cleaning 仅作只读兼容。
+- **数据建模边界**：`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象；`CaptureGroup` 是一次采集记录；`CameraStream` 是视角。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
+- **设备与采集边界**：采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。
+- **双轨 AI 证据链条**：MediaPipe 与 Action Candidate 独立运行。系统自动准备标注草稿，正确片段无需逐段采纳，用户可修改并最后显式提交；已提交 Revision 经现有 Review APPROVED 后才进入 HDF5 最终准入。
+- **规范导出**：当前唯一导出为 `human-demonstration-hdf5.v1`。
+- **历史状态清理**：领域模型、状态机和异步协议中的历史产品段落仅供参考。媒体就绪后的 Action Candidate 自动派发已接线，真实 Worker 联调仍待验收；人工任务只在进入人工提交路径时准备。自动化准备不代替提交和复核，不覆盖人工修改。D1 已停止新的 Cleaning 写入与 recheck，历史 Cleaning 仅作只读兼容。
 
 ## 本地运行
 
