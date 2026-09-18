@@ -136,68 +136,6 @@ class HandPoseJobService {
 		return response(job);
 	}
 
-	@Transactional
-	HandPoseJobResponse retry(UUID projectId, UUID clipAssetId, String actorId, String idempotencyKey, String requestId,
-			String traceId) {
-		ensureEnabled();
-		var projectRole = this.projectAccessService.lockAndRequireMember(projectId, actorId);
-		validateModel();
-		var fingerprint = fingerprint(projectId, clipAssetId);
-		var receiptKey = commandKey("retry", idempotencyKey);
-		var receipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, receiptKey);
-		if (receipt.isPresent()) {
-			return response(requireSameRequest(receipt.get(), fingerprint));
-		}
-		// A pre-namespace receipt is only safe to replay as a retry if it does
-		// not belong to the queue command that used the same client key.
-		var legacyReceipt = this.receiptRepository.findByProjectIdAndIdempotencyKey(projectId, idempotencyKey);
-		if (legacyReceipt.isPresent()) {
-			var legacyJob = this.repository.findById(legacyReceipt.get().getAiJobId())
-				.orElseThrow(() -> new IllegalStateException("An AI job idempotency receipt references no AI job."));
-			if (idempotencyKey.equals(legacyJob.getIdempotencyKey())) {
-				throw new HandPoseJobException("AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED",
-						"The idempotency key was already used for a queue command.", 409);
-			}
-			return response(requireSameRequest(legacyReceipt.get(), fingerprint));
-		}
-		var input = this.assetCatalog.getClipAssetInputSummary(projectId, clipAssetId);
-		ensureEligible(input);
-		ensureCapacity(input, projectId, clipAssetId);
-		var job = this.repository
-			.findTopByProjectIdAndClipAssetIdAndAlgorithmKeyOrderByCreatedAtDesc(projectId, clipAssetId,
-					HandPoseProfile.ALGORITHM_KEY)
-			.orElseThrow(() -> new HandPoseJobException("AI_HAND_POSE_JOB_NOT_FOUND",
-					"No hand pose job exists for this video.", 404));
-		if (idempotencyKey.equals(job.getIdempotencyKey())) {
-			throw new HandPoseJobException("AI_HAND_POSE_IDEMPOTENCY_KEY_REUSED",
-					"The idempotency key was already used for a queue command.", 409);
-		}
-		var attempt = this.attemptQueue.latest(job.getAiJobId());
-		if (job.getStatus() != AiCandidateJobStatus.FAILED || attempt == null
-				|| attempt.getStatus() != AiCandidateJobAttemptStatus.FAILED) {
-			throw new HandPoseJobException("AI_HAND_POSE_RETRY_NOT_ALLOWED",
-					"Only a terminally failed hand pose job can be retried.", 409);
-		}
-		if (attempt.getAttempt() >= this.maxAttempts) {
-			throw new HandPoseJobException("AI_HAND_POSE_RETRY_LIMIT_REACHED",
-					"The maximum number of hand pose attempts has been reached.", 409);
-		}
-		if (!attempt.isRetryable()) {
-			throw new HandPoseJobException("AI_HAND_POSE_RETRY_NOT_ALLOWED",
-					"This hand pose failure is not eligible for manual retry.", 409);
-		}
-		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		job.requeueForManualRetry(now);
-		this.attemptQueue.enqueue(job, attempt.getAttempt() + 1, now);
-		this.recordReceipt(job, receiptKey, fingerprint, now);
-		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
-				"AI_HAND_POSE_JOB_MANUAL_RETRY_QUEUED", "AIJob", job.getAiJobId().toString(),
-				Integer.toString(attempt.getAttempt() + 1), AuditOutcome.SUCCEEDED, attempt.getFailureReason(),
-				requestId, traceId, "ROLE_" + projectRole.name(), java.util.Map.of("clip_asset_id",
-						clipAssetId.toString(), "source_attempt", Integer.toString(attempt.getAttempt()))));
-		return response(job);
-	}
-
 	@Transactional(readOnly = true)
 	HandPoseJobResponse get(UUID projectId, UUID aiJobId, String actorId) {
 		this.projectAccessService.requireMember(projectId, actorId);

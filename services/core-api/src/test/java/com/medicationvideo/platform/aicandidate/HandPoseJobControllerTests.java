@@ -42,24 +42,4 @@ class HandPoseJobControllerTests {
 		assertEquals(36, requestId.getValue().length());
 	}
 
-	@Test
-	void delegatesManualRetryToTheDedicatedRetryApplicationService() {
-		var service = mock(HandPoseJobService.class);
-		var controller = new HandPoseJobController(service, mock(HandPoseCandidateQueryService.class));
-		var projectId = UUID.randomUUID();
-		var clipAssetId = UUID.randomUUID();
-		var authentication = mock(Authentication.class);
-		when(authentication.getPrincipal()).thenReturn(new PlatformActor(projectId, "reviewer"));
-		when(service.retry(eq(projectId), eq(clipAssetId), eq("reviewer"), any(), any(), any()))
-			.thenReturn(new HandPoseJobResponse(UUID.randomUUID(), projectId, clipAssetId, "MEDIAPIPE_HAND_LANDMARKER",
-					"v1", "a".repeat(64), "b".repeat(64), 1L, 10, "c".repeat(64), "QUEUED", "reviewer", Instant.EPOCH,
-					Instant.EPOCH));
-
-		controller.retryVideo(projectId, clipAssetId, "retry-idempotency-key-0001", "request-0001", authentication);
-
-		org.mockito.Mockito.verify(service)
-			.retry(eq(projectId), eq(clipAssetId), eq("reviewer"), eq("retry-idempotency-key-0001"), eq("request-0001"),
-					any());
-	}
-
 }
