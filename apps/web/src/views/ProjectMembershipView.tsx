@@ -243,10 +243,11 @@ export default function ProjectMembershipView() {
                       {
                         // 末列不给宽度：宽屏下的多余宽度由它吸收，保证账号与角色相邻。
                         title: '操作',
+                        align: 'right' as const,
                         render: (_: unknown, row: ProjectMembership) => (
                           <div className="table-cell-actions">
                             <Button
-                              type="link"
+                              size="small"
                               disabled={isMutating}
                               aria-label={`修改成员角色：${row.actor_id}`}
                               onClick={() => handleOpenEdit(row)}
@@ -254,7 +255,7 @@ export default function ProjectMembershipView() {
                               修改角色
                             </Button>
                             <Button
-                              type="link"
+                              size="small"
                               danger
                               disabled={isMutating}
                               aria-label={`移除项目成员：${row.actor_id}`}

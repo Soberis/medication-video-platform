@@ -220,18 +220,21 @@ export default function AccountManagementView() {
                 },
                 {
                   title: '操作',
+                  align: 'right',
                   render: (_, row) =>
                     row.role !== 'ADMIN' ? (
-                      <Button
-                        type="link"
-                        danger={row.enabled}
-                        className={row.enabled ? 'action-danger' : 'action-primary'}
-                        disabled={isChanging}
-                        aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
-                        onClick={() => toggleEnabled(row)}
-                      >
-                        {row.enabled ? '停用' : '启用'}
-                      </Button>
+                      <div className="table-cell-actions">
+                        <Button
+                          size="small"
+                          danger={row.enabled}
+                          className={row.enabled ? 'action-danger' : 'action-primary'}
+                          disabled={isChanging}
+                          aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
+                          onClick={() => toggleEnabled(row)}
+                        >
+                          {row.enabled ? '停用' : '启用'}
+                        </Button>
+                      </div>
                     ) : (
                       <span className="cell-secondary">管理员不可停用</span>
                     ),

@@ -113,10 +113,11 @@ export default function AnnotationLabelLibraryView() {
           <h2 className="visually-hidden" id="label-library-table-title">
             当前标签
           </h2>
-          <div className="table-surface">
+          <div className="table-surface label-library-table-card">
             <Table
               rowKey="label_id"
               pagination={false}
+              tableLayout="fixed"
               dataSource={schema.labels}
               locale={{ emptyText: '暂无标签。' }}
               columns={[
@@ -133,18 +134,13 @@ export default function AnnotationLabelLibraryView() {
                   render: (text: string, row) => {
                     const style = getActionStyle(row.label_id)
                     return (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span className="label-display-cell">
                         <span
-                          style={{
-                            display: 'inline-block',
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: style.dot,
-                            flexShrink: 0,
-                          }}
+                          className="label-color-dot"
+                          style={{ backgroundColor: style.dot }}
+                          aria-hidden="true"
                         />
-                        <strong>{text}</strong>
+                        <strong className="label-display-name">{text}</strong>
                       </span>
                     )
                   },
