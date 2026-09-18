@@ -44,6 +44,9 @@ export const appTheme: ThemeConfig = {
       primaryShadow: 'none',
       dangerShadow: 'none',
     },
+    Table: {
+      headerSplitColor: 'transparent',
+    },
   },
 }
 

@@ -145,11 +145,7 @@ export default function AccountManagementView() {
         description="平台账号加入项目后，才可访问项目数据。"
         actions={
           <>
-            <Button
-              type="primary"
-              icon={<Plus size={14} />}
-              onClick={handleOpenCreate}
-            >
+            <Button type="primary" icon={<Plus size={14} />} onClick={handleOpenCreate}>
               创建账号
             </Button>
             <RefreshButton loading={loadState === 'loading'} onClick={() => void loadAccounts()} />
@@ -157,9 +153,7 @@ export default function AccountManagementView() {
         }
       />
 
-      {loadState === 'loading' ? (
-        <LoadingState>正在加载平台账号…</LoadingState>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在加载平台账号…</LoadingState> : null}
 
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadAccounts()}>{errorMessage}</ErrorState>
@@ -227,7 +221,6 @@ export default function AccountManagementView() {
                         <Button
                           size="small"
                           danger={row.enabled}
-                          className={row.enabled ? 'action-danger' : 'action-primary'}
                           disabled={isChanging}
                           aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
                           onClick={() => toggleEnabled(row)}
@@ -310,11 +303,7 @@ export default function AccountManagementView() {
           <p className="form-hint">初始密码仅用于创建，不会写入账号列表、日志或审计记录。</p>
           <div className="management-modal-actions">
             <Button onClick={handleCloseCreate}>取消</Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={isSubmitting}
-            >
+            <Button type="primary" htmlType="submit" loading={isSubmitting}>
               确认创建
             </Button>
           </div>

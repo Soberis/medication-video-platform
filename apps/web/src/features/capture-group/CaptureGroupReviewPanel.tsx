@@ -231,7 +231,7 @@ export function CaptureGroupReviewPanel({
             <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
           </div>
           <Button
-            type="link"
+            type="text"
             size="small"
             aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
             aria-expanded={isCompletedDetailOpen}
@@ -443,15 +443,11 @@ function FormalAnnotationIntervals({
         </div>
         <div className="capture-group-intervals-actions">
           <span>
-            {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}
-            共 {safeSegments.length} 个动作段
+            {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}共 {safeSegments.length}{' '}
+            个动作段
           </span>
           {hasMore ? (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => setIsExpanded((prev) => !prev)}
-            >
+            <Button type="text" size="small" onClick={() => setIsExpanded((prev) => !prev)}>
               {isExpanded ? '收起' : `展开全部 (${safeSegments.length})`}
             </Button>
           ) : null}
@@ -532,9 +528,15 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
 const executedCheckMeta: Record<string, { label: string; desc: string }> = {
   REVIEW_APPROVED: { label: '人工复核通过', desc: '经授权复核人审核确认' },
   GROUP_QUALITY_ADMITTING: { label: '整体质量准入', desc: '采集记录综合质量评定通过' },
-  PRIMARY_VIEW_AUTHORITATIVE_INTERVAL: { label: '主机位权威区间有效', desc: '动作时间段与主机位基准对齐' },
+  PRIMARY_VIEW_AUTHORITATIVE_INTERVAL: {
+    label: '主机位权威区间有效',
+    desc: '动作时间段与主机位基准对齐',
+  },
   QUALIFIED_VIEWS_ONLY: { label: '已排除不合格机位', desc: '非合格视角不参与动作计算' },
-  SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE: { label: '辅机位参考证据就绪', desc: '多视角同步证据已记录' },
+  SUPPORTING_VIEWS_EVENT_LEVEL_EVIDENCE: {
+    label: '辅机位参考证据就绪',
+    desc: '多视角同步证据已记录',
+  },
   RAW_MEDIA_RETAINED: { label: '原始视频资产完整', desc: '原始媒体已安全归档' },
 }
 
@@ -567,9 +569,7 @@ function CaptureGroupCleaningCheck({
           {cleaning.outcome === 'PASS' ? '标注检查通过' : '标注检查未通过'}
         </StatusIndicator>
         <span>评估时间：{formatDateTime(cleaning.evaluated_at)}</span>
-        {cleaning?.evaluated_by ? (
-          <span>评估人：{cleaning.evaluated_by}</span>
-        ) : null}
+        {cleaning?.evaluated_by ? <span>评估人：{cleaning.evaluated_by}</span> : null}
       </div>
       <details className="capture-group-progressive-detail capture-group-cleaning-detail">
         <summary>
@@ -703,21 +703,21 @@ function CleaningPrimaryInterval({
   const [isExpanded, setIsExpanded] = useState(false)
   const safeIntervals = primaryInterval
   const hasMore = safeIntervals.length > INITIAL_INTERVAL_VISIBLE_COUNT
-  const displayed = isExpanded ? safeIntervals : safeIntervals.slice(0, INITIAL_INTERVAL_VISIBLE_COUNT)
+  const displayed = isExpanded
+    ? safeIntervals
+    : safeIntervals.slice(0, INITIAL_INTERVAL_VISIBLE_COUNT)
 
   return (
     <div className="capture-group-cleaning-interval">
       <div className="capture-group-cleaning-interval-header">
         <div>
           <strong>主视图正式时间轴</strong>
-          <span>{primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}只展示正式动作时间段</span>
+          <span>
+            {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}只展示正式动作时间段
+          </span>
         </div>
         {hasMore ? (
-          <Button
-            type="link"
-            size="small"
-            onClick={() => setIsExpanded((prev) => !prev)}
-          >
+          <Button type="text" size="small" onClick={() => setIsExpanded((prev) => !prev)}>
             {isExpanded ? '收起' : `展开全部 (${safeIntervals.length})`}
           </Button>
         ) : null}
@@ -738,7 +738,9 @@ function CleaningPrimaryInterval({
                     ? `${formattedStart} → ${formattedEnd}`
                     : '时间暂不可用'}
                 </span>
-                <span className="capture-group-action-name">{labelName ?? label ?? '未提供标签'}</span>
+                <span className="capture-group-action-name">
+                  {labelName ?? label ?? '未提供标签'}
+                </span>
               </li>
             )
           })}

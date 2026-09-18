@@ -1,5 +1,15 @@
 import { App as AntdApp, Alert, Button, Input, Select, Tooltip } from 'antd'
-import { Check, ChevronDown, ChevronUp, CircleAlert, Clock, Play, Plus, RotateCw, Trash2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  Clock,
+  Play,
+  Plus,
+  RotateCw,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
@@ -45,10 +55,7 @@ import {
   type GroupViewRow,
   type SegmentValidationErrors,
 } from '@/features/capture-group/capture-group-detail-model'
-import {
-  groupQualityLabels,
-  viewQualityLabels,
-} from '@/features/capture-group-presentation'
+import { groupQualityLabels, viewQualityLabels } from '@/features/capture-group-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
 interface CaptureGroupAnnotationPanelProps {
@@ -201,7 +208,11 @@ export function CaptureGroupAnnotationPanel({
     !isDirty && !task?.annotation_revision && validCandidates.length > 0,
   )
   const hasUnusableActionCandidates = actionCandidates.length > 0 && validCandidates.length === 0
-  const aiStatus: { tone: 'warning' | 'success' | 'default' | 'error' | 'info'; label: string; tooltip?: string } = actionReadFailed
+  const aiStatus: {
+    tone: 'warning' | 'success' | 'default' | 'error' | 'info'
+    label: string
+    tooltip?: string
+  } = actionReadFailed
     ? { tone: 'warning', label: 'AI 状态读取中' }
     : validCandidates.length > 0 && hasAutoLoadedAiDraft
       ? {
@@ -577,7 +588,9 @@ export function CaptureGroupAnnotationPanel({
         <div className="capture-group-task-banner-inner">
           <div className="capture-group-task-banner-left">
             {task ? (
-              <StatusIndicator tone={taskStatusTone(task)}>{formatTaskStatus(task)}</StatusIndicator>
+              <StatusIndicator tone={taskStatusTone(task)}>
+                {formatTaskStatus(task)}
+              </StatusIndicator>
             ) : (
               <StatusIndicator tone="neutral">尚未分配标注任务</StatusIndicator>
             )}
@@ -591,7 +604,6 @@ export function CaptureGroupAnnotationPanel({
             {actionJob?.status === 'FAILED' ? (
               <Button
                 type="primary"
-                danger
                 size="small"
                 htmlType="button"
                 loading={isDispatchingJob}
