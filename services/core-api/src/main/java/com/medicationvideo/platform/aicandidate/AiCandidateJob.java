@@ -23,11 +23,11 @@ class AiCandidateJob {
 	/** Algorithm key of the Qwen3-VL action pre-annotation job family. */
 	static final String ACTION_ALGORITHM_KEY = "QWEN3_VL_ACTION";
 
-	static final String ACTION_MODEL_NAME = "qwen3-vl-8b";
+	static final String ACTION_MODEL_NAME = "Qwen3.5-4B";
 
-	static final String ACTION_MODEL_SHA256 = HandPoseProfile.sha256("qwen3-vl-8b");
+	static final String ACTION_MODEL_SHA256 = AiDigests.sha256("Qwen3.5-4B");
 
-	static final String ACTION_PROFILE_SHA256 = HandPoseProfile.sha256("qwen3-vl-8b-bf16");
+	static final String ACTION_PROFILE_SHA256 = AiDigests.sha256("Qwen3.5-4B-bf16");
 
 	@Id
 	@Column(name = "ai_job_id", nullable = false, updatable = false)

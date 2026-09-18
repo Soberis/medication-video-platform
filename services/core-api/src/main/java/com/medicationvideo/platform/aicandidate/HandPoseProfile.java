@@ -1,10 +1,5 @@
 package com.medicationvideo.platform.aicandidate;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-
 final class HandPoseProfile {
 
 	static final String ALGORITHM_KEY = "MEDIAPIPE_HAND_LANDMARKER";
@@ -40,13 +35,7 @@ final class HandPoseProfile {
 	}
 
 	static String sha256(String value) {
-		try {
-			return HexFormat.of()
-				.formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-		}
-		catch (NoSuchAlgorithmException exception) {
-			throw new IllegalStateException("SHA-256 is not available in this Java runtime.", exception);
-		}
+		return AiDigests.sha256(value);
 	}
 
 }

@@ -247,7 +247,7 @@ public class ActionCandidateJobService {
 	}
 
 	private String computeDigest(ActionCandidateResultRequest request) {
-		return HandPoseProfile.sha256(this.objectMapper.writeValueAsString(request));
+		return AiDigests.sha256(this.objectMapper.writeValueAsString(request));
 	}
 
 	/**
@@ -354,7 +354,7 @@ public class ActionCandidateJobService {
 		var contentType = input.contentType();
 
 		var now = Instant.now();
-		var fingerprint = HandPoseProfile.sha256(projectId + ":" + clipAssetId + ":" + idempotencyKey);
+		var fingerprint = AiDigests.sha256(projectId + ":" + clipAssetId + ":" + idempotencyKey);
 		var receiptKey = "action-queue:" + idempotencyKey;
 
 		if (this.receiptRepository != null) {
@@ -404,8 +404,8 @@ public class ActionCandidateJobService {
 				.save(AiCandidateJobAttempt.queue(job.getAiJobId(), 1, messageId, cap.tokenHash(), now));
 		}
 		else {
-			this.attemptRepository.save(AiCandidateJobAttempt.queue(job.getAiJobId(), 1, messageId,
-					HandPoseProfile.sha256(leaseToken), now));
+			this.attemptRepository
+				.save(AiCandidateJobAttempt.queue(job.getAiJobId(), 1, messageId, AiDigests.sha256(leaseToken), now));
 		}
 
 		if (this.dispatchPort != null) {

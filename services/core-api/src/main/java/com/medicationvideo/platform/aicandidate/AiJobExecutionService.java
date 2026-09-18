@@ -118,7 +118,7 @@ class AiJobExecutionService {
 			throw new HandPoseJobException("AI_HAND_POSE_RESULT_INVALID",
 					"The AI Worker result does not satisfy the versioned hand pose result contract.", 400);
 		}
-		var digest = HandPoseProfile.sha256(request.toString());
+		var digest = AiDigests.sha256(request.toString());
 		var existing = this.jdbcTemplate
 			.queryForList("SELECT result_sha256 FROM ai_job_result_inbox WHERE message_id = ?", request.messageId());
 		if (!existing.isEmpty()) {

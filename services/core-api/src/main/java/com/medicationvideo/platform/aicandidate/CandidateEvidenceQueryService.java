@@ -321,7 +321,7 @@ public class CandidateEvidenceQueryService {
 			appendCanonicalJson(canonical, candidate.landmarks());
 			canonical.append('\n');
 		}
-		return HandPoseProfile.sha256(canonical.toString());
+		return AiDigests.sha256(canonical.toString());
 	}
 
 	private static void appendToken(StringBuilder target, String field, Object value) {
