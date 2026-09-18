@@ -62,25 +62,6 @@ public class ActionCandidateJobService {
 
 	private final int maxAttempts;
 
-	ActionCandidateJobService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
-			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, null, null, null, null, null, null,
-				new ActionJobEnvelopeFactory(null, null), null, 3);
-	}
-
-	ActionCandidateJobService(AiCandidateJobRepository jobRepository, AiCandidateJobAttemptRepository attemptRepository,
-			JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
-			@Autowired(required = false) ProjectAccessService projectAccessService,
-			@Autowired(required = false) AssetCatalogQueryService assetCatalog,
-			@Autowired(required = false) AiCandidateJobIdempotencyReceiptRepository receiptRepository,
-			@Autowired(required = false) AuditEventRecorder auditRecorder,
-			@Autowired(required = false) AiJobDispatchPort dispatchPort,
-			@Autowired(required = false) AiLeaseCapabilityFactory capabilityFactory,
-			@Autowired(required = false) ActionJobEnvelopeFactory actionEnvelopeFactory) {
-		this(jobRepository, attemptRepository, jdbcTemplate, objectMapper, projectAccessService, assetCatalog,
-				receiptRepository, auditRecorder, dispatchPort, capabilityFactory, actionEnvelopeFactory, null, 3);
-	}
-
 	@Autowired
 	public ActionCandidateJobService(AiCandidateJobRepository jobRepository,
 			AiCandidateJobAttemptRepository attemptRepository, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
@@ -513,13 +494,6 @@ public class ActionCandidateJobService {
 			if (AiCandidateJob.ACTION_ALGORITHM_KEY.equals(job.getAlgorithmKey())) {
 				return response(job, captureGroupId);
 			}
-		}
-		return null;
-	}
-
-	public UUID resolvePrimaryClipAssetId(UUID captureGroupId) {
-		if (this.assetCatalog != null) {
-			return this.assetCatalog.resolvePrimaryClipAssetId(captureGroupId);
 		}
 		return null;
 	}

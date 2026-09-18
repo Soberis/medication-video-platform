@@ -73,7 +73,7 @@ class AiHandPoseResultContractTests {
 		var assets = org.mockito.Mockito.mock(com.medicationvideo.platform.assetcapture.AssetCatalogQueryService.class);
 		org.mockito.Mockito.when(assets.resolveCaptureGroupId(this.lastInsertedClipAssetId)).thenReturn(groupId);
 		var service = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
-				new tools.jackson.databind.ObjectMapper(), null, assets, null, null, null, null, null);
+				new tools.jackson.databind.ObjectMapper(), null, assets, null, null, null, null, null, null, 3);
 		var revisionCount = this.jdbcTemplate.queryForObject("SELECT count(*) FROM annotation_revision", Long.class);
 		var request = new ActionCandidateResultRequest(messageId, "synthetic-action-model", "synthetic-v1", 1, 19000L,
 				1L, now, now,

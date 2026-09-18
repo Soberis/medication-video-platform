@@ -66,7 +66,8 @@ class ActionCandidateJobServiceTests {
 		this.actionEnvelopeFactory = mock(ActionJobEnvelopeFactory.class);
 		this.objectMapper = new ObjectMapper();
 		this.service = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
-				this.objectMapper, null, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory);
+				this.objectMapper, null, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory, null,
+				3);
 	}
 
 	@Test
@@ -103,7 +104,7 @@ class ActionCandidateJobServiceTests {
 		});
 		var automatic = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
 				this.objectMapper, access, this.assetCatalog, null, null, dispatch, null,
-				new ActionJobEnvelopeFactory(this.assetCatalog, labels));
+				new ActionJobEnvelopeFactory(this.assetCatalog, labels), null, 3);
 		automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID);
 		automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID);
 		assertEquals(1, stored.size());
@@ -121,7 +122,8 @@ class ActionCandidateJobServiceTests {
 			.when(access)
 			.lockActiveProjectForSystemProcessing(PROJECT_ID);
 		var automatic = new ActionCandidateJobService(this.jobRepository, this.attemptRepository, this.jdbcTemplate,
-				this.objectMapper, access, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory);
+				this.objectMapper, access, this.assetCatalog, null, null, null, null, this.actionEnvelopeFactory, null,
+				3);
 		assertThrows(IllegalStateException.class, () -> automatic.queueAutomatically(PROJECT_ID, CLIP_ASSET_ID));
 		verifyNoInteractions(this.jobRepository, this.assetCatalog);
 	}
@@ -324,7 +326,7 @@ class ActionCandidateJobServiceTests {
 		var auditRecorder = mock(AuditEventRecorder.class);
 		var serviceWithAudit = new ActionCandidateJobService(this.jobRepository, this.attemptRepository,
 				this.jdbcTemplate, this.objectMapper, null, this.assetCatalog, null, auditRecorder, null, null,
-				this.actionEnvelopeFactory);
+				this.actionEnvelopeFactory, null, 3);
 
 		when(this.assetCatalog.resolvePrimaryClipAssetId(CAPTURE_GROUP_ID)).thenReturn(CLIP_ASSET_ID);
 		when(this.assetCatalog.getClipAssetInputSummary(PROJECT_ID, CLIP_ASSET_ID))

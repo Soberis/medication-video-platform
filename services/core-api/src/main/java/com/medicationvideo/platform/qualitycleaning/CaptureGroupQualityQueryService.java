@@ -53,14 +53,6 @@ public class CaptureGroupQualityQueryService {
 			.orElseGet(() -> CurrentDecision.unreviewed(projectId, captureGroupId));
 	}
 
-	@Transactional(readOnly = true)
-	public List<CurrentDecision> getHistory(UUID projectId, UUID captureGroupId) {
-		return this.repository.findAllByProjectIdAndCaptureGroupIdOrderByRevisionAsc(projectId, captureGroupId)
-			.stream()
-			.map(CurrentDecision::from)
-			.toList();
-	}
-
 	public record CurrentDecision(UUID captureGroupQualityReviewId, UUID projectId, UUID captureGroupId, String result,
 			String reason, String reviewerActorId, long revision, Map<String, Object> confirmedViewSet,
 			String inputVersion, String confirmedViewSetSha256, Instant decidedAt) {
@@ -79,10 +71,6 @@ public class CaptureGroupQualityQueryService {
 
 		public boolean isAdmitting() {
 			return "QUALIFIED".equals(this.result) || "QUALIFIED_WITH_EXCLUSIONS".equals(this.result);
-		}
-
-		public boolean isBlocked() {
-			return "NEEDS_REVIEW".equals(this.result) || "REJECTED".equals(this.result);
 		}
 	}
 

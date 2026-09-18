@@ -35,13 +35,4 @@ public class CaptureGroupCleaningQueryService {
 						.thenComparing(CaptureGroupCleaningSummary::captureGroupCleaningId))));
 	}
 
-	@Transactional(readOnly = true)
-	public CaptureGroupCleaningSummary findLatestByCaptureGroup(UUID projectId, UUID captureGroupId) {
-		return this.repository
-			.findTopByProjectIdAndCaptureGroupIdOrderByEvaluatedAtDescCaptureGroupCleaningIdDesc(projectId,
-					captureGroupId)
-			.map(CaptureGroupCleaningSummary::from)
-			.orElse(null);
-	}
-
 }
