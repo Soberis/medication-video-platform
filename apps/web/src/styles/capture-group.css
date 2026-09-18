@@ -1566,7 +1566,7 @@
 }
 
 .capture-group-list-surface {
-  margin-top: var(--app-space-8);
+  margin-top: var(--app-space-12);
 }
 
 .capture-group-list-empty-search {
@@ -1603,11 +1603,11 @@
   grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 0.9fr) minmax(280px, 2fr) minmax(90px, 0.4fr);
   align-items: center;
   gap: var(--app-space-16);
-  padding: var(--app-space-8) var(--app-space-16);
-  background: var(--app-color-neutral-surface);
+  padding: 10px var(--app-space-16);
+  background: var(--app-color-background-subtle, #F8FAFC);
   border-bottom: 1px solid var(--app-color-border-subtle);
   color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
+  font-size: var(--app-font-size-label);
   font-weight: var(--app-font-weight-medium);
 }
 

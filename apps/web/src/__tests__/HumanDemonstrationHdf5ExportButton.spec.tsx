@@ -182,6 +182,29 @@ describe('project HDF5 selection', () => {
     expect(click).toHaveBeenCalledTimes(1)
   })
 
+  it('selects and unselects a row by clicking its body, without double toggling on the checkbox', async () => {
+    const user = userEvent.setup()
+    stubCandidates()
+    renderExport()
+    await user.click(screen.getByRole('button', { name: '导出数据' }))
+    const dialog = screen.getByRole('dialog', { name: '导出数据' })
+    await within(dialog).findByRole('checkbox', { name: '选择导出 视频 1' })
+
+    // Click the row body (video identity text), not the checkbox
+    await user.click(within(dialog).getByText('视频 1'))
+    expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 1' })).toBeChecked()
+    expect(within(dialog).getByText('已选择 1 条')).toBeInTheDocument()
+
+    // Clicking another row body adds it
+    await user.click(within(dialog).getByText('视频 2'))
+    expect(within(dialog).getByText('已选择 2 条')).toBeInTheDocument()
+
+    // Clicking the checkbox itself toggles exactly once (no double toggle)
+    await user.click(within(dialog).getByRole('checkbox', { name: '选择导出 视频 1' }))
+    expect(within(dialog).getByRole('checkbox', { name: '选择导出 视频 1' })).not.toBeChecked()
+    expect(within(dialog).getByText('已选择 1 条')).toBeInTheDocument()
+  })
+
   it('stops on a repeated cursor rather than returning a partial project', async () => {
     vi.stubGlobal(
       'fetch',

@@ -171,55 +171,76 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
             <ErrorState onRetry={() => void loadCandidates()}>{readError}</ErrorState>
           ) : null}
           {readState === 'success' ? (
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="capture_group_id"
-              dataSource={rows}
-              scroll={{ y: 320 }}
-              locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
-              columns={[
-                {
-                  title: (
-                    <Checkbox
-                      aria-label="全选"
-                      checked={allChecked}
-                      indeterminate={indeterminate}
-                      disabled={loading || !exportableIds.length}
-                      onChange={(event) =>
-                        setSelectedIds(new Set(event.target.checked ? exportableIds : []))
-                      }
-                    >
-                      全选
-                    </Checkbox>
-                  ),
-                  key: 'select',
-                  width: 132,
-                  render: (_, row) => (
-                    <Checkbox
-                      aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
-                      checked={selectedIds.has(row.capture_group_id)}
-                      disabled={loading}
-                      onChange={(event) => toggleRow(row.capture_group_id, event.target.checked)}
-                    />
-                  ),
-                },
-                {
-                  title: '视频',
-                  key: 'identity',
-                  render: (_, row) => (
-                    <span className="mono-wrap">
-                      {row.capture_group_key ?? shortId(row.capture_group_id)}
-                    </span>
-                  ),
-                },
-                {
-                  title: '导出',
-                  key: 'export',
-                  render: () => <span className="muted-text">可选择</span>,
-                },
-              ]}
-            />
+            <div className="table-surface export-table-card">
+              <Table
+                className="capture-group-export-table"
+                size="small"
+                tableLayout="fixed"
+                pagination={false}
+                rowKey="capture_group_id"
+                dataSource={rows}
+                scroll={{ y: 320 }}
+                locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
+                onRow={(row) => ({
+                  onClick: (event) => {
+                    if (loading) return
+                    const target = event.target as HTMLElement
+                    if (
+                      target.closest('a') ||
+                      target.closest('button') ||
+                      target.closest('input') ||
+                      target.closest('label') ||
+                      (window.getSelection()?.toString().length ?? 0) > 0
+                    ) {
+                      return
+                    }
+                    toggleRow(row.capture_group_id, !selectedIds.has(row.capture_group_id))
+                  },
+                })}
+                columns={[
+                  {
+                    title: (
+                      <Checkbox
+                        aria-label="全选"
+                        checked={allChecked}
+                        indeterminate={indeterminate}
+                        disabled={loading || !exportableIds.length}
+                        onChange={(event) =>
+                          setSelectedIds(new Set(event.target.checked ? exportableIds : []))
+                        }
+                      >
+                        全选
+                      </Checkbox>
+                    ),
+                    key: 'select',
+                    width: 132,
+                    render: (_, row) => (
+                      <Checkbox
+                        aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
+                        checked={selectedIds.has(row.capture_group_id)}
+                        disabled={loading}
+                        onChange={(event) => toggleRow(row.capture_group_id, event.target.checked)}
+                      />
+                    ),
+                  },
+                  {
+                    title: '视频',
+                    key: 'identity',
+                    render: (_, row) => (
+                      <span className="mono-wrap">
+                        {row.capture_group_key ?? shortId(row.capture_group_id)}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '导出',
+                    key: 'export',
+                    align: 'right',
+                    render: () => <span className="muted-text">可选择</span>,
+                  },
+                ]}
+              />
+            </div>
           ) : null}
           <p role="status">已选择 {selectedExportIds.length} 条</p>
         </section>

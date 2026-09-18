@@ -309,6 +309,7 @@ export default function CaptureGroupListView() {
         <div className="capture-group-list-toolbar-filters">
           <Select
             aria-label="视频视图"
+            id="capture-group-view-select"
             className="capture-group-view-select"
             value={activeView}
             onChange={(value) => {

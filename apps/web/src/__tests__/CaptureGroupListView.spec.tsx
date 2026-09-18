@@ -32,7 +32,9 @@ describe('capture group list view', () => {
     const outsideId = '60000000-0000-4000-8000-000000000099'
     stubGroupList([loaded], [groupTask(outsideId, true)], { nextCursor: 'more' })
     renderView()
-    await userEvent.setup().click(screen.getByText('待标注', { exact: true }))
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('combobox', { name: '视频视图' }))
+    await user.click(await screen.findByText('待标注'))
     const taskRow = await screen.findByRole('listitem', { name: /待标注/ })
     expect(taskRow).toHaveTextContent('60000000')
     expect(within(taskRow).getByRole('link', { name: /标注/ })).toHaveAttribute(
