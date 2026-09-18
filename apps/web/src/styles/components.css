@@ -382,34 +382,32 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: var(--app-radius-sm);
-  color: var(--app-color-primary);
+  color: var(--app-color-foreground-muted);
   background: transparent;
   cursor: pointer;
   font-weight: var(--app-font-weight-medium, 500);
-  font-size: 13px;
+  font-size: 12px;
   text-decoration: none;
-  transition: color 0.15s, background-color 0.15s;
+  transition: color 0.15s ease;
 }
 
+.project-card:hover .project-open-link,
 .project-open-link:hover {
-  color: var(--app-color-primary-hover);
-  background: var(--app-color-primary-subtle);
+  color: var(--app-color-primary);
   text-decoration: none;
 }
 
 .project-open-link svg {
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: var(--app-color-foreground-muted);
 }
 
 .project-card:hover .project-open-link svg,
 .project-open-link:hover svg {
   transform: translateX(3px);
-}
-
-.project-open-link:active {
-  background: var(--app-color-primary-subtle);
+  color: var(--app-color-primary);
 }
 
 .project-open-link:focus-visible {
@@ -474,9 +472,13 @@
 
 .project-card:hover {
   background: var(--app-color-surface);
-  border-color: var(--app-color-border);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  border-color: var(--app-color-primary-subtle);
+  box-shadow: 0 4px 16px rgba(49, 94, 155, 0.08);
   transform: translateY(-1px);
+}
+
+.project-card:hover .project-card-title {
+  color: var(--app-color-primary);
 }
 
 .project-card[data-status="ARCHIVED"] {
@@ -503,13 +505,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  background: var(--app-color-primary-subtle);
-  border: 1px solid var(--app-color-primary-subtle);
+  background: var(--app-color-surface-muted, #F8FAFC);
+  border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-md);
-  color: var(--app-color-primary);
+  color: var(--app-color-foreground-muted);
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.project-card:hover .project-card-avatar {
+  border-color: var(--app-color-border);
+  color: var(--app-color-foreground);
+  background: var(--app-color-surface);
 }
 
 .project-card-title-group {
@@ -521,12 +533,15 @@
 }
 
 .project-card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   color: var(--app-color-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.15s ease;
 }
 
 .project-card-badges {
@@ -536,10 +551,22 @@
   flex-wrap: wrap;
 }
 
+.project-card-more-btn {
+  color: var(--app-color-foreground-muted) !important;
+  font-size: 12px;
+  height: 26px;
+  padding: 0 var(--app-space-6);
+}
+
+.project-card-more-btn:hover {
+  color: var(--app-color-foreground) !important;
+  background: var(--app-color-surface-muted) !important;
+}
+
 .project-card-body {
   display: flex;
   flex-direction: column;
-  padding-top: var(--app-space-10);
+  padding-top: var(--app-space-12);
   border-top: 1px solid var(--app-color-border-subtle);
 }
 
@@ -790,6 +817,30 @@
   overflow-wrap: anywhere;
 }
 
+.copyable-text-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-4);
+  vertical-align: middle;
+}
+
+.copyable-text-btn-compact {
+  padding: 0 4px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  color: var(--app-color-foreground-muted) !important;
+  border-radius: var(--app-radius-xs) !important;
+}
+
+.copyable-text-btn-compact:hover {
+  color: var(--app-color-foreground) !important;
+  background: var(--app-color-surface-hover) !important;
+}
+
+.copyable-text-success-icon {
+  color: var(--app-color-success) !important;
+}
+
 .capture-group-export-modal-footer {
   display: grid;
   gap: var(--app-space-12);
@@ -803,6 +854,18 @@
 
 .capture-group-export-table .ant-table-tbody > tr {
   cursor: pointer;
+  transition: background-color var(--app-duration-fast) ease;
+}
+
+.capture-group-export-table .ant-table-tbody > tr.is-selected > td,
+.capture-group-export-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background-color: var(--app-color-primary-subtle) !important;
+}
+
+.capture-group-export-table .ant-table-tbody > tr.is-selected:hover > td,
+.capture-group-export-table .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background-color: var(--app-color-primary-subtle) !important;
+  filter: brightness(0.97);
 }
 
 .workspace-error {
@@ -1624,6 +1687,10 @@
   padding: 10px 16px !important;
 }
 
+.table-surface .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
 .table-surface .ant-table-tbody > tr > td {
   padding: 12px 16px !important;
   border-bottom: 1px solid var(--app-color-border-subtle);
@@ -1974,6 +2041,29 @@
   font-size: var(--app-font-size-helper);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.selected-file-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  flex-shrink: 0;
+}
+
+.selected-file-remove-btn {
+  color: var(--app-color-foreground-muted) !important;
+  padding: 0 4px !important;
+  height: 24px !important;
+  width: 24px !important;
+}
+
+.selected-file-remove-btn:hover {
+  color: var(--app-color-destructive) !important;
+  background: var(--app-color-destructive-surface) !important;
+}
+
+.local-upload-retry-cta {
+  margin: var(--app-space-12) 0;
 }
 
 .visually-hidden-input {

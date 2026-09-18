@@ -206,6 +206,9 @@ export default function ProjectListView() {
                   prefix={<Search size={14} className="app-search-icon" />}
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setSearchKeyword('')
+                  }}
                 />
               ) : null}
             </div>
@@ -217,6 +220,9 @@ export default function ProjectListView() {
                   key={project.project_id}
                   className="project-card"
                   data-status={project.status}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`打开项目：${project.display_name}`}
                   onClick={(event) => {
                     const target = event.target as HTMLElement
                     if (
@@ -229,10 +235,23 @@ export default function ProjectListView() {
                     }
                     void navigate(paths.captureGroups(project.project_id))
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    const target = event.target as HTMLElement
+                    if (
+                      target.closest('a') ||
+                      target.closest('button') ||
+                      target.closest('.ant-dropdown-trigger')
+                    ) {
+                      return
+                    }
+                    event.preventDefault()
+                    void navigate(paths.captureGroups(project.project_id))
+                  }}
                 >
                   <div className="project-card-header">
                     <div className="project-card-avatar">
-                      <FolderKanban aria-hidden="true" size={20} strokeWidth={1.8} />
+                      <FolderKanban aria-hidden="true" size={18} strokeWidth={1.8} />
                     </div>
                     <div className="project-card-title-group">
                       <strong title={project.display_name} className="project-card-title">
@@ -241,7 +260,7 @@ export default function ProjectListView() {
                       <div className="project-card-badges">
                         <StatusBadge
                           className="project-role-badge"
-                          tone={project.current_role === 'ADMIN' ? 'info' : 'default'}
+                          tone="default"
                         >
                           {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                         </StatusBadge>
