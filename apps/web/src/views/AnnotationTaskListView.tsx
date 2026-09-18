@@ -14,7 +14,6 @@ import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { StatusIndicator, type StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { Section } from '@/components/workspace/Section'
 import { shortId } from '@/features/catalog/catalog-presentation'
 import {
   annotationTaskStatusLabel,
@@ -75,9 +74,11 @@ function taskEvidenceTone(
 export default function AnnotationTaskListView({
   filter = 'tasks',
   embedded = false,
+  searchQuery = '',
 }: {
   filter?: string
   embedded?: boolean
+  searchQuery?: string
 }) {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
@@ -128,12 +129,29 @@ export default function AnnotationTaskListView({
     }
   }, [loadTasks])
 
+  const normalizedQuery = searchQuery.trim().toLowerCase()
   const visibleItems = items.filter((task) => {
-    if (filter === 'mine') return task.can_submit || task.can_select_primary || task.can_review
-    if (filter === 'assigned') return annotationTaskStatusLabel(task) === '待标注'
-    if (filter === 'submitted') return task.status === 'SUBMITTED'
-    if (filter === 'rework') return annotationTaskStatusLabel(task) === '待返工'
-    if (filter === 'completed') return task.status === 'COMPLETED'
+    if (filter === 'mine') {
+      if (!(task.can_submit || task.can_select_primary || task.can_review)) return false
+    } else if (filter === 'assigned') {
+      if (annotationTaskStatusLabel(task) !== '待标注') return false
+    } else if (filter === 'submitted') {
+      if (task.status !== 'SUBMITTED') return false
+    } else if (filter === 'rework') {
+      if (annotationTaskStatusLabel(task) !== '待返工') return false
+    } else if (filter === 'completed') {
+      if (task.status !== 'COMPLETED') return false
+    }
+
+    if (normalizedQuery) {
+      const matchId = task.capture_group_id.toLowerCase().includes(normalizedQuery)
+      const matchTaskId = task.annotation_task_id.toLowerCase().includes(normalizedQuery)
+      const matchStatus = annotationTaskStatusLabel(task).toLowerCase().includes(normalizedQuery)
+      const matchAssignee = task.assignee_actor_id?.toLowerCase().includes(normalizedQuery)
+      const matchSubmittedBy = task.annotation_revision?.submitted_by?.toLowerCase().includes(normalizedQuery)
+      if (!matchId && !matchTaskId && !matchStatus && !matchAssignee && !matchSubmittedBy) return false
+    }
+
     return true
   })
 
@@ -172,11 +190,13 @@ export default function AnnotationTaskListView({
         </section>
       ) : null}
       {loadState === 'success' && visibleItems.length ? (
-        <Section
+        <section
           className="annotation-task-queue"
-          title="任务队列"
-          titleId="annotation-task-queue-title"
+          aria-labelledby="annotation-task-queue-title"
         >
+          <h2 className="visually-hidden" id="annotation-task-queue-title">
+            任务队列
+          </h2>
           <div className="annotation-task-container">
             <div className="annotation-task-header" aria-hidden="true">
               <span className="annotation-task-th-identity">采集记录</span>
@@ -314,7 +334,7 @@ export default function AnnotationTaskListView({
             })}
           </ul>
           </div>
-        </Section>
+        </section>
       ) : null}
       {loadState === 'success' && !visibleItems.length ? (
         <EmptyState description="当前没有需要处理的标注任务。" />

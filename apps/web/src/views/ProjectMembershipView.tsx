@@ -18,7 +18,6 @@ import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { Section } from '@/components/workspace/Section'
 
 interface MembershipFields {
   actorId: string
@@ -212,12 +211,12 @@ export default function ProjectMembershipView() {
       ) : null}
 
       {loadState === 'success' && memberships.length > 0 ? (
-        <Section
-          className="table-card membership-list-panel working-surface"
-          title="项目成员列表"
-          titleId="membership-list-title"
-          actions={
-            <div className="membership-table-toolbar">
+        <div className="table-page-container">
+          <div className="table-page-toolbar">
+            <h2 className="table-toolbar-title" id="membership-list-title">
+              项目成员列表
+            </h2>
+            <div className="table-toolbar-actions membership-table-toolbar">
               <Input
                 className="membership-search-input"
                 placeholder="搜索成员…"
@@ -228,70 +227,71 @@ export default function ProjectMembershipView() {
               />
               <span className="membership-count-badge">共 {memberships.length} 位成员</span>
             </div>
-          }
-        >
-          <Table<ProjectMembership>
-            dataSource={filteredMemberships}
-            rowKey="membership_id"
-            pagination={false}
-            tableLayout="fixed"
-            columns={[
-              {
-                title: '平台账号',
-                dataIndex: 'actor_id',
-                width: 240,
-                render: (actorId: string) => (
-                  <span className="account-user-cell">
-                    <span className="account-user-avatar" aria-hidden="true">
-                      {actorId.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="table-surface membership-list-panel">
+            <Table<ProjectMembership>
+              dataSource={filteredMemberships}
+              rowKey="membership_id"
+              pagination={false}
+              tableLayout="fixed"
+              columns={[
+                {
+                  title: '平台账号',
+                  dataIndex: 'actor_id',
+                  width: 240,
+                  render: (actorId: string) => (
+                    <span className="account-user-cell">
+                      <span className="account-user-avatar" aria-hidden="true">
+                        {actorId.slice(0, 1).toUpperCase()}
+                      </span>
+                      <strong className="account-username" title={actorId}>
+                        {actorId}
+                      </strong>
                     </span>
-                    <strong className="account-username" title={actorId}>
-                      {actorId}
-                    </strong>
-                  </span>
-                ),
-              },
-              {
-                title: '项目角色',
-                width: 140,
-                render: (_, row) => (
-                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
-                    {row.role === 'ADMIN' ? '项目管理员' : '成员'}
-                  </StatusBadge>
-                ),
-              },
-              ...(canManageMembers
-                ? [
-                    {
-                      // 末列不给宽度：宽屏下的多余宽度由它吸收，保证账号与角色相邻。
-                      title: '操作',
-                      render: (_: unknown, row: ProjectMembership) => (
-                        <div className="table-cell-actions">
-                          <Button
-                            type="link"
-                            disabled={isMutating}
-                            aria-label={`修改成员角色：${row.actor_id}`}
-                            onClick={() => handleOpenEdit(row)}
-                          >
-                            修改角色
-                          </Button>
-                          <Button
-                            type="link"
-                            danger
-                            disabled={isMutating}
-                            aria-label={`移除项目成员：${row.actor_id}`}
-                            onClick={() => removeMembership(row)}
-                          >
-                            移除成员
-                          </Button>
-                        </div>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </Section>
+                  ),
+                },
+                {
+                  title: '项目角色',
+                  width: 140,
+                  render: (_, row) => (
+                    <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                      {row.role === 'ADMIN' ? '项目管理员' : '成员'}
+                    </StatusBadge>
+                  ),
+                },
+                ...(canManageMembers
+                  ? [
+                      {
+                        // 末列不给宽度：宽屏下的多余宽度由它吸收，保证账号与角色相邻。
+                        title: '操作',
+                        render: (_: unknown, row: ProjectMembership) => (
+                          <div className="table-cell-actions">
+                            <Button
+                              type="link"
+                              disabled={isMutating}
+                              aria-label={`修改成员角色：${row.actor_id}`}
+                              onClick={() => handleOpenEdit(row)}
+                            >
+                              修改角色
+                            </Button>
+                            <Button
+                              type="link"
+                              danger
+                              disabled={isMutating}
+                              aria-label={`移除项目成员：${row.actor_id}`}
+                              onClick={() => removeMembership(row)}
+                            >
+                              移除成员
+                            </Button>
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </div>
+        </div>
       ) : null}
 
       <Modal

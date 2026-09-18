@@ -1192,9 +1192,10 @@ export function CaptureGroupAnnotationPanel({
             </label>
             <div className="capture-group-verdict-actions">
               <Button
+                type="text"
                 danger
-                block
-                size="middle"
+                size="small"
+                className="capture-group-discard-btn"
                 loading={isDiscarding}
                 disabled={isSubmittingRevision || groupQualityReceiving}
                 onClick={() => {

@@ -13,7 +13,6 @@ import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { Section } from '@/components/workspace/Section'
 
 interface AccountFields {
   username: string
@@ -180,12 +179,12 @@ export default function AccountManagementView() {
       ) : null}
 
       {loadState === 'success' && accounts.length > 0 ? (
-        <Section
-          className="table-card account-table-card working-surface"
-          title="平台账号列表"
-          titleId="account-list-title"
-          actions={
-            <div className="account-table-toolbar">
+        <div className="table-page-container">
+          <div className="table-page-toolbar">
+            <h2 className="table-toolbar-title" id="account-list-title">
+              平台账号列表
+            </h2>
+            <div className="table-toolbar-actions account-table-toolbar">
               <Input
                 className="account-search-input"
                 placeholder="搜索账号…"
@@ -196,68 +195,69 @@ export default function AccountManagementView() {
               />
               <span className="account-count-badge">共 {accounts.length} 个账号</span>
             </div>
-          }
-        >
-          <Table<PlatformAccount>
-            dataSource={filteredAccounts}
-            rowKey="username"
-            pagination={false}
-            tableLayout="fixed"
-            columns={[
-              {
-                title: '平台账号',
-                dataIndex: 'username',
-                width: 240,
-                render: (username: string) => (
-                  <span className="account-user-cell">
-                    <span className="account-user-avatar" aria-hidden="true">
-                      {username.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="table-surface account-table-card">
+            <Table<PlatformAccount>
+              dataSource={filteredAccounts}
+              rowKey="username"
+              pagination={false}
+              tableLayout="fixed"
+              columns={[
+                {
+                  title: '平台账号',
+                  dataIndex: 'username',
+                  width: 240,
+                  render: (username: string) => (
+                    <span className="account-user-cell">
+                      <span className="account-user-avatar" aria-hidden="true">
+                        {username.slice(0, 1).toUpperCase()}
+                      </span>
+                      <strong className="account-username" title={username}>
+                        {username}
+                      </strong>
                     </span>
-                    <strong className="account-username" title={username}>
-                      {username}
-                    </strong>
-                  </span>
-                ),
-              },
-              {
-                title: '全局角色',
-                width: 120,
-                render: (_, row) => (
-                  <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
-                    {row.role === 'ADMIN' ? '管理员' : '成员'}
-                  </StatusBadge>
-                ),
-              },
-              {
-                title: '登录状态',
-                width: 120,
-                render: (_, row) => (
-                  <StatusBadge tone={row.enabled ? 'success' : 'error'}>
-                    {row.enabled ? '启用' : '停用'}
-                  </StatusBadge>
-                ),
-              },
-              {
-                // 末列不给宽度：自适应吸收空间，保证左侧账号与角色、状态相邻，且无横滚条。
-                title: '操作',
-                render: (_, row) =>
-                  row.role === 'MEMBER' ? (
-                    <Button
-                      type="link"
-                      danger={row.enabled}
-                      disabled={isChanging}
-                      aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
-                      onClick={() => toggleEnabled(row)}
-                    >
-                      {row.enabled ? '停用' : '启用'}
-                    </Button>
-                  ) : (
-                    <span className="cell-secondary">管理员不可停用</span>
                   ),
-              },
-            ]}
-          />
-        </Section>
+                },
+                {
+                  title: '全局角色',
+                  width: 120,
+                  render: (_, row) => (
+                    <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                      {row.role === 'ADMIN' ? '管理员' : '成员'}
+                    </StatusBadge>
+                  ),
+                },
+                {
+                  title: '登录状态',
+                  width: 120,
+                  render: (_, row) => (
+                    <StatusBadge tone={row.enabled ? 'success' : 'error'}>
+                      {row.enabled ? '启用' : '停用'}
+                    </StatusBadge>
+                  ),
+                },
+                {
+                  title: '操作',
+                  render: (_, row) =>
+                    row.role !== 'ADMIN' ? (
+                      <Button
+                        type="link"
+                        danger={row.enabled}
+                        className={row.enabled ? 'action-danger' : 'action-primary'}
+                        disabled={isChanging}
+                        aria-label={`${row.enabled ? '停用' : '启用'}账号：${row.username}`}
+                        onClick={() => toggleEnabled(row)}
+                      >
+                        {row.enabled ? '停用' : '启用'}
+                      </Button>
+                    ) : (
+                      <span className="cell-secondary">管理员不可停用</span>
+                    ),
+                },
+              ]}
+            />
+          </div>
+        </div>
       ) : null}
 
       <Modal

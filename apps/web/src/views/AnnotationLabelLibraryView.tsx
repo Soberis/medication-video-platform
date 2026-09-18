@@ -10,9 +10,7 @@ import {
 } from '@/api/annotation'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
-import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { Section } from '@/components/workspace/Section'
 import { getActionStyle } from '@/features/capture-group/capture-group-detail-model'
 
 interface LabelFields {
@@ -121,12 +119,12 @@ export default function AnnotationLabelLibraryView() {
         </ErrorState>
       ) : null}
       {schema ? (
-        <Section
-          className="table-card working-surface"
-          title="当前标签"
-          titleId="label-library-table-title"
-          actions={
-            <div className="label-table-toolbar">
+        <div className="table-page-container">
+          <div className="table-page-toolbar">
+            <h2 className="table-toolbar-title" id="label-library-table-title">
+              当前标签
+            </h2>
+            <div className="table-toolbar-actions label-table-toolbar">
               <Input
                 className="label-search-input"
                 placeholder="搜索标签 ID 或名称…"
@@ -135,52 +133,50 @@ export default function AnnotationLabelLibraryView() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <StatusBadge tone="info" className="label-version-tag">
-                规范版本: {schema.schema_version}
-              </StatusBadge>
               <span className="label-count-badge">共 {schema.labels.length} 个标签</span>
             </div>
-          }
-        >
-          <Table
-            rowKey="label_id"
-            pagination={false}
-            dataSource={filteredLabels}
-            locale={{ emptyText: searchQuery.trim() ? '未找到匹配的标签。' : '暂无标签。' }}
-            columns={[
-              {
-                title: '稳定标签 ID',
-                dataIndex: 'label_id',
-                width: 220,
-                render: (value: string) => <code className="label-code-tag">{value}</code>,
-              },
-              {
-                title: '显示名称',
-                dataIndex: 'display_name',
-                width: 180,
-                render: (text: string, row) => {
-                  const style = getActionStyle(row.label_id)
-                  return (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          backgroundColor: style.dot,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <strong>{text}</strong>
-                    </span>
-                  )
+          </div>
+          <div className="table-surface">
+            <Table
+              rowKey="label_id"
+              pagination={false}
+              dataSource={filteredLabels}
+              locale={{ emptyText: searchQuery.trim() ? '未找到匹配的标签。' : '暂无标签。' }}
+              columns={[
+                {
+                  title: '稳定标签 ID',
+                  dataIndex: 'label_id',
+                  width: 220,
+                  render: (value: string) => <code className="label-code-tag">{value}</code>,
                 },
-              },
-              { title: '说明', dataIndex: 'description' },
-            ]}
-          />
-        </Section>
+                {
+                  title: '显示名称',
+                  dataIndex: 'display_name',
+                  width: 180,
+                  render: (text: string, row) => {
+                    const style = getActionStyle(row.label_id)
+                    return (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: style.dot,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <strong>{text}</strong>
+                      </span>
+                    )
+                  },
+                },
+                { title: '说明', dataIndex: 'description' },
+              ]}
+            />
+          </div>
+        </div>
       ) : null}
 
       <Modal

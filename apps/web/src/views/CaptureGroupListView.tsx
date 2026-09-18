@@ -323,11 +323,11 @@ export default function CaptureGroupListView() {
             ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
           ]}
         />
-        {activeView === 'all' && rows.length ? (
+        {rows.length ? (
           <div className="capture-group-list-toolbar-actions">
             <Input
               className="capture-group-list-search"
-              placeholder="搜索视频标识或时间…"
+              placeholder={activeView === 'all' ? '搜索视频标识或时间…' : '搜索任务或采集记录…'}
               prefix={<Search size={14} className="capture-group-search-icon" />}
               allowClear
               value={searchQuery}
@@ -336,9 +336,11 @@ export default function CaptureGroupListView() {
                 setCurrentPage(1)
               }}
             />
-            <span className="capture-group-list-count">
-              {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
-            </span>
+            {activeView === 'all' ? (
+              <span className="capture-group-list-count">
+                {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -346,6 +348,7 @@ export default function CaptureGroupListView() {
         <AnnotationTaskListView
           embedded
           filter={activeView}
+          searchQuery={searchQuery}
           key={`${activeView}:${refreshEpoch}`}
         />
       ) : (

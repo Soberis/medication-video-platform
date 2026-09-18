@@ -1,4 +1,5 @@
 import { Alert, Button, Card, Form, Input } from 'antd'
+import { Clapperboard } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 
@@ -51,9 +52,14 @@ export default function LoginView() {
   return (
     <main className="login-page" aria-labelledby="login-title">
       <Card className="login-card" variant="outlined">
-        <p className="login-platform-title">配药视频数据管理平台</p>
-        <h1 id="login-title">登录</h1>
-        <p className="login-description">使用平台账号登录。</p>
+        <div className="login-brand-header">
+          <div className="login-brand-badge" aria-hidden="true">
+            <Clapperboard size={22} strokeWidth={2} />
+          </div>
+          <p className="login-platform-title">配药视频数据管理平台</p>
+          <h1 id="login-title">登录</h1>
+          <p className="login-description">使用平台账号登录。</p>
+        </div>
         {errorMessage || auth.sessionError ? (
           <Alert
             className="login-error"
@@ -102,6 +108,7 @@ export default function LoginView() {
             登录
           </Button>
         </Form>
+        <p className="login-footer-text">配药视频数据管理平台 · Quiet Professional Workspace</p>
       </Card>
     </main>
   )

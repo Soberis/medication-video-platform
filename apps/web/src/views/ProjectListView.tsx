@@ -216,6 +216,7 @@ export default function ProjectListView() {
                 <li
                   key={project.project_id}
                   className="project-card"
+                  data-status={project.status}
                   onClick={(event) => {
                     const target = event.target as HTMLElement
                     if (
@@ -244,6 +245,9 @@ export default function ProjectListView() {
                         >
                           {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                         </StatusBadge>
+                        {project.status === 'ARCHIVED' ? (
+                          <StatusBadge tone="default">已归档</StatusBadge>
+                        ) : null}
                       </div>
                     </div>
                     {project.current_role === 'ADMIN' ? (
