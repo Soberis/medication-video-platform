@@ -95,11 +95,6 @@ class ExternalVideoIngestManifest {
 		this.updatedAt = now;
 	}
 
-	static ExternalVideoIngestManifest accept(UUID projectId, ExternalVideoIngestManifestRequest request, Instant now) {
-		return new ExternalVideoIngestManifest(projectId, request.schemaVersion(), request.sourceSystem(),
-				request.sourceDeviceId(), request.sourceBatchId(), request.captureGroup(), false, now);
-	}
-
 	static ExternalVideoIngestManifest accept(UUID projectId, ExternalVideoIngestManifestV2Request request,
 			Instant now) {
 		return new ExternalVideoIngestManifest(projectId, request.schemaVersion(), request.sourceSystem(),

@@ -1772,36 +1772,6 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /projects/{project_id}/external-video-ingest-manifests:
-    post:
-      operationId: acceptExternalVideoIngestManifestV1
-      tags:
-        - External Ingest
-      summary: Validate an explicit external video ingest manifest
-      description: >-
-        Validates the versioned external manifest and its explicit capture-group/camera-number
-        identity. expected_camera_numbers is the theoretical fixed-camera set; videos is the
-        actual declared set for this Capture. The platform never derives a group or camera identity
-        from filenames, upload order or timestamps; file bytes continue through the existing upload flow.
-      parameters:
-        - $ref: "#/components/parameters/ProjectId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "../schemas/external-video-ingest-v1.schema.json" }
-      responses:
-        "202":
-          description: Manifest metadata passed validation.
-          headers:
-            Cache-Control: { $ref: "#/components/headers/NoStore" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ExternalVideoIngestManifestAccepted" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{project_id}/external-video-ingest-manifests/v2:
     post:
       operationId: acceptExternalVideoIngestManifestV2
@@ -5522,35 +5492,6 @@ components:
           maxItems: 100
           items:
             $ref: "#/components/schemas/CaptureGroupQualityReview"
-    ExternalVideoIngestManifestAccepted:
-      type: object
-      additionalProperties: false
-      required:
-        - manifest_id
-        - status
-        - schema_version
-        - capture_group_key
-        - key_source
-        - captured_at
-        - expected_camera_count
-        - video_count
-      properties:
-        manifest_id: { type: string, format: uuid }
-        status:
-          type: string
-          enum: [ACCEPTED, BOUND]
-          description: >-
-            ACCEPTED means the explicit manifest is persisted but not bound. BOUND means it is
-            uniquely bound to one UploadBatch; it does not mean that CaptureSession assembly or
-            media ingestion is complete.
-        schema_version: { type: string, const: external-video-ingest-v1 }
-        capture_group_key: { type: string, minLength: 1, maxLength: 128 }
-        key_source:
-          type: string
-          enum: [EXTERNAL_CAPTURE_SESSION_ID, UPSTREAM_MANIFEST_KEY]
-        captured_at: { type: string, format: date-time }
-        expected_camera_count: { type: integer, minimum: 1, maximum: 64 }
-        video_count: { type: integer, minimum: 1, maximum: 64 }
     ExternalVideoIngestManifestV2Accepted:
       type: object
       additionalProperties: false

@@ -381,7 +381,7 @@ class CaptureSessionIngestContractTests {
 	void preservesSparseExternalCameraNumbersInTheFinalCaptureStreams() throws Exception {
 		var configuration = fiveCameraSet(PROJECT_ID);
 		var captureSessionId = UUID.randomUUID();
-		var manifestId = createBoundExternalManifest(PROJECT_ID);
+		var manifestId = createSparseBoundExternalManifest(PROJECT_ID);
 		var videoEntries = List.of(
 				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
 				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
@@ -519,12 +519,11 @@ class CaptureSessionIngestContractTests {
 	}
 
 	@Test
-	void rejectsExternalBatchCompletionWhenManifestVideosAreMissing() {
-		var manifestId = createBoundExternalManifest(PROJECT_ID);
+	void rejectsExternalBatchCompletionWithAVideoOutsideTheBoundManifest() {
+		var manifestId = createSparseBoundExternalManifest(PROJECT_ID);
 		var videoEntries = List.of(
 				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
-				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
-						"camera-3.mp4"));
+				new ManifestEntry(VIDEO_TWO_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_TWO, "camera-2.mp4"));
 
 		var exception = assertThrows(UploadBatchCompletionException.class,
 				() -> completedBatch(PROJECT_ID, new byte[] { 1 }, videoEntries, manifestId));
@@ -537,7 +536,7 @@ class CaptureSessionIngestContractTests {
 	void rejectsAnExternalManifestWhenTheFinalStreamCameraSetDiffers() throws Exception {
 		var configuration = fiveCameraSet(PROJECT_ID);
 		var captureSessionId = UUID.randomUUID();
-		var manifestId = createBoundExternalManifest(PROJECT_ID);
+		var manifestId = createSparseBoundExternalManifest(PROJECT_ID);
 		var videoEntries = List.of(
 				new ManifestEntry(VIDEO_ONE_ID, UploadFileKind.VIDEO, "video/mp4", 12, VIDEO_SHA_ONE, "camera-1.mp4"),
 				new ManifestEntry(VIDEO_THREE_ID, UploadFileKind.VIDEO, "video/mp4", 13, VIDEO_SHA_THREE,
@@ -757,26 +756,12 @@ class CaptureSessionIngestContractTests {
 		return new MultiCameraConfiguration(cameraSet.getCameraSetId(), List.copyOf(channelIds));
 	}
 
-	private UUID createBoundExternalManifest(UUID projectId) {
-		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var request = new ExternalVideoIngestManifestRequest("external-video-ingest-v1", "synthetic-edge",
-				"synthetic-edge-01", null,
-				new ExternalVideoCaptureGroup("capture-external-" + UUID.randomUUID(),
-						ExternalVideoCaptureGroupKeySource.UPSTREAM_MANIFEST_KEY, Instant.parse("2026-07-15T01:02:03Z"),
-						"Asia/Shanghai", List.of(1, 2, 3, 4, 5)),
+	private UUID createSparseBoundExternalManifest(UUID projectId) {
+		return createBoundExternalManifestV2(projectId, List.of(1, 2, 3, 4, 5),
 				List.of(new ExternalVideoManifestVideo(VIDEO_ONE_ID, 1, "camera-1.mp4", 12L, VIDEO_SHA_ONE, null),
 						new ExternalVideoManifestVideo(VIDEO_THREE_ID, 3, "camera-3.mp4", 13L, VIDEO_SHA_THREE, null),
-						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)));
-		var manifest = ExternalVideoIngestManifest.accept(projectId, request, now);
-		this.externalManifestRepository.saveAndFlush(manifest);
-		this.externalManifestVideoRepository.saveAllAndFlush(request.videos()
-			.stream()
-			.map(video -> ExternalVideoIngestManifestVideo.accept(manifest.getManifestId(), video))
-			.toList());
-		manifest.markBound(now);
-		this.externalManifestRepository.saveAndFlush(manifest);
-		this.externalManifestIds.add(manifest.getManifestId());
-		return manifest.getManifestId();
+						new ExternalVideoManifestVideo(VIDEO_FIVE_ID, 5, "camera-5.mp4", 14L, VIDEO_SHA_FIVE, null)))
+			.manifestId();
 	}
 
 	private V2ManifestFixture createBoundExternalManifestV2(UUID projectId) {

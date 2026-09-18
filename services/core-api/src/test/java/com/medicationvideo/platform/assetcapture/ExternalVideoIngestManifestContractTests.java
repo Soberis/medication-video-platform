@@ -72,21 +72,11 @@ class ExternalVideoIngestManifestContractTests {
 	}
 
 	@Test
-	void acceptsAnExplicitExternalV1ManifestWithoutGuessingCameraIdentity() throws Exception {
-		var key = "edge-group-accept-" + UUID.randomUUID();
-		this.accept(validManifest(key))
-			.andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.schema_version").value("external-video-ingest-v1"))
-			.andExpect(jsonPath("$.capture_group_key").value(key))
-			.andExpect(jsonPath("$.expected_camera_count").value(2))
-			.andExpect(jsonPath("$.video_count").value(2));
-	}
-
-	@Test
 	void replaysIdenticalManifestContentIdempotently() throws Exception {
 		var key = "edge-group-replay-" + UUID.randomUUID();
-		var first = this.accept(validManifest(key)).andExpect(status().isAccepted()).andReturn();
-		var replay = this.accept(validManifest(key)).andExpect(status().isAccepted()).andReturn();
+		var manifest = v2Manifest(key, List.of(1, 2), List.of(1, 2), false);
+		var first = this.acceptV2(manifest).andExpect(status().isAccepted()).andReturn();
+		var replay = this.acceptV2(manifest).andExpect(status().isAccepted()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals(1,
@@ -100,10 +90,12 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void truncatesManifestInstantsToMicrosBeforeComparingReplayContent() throws Exception {
 		var key = "edge-group-micros-" + UUID.randomUUID();
-		var highPrecision = validManifest(key).replace("2026-08-11T02:00:00Z", "2026-08-11T02:00:00.123456789Z");
-		var microsReplay = validManifest(key).replace("2026-08-11T02:00:00Z", "2026-08-11T02:00:00.123456000Z");
-		var first = this.accept(highPrecision).andExpect(status().isAccepted()).andReturn();
-		var replay = this.accept(microsReplay).andExpect(status().isAccepted()).andReturn();
+		var highPrecision = v2Manifest(key, List.of(1, 2), List.of(1, 2), false).replace("2026-08-11T02:00:00Z",
+				"2026-08-11T02:00:00.123456789Z");
+		var microsReplay = v2Manifest(key, List.of(1, 2), List.of(1, 2), false).replace("2026-08-11T02:00:00Z",
+				"2026-08-11T02:00:00.123456000Z");
+		var first = this.acceptV2(highPrecision).andExpect(status().isAccepted()).andReturn();
+		var replay = this.acceptV2(microsReplay).andExpect(status().isAccepted()).andReturn();
 
 		assertEquals(first.getResponse().getContentAsString(), replay.getResponse().getContentAsString());
 		assertEquals("2026-08-11T02:00:00.123456Z",
@@ -113,7 +105,7 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void rejectsAnInvalidManifestTimezoneBeforePersistingFacts() throws Exception {
 		var key = "edge-group-timezone-" + UUID.randomUUID();
-		this.accept(validManifest(key).replace("Asia/Shanghai", "Mars/Base"))
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false).replace("Asia/Shanghai", "Mars/Base"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_TIMEZONE_INVALID"));
 		assertEquals(0,
@@ -122,25 +114,6 @@ class ExternalVideoIngestManifestContractTests {
 							ExternalVideoCaptureGroupKeySource.UPSTREAM_MANIFEST_KEY)
 					.stream()
 					.count());
-	}
-
-	@Test
-	void rejectsDifferentContentForTheSameCaptureGroupKeyAsAConflict() throws Exception {
-		var key = "edge-group-conflict-" + UUID.randomUUID();
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
-
-		this.accept(validManifest(key).replace("synthetic-edge", "other-edge"))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("EXTERNAL_MANIFEST_CONFLICT"));
-	}
-
-	@Test
-	void acceptsExpectedCameraGapsWithoutRenumberingTheDeclaredVideos() throws Exception {
-		var key = "edge-group-gap-" + UUID.randomUUID();
-		this.accept(gappedManifest(key))
-			.andExpect(status().isAccepted())
-			.andExpect(jsonPath("$.expected_camera_count").value(5))
-			.andExpect(jsonPath("$.video_count").value(3));
 	}
 
 	@Test
@@ -238,30 +211,29 @@ class ExternalVideoIngestManifestContractTests {
 
 	@Test
 	void rejectsAnUnprovidedCameraNumber() throws Exception {
-		this.accept(gappedManifest("edge-group-missing-number-" + UUID.randomUUID()).replace("\"camera_number\": 3",
-				"\"camera_number\": null"))
-			.andExpect(status().isBadRequest());
+		this.acceptV2(v2Manifest("edge-group-missing-number-" + UUID.randomUUID(), List.of(1), List.of(1), false)
+			.replace("\"camera_number\": 1", "\"camera_number\": null")).andExpect(status().isBadRequest());
 	}
 
 	@Test
 	void rejectsDuplicateCameraNumbers() throws Exception {
-		this.accept(gappedManifest("edge-group-duplicate-number-" + UUID.randomUUID()).replace("\"camera_number\": 5",
-				"\"camera_number\": 3"))
+		this.acceptV2(
+				v2Manifest("edge-group-duplicate-number-" + UUID.randomUUID(), List.of(1, 2), List.of(1, 2), false)
+					.replace("\"camera_number\": 2", "\"camera_number\": 1"))
 			.andExpect(status().isBadRequest());
 	}
 
 	@Test
 	void rejectsUnknownCameraNumbers() throws Exception {
-		this.accept(validManifest("edge-group-unknown-number-" + UUID.randomUUID()).replace("\"camera_number\": 2",
-				"\"camera_number\": 3"))
-			.andExpect(status().isBadRequest());
+		this.acceptV2(v2Manifest("edge-group-unknown-number-" + UUID.randomUUID(), List.of(1), List.of(1), false)
+			.replace("\"camera_number\": 1", "\"camera_number\": 9")).andExpect(status().isBadRequest());
 	}
 
 	@Test
 	void bindsAManifestOnceAndReplaysTheSameBatchSafely() throws Exception {
 		var key = "edge-group-bound-" + UUID.randomUUID();
-		var manifestJson = validManifest(key);
-		this.accept(manifestJson).andExpect(status().isAccepted());
+		var manifestJson = v2Manifest(key, List.of(1, 2), List.of(1, 2), false);
+		this.acceptV2(manifestJson).andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 
 		var firstKey = "batch-bound-first-" + UUID.randomUUID();
@@ -288,7 +260,7 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void concurrentBatchInitializationCanBindOnlyOneBatch() throws Exception {
 		var key = "edge-group-concurrent-" + UUID.randomUUID();
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)).andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 		var start = new CountDownLatch(1);
 		try (var executor = Executors.newFixedThreadPool(2)) {
@@ -314,11 +286,11 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void concurrentIdenticalManifestAcceptsReplayTheSameCommittedRow() throws Exception {
 		var key = "edge-group-concurrent-replay-" + UUID.randomUUID();
-		var manifestJson = validManifest(key);
+		var manifestJson = v2Manifest(key, List.of(1, 2), List.of(1, 2), false);
 		var start = new CountDownLatch(1);
 		try (var executor = Executors.newFixedThreadPool(2)) {
-			var first = executor.submit(() -> acceptConcurrently(manifestJson, start));
-			var second = executor.submit(() -> acceptConcurrently(manifestJson, start));
+			var first = executor.submit(() -> acceptV2Concurrently(manifestJson, start));
+			var second = executor.submit(() -> acceptV2Concurrently(manifestJson, start));
 			start.countDown();
 			assertEquals(202, first.get(20, TimeUnit.SECONDS));
 			assertEquals(202, second.get(20, TimeUnit.SECONDS));
@@ -334,7 +306,7 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void releasesAnAbortedManifestForOneControlledRetry() throws Exception {
 		var key = "edge-group-rebind-" + UUID.randomUUID();
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)).andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 		var firstKey = "batch-rebind-first-" + UUID.randomUUID();
 		var first = initializeBatch(manifestId, firstKey).andExpect(status().isCreated()).andReturn();
@@ -388,7 +360,7 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void rejectsBindingAManifestFromAnotherProject() throws Exception {
 		var key = "edge-group-cross-project-" + UUID.randomUUID();
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)).andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 
 		this.mockMvc
@@ -403,8 +375,8 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void rejectsBindingWhenManifestDeviceDiffersFromBatchDevice() throws Exception {
 		var key = "edge-group-device-mismatch-" + UUID.randomUUID();
-		this.accept(validManifest(key).replace("\"source_device_id\": \"cabinet-001\"",
-				"\"source_device_id\": \"cabinet-002\""))
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)
+			.replace("\"source_device_id\": \"cabinet-001\"", "\"source_device_id\": \"cabinet-002\""))
 			.andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 		initializeBatch(manifestId, "batch-device-mismatch-" + UUID.randomUUID()).andExpect(status().isConflict())
@@ -414,7 +386,7 @@ class ExternalVideoIngestManifestContractTests {
 	@Test
 	void failedExternalBatchValidationLeavesTheManifestAccepted() throws Exception {
 		var key = "edge-group-no-ghost-bound-" + UUID.randomUUID();
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)).andExpect(status().isAccepted());
 		var manifestId = manifestId(key, PROJECT_ID);
 
 		this.mockMvc
@@ -428,13 +400,6 @@ class ExternalVideoIngestManifestContractTests {
 
 		assertEquals(ExternalVideoIngestManifestStatus.ACCEPTED,
 				this.manifestRepository.findById(manifestId).orElseThrow().getStatus());
-	}
-
-	private ResultActions accept(String manifest) throws Exception {
-		return this.mockMvc.perform(post("/api/v1/projects/{projectId}/external-video-ingest-manifests", PROJECT_ID)
-			.header("Authorization", "Bearer " + TOKEN)
-			.contentType(MediaType.APPLICATION_JSON)
-			.content(manifest));
 	}
 
 	private ResultActions acceptV2(String manifest) throws Exception {
@@ -459,9 +424,9 @@ class ExternalVideoIngestManifestContractTests {
 		return initializeBatch(manifestId, idempotencyKey).andReturn().getResponse().getStatus();
 	}
 
-	private int acceptConcurrently(String manifestJson, CountDownLatch start) throws Exception {
+	private int acceptV2Concurrently(String manifestJson, CountDownLatch start) throws Exception {
 		start.await();
-		return accept(manifestJson).andReturn().getResponse().getStatus();
+		return acceptV2(manifestJson).andReturn().getResponse().getStatus();
 	}
 
 	private ResultActions registerVideo(UUID batchId, String fileName, long size, String sha256) throws Exception {
@@ -483,7 +448,7 @@ class ExternalVideoIngestManifestContractTests {
 	}
 
 	private UUID acceptedManifestId(String key) throws Exception {
-		this.accept(validManifest(key)).andExpect(status().isAccepted());
+		this.acceptV2(v2Manifest(key, List.of(1, 2), List.of(1, 2), false)).andExpect(status().isAccepted());
 		return manifestId(key, PROJECT_ID);
 	}
 
@@ -507,79 +472,6 @@ class ExternalVideoIngestManifestContractTests {
 				  "external_manifest_id": "%s"
 				}
 				""".formatted(projectId, VIDEO_SHA, manifestId);
-	}
-
-	private static String validManifest(String key) {
-		return """
-				{
-				  "schema_version": "external-video-ingest-v1",
-				  "source_system": "synthetic-edge",
-				  "source_device_id": "cabinet-001",
-				  "capture_group": {
-				    "capture_group_key": "%s",
-				    "key_source": "UPSTREAM_MANIFEST_KEY",
-				    "captured_at": "2026-08-11T02:00:00Z",
-				    "timezone": "Asia/Shanghai",
-				    "expected_camera_numbers": [1, 2]
-				  },
-				  "videos": [
-				    {
-				      "client_file_id": "00000000-0000-0000-0000-000000000101",
-				      "camera_number": 1,
-				      "file_name": "camera-1.mp4",
-				      "declared_size_bytes": 100,
-				      "sha256": "%s"
-				    },
-				    {
-				      "client_file_id": "00000000-0000-0000-0000-000000000102",
-				      "camera_number": 2,
-				      "file_name": "camera-2.mp4",
-				      "declared_size_bytes": 100,
-				      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-				    }
-				  ]
-				}
-				""".formatted(key, VIDEO_SHA);
-	}
-
-	private static String gappedManifest(String key) {
-		return """
-				{
-				  "schema_version": "external-video-ingest-v1",
-				  "source_system": "synthetic-edge",
-				  "source_device_id": "cabinet-001",
-				  "capture_group": {
-				    "capture_group_key": "%s",
-				    "key_source": "UPSTREAM_MANIFEST_KEY",
-				    "captured_at": "2026-08-11T02:00:00Z",
-				    "timezone": "Asia/Shanghai",
-				    "expected_camera_numbers": [1, 2, 3, 4, 5]
-				  },
-				  "videos": [
-				    {
-				      "client_file_id": "00000000-0000-0000-0000-000000000101",
-				      "camera_number": 1,
-				      "file_name": "camera-1.mp4",
-				      "declared_size_bytes": 100,
-				      "sha256": "%s"
-				    },
-				    {
-				      "client_file_id": "00000000-0000-0000-0000-000000000103",
-				      "camera_number": 3,
-				      "file_name": "camera-3.mp4",
-				      "declared_size_bytes": 300,
-				      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-				    },
-				    {
-				      "client_file_id": "00000000-0000-0000-0000-000000000105",
-				      "camera_number": 5,
-				      "file_name": "camera-5.mp4",
-				      "declared_size_bytes": 500,
-				      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-				    }
-				  ]
-				}
-				""".formatted(key, VIDEO_SHA);
 	}
 
 	private static String v2Manifest(String key, List<Integer> expectedCameraNumbers,
