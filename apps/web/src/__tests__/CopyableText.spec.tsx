@@ -47,4 +47,23 @@ describe('copyable identifiers', () => {
     await user.click(screen.getByRole('button', { name: `复制版本 ${fullValue}` }))
     expect(await navigator.clipboard.readText()).toBe(fullValue)
   })
+
+  it('renders in compact icon mode and stops propagation to parent elements', async () => {
+    const user = userEvent.setup()
+    const parentClick = vi.fn()
+    render(
+      <AntdApp>
+        <div onClick={parentClick}>
+          <CopyableText value="compact-id-123" compact />
+        </div>
+      </AntdApp>,
+    )
+
+    const copyBtn = screen.getByRole('button', { name: '复制 compact-id-123' })
+    expect(copyBtn).toHaveClass('copyable-text-btn-compact')
+    await user.click(copyBtn)
+
+    expect(await navigator.clipboard.readText()).toBe('compact-id-123')
+    expect(parentClick).not.toHaveBeenCalled()
+  })
 })

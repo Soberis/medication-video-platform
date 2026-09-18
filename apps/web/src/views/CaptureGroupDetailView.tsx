@@ -1,4 +1,4 @@
-import { Alert, Button, Modal } from 'antd'
+import { Alert, Button, Modal, Skeleton } from 'antd'
 import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
@@ -459,6 +459,27 @@ export default function CaptureGroupDetailView() {
       />
       {data.groupLoadState === 'loading' ? (
         <LoadingState>{data.group ? '正在刷新采集记录…' : '正在读取采集记录…'}</LoadingState>
+      ) : null}
+      {data.groupLoadState === 'loading' && !data.group ? (
+        <div className="capture-group-workspace capture-group-workspace-skeleton" aria-hidden="true">
+          <div className="capture-group-video-column">
+            <div className="video-stage-placeholder">
+              <Skeleton.Node active style={{ width: '100%', height: '100%' }}>
+                <span className="muted-text">视频预览准备中…</span>
+              </Skeleton.Node>
+            </div>
+          </div>
+          <div className="capture-group-action-column">
+            <div className="form-surface working-surface skeleton-column-surface">
+              <Skeleton active paragraph={{ rows: 6 }} />
+            </div>
+          </div>
+          <div className="capture-group-inspector-column">
+            <div className="form-surface working-surface skeleton-column-surface">
+              <Skeleton active paragraph={{ rows: 8 }} />
+            </div>
+          </div>
+        </div>
       ) : null}
       {data.groupLoadState === 'error' ? (
         <ErrorState code={data.groupErrorCode} onRetry={() => void data.refresh()}>

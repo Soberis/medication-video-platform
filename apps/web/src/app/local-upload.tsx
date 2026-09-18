@@ -41,6 +41,7 @@ interface UploadStore {
 
 type UploadAction =
   | { type: 'initialize'; projectId: string; files: File[] }
+  | { type: 'retry-failed'; ids: number[] }
   | { type: 'running'; id: number }
   | { type: 'progress'; id: number; progress: LocalUploadProgress }
   | { type: 'completed'; id: number; captureSessionId: string; clipAssetId: string | null }
@@ -66,6 +67,22 @@ function uploadReducer(store: UploadStore, action: UploadAction): UploadStore {
         captureSessionId: null,
         clipAssetId: null,
       })),
+    }
+  }
+  if (action.type === 'retry-failed') {
+    return {
+      uploadState: 'uploading',
+      tasks: store.tasks.map((task) =>
+        action.ids.includes(task.id)
+          ? {
+              ...task,
+              status: 'QUEUED',
+              progress: null,
+              errorCode: null,
+              errorMessage: null,
+            }
+          : task,
+      ),
     }
   }
   if (action.type === 'finish') return { ...store, uploadState: 'completed' }
@@ -99,6 +116,7 @@ function uploadReducer(store: UploadStore, action: UploadAction): UploadStore {
 interface LocalUploadContextValue extends UploadStore {
   resetUpload: () => void
   startUpload: (projectId: string, files: File[]) => void
+  retryFailedTasks: () => void
 }
 
 const LocalUploadContext = createContext<LocalUploadContextValue | null>(null)
@@ -132,9 +150,21 @@ export function LocalUploadProvider({ children }: PropsWithChildren) {
     [store.tasks.length],
   )
 
+  const retryFailedTasks = useCallback(() => {
+    if (uploadRequest.current || store.uploadState === 'uploading') return
+    const failedTasks = store.tasks.filter((t) => t.status === 'FAILED')
+    if (failedTasks.length === 0) return
+
+    const request = new AbortController()
+    uploadRequest.current = request
+    const ids = failedTasks.map((t) => t.id)
+    dispatch({ type: 'retry-failed', ids })
+    void runRetry(failedTasks, request, dispatch, uploadRequest)
+  }, [store.tasks, store.uploadState])
+
   const value = useMemo<LocalUploadContextValue>(
-    () => ({ ...store, resetUpload, startUpload }),
-    [resetUpload, startUpload, store],
+    () => ({ ...store, resetUpload, startUpload, retryFailedTasks }),
+    [resetUpload, retryFailedTasks, startUpload, store],
   )
 
   return <LocalUploadContext.Provider value={value}>{children}</LocalUploadContext.Provider>
@@ -184,3 +214,42 @@ async function runUpload(
   uploadRequest.current = null
   dispatch({ type: 'finish' })
 }
+
+async function runRetry(
+  failedTasks: LocalUploadTask[],
+  request: AbortController,
+  dispatch: Dispatch<UploadAction>,
+  uploadRequest: MutableRefObject<AbortController | null>,
+) {
+  for (const task of failedTasks) {
+    if (request.signal.aborted) return
+    const id = task.id
+    dispatch({ type: 'running', id })
+    try {
+      const result = await uploadPlatformLocalVideo(
+        { projectId: task.projectId, file: task.file },
+        (progress) => dispatch({ type: 'progress', id, progress }),
+        request.signal,
+      )
+      dispatch({
+        type: 'completed',
+        id,
+        captureSessionId: result.captureSessionId,
+        clipAssetId: result.clipAssetId,
+      })
+    } catch (error) {
+      if (request.signal.aborted) return
+      const apiError = error instanceof LocalUploadApiError
+      dispatch({
+        type: 'failed',
+        id,
+        errorCode: apiError ? error.errorCode : 'LOCAL_UPLOAD_FAILED',
+        errorMessage: apiError ? error.message : '本地视频上传失败，请检查网络和本地服务后重试。',
+      })
+    }
+  }
+  if (uploadRequest.current !== request || request.signal.aborted) return
+  uploadRequest.current = null
+  dispatch({ type: 'finish' })
+}
+

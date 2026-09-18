@@ -259,6 +259,13 @@ export function CaptureGroupFocusedView({
           void startPlayback()
         }}
       />
+      {playbackState === 'ready' ? (
+        <div className="capture-group-playback-shortcuts" aria-label="播放器快捷键提示">
+          <span>
+            快捷键：<kbd className="capture-group-kbd">空格</kbd> / <kbd className="capture-group-kbd">K</kbd> 播放暂停 · <kbd className="capture-group-kbd">←</kbd> / <kbd className="capture-group-kbd">→</kbd> 快退快进 · <kbd className="capture-group-kbd">J</kbd> / <kbd className="capture-group-kbd">L</kbd> 步进 1 秒（按住 <kbd className="capture-group-kbd">Shift</kbd> 5 秒）
+          </span>
+        </div>
+      ) : null}
       {selectedDetail || selectedStream ? (
         <>
           <StatusIndicator ariaLive="polite" tone={currentCandidateTone}>

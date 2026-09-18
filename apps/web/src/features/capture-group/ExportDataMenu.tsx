@@ -9,6 +9,7 @@ import {
 } from '@/api/annotation'
 import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { CopyableText } from '@/components/data/CopyableText'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
 import { shortId } from '@/features/catalog/catalog-presentation'
 
@@ -178,6 +179,9 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                 tableLayout="fixed"
                 pagination={false}
                 rowKey="capture_group_id"
+                rowClassName={(row) =>
+                  selectedIds.has(row.capture_group_id) ? 'is-selected ant-table-row-selected' : ''
+                }
                 dataSource={rows}
                 scroll={{ y: 320 }}
                 locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}

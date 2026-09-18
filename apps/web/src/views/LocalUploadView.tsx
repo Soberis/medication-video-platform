@@ -1,5 +1,5 @@
 import { Alert, Button, Progress, Select } from 'antd'
-import { ArrowRight, UploadCloud, Video } from 'lucide-react'
+import { ArrowRight, UploadCloud, Video, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -105,6 +105,7 @@ export default function LocalUploadView() {
     uploadState,
     resetUpload,
     startUpload: startPlatformLocalUpload,
+    retryFailedTasks,
   } = useLocalUpload()
   const [projectLoadState, setProjectLoadState] = useState<'loading' | 'success' | 'error'>(
     'loading',
@@ -201,6 +202,16 @@ export default function LocalUploadView() {
     setErrorCode('')
     setErrorMessage('')
   }
+  function handleRemoveFile(index: number) {
+    setSelectedFiles((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      if (next.length === 0 && fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return next
+    })
+  }
+
   function startUpload() {
     if (!canStart) return
     const files = [...selectedFiles]
@@ -320,7 +331,7 @@ export default function LocalUploadView() {
                   已选择 {selectedFiles.length} 个视频
                 </p>
                 <ul className="selected-file-list" aria-label="已选视频">
-                  {selectedFiles.map((file) => (
+                  {selectedFiles.map((file, index) => (
                     <li
                       key={`${file.name}:${file.size}:${file.lastModified}`}
                       className="selected-file-item"
@@ -334,9 +345,19 @@ export default function LocalUploadView() {
                         />
                         <strong>{file.name}</strong>
                       </div>
-                      <span className="selected-file-meta">
-                        {file.type || '视频'} · {formatBytes(file.size)}
-                      </span>
+                      <div className="selected-file-actions">
+                        <span className="selected-file-meta">
+                          {file.type || '视频'} · {formatBytes(file.size)}
+                        </span>
+                        <Button
+                          type="text"
+                          size="small"
+                          className="selected-file-remove-btn"
+                          aria-label={`移除视频 ${file.name}`}
+                          icon={<X size={14} />}
+                          onClick={() => handleRemoveFile(index)}
+                        />
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -379,6 +400,13 @@ export default function LocalUploadView() {
               tasks.length,
             )}
           </p>
+          {uploadState === 'completed' && failedTaskCount > 0 ? (
+            <div className="local-upload-retry-cta">
+              <Button type="primary" danger onClick={() => retryFailedTasks()}>
+                重试未完成视频（{failedTaskCount} 个）
+              </Button>
+            </div>
+          ) : null}
           {uploadState === 'completed' && completedTaskCount > 0 && selectedProjectId ? (
             <div className="local-upload-completion-cta">
               <Link

@@ -21,6 +21,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeed
 import { receiptStateLabels, receiptTone } from '@/features/capture-group-presentation'
 import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
+import { CopyableText } from '@/components/data/CopyableText'
 import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
 
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
@@ -339,6 +340,12 @@ export default function CaptureGroupListView() {
                 setSearchQuery(e.target.value)
                 setCurrentPage(1)
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSearchQuery('')
+                  setCurrentPage(1)
+                }
+              }}
             />
             {activeView === 'all' && rows.length ? (
               <span className="capture-group-list-count">
@@ -453,6 +460,12 @@ export default function CaptureGroupListView() {
                             >
                               {identity}
                             </strong>
+                            <CopyableText
+                              value={group.capture_group_id}
+                              label="复制完整 ID"
+                              compact
+                              hideCode
+                            />
                           </div>
                         </header>
                         <time className="capture-group-list-time" dateTime={eventTime}>
@@ -489,7 +502,7 @@ export default function CaptureGroupListView() {
                                     人工任务状态暂不可用
                                   </StatusIndicator>
                                   <Button
-                                    type="link"
+                                    type="text"
                                     size="small"
                                     aria-label="重试读取人工任务"
                                     onClick={() => void loadTasks()}
