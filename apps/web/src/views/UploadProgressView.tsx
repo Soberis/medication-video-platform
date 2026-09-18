@@ -408,13 +408,26 @@ export default function UploadProgressView() {
                       },
                       {
                         id: 'declared-sha256',
-                        label: '声明摘要',
-                        value: <code>{file.declared_sha256}</code>,
-                      },
-                      {
-                        id: 'verified-sha256',
-                        label: '已验证摘要',
-                        value: <code>{file.verified_sha256 ?? '—'}</code>,
+                        label: '完整性校验',
+                        value: (
+                          <span title={`声明: ${file.declared_sha256}\n验证: ${file.verified_sha256 ?? '—'}`}>
+                            <StatusBadge
+                              tone={
+                                file.status === 'UPLOADED'
+                                  ? 'success'
+                                  : file.completion_error_code === 'UPLOAD_FILE_SHA256_MISMATCH'
+                                    ? 'error'
+                                    : 'default'
+                              }
+                            >
+                              {file.status === 'UPLOADED'
+                                ? '已校验通过 (SHA-256)'
+                                : file.completion_error_code === 'UPLOAD_FILE_SHA256_MISMATCH'
+                                  ? 'SHA-256 校验不匹配'
+                                  : '待校验'}
+                            </StatusBadge>
+                          </span>
+                        ),
                       },
                       {
                         id: 'completion-started-at',

@@ -1540,8 +1540,19 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--app-space-12);
-  margin-top: var(--app-space-16);
+  margin-top: 0;
   margin-bottom: var(--app-space-12);
+}
+
+.capture-group-list-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+}
+
+.capture-group-view-select {
+  min-width: 130px;
+  height: 32px;
 }
 
 .capture-group-list-toolbar-actions {
@@ -1589,7 +1600,7 @@
 .capture-group-list-header {
   display: grid;
   grid-template-areas: 'header time facts footer';
-  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(200px, 1fr) minmax(100px, 0.5fr);
+  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 0.9fr) minmax(280px, 2fr) minmax(90px, 0.4fr);
   align-items: center;
   gap: var(--app-space-16);
   padding: var(--app-space-8) var(--app-space-16);
@@ -1621,7 +1632,7 @@
 .capture-group-list-row {
   display: grid;
   grid-template-areas: 'header time facts footer';
-  grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(200px, 1fr) minmax(100px, 0.5fr);
+  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 0.9fr) minmax(280px, 2fr) minmax(90px, 0.4fr);
   align-items: center;
   gap: var(--app-space-16);
   padding: var(--app-space-12) var(--app-space-16);

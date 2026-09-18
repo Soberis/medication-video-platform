@@ -1,5 +1,5 @@
 import { App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
-import { Lock, Plus, Search, User } from 'lucide-react'
+import { Lock, Plus, User } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -29,7 +29,6 @@ export default function AccountManagementView() {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isChanging, setIsChanging] = useState(false)
@@ -131,10 +130,6 @@ export default function AccountManagementView() {
     })
   }
 
-  const filteredAccounts = searchQuery.trim()
-    ? accounts.filter((a) => a.username.toLowerCase().includes(searchQuery.trim().toLowerCase()))
-    : accounts
-
   return (
     <div className="account-management-page">
       <nav className="breadcrumb" aria-label="面包屑导航">
@@ -180,25 +175,12 @@ export default function AccountManagementView() {
 
       {loadState === 'success' && accounts.length > 0 ? (
         <div className="table-page-container">
-          <div className="table-page-toolbar">
-            <h2 className="table-toolbar-title" id="account-list-title">
-              平台账号列表
-            </h2>
-            <div className="table-toolbar-actions account-table-toolbar">
-              <Input
-                className="account-search-input"
-                placeholder="搜索账号…"
-                prefix={<Search size={14} className="account-search-icon" />}
-                allowClear
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="account-count-badge">共 {accounts.length} 个账号</span>
-            </div>
-          </div>
+          <h2 className="visually-hidden" id="account-list-title">
+            平台账号列表
+          </h2>
           <div className="table-surface account-table-card">
             <Table<PlatformAccount>
-              dataSource={filteredAccounts}
+              dataSource={accounts}
               rowKey="username"
               pagination={false}
               tableLayout="fixed"

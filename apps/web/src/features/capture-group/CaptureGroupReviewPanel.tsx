@@ -73,7 +73,6 @@ export function CaptureGroupReviewPanel({
     : []
   const canReview = Boolean(task?.can_review && revision)
   const cleaning = revision?.capture_group_cleaning ?? null
-  const primaryClipAssetId = revision?.primary_clip_asset_id ?? task?.primary_clip_asset_id ?? null
   const primaryCameraNumber = revision?.primary_camera_number ?? task?.primary_camera_number ?? null
   const isReviewApproved = review?.decision === 'APPROVED'
   const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
@@ -269,18 +268,20 @@ export function CaptureGroupReviewPanel({
                   id: 'review-revision',
                   label: '修订',
                   value: `第 ${revision.revision_number} 次正式修订`,
-                  secondary: shortEvidenceId(revision.annotation_revision_id),
                 },
                 {
                   id: 'review-primary',
                   label: '主视图',
                   value: primaryCameraNumber ? `机位 ${primaryCameraNumber}` : '未提供',
-                  secondary: primaryClipAssetId ? shortEvidenceId(primaryClipAssetId) : undefined,
                 },
                 {
                   id: 'review-input-version',
                   label: '确认输入版本',
-                  value: inputVersion ?? '未提供',
+                  value: (
+                    <span title={inputVersion ?? undefined}>
+                      {formatInputVersion(inputVersion)}
+                    </span>
+                  ),
                 },
                 {
                   id: 'review-submitted',
@@ -301,21 +302,6 @@ export function CaptureGroupReviewPanel({
               ) : null}
             </div>
           </div>
-
-          <FormalAnnotationIntervals
-            primaryCameraNumber={primaryCameraNumber}
-            schema={schema}
-            segments={revision.annotation_document.segments}
-          />
-
-          {isReviewApproved ? (
-            <details className="capture-group-review-detail-disclosure">
-              <summary>查看已确认机位、检测证据与修订历史</summary>
-              <div className="capture-group-review-detail-content">{evidenceAndHistory}</div>
-            </details>
-          ) : (
-            evidenceAndHistory
-          )}
 
           {canReview ? (
             <div className="capture-group-review-actions" aria-label="人工标签复核操作">
@@ -352,6 +338,21 @@ export function CaptureGroupReviewPanel({
               <CircleAlert aria-hidden="true" size={16} strokeWidth={1.8} />
               当前账号没有该修订的复核权限；仍可查看服务端返回的审阅事实。
             </p>
+          )}
+
+          <FormalAnnotationIntervals
+            primaryCameraNumber={primaryCameraNumber}
+            schema={schema}
+            segments={revision.annotation_document.segments}
+          />
+
+          {isReviewApproved ? (
+            <details className="capture-group-review-detail-disclosure">
+              <summary>查看已确认机位、检测证据与修订历史</summary>
+              <div className="capture-group-review-detail-content">{evidenceAndHistory}</div>
+            </details>
+          ) : (
+            evidenceAndHistory
           )}
 
           {cleaning ? (
@@ -862,4 +863,15 @@ function booleanValue(evidence: CaptureGroupEvidence, key: string) {
 
 function shortEvidenceId(value: string) {
   return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value
+}
+
+function formatInputVersion(version: string | null | undefined): string {
+  if (!version) return '未提供'
+  const colonIndex = version.indexOf(':')
+  if (colonIndex !== -1) {
+    const rawPrefix = version.slice(0, colonIndex)
+    const prefix = rawPrefix.replace('capture-group-view-set.', '')
+    return `${prefix}（快照已锁定）`
+  }
+  return version
 }

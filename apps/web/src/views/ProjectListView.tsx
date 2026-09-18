@@ -196,6 +196,7 @@ export default function ProjectListView() {
       {projects.length > 0 ? (
         <section className="project-list-section" aria-label="项目列表">
           <div className="project-list-toolbar">
+            <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
             <div className="project-list-toolbar-actions">
               {projects.length > 2 || searchKeyword ? (
                 <Input
@@ -207,7 +208,6 @@ export default function ProjectListView() {
                   onChange={(e) => setSearchKeyword(e.target.value)}
                 />
               ) : null}
-              <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
             </div>
           </div>
           {filteredProjects.length > 0 ? (
@@ -289,24 +289,25 @@ export default function ProjectListView() {
                   </div>
                   <div className="project-card-body">
                     <div className="project-card-meta-row">
-                      <span className="project-card-meta-label">
+                      <span
+                        className="project-card-date"
+                        title={`创建日期：${project.created_at ? project.created_at.slice(0, 10) : '—'}`}
+                      >
                         <Calendar size={13} strokeWidth={1.8} />
-                        创建时间
+                        <span className="project-card-meta-value">
+                          {project.created_at ? project.created_at.slice(0, 10) : '—'}
+                        </span>
                       </span>
-                      <span className="project-card-meta-value">
-                        {project.created_at ? project.created_at.slice(0, 10) : '—'}
-                      </span>
+                      <Link
+                        className="project-open-link"
+                        to={paths.captureGroups(project.project_id)}
+                        aria-label={`进入项目：${project.display_name}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <span>进入项目</span>
+                        <ArrowRight aria-hidden="true" size={13} strokeWidth={2} />
+                      </Link>
                     </div>
-                  </div>
-                  <div className="project-card-footer" onClick={(event) => event.stopPropagation()}>
-                    <Link
-                      className="project-open-link"
-                      to={paths.captureGroups(project.project_id)}
-                      aria-label={`进入项目：${project.display_name}`}
-                    >
-                      <span>进入项目</span>
-                      <ArrowRight aria-hidden="true" size={14} strokeWidth={2} />
-                    </Link>
                   </div>
                 </li>
               ))}

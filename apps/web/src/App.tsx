@@ -4,7 +4,6 @@ import {
   FolderKanban,
   ListChecks,
   LogOut,
-  Settings,
   UserRoundCog,
   UsersRound,
   Video,
@@ -16,14 +15,6 @@ import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
-import { StatusBadge } from '@/components/StatusBadge'
-
-const managementRoutePatterns = [
-  paths.annotationLabelLibrary(),
-  '/projects/:projectId/members',
-  paths.uploads,
-  paths.accounts,
-] as const
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
 
@@ -77,9 +68,6 @@ export default function AppShell() {
   const { projectId = '' } = useParams()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const isAdministrator = auth.session?.role === 'ADMIN'
-  const isManagementRoute = managementRoutePatterns.some(
-    (path) => matchPath({ path, end: true }, location.pathname) !== null,
-  )
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     try {
@@ -137,21 +125,28 @@ export default function AppShell() {
           onCollapsedChange={setSidebarCollapsed}
           brand={
             <Link className="app-brand" to={paths.projects} aria-label="返回项目列表">
-              <Clapperboard {...iconProps} size={18} />
+              <div className="app-brand-badge" aria-hidden="true">
+                <Clapperboard size={15} strokeWidth={2.2} />
+              </div>
               <span className="app-brand-copy">
-                <strong>配药视频</strong>
-                <span>数据管理</span>
+                <strong>配药视频平台</strong>
+                <span className="visually-hidden">配药视频数据管理</span>
               </span>
             </Link>
           }
           footer={
             auth.session ? (
               <div className="account-summary">
+                <div className="sidebar-account-avatar" aria-hidden="true">
+                  {auth.session.username.slice(0, 1).toUpperCase()}
+                </div>
                 <div className="sidebar-account-copy">
-                  <span title={auth.session.username}>{auth.session.username}</span>
-                  <StatusBadge tone={isAdministrator ? 'info' : 'default'}>
-                    {isAdministrator ? '管理员' : '成员'}
-                  </StatusBadge>
+                  <span className="sidebar-account-name" title={auth.session.username}>
+                    {auth.session.username}
+                  </span>
+                  <span className="sidebar-account-role">
+                    {isAdministrator ? '系统管理员' : '项目成员'}
+                  </span>
                 </div>
                 <Button
                   className="sidebar-logout"
@@ -159,7 +154,7 @@ export default function AppShell() {
                   aria-label="退出登录"
                   title="退出登录"
                   loading={auth.loading}
-                  icon={<LogOut {...iconProps} />}
+                  icon={<LogOut size={16} strokeWidth={1.8} />}
                   onClick={() => void handleLogout()}
                 >
                   <span className="sidebar-label">退出登录</span>
@@ -188,25 +183,13 @@ export default function AppShell() {
               ) : null}
             </div>
             {isAdministrator ? (
-              <details
-                className="sidebar-nav-group"
-                open={isManagementRoute}
-                data-active={isManagementRoute || undefined}
-                aria-labelledby="management-navigation-label"
-              >
-                <summary
-                  id="management-navigation-label"
-                  className="sidebar-settings-toggle"
-                  title="设置"
-                >
-                  <Settings {...iconProps} />
-                  <span className="sidebar-label">设置</span>
-                </summary>
+              <div className="sidebar-nav-group">
+                <p className="sidebar-nav-group-label">设置</p>
                 <NavLink end to={paths.annotationLabelLibrary()} aria-label="标签库" title="标签库">
                   <ListChecks {...iconProps} />
                   <span className="sidebar-label">标签库</span>
                 </NavLink>
-                {contextualProjectId && isAdministrator ? (
+                {contextualProjectId ? (
                   <NavLink
                     end
                     to={paths.memberships(contextualProjectId)}
@@ -217,13 +200,11 @@ export default function AppShell() {
                     <span className="sidebar-label">项目成员</span>
                   </NavLink>
                 ) : null}
-                {isAdministrator ? (
-                  <NavLink end to={paths.accounts} aria-label="账号管理" title="账号管理">
-                    <UserRoundCog {...iconProps} />
-                    <span className="sidebar-label">账号管理</span>
-                  </NavLink>
-                ) : null}
-              </details>
+                <NavLink end to={paths.accounts} aria-label="账号管理" title="账号管理">
+                  <UserRoundCog {...iconProps} />
+                  <span className="sidebar-label">账号管理</span>
+                </NavLink>
+              </div>
             ) : null}
           </nav>
         </Sidebar>

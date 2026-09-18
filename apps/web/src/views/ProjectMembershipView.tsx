@@ -1,5 +1,5 @@
-import { Alert, App as AntdApp, Button, Form, Input, Modal, Select, Table } from 'antd'
-import { Plus, Search } from 'lucide-react'
+import { Alert, App as AntdApp, Button, Form, Modal, Select, Table } from 'antd'
+import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
@@ -40,8 +40,6 @@ export default function ProjectMembershipView() {
   const activeRequest = useRef<AbortController | null>(null)
   const canManageMembers = projectRole === 'ADMIN'
   const availableAccounts = useMemo(() => accounts.filter((account) => account.enabled), [accounts])
-
-  const [searchQuery, setSearchQuery] = useState('')
 
   const loadMemberships = useCallback(async () => {
     activeRequest.current?.abort()
@@ -151,12 +149,6 @@ export default function ProjectMembershipView() {
     })
   }
 
-  const filteredMemberships = searchQuery.trim()
-    ? memberships.filter((m) =>
-        m.actor_id.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-      )
-    : memberships
-
   return (
     <div className="project-membership-page">
       <ProjectBreadcrumb projectId={projectId} projectName={projectName} switchTarget="members">
@@ -212,25 +204,12 @@ export default function ProjectMembershipView() {
 
       {loadState === 'success' && memberships.length > 0 ? (
         <div className="table-page-container">
-          <div className="table-page-toolbar">
-            <h2 className="table-toolbar-title" id="membership-list-title">
-              项目成员列表
-            </h2>
-            <div className="table-toolbar-actions membership-table-toolbar">
-              <Input
-                className="membership-search-input"
-                placeholder="搜索成员…"
-                prefix={<Search size={14} className="membership-search-icon" />}
-                allowClear
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="membership-count-badge">共 {memberships.length} 位成员</span>
-            </div>
-          </div>
+          <h2 className="visually-hidden" id="membership-list-title">
+            项目成员列表
+          </h2>
           <div className="table-surface membership-list-panel">
             <Table<ProjectMembership>
-              dataSource={filteredMemberships}
+              dataSource={memberships}
               rowKey="membership_id"
               pagination={false}
               tableLayout="fixed"

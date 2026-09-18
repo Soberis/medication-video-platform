@@ -1,4 +1,4 @@
-import { Button, Input, Pagination, Segmented } from 'antd'
+import { Button, Input, Pagination, Select } from 'antd'
 import { ArrowRight, Search, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -306,24 +306,27 @@ export default function CaptureGroupListView() {
         }
       />
       <div className="capture-group-list-toolbar">
-        <Segmented
-          aria-label="视频视图"
-          value={activeView}
-          onChange={(value) => {
-            setCurrentPage(1)
-            setSearchParams(value === 'all' ? {} : { view: value })
-          }}
-          options={[
-            { label: '全部视频', value: 'all' },
-            { label: '待标注', value: 'assigned' },
-            { label: '待复核', value: 'submitted' },
-            { label: '待返工', value: 'rework' },
-            { label: '已完成', value: 'completed' },
-            { label: '我的待办', value: 'mine' },
-            ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
-          ]}
-        />
-        {rows.length ? (
+        <div className="capture-group-list-toolbar-filters">
+          <Select
+            aria-label="视频视图"
+            className="capture-group-view-select"
+            value={activeView}
+            onChange={(value) => {
+              setCurrentPage(1)
+              setSearchParams(value === 'all' ? {} : { view: value })
+            }}
+            options={[
+              { label: '全部视频', value: 'all' },
+              { label: '待标注', value: 'assigned' },
+              { label: '待复核', value: 'submitted' },
+              { label: '待返工', value: 'rework' },
+              { label: '已完成', value: 'completed' },
+              { label: '我的待办', value: 'mine' },
+              ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
+            ]}
+          />
+        </div>
+        {rows.length || activeView !== 'all' ? (
           <div className="capture-group-list-toolbar-actions">
             <Input
               className="capture-group-list-search"
@@ -336,7 +339,7 @@ export default function CaptureGroupListView() {
                 setCurrentPage(1)
               }}
             />
-            {activeView === 'all' ? (
+            {activeView === 'all' && rows.length ? (
               <span className="capture-group-list-count">
                 {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
               </span>

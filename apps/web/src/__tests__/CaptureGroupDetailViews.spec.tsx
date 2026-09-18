@@ -126,7 +126,7 @@ describe('CaptureGroup detail views', () => {
     expect(
       await screen.findByRole('heading', { level: 2, name: '视频', hidden: true }),
     ).toBeInTheDocument()
-    expect((await screen.findByText('查看检测与媒体信息')).closest('details')).toHaveAttribute(
+    expect((await screen.findByText('查看检测与媒体信息')).closest('details')).not.toHaveAttribute(
       'open',
     )
     expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
@@ -265,9 +265,9 @@ describe('CaptureGroup detail views', () => {
     const selector = await screen.findByRole('group', { name: '采集记录机位选择' })
     expect(within(selector).getByRole('button', { name: /机位 2/ })).toBeDisabled()
     const details = (await screen.findByText('查看检测与媒体信息')).closest('details')
-    expect(details).toHaveAttribute('open')
-    await user.click(await screen.findByText('查看检测与媒体信息'))
     expect(details).not.toHaveAttribute('open')
+    await user.click(await screen.findByText('查看检测与媒体信息'))
+    expect(details).toHaveAttribute('open')
     expect(await screen.findByText('手部检测：检测任务失败')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
     expect(await screen.findByText('等待 AI 自动分析')).toBeInTheDocument()

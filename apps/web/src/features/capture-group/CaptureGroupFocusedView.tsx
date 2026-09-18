@@ -134,7 +134,7 @@ export function CaptureGroupFocusedView({
     selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
   )
   const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 
   const focusedView = (
     <section

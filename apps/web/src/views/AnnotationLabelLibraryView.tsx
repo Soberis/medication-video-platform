@@ -1,6 +1,6 @@
 import { Alert, App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
-import { Plus, Search } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Plus } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   AnnotationTaskApiError,
@@ -26,7 +26,6 @@ export default function AnnotationLabelLibraryView() {
   const [state, setState] = useState<'loading' | 'success' | 'error'>('loading')
   const [saving, setSaving] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const requestRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -77,15 +76,6 @@ export default function AnnotationLabelLibraryView() {
     }
   }
 
-  const filteredLabels = useMemo(() => {
-    if (!schema) return []
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return schema.labels
-    return schema.labels.filter(
-      (l) => l.label_id.toLowerCase().includes(q) || l.display_name.toLowerCase().includes(q),
-    )
-  }, [schema, searchQuery])
-
   return (
     <div className="label-library-page">
       <nav className="breadcrumb" aria-label="面包屑导航">
@@ -120,28 +110,15 @@ export default function AnnotationLabelLibraryView() {
       ) : null}
       {schema ? (
         <div className="table-page-container">
-          <div className="table-page-toolbar">
-            <h2 className="table-toolbar-title" id="label-library-table-title">
-              当前标签
-            </h2>
-            <div className="table-toolbar-actions label-table-toolbar">
-              <Input
-                className="label-search-input"
-                placeholder="搜索标签 ID 或名称…"
-                prefix={<Search size={14} className="label-search-icon" />}
-                allowClear
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="label-count-badge">共 {schema.labels.length} 个标签</span>
-            </div>
-          </div>
+          <h2 className="visually-hidden" id="label-library-table-title">
+            当前标签
+          </h2>
           <div className="table-surface">
             <Table
               rowKey="label_id"
               pagination={false}
-              dataSource={filteredLabels}
-              locale={{ emptyText: searchQuery.trim() ? '未找到匹配的标签。' : '暂无标签。' }}
+              dataSource={schema.labels}
+              locale={{ emptyText: '暂无标签。' }}
               columns={[
                 {
                   title: '稳定标签 ID',
