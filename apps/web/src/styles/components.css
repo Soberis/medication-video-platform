@@ -892,7 +892,7 @@
 .export-modal-subhint {
   font-size: var(--app-font-size-label);
   color: var(--app-color-foreground-muted);
-  line-height: var(--app-line-height-base);
+  line-height: var(--app-line-height-label);
 }
 
 .capture-group-export-modal-actions {
@@ -1222,8 +1222,7 @@
   overflow-wrap: normal;
 }
 
-.status-badge-neutral,
-.status-badge-default {
+.status-badge-neutral {
   color: var(--app-color-foreground-secondary);
   background: var(--app-color-neutral-surface);
 }
@@ -1238,15 +1237,12 @@
   background: var(--app-color-warning-surface);
 }
 
-.status-badge-destructive,
-.status-badge-error {
+.status-badge-destructive {
   color: var(--app-color-destructive);
   background: var(--app-color-destructive-surface);
 }
 
-.status-badge-information,
-.status-badge-processing,
-.status-badge-info {
+.status-badge-information {
   color: var(--app-color-information);
   background: var(--app-color-information-surface);
 }

@@ -418,8 +418,8 @@ export default function UploadProgressView() {
                                 file.status === 'UPLOADED'
                                   ? 'success'
                                   : file.completion_error_code === 'UPLOAD_FILE_SHA256_MISMATCH'
-                                    ? 'error'
-                                    : 'default'
+                                    ? 'destructive'
+                                    : 'neutral'
                               }
                             >
                               {file.status === 'UPLOADED'
