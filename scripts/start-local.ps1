@@ -4,9 +4,9 @@ param(
     [switch]$InfrastructureOnly,
     [switch]$RestartApi,
     [ValidateRange(1, 8)]
-    [int]$MediaWorkerConcurrency = 2,
+    [int]$MediaWorkerConcurrency = 4,
     [ValidateRange(1, 8)]
-    [int]$AiWorkerConcurrency = 2,
+    [int]$AiWorkerConcurrency = 4,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
