@@ -50,14 +50,14 @@ function uploadDeviceDisplayLabel(deviceId: string) {
 
 function batchStatusTone(status: UploadBatchStatus): StatusBadgeTone {
   if (status === 'COMPLETED') return 'success'
-  if (status === 'FAILED' || status === 'ABORTED' || status === 'EXPIRED') return 'error'
-  return 'processing'
+  if (status === 'FAILED' || status === 'ABORTED' || status === 'EXPIRED') return 'destructive'
+  return 'information'
 }
 
 function fileStatusTone(status: UploadFileStatus): StatusBadgeTone {
   if (status === 'UPLOADED') return 'success'
-  if (status === 'FAILED') return 'error'
-  return 'processing'
+  if (status === 'FAILED') return 'destructive'
+  return 'information'
 }
 
 function batchStatusDescription(status: UploadBatchStatus) {
@@ -410,7 +410,9 @@ export default function UploadProgressView() {
                         id: 'declared-sha256',
                         label: '完整性校验',
                         value: (
-                          <span title={`声明: ${file.declared_sha256}\n验证: ${file.verified_sha256 ?? '—'}`}>
+                          <span
+                            title={`声明: ${file.declared_sha256}\n验证: ${file.verified_sha256 ?? '—'}`}
+                          >
                             <StatusBadge
                               tone={
                                 file.status === 'UPLOADED'

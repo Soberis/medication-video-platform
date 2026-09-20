@@ -132,9 +132,7 @@ test('AccountManagement — management table columns stay bounded', async ({ pag
   expect(accountHeader!.width).toBeLessThanOrEqual(320)
 
   // 末列负责吸收多余宽度，所以每行的操作始终可达。
-  await expect(
-    page.getByRole('button', { name: '启用账号：synthetic-reviewer' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: '启用账号：synthetic-reviewer' })).toBeVisible()
   await expect(page.getByText('管理员不可停用')).toBeVisible()
 
   // 单栏全宽工作台：创建入口整合在顶部，点击唤起模态弹窗，取消即关闭
@@ -150,7 +148,9 @@ test('AccountManagement — management table columns stay bounded', async ({ pag
   await expectNoSeriousAxeViolations(page)
 })
 
-test('AccountManagement — no page-level horizontal scroll on narrow viewports', async ({ page }) => {
+test('AccountManagement — no page-level horizontal scroll on narrow viewports', async ({
+  page,
+}) => {
   await mockCaptureGroupApi(page, 'list')
   await page.route('**/api/v1/admin/**', (route) => {
     const { pathname } = new URL(route.request().url())

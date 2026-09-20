@@ -22,6 +22,29 @@
   text-align: center;
 }
 
+.playback-idle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--app-radius-md);
+  background: var(--app-color-surface);
+  color: var(--app-color-primary);
+  border: 1px solid var(--app-color-border-subtle);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.playback-idle-stage.playback-availability-warning .playback-idle-icon {
+  color: var(--app-color-warning);
+  border-color: var(--app-color-warning-surface);
+}
+
+.playback-idle-stage.playback-availability-error .playback-idle-icon {
+  color: var(--app-color-destructive);
+  border-color: var(--app-color-destructive-surface);
+}
+
 .playback-idle-copy {
   display: grid;
   justify-items: center;
@@ -112,6 +135,16 @@
   color: var(--app-color-foreground-secondary);
   cursor: pointer;
   list-style: none;
+  transition: background-color var(--app-transition-quick);
+}
+
+.detail-disclosure > summary:hover {
+  background-color: var(--app-color-surface-hover);
+}
+
+.detail-disclosure > summary:focus-visible {
+  outline: 2px solid var(--app-color-focus-ring);
+  outline-offset: -2px;
 }
 
 .detail-disclosure > summary::-webkit-details-marker {
@@ -120,14 +153,19 @@
 
 .detail-disclosure > summary::after {
   flex: none;
-  color: var(--app-color-foreground-muted);
-  content: '＋';
-  font-size: var(--app-font-size-heading-2);
-  line-height: var(--app-line-height-single);
+  content: '';
+  width: 16px;
+  height: 16px;
+  background-color: var(--app-color-foreground-muted);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  transition: transform var(--app-transition-quick);
 }
 
 .detail-disclosure[open] > summary::after {
-  content: '－';
+  transform: rotate(180deg);
 }
 
 .detail-disclosure > summary span {
@@ -153,6 +191,7 @@
 
   .detail-disclosure > summary::after {
     position: absolute;
+    top: var(--app-space-16);
     right: var(--app-space-16);
     margin-top: 0;
   }

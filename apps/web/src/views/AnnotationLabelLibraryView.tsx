@@ -91,11 +91,7 @@ export default function AnnotationLabelLibraryView() {
         description="新增标签会发布新的不可变规范；已有标注任务和导出数据继续保留原规范。"
         actions={
           <>
-            <Button
-              type="primary"
-              icon={<Plus size={14} />}
-              onClick={() => setIsModalOpen(true)}
-            >
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setIsModalOpen(true)}>
               新增标签
             </Button>
             <RefreshButton loading={state === 'loading'} onClick={() => void load()} />
@@ -162,15 +158,13 @@ export default function AnnotationLabelLibraryView() {
         footer={null}
         destroyOnClose
         centered
-        width={520}
+        width={560}
       >
-        <p className="form-hint" style={{ marginBottom: 12 }}>
-          发布后不能编辑、删除或重新排序。
-        </p>
+        <p className="form-hint label-library-modal-hint">发布后不能编辑、删除或重新排序。</p>
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
+          className="label-library-modal-alert"
           message="新建标注任务会使用新规范；历史任务继续绑定已有规范。"
         />
         <Form

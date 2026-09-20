@@ -12,7 +12,6 @@ const clipAssetId = '50000000-0000-4000-8000-000000000001'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('catalog API', () => {
-
   it('requests a no-store data-review playback grant without persisting the URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -108,4 +107,3 @@ describe('catalog API', () => {
     )
   })
 })
-

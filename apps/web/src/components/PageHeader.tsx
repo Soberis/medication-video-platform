@@ -27,7 +27,10 @@ export function PageHeader({
   const resolvedTitleId = titleId ?? generatedTitleId
 
   return (
-    <header className={`page-heading ${className}`.trim()} aria-labelledby={resolvedTitleId}>
+    <header
+      className={`page-heading ${eyebrow ? 'has-eyebrow' : ''} ${className}`.trim()}
+      aria-labelledby={resolvedTitleId}
+    >
       <div className="page-heading-copy">
         {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
         <h1 id={resolvedTitleId}>{title}</h1>

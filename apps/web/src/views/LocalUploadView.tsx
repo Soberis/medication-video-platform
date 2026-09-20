@@ -71,9 +71,9 @@ function taskProgressLabel(task: LocalUploadTask) {
   return phaseLabels[progress.phase]
 }
 
-function uploadTaskTone(status: LocalUploadTaskStatus): 'error' | 'processing' | 'success' {
-  if (status === 'FAILED') return 'error'
-  return status === 'COMPLETED' ? 'success' : 'processing'
+function uploadTaskTone(status: LocalUploadTaskStatus): 'destructive' | 'information' | 'success' {
+  if (status === 'FAILED') return 'destructive'
+  return status === 'COMPLETED' ? 'success' : 'information'
 }
 
 function uploadResultDescription(
@@ -128,11 +128,11 @@ export default function LocalUploadView() {
     uploadState === 'idle'
       ? null
       : uploadState === 'uploading'
-        ? { label: '处理中', color: 'processing' }
+        ? { label: '处理中', color: 'information' }
         : failedTaskCount === 0
           ? { label: '全部上传完成', color: 'success' }
           : completedTaskCount === 0
-            ? { label: '本轮上传失败', color: 'error' }
+            ? { label: '本轮上传失败', color: 'destructive' }
             : { label: '部分上传完成', color: 'warning' }
 
   const loadProjects = useCallback(async () => {
@@ -409,10 +409,7 @@ export default function LocalUploadView() {
           ) : null}
           {uploadState === 'completed' && completedTaskCount > 0 && selectedProjectId ? (
             <div className="local-upload-completion-cta">
-              <Link
-                className="ant-btn ant-btn-primary"
-                to={paths.captureGroups(selectedProjectId)}
-              >
+              <Link className="ant-btn ant-btn-primary" to={paths.captureGroups(selectedProjectId)}>
                 <span>前往视频列表查看已上传视频</span>
                 <ArrowRight aria-hidden="true" size={14} />
               </Link>

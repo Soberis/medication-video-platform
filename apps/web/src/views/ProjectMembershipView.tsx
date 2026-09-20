@@ -161,15 +161,14 @@ export default function ProjectMembershipView() {
         actions={
           <>
             {canManageMembers ? (
-              <Button
-                type="primary"
-                icon={<Plus size={14} />}
-                onClick={handleOpenAdd}
-              >
+              <Button type="primary" icon={<Plus size={14} />} onClick={handleOpenAdd}>
                 添加成员
               </Button>
             ) : null}
-            <RefreshButton loading={loadState === 'loading'} onClick={() => void loadMemberships()} />
+            <RefreshButton
+              loading={loadState === 'loading'}
+              onClick={() => void loadMemberships()}
+            />
           </>
         }
       />
@@ -184,9 +183,7 @@ export default function ProjectMembershipView() {
         />
       ) : null}
 
-      {loadState === 'loading' ? (
-        <LoadingState>正在加载项目成员…</LoadingState>
-      ) : null}
+      {loadState === 'loading' ? <LoadingState>正在加载项目成员…</LoadingState> : null}
 
       {loadState === 'error' ? (
         <ErrorState onRetry={() => void loadMemberships()}>{errorMessage}</ErrorState>
@@ -233,7 +230,7 @@ export default function ProjectMembershipView() {
                   title: '项目角色',
                   width: 140,
                   render: (_, row) => (
-                    <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                    <StatusBadge tone={row.role === 'ADMIN' ? 'information' : 'neutral'}>
                       {row.role === 'ADMIN' ? '项目管理员' : '成员'}
                     </StatusBadge>
                   ),
@@ -280,7 +277,7 @@ export default function ProjectMembershipView() {
         onCancel={handleCloseModal}
         footer={null}
         destroyOnHidden
-        width={480}
+        width={560}
       >
         <Form<MembershipFields>
           form={form}
@@ -321,11 +318,7 @@ export default function ProjectMembershipView() {
           </p>
           <div className="management-modal-actions">
             <Button onClick={handleCloseModal}>取消</Button>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={isMutating}
-            >
+            <Button type="primary" htmlType="submit" loading={isMutating}>
               保存成员
             </Button>
           </div>

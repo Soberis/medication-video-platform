@@ -198,7 +198,7 @@ export default function AccountManagementView() {
                   title: '全局角色',
                   width: 120,
                   render: (_, row) => (
-                    <StatusBadge tone={row.role === 'ADMIN' ? 'info' : 'default'}>
+                    <StatusBadge tone={row.role === 'ADMIN' ? 'information' : 'neutral'}>
                       {row.role === 'ADMIN' ? '管理员' : '成员'}
                     </StatusBadge>
                   ),
@@ -207,7 +207,7 @@ export default function AccountManagementView() {
                   title: '登录状态',
                   width: 120,
                   render: (_, row) => (
-                    <StatusBadge tone={row.enabled ? 'success' : 'error'}>
+                    <StatusBadge tone={row.enabled ? 'success' : 'destructive'}>
                       {row.enabled ? '启用' : '停用'}
                     </StatusBadge>
                   ),
@@ -244,7 +244,7 @@ export default function AccountManagementView() {
         onCancel={handleCloseCreate}
         footer={null}
         destroyOnHidden
-        width={480}
+        width={560}
       >
         <Form<AccountFields>
           form={form}

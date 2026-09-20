@@ -301,4 +301,3 @@ async function toCatalogError(response: Response): Promise<CatalogApiError> {
     response.status,
   )
 }
-

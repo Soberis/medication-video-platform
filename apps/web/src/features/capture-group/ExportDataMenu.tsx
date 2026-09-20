@@ -9,9 +9,8 @@ import {
 } from '@/api/annotation'
 import { listAllCaptureGroupSummaries, type CaptureGroupSummary } from '@/api/capture-groups'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
-import { CopyableText } from '@/components/data/CopyableText'
 import { isHumanAnnotationExportReady } from '@/features/capture-group-presentation'
-import { shortId } from '@/features/catalog/catalog-presentation'
+import { formatDateTime, shortId } from '@/features/catalog/catalog-presentation'
 
 export function ExportDataMenu({ projectId }: { projectId: string }) {
   const { message } = AntdApp.useApp()
@@ -138,7 +137,14 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
         keyboard={!loading}
         footer={
           <div className="capture-group-export-modal-footer">
-            <p className="form-hint">仅导出勾选记录；下载时仍会检查当前媒体与标注来源是否有效。</p>
+            <div className="capture-group-export-footer-info">
+              <span className="capture-group-export-selected-count" role="status">
+                已选择 {selectedExportIds.length} 条
+              </span>
+              <span className="export-modal-subhint">
+                仅导出勾选记录；下载时仍会检查当前媒体与标注来源是否有效。
+              </span>
+            </div>
             <div className="capture-group-export-modal-actions">
               <Button aria-label="取消" disabled={loading} onClick={close}>
                 取消
@@ -159,12 +165,13 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
         onCancel={close}
       >
         <section aria-label="HDF5 演示数据导出">
-          <p className="form-hint">
-            HDF5 演示数据包含已复核人工动作区间、标签来源与各机位当前可验证的 MediaPipe 手部关键点。
-          </p>
-          <p className="form-hint">
-            文件不包含 MP4、对象存储地址、患者身份或机器人控制动作；仅限合成数据配置导出。
-          </p>
+          <div className="export-modal-description">
+            <p>
+              HDF5 演示数据包含已复核人工动作区间、标签来源与各机位当前可验证的 MediaPipe
+              手部关键点。
+            </p>
+            <p>文件不包含 MP4、对象存储地址、患者身份或机器人控制动作；仅限合成数据配置导出。</p>
+          </div>
           {readState === 'loading' ? (
             <LoadingState>正在读取当前项目的导出候选…</LoadingState>
           ) : null}
@@ -183,7 +190,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                   selectedIds.has(row.capture_group_id) ? 'is-selected ant-table-row-selected' : ''
                 }
                 dataSource={rows}
-                scroll={{ y: 320 }}
+                scroll={rows.length > 5 ? { y: 320 } : undefined}
                 locale={{ emptyText: '当前项目暂无已完成并通过确认的人工标注数据。' }}
                 onRow={(row) => ({
                   onClick: (event) => {
@@ -217,7 +224,7 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                       </Checkbox>
                     ),
                     key: 'select',
-                    width: 132,
+                    width: 96,
                     render: (_, row) => (
                       <Checkbox
                         aria-label={`选择导出 ${row.capture_group_key ?? shortId(row.capture_group_id)}`}
@@ -231,22 +238,36 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
                     title: '视频',
                     key: 'identity',
                     render: (_, row) => (
-                      <span className="mono-wrap">
+                      <span className="mono-wrap capture-group-export-key">
                         {row.capture_group_key ?? shortId(row.capture_group_id)}
                       </span>
                     ),
                   },
                   {
-                    title: '导出',
-                    key: 'export',
+                    title: '采集时间',
+                    key: 'device_time',
+                    width: 220,
+                    render: (_, row) => (
+                      <span className="muted-text">
+                        {formatDateTime(row.device_time_utc ?? row.created_at)}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '机位',
+                    key: 'cameras',
+                    width: 100,
                     align: 'right',
-                    render: () => <span className="muted-text">可选择</span>,
+                    render: (_, row) => (
+                      <span className="muted-text">
+                        {row.received_camera_count > 0 ? `${row.received_camera_count} 机位` : '—'}
+                      </span>
+                    ),
                   },
                 ]}
               />
             </div>
           ) : null}
-          <p role="status">已选择 {selectedExportIds.length} 条</p>
         </section>
       </Modal>
     </>

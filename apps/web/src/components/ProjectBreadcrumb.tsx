@@ -115,7 +115,9 @@ export function ProjectBreadcrumb({
           aria-label={`当前项目：${displayName}，点击切换项目`}
         >
           <FolderKanban aria-hidden="true" size={13} strokeWidth={1.8} />
-          <span className="project-switcher-name">{displayName}</span>
+          <span className="project-switcher-name" title={displayName}>
+            {displayName}
+          </span>
           <ChevronDown aria-hidden="true" size={12} strokeWidth={1.8} />
         </button>
       </Dropdown>

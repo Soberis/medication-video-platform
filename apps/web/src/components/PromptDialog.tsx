@@ -85,6 +85,7 @@ export function PromptProvider({ children }: PropsWithChildren) {
         closable={{ 'aria-label': '关闭' }}
         className="prompt-dialog"
         destroyOnHidden
+        width={440}
       >
         <p className="prompt-dialog-description">{activePrompt?.description}</p>
         <label className="prompt-input-label" htmlFor={promptInputId}>

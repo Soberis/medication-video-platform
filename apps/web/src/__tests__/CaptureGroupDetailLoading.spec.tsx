@@ -390,9 +390,7 @@ function stubHookDetail(
       )
       if (reviewGroup) {
         return Promise.resolve(
-          jsonResponse(
-            viewQuality(clipAssetId, qualityFixture(reviewGroup, 'QUALIFIED')),
-          ),
+          jsonResponse(viewQuality(clipAssetId, qualityFixture(reviewGroup, 'QUALIFIED'))),
         )
       }
     }

@@ -148,8 +148,11 @@ export default function AnnotationTaskListView({
       const matchTaskId = task.annotation_task_id.toLowerCase().includes(normalizedQuery)
       const matchStatus = annotationTaskStatusLabel(task).toLowerCase().includes(normalizedQuery)
       const matchAssignee = task.assignee_actor_id?.toLowerCase().includes(normalizedQuery)
-      const matchSubmittedBy = task.annotation_revision?.submitted_by?.toLowerCase().includes(normalizedQuery)
-      if (!matchId && !matchTaskId && !matchStatus && !matchAssignee && !matchSubmittedBy) return false
+      const matchSubmittedBy = task.annotation_revision?.submitted_by
+        ?.toLowerCase()
+        .includes(normalizedQuery)
+      if (!matchId && !matchTaskId && !matchStatus && !matchAssignee && !matchSubmittedBy)
+        return false
     }
 
     return true
@@ -179,9 +182,13 @@ export default function AnnotationTaskListView({
         >
           <div className="task-overview-metrics">
             <strong>{progress.total} 个任务</strong>
-            <span className="task-overview-dot" aria-hidden="true">·</span>
+            <span className="task-overview-dot" aria-hidden="true">
+              ·
+            </span>
             <span>{progress.completed} 个已完成</span>
-            <span className="task-overview-dot" aria-hidden="true">·</span>
+            <span className="task-overview-dot" aria-hidden="true">
+              ·
+            </span>
             <span>
               {progress.awaiting_submission + progress.rework_required + progress.awaiting_review}{' '}
               个待处理
@@ -190,10 +197,7 @@ export default function AnnotationTaskListView({
         </section>
       ) : null}
       {loadState === 'success' && visibleItems.length ? (
-        <section
-          className="annotation-task-queue"
-          aria-labelledby="annotation-task-queue-title"
-        >
+        <section className="annotation-task-queue" aria-labelledby="annotation-task-queue-title">
           <h2 className="visually-hidden" id="annotation-task-queue-title">
             任务队列
           </h2>
@@ -206,133 +210,133 @@ export default function AnnotationTaskListView({
             </div>
             <ul className="annotation-task-list-surface" aria-label="标注任务列表">
               {visibleItems.map((row) => {
-              const captureGroupId = row.capture_group_id
-              const taskSubject = `采集记录 ${shortId(captureGroupId)}`
-              const revision = row.annotation_revision
-              const presentation = captureGroupCleaningPresentation(row)
-              const taskDestination = captureGroupTaskDestination(row)
-              const taskAction =
-                row.status !== 'COMPLETED' && taskDestination ? (
-                  <Link
-                    className="capture-group-list-open annotation-task-action-link"
-                    aria-label={taskDestination.actionLabel}
-                    to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
-                  >
-                    <span>{taskDestination.actionLabel}</span>
-                    <ArrowRight aria-hidden="true" size={13} />
-                  </Link>
-                ) : null
-              const completedTaskResult =
-                row.status === 'COMPLETED' && taskDestination ? (
-                  <Link
-                    className="capture-group-list-open annotation-task-result-link"
-                    to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
-                  >
-                    <span>查看标注结果</span>
-                    <ArrowRight aria-hidden="true" size={13} />
-                  </Link>
-                ) : null
-              return (
-                <li
-                  aria-label={`${taskSubject} · ${annotationTaskStatusLabel(row)}`}
-                  className="annotation-task-row"
-                  key={row.annotation_task_id}
-                  data-status={row.status}
-                  tabIndex={0}
-                  onClick={(event) => {
-                    const target = event.target as HTMLElement
-                    if (
-                      target.closest('a') ||
-                      target.closest('button') ||
-                      (window.getSelection()?.toString().length ?? 0) > 0
-                    ) {
-                      return
-                    }
-                    const destination = taskDestination
-                      ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
-                      : paths.captureGroup(projectId, captureGroupId)
-                    void navigate(destination)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return
-                    const target = event.target as HTMLElement
-                    if (target.closest('a') || target.closest('button')) return
-                    event.preventDefault()
-                    const destination = taskDestination
-                      ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
-                      : paths.captureGroup(projectId, captureGroupId)
-                    void navigate(destination)
-                  }}
-                >
-                  <header className="annotation-task-row-identity">
-                    <strong
-                      className="mono-wrap annotation-task-title-clickable"
-                      title={captureGroupId}
+                const captureGroupId = row.capture_group_id
+                const taskSubject = `采集记录 ${shortId(captureGroupId)}`
+                const revision = row.annotation_revision
+                const presentation = captureGroupCleaningPresentation(row)
+                const taskDestination = captureGroupTaskDestination(row)
+                const taskAction =
+                  row.status !== 'COMPLETED' && taskDestination ? (
+                    <Link
+                      className="capture-group-list-open annotation-task-action-link"
+                      aria-label={taskDestination.actionLabel}
+                      to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                     >
-                      {taskSubject}
-                    </strong>
-                  </header>
-                  <div className="annotation-task-row-status">
-                    <StatusIndicator
-                      className="annotation-task-status"
-                      tone={annotationTaskStatusTone(row)}
+                      <span>{taskDestination.actionLabel}</span>
+                      <ArrowRight aria-hidden="true" size={13} />
+                    </Link>
+                  ) : null
+                const completedTaskResult =
+                  row.status === 'COMPLETED' && taskDestination ? (
+                    <Link
+                      className="capture-group-list-open annotation-task-result-link"
+                      to={paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)}
                     >
-                      {annotationTaskStatusLabel(row)}
-                    </StatusIndicator>
-                  </div>
-                  <div className="annotation-task-row-evidence">
-                    <div className="annotation-task-progress">
-                      {revision ? (
-                        <div className="task-evidence-summary">
-                          <strong className="task-evidence-primary">
-                            已提交 · {revision.annotation_document.segments.length} 个时间段
-                          </strong>
-                          <p
-                            className="task-evidence-status"
-                            data-tone={taskEvidenceTone(row, presentation)}
-                          >
-                            {taskEvidenceLabel(row, presentation)}
-                            {revision.review?.decision === 'APPROVED' &&
-                            revision.review.reviewed_by === revision.submitted_by ? (
-                              <small className="task-evidence-self-review">
-                                <span aria-hidden="true">（</span>
-                                <span>管理员自审</span>
-                                <span aria-hidden="true">）</span>
-                              </small>
-                            ) : null}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="task-evidence-summary">
-                          <span className="muted-text">尚未提交</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <footer className="annotation-task-row-footer">
-                    <div
-                      className="annotation-task-row-actions"
-                      aria-label={
-                        row.status === 'COMPLETED'
-                          ? '完成结果操作'
-                          : taskAction
-                            ? '下一步操作'
-                            : '当前任务状态'
+                      <span>查看标注结果</span>
+                      <ArrowRight aria-hidden="true" size={13} />
+                    </Link>
+                  ) : null
+                return (
+                  <li
+                    aria-label={`${taskSubject} · ${annotationTaskStatusLabel(row)}`}
+                    className="annotation-task-row"
+                    key={row.annotation_task_id}
+                    data-status={row.status}
+                    tabIndex={0}
+                    onClick={(event) => {
+                      const target = event.target as HTMLElement
+                      if (
+                        target.closest('a') ||
+                        target.closest('button') ||
+                        (window.getSelection()?.toString().length ?? 0) > 0
+                      ) {
+                        return
                       }
-                    >
-                      {row.status === 'COMPLETED'
-                        ? completedTaskResult
-                        : (taskAction ?? (
-                            <span className="annotation-task-no-action">
-                              {taskNoActionLabel(row, session?.username)}
-                            </span>
-                          ))}
+                      const destination = taskDestination
+                        ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
+                        : paths.captureGroup(projectId, captureGroupId)
+                      void navigate(destination)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      const target = event.target as HTMLElement
+                      if (target.closest('a') || target.closest('button')) return
+                      event.preventDefault()
+                      const destination = taskDestination
+                        ? paths.captureGroupFocus(projectId, captureGroupId, taskDestination.focus)
+                        : paths.captureGroup(projectId, captureGroupId)
+                      void navigate(destination)
+                    }}
+                  >
+                    <header className="annotation-task-row-identity">
+                      <strong
+                        className="mono-wrap annotation-task-title-clickable"
+                        title={captureGroupId}
+                      >
+                        {taskSubject}
+                      </strong>
+                    </header>
+                    <div className="annotation-task-row-status">
+                      <StatusIndicator
+                        className="annotation-task-status"
+                        tone={annotationTaskStatusTone(row)}
+                      >
+                        {annotationTaskStatusLabel(row)}
+                      </StatusIndicator>
                     </div>
-                  </footer>
-                </li>
-              )
-            })}
-          </ul>
+                    <div className="annotation-task-row-evidence">
+                      <div className="annotation-task-progress">
+                        {revision ? (
+                          <div className="task-evidence-summary">
+                            <strong className="task-evidence-primary">
+                              已提交 · {revision.annotation_document.segments.length} 个时间段
+                            </strong>
+                            <p
+                              className="task-evidence-status"
+                              data-tone={taskEvidenceTone(row, presentation)}
+                            >
+                              {taskEvidenceLabel(row, presentation)}
+                              {revision.review?.decision === 'APPROVED' &&
+                              revision.review.reviewed_by === revision.submitted_by ? (
+                                <small className="task-evidence-self-review">
+                                  <span aria-hidden="true">（</span>
+                                  <span>管理员自审</span>
+                                  <span aria-hidden="true">）</span>
+                                </small>
+                              ) : null}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="task-evidence-summary">
+                            <span className="muted-text">尚未提交</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <footer className="annotation-task-row-footer">
+                      <div
+                        className="annotation-task-row-actions"
+                        aria-label={
+                          row.status === 'COMPLETED'
+                            ? '完成结果操作'
+                            : taskAction
+                              ? '下一步操作'
+                              : '当前任务状态'
+                        }
+                      >
+                        {row.status === 'COMPLETED'
+                          ? completedTaskResult
+                          : (taskAction ?? (
+                              <span className="annotation-task-no-action">
+                                {taskNoActionLabel(row, session?.username)}
+                              </span>
+                            ))}
+                      </div>
+                    </footer>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
         </section>
       ) : null}

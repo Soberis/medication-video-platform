@@ -579,10 +579,7 @@ export function qualityFixture(
   }
 }
 
-export function viewQuality(
-  clipAssetId: string,
-  quality: CaptureGroupQualityReview,
-) {
+export function viewQuality(clipAssetId: string, quality: CaptureGroupQualityReview) {
   const view = quality.confirmed_view_set?.views.find(
     (candidate) => candidate.clip_asset_id === clipAssetId,
   )

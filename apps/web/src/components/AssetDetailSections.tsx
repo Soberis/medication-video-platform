@@ -1,4 +1,5 @@
 import { Alert, Button, Descriptions } from 'antd'
+import { Video } from 'lucide-react'
 import {
   useEffect,
   useMemo,
@@ -177,6 +178,9 @@ export function PlaybackCard({
           className={`playback-idle-stage playback-availability-${availability.type}`}
           role="status"
         >
+          <div className="playback-idle-icon" aria-hidden="true">
+            <Video size={28} strokeWidth={1.75} />
+          </div>
           <div className="playback-idle-copy">
             <strong>{availability.title}</strong>
             <span>{availability.description}</span>
@@ -379,7 +383,7 @@ export function MediaReportCard({
             <span className="media-report-warning-label">附加信息</span>
             <div className="media-report-warning-list">
               {warnings.map((code) => (
-                <StatusBadge key={code} tone="default">
+                <StatusBadge key={code} tone="neutral">
                   {mediaWarningLabels[code] ?? code}
                 </StatusBadge>
               ))}

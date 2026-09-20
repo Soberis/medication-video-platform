@@ -113,25 +113,28 @@ export default function CaptureGroupDetailView() {
     startPlayback,
   } = viewState
 
-  const executePlaySegment = useCallback((video: HTMLVideoElement, startMs: number, endMs: number) => {
-    if (segmentStopListenerRef.current) {
-      segmentStopListenerRef.current()
-      segmentStopListenerRef.current = null
-    }
-    video.currentTime = Math.max(0, startMs / 1000)
-    void video.play().catch(() => undefined)
-    const onTimeUpdate = () => {
-      if (video.currentTime * 1000 >= endMs) {
-        video.pause()
-        video.removeEventListener('timeupdate', onTimeUpdate)
+  const executePlaySegment = useCallback(
+    (video: HTMLVideoElement, startMs: number, endMs: number) => {
+      if (segmentStopListenerRef.current) {
+        segmentStopListenerRef.current()
         segmentStopListenerRef.current = null
       }
-    }
-    video.addEventListener('timeupdate', onTimeUpdate)
-    segmentStopListenerRef.current = () => {
-      video.removeEventListener('timeupdate', onTimeUpdate)
-    }
-  }, [])
+      video.currentTime = Math.max(0, startMs / 1000)
+      void video.play().catch(() => undefined)
+      const onTimeUpdate = () => {
+        if (video.currentTime * 1000 >= endMs) {
+          video.pause()
+          video.removeEventListener('timeupdate', onTimeUpdate)
+          segmentStopListenerRef.current = null
+        }
+      }
+      video.addEventListener('timeupdate', onTimeUpdate)
+      segmentStopListenerRef.current = () => {
+        video.removeEventListener('timeupdate', onTimeUpdate)
+      }
+    },
+    [],
+  )
 
   const handlePlaySegment = useCallback(
     (startMs: number, endMs: number) => {
@@ -148,7 +151,14 @@ export default function CaptureGroupDetailView() {
       }
       executePlaySegment(video, startMs, endMs)
     },
-    [canPlay, executePlaySegment, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+    [
+      canPlay,
+      executePlaySegment,
+      isRequestingPlayback,
+      playbackGrant,
+      playbackState,
+      startPlayback,
+    ],
   )
 
   const handlePlayAtMs = useCallback(
@@ -461,7 +471,10 @@ export default function CaptureGroupDetailView() {
         <LoadingState>{data.group ? '正在刷新采集记录…' : '正在读取采集记录…'}</LoadingState>
       ) : null}
       {data.groupLoadState === 'loading' && !data.group ? (
-        <div className="capture-group-workspace capture-group-workspace-skeleton" aria-hidden="true">
+        <div
+          className="capture-group-workspace capture-group-workspace-skeleton"
+          aria-hidden="true"
+        >
           <div className="capture-group-video-column">
             <div className="video-stage-placeholder">
               <Skeleton.Node active style={{ width: '100%', height: '100%' }}>
@@ -541,6 +554,7 @@ export default function CaptureGroupDetailView() {
         title="离开并丢弃未提交的标注？"
         okText="丢弃并离开"
         cancelText="继续编辑"
+        width={440}
         onOk={() => blocker.state === 'blocked' && blocker.proceed()}
         onCancel={() => blocker.state === 'blocked' && blocker.reset()}
       >
@@ -551,6 +565,7 @@ export default function CaptureGroupDetailView() {
         title="结束本次接收？"
         okText="结束接收"
         cancelText="取消"
+        width={440}
         confirmLoading={isReceiptFinalizationPending}
         okButtonProps={{
           disabled: isReceiptFinalizationPending,

@@ -56,7 +56,9 @@ export function CopyableText({
           className="copyable-text-btn copyable-text-btn-compact"
           aria-label={`${label} ${value}`}
           title={tooltipText}
-          icon={copied ? <Check size={12} className="copyable-text-success-icon" /> : <Copy size={12} />}
+          icon={
+            copied ? <Check size={12} className="copyable-text-success-icon" /> : <Copy size={12} />
+          }
           onClick={(e) => void copy(e)}
         />
       ) : (
@@ -73,5 +75,3 @@ export function CopyableText({
     </span>
   )
 }
-
-

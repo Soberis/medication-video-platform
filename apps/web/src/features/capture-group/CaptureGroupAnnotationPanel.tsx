@@ -33,7 +33,7 @@ import {
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import { recordQualityReview, type QualityReview } from '@/api/quality'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusBadge, type CanonicalStatusBadgeTone } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
 import {
@@ -209,7 +209,7 @@ export function CaptureGroupAnnotationPanel({
   )
   const hasUnusableActionCandidates = actionCandidates.length > 0 && validCandidates.length === 0
   const aiStatus: {
-    tone: 'warning' | 'success' | 'default' | 'error' | 'info'
+    tone: CanonicalStatusBadgeTone
     label: string
     tooltip?: string
   } = actionReadFailed
@@ -221,18 +221,18 @@ export function CaptureGroupAnnotationPanel({
           tooltip: `AI 已预填 ${validCandidates.length} 段候选，可直接核对微调`,
         }
       : validCandidates.length > 0
-        ? { tone: 'default', label: `AI 已生成 ${validCandidates.length} 条候选` }
+        ? { tone: 'neutral', label: `AI 已生成 ${validCandidates.length} 条候选` }
         : actionJob?.status === 'FAILED'
-          ? { tone: 'error', label: 'AI 分析失败' }
+          ? { tone: 'destructive', label: 'AI 分析失败' }
           : actionJob?.status === 'QUEUED'
-            ? { tone: 'info', label: 'AI 等待处理' }
+            ? { tone: 'information', label: 'AI 等待处理' }
             : actionJob?.status === 'RUNNING'
-              ? { tone: 'info', label: 'AI 分析中' }
+              ? { tone: 'information', label: 'AI 分析中' }
               : actionJob?.status === 'SUCCEEDED'
                 ? hasUnusableActionCandidates
                   ? { tone: 'warning', label: 'AI 候选未载入' }
-                  : { tone: 'default', label: 'AI 已完成 · 可直接标注' }
-                : { tone: 'default', label: '等待 AI 自动分析' }
+                  : { tone: 'neutral', label: 'AI 已完成 · 可直接标注' }
+                : { tone: 'neutral', label: '等待 AI 自动分析' }
 
   useEffect(() => {
     if (
@@ -617,7 +617,7 @@ export function CaptureGroupAnnotationPanel({
         </div>
       </div>
       {hasNoHandDetected && (
-        <div style={{ marginBottom: 8 }}>
+        <div className="capture-group-alert-banner">
           <Alert
             type="warning"
             showIcon

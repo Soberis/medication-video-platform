@@ -720,4 +720,3 @@ describe('CaptureGroup annotation workflow', () => {
     expect(video).toBeInTheDocument()
   })
 })
-

@@ -1,5 +1,5 @@
-import { App as AntdApp, Button, Dropdown, Input } from 'antd'
-import { ArrowRight, Calendar, FolderKanban, Search, Settings } from 'lucide-react'
+import { App as AntdApp, Button, Dropdown, Input, Select } from 'antd'
+import { ArrowRight, ArrowUpDown, Calendar, FolderKanban, Search, Settings } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
@@ -20,6 +20,15 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeed
 
 type LoadState = 'loading' | 'success' | 'error'
 
+type ProjectSortKey = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc'
+
+const PROJECT_SORT_OPTIONS: { label: string; value: ProjectSortKey }[] = [
+  { label: '最新创建', value: 'created_desc' },
+  { label: '最早创建', value: 'created_asc' },
+  { label: '名称 A → Z', value: 'name_asc' },
+  { label: '名称 Z → A', value: 'name_desc' },
+]
+
 export default function ProjectListView() {
   const { message, modal } = AntdApp.useApp()
   const navigate = useNavigate()
@@ -33,6 +42,7 @@ export default function ProjectListView() {
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
   const [archivingProjectId, setArchivingProjectId] = useState<string | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [sortKey, setSortKey] = useState<ProjectSortKey>('created_desc')
   const activeRequest = useRef<AbortController | null>(null)
 
   const loadProjects = useCallback(async () => {
@@ -70,11 +80,33 @@ export default function ProjectListView() {
 
   const filteredProjects = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase()
-    if (!keyword) return projects
-    return projects.filter((project) =>
-      project.display_name.toLowerCase().includes(keyword),
-    )
-  }, [projects, searchKeyword])
+    const list = keyword
+      ? projects.filter((project) => project.display_name.toLowerCase().includes(keyword))
+      : [...projects]
+
+    return list.sort((a, b) => {
+      switch (sortKey) {
+        case 'created_desc': {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+          if (timeB !== timeA) return timeB - timeA
+          return a.display_name.localeCompare(b.display_name, 'zh-CN')
+        }
+        case 'created_asc': {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+          if (timeA !== timeB) return timeA - timeB
+          return a.display_name.localeCompare(b.display_name, 'zh-CN')
+        }
+        case 'name_asc':
+          return a.display_name.localeCompare(b.display_name, 'zh-CN', { numeric: true })
+        case 'name_desc':
+          return b.display_name.localeCompare(a.display_name, 'zh-CN', { numeric: true })
+        default:
+          return 0
+      }
+    })
+  }, [projects, searchKeyword, sortKey])
 
   async function createDataProject() {
     if (isCreating) return
@@ -198,6 +230,16 @@ export default function ProjectListView() {
           <div className="project-list-toolbar">
             <span className="project-count-summary">共 {filteredProjects.length} 个项目</span>
             <div className="project-list-toolbar-actions">
+              {projects.length > 1 ? (
+                <Select
+                  aria-label="项目排序"
+                  className="project-list-sort-select"
+                  value={sortKey}
+                  onChange={(val) => setSortKey(val)}
+                  options={PROJECT_SORT_OPTIONS}
+                  suffixIcon={<ArrowUpDown size={13} className="project-sort-icon" />}
+                />
+              ) : null}
               {projects.length > 2 || searchKeyword ? (
                 <Input
                   className="project-list-search"
@@ -258,14 +300,11 @@ export default function ProjectListView() {
                         {project.display_name}
                       </strong>
                       <div className="project-card-badges">
-                        <StatusBadge
-                          className="project-role-badge"
-                          tone="default"
-                        >
+                        <StatusBadge className="project-role-badge" tone="neutral">
                           {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
                         </StatusBadge>
                         {project.status === 'ARCHIVED' ? (
-                          <StatusBadge tone="default">已归档</StatusBadge>
+                          <StatusBadge tone="neutral">已归档</StatusBadge>
                         ) : null}
                       </div>
                     </div>
