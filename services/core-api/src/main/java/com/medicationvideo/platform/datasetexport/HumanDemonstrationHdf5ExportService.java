@@ -39,9 +39,7 @@ import tools.jackson.databind.JsonNode;
 @Service
 class HumanDemonstrationHdf5ExportService {
 
-	static final String SCHEMA_VERSION = "human-demonstration-hdf5.v1";
-
-	static final String SCHEMA_VERSION_V2 = "human-demonstration-hdf5.v2";
+	static final String SCHEMA_VERSION = "human-demonstration-hdf5.v2";
 
 	static final String MEDIA_TYPE = "application/x-hdf5";
 
@@ -68,7 +66,7 @@ class HumanDemonstrationHdf5ExportService {
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	byte[] download(UUID projectId, List<UUID> captureGroupIds) {
-		return download(projectId, captureGroupIds, ExportOptions.V1_DEFAULT);
+		return download(projectId, captureGroupIds, ExportOptions.DEFAULT);
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -94,7 +92,7 @@ class HumanDemonstrationHdf5ExportService {
 		try {
 			output = Files.createTempFile("human-demonstration-", ".hdf5");
 			try (var file = HdfFile.write(output)) {
-				file.putAttribute("schema_version", options.version().schemaVersion());
+				file.putAttribute("schema_version", SCHEMA_VERSION);
 				file.putAttribute("project_id", projectId.toString());
 				file.putAttribute("export_scope", selectedIds.isEmpty() ? "project" : "selection");
 				file.putAttribute("contains_mp4_bytes", false);
@@ -125,15 +123,9 @@ class HumanDemonstrationHdf5ExportService {
 	}
 
 	static String fileName(List<UUID> captureGroupIds, Instant generatedAt) {
-		return fileName(captureGroupIds, generatedAt, ExportVersion.V1);
-	}
-
-	static String fileName(List<UUID> captureGroupIds, Instant generatedAt, ExportVersion version) {
 		var scope = captureGroupIds == null || captureGroupIds.isEmpty() ? "project" : captureGroupIds.size() == 1
 				? "event_" + captureGroupIds.getFirst().toString().substring(0, 8) : "selection";
-		var versionTag = version == ExportVersion.V2 ? "v2" : "v1";
-		return "human_demonstration_hdf5_%s_%s_%s.hdf5".formatted(versionTag, scope,
-				FILE_TIMESTAMP.format(generatedAt));
+		return "human_demonstration_hdf5_v2_%s_%s.hdf5".formatted(scope, FILE_TIMESTAMP.format(generatedAt));
 	}
 
 	private void writeEpisode(WritableGroup episode, CaptureGroupFacts group,
@@ -250,37 +242,12 @@ class HumanDemonstrationHdf5ExportService {
 		samples.putAttribute("algorithm_version", evidence.algorithmVersion());
 		samples.putAttribute("model_sha256", evidence.modelSha256());
 
-		if (options.version() == ExportVersion.V1) {
-			writeV1Samples(samples, rows);
-		}
-		else if (options.tensorLayout()) {
+		if (options.tensorLayout()) {
 			writeV2TensorSamples(samples, rows, orderedSegments);
 		}
 		else {
 			writeV2TableSamples(samples, rows);
 		}
-	}
-
-	private static void writeV1Samples(WritableGroup samples, List<LabeledSample> rows) {
-		var landmarks = new float[rows.size()][21][3];
-		for (var index = 0; index < rows.size(); index += 1) {
-			copyLandmarks(rows.get(index).candidate(), landmarks[index]);
-		}
-		samples.putAttribute("layout", "columnar-table.v1");
-		samples.putAttribute("row_count", rows.size());
-		samples.putDataset("frame_timestamp_ms",
-				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
-		samples.putDataset("hand_index", rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
-		samples.putDataset("handedness", rows.stream().map(row -> row.candidate().handedness()).toArray(String[]::new));
-		samples.putDataset("handedness_score",
-				rows.stream().mapToDouble(row -> row.candidate().handednessScore().doubleValue()).toArray());
-		samples.putDataset("image_width", rows.stream().mapToInt(row -> row.candidate().imageWidth()).toArray());
-		samples.putDataset("image_height", rows.stream().mapToInt(row -> row.candidate().imageHeight()).toArray());
-		samples.putDataset("label", rows.stream().map(row -> row.segment().label()).toArray(String[]::new));
-		samples.putDataset("segment_start_ms",
-				rows.stream().mapToLong(row -> row.segment().segmentStartMs()).toArray());
-		samples.putDataset("segment_end_ms", rows.stream().mapToLong(row -> row.segment().segmentEndMs()).toArray());
-		samples.putDataset("landmarks", landmarks);
 	}
 
 	private static void writeV2TensorSamples(WritableGroup samples, List<LabeledSample> rows,
@@ -482,30 +449,14 @@ class HumanDemonstrationHdf5ExportService {
 	private record LabeledSample(CandidateAnnotationSnapshot candidate, HumanAnnotationExportSegment segment) {
 	}
 
-	enum ExportVersion {
+	record ExportOptions(boolean includeRawCandidates, boolean tensorLayout) {
 
-		V1(SCHEMA_VERSION), V2(SCHEMA_VERSION_V2);
+		static final ExportOptions DEFAULT = new ExportOptions(false, true);
 
-		private final String schemaVersion;
-
-		ExportVersion(String schemaVersion) {
-			this.schemaVersion = schemaVersion;
-		}
-
-		String schemaVersion() {
-			return this.schemaVersion;
-		}
-
-	}
-
-	record ExportOptions(ExportVersion version, boolean includeRawCandidates, boolean tensorLayout) {
-
-		static final ExportOptions V1_DEFAULT = new ExportOptions(ExportVersion.V1, true, false);
-
-		static final ExportOptions V2_DEFAULT = new ExportOptions(ExportVersion.V2, false, true);
+		static final ExportOptions V2_DEFAULT = DEFAULT;
 
 		static ExportOptions v2(boolean includeRawCandidates, boolean tensorLayout) {
-			return new ExportOptions(ExportVersion.V2, includeRawCandidates, tensorLayout);
+			return new ExportOptions(includeRawCandidates, tensorLayout);
 		}
 
 	}

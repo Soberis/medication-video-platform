@@ -10,12 +10,17 @@ Format specification:
 
 from pathlib import Path
 import h5py
-import torch
-from torch.utils.data import Dataset
+
+try:
+    import torch
+    from torch.utils.data import Dataset
+except ImportError:
+    torch = None
+    Dataset = object  # type: ignore[assignment,misc]
 
 
 class HumanDemonstrationDataset(Dataset):
-    """PyTorch Dataset for human-demonstration-hdf5.v2 files."""
+    """PyTorch Dataset (or NumPy demonstration container) for human-demonstration-hdf5.v2 files."""
 
     def __init__(self, hdf5_path: str | Path):
         self.hdf5_path = str(hdf5_path)
@@ -37,11 +42,21 @@ class HumanDemonstrationDataset(Dataset):
             demo = f["data"][demo_key]
             samples = demo["samples"]
 
-            # Directly load arrays into PyTorch tensors (zero pandas/grouping needed)
-            landmarks = torch.from_numpy(samples["landmarks"][:])           # (K, 2, 21, 3) float32
-            hand_mask = torch.from_numpy(samples["hand_mask"][:])           # (K, 2) int32
-            scores = torch.from_numpy(samples["handedness_score"][:])       # (K, 2) float64
-            timestamps = torch.from_numpy(samples["frame_timestamp_ms"][:]) # (K,) int64
+            raw_landmarks = samples["landmarks"][:]
+            raw_mask = samples["hand_mask"][:]
+            raw_scores = samples["handedness_score"][:]
+            raw_timestamps = samples["frame_timestamp_ms"][:]
+
+            if torch is not None:
+                landmarks = torch.from_numpy(raw_landmarks)           # (K, 2, 21, 3) float32
+                hand_mask = torch.from_numpy(raw_mask)                # (K, 2) int32
+                scores = torch.from_numpy(raw_scores)                 # (K, 2) float64
+                timestamps = torch.from_numpy(raw_timestamps)         # (K,) int64
+            else:
+                landmarks = raw_landmarks
+                hand_mask = raw_mask
+                scores = raw_scores
+                timestamps = raw_timestamps
             labels = [
                 lbl.decode("utf-8") if isinstance(lbl, bytes) else str(lbl)
                 for lbl in samples["label"][:]

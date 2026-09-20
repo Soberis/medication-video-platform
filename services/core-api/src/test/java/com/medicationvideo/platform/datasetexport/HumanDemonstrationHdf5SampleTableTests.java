@@ -55,17 +55,20 @@ class HumanDemonstrationHdf5SampleTableTests {
 		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID));
 
 		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
 			var path = "/data/demo_000000/samples/";
-			assertEquals("columnar-table.v1",
+			assertEquals("dual-hand-tensor.v2",
 					file.getByPath("/data/demo_000000/samples").getAttribute("layout").getData());
 			assertEquals("verify_dose", ((String[]) file.getDatasetByPath(path + "label").getData())[0]);
-			assertEquals(500L, ((long[]) file.getDatasetByPath(path + "segment_start_ms").getData())[0]);
-			assertEquals(900L, ((long[]) file.getDatasetByPath(path + "segment_end_ms").getData())[0]);
 			assertEquals(520L, ((long[]) file.getDatasetByPath(path + "frame_timestamp_ms").getData())[0]);
-			var landmarks = (float[][][]) file.getDatasetByPath(path + "landmarks").getData();
+			var landmarks = (float[][][][]) file.getDatasetByPath(path + "landmarks").getData();
 			assertEquals(1, landmarks.length);
-			assertEquals(21, landmarks[0].length);
-			assertEquals(3, landmarks[0][0].length);
+			assertEquals(2, landmarks[0].length);
+			assertEquals(21, landmarks[0][0].length);
+			assertEquals(3, landmarks[0][0][0].length);
+			var handMask = (int[][]) file.getDatasetByPath(path + "hand_mask").getData();
+			assertEquals(0, handMask[0][0]);
+			assertEquals(1, handMask[0][1]);
 			var samplesGroup = file.getByPath("/data/demo_000000/samples");
 			assertEquals(MODEL_SHA, samplesGroup.getAttribute("model_sha256").getData());
 			assertFalse(samplesGroup.getAttributes().containsKey("input_sha256"));

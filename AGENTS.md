@@ -28,7 +28,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 - P0 采用一个 Java 21、Spring Boot、Spring Modulith Core API，不提前拆微服务。
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
-- Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v1` 由 Core API 校验后导出，旧 `hand-landmarks.v1` CSV 为历史格式。
+- Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v2` 由 Core API 校验后导出，旧扁平展开表与 CSV 为历史格式。
 - AI 输出只能进入 `CandidateAnnotation`；动作候选与 MediaPipe 检测事实区分存取，不得直接写成人工质量、正式标注、Review 或 Cleaning 结论。HDF5 关联当前已批准人工区间与同源、provenance 有效的主视频手部样本。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 

@@ -262,7 +262,7 @@ test('project export selects every candidate across pages without expanding the 
     }),
   )
   let downloadedIds: string[] = []
-  await page.route('**/human-demonstrations/hdf5/v1/download?**', (route) => {
+  await page.route('**/human-demonstrations/hdf5/**', (route) => {
     downloadedIds = new URL(route.request().url()).searchParams.getAll('capture_group_id')
     return route.fulfill({
       contentType: 'application/x-hdf5',

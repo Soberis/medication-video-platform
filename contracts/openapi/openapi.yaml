@@ -71,7 +71,7 @@ tags:
       the business state store; successful completion requires a lease-matched, approved Worker
       result to be validated and committed by the Core API.
 paths:
-  /projects/{project_id}/human-demonstrations/hdf5/v1/download:
+  /projects/{project_id}/human-demonstrations/hdf5/v2/download:
     get:
       operationId: downloadHumanDemonstrationHdf5
       tags:
@@ -81,8 +81,9 @@ paths:
         Returns one HDF5 episode per selected CaptureGroup with current approved human action intervals, label schema
         and revision provenance, plus each enabled camera's current MediaPipe evidence. Human labels remain bound to
         the approved primary view; MediaPipe timestamps remain source-local and are never aligned or copied across
-        cameras. The custom human-demonstration-hdf5.v1 file contains no MP4 bytes, storage addresses, patient
-        identity, robot states, robot actions, reward or success values. It is restricted to the synthetic profile.
+        cameras. The custom human-demonstration-hdf5.v2 file contains dual-hand regularized tensors for imitation learning
+        without MP4 bytes, storage addresses, patient identity, robot states, robot actions, reward or success values.
+        It is restricted to the synthetic profile.
       security:
         - sessionCookie: []
       parameters:
@@ -97,6 +98,20 @@ paths:
               type: string
               format: uuid
             minItems: 1
+        - name: include_raw_candidates
+          in: query
+          required: false
+          description: Include raw unreviewed candidate landmarks from views.
+          schema:
+            type: boolean
+            default: false
+        - name: tensor_layout
+          in: query
+          required: false
+          description: Export as dual-hand tensor (T, 2, 21, 3) layout rather than legacy tabular layout.
+          schema:
+            type: boolean
+            default: true
       responses:
         "200":
           description: Approved human demonstration HDF5; no MP4 bytes or robot-control data.
@@ -106,7 +121,7 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-                pattern: '^attachment; filename="human_demonstration_hdf5_v1_(project|event_[a-f0-9]{8}|selection)_[0-9]{8}T[0-9]{6}Z\\.hdf5"$'
+                pattern: '^attachment; filename="human_demonstration_hdf5_v2_(project|event_[a-f0-9]{8}|selection)_[0-9]{8}T[0-9]{6}Z\\.hdf5"$'
           content:
             application/x-hdf5:
               schema:

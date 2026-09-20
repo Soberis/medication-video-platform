@@ -87,17 +87,18 @@ class HumanDemonstrationHdf5ExportContractTests {
 		var revisionId = approveRevision(group, 900, "hdf5-export");
 
 		var bytes = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v1/download", PROJECT_ID)
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
+				.param("include_raw_candidates", "true")
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"human_demonstration_hdf5_v1_project_")))
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_project_")))
 			.andReturn()
 			.getResponse()
 			.getContentAsByteArray();
 		try (var file = HdfFile.fromBytes(bytes)) {
-			assertEquals("human-demonstration-hdf5.v1", file.getAttribute("schema_version").getData());
+			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
 			assertFalse(file.getChildren().containsKey("states"));
 			assertFalse(file.getChildren().containsKey("actions"));
 			var episode = file.getByPath("/data/demo_000000");
@@ -131,12 +132,12 @@ class HumanDemonstrationHdf5ExportContractTests {
 		approveRevision(second, 800, "second-selected-hdf5");
 
 		var bytes = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v1/download", PROJECT_ID)
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
 				.param("capture_group_id", second.captureGroupId().toString())
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Content-Disposition",
-					startsWith("attachment; filename=\"human_demonstration_hdf5_v1_event_")))
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_event_")))
 			.andReturn()
 			.getResponse()
 			.getContentAsByteArray();
@@ -155,7 +156,7 @@ class HumanDemonstrationHdf5ExportContractTests {
 		approveRevision(group, 900, "v2-hdf5-export");
 
 		var bytes = this.mockMvc
-			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/download", PROJECT_ID)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
