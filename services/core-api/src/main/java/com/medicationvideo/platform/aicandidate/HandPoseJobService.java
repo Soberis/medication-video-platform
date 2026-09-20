@@ -219,11 +219,11 @@ class HandPoseJobService {
 		}
 		// Keep the DB key bounded without silently colliding queue and retry
 		// namespaces when clients use the maximum-length idempotency key.
-		return prefix + HandPoseProfile.sha256(raw);
+		return prefix + AiDigests.sha256(raw);
 	}
 
 	private String fingerprint(UUID projectId, UUID clipAssetId) {
-		return HandPoseProfile.sha256(String.join("\n", projectId.toString(), clipAssetId.toString(), this.modelSha256,
+		return AiDigests.sha256(String.join("\n", projectId.toString(), clipAssetId.toString(), this.modelSha256,
 				HandPoseProfile.PROFILE_SHA256));
 	}
 

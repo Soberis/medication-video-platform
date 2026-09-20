@@ -453,8 +453,6 @@ class HumanDemonstrationHdf5ExportService {
 
 		static final ExportOptions DEFAULT = new ExportOptions(false, true);
 
-		static final ExportOptions V2_DEFAULT = DEFAULT;
-
 		static ExportOptions v2(boolean includeRawCandidates, boolean tensorLayout) {
 			return new ExportOptions(includeRawCandidates, tensorLayout);
 		}

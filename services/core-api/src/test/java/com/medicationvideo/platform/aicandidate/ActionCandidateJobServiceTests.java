@@ -162,7 +162,7 @@ class ActionCandidateJobServiceTests {
 		var original = result(messageId,
 				List.of(new ActionCandidateSegmentItem(1L, 234L, "draw_liquid", 0.8, 1, List.of())));
 		when(this.jdbcTemplate.queryForList(anyString(), eq(String.class), eq(messageId)))
-			.thenReturn(List.of(HandPoseProfile.sha256(this.objectMapper.writeValueAsString(original))));
+			.thenReturn(List.of(AiDigests.sha256(this.objectMapper.writeValueAsString(original))));
 		this.service.acceptResult(JOB_ID, 1, "token", original, "worker");
 		for (var changed : List.of(
 				result(messageId, List.of(new ActionCandidateSegmentItem(12L, 34L, "draw_liquid", 0.8, 1, List.of()))),

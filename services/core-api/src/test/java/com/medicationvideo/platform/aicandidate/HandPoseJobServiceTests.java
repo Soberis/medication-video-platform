@@ -228,7 +228,7 @@ class HandPoseJobServiceTests {
 	}
 
 	private static AiCandidateJob queuedJob(String requestedBy) {
-		var fingerprint = HandPoseProfile.sha256(String.join("\n", PROJECT_ID.toString(), CLIP_ASSET_ID.toString(),
+		var fingerprint = AiDigests.sha256(String.join("\n", PROJECT_ID.toString(), CLIP_ASSET_ID.toString(),
 				"a".repeat(64), HandPoseProfile.PROFILE_SHA256));
 		return AiCandidateJob.queue(PROJECT_ID, CLIP_ASSET_ID, "a".repeat(64), INPUT_SHA, 128, "video/mp4",
 				"existing-key-0001", fingerprint, requestedBy, Instant.EPOCH);

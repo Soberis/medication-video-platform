@@ -85,7 +85,7 @@ class HumanDemonstrationHdf5SampleTableTests {
 		var service = service(candidate(520));
 
 		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID),
-				HumanDemonstrationHdf5ExportService.ExportOptions.V2_DEFAULT);
+				HumanDemonstrationHdf5ExportService.ExportOptions.DEFAULT);
 
 		try (var file = HdfFile.fromBytes(bytes)) {
 			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
