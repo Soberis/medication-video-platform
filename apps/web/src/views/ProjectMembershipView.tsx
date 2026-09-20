@@ -16,7 +16,7 @@ import {
 import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { RefreshButton } from '@/components/RefreshButton'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 interface MembershipFields {
@@ -230,9 +230,9 @@ export default function ProjectMembershipView() {
                   title: '项目角色',
                   width: 140,
                   render: (_, row) => (
-                    <StatusBadge tone={row.role === 'ADMIN' ? 'information' : 'neutral'}>
+                    <StatusIndicator tone={row.role === 'ADMIN' ? 'information' : 'neutral'}>
                       {row.role === 'ADMIN' ? '项目管理员' : '成员'}
-                    </StatusBadge>
+                    </StatusIndicator>
                   ),
                 },
                 ...(canManageMembers

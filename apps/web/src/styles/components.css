@@ -1852,6 +1852,15 @@
   white-space: nowrap;
 }
 
+.account-role-admin {
+  font-weight: var(--app-font-weight-medium);
+  color: var(--app-color-foreground);
+}
+
+.account-role-member {
+  color: var(--app-color-foreground-secondary);
+}
+
 .label-code-tag {
   display: inline-block;
   padding: 2px 8px;

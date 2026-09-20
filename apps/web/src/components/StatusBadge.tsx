@@ -2,7 +2,6 @@ import { Tag } from 'antd'
 import type { ReactNode } from 'react'
 
 export type StatusBadgeTone = 'destructive' | 'information' | 'neutral' | 'success' | 'warning'
-export type CanonicalStatusBadgeTone = StatusBadgeTone
 
 export interface StatusBadgeProps {
   children: ReactNode

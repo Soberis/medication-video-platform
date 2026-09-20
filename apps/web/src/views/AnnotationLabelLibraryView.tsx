@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
+import { App as AntdApp, Button, Form, Input, Modal, Table } from 'antd'
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -10,7 +10,7 @@ import {
 } from '@/api/annotation'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
-import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 import { getActionStyle } from '@/features/capture-group/capture-group-detail-model'
 
 interface LabelFields {
@@ -104,7 +104,13 @@ export default function AnnotationLabelLibraryView() {
           暂时无法读取标签库，请稍后重试。
         </ErrorState>
       ) : null}
-      {schema ? (
+      {schema && schema.labels.length === 0 ? (
+        <EmptyState description="当前没有动作标签。发布新标签后，即可在标注任务中使用。">
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setIsModalOpen(true)}>
+            新增标签
+          </Button>
+        </EmptyState>
+      ) : schema ? (
         <div className="table-page-container">
           <h2 className="visually-hidden" id="label-library-table-title">
             当前标签
@@ -115,7 +121,6 @@ export default function AnnotationLabelLibraryView() {
               pagination={false}
               tableLayout="fixed"
               dataSource={schema.labels}
-              locale={{ emptyText: '暂无标签。' }}
               columns={[
                 {
                   title: '稳定标签 ID',
@@ -156,17 +161,12 @@ export default function AnnotationLabelLibraryView() {
           form.resetFields()
         }}
         footer={null}
-        destroyOnClose
-        centered
+        destroyOnHidden
         width={560}
       >
-        <p className="form-hint label-library-modal-hint">发布后不能编辑、删除或重新排序。</p>
-        <Alert
-          type="info"
-          showIcon
-          className="label-library-modal-alert"
-          message="新建标注任务会使用新规范；历史任务继续绑定已有规范。"
-        />
+        <p className="form-hint label-library-modal-hint">
+          新建标注任务会使用新规范；历史任务继续绑定已有规范。发布后不可修改或删除。
+        </p>
         <Form
           form={form}
           layout="vertical"

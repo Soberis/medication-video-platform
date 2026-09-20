@@ -11,7 +11,7 @@ import {
 } from '@/api/admin'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
-import { StatusBadge } from '@/components/StatusBadge'
+import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { EmptyState, ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
 
 interface AccountFields {
@@ -198,18 +198,18 @@ export default function AccountManagementView() {
                   title: '全局角色',
                   width: 120,
                   render: (_, row) => (
-                    <StatusBadge tone={row.role === 'ADMIN' ? 'information' : 'neutral'}>
+                    <span className={row.role === 'ADMIN' ? 'account-role-admin' : 'account-role-member'}>
                       {row.role === 'ADMIN' ? '管理员' : '成员'}
-                    </StatusBadge>
+                    </span>
                   ),
                 },
                 {
                   title: '登录状态',
                   width: 120,
                   render: (_, row) => (
-                    <StatusBadge tone={row.enabled ? 'success' : 'destructive'}>
+                    <StatusIndicator tone={row.enabled ? 'success' : 'destructive'}>
                       {row.enabled ? '启用' : '停用'}
-                    </StatusBadge>
+                    </StatusIndicator>
                   ),
                 },
                 {

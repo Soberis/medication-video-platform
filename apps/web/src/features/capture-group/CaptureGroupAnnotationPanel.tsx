@@ -33,7 +33,7 @@ import {
   type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import { recordQualityReview, type QualityReview } from '@/api/quality'
-import { StatusBadge, type CanonicalStatusBadgeTone } from '@/components/StatusBadge'
+import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
 import {
@@ -209,7 +209,7 @@ export function CaptureGroupAnnotationPanel({
   )
   const hasUnusableActionCandidates = actionCandidates.length > 0 && validCandidates.length === 0
   const aiStatus: {
-    tone: CanonicalStatusBadgeTone
+    tone: StatusBadgeTone
     label: string
     tooltip?: string
   } = actionReadFailed

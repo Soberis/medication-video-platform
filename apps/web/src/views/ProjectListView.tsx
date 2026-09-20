@@ -240,7 +240,7 @@ export default function ProjectListView() {
                   suffixIcon={<ArrowUpDown size={13} className="project-sort-icon" />}
                 />
               ) : null}
-              {projects.length > 2 || searchKeyword ? (
+              {projects.length > 1 || searchKeyword ? (
                 <Input
                   className="project-list-search"
                   placeholder="搜索项目名称…"
