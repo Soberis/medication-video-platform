@@ -3,11 +3,13 @@ package com.medicationvideo.platform.datasetexport;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
@@ -86,10 +88,13 @@ class HumanDemonstrationHdf5ExportContractTests {
 				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
 		var revisionId = approveRevision(group, 900, "hdf5-export");
 
-		var bytes = this.mockMvc
+		var mvcResult = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
 				.param("include_raw_candidates", "true")
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(request().asyncStarted())
+			.andReturn();
+		var bytes = this.mockMvc.perform(asyncDispatch(mvcResult))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(header().string("Content-Disposition",
@@ -131,10 +136,13 @@ class HumanDemonstrationHdf5ExportContractTests {
 		approveRevision(first, 800, "first-selected-hdf5");
 		approveRevision(second, 800, "second-selected-hdf5");
 
-		var bytes = this.mockMvc
+		var mvcResult = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
 				.param("capture_group_id", second.captureGroupId().toString())
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(request().asyncStarted())
+			.andReturn();
+		var bytes = this.mockMvc.perform(asyncDispatch(mvcResult))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Content-Disposition",
 					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_event_")))
@@ -155,9 +163,12 @@ class HumanDemonstrationHdf5ExportContractTests {
 				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
 		approveRevision(group, 900, "v2-hdf5-export");
 
-		var bytes = this.mockMvc
+		var mvcResult = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/download", PROJECT_ID)
 				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(request().asyncStarted())
+			.andReturn();
+		var bytes = this.mockMvc.perform(asyncDispatch(mvcResult))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(header().string("Content-Disposition",

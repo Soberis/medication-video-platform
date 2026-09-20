@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -52,7 +53,9 @@ class HumanDemonstrationHdf5SampleTableTests {
 	void alignsPrimaryVideoMediapipeSampleWithApprovedActionLabel() throws Exception {
 		var service = service(candidate(520));
 
-		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID));
+		var exportPath = service.download(PROJECT_ID, List.of(GROUP_ID));
+		var bytes = Files.readAllBytes(exportPath);
+		Files.deleteIfExists(exportPath);
 
 		try (var file = HdfFile.fromBytes(bytes)) {
 			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
@@ -84,8 +87,10 @@ class HumanDemonstrationHdf5SampleTableTests {
 	void exportsV2DualHandTensorLayoutAndPrunesRedundantColumns() throws Exception {
 		var service = service(candidate(520));
 
-		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID),
+		var exportPath = service.download(PROJECT_ID, List.of(GROUP_ID),
 				HumanDemonstrationHdf5ExportService.ExportOptions.DEFAULT);
+		var bytes = Files.readAllBytes(exportPath);
+		Files.deleteIfExists(exportPath);
 
 		try (var file = HdfFile.fromBytes(bytes)) {
 			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
@@ -129,8 +134,10 @@ class HumanDemonstrationHdf5SampleTableTests {
 	void exportsV2CompactTableLayoutWhenRequested() throws Exception {
 		var service = service(candidate(520));
 
-		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID),
+		var exportPath = service.download(PROJECT_ID, List.of(GROUP_ID),
 				HumanDemonstrationHdf5ExportService.ExportOptions.v2(false, false));
+		var bytes = Files.readAllBytes(exportPath);
+		Files.deleteIfExists(exportPath);
 
 		try (var file = HdfFile.fromBytes(bytes)) {
 			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());

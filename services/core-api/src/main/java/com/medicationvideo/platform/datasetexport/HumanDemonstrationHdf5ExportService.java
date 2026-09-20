@@ -65,12 +65,12 @@ class HumanDemonstrationHdf5ExportService {
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	byte[] download(UUID projectId, List<UUID> captureGroupIds) {
+	Path download(UUID projectId, List<UUID> captureGroupIds) {
 		return download(projectId, captureGroupIds, ExportOptions.DEFAULT);
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	byte[] download(UUID projectId, List<UUID> captureGroupIds, ExportOptions options) {
+	Path download(UUID projectId, List<UUID> captureGroupIds, ExportOptions options) {
 		requireSyntheticProfile();
 		var selectedIds = captureGroupIds == null ? List.<UUID>of() : captureGroupIds.stream().distinct().toList();
 		var segments = this.approvedHumanAnnotationQueryService.findApprovedSegments(projectId, selectedIds);
@@ -104,21 +104,17 @@ class HumanDemonstrationHdf5ExportService {
 							segmentsByGroup.get(groups.get(index).captureGroupId()), projectId, options);
 				}
 			}
-			return Files.readAllBytes(output);
+			return output;
 		}
 		catch (IOException exception) {
-			throw new TrainingDataExportException("HDF5_EXPORT_FAILED", "The HDF5 export could not be created.", 500);
-		}
-		finally {
 			if (output != null) {
 				try {
 					Files.deleteIfExists(output);
 				}
 				catch (IOException ignored) {
-					// Temporary output contains only the already authorized synthetic
-					// export snapshot.
 				}
 			}
+			throw new TrainingDataExportException("HDF5_EXPORT_FAILED", "The HDF5 export could not be created.", 500);
 		}
 	}
 
