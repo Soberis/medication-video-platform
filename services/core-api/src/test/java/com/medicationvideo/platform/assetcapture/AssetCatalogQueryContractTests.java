@@ -124,7 +124,7 @@ class AssetCatalogQueryContractTests {
 			this.actionJobs.queueAutomatically(input.projectId(), input.clipAssetId());
 		}
 		assertEquals(2, this.jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM ai_job WHERE algorithm_key = 'QWEN3_VL_ACTION' AND annotation_task_id IS NULL AND label_schema_id IS NOT NULL",
+				"SELECT count(*) FROM ai_job WHERE algorithm_key = 'QWEN3_5_ACTION' AND annotation_task_id IS NULL AND label_schema_id IS NOT NULL",
 				Integer.class));
 		assertEquals(2, this.jdbcTemplate.queryForObject("SELECT count(*) FROM ai_job_attempt", Integer.class));
 		assertEquals(2, this.jdbcTemplate

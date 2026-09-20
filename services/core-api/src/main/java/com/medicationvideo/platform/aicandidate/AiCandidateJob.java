@@ -20,10 +20,8 @@ import jakarta.persistence.Version;
 @Table(name = "ai_job")
 class AiCandidateJob {
 
-	/** Algorithm key of the Qwen3-VL action pre-annotation job family. */
-	static final String ACTION_ALGORITHM_KEY = "QWEN3_VL_ACTION";
-
-	static final String ACTION_MODEL_NAME = "Qwen3.5-4B";
+	/** Algorithm key of the Qwen3.5 action pre-annotation job family. */
+	static final String ACTION_ALGORITHM_KEY = "QWEN3_5_ACTION";
 
 	static final String ACTION_MODEL_SHA256 = AiDigests.sha256("Qwen3.5-4B");
 

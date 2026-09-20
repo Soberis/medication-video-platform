@@ -150,7 +150,7 @@ class ActionJob:
     sampling_fps: int
     profile_sha256: str
     allowed_labels: tuple[str, ...]
-    algorithm_key: str = "QWEN3_VL_ACTION"
+    algorithm_key: str = "QWEN3_5_ACTION"
     algorithm_version: str = "v1"
 
     @classmethod
@@ -163,7 +163,7 @@ class ActionJob:
             raise ContractError("Broker body fields do not match ai-action-job.v1")
         if (
             value.get("schema_version") != "ai-action-job.v1"
-            or value.get("algorithm_key") != "QWEN3_VL_ACTION"
+            or value.get("algorithm_key") != "QWEN3_5_ACTION"
             or value.get("algorithm_version") != "v1"
         ):
             raise ContractError("Unsupported AI action job profile")

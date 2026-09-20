@@ -66,7 +66,7 @@ class AiHandPoseResultContractTests {
 		var schemaId = UUID.randomUUID();
 		var groupId = UUID.randomUUID();
 		this.jdbcTemplate.update("""
-				UPDATE ai_job SET algorithm_key = 'QWEN3_VL_ACTION', annotation_task_id = ?,
+				UPDATE ai_job SET algorithm_key = 'QWEN3_5_ACTION', annotation_task_id = ?,
 				label_schema_id = ?, label_schema_digest = ?, allowed_labels = '["draw_liquid"]'::jsonb
 				WHERE ai_job_id = ?
 				""", taskId, schemaId, "c".repeat(64), jobId);

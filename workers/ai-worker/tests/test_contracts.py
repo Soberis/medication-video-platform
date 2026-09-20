@@ -69,11 +69,11 @@ def _action_payload() -> dict[str, object]:
         "input_sha256": "c" * 64,
         "input_size_bytes": 2048,
         "content_type": "video/mp4",
-        "algorithm_key": "QWEN3_VL_ACTION",
+        "algorithm_key": "QWEN3_5_ACTION",
         "algorithm_version": "v1",
-        "model_sha256": "qwen3-vl-8b-bf16",
+        "model_sha256": "qwen3-5-4b-bf16",
         "sampling_fps": 1,
-        "profile_sha256": "qwen3-vl-8b-bf16",
+        "profile_sha256": "qwen3-5-4b-bf16",
         "requested_at": "2026-09-10T00:00:00Z",
     }
 
@@ -83,7 +83,7 @@ def test_action_job_contract_parses_valid_payload() -> None:
 
     raw = json.dumps(_action_payload()).encode()
     job = ActionJob.from_bytes(raw)
-    assert job.algorithm_key == "QWEN3_VL_ACTION"
+    assert job.algorithm_key == "QWEN3_5_ACTION"
     assert job.allowed_labels == ("acquire_item", "draw_liquid", "transfer_liquid")
     assert job.sampling_fps == 1
 
@@ -139,7 +139,7 @@ def test_action_job_schema_matches_the_worker_field_contract() -> None:
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == set(schema["properties"]) == set(ACTION_FIELDS)
     assert schema["properties"]["schema_version"]["const"] == "ai-action-job.v1"
-    assert schema["properties"]["algorithm_key"]["const"] == "QWEN3_VL_ACTION"
+    assert schema["properties"]["algorithm_key"]["const"] == "QWEN3_5_ACTION"
 
 
 def test_action_job_example_matches_the_declared_schema_fields() -> None:

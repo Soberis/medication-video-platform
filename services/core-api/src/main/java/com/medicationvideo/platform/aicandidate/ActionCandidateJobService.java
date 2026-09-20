@@ -189,7 +189,7 @@ public class ActionCandidateJobService {
 				 WHERE c.project_id = ? AND c.capture_group_id = ? AND c.clip_asset_id = ?
 				   AND c.ai_job_id = (SELECT j.ai_job_id FROM ai_job j
 				                       WHERE j.project_id = c.project_id AND j.clip_asset_id = c.clip_asset_id
-				                         AND j.algorithm_key = 'QWEN3_VL_ACTION'
+				                         AND j.algorithm_key = 'QWEN3_5_ACTION'
 				                       ORDER BY j.created_at DESC, j.ai_job_id DESC LIMIT 1)
 				   AND EXISTS (SELECT 1 FROM ai_job j WHERE j.ai_job_id = c.ai_job_id AND j.status = 'SUCCEEDED')
 				 ORDER BY start_ms ASC, end_ms ASC

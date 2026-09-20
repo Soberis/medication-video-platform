@@ -74,7 +74,7 @@ class ActionCandidateJobServiceTests {
 	void throwsWhenJobNotFound() {
 		when(this.jobRepository.findForUpdate(JOB_ID)).thenReturn(Optional.empty());
 
-		var request = new ActionCandidateResultRequest(UUID.randomUUID(), "qwen3-vl-8b", "v1", 1, 19000L, 5000L,
+		var request = new ActionCandidateResultRequest(UUID.randomUUID(), "qwen3-5-4b", "v1", 1, 19000L, 5000L,
 				Instant.now(), Instant.now(), List.of());
 
 		var exception = assertThrows(HandPoseJobException.class,
@@ -299,7 +299,7 @@ class ActionCandidateJobServiceTests {
 
 	private static ActionCandidateResultRequest result(UUID messageId, List<ActionCandidateSegmentItem> segments) {
 		var time = Instant.parse("2026-09-10T00:00:00Z");
-		return new ActionCandidateResultRequest(messageId, "qwen3-vl-8b", "v1", 1, 19000L, 5000L, time, time, segments);
+		return new ActionCandidateResultRequest(messageId, "qwen3-5-4b", "v1", 1, 19000L, 5000L, time, time, segments);
 	}
 
 	@Test

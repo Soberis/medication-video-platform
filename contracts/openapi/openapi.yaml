@@ -3546,7 +3546,7 @@ paths:
       tags: [AI Candidates]
       summary: Receive a result for an existing Qwen action attempt
       description: >-
-        Requires QWEN3_VL_ACTION, the leased worker, matching lease and attempt message ID.
+        Requires QWEN3_5_ACTION, the leased worker, matching lease and attempt message ID.
         Exact receipt replay is idempotent; changed payload returns 409. This endpoint does
         not create or dispatch Qwen jobs. Validates labels against the job's frozen schema snapshot;
         a human task may be absent. Accepted results remain machine candidates only.

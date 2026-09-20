@@ -47,7 +47,7 @@ MediaPipe 与 Qwen 互补、独立执行，共用视频身份和时间基准。�
 | Qwen 视频理解 | 根据画面和任务标签定义提出动作及时间段候选 | 毫秒级准确边界、可靠真实置信度、自动批准结果 |
 | 人工修订及复核 | 核对可观察行为和边界，形成正式版本 | 不能补造被遮挡的手部轨迹或未拍摄到的动作 |
 
-Google 文档区分检测、手存在判断和跟踪阈值，并支持视频时间戳；这说明检测失败与语义上的“无动作”应分开。见 [MediaPipe 官方指南](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)。Qwen 的时间戳视频能力是候选生成依据，不是本业务准确率证据，见 [Qwen3-VL 官方仓库](https://github.com/QwenLM/Qwen3-VL)。
+Google 文档区分检测、手存在判断和跟踪阈值，并支持视频时间戳；这说明检测失败与语义上的“无动作”应分开。见 [MediaPipe 官方指南](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)。Qwen 的时间戳视频能力是候选生成依据，不是本业务准确率证据，见 [Qwen3.5 官方仓库](https://github.com/QwenLM)。
 
 建议默认保留以下区别：
 

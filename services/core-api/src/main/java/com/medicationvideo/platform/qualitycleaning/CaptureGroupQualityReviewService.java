@@ -24,7 +24,6 @@ import com.medicationvideo.platform.governance.AuditEventCommand;
 import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
-import com.medicationvideo.platform.iamproject.ProjectRole;
 
 @Service
 class CaptureGroupQualityReviewService {

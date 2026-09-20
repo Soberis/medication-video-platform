@@ -570,9 +570,4 @@ class CaptureGroupAnnotationWorkflow {
 				"The annotation task was not found in the current project.", 404);
 	}
 
-	private static AnnotationTaskException revisionNotFound() {
-		return new AnnotationTaskException("ANNOTATION_REVISION_NOT_FOUND",
-				"The annotation revision was not found in the current project.", 404);
-	}
-
 }

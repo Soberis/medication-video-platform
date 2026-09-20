@@ -21,7 +21,7 @@
     "input_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "input_size_bytes": { "type": "integer", "minimum": 1 },
     "content_type": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$" },
-    "algorithm_key": { "const": "QWEN3_VL_ACTION" },
+    "algorithm_key": { "const": "QWEN3_5_ACTION" },
     "algorithm_version": { "const": "v1" },
     "model_sha256": { "type": "string", "minLength": 1 },
     "sampling_fps": { "type": "integer", "minimum": 1 },

@@ -93,7 +93,7 @@ class ActionJobEnvelopeFactoryTests {
 		var envelope = this.factory.create(job, CAPTURE_GROUP_ID, 2, MESSAGE_ID, "L".repeat(43), REQUESTED_AT);
 
 		assertEquals("ai-action-job.v1", envelope.schemaVersion());
-		assertEquals("QWEN3_VL_ACTION", envelope.algorithmKey());
+		assertEquals("QWEN3_5_ACTION", envelope.algorithmKey());
 		assertEquals("v1", envelope.algorithmVersion());
 		assertEquals(1, envelope.samplingFps());
 		assertEquals(AiCandidateJob.ACTION_PROFILE_SHA256, envelope.profileSha256());
