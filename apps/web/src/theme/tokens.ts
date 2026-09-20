@@ -20,7 +20,6 @@ const typographyScaleTokens = {
     semibold: 600,
   },
   lineHeight: {
-    single: 1,
     heading: 1.2,
     metric: 1.25,
     compact: 1.35,
@@ -108,7 +107,6 @@ export const appTokens = {
     sidebarBorder: '#E5E7EB',
     sidebarHover: '#ECEFF3',
     sidebarSelected: '#E8EEF6',
-    sidebarAccent: '#315E9B',
   },
   spacing: {
     4: 4,
@@ -131,7 +129,6 @@ export const appTokens = {
     large: 36,
     input: 32,
     select: 32,
-    icon: 28,
   },
   layout: {
     sidebar: 224,

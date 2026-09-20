@@ -47,6 +47,9 @@ export const appTheme: ThemeConfig = {
     Table: {
       headerSplitColor: 'transparent',
     },
+    Pagination: {
+      itemSizeSM: appTokens.control.compact,
+    },
   },
 }
 
@@ -87,7 +90,6 @@ const cssTokenBridge = {
   '--app-color-sidebar-border': appTokens.color.sidebarBorder,
   '--app-color-sidebar-hover': appTokens.color.sidebarHover,
   '--app-color-sidebar-selected': appTokens.color.sidebarSelected,
-  '--app-color-sidebar-accent': appTokens.color.sidebarAccent,
   '--app-space-4': `${appTokens.spacing[4]}px`,
   '--app-space-8': `${appTokens.spacing[8]}px`,
   '--app-space-12': `${appTokens.spacing[12]}px`,
@@ -118,7 +120,6 @@ const cssTokenBridge = {
   '--app-font-weight-section-title': `${appTokens.typography.semantic.sectionTitle.weight}`,
   '--app-font-weight-label': `${appTokens.typography.semantic.label.weight}`,
   '--app-font-weight-caption': `${appTokens.typography.semantic.caption.weight}`,
-  '--app-line-height-single': `${appTokens.typography.lineHeight.single}`,
   '--app-line-height-heading': `${appTokens.typography.lineHeight.heading}`,
   '--app-line-height-metric': `${appTokens.typography.lineHeight.metric}`,
   '--app-line-height-compact': `${appTokens.typography.lineHeight.compact}`,
@@ -133,7 +134,6 @@ const cssTokenBridge = {
   '--app-line-height-caption': `${appTokens.typography.semantic.caption.lineHeight}`,
   '--app-control-height-compact': `${appTokens.control.compact}px`,
   '--app-control-height': `${appTokens.control.standard}px`,
-  '--app-control-height-icon': `${appTokens.control.icon}px`,
   '--app-sidebar-width': `${appTokens.layout.sidebar}px`,
   '--app-sidebar-collapsed-width': `${appTokens.layout.sidebarCollapsed}px`,
   '--app-workspace-max-width': `${appTokens.layout.workspaceMax}px`,
