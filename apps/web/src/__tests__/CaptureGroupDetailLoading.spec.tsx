@@ -1,4 +1,4 @@
-﻿import { App as AntdApp, ConfigProvider } from 'antd'
+import { App as AntdApp, ConfigProvider } from 'antd'
 import { act, renderHook, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -264,6 +264,72 @@ describe('CaptureGroup detail loading', () => {
         String(input).includes(`/capture-groups/${groupA.capture_group_id}/quality-review`),
       ),
     ).toBe(false)
+  })
+
+  it('automatically polls capture group while receipt_state is RECEIVING and stops once completed', async () => {
+    vi.useFakeTimers()
+    const receivingGroup = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1],
+      receipt: 'RECEIVING',
+    })
+    const completedGroup = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+
+    let getCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.endsWith(`/capture-groups/${groupId}`)) {
+          getCount += 1
+          return Promise.resolve(jsonResponse(getCount >= 3 ? completedGroup : receivingGroup))
+        }
+        if (url.endsWith('/annotation-tasks')) {
+          return Promise.resolve(jsonResponse(taskList([])))
+        }
+        if (url.endsWith('/quality-review')) {
+          return Promise.resolve(jsonResponse(qualityFixture(receivingGroup, 'UNREVIEWED')))
+        }
+        if (url.endsWith('/quality-review-history')) {
+          return Promise.resolve(jsonResponse({ history: [] }))
+        }
+        if (url.endsWith('/annotation-label-schema')) {
+          return Promise.resolve(jsonResponse(labelSchema))
+        }
+        return Promise.reject(new Error(`Unhandled fetch: ${url}`))
+      }),
+    )
+
+    const { result } = renderDetailHook(projectId, groupId)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(result.current.group?.receipt_state).toBe('RECEIVING')
+    expect(getCount).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(getCount).toBe(2)
+    expect(result.current.group?.receipt_state).toBe('RECEIVING')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(getCount).toBe(3)
+    expect(result.current.group?.receipt_state).toBe('COMPLETE')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000)
+    })
+    expect(getCount).toBe(3)
+
+    vi.useRealTimers()
   })
 })
 

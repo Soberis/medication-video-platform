@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -454,6 +454,62 @@ describe('capture group list view', () => {
 
     await user.click(switcherButton)
     expect(await screen.findByText('全部项目')).toBeInTheDocument()
+  })
+
+  it('silently polls capture groups on page 1 without disrupting the user', async () => {
+    vi.useFakeTimers()
+    const group1 = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'group-one',
+    })
+    const group2 = captureGroupFixture('60000000-0000-4000-8000-000000000002', {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+      key: 'group-two',
+    })
+
+    let fetchCount = 0
+    stubGroupList([group1], [])
+    const baseFetch = globalThis.fetch
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const path = new URL(url, 'http://localhost').pathname
+        if (path === `/api/v1/projects/${projectId}/capture-groups`) {
+          fetchCount += 1
+          return Promise.resolve(
+            jsonResponse({
+              items:
+                fetchCount >= 2
+                  ? [summaryFromGroup(group2), summaryFromGroup(group1)]
+                  : [summaryFromGroup(group1)],
+              next_cursor: null,
+            }),
+          )
+        }
+        return baseFetch(input, init)
+      }),
+    )
+
+    renderView()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10)
+    })
+    expect(screen.getByText('group-one')).toBeInTheDocument()
+    expect(fetchCount).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000)
+    })
+    expect(fetchCount).toBe(2)
+    expect(screen.getByText('group-two')).toBeInTheDocument()
+
+    vi.useRealTimers()
   })
 })
 

@@ -24,6 +24,8 @@ import { ExportDataMenu } from '@/features/capture-group/ExportDataMenu'
 import { CopyableText } from '@/components/data/CopyableText'
 import { formatTaskStatus } from '@/features/capture-group/capture-group-detail-model'
 
+export const CAPTURE_GROUP_LIST_POLL_INTERVAL_MS = 20_000
+
 type CaptureGroupListLoadingMode = 'initial' | 'refresh' | 'more' | null
 
 type AnnotationTaskReadState =
@@ -103,7 +105,7 @@ export default function CaptureGroupListView() {
   }, [filteredRows, currentPage, pageSize])
 
   const loadGroups = useCallback(
-    async (append = false, cursor: string | null = null) => {
+    async (append = false, cursor: string | null = null, silent = false) => {
       groupRequest.current?.controller.abort()
       const request: RequestToken = {
         controller: new AbortController(),
@@ -114,7 +116,9 @@ export default function CaptureGroupListView() {
       const requestMode: CaptureGroupListLoadingMode = append
         ? 'more'
         : rowsRef.current.length
-          ? 'refresh'
+          ? silent
+            ? null
+            : 'refresh'
           : 'initial'
       if (requestMode === 'initial') {
         setRows([])
@@ -124,9 +128,11 @@ export default function CaptureGroupListView() {
         setCurrentPage(1)
       }
       setLoadingMode(requestMode)
-      setLoadState('loading')
-      setErrorCode('')
-      setErrorMessage('')
+      if (!silent) {
+        setLoadState('loading')
+        setErrorCode('')
+        setErrorMessage('')
+      }
       try {
         const groupList = await listCaptureGroups(projectId, cursor, request.controller.signal)
         if (
@@ -158,13 +164,15 @@ export default function CaptureGroupListView() {
         ) {
           return
         }
-        setLoadState('error')
-        setErrorCode(
-          error instanceof CaptureGroupApiError
-            ? error.errorCode
-            : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
-        )
-        setErrorMessage('暂时无法读取采集记录，请稍后重试。')
+        if (!silent) {
+          setLoadState('error')
+          setErrorCode(
+            error instanceof CaptureGroupApiError
+              ? error.errorCode
+              : 'CAPTURE_GROUP_LIST_REQUEST_FAILED',
+          )
+          setErrorMessage('暂时无法读取采集记录，请稍后重试。')
+        }
       } finally {
         if (groupRequest.current === request) {
           groupRequest.current = null
@@ -175,43 +183,50 @@ export default function CaptureGroupListView() {
     [projectId],
   )
 
-  const loadTasks = useCallback(async () => {
-    taskRequest.current?.controller.abort()
-    const request: RequestToken = {
-      controller: new AbortController(),
-      generation: taskGeneration.current + 1,
-    }
-    taskGeneration.current = request.generation
-    taskRequest.current = request
-    setTaskReadState({ status: 'loading' })
+  const loadTasks = useCallback(
+    async (silent = false) => {
+      taskRequest.current?.controller.abort()
+      const request: RequestToken = {
+        controller: new AbortController(),
+        generation: taskGeneration.current + 1,
+      }
+      taskGeneration.current = request.generation
+      taskRequest.current = request
+      if (!silent) {
+        setTaskReadState({ status: 'loading' })
+      }
 
-    try {
-      const taskList = await listAnnotationTasks(projectId, request.controller.signal)
-      if (
-        request.controller.signal.aborted ||
-        taskRequest.current !== request ||
-        taskGeneration.current !== request.generation
-      ) {
-        return
+      try {
+        const taskList = await listAnnotationTasks(projectId, request.controller.signal)
+        if (
+          request.controller.signal.aborted ||
+          taskRequest.current !== request ||
+          taskGeneration.current !== request.generation
+        ) {
+          return
+        }
+        setTaskReadState({
+          status: 'success',
+          scope: taskList.progress.scope,
+          items: taskList.items,
+        })
+      } catch {
+        if (
+          request.controller.signal.aborted ||
+          taskRequest.current !== request ||
+          taskGeneration.current !== request.generation
+        ) {
+          return
+        }
+        if (!silent) {
+          setTaskReadState({ status: 'error' })
+        }
+      } finally {
+        if (taskRequest.current === request) taskRequest.current = null
       }
-      setTaskReadState({
-        status: 'success',
-        scope: taskList.progress.scope,
-        items: taskList.items,
-      })
-    } catch {
-      if (
-        request.controller.signal.aborted ||
-        taskRequest.current !== request ||
-        taskGeneration.current !== request.generation
-      ) {
-        return
-      }
-      setTaskReadState({ status: 'error' })
-    } finally {
-      if (taskRequest.current === request) taskRequest.current = null
-    }
-  }, [projectId])
+    },
+    [projectId],
+  )
 
   useEffect(() => {
     const request = new AbortController()
@@ -245,6 +260,52 @@ export default function CaptureGroupListView() {
       rowsRef.current = []
     }
   }, [loadGroups, loadTasks, projectId, restoredList])
+
+  useEffect(() => {
+    if (
+      activeView !== 'all' ||
+      currentPage !== 1 ||
+      searchQuery.trim() !== '' ||
+      loadState !== 'success'
+    ) {
+      return undefined
+    }
+
+    let isDisposed = false
+    let timer: number | null = null
+
+    const scheduleNext = () => {
+      if (isDisposed) return
+      timer = window.setTimeout(async () => {
+        timer = null
+        if (isDisposed) return
+        if (!document.hidden) {
+          await Promise.all([loadGroups(false, null, true), loadTasks(true)])
+        }
+        if (!isDisposed) {
+          scheduleNext()
+        }
+      }, CAPTURE_GROUP_LIST_POLL_INTERVAL_MS)
+    }
+
+    scheduleNext()
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void Promise.all([loadGroups(false, null, true), loadTasks(true)])
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isDisposed = true
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [activeView, currentPage, loadGroups, loadState, loadTasks, searchQuery])
 
   const openCaptureGroup = useCallback(
     (targetGroupId: string) => {

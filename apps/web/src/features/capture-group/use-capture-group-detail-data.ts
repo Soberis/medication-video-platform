@@ -28,6 +28,8 @@ export interface CaptureGroupDetailRefreshOptions {
   focusNextPendingView?: boolean
 }
 
+export const RECEIPT_POLL_INTERVAL_MS = 5_000
+
 export function useCaptureGroupDetailData(projectId: string, captureGroupId: string) {
   const { message } = AntdApp.useApp()
   const [group, setGroup] = useState<CaptureGroup | null>(null)
@@ -272,6 +274,45 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       humanRequest.current = null
     }
   }, [refresh])
+
+  useEffect(() => {
+    if (group?.receipt_state !== 'RECEIVING') return undefined
+
+    let isDisposed = false
+    let timer: number | null = null
+
+    const scheduleNext = () => {
+      if (isDisposed) return
+      timer = window.setTimeout(async () => {
+        timer = null
+        if (isDisposed) return
+        if (!document.hidden) {
+          await refresh()
+        }
+        if (!isDisposed && group?.receipt_state === 'RECEIVING') {
+          scheduleNext()
+        }
+      }, RECEIPT_POLL_INTERVAL_MS)
+    }
+
+    scheduleNext()
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && group?.receipt_state === 'RECEIVING') {
+        void refresh()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isDisposed = true
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [group?.receipt_state, refresh])
 
   const finalizeReceipt = useCallback(async () => {
     if (!group || group.receipt_state !== 'RECEIVING' || isFinalizingReceipt) return false

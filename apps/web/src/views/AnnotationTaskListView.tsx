@@ -21,6 +21,8 @@ import {
   captureGroupTaskDestination,
 } from '@/features/capture-group-presentation'
 
+export const ANNOTATION_TASK_LIST_POLL_INTERVAL_MS = 20_000
+
 function taskNoActionLabel(task: AnnotationTask, viewerUsername: string | undefined) {
   if (task.status === 'COMPLETED') return '当前无需操作'
   if (task.status === 'SUBMITTED') {
@@ -90,37 +92,44 @@ export default function AnnotationTaskListView({
   const [errorMessage, setErrorMessage] = useState('')
   const activeRequest = useRef<AbortController | null>(null)
 
-  const loadTasks = useCallback(async () => {
-    activeRequest.current?.abort()
-    const request = new AbortController()
-    activeRequest.current = request
-    setLoadState('loading')
-    setProgress(null)
-    setErrorCode('')
-    setErrorMessage('')
-    try {
-      const taskList = await listAnnotationTasks(projectId, request.signal)
-      if (activeRequest.current !== request) return
-      setItems(taskList.items)
-      setProgress(taskList.progress)
-      setLoadState('success')
-    } catch (error) {
-      if (request.signal.aborted || activeRequest.current !== request) return
-      setLoadState('error')
-      setErrorCode(
-        error instanceof AnnotationTaskApiError
-          ? error.errorCode
-          : 'ANNOTATION_TASK_REQUEST_FAILED',
-      )
-      setErrorMessage(
-        error instanceof AnnotationTaskApiError
-          ? error.message
-          : '暂时无法读取标注任务，请稍后重试。',
-      )
-    } finally {
-      if (activeRequest.current === request) activeRequest.current = null
-    }
-  }, [projectId])
+  const loadTasks = useCallback(
+    async (silent = false) => {
+      activeRequest.current?.abort()
+      const request = new AbortController()
+      activeRequest.current = request
+      if (!silent) {
+        setLoadState('loading')
+        setProgress(null)
+        setErrorCode('')
+        setErrorMessage('')
+      }
+      try {
+        const taskList = await listAnnotationTasks(projectId, request.signal)
+        if (activeRequest.current !== request) return
+        setItems(taskList.items)
+        setProgress(taskList.progress)
+        setLoadState('success')
+      } catch (error) {
+        if (request.signal.aborted || activeRequest.current !== request) return
+        if (!silent) {
+          setLoadState('error')
+          setErrorCode(
+            error instanceof AnnotationTaskApiError
+              ? error.errorCode
+              : 'ANNOTATION_TASK_REQUEST_FAILED',
+          )
+          setErrorMessage(
+            error instanceof AnnotationTaskApiError
+              ? error.message
+              : '暂时无法读取标注任务，请稍后重试。',
+          )
+        }
+      } finally {
+        if (activeRequest.current === request) activeRequest.current = null
+      }
+    },
+    [projectId],
+  )
   useEffect(() => {
     const timer = window.setTimeout(() => void loadTasks(), 0)
     return () => {
@@ -128,6 +137,47 @@ export default function AnnotationTaskListView({
       activeRequest.current?.abort()
     }
   }, [loadTasks])
+
+  useEffect(() => {
+    if (searchQuery.trim() !== '' || loadState !== 'success') {
+      return undefined
+    }
+
+    let isDisposed = false
+    let timer: number | null = null
+
+    const scheduleNext = () => {
+      if (isDisposed) return
+      timer = window.setTimeout(async () => {
+        timer = null
+        if (isDisposed) return
+        if (!document.hidden) {
+          await loadTasks(true)
+        }
+        if (!isDisposed) {
+          scheduleNext()
+        }
+      }, ANNOTATION_TASK_LIST_POLL_INTERVAL_MS)
+    }
+
+    scheduleNext()
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadTasks(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isDisposed = true
+      if (timer !== null) {
+        window.clearTimeout(timer)
+        timer = null
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [loadState, loadTasks, searchQuery])
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const visibleItems = items.filter((task) => {

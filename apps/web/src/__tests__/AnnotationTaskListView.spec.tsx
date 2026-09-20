@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -586,6 +586,70 @@ describe('annotation task list view', () => {
     renderView()
     expect(await screen.findByText('ANNOTATION_TASK_NOT_FOUND')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('silently polls annotation tasks without disrupting the table', async () => {
+    vi.useFakeTimers()
+    const taskA = {
+      annotation_task_id: taskId,
+      capture_group_id: captureGroupId,
+      status: 'ASSIGNED',
+      stage: 'PRIMARY_ANNOTATION',
+      priority: 100,
+      assignee_actor_id: 'annotator-1',
+      annotation_revision: null,
+      created_at: '2026-07-26T00:00:00Z',
+      can_submit: true,
+      can_select_primary: true,
+      can_review: false,
+    }
+    const taskB = {
+      annotation_task_id: 'a0000000-0000-4000-8000-000000000002',
+      capture_group_id: '60000000-0000-4000-8000-000000000002',
+      status: 'ASSIGNED',
+      stage: 'PRIMARY_ANNOTATION',
+      priority: 90,
+      assignee_actor_id: 'annotator-2',
+      annotation_revision: null,
+      created_at: '2026-07-26T00:01:00Z',
+      can_submit: true,
+      can_select_primary: true,
+      can_review: false,
+    }
+
+    let fetchCount = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.endsWith('/annotation-tasks')) {
+          fetchCount += 1
+          return Promise.resolve(jsonResponse(taskList(fetchCount >= 2 ? [taskA, taskB] : [taskA])))
+        }
+        if (url.endsWith('/annotation-label-schema')) {
+          return Promise.resolve(jsonResponse(labelSchema))
+        }
+        return Promise.reject(new Error(`Unhandled fetch: ${url}`))
+      }),
+    )
+
+    renderView()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10)
+    })
+    expect(fetchCount).toBe(1)
+    expect(screen.getByText(/60000000…0001/)).toBeInTheDocument()
+
+    // Advance 20s
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000)
+    })
+    expect(fetchCount).toBe(2)
+    expect(screen.getByText(/60000000…0002/)).toBeInTheDocument()
+    expect(screen.getByText(/2\s+个任务/)).toBeInTheDocument()
+
+    vi.useRealTimers()
   })
 })
 
