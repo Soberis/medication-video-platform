@@ -430,6 +430,58 @@ describe('App', () => {
     expect(router.state.location.pathname).toBe(`/projects/${project.project_id}/capture-groups`)
   })
 
+  it('supports sorting projects by newest, oldest, and name order', async () => {
+    const projectB = {
+      project_id: '30000000-0000-4000-8000-000000000002',
+      display_name: 'B 项目',
+      status: 'ACTIVE' as const,
+      current_role: 'ADMIN' as const,
+      created_at: '2026-09-16T10:00:00Z',
+    }
+    const projectA = {
+      project_id: '30000000-0000-4000-8000-000000000001',
+      display_name: 'A 项目',
+      status: 'ACTIVE' as const,
+      current_role: 'ADMIN' as const,
+      created_at: '2026-09-18T10:00:00Z',
+    }
+    const projectC = {
+      project_id: '30000000-0000-4000-8000-000000000003',
+      display_name: 'C 项目',
+      status: 'ACTIVE' as const,
+      current_role: 'ADMIN' as const,
+      created_at: '2026-09-17T10:00:00Z',
+    }
+    vi.stubGlobal('fetch', projectListFetch([projectB, projectA, projectC], false))
+    const user = userEvent.setup()
+    renderRoute(<ProjectListView />, { route: '/projects', path: '/projects' })
+
+    expect(await screen.findByText('A 项目')).toBeInTheDocument()
+
+    const getCardTitles = () =>
+      screen
+        .getAllByRole('button', { name: /^打开项目：/ })
+        .map((el) => el.getAttribute('aria-label'))
+
+    // Default: 'created_desc' (A: 09-18, C: 09-17, B: 09-16)
+    expect(getCardTitles()).toEqual(['打开项目：A 项目', '打开项目：C 项目', '打开项目：B 项目'])
+
+    // Switch to name_asc (A, B, C)
+    const sortSelect = screen.getByRole('combobox', { name: '项目排序' })
+    await user.click(sortSelect)
+    const nameAscOption = await screen.findByTitle('名称 A → Z')
+    await user.click(nameAscOption)
+
+    expect(getCardTitles()).toEqual(['打开项目：A 项目', '打开项目：B 项目', '打开项目：C 项目'])
+
+    // Switch to created_asc (B: 09-16, C: 09-17, A: 09-18)
+    await user.click(sortSelect)
+    const createdAscOption = await screen.findByTitle('最早创建')
+    await user.click(createdAscOption)
+
+    expect(getCardTitles()).toEqual(['打开项目：B 项目', '打开项目：C 项目', '打开项目：A 项目'])
+  })
+
   it('returns to login after logout succeeds', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
     const user = userEvent.setup()

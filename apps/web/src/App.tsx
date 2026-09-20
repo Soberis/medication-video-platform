@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { Link, matchPath, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router'
 
 import { useAuth } from '@/app/auth'
+import { documentTitleFor } from '@/app/document-title'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
@@ -68,6 +69,10 @@ export default function AppShell() {
   const { projectId = '' } = useParams()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const isAdministrator = auth.session?.role === 'ADMIN'
+
+  useEffect(() => {
+    document.title = documentTitleFor(location.pathname)
+  }, [location.pathname])
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     try {
