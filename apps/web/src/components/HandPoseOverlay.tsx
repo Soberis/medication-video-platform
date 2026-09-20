@@ -40,25 +40,66 @@ function isFinitePoint(
   return point !== undefined && Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 
-function currentFrame(candidates: HandPoseCandidate[], playbackTimeMs: number) {
-  const frames = new Map<number, HandPoseCandidate[]>()
+interface IndexedFrame {
+  timestampMs: number
+  candidates: HandPoseCandidate[]
+}
+
+function buildIndexedFrames(candidates: HandPoseCandidate[]): IndexedFrame[] {
+  if (!candidates.length) return []
+  const map = new Map<number, HandPoseCandidate[]>()
   for (const candidate of candidates) {
-    const frame = frames.get(candidate.frame_timestamp_ms) ?? []
-    frame.push(candidate)
-    frames.set(candidate.frame_timestamp_ms, frame)
-  }
-  let nearestTimestamp: number | null = null
-  let nearestDistance = Number.POSITIVE_INFINITY
-  for (const timestamp of frames.keys()) {
-    const distance = Math.abs(timestamp - playbackTimeMs)
-    if (distance < nearestDistance) {
-      nearestTimestamp = timestamp
-      nearestDistance = distance
+    const list = map.get(candidate.frame_timestamp_ms)
+    if (list) {
+      list.push(candidate)
+    } else {
+      map.set(candidate.frame_timestamp_ms, [candidate])
     }
   }
-  return nearestTimestamp !== null && nearestDistance <= OVERLAY_WINDOW_MS
-    ? (frames.get(nearestTimestamp) ?? [])
-    : []
+  return Array.from(map.entries())
+    .map(([timestampMs, items]) => ({ timestampMs, candidates: items }))
+    .sort((a, b) => a.timestampMs - b.timestampMs)
+}
+
+function findNearestFrame(frames: IndexedFrame[], playbackTimeMs: number): HandPoseCandidate[] {
+  if (!frames.length) return []
+
+  let low = 0
+  let high = frames.length - 1
+
+  // After the length check above, frames[0] and frames[high] are guaranteed to exist.
+  const first = frames[0]!
+  const last = frames[high]!
+
+  if (playbackTimeMs <= first.timestampMs) {
+    return first.timestampMs - playbackTimeMs <= OVERLAY_WINDOW_MS ? first.candidates : []
+  }
+  if (playbackTimeMs >= last.timestampMs) {
+    return playbackTimeMs - last.timestampMs <= OVERLAY_WINDOW_MS ? last.candidates : []
+  }
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const entry = frames[mid]!
+    const diff = entry.timestampMs - playbackTimeMs
+    if (diff === 0) {
+      return entry.candidates
+    }
+    if (diff < 0) {
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
+  }
+
+  const leftEntry = frames[high]!
+  const rightEntry = frames[low]!
+  const leftDist = playbackTimeMs - leftEntry.timestampMs
+  const rightDist = rightEntry.timestampMs - playbackTimeMs
+  const nearest = leftDist <= rightDist ? leftEntry : rightEntry
+  const nearestDist = Math.min(leftDist, rightDist)
+
+  return nearestDist <= OVERLAY_WINDOW_MS ? nearest.candidates : []
 }
 
 function handednessLabel(candidate: HandPoseCandidate) {
@@ -68,9 +109,10 @@ function handednessLabel(candidate: HandPoseCandidate) {
 }
 
 export function HandPoseOverlay({ candidates, playbackTimeMs }: HandPoseOverlayProps) {
+  const indexedFrames = useMemo(() => buildIndexedFrames(candidates), [candidates])
   const frame = useMemo(
-    () => currentFrame(candidates, playbackTimeMs),
-    [candidates, playbackTimeMs],
+    () => findNearestFrame(indexedFrames, playbackTimeMs),
+    [indexedFrames, playbackTimeMs],
   )
   const dimensions = frame[0]
     ? { width: frame[0].image_width, height: frame[0].image_height }

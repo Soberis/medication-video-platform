@@ -260,4 +260,33 @@ describe('HandPoseOverlay', () => {
     fireEvent.timeUpdate(video)
     expect(container.querySelector('.hand-pose-overlay')).toBeNull()
   })
+
+  it('efficiently and accurately locates the nearest candidate in unsorted high-density streams', () => {
+    const stream = [
+      { frame_timestamp_ms: 5000, hand_index: 0 },
+      { frame_timestamp_ms: 1000, hand_index: 0 },
+      { frame_timestamp_ms: 3000, hand_index: 0 },
+      { frame_timestamp_ms: 2000, hand_index: 0 },
+      { frame_timestamp_ms: 4000, hand_index: 0 },
+    ].map((item) => ({
+      frame_timestamp_ms: item.frame_timestamp_ms,
+      image_width: 1280,
+      image_height: 720,
+      hand_index: item.hand_index,
+      handedness: 'RIGHT' as const,
+      handedness_score: 0.95,
+      bounding_box: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+      landmarks,
+      valid_landmark_count: 21,
+    }))
+
+    const { rerender } = render(<HandPoseOverlay candidates={stream} playbackTimeMs={2050} />)
+    expect(screen.getByLabelText('当前视频帧的手部检测结果')).toBeInTheDocument()
+
+    rerender(<HandPoseOverlay candidates={stream} playbackTimeMs={2500} />)
+    expect(screen.queryByLabelText('当前视频帧的手部检测结果')).toBeNull()
+
+    rerender(<HandPoseOverlay candidates={stream} playbackTimeMs={4920} />)
+    expect(screen.getByLabelText('当前视频帧的手部检测结果')).toBeInTheDocument()
+  })
 })

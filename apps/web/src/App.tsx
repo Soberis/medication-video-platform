@@ -15,6 +15,7 @@ import { useAuth } from '@/app/auth'
 import { documentTitleFor } from '@/app/document-title'
 import { paths } from '@/app/paths'
 import { LocalUploadProvider, useLocalUpload } from '@/app/local-upload'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AppShell as AppFrame, Sidebar } from '@/components/layout/AppShell'
 
 const iconProps = { 'aria-hidden': true, size: 16, strokeWidth: 1.8 } as const
@@ -216,8 +217,10 @@ export default function AppShell() {
       }
     >
       <LocalUploadProvider>
-        <LocalUploadActivity />
-        <Outlet />
+        <ErrorBoundary title="应用遇到异常">
+          <LocalUploadActivity />
+          <Outlet />
+        </ErrorBoundary>
       </LocalUploadProvider>
     </AppFrame>
   )

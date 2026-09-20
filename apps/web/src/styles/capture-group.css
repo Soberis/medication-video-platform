@@ -773,6 +773,17 @@
   z-index: 2;
 }
 
+.capture-group-timeline-slice.has-overlap-warning {
+  outline: 2px solid var(--app-color-warning, #faad14);
+  outline-offset: -1px;
+  animation: overlap-pulse 1.5s ease-in-out 2;
+}
+
+@keyframes overlap-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .capture-group-segment-fields,
 .capture-group-segment-time-field,
 .capture-group-note-field,

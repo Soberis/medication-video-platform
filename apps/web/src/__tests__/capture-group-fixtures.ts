@@ -434,7 +434,7 @@ export function stubGroupDetail(
           capture_group_id: group.capture_group_id,
           clip_asset_id: group.streams[0]?.clip_asset_id ?? '',
           status: 'QUEUED',
-          algorithm_key: 'QWEN3_VL_ACTION',
+          algorithm_key: 'QWEN3_5_ACTION',
           error_code: null,
           error_message: null,
           created_at: '2026-09-10T00:00:00Z',

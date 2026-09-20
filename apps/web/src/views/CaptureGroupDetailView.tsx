@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { RefreshButton } from '@/components/RefreshButton'
 import { ErrorState, LoadingState } from '@/components/WorkspaceFeedback'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { CaptureGroupAnnotationPanel } from '@/features/capture-group/CaptureGroupAnnotationPanel'
 import { CaptureGroupFocusedView } from '@/features/capture-group/CaptureGroupFocusedView'
 import { CaptureGroupInspector } from '@/features/capture-group/CaptureGroupInspector'
@@ -524,24 +525,26 @@ export default function CaptureGroupDetailView() {
                   : undefined
             }
           >
-            <div className="capture-group-video-column">
-              <CaptureGroupFocusedView
-                viewRows={viewRows}
-                task={humanTask}
-                viewReviews={data.viewReviews}
-                viewState={viewState}
-                externalVideoRef={videoRef}
-                initialPlaybackTimeMs={preservedPlaybackTimeMs}
-                onSelectView={handleSelectView}
-                onPlaybackTimeChange={handlePlaybackTimeChange}
-                isCompleted={humanTask?.status === 'COMPLETED'}
-              />
-            </div>
-            {actionPanel ? (
-              <div id="human-label-panel" className="capture-group-action-column">
-                {actionPanel}
+            <ErrorBoundary title="工作台局部异常">
+              <div className="capture-group-video-column">
+                <CaptureGroupFocusedView
+                  viewRows={viewRows}
+                  task={humanTask}
+                  viewReviews={data.viewReviews}
+                  viewState={viewState}
+                  externalVideoRef={videoRef}
+                  initialPlaybackTimeMs={preservedPlaybackTimeMs}
+                  onSelectView={handleSelectView}
+                  onPlaybackTimeChange={handlePlaybackTimeChange}
+                  isCompleted={humanTask?.status === 'COMPLETED'}
+                />
               </div>
-            ) : null}
+              {actionPanel ? (
+                <div id="human-label-panel" className="capture-group-action-column">
+                  {actionPanel}
+                </div>
+              ) : null}
+            </ErrorBoundary>
           </div>
           <details className="capture-group-record-details">
             <summary>更多信息</summary>

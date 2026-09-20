@@ -67,8 +67,10 @@ export function CaptureGroupFocusedView({
       const isKeyJ = event.code === 'KeyJ'
       const isKeyK = event.code === 'KeyK'
       const isKeyL = event.code === 'KeyL'
+      const isKeyI = event.code === 'KeyI'
+      const isKeyO = event.code === 'KeyO'
 
-      if (!isSpace && !isArrowLeft && !isArrowRight && !isKeyJ && !isKeyK && !isKeyL) {
+      if (!isSpace && !isArrowLeft && !isArrowRight && !isKeyJ && !isKeyK && !isKeyL && !isKeyI && !isKeyO) {
         return
       }
 
@@ -123,6 +125,19 @@ export function CaptureGroupFocusedView({
         const maxSec =
           Number.isFinite(video.duration) && video.duration > 0 ? video.duration : Infinity
         video.currentTime = Math.min(maxSec, video.currentTime + deltaSec)
+        return
+      }
+
+      if (isKeyI || isKeyO) {
+        event.preventDefault()
+        const timeMs = Math.round(video.currentTime * 1000)
+        if (Number.isFinite(timeMs)) {
+          window.dispatchEvent(
+            new CustomEvent(isKeyI ? 'annotation:mark-in' : 'annotation:mark-out', {
+              detail: { timeMs },
+            }),
+          )
+        }
         return
       }
     }

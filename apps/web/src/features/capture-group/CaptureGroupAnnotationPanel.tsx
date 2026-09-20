@@ -10,7 +10,7 @@ import {
   RotateCw,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 import {
   dispatchActionCandidateJob,
@@ -79,6 +79,24 @@ interface CaptureGroupAnnotationPanelProps {
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
   onDiscardVideo?: () => Promise<void> | void
   canPrepareTask?: boolean
+}
+
+function hasOverlapWith(
+  seg: DraftAnnotationSegment,
+  allSegments: DraftAnnotationSegment[],
+): boolean {
+  if (!Number.isFinite(seg.start_ms) || !Number.isFinite(seg.end_ms) || seg.start_ms >= seg.end_ms) {
+    return false
+  }
+  return allSegments.some(
+    (other) =>
+      other.draftId !== seg.draftId &&
+      Number.isFinite(other.start_ms) &&
+      Number.isFinite(other.end_ms) &&
+      other.start_ms < other.end_ms &&
+      seg.start_ms < other.end_ms &&
+      seg.end_ms > other.start_ms,
+  )
 }
 
 const AUTO_COLLAPSE_SEGMENT_THRESHOLD = 8
@@ -431,20 +449,23 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
-  function beginDraftEdit() {
+  const beginDraftEdit = useCallback(() => {
     setIsDirty(true)
     setAppliedContext(draftContext)
-  }
+  }, [draftContext])
 
-  function updateSegment(draftId: number, field: keyof AnnotationSegment, value: string | number) {
-    beginDraftEdit()
-    setDraftSegments((prev) => {
-      const sourceSegments = prev.length > 0 ? prev : visibleDraftSegments
-      return sourceSegments.map((segment) =>
-        segment.draftId === draftId ? { ...segment, [field]: value } : segment,
-      )
-    })
-  }
+  const updateSegment = useCallback(
+    (draftId: number, field: keyof AnnotationSegment, value: string | number) => {
+      beginDraftEdit()
+      setDraftSegments((prev) => {
+        const sourceSegments = prev.length > 0 ? prev : visibleDraftSegments
+        return sourceSegments.map((segment) =>
+          segment.draftId === draftId ? { ...segment, [field]: value } : segment,
+        )
+      })
+    },
+    [beginDraftEdit, visibleDraftSegments],
+  )
 
   function setSegmentPlaybackTime(draftId: number, field: 'start_ms' | 'end_ms') {
     if (!canUseCurrentPlaybackTime || currentPlaybackTimeMs === null) return
@@ -468,6 +489,49 @@ export function CaptureGroupAnnotationPanel({
     })
     onSeekToMs?.(updatedMs)
   }
+
+  // I/O mark-in / mark-out hotkey listener (CustomEvent dispatched from FocusedView keyboard handler)
+  useEffect(() => {
+    if (!canSubmitRevision) return
+
+    function findActiveSegmentDraftId(): number | null {
+      if (currentPlaybackTimeMs !== null) {
+        const active = visibleDraftSegments.find(
+          (seg) =>
+            Number.isFinite(seg.start_ms) &&
+            Number.isFinite(seg.end_ms) &&
+            currentPlaybackTimeMs >= seg.start_ms &&
+            currentPlaybackTimeMs <= seg.end_ms,
+        )
+        if (active) return active.draftId
+      }
+      const last = visibleDraftSegments.length > 0 ? visibleDraftSegments[visibleDraftSegments.length - 1] : undefined
+      return last?.draftId ?? null
+    }
+
+    function handleMarkIn(e: Event) {
+      const { timeMs } = (e as CustomEvent<{ timeMs: number }>).detail
+      const targetId = findActiveSegmentDraftId()
+      if (targetId !== null) {
+        updateSegment(targetId, 'start_ms', Math.max(0, Math.round(timeMs)))
+      }
+    }
+
+    function handleMarkOut(e: Event) {
+      const { timeMs } = (e as CustomEvent<{ timeMs: number }>).detail
+      const targetId = findActiveSegmentDraftId()
+      if (targetId !== null) {
+        updateSegment(targetId, 'end_ms', Math.max(0, Math.round(timeMs)))
+      }
+    }
+
+    window.addEventListener('annotation:mark-in', handleMarkIn)
+    window.addEventListener('annotation:mark-out', handleMarkOut)
+    return () => {
+      window.removeEventListener('annotation:mark-in', handleMarkIn)
+      window.removeEventListener('annotation:mark-out', handleMarkOut)
+    }
+  }, [canSubmitRevision, currentPlaybackTimeMs, updateSegment, visibleDraftSegments])
 
   function handleAddSegment() {
     const sourceSegments = isDirty ? draftSegments : visibleDraftSegments
@@ -749,16 +813,17 @@ export function CaptureGroupAnnotationPanel({
                       Number.isFinite(seg.end_ms) &&
                       currentPlaybackTimeMs >= seg.start_ms &&
                       currentPlaybackTimeMs < seg.end_ms
+                    const segOverlaps = hasOverlapWith(seg, visibleDraftSegments)
                     return (
                       <Tooltip
                         key={seg.draftId}
-                        title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)}) · 点击跳转播放`}
+                        title={`${idx + 1}. ${displayName} (${formatHumanFriendlyTime(seg.start_ms)} ~ ${formatHumanFriendlyTime(seg.end_ms)})${segOverlaps ? ' ⚠ 与其他区间重叠' : ''} · 点击跳转播放`}
                       >
                         <div
                           role="button"
                           aria-label={`播放时间段 ${idx + 1}：${displayName}`}
                           tabIndex={0}
-                          className={`capture-group-timeline-slice ${isSliceActive ? 'is-active-slice' : ''}`}
+                          className={`capture-group-timeline-slice${isSliceActive ? ' is-active-slice' : ''}${segOverlaps ? ' has-overlap-warning' : ''}`}
                           style={{
                             left: `${leftPercent}%`,
                             width: `${widthPercent}%`,
