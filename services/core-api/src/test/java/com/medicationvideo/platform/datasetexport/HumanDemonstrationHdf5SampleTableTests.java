@@ -1,6 +1,8 @@
 package com.medicationvideo.platform.datasetexport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -23,6 +25,7 @@ import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.Ca
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
 
 import io.jhdf.HdfFile;
+import io.jhdf.api.Group;
 import tools.jackson.databind.ObjectMapper;
 
 class HumanDemonstrationHdf5SampleTableTests {
@@ -65,12 +68,83 @@ class HumanDemonstrationHdf5SampleTableTests {
 			assertEquals(3, landmarks[0][0].length);
 			var samplesGroup = file.getByPath("/data/demo_000000/samples");
 			assertEquals(MODEL_SHA, samplesGroup.getAttribute("model_sha256").getData());
-			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("input_sha256"));
-			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("profile_sha256"));
-			org.junit.jupiter.api.Assertions.assertFalse(samplesGroup.getAttributes().containsKey("result_sha256"));
+			assertFalse(samplesGroup.getAttributes().containsKey("input_sha256"));
+			assertFalse(samplesGroup.getAttributes().containsKey("profile_sha256"));
+			assertFalse(samplesGroup.getAttributes().containsKey("result_sha256"));
 			var annotationsGroup = file.getByPath("/data/demo_000000/annotations");
 			assertEquals("f".repeat(64), annotationsGroup.getAttribute("document_sha256").getData());
-			org.junit.jupiter.api.Assertions.assertNotNull(annotationsGroup.getAttribute("annotation_revision_id"));
+			assertNotNull(annotationsGroup.getAttribute("annotation_revision_id"));
+		}
+	}
+
+	@Test
+	void exportsV2DualHandTensorLayoutAndPrunesRedundantColumns() throws Exception {
+		var service = service(candidate(520));
+
+		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID),
+				HumanDemonstrationHdf5ExportService.ExportOptions.V2_DEFAULT);
+
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
+			var samples = file.getByPath("/data/demo_000000/samples");
+			assertEquals("dual-hand-tensor.v2", samples.getAttribute("layout").getData());
+			assertEquals(1280, samples.getAttribute("image_width").getData());
+			assertEquals(720, samples.getAttribute("image_height").getData());
+			assertEquals(1, samples.getAttribute("step_count").getData());
+
+			var path = "/data/demo_000000/samples/";
+			assertEquals("verify_dose", ((String[]) file.getDatasetByPath(path + "label").getData())[0]);
+			assertEquals(520L, ((long[]) file.getDatasetByPath(path + "frame_timestamp_ms").getData())[0]);
+
+			var landmarks = (float[][][][]) file.getDatasetByPath(path + "landmarks").getData();
+			assertEquals(1, landmarks.length);
+			assertEquals(2, landmarks[0].length);
+			assertEquals(21, landmarks[0][0].length);
+			assertEquals(3, landmarks[0][0][0].length);
+
+			var handMask = (int[][]) file.getDatasetByPath(path + "hand_mask").getData();
+			assertEquals(0, handMask[0][0]);
+			assertEquals(1, handMask[0][1]);
+
+			var scores = (double[][]) file.getDatasetByPath(path + "handedness_score").getData();
+			assertEquals(0.0, scores[0][0]);
+			assertEquals(0.95, scores[0][1]);
+
+			var sampleDatasets = ((Group) samples).getChildren();
+			assertFalse(sampleDatasets.containsKey("image_width"));
+			assertFalse(sampleDatasets.containsKey("image_height"));
+			assertFalse(sampleDatasets.containsKey("segment_start_ms"));
+			assertFalse(sampleDatasets.containsKey("segment_end_ms"));
+
+			var demo = (Group) file.getByPath("/data/demo_000000");
+			assertFalse(demo.getChildren().containsKey("views"));
+			assertEquals(false, file.getAttribute("contains_raw_candidates").getData());
+		}
+	}
+
+	@Test
+	void exportsV2CompactTableLayoutWhenRequested() throws Exception {
+		var service = service(candidate(520));
+
+		var bytes = service.download(PROJECT_ID, List.of(GROUP_ID),
+				HumanDemonstrationHdf5ExportService.ExportOptions.v2(false, false));
+
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
+			var samples = file.getByPath("/data/demo_000000/samples");
+			assertEquals("columnar-table.v2", samples.getAttribute("layout").getData());
+			assertEquals(1280, samples.getAttribute("image_width").getData());
+			assertEquals(720, samples.getAttribute("image_height").getData());
+
+			var path = "/data/demo_000000/samples/";
+			var landmarks = (float[][][]) file.getDatasetByPath(path + "landmarks").getData();
+			assertEquals(1, landmarks.length);
+			assertEquals(21, landmarks[0].length);
+			assertEquals(3, landmarks[0][0].length);
+
+			var sampleDatasets = ((Group) samples).getChildren();
+			assertFalse(sampleDatasets.containsKey("image_width"));
+			assertFalse(sampleDatasets.containsKey("segment_start_ms"));
 		}
 	}
 

@@ -37,7 +37,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task API', () => {
   it('downloads the approved HDF5 demonstration with the server filename', async () => {
-    const fileName = 'human_demonstration_hdf5_v1_event_60000000_20260905T010203Z.hdf5'
+    const fileName = 'human_demonstration_hdf5_v2_event_60000000_20260905T010203Z.hdf5'
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(new Uint8Array([0x89, 0x48, 0x44, 0x46]), {
         headers: { 'Content-Disposition': `attachment; filename="${fileName}"` },
@@ -49,7 +49,7 @@ describe('annotation task API', () => {
       downloadHumanDemonstrationHdf5(projectId, [captureGroupId]),
     ).resolves.toMatchObject({ fileName })
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/v1/projects/${projectId}/human-demonstrations/hdf5/v1/download?capture_group_id=${captureGroupId}`,
+      `/api/v1/projects/${projectId}/human-demonstrations/hdf5/v2/download?capture_group_id=${captureGroupId}`,
       expect.objectContaining({
         method: 'GET',
         headers: { Accept: 'application/x-hdf5' },

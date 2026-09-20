@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,13 +33,15 @@ import io.jhdf.api.WritableGroup;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Builds the compact P0 HDF5 interchange file from already approved human labels and
- * current MediaPipe facts.
+ * Builds compact HDF5 interchange files from already approved human labels and current
+ * MediaPipe facts.
  */
 @Service
 class HumanDemonstrationHdf5ExportService {
 
 	static final String SCHEMA_VERSION = "human-demonstration-hdf5.v1";
+
+	static final String SCHEMA_VERSION_V2 = "human-demonstration-hdf5.v2";
 
 	static final String MEDIA_TYPE = "application/x-hdf5";
 
@@ -59,11 +63,16 @@ class HumanDemonstrationHdf5ExportService {
 		this.approvedHumanAnnotationQueryService = approvedHumanAnnotationQueryService;
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.candidateEvidenceQueryService = candidateEvidenceQueryService;
-		this.dataProfile = dataProfile == null ? "" : dataProfile.trim().toLowerCase(java.util.Locale.ROOT);
+		this.dataProfile = dataProfile == null ? "" : dataProfile.trim().toLowerCase(Locale.ROOT);
 	}
 
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	byte[] download(UUID projectId, List<UUID> captureGroupIds) {
+		return download(projectId, captureGroupIds, ExportOptions.V1_DEFAULT);
+	}
+
+	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+	byte[] download(UUID projectId, List<UUID> captureGroupIds, ExportOptions options) {
 		requireSyntheticProfile();
 		var selectedIds = captureGroupIds == null ? List.<UUID>of() : captureGroupIds.stream().distinct().toList();
 		var segments = this.approvedHumanAnnotationQueryService.findApprovedSegments(projectId, selectedIds);
@@ -85,15 +94,16 @@ class HumanDemonstrationHdf5ExportService {
 		try {
 			output = Files.createTempFile("human-demonstration-", ".hdf5");
 			try (var file = HdfFile.write(output)) {
-				file.putAttribute("schema_version", SCHEMA_VERSION);
+				file.putAttribute("schema_version", options.version().schemaVersion());
 				file.putAttribute("project_id", projectId.toString());
 				file.putAttribute("export_scope", selectedIds.isEmpty() ? "project" : "selection");
 				file.putAttribute("contains_mp4_bytes", false);
 				file.putAttribute("contains_robot_actions", false);
+				file.putAttribute("contains_raw_candidates", options.includeRawCandidates());
 				var data = file.putGroup("data");
 				for (var index = 0; index < groups.size(); index += 1) {
 					writeEpisode(data.putGroup("demo_%06d".formatted(index)), groups.get(index),
-							segmentsByGroup.get(groups.get(index).captureGroupId()), projectId);
+							segmentsByGroup.get(groups.get(index).captureGroupId()), projectId, options);
 				}
 			}
 			return Files.readAllBytes(output);
@@ -115,13 +125,19 @@ class HumanDemonstrationHdf5ExportService {
 	}
 
 	static String fileName(List<UUID> captureGroupIds, Instant generatedAt) {
+		return fileName(captureGroupIds, generatedAt, ExportVersion.V1);
+	}
+
+	static String fileName(List<UUID> captureGroupIds, Instant generatedAt, ExportVersion version) {
 		var scope = captureGroupIds == null || captureGroupIds.isEmpty() ? "project" : captureGroupIds.size() == 1
 				? "event_" + captureGroupIds.getFirst().toString().substring(0, 8) : "selection";
-		return "human_demonstration_hdf5_v1_%s_%s.hdf5".formatted(scope, FILE_TIMESTAMP.format(generatedAt));
+		var versionTag = version == ExportVersion.V2 ? "v2" : "v1";
+		return "human_demonstration_hdf5_%s_%s_%s.hdf5".formatted(versionTag, scope,
+				FILE_TIMESTAMP.format(generatedAt));
 	}
 
 	private void writeEpisode(WritableGroup episode, CaptureGroupFacts group,
-			List<HumanAnnotationExportSegment> segments, UUID projectId) {
+			List<HumanAnnotationExportSegment> segments, UUID projectId, ExportOptions options) {
 		if (group == null || !projectId.equals(group.projectId()) || group.views() == null) {
 			throw invalid("The current CaptureGroup projection is incomplete.");
 		}
@@ -168,17 +184,20 @@ class HumanDemonstrationHdf5ExportService {
 			.collect(Collectors.toMap(CandidateEvidence::clipAssetId, evidence -> evidence, (left, right) -> {
 				throw invalid("The current MediaPipe evidence contains duplicate ClipAsset entries.");
 			}));
-		writeLabeledSampleTable(episode, orderedSegments, group, evidenceByAsset, first, projectId);
-		var viewGroup = episode.putGroup("views");
-		for (var view : views) {
-			writeView(viewGroup.putGroup("camera_%02d".formatted(view.cameraNumber())), view,
-					evidenceByAsset.get(view.clipAssetId()), projectId);
+		writeLabeledSampleTable(episode, orderedSegments, group, evidenceByAsset, first, projectId, options);
+		if (options.includeRawCandidates()) {
+			var viewGroup = episode.putGroup("views");
+			for (var view : views) {
+				writeView(viewGroup.putGroup("camera_%02d".formatted(view.cameraNumber())), view,
+						evidenceByAsset.get(view.clipAssetId()), projectId, options);
+			}
 		}
 	}
 
 	private static void writeLabeledSampleTable(WritableGroup episode,
 			List<HumanAnnotationExportSegment> orderedSegments, CaptureGroupFacts group,
-			Map<UUID, CandidateEvidence> evidenceByAsset, HumanAnnotationExportSegment first, UUID projectId) {
+			Map<UUID, CandidateEvidence> evidenceByAsset, HumanAnnotationExportSegment first, UUID projectId,
+			ExportOptions options) {
 		var primaryView = group.views()
 			.stream()
 			.filter(CaptureGroupView::present)
@@ -219,13 +238,8 @@ class HumanDemonstrationHdf5ExportService {
 					|| !evidence.aiJobId().equals(row.candidate().aiJobId()))) {
 			throw invalid("A labeled MediaPipe sample does not match the annotated primary video.");
 		}
-		var landmarks = new float[rows.size()][21][3];
-		for (var index = 0; index < rows.size(); index += 1) {
-			copyLandmarks(rows.get(index).candidate(), landmarks[index]);
-		}
+
 		var samples = episode.putGroup("samples");
-		samples.putAttribute("layout", "columnar-table.v1");
-		samples.putAttribute("row_count", rows.size());
 		samples.putAttribute("camera_number", primaryView.cameraNumber());
 		samples.putAttribute("clip_asset_id", primaryView.clipAssetId().toString());
 		samples.putAttribute("clip_asset_sha256", primaryView.clipAssetSha256());
@@ -235,6 +249,25 @@ class HumanDemonstrationHdf5ExportService {
 		samples.putAttribute("algorithm_key", evidence.algorithmKey());
 		samples.putAttribute("algorithm_version", evidence.algorithmVersion());
 		samples.putAttribute("model_sha256", evidence.modelSha256());
+
+		if (options.version() == ExportVersion.V1) {
+			writeV1Samples(samples, rows);
+		}
+		else if (options.tensorLayout()) {
+			writeV2TensorSamples(samples, rows, orderedSegments);
+		}
+		else {
+			writeV2TableSamples(samples, rows);
+		}
+	}
+
+	private static void writeV1Samples(WritableGroup samples, List<LabeledSample> rows) {
+		var landmarks = new float[rows.size()][21][3];
+		for (var index = 0; index < rows.size(); index += 1) {
+			copyLandmarks(rows.get(index).candidate(), landmarks[index]);
+		}
+		samples.putAttribute("layout", "columnar-table.v1");
+		samples.putAttribute("row_count", rows.size());
 		samples.putDataset("frame_timestamp_ms",
 				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
 		samples.putDataset("hand_index", rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
@@ -250,6 +283,87 @@ class HumanDemonstrationHdf5ExportService {
 		samples.putDataset("landmarks", landmarks);
 	}
 
+	private static void writeV2TensorSamples(WritableGroup samples, List<LabeledSample> rows,
+			List<HumanAnnotationExportSegment> orderedSegments) {
+		var firstCandidate = rows.getFirst().candidate();
+		samples.putAttribute("layout", "dual-hand-tensor.v2");
+		samples.putAttribute("image_width", firstCandidate.imageWidth());
+		samples.putAttribute("image_height", firstCandidate.imageHeight());
+
+		var rowsByTimestamp = rows.stream()
+			.collect(Collectors.groupingBy(row -> row.candidate().frameTimestampMs(), LinkedHashMap::new,
+					Collectors.toList()));
+
+		int stepCount = rowsByTimestamp.size();
+		samples.putAttribute("step_count", stepCount);
+
+		var frameTimestamps = new long[stepCount];
+		var labels = new String[stepCount];
+		var landmarks = new float[stepCount][2][21][3];
+		var handMask = new int[stepCount][2];
+		var handednessScore = new double[stepCount][2];
+
+		int index = 0;
+		for (var entry : rowsByTimestamp.entrySet()) {
+			long timestampMs = entry.getKey();
+			var candidatesAtTimestamp = entry.getValue();
+			frameTimestamps[index] = timestampMs;
+			var segment = segmentAt(orderedSegments, timestampMs);
+			labels[index] = segment != null ? segment.label() : candidatesAtTimestamp.getFirst().segment().label();
+
+			for (var sample : candidatesAtTimestamp) {
+				var cand = sample.candidate();
+				int slot = resolveHandSlot(cand);
+				double score = cand.handednessScore() != null ? cand.handednessScore().doubleValue() : 0.0;
+				if (handMask[index][slot] == 0 || score > handednessScore[index][slot]) {
+					handMask[index][slot] = 1;
+					handednessScore[index][slot] = score;
+					copyLandmarks(cand, landmarks[index][slot]);
+				}
+			}
+			index += 1;
+		}
+
+		samples.putDataset("frame_timestamp_ms", frameTimestamps);
+		samples.putDataset("label", labels);
+		samples.putDataset("landmarks", landmarks);
+		samples.putDataset("hand_mask", handMask);
+		samples.putDataset("handedness_score", handednessScore);
+	}
+
+	private static void writeV2TableSamples(WritableGroup samples, List<LabeledSample> rows) {
+		var firstCandidate = rows.getFirst().candidate();
+		samples.putAttribute("layout", "columnar-table.v2");
+		samples.putAttribute("row_count", rows.size());
+		samples.putAttribute("image_width", firstCandidate.imageWidth());
+		samples.putAttribute("image_height", firstCandidate.imageHeight());
+
+		var landmarks = new float[rows.size()][21][3];
+		for (var index = 0; index < rows.size(); index += 1) {
+			copyLandmarks(rows.get(index).candidate(), landmarks[index]);
+		}
+		samples.putDataset("frame_timestamp_ms",
+				rows.stream().mapToLong(row -> row.candidate().frameTimestampMs()).toArray());
+		samples.putDataset("hand_index", rows.stream().mapToInt(row -> row.candidate().handIndex()).toArray());
+		samples.putDataset("handedness", rows.stream().map(row -> row.candidate().handedness()).toArray(String[]::new));
+		samples.putDataset("handedness_score",
+				rows.stream().mapToDouble(row -> row.candidate().handednessScore().doubleValue()).toArray());
+		samples.putDataset("label", rows.stream().map(row -> row.segment().label()).toArray(String[]::new));
+		samples.putDataset("landmarks", landmarks);
+	}
+
+	private static int resolveHandSlot(CandidateAnnotationSnapshot candidate) {
+		if (candidate.handedness() != null) {
+			if ("LEFT".equalsIgnoreCase(candidate.handedness())) {
+				return 0;
+			}
+			if ("RIGHT".equalsIgnoreCase(candidate.handedness())) {
+				return 1;
+			}
+		}
+		return candidate.handIndex() == 0 ? 0 : 1;
+	}
+
 	private static HumanAnnotationExportSegment segmentAt(List<HumanAnnotationExportSegment> segments,
 			long timestampMs) {
 		return segments.stream()
@@ -259,7 +373,7 @@ class HumanDemonstrationHdf5ExportService {
 	}
 
 	private static void writeView(WritableGroup output, CaptureGroupView view, CandidateEvidence evidence,
-			UUID projectId) {
+			UUID projectId, ExportOptions options) {
 		if (view.cameraStreamId() == null || view.clipAssetId() == null || view.cameraNumber() < 1
 				|| view.clipAssetSha256() == null || !view.clipAssetSha256().matches("^[a-f0-9]{64}$")
 				|| evidence == null || !evidence.provenanceValid() || !view.clipAssetId().equals(evidence.clipAssetId())
@@ -285,6 +399,11 @@ class HumanDemonstrationHdf5ExportService {
 		output.putAttribute("algorithm_key", evidence.algorithmKey());
 		output.putAttribute("algorithm_version", evidence.algorithmVersion());
 		output.putAttribute("model_sha256", evidence.modelSha256());
+
+		if (!options.includeRawCandidates()) {
+			return;
+		}
+
 		var candidates = evidence.candidates();
 		if (candidates.isEmpty()) {
 			throw invalid("A successful MediaPipe hand result has no candidate samples.");
@@ -361,6 +480,34 @@ class HumanDemonstrationHdf5ExportService {
 	}
 
 	private record LabeledSample(CandidateAnnotationSnapshot candidate, HumanAnnotationExportSegment segment) {
+	}
+
+	enum ExportVersion {
+
+		V1(SCHEMA_VERSION), V2(SCHEMA_VERSION_V2);
+
+		private final String schemaVersion;
+
+		ExportVersion(String schemaVersion) {
+			this.schemaVersion = schemaVersion;
+		}
+
+		String schemaVersion() {
+			return this.schemaVersion;
+		}
+
+	}
+
+	record ExportOptions(ExportVersion version, boolean includeRawCandidates, boolean tensorLayout) {
+
+		static final ExportOptions V1_DEFAULT = new ExportOptions(ExportVersion.V1, true, false);
+
+		static final ExportOptions V2_DEFAULT = new ExportOptions(ExportVersion.V2, false, true);
+
+		static ExportOptions v2(boolean includeRawCandidates, boolean tensorLayout) {
+			return new ExportOptions(ExportVersion.V2, includeRawCandidates, tensorLayout);
+		}
+
 	}
 
 }

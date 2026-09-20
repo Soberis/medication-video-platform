@@ -349,7 +349,7 @@ export async function downloadHumanDemonstrationHdf5(
     query.append('capture_group_id', captureGroupId)
   const querySuffix = query.size ? `?${query}` : ''
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v1/download${querySuffix}`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/human-demonstrations/hdf5/v2/download${querySuffix}`,
     {
       method: 'GET',
       headers: { Accept: 'application/x-hdf5' },
@@ -362,7 +362,7 @@ export async function downloadHumanDemonstrationHdf5(
     blob: await response.blob(),
     fileName:
       response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] ??
-      `human_demonstration_hdf5_v1_${captureGroupIds?.length ? 'selection' : 'project'}.hdf5`,
+      `human_demonstration_hdf5_v2_${captureGroupIds?.length ? 'selection' : 'project'}.hdf5`,
   }
 }
 

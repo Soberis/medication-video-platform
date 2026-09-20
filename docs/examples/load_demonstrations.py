@@ -1,0 +1,73 @@
+"""
+Example: Loading human_demonstration_hdf5.v2 demonstrations for imitation learning (PyTorch / NumPy).
+
+Format specification:
+  - demo_XXXXXX/samples/landmarks: shape (K, 2, 21, 3) where [:, 0] is LEFT hand, [:, 1] is RIGHT hand.
+  - demo_XXXXXX/samples/hand_mask: shape (K, 2) where 1 indicates hand is detected, 0 otherwise.
+  - demo_XXXXXX/samples/frame_timestamp_ms: shape (K,)
+  - demo_XXXXXX/samples/label: shape (K,) string array of approved atomic step labels.
+"""
+
+from pathlib import Path
+import h5py
+import torch
+from torch.utils.data import Dataset
+
+
+class HumanDemonstrationDataset(Dataset):
+    """PyTorch Dataset for human-demonstration-hdf5.v2 files."""
+
+    def __init__(self, hdf5_path: str | Path):
+        self.hdf5_path = str(hdf5_path)
+        with h5py.File(self.hdf5_path, "r") as f:
+            schema = f.attrs.get("schema_version")
+            if isinstance(schema, bytes):
+                schema = schema.decode("utf-8")
+            assert schema == "human-demonstration-hdf5.v2", (
+                f"Expected schema_version human-demonstration-hdf5.v2, got {schema}"
+            )
+            self.demo_keys = sorted(list(f["data"].keys()))
+
+    def __len__(self) -> int:
+        return len(self.demo_keys)
+
+    def __getitem__(self, idx: int) -> dict[str, object]:
+        demo_key = self.demo_keys[idx]
+        with h5py.File(self.hdf5_path, "r") as f:
+            demo = f["data"][demo_key]
+            samples = demo["samples"]
+
+            # Directly load arrays into PyTorch tensors (zero pandas/grouping needed)
+            landmarks = torch.from_numpy(samples["landmarks"][:])           # (K, 2, 21, 3) float32
+            hand_mask = torch.from_numpy(samples["hand_mask"][:])           # (K, 2) int32
+            scores = torch.from_numpy(samples["handedness_score"][:])       # (K, 2) float64
+            timestamps = torch.from_numpy(samples["frame_timestamp_ms"][:]) # (K,) int64
+            labels = [
+                lbl.decode("utf-8") if isinstance(lbl, bytes) else str(lbl)
+                for lbl in samples["label"][:]
+            ]
+
+        return {
+            "demo_id": demo_key,
+            "landmarks": landmarks,
+            "hand_mask": hand_mask,
+            "handedness_score": scores,
+            "timestamps": timestamps,
+            "labels": labels,
+        }
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+        dataset = HumanDemonstrationDataset(path)
+        print(f"Loaded {len(dataset)} demonstrations from {path}")
+        sample = dataset[0]
+        print(f"Demo 0 landmarks shape: {sample['landmarks'].shape}")
+        print(f"Demo 0 hand_mask shape: {sample['hand_mask'].shape}")
+        print(f"Demo 0 step count: {len(sample['timestamps'])}")
+        print(f"Demo 0 first 3 labels: {sample['labels'][:3]}")
+    else:
+        print("Usage: python load_demonstrations.py <path_to_v2_hdf5_file>")

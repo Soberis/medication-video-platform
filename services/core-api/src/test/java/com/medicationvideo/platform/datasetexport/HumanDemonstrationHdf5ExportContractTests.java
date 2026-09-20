@@ -147,6 +147,46 @@ class HumanDemonstrationHdf5ExportContractTests {
 		}
 	}
 
+	@Test
+	void exportsApprovedHumanLabelsAndDualHandTensorInV2Endpoint() throws Exception {
+		var group = createGroup(1, 1, "COMPLETE", 1);
+		insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
+		approveRevision(group, 900, "v2-hdf5-export");
+
+		var bytes = this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
+				.header("Authorization", "Bearer " + ADMIN_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(header().string("Content-Disposition",
+					startsWith("attachment; filename=\"human_demonstration_hdf5_v2_project_")))
+			.andReturn()
+			.getResponse()
+			.getContentAsByteArray();
+		try (var file = HdfFile.fromBytes(bytes)) {
+			assertEquals("human-demonstration-hdf5.v2", file.getAttribute("schema_version").getData());
+			assertEquals(false, file.getAttribute("contains_raw_candidates").getData());
+			var episode = (io.jhdf.api.Group) file.getByPath("/data/demo_000000");
+			assertFalse(episode.getChildren().containsKey("views"));
+			var samples = file.getByPath("/data/demo_000000/samples");
+			assertEquals("dual-hand-tensor.v2", samples.getAttribute("layout").getData());
+			assertEquals(1280, samples.getAttribute("image_width").getData());
+			assertEquals(720, samples.getAttribute("image_height").getData());
+			assertEquals(1, samples.getAttribute("step_count").getData());
+
+			var landmarks = (float[][][][]) file.getDatasetByPath("/data/demo_000000/samples/landmarks").getData();
+			assertEquals(1, landmarks.length);
+			assertEquals(2, landmarks[0].length);
+			assertEquals(21, landmarks[0][0].length);
+			assertEquals(3, landmarks[0][0][0].length);
+
+			var handMask = (int[][]) file.getDatasetByPath("/data/demo_000000/samples/hand_mask").getData();
+			assertEquals(1, handMask[0][0]); // LEFT hand present
+			assertEquals(0, handMask[0][1]); // RIGHT hand absent
+		}
+	}
+
 	private UUID approveRevision(GroupFixture group, int endMs, String prefix) throws Exception {
 		recordGroup(group, "QUALIFIED", prefix + "-quality").andExpect(status().isOk());
 		this.mockMvc

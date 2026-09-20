@@ -167,8 +167,8 @@ export function ExportDataMenu({ projectId }: { projectId: string }) {
         <section aria-label="HDF5 演示数据导出">
           <div className="export-modal-description">
             <p>
-              HDF5 演示数据包含已复核人工动作区间、标签来源与各机位当前可验证的 MediaPipe
-              手部关键点。
+              HDF5 演示数据包含已复核人工动作区间、标签来源与双手时间步对齐手部关键点（v2
+              开箱即训精简格式）。
             </p>
             <p>文件不包含 MP4、对象存储地址、患者身份或机器人控制动作；仅限合成数据配置导出。</p>
           </div>
