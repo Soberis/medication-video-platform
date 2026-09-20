@@ -151,14 +151,6 @@ class MediaJob {
 		this.updatedAt = changedAt;
 	}
 
-	void requeueAfterDeliveryRecovery(Instant changedAt) {
-		if (this.status != MediaJobStatus.QUEUED) {
-			throw new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_STATE_CONFLICT",
-					"Only a queued media job can recover a confirmed missing delivery.");
-		}
-		this.updatedAt = changedAt;
-	}
-
 	private void transitionFromRunning(MediaJobStatus target, Instant changedAt) {
 		if (this.status != MediaJobStatus.RUNNING) {
 			throw new MediaJobExecutionException("STALE_ATTEMPT", "The media job is no longer running.", false);

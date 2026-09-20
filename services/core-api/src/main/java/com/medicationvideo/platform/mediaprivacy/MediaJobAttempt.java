@@ -183,20 +183,6 @@ class MediaJobAttempt {
 		this.updatedAt = now;
 	}
 
-	void recoverMissingBrokerDelivery(Instant now) {
-		if (this.status != MediaJobAttemptStatus.QUEUED) {
-			throw new MediaJobDeliveryRecoveryException("MEDIA_JOB_DELIVERY_RECOVERY_STATE_CONFLICT",
-					"Only a queued media job attempt can recover a confirmed missing delivery.");
-		}
-		this.status = MediaJobAttemptStatus.FAILED;
-		this.errorClass = "RETRYABLE_RESOURCE";
-		this.errorCode = "BROKER_MESSAGE_LOST";
-		this.safeErrorMessage = "The confirmed broker delivery was missing and was replaced by an audited attempt.";
-		this.errorRetryable = true;
-		this.completedAt = now;
-		this.updatedAt = now;
-	}
-
 	boolean isRecoverableAt(Instant cutoff) {
 		return this.status == MediaJobAttemptStatus.RUNNING && this.leaseUntil != null
 				&& !this.leaseUntil.isAfter(cutoff);

@@ -1,7 +1,7 @@
 # 异步作业协议
 
 > 文档状态：P0 详细设计（评审稿，V1.35 对齐待校订）
-> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理、MediaPipe 与 Action Candidate 作业；当前 `human-demonstration-hdf5.v1` 导出为 Core API 内的受控导出操作
+> 适用范围：媒体探测/转码/抽帧、跨进程媒体处理、MediaPipe 与 Action Candidate 作业；当前 `human-demonstration-hdf5.v2` 导出为 Core API 内的受控导出操作
 > 最后更新：2026-09-01
 
 当前需求口径以 [V1.35 Consolidated Baseline](../requirements/baselines/V1.35/配药视频数据处理平台需求文档_V1.35.md) 和
@@ -360,13 +360,10 @@ UUIDv5 校验能够发现抄录错误并绑定稳定诊断身份，但不是签�
 管理员从受控 RabbitMQ 管理面读取保留诊断并接受审计；若未来需要无人值守重放，必须先增加
 签名诊断或受信 DLQ Inbox，不能把本接口改为自动消费后直接重试。
 
-若 RabbitMQ 在 publisher confirm 之后发生灾难性丢失，数据库中的当前 `QUEUED` attempt 不会被
-自动重新投递：Core API 无法仅凭队列瞬时为空判断消息丢失，自动重投会造成重复执行和伪造 DLQ。
-管理员在确认 source message 已丢失后，才可调用
-`POST /api/v1/media-jobs/{media_job_id}/delivery-recoveries`。该命令仅接受 source message/attempt、
-固定原因 `BROKER_MESSAGE_LOST` 与非敏感变更引用；锁定项目和当前 `QUEUED` attempt，标记旧 attempt
-为失败并原子创建新的 attempt、capability、message ID、Outbox、恢复记录和审计。它不扫描队列、
-不重发旧 capability、不能用于 RUNNING/终态 attempt，并受既有最大 attempt 上限约束。
+历史媒体作业投递恢复曾针对极端 Broker 消息丢失设计了人工受控恢复；V50 表结构
+仅用于解释历史 Flyway/运行记录，当前不保留 active 的 `POST /api/v1/media-jobs/{media_job_id}/delivery-recoveries`
+等 HTTP 端点。Core API 依赖 Transactional Outbox 与租约超时回收保证投递可靠性；若确实发生极端
+broker 消息丢失，由系统运维通过重试或重新派发作业处理，不依赖独立手工恢复接口。
 
 历史数据集导出曾沿用同一人工边界；以下接口和字段仅用于解释历史 Flyway/运行记录，当前不存在
 `POST /api/v1/dataset-exports/{dataset_export_id}/replays` 这类 active endpoint。

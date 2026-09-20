@@ -13,7 +13,7 @@
 - Docker Compose 可验证功能闭环，但不能自动证明生产高可用和灾难恢复能力。
 - 精确 CPU、内存、存储、并发、RPO 和 RTO 在真实工作量与目标部署基础设施确认后冻结。
 - 镜像不得使用 `latest`，使用准确版本和 digest。
-- V1.35 当前不部署独立 Dataset Export Worker；唯一的 `human-demonstration-hdf5.v1` 由 Core API 在最终准入通过后受控生成，不构成独立 Worker 工作负载。自动标注的真实模型推理由受控 AI Worker 执行，草稿来源记录仍由 Core API 持有。
+- V1.35 当前不部署独立 Dataset Export Worker；唯一的 `human-demonstration-hdf5.v2` 由 Core API 在最终准入通过后受控生成，不构成独立 Worker 工作负载。自动标注的真实模型推理由受控 AI Worker 执行，草稿来源记录仍由 Core API 持有。
   历史 Export Worker 与 DatasetVersion 运行表面已由 V66 退役，不能作为当前容量或运行拓扑依据；历史迁移文件仍保留。
 
 ## 2. 工作负载
@@ -27,7 +27,7 @@
 | Web | React 管理端静态资源 | 否 |
 | Core API | 状态、权限、审计、事务和公开 API | 是，通过 PostgreSQL |
 | Media Worker | 探测、转码、抽帧、画质和脱敏作业 | 否，只写临时对象并回传结果 |
-| HDF5 Export / Eligibility | `human-demonstration-hdf5.v1` 最终准入和受控生成 | 是，Core API 重新校验并生成导出 |
+| HDF5 Export / Eligibility | `human-demonstration-hdf5.v2` 最终准入和受控生成 | 是，Core API 重新校验并生成导出 |
 | PostgreSQL | 关系业务真值、Outbox/Inbox 和审计索引 | 是 |
 | S3 兼容存储 | raw、variant、frames、reports | 保存字节事实，不保存关系状态；当前 HDF5 由 Core API 受控返回，不改变对象存储业务真值边界 |
 | RabbitMQ | 作业和事件传递 | 否 |
@@ -44,7 +44,7 @@
 | 上传与资产 | 在业务代码中启用 PostgreSQL 和 S3 | RabbitMQ、Redis、CVAT、Export/AI Worker |
 | 媒体处理 | RabbitMQ、Media Worker、单业务队列、DLQ | Redis、独立 Export Worker |
 | 隐私与标注 | 平台账号会话、人工接管能力 | 无证据的 Redis、未批准的外部 IdP |
-| human-demonstration-hdf5.v1 | Core API 最终准入和受控导出 | DatasetVersion/Export Worker、无证据的 Redis |
+| human-demonstration-hdf5.v2 | Core API 最终准入和受控导出 | DatasetVersion/Export Worker、无证据的 Redis |
 | 自动标注 | AI Worker、RabbitMQ、获批准的本地模型、Core API 草稿初始化规则 | 未验收的批量放量和无人工回退策略 |
 
 Redis 不属于 P0 默认运行清单。只有出现可量化的缓存、限流、短锁或短期进度需求，并验证失效后不影响正确性，才通过配置和部署变更加入。
@@ -204,7 +204,7 @@ required_workers = worker_hours_day / effective_worker_hours_day
 ## 8. 对象存储运行要求
 
 - S3 API 能力测试：multipart、checksum、versioning、object lock、lifecycle、SSE/KMS、range GET、并发和错误语义。
-- 原始、工作和隔离对象有独立生命周期策略；当前 `human-demonstration-hdf5.v1` 不改变关系型业务真值，具体导出对象持久化方式由现役 exporter 事实决定。
+- 原始、工作和隔离对象有独立生命周期策略；当前 `human-demonstration-hdf5.v2` 不改变关系型业务真值，具体导出对象持久化方式由现役 exporter 事实决定。
 - 未完成 multipart 和 job 临时前缀有清理任务及积压告警。
 - 上传过期扫描和对象清理属于破坏性调度，默认关闭；每个环境须在隔离 bucket、最小权限、告警 owner 和运行手册确认后显式启用 `UPLOAD_CLEANUP_ENABLED=true`。
 - 调度关闭或 API 重启时，已提交的 `upload_cleanup_task` 必须保留；claim lease 到期后允许其他实例恢复，达到有限重试上限后进入可告警的 `FAILED`，不得静默丢弃。
@@ -249,7 +249,7 @@ Kubernetes 不是 HA 的充分条件。数据库、对象存储、备份、网�
 | --- | --- | --- | --- | --- |
 | 上传接收 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
 | 标注/复核 | 待确认 | 待确认 | 待确认 | 恢复演练报告 |
-| human-demonstration-hdf5.v1 export | 待确认 | 待确认 | 待确认 | 当前记录、批准结果、ClipAsset 和 MediaPipe provenance 校验 |
+| human-demonstration-hdf5.v2 export | 待确认 | 待确认 | 待确认 | 当前记录、批准结果、ClipAsset 和 MediaPipe provenance 校验 |
 | 权限/审计 | 待确认 | 待确认 | 待确认 | PITR 和审计链校验 |
 
 冻结数值后反推 WAL、快照、对象备份频率、异地副本、HA 和值班要求。

@@ -4,7 +4,7 @@
 
 本手册描述仓库当前实际提供的运行时拓扑、可重复的本地 synthetic smoke、配置与秘密边界，以及上线前必须由目标环境责任人补齐的证据。它不把本地 Docker Compose 当作生产部署，也不授权使用真实患者数据、生产凭据或生产队列。
 
-当前仓库的历史 smoke 主要验证 V1.28 CaptureGroup 闭环；当前产品目标是 V1.35 的自动标注、异常人工接管和 `human-demonstration-hdf5.v1`。草稿准备与显式提交 runtime 与真实模型质量尚未完成验收，真实生产发布目前仍应标为 `NOT READY`，除非目标环境另行提供并演练生产制品监督、TLS/入口保护、数据库与对象存储备份恢复、值班/告警和批准的 RPO/RTO。
+当前仓库的历史 smoke 主要验证 V1.28 CaptureGroup 闭环；当前产品目标是 V1.35 的自动标注、异常人工接管和 `human-demonstration-hdf5.v2`。草稿准备与显式提交 runtime 与真实模型质量尚未完成验收，真实生产发布目前仍应标为 `NOT READY`，除非目标环境另行提供并演练生产制品监督、TLS/入口保护、数据库与对象存储备份恢复、值班/告警和批准的 RPO/RTO。
 
 本轮是部署与 smoke 就绪检查，不是 UAT，也不改变产品业务语义。
 
@@ -25,7 +25,7 @@
 | Web | 用户 smoke 需要 | `apps/web` 下 `pnpm dev`（`pnpm run web:dev`） | 当前仓库提供前端源代码和 Vite 启动方式，不提供受支持的生产 Web supervisor/镜像 |
 | model/profile files | 按路径需要 | Media Probe profile 在 `contracts/profiles/`；CaptureGroup Cleaning 规则集由 Core API 固定；AI 模型在仓库外 | profile、规则集和模型摘要必须与 Core API、Worker、job 及契约一致；不把模型文件提交到 Git |
 
-V1.35 的 `human-demonstration-hdf5.v1` 由 Core API 在最终准入通过后受控生成；仓库没有当前在用的 Export Worker，也不创建 `DatasetVersion`、`CaptureSync` 或通用 workflow engine。`hand-landmarks.v1` 仅作为历史导出事实，不是当前产品入口。
+V1.35 的 `human-demonstration-hdf5.v2` 由 Core API 在最终准入通过后受控生成；仓库没有当前在用的 Export Worker，也不创建 `DatasetVersion`、`CaptureSync` 或通用 workflow engine。`hand-landmarks.v1` 仅作为历史导出事实，不是当前产品入口。
 
 ## 最小部署就绪清单
 
@@ -176,7 +176,7 @@ pnpm run synthetic-capture-group -- --scenario n1-complete
 6. 分别读取 view quality `.../clip-assets/{clip_asset_id}/quality-review` 和 group quality `.../capture-groups/{capture_group_id}/quality-review`，确认两者不是同一事实。
 7. 读取任务列表，确认每个 CaptureGroup 至多一个任务；提交、复核状态与当前 Revision 一致。
 8. 使用合成 fixture 验证媒体就绪后的自动派发、候选初始化不提交、人工修改不被覆盖、显式提交后才能复核。真实 Worker 接收、推理和回传仍须在受控环境另行验收。
-9. 在视频工作区执行 `human-demonstration-hdf5.v1` preview/download；核对导出范围、当前 CameraStream/ClipAsset、21 点样本、批准结果来源和 MediaPipe provenance。旧事件 manifest、旧 CSV 与历史单视频导出不列为 V1.35 验收目标。
+9. 在视频工作区执行 `human-demonstration-hdf5.v2` preview/download；核对导出范围、当前 CameraStream/ClipAsset、21 点样本、批准结果来源和 MediaPipe provenance。旧事件 manifest、旧 CSV 与历史单视频导出不列为 V1.35 验收目标。
 
 建议至少运行 `n1-complete`、`n5-complete`、`n5-missing-camera`、`n5-rejected-view` 和 `receiving-before-finalize`；`no-hand-detected`/`candidate-failure` 只有在 AI 模型和受控 fixture 就绪时才运行。`candidate-failure` 未运行不能解释为 UAT 通过。
 
