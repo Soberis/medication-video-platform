@@ -1,15 +1,25 @@
 [CmdletBinding()]
 param(
+    [Parameter(Position = 0)]
+    [ValidateSet('start', 'restart', '')]
+    [string]$Action = '',
+
+    [Alias('Restart', 'restart')]
+    [switch]$RestartApi,
+
     [switch]$AiWorker,
     [switch]$InfrastructureOnly,
-    [switch]$RestartApi,
     [ValidateRange(1, 8)]
-    [int]$MediaWorkerConcurrency = 4,
+    [int]$MediaWorkerConcurrency = 2,
     [ValidateRange(1, 8)]
-    [int]$AiWorkerConcurrency = 4,
+    [int]$AiWorkerConcurrency = 2,
     [ValidateRange(30, 600)]
     [int]$ApiStartupTimeoutSeconds = 180
 )
+
+if ($Action -eq 'restart') {
+    $RestartApi = [switch]::Present
+}
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot

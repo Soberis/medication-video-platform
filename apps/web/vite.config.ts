@@ -1,3 +1,4 @@
+import { createServer } from 'node:net'
 import { fileURLToPath, URL } from 'node:url'
 
 import react from '@vitejs/plugin-react'
@@ -5,7 +6,34 @@ import { defineConfig, loadEnv } from 'vite'
 
 const workspaceRoot = fileURLToPath(new URL('../..', import.meta.url))
 
-export default defineConfig(({ mode }) => {
+async function isPortAvailable(port: number, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    server.once('error', () => resolve(false))
+    server.once('listening', () => {
+      server.close(() => resolve(true))
+    })
+    server.listen(port, host)
+  })
+}
+
+async function resolveAvailableWebPort(preferredPort: number, host = '127.0.0.1'): Promise<number> {
+  if (await isPortAvailable(preferredPort, host)) {
+    return preferredPort
+  }
+  const candidatePorts = [3000, 3001, 5174, 5175, 8081, 8082]
+  for (const candidate of candidatePorts) {
+    if (candidate !== preferredPort && (await isPortAvailable(candidate, host))) {
+      console.warn(
+        `[vite] Port ${preferredPort} is unavailable on ${host} (likely reserved by Windows Hyper-V / EACCES or in use). Automatically falling back to port ${candidate}.`,
+      )
+      return candidate
+    }
+  }
+  return preferredPort
+}
+
+export default defineConfig(async ({ mode }) => {
   // Load the repository .env for the development proxy only. Values without
   // the VITE_ prefix remain unavailable to browser code. A fresh checkout
   // falls back to .env.example, matching the local backend script.
@@ -22,6 +50,7 @@ export default defineConfig(({ mode }) => {
   ) {
     throw new Error('WEB_PORT must be an integer between 1024 and 65535.')
   }
+  const effectiveWebPort = await resolveAvailableWebPort(configuredWebPort, '127.0.0.1')
   const configuredApiPort = Number(environmentValue('PLATFORM_API_PORT') || '8080')
   if (
     !Number.isInteger(configuredApiPort) ||
@@ -41,7 +70,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '127.0.0.1',
-      port: configuredWebPort,
+      port: effectiveWebPort,
       proxy: {
         '/api': {
           target: `http://127.0.0.1:${configuredApiPort}`,
