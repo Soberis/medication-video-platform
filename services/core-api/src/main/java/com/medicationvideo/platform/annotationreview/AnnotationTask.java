@@ -159,9 +159,7 @@ class AnnotationTask {
 				&& Objects.equals(this.confirmedViewSet, revision.getConfirmedViewSet());
 	}
 
-	void selectPrimaryView(UUID clipAssetId, int cameraNumber, Instant now) {
-		this.primaryClipAssetId = clipAssetId;
-		this.primaryCameraNumber = cameraNumber;
+	void touch(Instant now) {
 		this.updatedAt = now;
 	}
 

@@ -182,7 +182,7 @@ export default function AnnotationTaskListView({
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const visibleItems = items.filter((task) => {
     if (filter === 'mine') {
-      if (!(task.can_submit || task.can_select_primary || task.can_review)) return false
+      if (!(task.can_submit || task.can_review)) return false
     } else if (filter === 'assigned') {
       if (annotationTaskStatusLabel(task) !== '待标注') return false
     } else if (filter === 'submitted') {
@@ -263,6 +263,14 @@ export default function AnnotationTaskListView({
                 const captureGroupId = row.capture_group_id
                 const taskSubject = `采集记录 ${shortId(captureGroupId)}`
                 const revision = row.annotation_revision
+                const revisionSegmentCount = revision
+                  ? revision.annotation_document.schema_version === 'annotation-document.v2'
+                    ? revision.annotation_document.camera_views.reduce(
+                        (count, view) => count + view.segments.length,
+                        0,
+                      )
+                    : revision.annotation_document.segments.length
+                  : 0
                 const presentation = captureGroupCleaningPresentation(row)
                 const taskDestination = captureGroupTaskDestination(row)
                 const taskAction =
@@ -339,7 +347,7 @@ export default function AnnotationTaskListView({
                         {revision ? (
                           <div className="task-evidence-summary">
                             <strong className="task-evidence-primary">
-                              已提交 · {revision.annotation_document.segments.length} 个时间段
+                              已提交 · {revisionSegmentCount} 个时间段
                             </strong>
                             <p
                               className="task-evidence-status"

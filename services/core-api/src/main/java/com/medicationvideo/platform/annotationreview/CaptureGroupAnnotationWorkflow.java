@@ -5,10 +5,12 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -17,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.CandidateEvidence;
 import com.medicationvideo.platform.aicandidate.CandidateEvidenceQueryService.RunSummary;
-import com.medicationvideo.platform.assetcapture.ClipAssetReviewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupFacts;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
@@ -35,8 +36,6 @@ import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
 class CaptureGroupAnnotationWorkflow {
 
 	private final ProjectAccessService projectAccessService;
-
-	private final ClipAssetReviewQueryService assetQueryService;
 
 	private final QualityReviewQueryService qualityReviewQueryService;
 
@@ -56,19 +55,20 @@ class CaptureGroupAnnotationWorkflow {
 
 	private final AnnotationReviewRepository reviewRepository;
 
+	private final AnnotationTaskViewService taskViewService;
+
 	private final AuditEventRecorder auditRecorder;
 
 	CaptureGroupAnnotationWorkflow(ProjectAccessService projectAccessService,
-			ClipAssetReviewQueryService assetQueryService, QualityReviewQueryService qualityReviewQueryService,
+			QualityReviewQueryService qualityReviewQueryService,
 			CaptureGroupViewQueryService captureGroupViewQueryService,
 			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			MediaDurationQueryService mediaDurationQueryService,
 			CandidateEvidenceQueryService candidateEvidenceQueryService,
 			AnnotationLabelSchemaService labelSchemaService, AnnotationTaskRepository taskRepository,
 			AnnotationRevisionRepository revisionRepository, AnnotationReviewRepository reviewRepository,
-			AuditEventRecorder auditRecorder) {
+			AnnotationTaskViewService taskViewService, AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
-		this.assetQueryService = assetQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
@@ -78,6 +78,7 @@ class CaptureGroupAnnotationWorkflow {
 		this.taskRepository = taskRepository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
+		this.taskViewService = taskViewService;
 		this.auditRecorder = auditRecorder;
 	}
 
@@ -104,6 +105,8 @@ class CaptureGroupAnnotationWorkflow {
 			var inputChanged = task.refreshGroupQualitySnapshot(current.captureGroupQualityReviewId(),
 					current.revision(), current.confirmedViewSet(), current.inputVersion(), now);
 			this.taskRepository.saveAndFlush(task);
+			var facts = this.captureGroupViewQueryService.lockAndGet(projectId, captureGroupId);
+			this.taskViewService.synchronize(task, facts.views(), inputChanged, now);
 			if (inputChanged && previousStatus != AnnotationTaskStatus.ASSIGNED) {
 				this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 						"CAPTURE_GROUP_ANNOTATION_TASK_REOPENED_FOR_INPUT_CHANGE", "AnnotationTask",
@@ -124,6 +127,8 @@ class CaptureGroupAnnotationWorkflow {
 			.saveAndFlush(AnnotationTask.createForCaptureGroup(projectId, captureGroupId, assigneeActorId, actorId,
 					idempotencyKey, this.labelSchemaService.currentBinding(), current.captureGroupQualityReviewId(),
 					current.revision(), current.confirmedViewSet(), current.inputVersion(), now));
+		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, captureGroupId);
+		this.taskViewService.synchronize(task, facts.views(), false, now);
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"CAPTURE_GROUP_ANNOTATION_TASK_ASSIGNED", "AnnotationTask", task.getAnnotationTaskId().toString(),
 				Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "EXPLICIT_HUMAN_LABEL_ASSIGNMENT", requestId,
@@ -141,27 +146,24 @@ class CaptureGroupAnnotationWorkflow {
 			String idempotencyKey, String requestId, String traceId, AnnotationRevisionSubmitCommand request,
 			Map<String, Object> document, String documentSha256) {
 		var groupContext = requireGroupSubmissionContext(projectId, task);
-		validateSegmentBounds(projectId, groupContext.primaryClipAssetId(), request.segments());
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 		task.submit(now);
 		var revisionNumber = this.revisionRepository
 			.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(task.getAnnotationTaskId())
 			.map(revision -> revision.getRevisionNumber() + 1)
 			.orElse(1);
-		var revision = AnnotationRevision.submitForCaptureGroup(task, revisionNumber, document, documentSha256, actorId,
-				idempotencyKey, now, groupContext.confirmedViewSet(), groupContext.inputVersion());
+		var revision = AnnotationRevision.submitForCaptureGroupV2(task, revisionNumber, document, documentSha256,
+				actorId, idempotencyKey, now, groupContext.confirmedViewSet(), groupContext.inputVersion());
 		this.revisionRepository.saveAndFlush(revision);
 		this.taskRepository.saveAndFlush(task);
 		var auditDetails = new LinkedHashMap<String, String>();
 		auditDetails.put("annotation_task_id", task.getAnnotationTaskId().toString());
-		auditDetails.put("clip_asset_id", groupContext.primaryClipAssetId().toString());
 		auditDetails.put("label_schema_id", revision.getLabelSchemaId().toString());
 		auditDetails.put("label_schema_digest", revision.getLabelSchemaDigest());
 		auditDetails.put("document_sha256", documentSha256);
-		auditDetails.put("segment_count", Integer.toString(request.segments().size()));
+		auditDetails.put("camera_view_count", Integer.toString(((List<?>) document.get("camera_views")).size()));
+		auditDetails.put("correspondence_count", Integer.toString(request.correspondences().size()));
 		auditDetails.put("capture_group_id", task.getCaptureGroupId().toString());
-		auditDetails.put("primary_clip_asset_id", task.getPrimaryClipAssetId().toString());
-		auditDetails.put("primary_camera_number", task.getPrimaryCameraNumber().toString());
 		auditDetails.put("group_input_version", groupContext.inputVersion());
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_REVISION_SUBMITTED", "AnnotationRevision", revision.getAnnotationRevisionId().toString(),
@@ -170,63 +172,58 @@ class CaptureGroupAnnotationWorkflow {
 		return AnnotationRevisionResponse.from(revision);
 	}
 
-	@Transactional
-	AnnotationTaskResponse selectPrimaryView(UUID projectId, UUID annotationTaskId, String actorId, UUID clipAssetId,
-			String requestId, String traceId) {
-		this.projectAccessService.lockAndRequireMember(projectId, actorId);
-		var task = this.taskRepository.findForUpdate(projectId, annotationTaskId)
-			.orElseThrow(CaptureGroupAnnotationWorkflow::taskNotFound);
-		if (!task.getAssigneeActorId().equals(actorId)) {
-			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_ASSIGNEE",
-					"Only the assigned project member can select the primary view.", 403);
-		}
-		var existingRevision = this.revisionRepository
-			.findTopByAnnotationTaskIdOrderByRevisionNumberDesc(task.getAnnotationTaskId());
-		if (existingRevision.isPresent() && !Objects.equals(task.getPrimaryClipAssetId(), clipAssetId)
-				&& (task.getStatus() != AnnotationTaskStatus.ASSIGNED
-						|| task.isRevisionForCurrentGroupInput(existingRevision.get()))) {
-			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_FROZEN",
-					"The primary view is frozen for the current input after a formal annotation revision.", 409);
-		}
-		if (Objects.equals(task.getPrimaryClipAssetId(), clipAssetId)) {
-			return AnnotationTaskResponse.from(task, actorId, false,
-					existingRevision.filter(task::isRevisionForCurrentGroupInput).orElse(null), null, null);
-		}
-
+	void requireCurrentGroupInput(UUID projectId, AnnotationTask task) {
 		var groupQuality = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId,
 				task.getCaptureGroupId());
 		if (!groupQuality.isAdmitting()) {
 			throw groupQualityNotAdmitting();
 		}
-		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, task.getCaptureGroupId());
-		var selectedView = facts.views()
-			.stream()
-			.filter(view -> clipAssetId.equals(view.clipAssetId()))
-			.findFirst()
-			.orElseThrow(CaptureGroupAnnotationWorkflow::primaryViewNotEligible);
-		var quality = this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId, clipAssetId);
-		var assetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, clipAssetId);
-		if (!selectedView.present() || !selectedView.assetAvailable() || !assetFacts.reviewable()
-				|| !quality.isQualified()) {
-			throw primaryViewNotEligible();
+		if (!Objects.equals(task.getGroupInputVersion(), groupQuality.inputVersion())
+				|| !Objects.equals(task.getConfirmedViewSet(), groupQuality.confirmedViewSet())) {
+			throw primaryViewInputChanged();
 		}
+		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, task.getCaptureGroupId());
 		var decisions = this.qualityReviewQueryService.findCurrentDecisions(projectId,
 				facts.views().stream().map(CaptureGroupView::clipAssetId).filter(Objects::nonNull).toList());
 		if (!viewSetStillCurrent(groupQuality.confirmedViewSet(), facts, decisions)) {
 			throw primaryViewInputChanged();
 		}
+	}
+
+	void requireCameraViewEligibleForSubmission(AnnotationTask task, AnnotationTaskView view) {
+		if (!(task.getConfirmedViewSet().get("views") instanceof List<?> views)) {
+			throw primaryViewInputChanged();
+		}
+		var confirmed = views.stream()
+			.filter(Map.class::isInstance)
+			.map(Map.class::cast)
+			.filter(row -> row.get("camera_number") instanceof Number number
+					&& number.intValue() == view.getCameraNumber())
+			.findFirst()
+			.orElse(null);
+		if (confirmed == null || !Boolean.TRUE.equals(confirmed.get("present"))
+				|| !Boolean.TRUE.equals(confirmed.get("asset_available"))
+				|| !"INGESTED".equals(confirmed.get("media_status"))
+				|| !"QUALIFIED".equals(confirmed.get("quality_review_decision"))
+				|| !Objects.equals(confirmed.get("clip_asset_id"),
+						view.getClipAssetId() == null ? null : view.getClipAssetId().toString())) {
+			throw new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_NOT_REVIEWABLE",
+					"Only a present, ingested and quality-approved camera view can be submitted.", 409);
+		}
+	}
+
+	void recordCameraViewUpdated(UUID projectId, AnnotationTask task, AnnotationTaskView view, String actorId,
+			String requestId, String traceId) {
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		task.selectPrimaryView(clipAssetId, selectedView.cameraNumber(), now);
-		this.taskRepository.saveAndFlush(task);
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
-				"CAPTURE_GROUP_PRIMARY_VIEW_SELECTED", "AnnotationTask", task.getAnnotationTaskId().toString(),
-				Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "PRIMARY_VIEW_TIMEBASE_SELECTED", requestId,
-				traceId, "ANNOTATION_TASK_ASSIGNEE",
-				Map.of("capture_group_id", task.getCaptureGroupId().toString(), "primary_clip_asset_id",
-						clipAssetId.toString(), "primary_camera_number", Integer.toString(selectedView.cameraNumber()),
-						"group_quality_revision", Long.toString(groupQuality.revision()), "input_version",
-						groupQuality.inputVersion())));
-		return AnnotationTaskResponse.from(task, actorId, false, null, null, null);
+				"ANNOTATION_CAMERA_VIEW_UPDATED", "AnnotationTaskView", view.getAnnotationTaskViewId().toString(),
+				Long.toString(view.getVersion()), AuditOutcome.SUCCEEDED, "CAMERA_VIEW_" + view.getState().name(),
+				requestId, traceId, "ANNOTATION_TASK_ASSIGNEE",
+				Map.of("annotation_task_id", task.getAnnotationTaskId().toString(), "capture_group_id",
+						task.getCaptureGroupId().toString(), "camera_number", Integer.toString(view.getCameraNumber()),
+						"view_state", view.getState().name(), "camera_stream_version",
+						Long.toString(view.getCameraStreamVersion()), "clip_asset_version",
+						Long.toString(view.getClipAssetVersion()), "task_version", Long.toString(task.getVersion()))));
 	}
 
 	AnnotationReviewResponse reviewRevision(UUID projectId, AnnotationRevision revision, String actorId,
@@ -237,7 +234,7 @@ class CaptureGroupAnnotationWorkflow {
 			throw new AnnotationTaskException("ANNOTATION_REVISION_NOT_CURRENT",
 					"Only the current submitted annotation revision can be reviewed.", 409);
 		}
-		var groupContext = requireGroupReviewContext(projectId, revision, task);
+		var groupContext = requireGroupReviewContext(projectId, revision, task, request);
 		if (request.decision() == AnnotationReviewDecision.APPROVED) {
 			validateRevisionBounds(projectId, revision);
 		}
@@ -249,6 +246,10 @@ class CaptureGroupAnnotationWorkflow {
 		if (review.getDecision() == AnnotationReviewDecision.REJECTED) {
 			task.returnForRework(now);
 			this.taskRepository.saveAndFlush(task);
+			if ("annotation-document.v2".equals(revision.getAnnotationSchemaVersion())) {
+				this.taskViewService.restoreAfterReview(task, revision, request.returnCameraNumbers(), actorId,
+						idempotencyKey, now);
+			}
 		}
 		else {
 			task.complete(now);
@@ -267,44 +268,12 @@ class CaptureGroupAnnotationWorkflow {
 	}
 
 	private GroupSubmissionContext requireGroupSubmissionContext(UUID projectId, AnnotationTask task) {
-		var groupQuality = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId,
-				task.getCaptureGroupId());
-		if (!groupQuality.isAdmitting()) {
-			throw groupQualityNotAdmitting();
-		}
-		if (!Objects.equals(task.getGroupInputVersion(), groupQuality.inputVersion())
-				|| !Objects.equals(task.getConfirmedViewSet(), groupQuality.confirmedViewSet())) {
-			throw primaryViewInputChanged();
-		}
-		if (!task.hasPrimaryView()) {
-			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_REQUIRED",
-					"A primary view must be selected before submitting a group annotation revision.", 409);
-		}
-		var facts = this.captureGroupViewQueryService.lockAndGet(projectId, task.getCaptureGroupId());
-		var primaryView = facts.views()
-			.stream()
-			.filter(view -> task.getPrimaryClipAssetId().equals(view.clipAssetId()))
-			.findFirst()
-			.orElseThrow(CaptureGroupAnnotationWorkflow::primaryViewNotEligible);
-		var viewAssetFacts = this.assetQueryService.lockAndGetReviewFacts(projectId, task.getPrimaryClipAssetId());
-		var primaryQuality = this.qualityReviewQueryService.lockAndGetCurrentDecision(projectId,
-				task.getPrimaryClipAssetId());
-		var decisions = new HashMap<>(this.qualityReviewQueryService.findCurrentDecisions(projectId,
-				facts.views().stream().map(CaptureGroupView::clipAssetId).filter(Objects::nonNull).toList()));
-		decisions.put(task.getPrimaryClipAssetId(), primaryQuality);
-		if (!primaryView.present() || !primaryView.assetAvailable() || !viewAssetFacts.reviewable()
-				|| !primaryQuality.isQualified() || primaryView.cameraNumber() != task.getPrimaryCameraNumber()) {
-			throw primaryViewNotEligible();
-		}
-		if (!viewSetStillCurrent(groupQuality.confirmedViewSet(), facts, decisions)) {
-			throw primaryViewInputChanged();
-		}
-		return new GroupSubmissionContext(task.getPrimaryClipAssetId(), groupQuality.confirmedViewSet(),
-				groupQuality.inputVersion());
+		this.requireCurrentGroupInput(projectId, task);
+		return new GroupSubmissionContext(task.getConfirmedViewSet(), task.getGroupInputVersion());
 	}
 
 	private GroupReviewContext requireGroupReviewContext(UUID projectId, AnnotationRevision revision,
-			AnnotationTask task) {
+			AnnotationTask task, AnnotationReviewCommand request) {
 		var groupQuality = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId,
 				revision.getCaptureGroupId());
 		if (!groupQuality.isAdmitting() || groupQuality.captureGroupQualityReviewId() == null
@@ -320,6 +289,8 @@ class CaptureGroupAnnotationWorkflow {
 			throw new AnnotationTaskException("ANNOTATION_REVISION_NO_LONGER_QUALIFIED",
 					"The CaptureGroup View Set is stale and cannot be reviewed.", 409);
 		}
+		var revisionCameras = annotationSchemaCameras(revision);
+		validateReviewCameraScope(revision, revisionCameras, request);
 		var qualifiedViews = new ArrayList<Map<String, Object>>();
 		var rejectedMissingViews = new ArrayList<Map<String, Object>>();
 		for (var view : facts.views()) {
@@ -329,7 +300,9 @@ class CaptureGroupAnnotationWorkflow {
 			var details = groupViewDetails(view, qualityDecision, qualityVersion);
 			if (view.present() && view.assetAvailable() && "INGESTED".equals(view.mediaStatus())
 					&& "QUALIFIED".equals(qualityDecision)) {
-				details.put("is_primary", Objects.equals(view.clipAssetId(), task.getPrimaryClipAssetId()));
+				if ("annotation-document.v1".equals(revision.getAnnotationSchemaVersion())) {
+					details.put("is_primary", Objects.equals(view.clipAssetId(), task.getPrimaryClipAssetId()));
+				}
 				qualifiedViews.add(Collections.unmodifiableMap(new LinkedHashMap<>(details)));
 			}
 			else {
@@ -338,8 +311,10 @@ class CaptureGroupAnnotationWorkflow {
 			}
 		}
 		var primaryQualified = qualifiedViews.stream()
-			.anyMatch(view -> Objects.equals(view.get("clip_asset_id"), task.getPrimaryClipAssetId().toString()));
-		if (!task.hasPrimaryView() || !primaryQualified) {
+			.anyMatch(view -> Objects.equals(view.get("clip_asset_id"),
+					task.getPrimaryClipAssetId() == null ? null : task.getPrimaryClipAssetId().toString()));
+		if ("annotation-document.v1".equals(revision.getAnnotationSchemaVersion())
+				&& (!task.hasPrimaryView() || !primaryQualified)) {
 			throw new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE",
 					"The primary view must remain present, reviewable and qualified for Review.", 409);
 		}
@@ -350,12 +325,79 @@ class CaptureGroupAnnotationWorkflow {
 			.map(CaptureGroupAnnotationWorkflow::candidateEvidenceDetails)
 			.toList();
 		return new GroupReviewContext(revision.getCaptureGroupId(), revision.getRevisionNumber(),
-				task.getPrimaryClipAssetId(), task.getPrimaryCameraNumber(), revision.getConfirmedViewSet(),
-				revision.getInputVersion(), groupQuality.captureGroupQualityReviewId(), groupQuality.result(),
-				groupQuality.revision(), qualifiedViews, rejectedMissingViews, candidateEvidence);
+				"annotation-document.v1".equals(revision.getAnnotationSchemaVersion()) ? task.getPrimaryClipAssetId()
+						: null,
+				"annotation-document.v1".equals(revision.getAnnotationSchemaVersion()) ? task.getPrimaryCameraNumber()
+						: null,
+				revision.getConfirmedViewSet(), revision.getInputVersion(), groupQuality.captureGroupQualityReviewId(),
+				groupQuality.result(), groupQuality.revision(), qualifiedViews, rejectedMissingViews, candidateEvidence,
+				request.reviewedCameraNumbers(), request.returnCameraNumbers());
+	}
+
+	private static void validateReviewCameraScope(AnnotationRevision revision, List<Integer> revisionCameras,
+			AnnotationReviewCommand request) {
+		if ("annotation-document.v1".equals(revision.getAnnotationSchemaVersion())) {
+			if (!request.reviewedCameraNumbers().isEmpty() || !request.returnCameraNumbers().isEmpty()) {
+				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
+						"Legacy single-camera reviews cannot declare camera scope.", 400);
+			}
+			return;
+		}
+		var cameras = Set.copyOf(revisionCameras);
+		if (request.decision() == AnnotationReviewDecision.APPROVED) {
+			if (!request.reviewedCameraNumbers().equals(revisionCameras) || !request.returnCameraNumbers().isEmpty()) {
+				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
+						"Approval must cover every camera in the submitted revision and return none.", 400);
+			}
+		}
+		else {
+			var reviewed = Set.copyOf(request.reviewedCameraNumbers());
+			var returned = Set.copyOf(request.returnCameraNumbers());
+			var covered = new HashSet<>(reviewed);
+			covered.addAll(returned);
+			if (request.returnCameraNumbers().isEmpty() || !cameras.containsAll(reviewed)
+					|| !cameras.containsAll(returned) || !covered.equals(cameras)
+					|| reviewed.stream().anyMatch(returned::contains)) {
+				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
+						"A rejected revision needs non-overlapping reviewed and returned cameras from the revision.",
+						400);
+			}
+			var submittedCameras = new HashSet<Integer>();
+			if (revision.getAnnotationDocument().get("camera_views") instanceof List<?> views) {
+				for (var value : views) {
+					if (value instanceof Map<?, ?> view && Boolean.TRUE.equals(view.get("included"))
+							&& view.get("camera_number") instanceof Number camera) {
+						submittedCameras.add(camera.intValue());
+					}
+				}
+			}
+			if (!submittedCameras.containsAll(request.returnCameraNumbers())) {
+				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
+						"Only submitted camera views can be returned for rework.", 400);
+			}
+		}
+	}
+
+	private static List<Integer> annotationSchemaCameras(AnnotationRevision revision) {
+		if ("annotation-document.v1".equals(revision.getAnnotationSchemaVersion())) {
+			return revision.getPrimaryCameraNumber() == null ? List.of() : List.of(revision.getPrimaryCameraNumber());
+		}
+		if (!(revision.getAnnotationDocument().get("camera_views") instanceof List<?> views)) {
+			throw new AnnotationTaskException("ANNOTATION_REVISION_DOCUMENT_INVALID",
+					"The submitted camera snapshot is invalid.", 409);
+		}
+		return views.stream()
+			.map(value -> value instanceof Map<?, ?> view && view.get("camera_number") instanceof Number number
+					? number.intValue() : -1)
+			.sorted()
+			.toList();
 	}
 
 	private void validateSegmentBounds(UUID projectId, UUID clipAssetId, List<AnnotationSegmentCommand> segments) {
+		if (clipAssetId == null) {
+			throw new AnnotationTaskException("ANNOTATION_MEDIA_SOURCE_MISSING",
+					"The camera clip asset is missing from the submitted revision.", 409);
+		}
 		var durationMicroseconds = this.mediaDurationQueryService.findVerifiedDurationMicroseconds(projectId,
 				clipAssetId);
 		if (durationMicroseconds.isEmpty()) {
@@ -372,7 +414,37 @@ class CaptureGroupAnnotationWorkflow {
 	}
 
 	private void validateRevisionBounds(UUID projectId, AnnotationRevision revision) {
-		validateSegmentBounds(projectId, revision.getPrimaryClipAssetId(), toRevisionSegments(revision));
+		if ("annotation-document.v1".equals(revision.getAnnotationSchemaVersion())) {
+			validateSegmentBounds(projectId, revision.getPrimaryClipAssetId(), toRevisionSegments(revision));
+			return;
+		}
+		if (!(revision.getAnnotationDocument().get("camera_views") instanceof List<?> views)) {
+			throw new AnnotationTaskException("ANNOTATION_REVISION_DOCUMENT_INVALID",
+					"The submitted camera snapshot is invalid.", 409);
+		}
+		for (var value : views) {
+			if (!(value instanceof Map<?, ?> view) || !Boolean.TRUE.equals(view.get("included"))) {
+				continue;
+			}
+			var clipAssetId = uuidValue(view.get("clip_asset_id"));
+			var segments = view.get("segments") instanceof List<?> rows
+					? rows.stream().map(CaptureGroupAnnotationWorkflow::toRevisionSegment).toList()
+					: List.<AnnotationSegmentCommand>of();
+			if (segments.stream().anyMatch(segment -> segment.startMs() < 0 || segment.endMs() <= segment.startMs())) {
+				throw new AnnotationTaskException("ANNOTATION_REVISION_DOCUMENT_INVALID",
+						"A submitted camera segment has an invalid local time range.", 409);
+			}
+			validateSegmentBounds(projectId, clipAssetId, segments);
+		}
+	}
+
+	private static UUID uuidValue(Object value) {
+		try {
+			return UUID.fromString(Objects.toString(value, ""));
+		}
+		catch (IllegalArgumentException exception) {
+			return null;
+		}
 	}
 
 	private static List<AnnotationSegmentCommand> toRevisionSegments(AnnotationRevision revision) {
@@ -552,11 +624,6 @@ class CaptureGroupAnnotationWorkflow {
 	private static AnnotationTaskException groupQualityNotAdmitting() {
 		return new AnnotationTaskException("ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED",
 				"The CaptureGroup is not currently qualified for annotation submission.", 409);
-	}
-
-	private static AnnotationTaskException primaryViewNotEligible() {
-		return new AnnotationTaskException("ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE",
-				"The primary view must be a present, reviewable and qualified participating view.", 409);
 	}
 
 	private static AnnotationTaskException primaryViewInputChanged() {

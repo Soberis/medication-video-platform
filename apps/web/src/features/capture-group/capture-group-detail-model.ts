@@ -12,6 +12,8 @@ import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-
 
 export interface DraftAnnotationSegment extends AnnotationSegment {
   readonly draftId: number
+  segment_id?: string
+  source_candidate_ids?: string[]
 }
 
 export interface SegmentValidationErrors {
@@ -32,6 +34,7 @@ export function createDraftSegment(
   segment?: AnnotationSegment,
   fallbackStartMs = 0,
   fallbackEndMs = 1000,
+  metadata?: Pick<DraftAnnotationSegment, 'segment_id' | 'source_candidate_ids'>,
 ): DraftAnnotationSegment {
   nextDraftSegmentId += 1
   return {
@@ -39,6 +42,7 @@ export function createDraftSegment(
     start_ms: segment?.start_ms ?? fallbackStartMs,
     end_ms: segment?.end_ms ?? fallbackEndMs,
     label: segment?.label ?? '',
+    ...metadata,
   }
 }
 
@@ -220,15 +224,43 @@ export function initialDraftSegments(
   fallbackContext?: {
     projectId: string
     captureGroupId: string
-    primaryClipAssetId?: string | null
+    activeCameraNumber?: number | null
+    activeClipAssetId?: string | null
   },
 ) {
   if (task) {
     if (task.status !== 'ASSIGNED') return []
+    const activeCameraView = task.camera_views?.find((view) =>
+      fallbackContext?.activeCameraNumber != null
+        ? view.camera_number === fallbackContext.activeCameraNumber
+        : fallbackContext?.activeClipAssetId != null &&
+          view.clip_asset_id === fallbackContext.activeClipAssetId,
+    )
+    if (activeCameraView && activeCameraView.state !== 'PENDING') {
+      return activeCameraView.segments.map((segment) =>
+        createDraftSegment(segment, 0, 1000, {
+          segment_id: segment.segment_id,
+          source_candidate_ids: segment.source_candidate_ids,
+        }),
+      )
+    }
     const revision = task.annotation_revision
-    if (
-      revision?.annotation_document?.segments &&
-      revision.annotation_document.segments.length > 0
+    if (revision?.annotation_document.schema_version === 'annotation-document.v2') {
+      const revisedCameraView = revision.annotation_document.camera_views.find(
+        (view) => view.camera_number === fallbackContext?.activeCameraNumber,
+      )
+      if (activeCameraView?.state === 'PENDING' && revisedCameraView?.included) {
+        return revisedCameraView.segments.map((segment) =>
+          createDraftSegment(segment, 0, 1000, {
+            segment_id: segment.segment_id,
+            source_candidate_ids: segment.source_candidate_ids,
+          }),
+        )
+      }
+    } else if (
+      revision?.annotation_document.schema_version === 'annotation-document.v1' &&
+      revision.annotation_document.segments.length > 0 &&
+      revision.primary_clip_asset_id === fallbackContext?.activeClipAssetId
     ) {
       return revision.annotation_document.segments.map((segment) => createDraftSegment(segment))
     }
@@ -242,11 +274,16 @@ export function initialDraftSegments(
   )
   if (validCandidates.length > 0) {
     return validCandidates.map((candidate) =>
-      createDraftSegment({
-        start_ms: candidate.start_ms,
-        end_ms: candidate.end_ms,
-        label: candidate.action_label,
-      }),
+      createDraftSegment(
+        {
+          start_ms: candidate.start_ms,
+          end_ms: candidate.end_ms,
+          label: candidate.action_label,
+        },
+        0,
+        1000,
+        { source_candidate_ids: [candidate.action_candidate_id] },
+      ),
     )
   }
   return [createDraftSegment()]
@@ -260,7 +297,7 @@ export function validActionCandidates(
   fallbackContext?: {
     projectId: string
     captureGroupId: string
-    primaryClipAssetId?: string | null
+    activeClipAssetId?: string | null
   },
 ): ActionCandidate[] {
   if (!schema || !durationMs || !Array.isArray(candidates) || candidates.length === 0) return []
@@ -274,7 +311,7 @@ export function validActionCandidates(
   }
   const targetProjectId = task?.project_id ?? fallbackContext?.projectId
   const targetGroupId = task?.capture_group_id ?? fallbackContext?.captureGroupId
-  const targetClipAssetId = task?.primary_clip_asset_id ?? fallbackContext?.primaryClipAssetId
+  const targetClipAssetId = fallbackContext?.activeClipAssetId
 
   const ordered = [...candidates].sort((a, b) => a.start_ms - b.start_ms)
   const labels = new Set(schema.labels.map((label) => label.label_id))

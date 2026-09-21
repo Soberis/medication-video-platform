@@ -17,7 +17,7 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('CaptureGroup detail views', () => {
-  it('discovers the new primary video job after the previous job reached a terminal state', async () => {
+  it('loads action status for the selected camera after the previous job reached a terminal state', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -35,15 +35,11 @@ describe('CaptureGroup detail views', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}`,
     })
     await screen.findByText('AI 已完成 · 可直接标注', {}, { timeout: 4000 })
-    options.task = {
-      ...options.task,
-      primary_clip_asset_id: group.streams[1]!.clip_asset_id,
-      primary_camera_number: 2,
-    }
     options.actionCandidateJob = {
       status: 'RUNNING',
       clip_asset_id: group.streams[1]!.clip_asset_id,
     }
+    await userEvent.setup().click(screen.getByRole('button', { name: /机位 2/ }))
     await userEvent.setup().click(screen.getByRole('button', { name: /^刷新$/ }))
     expect(await screen.findByText('AI 分析中')).toBeInTheDocument()
   })
@@ -70,7 +66,7 @@ describe('CaptureGroup detail views', () => {
     ).toHaveLength(0)
   })
 
-  it('retries a failed action job without creating a human task', async () => {
+  it('reports a failed camera action job without creating a human task or dispatching another job', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -80,27 +76,30 @@ describe('CaptureGroup detail views', () => {
       task: null,
       quality: qualityFixture(group, 'UNREVIEWED'),
       candidateStatus: 'NO_HAND_DETECTED',
-      actionCandidateJob: { job_id: 'synthetic-action-job', status: 'FAILED' },
+      actionCandidateJob: {
+        job_id: 'synthetic-action-job',
+        status: 'FAILED',
+        clip_asset_id: group.streams[0]!.clip_asset_id,
+      },
     })
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
-      route: `/projects/${projectId}/capture-groups/${groupId}`,
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
     })
-    await userEvent
-      .setup()
-      .click(await screen.findByRole('button', { name: '重试动作分析' }, { timeout: 5000 }))
-    await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.some(
-          ([url, init]) =>
-            String(url).endsWith('/action-candidate-jobs') && init?.method === 'POST',
-        ),
-      ).toBe(true),
-    )
-    const writes = fetchMock.mock.calls.filter(
-      ([, init]) => init?.method === 'POST' || init?.method === 'PUT',
-    )
-    expect(writes.every(([url]) => String(url).endsWith('/action-candidate-jobs'))).toBe(true)
+    expect(await screen.findByText('AI 分析失败')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重试动作分析' })).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
+          init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).endsWith('/action-candidate-jobs') && init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
   })
 
   it('keeps the default detail path focused on receipt, media and machine evidence', async () => {
@@ -216,7 +215,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /提交(标注|修订)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeInTheDocument()
   })
 
   it('renders an existing human-label task without making it the default machine path', async () => {
@@ -237,11 +236,8 @@ describe('CaptureGroup detail views', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /机位 1.*标注基准/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(screen.getByRole('button', { name: /提交(标注|修订)/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /机位 1/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeInTheDocument()
   })
 
   it('keeps a missing machine result explicit while exposing the manual quality gate', async () => {

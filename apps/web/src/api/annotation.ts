@@ -9,6 +9,9 @@ export interface AnnotationTask {
   capture_group_quality_review_id: string
   group_quality_revision: number
   confirmed_view_set: CaptureGroupViewSet
+  /** Missing on historical task payloads; current API returns one row per expected view. */
+  camera_views?: AnnotationCameraView[]
+  camera_view_progress?: AnnotationCameraViewProgress
   group_input_version: string
   label_schema_id: string
   label_schema_digest: string
@@ -16,7 +19,8 @@ export interface AnnotationTask {
   created_by: string
   status: 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
   can_submit: boolean
-  can_select_primary: boolean
+  /** Legacy response field. Current group tasks do not expose primary-view selection. */
+  can_select_primary?: boolean
   can_review: boolean
   can_recheck_capture_group_cleaning: boolean
   annotation_revision: AnnotationRevisionSummary | null
@@ -24,6 +28,99 @@ export interface AnnotationTask {
   updated_at: string
   version: number
 }
+
+export type AnnotationCameraViewState = 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED'
+
+export interface AnnotationCameraViewSegment extends AnnotationSegment {
+  segment_id: string
+  source_candidate_ids: string[]
+}
+
+export interface AnnotationCameraView {
+  annotation_task_id: string
+  camera_number: number
+  camera_stream_id: string | null
+  clip_asset_id: string | null
+  source_asset_sha256: string | null
+  media_status: string
+  camera_stream_version: number
+  clip_asset_version: number
+  version: number
+  state: AnnotationCameraViewState
+  segments: AnnotationCameraViewSegment[]
+  note: string
+  exclusion_reason: string | null
+}
+
+export interface AnnotationCameraViewProgress {
+  total: number
+  pending: number
+  draft: number
+  submitted: number
+  excluded: number
+}
+
+export interface AnnotationCameraViewUpdate {
+  expected_version: number
+  expected_input_version: string
+  state: AnnotationCameraViewState
+  segments: Array<{
+    segment_id: string
+    start_ms: number
+    end_ms: number
+    label: string
+    source_candidate_ids: string[]
+  }>
+  note: string
+  exclusion_reason: string | null
+}
+
+export interface AnnotationCorrespondence {
+  correspondence_id: string
+  status: 'CONFIRMED' | 'UNCERTAIN'
+  segments: Array<{ camera_number: number; segment_id: string }>
+  reason?: string
+}
+
+export interface AnnotationRevisionCameraViewSegment extends AnnotationCameraViewSegment {
+  correspondence_id: string
+  correspondence_status: AnnotationCorrespondence['status']
+}
+
+export interface AnnotationRevisionCameraView {
+  camera_number: number
+  camera_stream_id: string | null
+  clip_asset_id: string | null
+  clip_asset_sha256: string | null
+  camera_stream_version: number
+  clip_asset_version: number
+  media_status: string
+  disposition: 'SUBMITTED' | 'EXCLUDED'
+  included: boolean
+  note?: string
+  exclusion_reason?: string | null
+  segments: AnnotationRevisionCameraViewSegment[]
+}
+
+export interface LegacyAnnotationDocument {
+  schema_version: 'annotation-document.v1'
+  segments: AnnotationSegment[]
+  note?: string
+}
+
+export interface GroupAnnotationDocument {
+  schema_version: 'annotation-document.v2'
+  capture_group_id: string
+  expected_task_version: number
+  input_version: string
+  label_schema_id: string
+  label_schema_digest: string
+  camera_views: AnnotationRevisionCameraView[]
+  correspondences: AnnotationCorrespondence[]
+  note?: string
+}
+
+export type AnnotationDocument = LegacyAnnotationDocument | GroupAnnotationDocument
 
 export interface AnnotationTaskProgress {
   scope: 'PROJECT' | 'ASSIGNEE'
@@ -71,17 +168,17 @@ export interface AnnotationRevision {
   annotation_revision_id: string
   project_id: string
   annotation_task_id: string
-  clip_asset_id: string
+  clip_asset_id?: string | null
   label_schema_id: string
   label_schema_digest: string
   revision_number: number
-  annotation_schema_version: 'annotation-document.v1'
+  annotation_schema_version: 'annotation-document.v1' | 'annotation-document.v2'
   document_sha256: string
   submitted_by: string
   submitted_at: string
   capture_group_id: string
-  primary_clip_asset_id: string
-  primary_camera_number: number
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
   confirmed_view_set: CaptureGroupViewSet
   input_version: string
 }
@@ -91,16 +188,12 @@ export interface AnnotationRevisionSummary {
   label_schema_id: string
   label_schema_digest: string
   revision_number: number
-  annotation_document: {
-    schema_version: 'annotation-document.v1'
-    segments: AnnotationSegment[]
-    note?: string
-  }
+  annotation_document: AnnotationDocument
   submitted_by: string
   submitted_at: string
   capture_group_id: string
-  primary_clip_asset_id: string
-  primary_camera_number: number
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
   confirmed_view_set: CaptureGroupViewSet
   input_version: string
   review: AnnotationReview | null
@@ -138,8 +231,8 @@ export interface CaptureGroupCleaning {
   annotation_review_decision?: 'APPROVED' | 'REJECTED'
   group_quality_result: string
   group_quality_revision: number
-  primary_clip_asset_id: string
-  primary_camera_number: number
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
   primary_interval?: CaptureGroupEvidence[]
   view_evidence?: CaptureGroupEvidence[]
   participating_views: CaptureGroupEvidence[]
@@ -168,13 +261,15 @@ export interface AnnotationReview {
   reviewed_at: string
   capture_group_id: string
   revision: number
-  primary_clip_asset_id: string
-  primary_camera_number: number
+  primary_clip_asset_id?: string | null
+  primary_camera_number?: number | null
   confirmed_view_set: CaptureGroupViewSet
   input_version: string
   qualified_views: CaptureGroupEvidence[]
   rejected_missing_views: CaptureGroupEvidence[]
   candidate_evidence: CaptureGroupEvidence[]
+  reviewed_camera_numbers?: number[]
+  return_camera_numbers?: number[]
 }
 
 export type CaptureGroupEvidence = Record<string, unknown>
@@ -265,22 +360,23 @@ export async function assignCaptureGroupHumanLabelTask(
   throw await annotationTaskApiError(response)
 }
 
-export async function selectAnnotationPrimaryView(
+export async function updateAnnotationCameraView(
   projectId: string,
   annotationTaskId: string,
-  clipAssetId: string,
+  cameraNumber: number,
+  update: AnnotationCameraViewUpdate,
 ): Promise<AnnotationTask> {
   const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(annotationTaskId)}/primary-view`,
+    `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(annotationTaskId)}/camera-views/${encodeURIComponent(String(cameraNumber))}`,
     {
       method: 'PUT',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'X-Request-Id': crypto.randomUUID(),
+        'Idempotency-Key': crypto.randomUUID(),
         ...csrfHeaders(),
       },
-      body: JSON.stringify({ clip_asset_id: clipAssetId }),
+      body: JSON.stringify(update),
       cache: 'no-store',
     },
   )
@@ -291,8 +387,12 @@ export async function selectAnnotationPrimaryView(
 export async function submitAnnotationRevision(
   projectId: string,
   annotationTaskId: string,
-  segments: AnnotationSegment[],
-  note: string,
+  request: {
+    expectedTaskVersion: number
+    inputVersion: string
+    correspondences: AnnotationCorrespondence[]
+    note: string
+  },
 ): Promise<AnnotationRevision> {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-tasks/${encodeURIComponent(annotationTaskId)}/revisions`,
@@ -304,7 +404,12 @@ export async function submitAnnotationRevision(
         'Idempotency-Key': crypto.randomUUID(),
         ...csrfHeaders(),
       },
-      body: JSON.stringify({ segments, ...(note.trim() ? { note: note.trim() } : {}) }),
+      body: JSON.stringify({
+        expected_task_version: request.expectedTaskVersion,
+        expected_input_version: request.inputVersion,
+        correspondences: request.correspondences,
+        ...(request.note.trim() ? { note: request.note.trim() } : {}),
+      }),
       cache: 'no-store',
     },
   )
@@ -317,6 +422,7 @@ export async function reviewAnnotationRevision(
   annotationRevisionId: string,
   decision: AnnotationReview['decision'],
   reviewNote = '',
+  options?: { reviewedCameraNumbers: number[]; returnCameraNumbers: number[] },
 ): Promise<AnnotationReview> {
   const response = await fetch(
     `/api/v1/projects/${encodeURIComponent(projectId)}/annotation-revisions/${encodeURIComponent(annotationRevisionId)}/review`,
@@ -331,6 +437,12 @@ export async function reviewAnnotationRevision(
       body: JSON.stringify({
         decision,
         ...(reviewNote.trim() ? { review_note: reviewNote.trim() } : {}),
+        ...(options
+          ? {
+              reviewed_camera_numbers: options.reviewedCameraNumbers,
+              return_camera_numbers: options.returnCameraNumbers,
+            }
+          : {}),
       }),
       cache: 'no-store',
     },
@@ -390,11 +502,11 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_NOT_SUBMITTED: '该标注任务已不是待复核状态，请刷新任务列表。',
     ANNOTATION_TASK_NO_LONGER_QUALIFIED: '该采集记录当前不满足标注提交条件。',
     ANNOTATION_SEGMENT_TIME_RANGE_INVALID: '每个时间段的结束时间必须晚于开始时间。',
-    ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了主视图已确认的视频时长。',
-    ANNOTATION_MEDIA_DURATION_UNVERIFIED: '主视图尚无已验证的视频时长；请完成媒体检查后重试。',
+    ANNOTATION_SEGMENT_EXCEEDS_MEDIA_DURATION: '标注时间段超出了当前机位已确认的视频时长。',
+    ANNOTATION_MEDIA_DURATION_UNVERIFIED: '当前机位尚无已验证的视频时长；请完成媒体检查后重试。',
     ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED: '采集或质量输入已变化，请管理员更新任务输入后重新标注。',
-    ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE: '该主视图当前不满足媒体与质量条件。',
-    ANNOTATION_PRIMARY_VIEW_FROZEN: '当前输入已有正式修订，主视图已锁定。',
+    ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE: '该机位当前不满足媒体与质量条件。',
+    ANNOTATION_PRIMARY_VIEW_FROZEN: '当前输入已有正式修订，已提交机位不能修改。',
     ANNOTATION_LABEL_NOT_ALLOWED: '所选标签不在当前标注规范中，请重新选择。',
     ANNOTATION_PRIMARY_STEP_OVERLAP: '主要步骤的时间段不能重叠，请调整后重试。',
     ANNOTATION_REVIEW_SELF_REVIEW_FORBIDDEN: '标注提交者不能复核自己的标注。',

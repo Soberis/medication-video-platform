@@ -163,9 +163,6 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
           }
           if (current && presentIds.has(current)) return current
           if (pendingStream) return pendingStream.clip_asset_id
-          if (nextTask?.primary_clip_asset_id && presentIds.has(nextTask.primary_clip_asset_id)) {
-            return nextTask.primary_clip_asset_id
-          }
           return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
         })
       } finally {

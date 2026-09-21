@@ -79,9 +79,11 @@ paths:
       summary: Download approved human demonstrations as HDF5
       description: >-
         Returns one HDF5 episode per selected CaptureGroup with current approved human action intervals, label schema
-        and revision provenance, plus each enabled camera's current MediaPipe evidence. Human labels remain bound to
-        the approved primary view; MediaPipe timestamps remain source-local and are never aligned or copied across
-        cameras. The custom human-demonstration-hdf5.v2 file contains dual-hand regularized tensors for imitation learning
+        and revision provenance, plus current MediaPipe evidence for every included camera. Each camera's action
+        intervals use that camera's local timestamp axis; tensor samples carry a camera_number per step and are keyed
+        by (camera_number, frame_timestamp_ms), so equal timestamps from two cameras stay separate. Only explicitly
+        recorded correspondences relate actions across cameras, and uncertain correspondences retain their reason.
+        Excluded cameras contribute no samples or raw candidates. The custom human-demonstration-hdf5.v2 file contains dual-hand regularized tensors for imitation learning
         without MP4 bytes, storage addresses, patient identity, robot states, robot actions, reward or success values.
         It is restricted to the synthetic profile.
       security:
@@ -2085,18 +2087,20 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
-  /projects/{project_id}/annotation-tasks/{annotation_task_id}/primary-view:
+  /projects/{project_id}/annotation-tasks/{annotation_task_id}/camera-views/{camera_number}:
     put:
-      operationId: selectCaptureGroupAnnotationPrimaryView
+      operationId: updateCaptureGroupAnnotationCameraView
       tags:
         - Annotation
-      summary: Select the CaptureGroup annotation timebase view
+      summary: Save, submit, exclude, or restore one CaptureGroup camera annotation
       description: >-
-        Selects an eligible participating view as the formal annotation timebase. The view does
-        not own the annotation. Selection is frozen after submission for the same input. After an
-        administrator explicitly reassigns the task to changed inputs, an ASSIGNED task may select
-        a new primary view before submitting its new revision. Historical revisions retain their
-        original timebase. A quality downgrade alone never reassigns or deletes the task.
+        Updates one camera's server-owned annotation state within the existing CaptureGroup task.
+        Each camera keeps its own clip identity and local timestamp axis. PENDING means no edits
+        have been saved; DRAFT saves editable work, SUBMITTED confirms only this camera's result,
+        and EXCLUDED records a reversible exclusion decision. Restore returns an excluded camera
+        to PENDING and requires re-confirmation. This operation never creates an AnnotationRevision
+        or review. The expected view version and group input version are checked atomically, and an
+        Idempotency-Key replays the identical mutation.
       security:
         - sessionCookie: []
       parameters:
@@ -2105,15 +2109,20 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+        - name: camera_number
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 64 }
+        - $ref: "#/components/parameters/IdempotencyKey"
         - $ref: "#/components/parameters/OptionalRequestId"
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AnnotationPrimaryViewRequest" }
+            schema: { $ref: "#/components/schemas/AnnotationCameraViewUpdateRequest" }
       responses:
         "200":
-          description: CaptureGroup-owned annotation task with the selected timebase view.
+          description: Full updated task, including all camera views and aggregate progress.
           headers:
             Cache-Control: { $ref: "#/components/headers/NoStore" }
           content:
@@ -2683,17 +2692,17 @@ paths:
       operationId: submitAnnotationRevision
       tags:
         - Annotation Tasks
-      summary: Submit an immutable manual annotation revision for an assigned task
+      summary: Submit one immutable group annotation revision for an assigned task
       description: >-
-        Requires an ACTIVE project membership and that the caller is the task assignee. The task's
-        video must still be undeleted, INGESTED and human-qualified. P0 accepts a small
-        annotation-document.v1 consisting of one or more primary-Step time ranges selected from the
-        immutable schema bound to the task and an optional note. Primary-Step ranges may touch at a
-        boundary but must not overlap. This operation does not provide drawing tools, AI annotations
-        or independent review. A verified media duration is required, and each range must end within
-        it. Missing duration returns ANNOTATION_MEDIA_DURATION_UNVERIFIED; changed task inputs
-        return ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED until explicit reassignment.
-        The Idempotency-Key safely replays the identical submission without creating another revision.
+        Requires an ACTIVE project membership and that the caller is the task assignee. The request
+        freezes the already persisted camera states into annotation-document.v2; it does not accept
+        a single shared segment list. Every expected camera slot, including missing cameras, must
+        be SUBMITTED or EXCLUDED, at least one camera must be SUBMITTED, and no view may have an
+        unsaved DRAFT. Segment bounds are validated against that camera's verified media duration
+        and original timestamp axis. Explicit correspondences distinguish CONFIRMED actions from
+        UNCERTAIN observations, which require a reason; time proximity, equal labels, or equal list
+        positions never imply synchronization. The group input and task versions are checked
+        atomically. Idempotency-Key replays the identical submission without a second revision.
       security:
         - sessionCookie: []
       parameters:
@@ -2727,7 +2736,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnnotationRevision"
         "400":
-          description: The request, label, time range, overlap rule or identifiers are invalid.
+          description: The request, label, local time range, correspondence or identifiers are invalid.
           content:
             application/problem+json:
               schema:
@@ -2751,7 +2760,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "409":
-          description: The task was already submitted or its video is no longer eligible.
+          description: A camera is unresolved, the task/input version changed, or the group is no longer eligible.
           content:
             application/problem+json:
               schema:
@@ -2765,13 +2774,13 @@ paths:
       description: >-
         Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. Administrators may confirm
         their own submissions; no second person is required. Immutable audit facts remain unchanged.
-        Approval requires verified media duration
-        and in-bounds segments; rejection remains available for rework. The CaptureGroup quality
-        admission and confirmed View Set must remain current. P0 records one immutable APPROVED or
-        REJECTED decision. A rejection returns the task to its assignee; their next immutable revision
-        receives the next revision number. An approval completes the task and persists the deterministic
-        CaptureGroup Cleaning result for that exact immutable revision. Older revisions, reviews and
-        cleaning results remain immutable.
+        Approval requires the reviewer to confirm every camera in the frozen view set and validates
+        each submitted camera's local bounds and explicit correspondence records. A rejection names
+        one or more cameras to return; other submitted or excluded camera decisions remain intact.
+        The CaptureGroup quality admission and confirmed View Set must remain current. Each decision
+        is immutable. A returned camera is re-opened for correction or re-disposition, and the next
+        complete group submission gets the next revision number. Approval completes the task for
+        that exact immutable group revision. Older revisions and reviews remain immutable.
       security:
         - sessionCookie: []
       parameters:
@@ -2829,7 +2838,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "409":
-          description: The revision was already reviewed or its CaptureGroup is no longer eligible.
+          description: Camera review coverage is incomplete, the revision was already reviewed, or the CaptureGroup is no longer eligible.
           content:
             application/problem+json:
               schema:
@@ -5600,11 +5609,11 @@ components:
         - annotation_task_id
         - project_id
         - capture_group_id
-        - primary_clip_asset_id
-        - primary_camera_number
         - capture_group_quality_review_id
         - group_quality_revision
         - confirmed_view_set
+        - camera_views
+        - camera_view_progress
         - group_input_version
         - label_schema_id
         - label_schema_digest
@@ -5633,11 +5642,14 @@ components:
         primary_clip_asset_id:
           type: [string, "null"]
           format: uuid
-          description: Selected formal annotation timebase view; it does not own the task.
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records; unused by current group revisions.
         primary_camera_number:
           type: [integer, "null"]
           minimum: 1
           maximum: 64
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records; unused by current group revisions.
         capture_group_quality_review_id:
           type: string
           format: uuid
@@ -5647,6 +5659,13 @@ components:
           minimum: 1
         confirmed_view_set:
           $ref: "#/components/schemas/CaptureGroupViewSet"
+        camera_views:
+          type: array
+          description: One current state per expected camera number, including expected slots without a received ClipAsset.
+          items:
+            $ref: "#/components/schemas/AnnotationCameraView"
+        camera_view_progress:
+          $ref: "#/components/schemas/AnnotationCameraViewProgress"
         group_input_version:
           type: string
           maxLength: 128
@@ -5670,13 +5689,14 @@ components:
             - COMPLETED
         can_submit:
           type: boolean
-          description: Server-evaluated capability for the current authenticated account to submit this task.
+          description: True only when the assigned account may submit a group revision now, all expected camera views are submitted or excluded, and at least one view is submitted.
         can_select_primary:
           type: boolean
-          description: Server-evaluated capability to select the Primary View before submission for the current task input, including explicitly reassigned changed inputs.
+          deprecated: true
+          description: Historical compatibility field; current CaptureGroup tasks always return false because no camera is primary.
         can_review:
           type: boolean
-          description: Server-evaluated capability for an administrator other than the revision submitter to independently review the submitted revision.
+          description: Server-evaluated capability for the current authenticated account to review this submitted group revision.
         can_recheck_capture_group_cleaning:
           type: boolean
           description: Server-evaluated capability for an administrator to re-evaluate CaptureGroup training eligibility against current facts.
@@ -5761,39 +5781,213 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$
-    AnnotationPrimaryViewRequest:
+    AnnotationCameraViewState:
+      type: string
+      enum:
+        - PENDING
+        - DRAFT
+        - SUBMITTED
+        - EXCLUDED
+    AnnotationCameraViewSegment:
       type: object
       additionalProperties: false
-      required:
-        - clip_asset_id
+      required: [segment_id, start_ms, end_ms, label, source_candidate_ids]
       properties:
-        clip_asset_id:
-          type: string
-          format: uuid
-          description: Participating eligible view that supplies the formal annotation timebase.
-    AnnotationSegment:
-      type: object
-      additionalProperties: false
-      required:
-        - start_ms
-        - end_ms
-        - label
-      properties:
-        start_ms:
-          type: integer
-          format: int64
-          minimum: 0
-        end_ms:
-          type: integer
-          format: int64
-          minimum: 1
+        segment_id: { type: string, format: uuid }
+        start_ms: { type: integer, format: int64, minimum: 0 }
+        end_ms: { type: integer, format: int64, minimum: 1 }
         label:
           type: string
           minLength: 1
           maxLength: 64
           pattern: ^[^\x00-\x1F\x7F]+$
-          description: >-
-            Stable label_id corresponding to an active label in the project's label schema.
+        source_candidate_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+          description: Validated Action Candidate IDs explicitly used by this segment; empty when entered from scratch.
+    AnnotationRevisionCameraViewSegment:
+      type: object
+      additionalProperties: false
+      required:
+        - segment_id
+        - start_ms
+        - end_ms
+        - label
+        - source_candidate_ids
+        - correspondence_id
+        - correspondence_status
+      properties:
+        segment_id: { type: string, format: uuid }
+        start_ms: { type: integer, format: int64, minimum: 0 }
+        end_ms: { type: integer, format: int64, minimum: 1 }
+        label: { type: string, minLength: 1, maxLength: 64 }
+        source_candidate_ids:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        correspondence_id: { type: string, format: uuid }
+        correspondence_status:
+          type: string
+          enum: [CONFIRMED, UNCERTAIN]
+    AnnotationCameraView:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_number
+        - camera_stream_id
+        - clip_asset_id
+        - source_asset_sha256
+        - media_status
+        - annotation_task_id
+        - camera_stream_version
+        - clip_asset_version
+        - version
+        - state
+        - segments
+        - note
+        - exclusion_reason
+      properties:
+        camera_number:
+          type: integer
+          minimum: 1
+          maximum: 64
+        camera_stream_id:
+          type: [string, "null"]
+          format: uuid
+        clip_asset_id:
+          type: [string, "null"]
+          format: uuid
+        source_asset_sha256:
+          type: [string, "null"]
+          pattern: ^[a-f0-9]{64}$
+        annotation_task_id: { type: string, format: uuid }
+        camera_stream_version: { type: integer, format: int64, minimum: 0 }
+        clip_asset_version: { type: integer, format: int64, minimum: 0 }
+        media_status:
+          type: string
+          maxLength: 64
+          description: Current source-media state; an absent camera is represented with null stream/clip identities.
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        state:
+          $ref: "#/components/schemas/AnnotationCameraViewState"
+        segments:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/AnnotationCameraViewSegment"
+        note:
+          type: string
+          maxLength: 1000
+        exclusion_reason:
+          type: [string, "null"]
+          maxLength: 1000
+    AnnotationCameraViewProgress:
+      type: object
+      additionalProperties: false
+      required:
+        - total
+        - pending
+        - draft
+        - submitted
+        - excluded
+      properties:
+        total: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        draft: { type: integer, minimum: 0 }
+        submitted: { type: integer, minimum: 0 }
+        excluded: { type: integer, minimum: 0 }
+    AnnotationCameraViewUpdateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - expected_version
+        - expected_input_version
+        - state
+        - segments
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 0 }
+        expected_input_version: { type: string, minLength: 1, maxLength: 128 }
+        state:
+          $ref: "#/components/schemas/AnnotationCameraViewState"
+        segments:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            additionalProperties: false
+            required: [segment_id, start_ms, end_ms, label, source_candidate_ids]
+            properties:
+              segment_id: { type: string, format: uuid }
+              start_ms: { type: integer, format: int64, minimum: 0 }
+              end_ms: { type: integer, format: int64, minimum: 1 }
+              label: { type: string, minLength: 1, maxLength: 64 }
+              source_candidate_ids:
+                type: array
+                uniqueItems: true
+                items: { type: string, format: uuid }
+        note: { type: string, maxLength: 1000, pattern: '^[^\x00-\x1F\x7F]*$' }
+        exclusion_reason: { type: [string, "null"], maxLength: 1000 }
+    AnnotationCorrespondence:
+      type: object
+      additionalProperties: false
+      required: [correspondence_id, status, segments]
+      properties:
+        correspondence_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [CONFIRMED, UNCERTAIN]
+        segments:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: object
+            additionalProperties: false
+            required: [camera_number, segment_id]
+            properties:
+              camera_number: { type: integer, minimum: 1, maximum: 64 }
+              segment_id: { type: string, format: uuid }
+        reason:
+          type: string
+          maxLength: 1000
+          description: Required when status is UNCERTAIN; confirmed mappings must cover at least two distinct cameras and use matching labels.
+    AnnotationRevisionCameraView:
+      type: object
+      additionalProperties: false
+      required:
+        - camera_number
+        - camera_stream_id
+        - clip_asset_id
+        - clip_asset_sha256
+        - camera_stream_version
+        - clip_asset_version
+        - media_status
+        - disposition
+        - included
+        - segments
+      properties:
+        camera_number: { type: integer, minimum: 1, maximum: 64 }
+        camera_stream_id: { type: [string, "null"], format: uuid }
+        clip_asset_id: { type: [string, "null"], format: uuid }
+        clip_asset_sha256: { type: [string, "null"], pattern: "^[a-f0-9]{64}$" }
+        camera_stream_version: { type: integer, format: int64, minimum: 0 }
+        clip_asset_version: { type: integer, format: int64, minimum: 0 }
+        media_status: { type: string, maxLength: 64 }
+        disposition:
+          type: string
+          enum: [SUBMITTED, EXCLUDED]
+        included: { type: boolean }
+        note: { type: string, maxLength: 1000 }
+        exclusion_reason: { type: [string, "null"], maxLength: 1000 }
+        segments:
+          type: array
+          items: { $ref: "#/components/schemas/AnnotationRevisionCameraViewSegment" }
     StoredAnnotationSegment:
       type: object
       additionalProperties: false
@@ -5822,14 +6016,17 @@ components:
       type: object
       additionalProperties: false
       required:
-        - segments
+        - expected_task_version
+        - expected_input_version
+        - correspondences
       properties:
-        segments:
+        expected_task_version: { type: integer, format: int64, minimum: 0 }
+        expected_input_version: { type: string, minLength: 1, maxLength: 128 }
+        correspondences:
           type: array
-          minItems: 1
-          maxItems: 200
+          maxItems: 512
           items:
-            $ref: "#/components/schemas/AnnotationSegment"
+            $ref: "#/components/schemas/AnnotationCorrespondence"
         note:
           type: string
           maxLength: 1000
@@ -5841,10 +6038,7 @@ components:
         - annotation_revision_id
         - project_id
         - annotation_task_id
-        - clip_asset_id
         - capture_group_id
-        - primary_clip_asset_id
-        - primary_camera_number
         - confirmed_view_set
         - input_version
         - revision_number
@@ -5865,19 +6059,24 @@ components:
           type: string
           format: uuid
         clip_asset_id:
-          type: string
+          type: [string, "null"]
           format: uuid
-          description: The primary ClipAsset that supplies the formal annotation timebase for this CaptureGroup revision.
+          deprecated: true
+          description: Legacy primary ClipAsset field; current group revisions return null.
         capture_group_id:
           type: string
           format: uuid
         primary_clip_asset_id:
-          type: string
+          type: [string, "null"]
           format: uuid
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records; null or absent for current group revisions.
         primary_camera_number:
-          type: integer
+          type: [integer, "null"]
           minimum: 1
           maximum: 64
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records; null or absent for current group revisions.
         confirmed_view_set:
           $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
@@ -5888,7 +6087,7 @@ components:
           minimum: 1
         annotation_schema_version:
           type: string
-          const: annotation-document.v1
+          const: annotation-document.v2
         label_schema_id:
           type: string
           format: uuid
@@ -5916,8 +6115,6 @@ components:
         - submitted_by
         - submitted_at
         - capture_group_id
-        - primary_clip_asset_id
-        - primary_camera_number
         - confirmed_view_set
         - input_version
         - review
@@ -5936,23 +6133,9 @@ components:
           type: string
           pattern: ^[a-f0-9]{64}$
         annotation_document:
-          type: object
-          additionalProperties: false
-          required:
-            - schema_version
-            - segments
-          properties:
-            schema_version:
-              type: string
-              const: annotation-document.v1
-            segments:
-              type: array
-              minItems: 1
-              items:
-                $ref: "#/components/schemas/StoredAnnotationSegment"
-            note:
-              type: string
-              maxLength: 1000
+          oneOf:
+            - $ref: "#/components/schemas/LegacyAnnotationDocument"
+            - $ref: "#/components/schemas/GroupAnnotationDocument"
         submitted_by:
           type: string
           maxLength: 128
@@ -5963,12 +6146,16 @@ components:
           type: string
           format: uuid
         primary_clip_asset_id:
-          type: string
+          type: [string, "null"]
           format: uuid
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records.
         primary_camera_number:
-          type: integer
+          type: [integer, "null"]
           minimum: 1
           maximum: 64
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 records.
         confirmed_view_set:
           $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
@@ -5985,6 +6172,44 @@ components:
           anyOf:
             - $ref: "#/components/schemas/CaptureGroupCleaning"
             - type: "null"
+    LegacyAnnotationDocument:
+      type: object
+      additionalProperties: false
+      required: [schema_version, segments]
+      properties:
+        schema_version: { type: string, const: annotation-document.v1 }
+        segments:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/StoredAnnotationSegment" }
+        note: { type: string, maxLength: 1000 }
+    GroupAnnotationDocument:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - capture_group_id
+        - expected_task_version
+        - input_version
+        - label_schema_id
+        - label_schema_digest
+        - camera_views
+        - correspondences
+      properties:
+        schema_version: { type: string, const: annotation-document.v2 }
+        capture_group_id: { type: string, format: uuid }
+        expected_task_version: { type: integer, format: int64, minimum: 0 }
+        input_version: { type: string, maxLength: 128 }
+        label_schema_id: { type: string, format: uuid }
+        label_schema_digest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        camera_views:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/AnnotationRevisionCameraView" }
+        correspondences:
+          type: array
+          items: { $ref: "#/components/schemas/AnnotationCorrespondence" }
+        note: { type: string, maxLength: 1000 }
     AnnotationReviewDecision:
       type: string
       enum:
@@ -5995,9 +6220,21 @@ components:
       additionalProperties: false
       required:
         - decision
+        - reviewed_camera_numbers
+        - return_camera_numbers
       properties:
         decision:
           $ref: "#/components/schemas/AnnotationReviewDecision"
+        reviewed_camera_numbers:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 64 }
+          description: Cameras explicitly checked for this decision; APPROVED requires every camera in the revision snapshot. For REJECTED, this and return_camera_numbers must be disjoint and together cover every snapshot camera.
+        return_camera_numbers:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 64 }
+          description: REJECTED requires one or more revision cameras to reopen; APPROVED requires an empty list. For REJECTED, this and reviewed_camera_numbers must be disjoint and together cover every snapshot camera.
         review_note:
           type: string
           maxLength: 1000
@@ -6015,13 +6252,13 @@ components:
         - reviewed_at
         - capture_group_id
         - revision
-        - primary_clip_asset_id
-        - primary_camera_number
         - confirmed_view_set
         - input_version
         - qualified_views
         - rejected_missing_views
         - candidate_evidence
+        - reviewed_camera_numbers
+        - return_camera_numbers
       properties:
         annotation_review_id:
           type: string
@@ -6053,13 +6290,17 @@ components:
           format: int32
           minimum: 1
         primary_clip_asset_id:
-          type: string
+          type: [string, "null"]
           format: uuid
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 review records.
         primary_camera_number:
-          type: integer
+          type: [integer, "null"]
           format: int32
           minimum: 1
           maximum: 64
+          deprecated: true
+          description: Legacy field for historical annotation-document.v1 review records.
         confirmed_view_set:
           $ref: "#/components/schemas/CaptureGroupViewSet"
         input_version:
@@ -6079,6 +6320,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CandidateProvenanceEntry"
+        reviewed_camera_numbers:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 64 }
+        return_camera_numbers:
+          type: array
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 64 }
     QualityReviewDecision:
       type: string
       enum:
@@ -6445,11 +6694,15 @@ components:
         primary_clip_asset_id:
           type: string
           format: uuid
+          deprecated: true
+          description: Legacy primary-view field retained only for historical Cleaning snapshots.
         primary_camera_number:
           type: integer
           format: int32
           minimum: 1
           maximum: 64
+          deprecated: true
+          description: Legacy primary-view field retained only for historical Cleaning snapshots.
         primary_interval:
           type: array
           items:

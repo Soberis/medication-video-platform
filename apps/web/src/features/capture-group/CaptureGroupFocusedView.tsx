@@ -12,7 +12,6 @@ import { mediaStatusLabels, viewQualityLabels } from '@/features/capture-group-p
 
 interface CaptureGroupFocusedViewProps {
   viewRows: GroupViewRow[]
-  primaryClipAssetId?: string | null
   viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
@@ -25,7 +24,6 @@ interface CaptureGroupFocusedViewProps {
 
 export function CaptureGroupFocusedView({
   viewRows,
-  primaryClipAssetId,
   viewReviews,
   viewState,
   onSelectView,
@@ -148,7 +146,6 @@ export function CaptureGroupFocusedView({
   }, [canPlay, isRequestingPlayback, playbackGrant, playbackState, startPlayback, videoRef])
 
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const resolvedPrimaryClipAssetId = primaryClipAssetId ?? null
 
   const focusedView = (
     <section
@@ -165,9 +162,6 @@ export function CaptureGroupFocusedView({
               const stream = view.stream
               const isCurrent = Boolean(
                 stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
-              )
-              const isBaseline = Boolean(
-                stream && stream.clip_asset_id === primaryClipAssetId,
               )
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
               const isExcluded = decision?.decision === 'REJECTED'
@@ -191,14 +185,13 @@ export function CaptureGroupFocusedView({
                   aria-current={isCurrent ? 'true' : undefined}
                   aria-label={[
                     `机位 ${view.cameraNumber}`,
-                    isBaseline ? '标注基准' : null,
                     isExcluded ? '已排除' : null,
-                    isStreamError ? mediaLabel : null,
+                    mediaLabel,
                     qualityLabel,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  title={[mediaLabel, isExcluded ? '已排除此视角' : qualityLabel, isBaseline ? '标注基准机位' : null]
+                  title={[mediaLabel, isExcluded ? '已排除此视角' : qualityLabel]
                     .filter(Boolean)
                     .join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
@@ -234,21 +227,17 @@ export function CaptureGroupFocusedView({
                     <Video size={14} strokeWidth={1.75} />
                   </span>
                   <span className="capture-group-compare-name">机位 {view.cameraNumber}</span>
-                  {isBaseline ? (
-                    <span className="capture-group-compare-badge">标注基准</span>
-                  ) : isExcluded ? (
+                  {isExcluded ? (
                     <span className="capture-group-compare-badge is-excluded">已排除</span>
                   ) : null}
-                  {isStreamError ? (
-                    <span className="capture-group-compare-status is-error">
-                      {!stream ? '缺失' : '不可用'}
-                    </span>
-                  ) : null}
+                  <span className={`capture-group-compare-status${isStreamError ? ' is-error' : ''}`}>
+                    {!stream ? '缺失' : mediaLabel}
+                  </span>
                 </button>
               )
             })}
           </div>
-          {onToggleExcludeView && selectedStream && !isCompleted && selectedStream.clip_asset_id !== primaryClipAssetId ? (
+          {onToggleExcludeView && selectedStream && !isCompleted ? (
             <div className="capture-group-compare-actions" style={{ marginLeft: 'auto' }}>
               {viewReviews[selectedStream.clip_asset_id]?.decision === 'REJECTED' ? (
                 <Button

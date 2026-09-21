@@ -89,10 +89,19 @@ class AnnotationTaskController {
 		var response = this.service.submitRevision(projectId, annotationTaskId, requireActor(authentication).actorId(),
 				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
 				MDC.get("traceId"),
-				new AnnotationRevisionSubmitCommand(request.segments()
-					.stream()
-					.map(segment -> new AnnotationSegmentCommand(segment.startMs(), segment.endMs(), segment.label()))
-					.toList(), request.note()));
+				new AnnotationRevisionSubmitCommand(request.expectedTaskVersion(), request.expectedInputVersion(),
+						request.correspondences()
+							.stream()
+							.map(correspondence -> new AnnotationCorrespondenceCommand(
+									correspondence.correspondenceId(), correspondence.status(),
+									correspondence.segments()
+										.stream()
+										.map(ref -> new AnnotationCorrespondenceSegmentRefCommand(ref.cameraNumber(),
+												ref.segmentId()))
+										.toList(),
+									correspondence.reason()))
+							.toList(),
+						request.note()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI.create("/api/v1/projects/" + projectId + "/annotation-tasks/" + annotationTaskId
 					+ "/revisions/" + response.annotationRevisionId()))
@@ -100,15 +109,25 @@ class AnnotationTaskController {
 			.body(response);
 	}
 
-	@PutMapping("/annotation-tasks/{annotationTaskId}/primary-view")
-	ResponseEntity<AnnotationTaskResponse> selectPrimaryView(@PathVariable UUID projectId,
-			@PathVariable UUID annotationTaskId,
+	@PutMapping("/annotation-tasks/{annotationTaskId}/camera-views/{cameraNumber}")
+	ResponseEntity<AnnotationTaskResponse> updateCameraView(@PathVariable UUID projectId,
+			@PathVariable UUID annotationTaskId, @PathVariable @jakarta.validation.constraints.Min(1) int cameraNumber,
+			@RequestHeader(name = "Idempotency-Key") @NotBlank @Pattern(
+					regexp = IDEMPOTENCY_KEY_PATTERN) String idempotencyKey,
 			@RequestHeader(name = "X-Request-Id",
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
-			@Valid @RequestBody AnnotationPrimaryViewRequest request, Authentication authentication) {
-		var response = this.service.selectPrimaryView(projectId, annotationTaskId,
-				requireActor(authentication).actorId(), request.clipAssetId(),
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"));
+			@Valid @RequestBody AnnotationCameraViewUpdateRequest request, Authentication authentication) {
+		var response = this.service.updateCameraView(projectId, annotationTaskId, cameraNumber,
+				requireActor(authentication).actorId(), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				new AnnotationCameraViewUpdateCommand(request.expectedVersion(), request.expectedInputVersion(),
+						request.state(),
+						request.segments()
+							.stream()
+							.map(segment -> new AnnotationCameraViewSegmentCommand(segment.segmentId(),
+									segment.startMs(), segment.endMs(), segment.label(), segment.sourceCandidateIds()))
+							.toList(),
+						request.note(), request.exclusionReason()));
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
 	}
 
@@ -123,7 +142,8 @@ class AnnotationTaskController {
 		var response = this.service.reviewRevision(projectId, annotationRevisionId,
 				requirePlatformAdministrator(authentication).actorId(), idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
-				new AnnotationReviewCommand(request.decision(), request.reviewNote()));
+				new AnnotationReviewCommand(request.decision(), request.reviewNote(), request.reviewedCameraNumbers(),
+						request.returnCameraNumbers()));
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.location(URI
 				.create("/api/v1/projects/" + projectId + "/annotation-revisions/" + annotationRevisionId + "/review"))
@@ -156,17 +176,41 @@ class AnnotationTaskController {
 
 }
 
-record AnnotationPrimaryViewRequest(@NotNull UUID clipAssetId) {
-}
-
 record AnnotationTaskAssignmentRequest(
 		@NotBlank @Size(max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$") String assigneeActorId) {
 }
 
-record AnnotationRevisionRequest(
-		@NotNull @jakarta.validation.constraints.Size(min = 1,
-				max = 200) java.util.List<@Valid AnnotationSegmentRequest> segments,
+record AnnotationRevisionRequest(@jakarta.validation.constraints.Min(0) long expectedTaskVersion,
+		@NotBlank @Size(max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String expectedInputVersion,
+		@NotNull @jakarta.validation.constraints.Size(
+				max = 512) java.util.List<@NotNull @Valid AnnotationCorrespondenceRequest> correspondences,
 		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String note) {
+}
+
+record AnnotationCorrespondenceRequest(@NotNull UUID correspondenceId, @NotNull AnnotationCorrespondenceStatus status,
+		@NotNull @jakarta.validation.constraints.Size(min = 1,
+				max = 128) java.util.List<@NotNull @Valid AnnotationCorrespondenceSegmentRefRequest> segments,
+		@Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reason) {
+}
+
+record AnnotationCorrespondenceSegmentRefRequest(
+		@jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(64) int cameraNumber,
+		@NotNull UUID segmentId) {
+}
+
+record AnnotationCameraViewUpdateRequest(@jakarta.validation.constraints.Min(0) long expectedVersion,
+		@NotBlank @Size(max = 128) @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$") String expectedInputVersion,
+		@NotNull AnnotationTaskViewState state,
+		@NotNull @jakarta.validation.constraints.Size(
+				max = 200) java.util.List<@NotNull @Valid AnnotationCameraViewSegmentRequest> segments,
+		@Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String note,
+		@Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String exclusionReason) {
+}
+
+record AnnotationCameraViewSegmentRequest(@NotNull UUID segmentId, @jakarta.validation.constraints.Min(0) long startMs,
+		@jakarta.validation.constraints.Min(1) long endMs,
+		@NotBlank @Size(max = 64) @Pattern(regexp = "^[^\\p{Cc}]+$") String label,
+		@NotNull @jakarta.validation.constraints.Size(max = 200) java.util.List<@NotNull UUID> sourceCandidateIds) {
 }
 
 record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long startMs,
@@ -175,7 +219,11 @@ record AnnotationSegmentRequest(@jakarta.validation.constraints.Min(0) long star
 }
 
 record AnnotationReviewRequest(@NotNull AnnotationReviewDecision decision,
-		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote) {
+		@jakarta.validation.constraints.Size(max = 1000) @Pattern(regexp = "^[^\\p{Cc}]*$") String reviewNote,
+		@jakarta.validation.constraints.Size(
+				max = 64) java.util.List<@NotNull @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(64) Integer> reviewedCameraNumbers,
+		@jakarta.validation.constraints.Size(
+				max = 64) java.util.List<@NotNull @jakarta.validation.constraints.Min(1) @jakarta.validation.constraints.Max(64) Integer> returnCameraNumbers) {
 }
 
 record AnnotationTaskErrorResponse(String errorCode, String errorMessage, boolean retryable, String requestId) {

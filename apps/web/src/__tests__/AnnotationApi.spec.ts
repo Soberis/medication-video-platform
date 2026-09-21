@@ -7,10 +7,13 @@ import {
   getAnnotationLabelSchema,
   listAnnotationTasks,
   reviewAnnotationRevision,
+  updateAnnotationCameraView,
   submitAnnotationRevision,
 } from '@/api/annotation'
+import { cameraViewFixture } from './capture-group-fixtures'
 
 const projectId = '30000000-0000-4000-8000-000000000001'
+const taskId = '70000000-0000-4000-8000-000000000001'
 const assetId = '50000000-0000-4000-8000-000000000001'
 const captureGroupId = '60000000-0000-4000-8000-000000000001'
 const labelSchemaId = '70000000-0000-4000-8000-000000000001'
@@ -132,6 +135,35 @@ describe('annotation task API', () => {
               can_submit: false,
               can_review: false,
               can_recheck_capture_group_cleaning: true,
+              camera_views: [
+                cameraViewFixture(1, {
+                  version: 2,
+                  state: 'SUBMITTED',
+                  segments: [
+                    {
+                      segment_id: 'segment-camera-1',
+                      start_ms: 100,
+                      end_ms: 900,
+                      label: 'acquire_item',
+                      source_candidate_ids: ['candidate-camera-1'],
+                    },
+                  ],
+                }),
+                cameraViewFixture(2, {
+                  version: 1,
+                  state: 'DRAFT',
+                  segments: [
+                    {
+                      segment_id: 'segment-camera-2',
+                      start_ms: 250,
+                      end_ms: 1100,
+                      label: 'open_container',
+                      source_candidate_ids: [],
+                    },
+                  ],
+                  note: 'camera-local timing',
+                }),
+              ],
               annotation_revision: {
                 annotation_revision_id: '80000000-0000-4000-8000-000000000001',
                 label_schema_id: labelSchemaId,
@@ -199,6 +231,22 @@ describe('annotation task API', () => {
       items: [
         {
           status: 'COMPLETED',
+          camera_views: [
+            {
+              camera_number: 1,
+              clip_asset_id: assetId,
+              version: 2,
+              state: 'SUBMITTED',
+              segments: [{ segment_id: 'segment-camera-1', start_ms: 100, end_ms: 900 }],
+            },
+            {
+              camera_number: 2,
+              clip_asset_id: '50000000-0000-4000-8000-000000000002',
+              version: 1,
+              state: 'DRAFT',
+              segments: [{ segment_id: 'segment-camera-2', start_ms: 250, end_ms: 1100 }],
+            },
+          ],
           annotation_revision: { capture_group_cleaning: { outcome: 'PASS' } },
         },
       ],
@@ -261,23 +309,95 @@ describe('annotation task API', () => {
     )
   })
 
-  it('submits an immutable time-range annotation revision with a fresh idempotency key', async () => {
+  it('saves one camera-local draft with optimistic versions and an idempotency key', async () => {
+    const cameraView = {
+      camera_number: 2,
+      camera_stream_id: '41000000-0000-4000-8000-000000000002',
+      clip_asset_id: '50000000-0000-4000-8000-000000000002',
+      source_asset_sha256: 'd'.repeat(64),
+      media_status: 'INGESTED',
+      version: 5,
+      state: 'DRAFT' as const,
+      segments: [
+        {
+          segment_id: 'segment-camera-2',
+          start_ms: 250,
+          end_ms: 1100,
+          label: 'open_container',
+          source_candidate_ids: ['candidate-camera-2'],
+        },
+      ],
+      note: 'camera-local note',
+      exclusion_reason: null,
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotation_task_id: taskId,
+        project_id: projectId,
+        capture_group_id: captureGroupId,
+        version: 8,
+        camera_views: [cameraViewFixture(1), cameraView],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('camera-view-idempotency-0001'),
+    })
+
+    const savedTask = await updateAnnotationCameraView(projectId, taskId, 2, {
+      expected_version: 4,
+      expected_input_version: groupInputVersion,
+      state: 'DRAFT',
+      segments: cameraView.segments,
+      note: 'camera-local note',
+      exclusion_reason: null,
+    })
+    expect(savedTask).toMatchObject({
+      annotation_task_id: taskId,
+      version: 8,
+    })
+    expect(savedTask.camera_views).toHaveLength(2)
+    expect(savedTask.camera_views?.[0]).toMatchObject({ camera_number: 1, state: 'PENDING' })
+    expect(savedTask.camera_views?.[1]).toMatchObject({
+      camera_number: 2,
+      version: 5,
+      state: 'DRAFT',
+      segments: [{ segment_id: 'segment-camera-2', start_ms: 250, end_ms: 1100 }],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-tasks/${taskId}/camera-views/2`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          expected_version: 4,
+          expected_input_version: groupInputVersion,
+          state: 'DRAFT',
+          segments: cameraView.segments,
+          note: 'camera-local note',
+          exclusion_reason: null,
+        }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'camera-view-idempotency-0001',
+        }),
+      }),
+    )
+  })
+
+  it('submits multi-camera correspondences with task and input versions', async () => {
     const taskId = '30000000-0000-4000-8000-000000000003'
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         annotation_revision_id: '30000000-0000-4000-8000-000000000004',
         project_id: projectId,
         annotation_task_id: taskId,
-        clip_asset_id: assetId,
         capture_group_id: captureGroupId,
-        primary_clip_asset_id: assetId,
-        primary_camera_number: 1,
         confirmed_view_set: confirmedViewSet,
         input_version: groupInputVersion,
         label_schema_id: labelSchemaId,
         label_schema_digest: labelSchemaDigest,
         revision_number: 1,
-        annotation_schema_version: 'annotation-document.v1',
+        annotation_schema_version: 'annotation-document.v2',
         document_sha256: 'a'.repeat(64),
         submitted_by: 'local-synthetic-uploader',
         submitted_at: '2026-07-24T00:00:00Z',
@@ -289,12 +409,27 @@ describe('annotation task API', () => {
     })
 
     await expect(
-      submitAnnotationRevision(
-        projectId,
-        taskId,
-        [{ start_ms: 100, end_ms: 900, label: 'acquire_item' }],
-        '合成验证',
-      ),
+      submitAnnotationRevision(projectId, taskId, {
+        expectedTaskVersion: 7,
+        inputVersion: groupInputVersion,
+        correspondences: [
+          {
+            correspondence_id: 'correspondence-1',
+            status: 'CONFIRMED',
+            segments: [
+              { camera_number: 1, segment_id: 'segment-camera-1' },
+              { camera_number: 2, segment_id: 'segment-camera-2' },
+            ],
+          },
+          {
+            correspondence_id: 'correspondence-2',
+            status: 'UNCERTAIN',
+            segments: [{ camera_number: 2, segment_id: 'segment-camera-3' }],
+            reason: '机位 1 遮挡，无法确认对应动作',
+          },
+        ],
+        note: '  合成验证  ',
+      }),
     ).resolves.toMatchObject({ annotation_task_id: taskId, revision_number: 1 })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -302,7 +437,24 @@ describe('annotation task API', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          segments: [{ start_ms: 100, end_ms: 900, label: 'acquire_item' }],
+          expected_task_version: 7,
+          expected_input_version: groupInputVersion,
+          correspondences: [
+            {
+              correspondence_id: 'correspondence-1',
+              status: 'CONFIRMED',
+              segments: [
+                { camera_number: 1, segment_id: 'segment-camera-1' },
+                { camera_number: 2, segment_id: 'segment-camera-2' },
+              ],
+            },
+            {
+              correspondence_id: 'correspondence-2',
+              status: 'UNCERTAIN',
+              segments: [{ camera_number: 2, segment_id: 'segment-camera-3' }],
+              reason: '机位 1 遮挡，无法确认对应动作',
+            },
+          ],
           note: '合成验证',
         }),
         headers: expect.objectContaining({
@@ -325,8 +477,6 @@ describe('annotation task API', () => {
         reviewed_at: '2026-07-24T00:00:00Z',
         capture_group_id: captureGroupId,
         revision: 1,
-        primary_clip_asset_id: assetId,
-        primary_camera_number: 1,
         confirmed_view_set: confirmedViewSet,
         input_version: groupInputVersion,
         qualified_views: [],
@@ -371,8 +521,6 @@ describe('annotation task API', () => {
         reviewed_at: '2026-07-24T00:00:00Z',
         capture_group_id: captureGroupId,
         revision: 1,
-        primary_clip_asset_id: assetId,
-        primary_camera_number: 1,
         confirmed_view_set: confirmedViewSet,
         input_version: groupInputVersion,
         qualified_views: [],
@@ -397,6 +545,55 @@ describe('annotation task API', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ decision: 'REJECTED', review_note: '请补充时间段。' }),
+      }),
+    )
+  })
+
+  it('records the reviewed and returned camera set with a review decision', async () => {
+    const revisionId = '30000000-0000-4000-8000-000000000004'
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        annotation_review_id: '30000000-0000-4000-8000-000000000005',
+        project_id: projectId,
+        annotation_revision_id: revisionId,
+        decision: 'REJECTED',
+        review_note: '请复核机位 2。',
+        reviewed_by: 'local-synthetic-admin',
+        reviewed_at: '2026-07-24T00:00:00Z',
+        capture_group_id: captureGroupId,
+        revision: 1,
+        primary_clip_asset_id: assetId,
+        primary_camera_number: 1,
+        confirmed_view_set: confirmedViewSet,
+        input_version: groupInputVersion,
+        qualified_views: [],
+        rejected_missing_views: [],
+        candidate_evidence: [],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn().mockReturnValue('annotation-review-idempotency-0003'),
+    })
+
+    await reviewAnnotationRevision(projectId, revisionId, 'REJECTED', '请复核机位 2。', {
+      reviewedCameraNumbers: [1, 2],
+      returnCameraNumbers: [2],
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/v1/projects/${projectId}/annotation-revisions/${revisionId}/review`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          decision: 'REJECTED',
+          review_note: '请复核机位 2。',
+          reviewed_camera_numbers: [1, 2],
+          return_camera_numbers: [2],
+        }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'annotation-review-idempotency-0003',
+        }),
       }),
     )
   })

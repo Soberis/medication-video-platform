@@ -54,11 +54,11 @@ class AnnotationReview {
 	@Column(name = "annotation_revision_number", nullable = false, updatable = false)
 	private int revisionNumber;
 
-	@Column(name = "primary_clip_asset_id", nullable = false, updatable = false)
+	@Column(name = "primary_clip_asset_id", updatable = false)
 	private UUID primaryClipAssetId;
 
-	@Column(name = "primary_camera_number", nullable = false, updatable = false)
-	private int primaryCameraNumber;
+	@Column(name = "primary_camera_number", updatable = false)
+	private Integer primaryCameraNumber;
 
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "confirmed_view_set", nullable = false, updatable = false, columnDefinition = "jsonb")
@@ -79,6 +79,14 @@ class AnnotationReview {
 	@Column(name = "candidate_evidence", nullable = false, updatable = false, columnDefinition = "jsonb")
 	private List<java.util.Map<String, Object>> candidateEvidence;
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "reviewed_camera_numbers", nullable = false, updatable = false, columnDefinition = "jsonb")
+	private List<Integer> reviewedCameraNumbers;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "return_camera_numbers", nullable = false, updatable = false, columnDefinition = "jsonb")
+	private List<Integer> returnCameraNumbers;
+
 	protected AnnotationReview() {
 	}
 
@@ -95,13 +103,15 @@ class AnnotationReview {
 		this.reviewedAt = reviewedAt;
 		this.captureGroupId = Objects.requireNonNull(context.captureGroupId(), "captureGroupId");
 		this.revisionNumber = context.revisionNumber();
-		this.primaryClipAssetId = Objects.requireNonNull(context.primaryClipAssetId(), "primaryClipAssetId");
+		this.primaryClipAssetId = context.primaryClipAssetId();
 		this.primaryCameraNumber = context.primaryCameraNumber();
 		this.confirmedViewSet = copyMapPreservingNulls(context.confirmedViewSet());
 		this.inputVersion = Objects.requireNonNull(context.inputVersion(), "inputVersion");
 		this.qualifiedViews = copyListPreservingNulls(context.qualifiedViews());
 		this.rejectedMissingViews = copyListPreservingNulls(context.rejectedMissingViews());
 		this.candidateEvidence = copyListPreservingNulls(context.candidateEvidence());
+		this.reviewedCameraNumbers = List.copyOf(context.reviewedCameraNumbers());
+		this.returnCameraNumbers = List.copyOf(context.returnCameraNumbers());
 	}
 
 	private static Map<String, Object> copyMapPreservingNulls(Map<String, Object> value) {
@@ -158,7 +168,7 @@ class AnnotationReview {
 		return this.primaryClipAssetId;
 	}
 
-	int getPrimaryCameraNumber() {
+	Integer getPrimaryCameraNumber() {
 		return this.primaryCameraNumber;
 	}
 
@@ -182,9 +192,20 @@ class AnnotationReview {
 		return this.candidateEvidence;
 	}
 
-	boolean matches(AnnotationReviewDecision decision, String reviewNote) {
+	List<Integer> getReviewedCameraNumbers() {
+		return this.reviewedCameraNumbers;
+	}
+
+	List<Integer> getReturnCameraNumbers() {
+		return this.returnCameraNumbers;
+	}
+
+	boolean matches(AnnotationReviewDecision decision, String reviewNote, List<Integer> reviewedCameraNumbers,
+			List<Integer> returnCameraNumbers) {
 		var normalizedNote = reviewNote == null || reviewNote.isBlank() ? null : reviewNote.trim();
-		return this.decision == decision && java.util.Objects.equals(this.reviewNote, normalizedNote);
+		return this.decision == decision && java.util.Objects.equals(this.reviewNote, normalizedNote)
+				&& Objects.equals(this.reviewedCameraNumbers, reviewedCameraNumbers)
+				&& Objects.equals(this.returnCameraNumbers, returnCameraNumbers);
 	}
 
 }

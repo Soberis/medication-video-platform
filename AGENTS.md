@@ -29,7 +29,7 @@ V1.30：Video-first Quiet Professional Workspace，Neutral Light + Medical Blue�
 - 核心领域模块为 `iamproject`、`assetcapture`、`mediaprivacy`、`annotationreview`、`qualitycleaning`、`datasetexport`、`aicandidate`、`governance`。
 - `integration` 是 CVAT、S3、RabbitMQ、OIDC 等端口和适配器层，不拥有业务真值。
 - Python Worker 只处理媒体和 AI 作业，不直接写业务表；当前唯一 `human-demonstration-hdf5.v2` 由 Core API 校验后导出，旧扁平展开表与 CSV 为历史格式。
-- AI 输出只能进入 `CandidateAnnotation`；动作候选与 MediaPipe 检测事实区分存取，不得直接写成人工质量、正式标注、Review 或 Cleaning 结论。HDF5 关联当前已批准人工区间与同源、provenance 有效的主视频手部样本。
+- AI 输出只能进入 `CandidateAnnotation`；动作候选与 MediaPipe 检测事实区分存取，不得直接写成人工质量、正式标注、Review 或 Cleaning 结论。各机位均为等权客观观测，手部与动作自动检测，多视角实事求是一一对应；HDF5 关联当前已批准人工区间与同源、provenance 有效的各机位手部样本，不人为设立主副机位。
 - Redis 不作为事实数据库；RabbitMQ 不保存最终业务状态；对象存储不承载关系型业务状态。
 
 ## Module Boundaries
@@ -51,13 +51,13 @@ External Ingest / Upload
 → CaptureGroup
 → CameraStream / ClipAsset
 → Media Probe
-   ├─ MediaPipe detection evidence
+   ├─ MediaPipe detection evidence (all cameras)
    └─ action candidate → editable draft → explicit human submit → existing review
                               ↓
                     existing admission → HDF5 Export
 ```
 
-MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。人工质量、Annotation、Review 和 Cleaning 仅在项目需要 human ground truth 时使用，不是每个 CaptureGroup 的强制流程。动作预标注不等待 MediaPipe；当前 HDF5 配套导出必须同时满足人工确认、MediaPipe 与既有准入，不恢复独立 CSV。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
+MediaPipe 手部预标注是数据处理主链的辅助能力；它只能产生 `CandidateAnnotation`，不得改写人工质量、正式标注、Review 或 Cleaning。各机位手部骨骼与动作候选均为自动并发检测生成，并与物理动作事实一一对应。人工提交与复核涵盖组内各机位的动作对应与手部质量核验，不再只针对单一机位。当前 HDF5 配套导出必须同时满足全机位对应确认、MediaPipe 与既有准入，不恢复独立 CSV。handedness 仅为辅助元数据，不得作为标注、复核、Cleaning 或导出准入条件。
 
 ## MVP Simplicity
 

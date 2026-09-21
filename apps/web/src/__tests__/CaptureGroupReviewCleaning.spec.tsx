@@ -7,6 +7,7 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 import {
   approvedGroupTask,
+  cameraViewFixture,
   captureGroupFixture,
   groupId,
   projectId,
@@ -37,6 +38,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
+    await markAllReviewCamerasAsReviewed(user)
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
@@ -57,12 +59,129 @@ describe('CaptureGroup Review and event cleaning', () => {
           `/annotation-revisions/${submitted.annotation_revision?.annotation_revision_id}/review`,
         ) && init?.method === 'POST',
     )
-    expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({ decision: 'APPROVED' })
+    expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
+      decision: 'APPROVED',
+      reviewed_camera_numbers: [1, 2, 3],
+      return_camera_numbers: [],
+    })
     await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
     expect(await screen.findByText('标注检查通过')).toBeInTheDocument()
     expect(screen.getByText('当前规则检查通过')).toBeInTheDocument()
     expect(screen.getByText('capture-group-event-eligibility')).toBeInTheDocument()
     expect(screen.getByText('REVIEW_APPROVED')).toBeInTheDocument()
+  })
+
+  it('reviews immutable per-camera intervals from the v2 revision snapshot', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const task = submittedGroupTask(group)
+    const camera1 = cameraViewFixture(1, {
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'current-camera-1',
+          start_ms: 2000,
+          end_ms: 2400,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    })
+    const camera2 = cameraViewFixture(2, {
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'current-camera-2',
+          start_ms: 3000,
+          end_ms: 3500,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    })
+    task.camera_views = [camera1, camera2]
+    task.annotation_revision!.annotation_document = {
+      schema_version: 'annotation-document.v2',
+      capture_group_id: group.capture_group_id,
+      expected_task_version: 1,
+      input_version: 'capture-group-view-set.v1:synthetic',
+      label_schema_id: task.label_schema_id,
+      label_schema_digest: task.label_schema_digest,
+      camera_views: [
+        {
+          camera_number: 1,
+          camera_stream_id: camera1.camera_stream_id,
+          clip_asset_id: camera1.clip_asset_id,
+          clip_asset_sha256: camera1.source_asset_sha256,
+          camera_stream_version: 1,
+          clip_asset_version: 1,
+          media_status: camera1.media_status,
+          disposition: 'SUBMITTED',
+          included: true,
+          note: camera1.note,
+          segments: [
+            {
+              segment_id: 'snapshot-camera-1',
+              start_ms: 100,
+              end_ms: 500,
+              label: 'acquire_item',
+              source_candidate_ids: [],
+              correspondence_id: 'snapshot-correspondence',
+              correspondence_status: 'CONFIRMED',
+            },
+          ],
+        },
+        {
+          camera_number: 2,
+          camera_stream_id: camera2.camera_stream_id,
+          clip_asset_id: camera2.clip_asset_id,
+          clip_asset_sha256: camera2.source_asset_sha256,
+          camera_stream_version: 1,
+          clip_asset_version: 1,
+          media_status: camera2.media_status,
+          disposition: 'SUBMITTED',
+          included: true,
+          note: camera2.note,
+          segments: [
+            {
+              segment_id: 'snapshot-camera-2',
+              start_ms: 150,
+              end_ms: 650,
+              label: 'acquire_item',
+              source_candidate_ids: [],
+              correspondence_id: 'snapshot-correspondence',
+              correspondence_status: 'CONFIRMED',
+            },
+          ],
+        },
+      ],
+      correspondences: [
+        {
+          correspondence_id: 'snapshot-correspondence',
+          status: 'CONFIRMED',
+          segments: [
+            { camera_number: 1, segment_id: 'snapshot-camera-1' },
+            { camera_number: 2, segment_id: 'snapshot-camera-2' },
+          ],
+        },
+      ],
+    }
+    stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    renderCaptureGroup()
+
+    const reviewLanes = await screen.findByRole('region', { name: '逐机位复核' })
+    expect(within(reviewLanes).getByText('00:00.100 → 00:00.500')).toBeInTheDocument()
+    expect(within(reviewLanes).getByText('00:00.150 → 00:00.650')).toBeInTheDocument()
+    expect(within(reviewLanes).queryByText('00:02.000 → 00:02.400')).not.toBeInTheDocument()
+    expect(within(reviewLanes).queryByText('00:03.000 → 00:03.500')).not.toBeInTheDocument()
   })
 
   it('does not expose Review actions when the server denies reviewer permission', async () => {
@@ -106,6 +225,8 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
+    await markAllReviewCamerasAsReviewed(user)
+    await user.click(screen.getAllByRole('checkbox', { name: '退回此机位' })[0]!)
     await user.click(await screen.findByRole('button', { name: '退回修改' }))
     const dialog = await screen.findByRole('dialog')
     await user.type(
@@ -133,6 +254,8 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
       decision: 'REJECTED',
       review_note: '请补充动作结束位置。',
+      reviewed_camera_numbers: [1, 2],
+      return_camera_numbers: [1],
     })
     expect((await screen.findAllByText('待修改')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
@@ -160,6 +283,7 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
+    await markAllReviewCamerasAsReviewed(user)
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
@@ -208,10 +332,13 @@ describe('CaptureGroup Review and event cleaning', () => {
     const supportingItem = within(eventEvidence).getByText('机位 3').closest('li')
     expect(supportingItem).not.toBeNull()
     expect(
-      within(supportingItem as HTMLElement).getByText('参考视图 · 仅供采集记录级参考'),
+      within(supportingItem as HTMLElement).getByText('采集记录级参考证据'),
+    ).toBeInTheDocument()
+    expect(
+      within(supportingItem as HTMLElement).getByText('不生成参考视图动作时间点'),
     ).toBeInTheDocument()
     expect(within(supportingItem as HTMLElement).queryByText(/100|900/)).not.toBeInTheDocument()
-    expect(screen.getByText('主视图正式时间轴')).toBeInTheDocument()
+    expect(screen.getByText('历史正式动作区间')).toBeInTheDocument()
     expect(screen.queryByText(/first_timestamp_ms|last_timestamp_ms/)).not.toBeInTheDocument()
   })
 
@@ -240,4 +367,9 @@ function renderCaptureGroup() {
     path: '/projects/:projectId/capture-groups/:captureGroupId',
     route: `/projects/${projectId}/capture-groups/${groupId}?focus=review`,
   })
+}
+
+async function markAllReviewCamerasAsReviewed(user: ReturnType<typeof userEvent.setup>) {
+  const checkboxes = await screen.findAllByRole('checkbox', { name: '已查看此机位' })
+  for (const checkbox of checkboxes) await user.click(checkbox)
 }

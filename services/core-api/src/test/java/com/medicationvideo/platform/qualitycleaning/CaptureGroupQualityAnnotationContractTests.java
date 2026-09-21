@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.qualitycleaning;
 
 import static org.hamcrest.Matchers.startsWith;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -134,7 +136,7 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.items[0].confirmed_view_set.schema_version").value("capture-group-view-set.v1"))
 			.andExpect(jsonPath("$.items[0].group_input_version").value(startsWith("capture-group-view-set.v1:")))
 			.andExpect(jsonPath("$.items[0].can_submit").value(false))
-			.andExpect(jsonPath("$.items[0].can_select_primary").value(true));
+			.andExpect(jsonPath("$.items[0].can_select_primary").value(false));
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
@@ -263,29 +265,25 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void groupRevisionChainPreservesTimebaseAndViewSetAndFreezesPrimary() throws Exception {
+	void groupRevisionChainFreezesEveryCameraAndReviewReturnsTheWholeRevisionForRework() throws Exception {
 		var group = createGroup(PROJECT_ID, 3, 3, "COMPLETE", 3);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("revision-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().get(1), MEMBER_TOKEN).andExpect(status().isOk())
-			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().get(1).toString()))
-			.andExpect(jsonPath("$.clip_asset_id").doesNotExist());
-
 		var first = submit(group, taskId, MEMBER_TOKEN, key("revision-first"), 10).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1))
-			.andExpect(jsonPath("$.clip_asset_id").value(group.clipAssetIds().get(1).toString()))
+			.andExpect(jsonPath("$.annotation_schema_version").value("annotation-document.v2"))
+			.andExpect(jsonPath("$.clip_asset_id").value(nullValue()))
 			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().get(1).toString()))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()))
 			.andExpect(jsonPath("$.confirmed_view_set.schema_version").value("capture-group-view-set.v1"))
 			.andExpect(jsonPath("$.input_version").value(startsWith("capture-group-view-set.v1:")))
 			.andReturn();
 		var firstRevisionId = UUID
 			.fromString(JsonPath.read(first.getResponse().getContentAsString(), "$.annotation_revision_id"));
-
-		selectPrimary(taskId, group.clipAssetIds().get(2), MEMBER_TOKEN).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_FROZEN"));
+		assertEquals(3, count(
+				"SELECT count(*) FROM annotation_task_view WHERE annotation_task_id = ? AND view_state = 'SUBMITTED'",
+				taskId));
 
 		this.mockMvc
 			.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID,
@@ -293,13 +291,13 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("revision-reject"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"REJECTED\",\"review_note\":\"Synthetic rework\"}"))
+				.content(reviewRequest(firstRevisionId, "REJECTED", "Synthetic rework")))
 			.andExpect(status().isCreated());
 
 		submit(group, taskId, MEMBER_TOKEN, key("revision-second"), 20).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(2))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().get(1).toString()))
-			.andExpect(jsonPath("$.confirmed_view_set.schema_version").value("capture-group-view-set.v1"));
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()))
+			.andExpect(jsonPath("$.annotation_schema_version").value("annotation-document.v2"));
 		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 		assertEquals(2,
 				count("SELECT count(*) FROM annotation_revision WHERE capture_group_id = ?", group.captureGroupId()));
@@ -313,7 +311,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, key("review-context-quality"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var revision = submit(group, taskId, MEMBER_TOKEN, key("review-context-submit"), 400)
 			.andExpect(status().isCreated())
 			.andReturn();
@@ -330,13 +328,15 @@ class CaptureGroupQualityAnnotationContractTests {
 					.header("Authorization", "Bearer " + ADMIN_TOKEN)
 					.header("Idempotency-Key", key("review-context-approve"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"decision\":\"APPROVED\",\"review_note\":\"Synthetic review\"}"))
+					.content(reviewRequest(revisionId, "APPROVED", "Synthetic review")))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
 			.andExpect(jsonPath("$.revision").value(1))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getFirst().toString()))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()))
 			.andExpect(jsonPath("$.qualified_views.length()").value(3))
 			.andExpect(jsonPath("$.rejected_missing_views.length()").value(2))
+			.andExpect(jsonPath("$.reviewed_camera_numbers.length()").value(5))
+			.andExpect(jsonPath("$.return_camera_numbers.length()").value(0))
 			.andExpect(jsonPath("$.candidate_evidence.length()").value(3))
 			.andExpect(jsonPath("$.candidate_evidence[0].execution_status").value("NO_JOB"))
 			.andExpect(jsonPath("$.candidate_evidence[0].provenance_valid").value(true));
@@ -354,7 +354,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("review-rejected-quality"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var revision = submit(group, taskId, MEMBER_TOKEN, key("review-rejected-submit"), 200)
 			.andExpect(status().isCreated())
 			.andReturn();
@@ -366,7 +366,7 @@ class CaptureGroupQualityAnnotationContractTests {
 					.header("Authorization", "Bearer " + ADMIN_TOKEN)
 					.header("Idempotency-Key", key("review-rejected-decision"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"decision\":\"REJECTED\",\"review_note\":\"Needs rework\"}"))
+					.content(reviewRequest(revisionId, "REJECTED", "Needs rework")))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.decision").value("REJECTED"))
 			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()));
@@ -383,7 +383,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("mapping-quality"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var revision = submit(group, taskId, MEMBER_TOKEN, key("mapping-submit"), 400).andExpect(status().isCreated())
 			.andReturn();
 		var revisionId = UUID
@@ -393,7 +393,7 @@ class CaptureGroupQualityAnnotationContractTests {
 					.header("Authorization", "Bearer " + ADMIN_TOKEN)
 					.header("Idempotency-Key", key("mapping-approve"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"decision\":\"APPROVED\"}"))
+					.content(reviewRequest(revisionId, "APPROVED", null)))
 			.andExpect(status().isCreated());
 
 		assertEquals("COMPLETED", this.jdbcTemplate.queryForObject(
@@ -417,7 +417,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("downgrade-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 
 		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "View quality changed", 1, key("downgrade-review"))
 			.andExpect(status().isOk());
@@ -429,6 +429,8 @@ class CaptureGroupQualityAnnotationContractTests {
 
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", "View quality rechecked", 3, key("downgrade-requalified"))
 			.andExpect(status().isOk());
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("downgrade-reassignment"))
+			.andExpect(status().isCreated());
 		submit(group, taskId, MEMBER_TOKEN, key("after-requalification"), 10).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1));
 		assertEquals(1,
@@ -444,7 +446,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("stale-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var first = submit(group, taskId, MEMBER_TOKEN, key("stale-first-submit"), 100).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1))
 			.andReturn();
@@ -475,7 +477,8 @@ class CaptureGroupQualityAnnotationContractTests {
 					"Bearer " + MEMBER_TOKEN))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items[0].status").value("ASSIGNED"))
-			.andExpect(jsonPath("$.items[0].can_submit").value(true))
+			.andExpect(jsonPath("$.items[0].can_submit").value(false))
+			.andExpect(jsonPath("$.items[0].camera_view_progress.pending").value(2))
 			.andExpect(jsonPath("$.items[0].annotation_revision").isEmpty());
 
 		this.mockMvc
@@ -484,7 +487,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("stale-review"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"APPROVED\"}"))
+				.content(reviewRequest(firstRevisionId, "APPROVED", null)))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("ANNOTATION_REVISION_NOT_CURRENT"));
 		assertEquals(0,
@@ -509,34 +512,38 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void changedInputAllowsExplicitPrimaryReselectionWhilePreservingOldRevision() throws Exception {
+	void changedInputRebuildsPerCameraEligibilityWhilePreservingOldRevision() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 2);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("primary-ineligible-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		var primaryClipAssetId = group.clipAssetIds().getFirst();
-		selectPrimary(taskId, primaryClipAssetId, MEMBER_TOKEN).andExpect(status().isOk());
 		submit(group, taskId, MEMBER_TOKEN, key("primary-ineligible-first"), 100).andExpect(status().isCreated())
-			.andExpect(jsonPath("$.revision_number").value(1));
+			.andExpect(jsonPath("$.revision_number").value(1))
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()));
 
-		recordViewQuality(primaryClipAssetId, MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0).andExpect(status().isOk());
-		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Primary view changed", 1, key("primary-ineligible-review"))
+		recordViewQuality(group.clipAssetIds().getFirst(), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
 			.andExpect(status().isOk());
-		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Primary view no longer eligible", 2,
-				key("primary-ineligible-requalified"))
+		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Camera quality changed", 1, key("camera-ineligible-review"))
+			.andExpect(status().isOk());
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "One camera remains eligible", 2,
+				key("camera-ineligible-requalified"))
 			.andExpect(status().isOk());
 
-		submit(group, taskId, MEMBER_TOKEN, key("primary-ineligible-second"), 120).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED"));
-		selectPrimary(taskId, group.clipAssetIds().getLast(), MEMBER_TOKEN).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_PRIMARY_VIEW_FROZEN"));
-		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("primary-reassign"))
+		assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("camera-reassign"))
 			.andExpect(status().isCreated());
-		selectPrimary(taskId, group.clipAssetIds().getLast(), MEMBER_TOKEN).andExpect(status().isOk());
-		submit(group, taskId, MEMBER_TOKEN, key("primary-new-input-submit"), 120).andExpect(status().isCreated())
+		var second = submit(group, taskId, MEMBER_TOKEN, key("camera-new-input-submit"), 120)
+			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(2))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getLast().toString()));
-		assertEquals(primaryClipAssetId, this.jdbcTemplate.queryForObject(
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()))
+			.andReturn();
+		var secondRevisionId = UUID
+			.fromString(JsonPath.read(second.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		var secondDocument = this.jdbcTemplate.queryForObject(
+				"SELECT annotation_document::text FROM annotation_revision WHERE annotation_revision_id = ?",
+				String.class, secondRevisionId);
+		assertEquals("EXCLUDED", JsonPath.read(secondDocument, "$.camera_views[0].disposition"));
+		assertEquals("SUBMITTED", JsonPath.read(secondDocument, "$.camera_views[1].disposition"));
+		assertEquals(null, this.jdbcTemplate.queryForObject(
 				"SELECT primary_clip_asset_id FROM annotation_revision WHERE annotation_task_id = ? AND revision_number = 1",
 				UUID.class, taskId));
 		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
@@ -549,7 +556,7 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isOk());
 		var task = taskId(group);
 		var clip = group.clipAssetIds().getFirst();
-		selectPrimary(task, clip, MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(task, clip, MEMBER_TOKEN).andExpect(status().isOk());
 		this.jdbcTemplate.update("DELETE FROM media_report WHERE clip_asset_id = ?", clip);
 		this.jdbcTemplate.update("DELETE FROM media_job WHERE clip_asset_id = ?", clip);
 		submit(group, task, MEMBER_TOKEN, key("unknown-duration"), 100).andExpect(status().isConflict())
@@ -566,7 +573,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("review-duration-quality"))
 			.andExpect(status().isOk());
 		var task = taskId(group);
-		selectPrimary(task, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(task, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var submitted = submit(group, task, MEMBER_TOKEN, key("review-duration-submit"), 100)
 			.andExpect(status().isCreated())
 			.andReturn();
@@ -579,7 +586,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("unknown-duration-approve"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"APPROVED\"}"))
+				.content(reviewRequest(UUID.fromString(revision), "APPROVED", null)))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error_code").value("ANNOTATION_MEDIA_DURATION_UNVERIFIED"));
 		this.mockMvc
@@ -587,7 +594,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("unknown-duration-reject"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"REJECTED\"}"))
+				.content(reviewRequest(UUID.fromString(revision), "REJECTED", null)))
 			.andExpect(status().isCreated());
 	}
 
@@ -601,7 +608,7 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(status().isCreated())
 			.andReturn();
 		var task = UUID.fromString(JsonPath.read(assigned.getResponse().getContentAsString(), "$.annotation_task_id"));
-		selectPrimary(task, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(task, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isOk());
 		var submitted = submit(group, task, ADMIN_TOKEN, key("self-review-submit"), 100).andExpect(status().isCreated())
 			.andReturn();
 		var revision = JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id")
@@ -616,7 +623,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("self-review-approve"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"APPROVED\"}"))
+				.content(reviewRequest(UUID.fromString(revision), "APPROVED", null)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.decision").value("APPROVED"));
 		this.mockMvc
@@ -636,7 +643,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("input-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var first = submit(group, taskId, MEMBER_TOKEN, key("input-first-submit"), 100).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(1))
 			.andReturn();
@@ -648,7 +655,7 @@ class CaptureGroupQualityAnnotationContractTests {
 				.header("Authorization", "Bearer " + ADMIN_TOKEN)
 				.header("Idempotency-Key", key("input-first-approve"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"decision\":\"APPROVED\"}"))
+				.content(reviewRequest(firstRevisionId, "APPROVED", null)))
 			.andExpect(status().isCreated());
 
 		var firstFacts = this.jdbcTemplate.queryForMap("""
@@ -691,7 +698,7 @@ class CaptureGroupQualityAnnotationContractTests {
 
 		submit(group, taskId, MEMBER_TOKEN, key("input-second-submit"), 120).andExpect(status().isCreated())
 			.andExpect(jsonPath("$.revision_number").value(2))
-			.andExpect(jsonPath("$.primary_clip_asset_id").value(group.clipAssetIds().getFirst().toString()));
+			.andExpect(jsonPath("$.primary_clip_asset_id").value(nullValue()));
 		assertEquals(2, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 		assertEquals(1,
 				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
@@ -715,7 +722,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("authorization-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isForbidden())
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_NOT_ASSIGNEE"));
 
 		var otherGroup = createGroup(OTHER_PROJECT_ID, 1, 1, "COMPLETE", 1);
@@ -805,7 +812,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, groupQualityResult, BASE_REASON, 0, key(prefix + "-quality"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 		var revision = submit(group, taskId, MEMBER_TOKEN, key(prefix + "-submit"), endMs)
 			.andExpect(status().isCreated())
 			.andReturn();
@@ -821,7 +828,7 @@ class CaptureGroupQualityAnnotationContractTests {
 					.header("Authorization", "Bearer " + ADMIN_TOKEN)
 					.header("Idempotency-Key", key(prefix))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"decision\":\"APPROVED\"}"))
+					.content(reviewRequest(revisionId, "APPROVED", null)))
 			.andExpect(status().isCreated());
 	}
 
@@ -848,24 +855,121 @@ class CaptureGroupQualityAnnotationContractTests {
 				.content("{\"assignee_actor_id\":\"%s\"}".formatted(assigneeActorId)));
 	}
 
-	private ResultActions selectPrimary(UUID taskId, UUID clipAssetId, String token) throws Exception {
+	private ResultActions saveCameraDraft(UUID taskId, UUID clipAssetId, String token) throws Exception {
+		var view = this.jdbcTemplate.queryForMap("""
+				SELECT v.camera_number, v.version, t.group_input_version
+				FROM annotation_task_view v
+				JOIN annotation_task t ON t.annotation_task_id = v.annotation_task_id
+				WHERE v.annotation_task_id = ? AND v.clip_asset_id = ?
+				""", taskId, clipAssetId);
+		var cameraNumber = ((Number) view.get("camera_number")).intValue();
 		return this.mockMvc
-			.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/primary-view", PROJECT_ID, taskId)
+			.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/camera-views/{cameraNumber}",
+					PROJECT_ID, taskId, cameraNumber)
 				.header("Authorization", "Bearer " + token)
+				.header("Idempotency-Key", key("camera-draft"))
+				.header("X-Request-Id", key("camera-draft-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"clip_asset_id\":\"%s\"}".formatted(clipAssetId)));
+				.content(("{\"expected_version\":%d,\"expected_input_version\":\"%s\",\"state\":\"DRAFT\","
+						+ "\"segments\":[],\"note\":\"Synthetic draft\",\"exclusion_reason\":null}")
+					.formatted(((Number) view.get("version")).longValue(), view.get("group_input_version"))));
 	}
 
 	private ResultActions submit(GroupFixture group, UUID taskId, String token, String idempotencyKey, int endMs)
 			throws Exception {
+		var task = this.jdbcTemplate.queryForMap(
+				"SELECT version, group_input_version, task_status FROM annotation_task WHERE annotation_task_id = ?",
+				taskId);
+		var groupResult = this.jdbcTemplate.queryForObject("""
+				SELECT result FROM capture_group_quality_review
+				WHERE capture_group_id = ? ORDER BY revision DESC LIMIT 1
+				""", String.class, group.captureGroupId());
+		var correspondenceSegmentRefs = new ArrayList<String>();
+		if ("ASSIGNED".equals(task.get("task_status"))
+				&& ("QUALIFIED".equals(groupResult) || "QUALIFIED_WITH_EXCLUSIONS".equals(groupResult))) {
+			var views = this.jdbcTemplate.queryForList("""
+						SELECT v.camera_number, v.version, v.clip_asset_id, v.media_status,
+						       coalesce(q.decision, 'UNREVIEWED') AS quality_decision
+					FROM annotation_task_view v
+					LEFT JOIN quality_review q ON q.clip_asset_id = v.clip_asset_id
+					WHERE v.annotation_task_id = ?
+					ORDER BY v.camera_number
+					""", taskId);
+			for (var view : views) {
+				var cameraNumber = ((Number) view.get("camera_number")).intValue();
+				var clipAssetId = (UUID) view.get("clip_asset_id");
+				var included = clipAssetId != null && "INGESTED".equals(view.get("media_status"))
+						&& "QUALIFIED".equals(view.get("quality_decision"));
+				var segmentId = included ? UUID.randomUUID() : null;
+				var state = included ? "SUBMITTED" : "EXCLUDED";
+				var segments = included
+						? "[{\"segment_id\":\"%s\",\"start_ms\":0,\"end_ms\":%d,\"label\":\"acquire_item\",\"source_candidate_ids\":[]}]"
+							.formatted(segmentId, endMs + (cameraNumber - 1L) * 10L)
+						: "[]";
+				var exclusionReason = included ? "null" : clipAssetId == null
+						? "Missing camera slot in synthetic fixture" : "View is not quality-qualified";
+				var updateBody = ("{\"expected_version\":%d,\"expected_input_version\":\"%s\",\"state\":\"%s\","
+						+ "\"segments\":%s,\"note\":\"\",\"exclusion_reason\":%s}")
+					.formatted(((Number) view.get("version")).longValue(), task.get("group_input_version"), state,
+							segments, included ? "null" : "\"" + exclusionReason + "\"");
+				var update = this.mockMvc
+					.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/camera-views/{cameraNumber}",
+							PROJECT_ID, taskId, cameraNumber)
+						.header("Authorization", "Bearer " + token)
+						.header("Idempotency-Key", key("camera-submit"))
+						.header("X-Request-Id", key("camera-submit-request"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(updateBody));
+				if (update.andReturn().getResponse().getStatus() >= 400) {
+					return update;
+				}
+				if (included) {
+					correspondenceSegmentRefs
+						.add("{\"camera_number\":%d,\"segment_id\":\"%s\"}".formatted(cameraNumber, segmentId));
+				}
+			}
+		}
+		var correspondences = correspondenceSegmentRefs.isEmpty() ? "[]"
+				: "[{\"correspondence_id\":\"%s\",\"status\":\"%s\",\"segments\":[%s]%s}]".formatted(UUID.randomUUID(),
+						correspondenceSegmentRefs.size() > 1 ? "CONFIRMED" : "UNCERTAIN",
+						String.join(",", correspondenceSegmentRefs), correspondenceSegmentRefs.size() > 1 ? ""
+								: ",\"reason\":\"Only one qualified synthetic camera\"");
+		var currentTaskVersion = this.jdbcTemplate
+			.queryForObject("SELECT version FROM annotation_task WHERE annotation_task_id = ?", Long.class, taskId);
+		var body = "{\"expected_task_version\":%d,\"expected_input_version\":\"%s\",\"correspondences\":%s,\"note\":\"Synthetic group annotation\"}"
+			.formatted(currentTaskVersion, task.get("group_input_version"), correspondences);
 		return this.mockMvc
 			.perform(post("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/revisions", PROJECT_ID, taskId)
 				.header("Authorization", "Bearer " + token)
 				.header("Idempotency-Key", idempotencyKey)
 				.header("X-Request-Id", key("submit-request"))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(
-						"{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"acquire_item\"}]}".formatted(endMs)));
+				.content(body));
+	}
+
+	private String reviewRequest(UUID revisionId, String decision, String reviewNote) {
+		var cameraNumbers = this.jdbcTemplate.queryForList("""
+				SELECT (camera_view.value->>'camera_number')::integer
+				FROM annotation_revision revision,
+				    jsonb_array_elements(revision.annotation_document->'camera_views') AS camera_view(value)
+				WHERE revision.annotation_revision_id = ?
+				ORDER BY 1
+				""", Integer.class, revisionId);
+		var returned = "REJECTED".equals(decision) ? this.jdbcTemplate.queryForList("""
+				SELECT (camera_view.value->>'camera_number')::integer
+				FROM annotation_revision revision,
+				    jsonb_array_elements(revision.annotation_document->'camera_views') AS camera_view(value)
+				WHERE revision.annotation_revision_id = ? AND camera_view.value->>'included' = 'true'
+				ORDER BY 1
+				""", Integer.class, revisionId) : List.<Integer>of();
+		var reviewed = "REJECTED".equals(decision)
+				? cameraNumbers.stream().filter(camera -> !returned.contains(camera)).toList() : cameraNumbers;
+		var noteJson = reviewNote == null ? "null"
+				: "\"" + reviewNote.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+		return ("{\"decision\":\"%s\",\"review_note\":%s,\"reviewed_camera_numbers\":[%s],"
+				+ "\"return_camera_numbers\":[%s]}")
+			.formatted(decision, noteJson, reviewed.stream().map(String::valueOf).collect(Collectors.joining(",")),
+					returned.stream().map(String::valueOf).collect(Collectors.joining(",")));
 	}
 
 	private ResultActions recordViewQuality(UUID clipAssetId, String token, String decision, String reasonCode,
@@ -1027,6 +1131,16 @@ class CaptureGroupQualityAnnotationContractTests {
 		this.jdbcTemplate.update("DELETE FROM capture_group_cleaning WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_revision WHERE project_id = ?", projectId);
+		this.jdbcTemplate.execute(
+				"ALTER TABLE annotation_task_view_history DISABLE TRIGGER trg_annotation_task_view_history_append_only");
+		try {
+			this.jdbcTemplate.update("DELETE FROM annotation_task_view_history WHERE project_id = ?", projectId);
+		}
+		finally {
+			this.jdbcTemplate.execute(
+					"ALTER TABLE annotation_task_view_history ENABLE TRIGGER trg_annotation_task_view_history_append_only");
+		}
+		this.jdbcTemplate.update("DELETE FROM annotation_task_view WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM capture_group_quality_review WHERE project_id = ?", projectId);
 		this.jdbcTemplate.update("DELETE FROM quality_review WHERE project_id = ?", projectId);

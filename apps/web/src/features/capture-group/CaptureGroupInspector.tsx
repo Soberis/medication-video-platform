@@ -34,8 +34,6 @@ import { formatDateTime } from '@/features/catalog/catalog-presentation'
 const captureValueLabels: Record<string, string> = {
   EXTERNAL_CAPTURE_SESSION_ID: '外部采集会话',
   PLATFORM_LOCAL: '本地导入',
-  PRIMARY: '主机位',
-  SUPPORTING: '辅助机位',
   UPSTREAM_MANIFEST_KEY: '上游清单',
 }
 
@@ -92,16 +90,12 @@ export function CaptureGroupInspector({
     receivedCameraNumbers.length === 1 &&
     group.missing_camera_numbers.length === 0
   const cameraModeLabel = expectedCameraNumbers.length === 1 ? '单机位' : '多机位'
-  const selectedCameraRole = selectedStream
-    ? friendlyCaptureValue(selectedStream.camera_role)
-    : null
   const selectedMountPosition = selectedStream
     ? friendlyCaptureValue(selectedStream.mount_position)
     : null
   const showMountPosition = Boolean(
     selectedMountPosition &&
-      selectedMountPosition !== deviceLabel &&
-      selectedMountPosition !== selectedCameraRole,
+      selectedMountPosition !== deviceLabel,
   )
   const taskFocus =
     groupQuality &&
@@ -212,9 +206,7 @@ export function CaptureGroupInspector({
                 {
                   id: 'camera',
                   label: '机位',
-                  value: [`机位 ${selectedStream.camera_number}`, selectedCameraRole]
-                    .filter(Boolean)
-                    .join(' · '),
+                  value: `机位 ${selectedStream.camera_number}`,
                 },
                 ...(showMountPosition
                   ? [{ id: 'mount', label: '安装位置', value: selectedMountPosition }]
@@ -354,14 +346,13 @@ export function CaptureGroupInspector({
                   { id: 'task-status', label: '任务状态', value: formatTaskStatus(task) },
                   { id: 'task-assignee', label: '执行人', value: task.assignee_actor_id },
                   { id: 'task-created-by', label: '创建人', value: task.created_by },
-                  {
-                    id: 'task-primary',
-                    label: '主视图',
-                    value: task.primary_camera_number
-                      ? `机位 ${task.primary_camera_number}`
-                      : '未选择',
-                    secondary: task.primary_clip_asset_id ?? undefined,
-                  },
+                  ...(task.camera_views?.length
+                    ? [{
+                        id: 'task-camera-progress',
+                        label: '机位进度',
+                        value: `${task.camera_views.filter((view) => view.state === 'SUBMITTED' || view.state === 'EXCLUDED').length} / ${task.camera_views.length} 路已提交或排除`,
+                      }]
+                    : []),
                   {
                     id: 'task-input-version',
                     label: '确认输入版本',

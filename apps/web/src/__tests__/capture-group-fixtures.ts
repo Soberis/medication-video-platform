@@ -1,9 +1,14 @@
 import { vi } from 'vitest'
 
 import type {
+  AnnotationCameraView,
+  AnnotationCorrespondence,
   AnnotationLabelSchema,
+  AnnotationRevisionCameraView,
+  AnnotationRevisionCameraViewSegment,
   AnnotationReview,
   AnnotationTask,
+  GroupAnnotationDocument,
   CaptureGroupCleaning,
   CaptureGroupEvidence,
   CaptureGroupViewSet,
@@ -373,8 +378,44 @@ export function stubGroupDetail(
     if (url.endsWith('/media-report')) {
       return Promise.resolve(jsonResponse(mediaReport(group, url)))
     }
-    if (url.endsWith('/primary-view') && init?.method === 'PUT') {
-      return Promise.resolve(jsonResponse(options.task ?? {}))
+    const cameraViewUpdate = url.match(/\/annotation-tasks\/([^/]+)\/camera-views\/(\d+)$/)
+    if (cameraViewUpdate && init?.method === 'PUT') {
+      const [, annotationTaskId, cameraNumberValue] = cameraViewUpdate
+      const cameraNumber = Number(cameraNumberValue)
+      const currentTask = options.task
+      if (!currentTask || currentTask.annotation_task_id !== annotationTaskId) {
+        return Promise.resolve(
+          jsonResponse({ error_code: 'ANNOTATION_TASK_NOT_FOUND' }, { status: 404 }),
+        )
+      }
+      const request = JSON.parse(String(init.body ?? '{}')) as {
+        expected_version: number
+        state: AnnotationCameraView['state']
+        segments: AnnotationCameraView['segments']
+        note: string
+        exclusion_reason: string | null
+      }
+      const updatedTask: AnnotationTask = {
+        ...currentTask,
+        version: currentTask.version + 1,
+        camera_views: (currentTask.camera_views ?? []).map((view) =>
+          view.camera_number === cameraNumber
+            ? {
+                ...view,
+                version: request.expected_version + 1,
+                state: request.state,
+                segments: request.segments.map((segment, index) => ({
+                  ...segment,
+                  segment_id: segment.segment_id ?? `saved-camera-${cameraNumber}-${index + 1}`,
+                })),
+                note: request.note,
+                exclusion_reason: request.exclusion_reason,
+              }
+            : view,
+        ),
+      }
+      Object.assign(currentTask, updatedTask)
+      return Promise.resolve(jsonResponse(updatedTask))
     }
     if (
       url.includes('/annotation-revisions/') &&
@@ -600,16 +641,20 @@ export function viewQuality(clipAssetId: string, quality: CaptureGroupQualityRev
 export function groupTask(
   captureGroupId: string,
   canSubmit: boolean,
-  options: { revision?: boolean } = {},
+  options: { revision?: boolean; cameraViews?: AnnotationCameraView[] } = {},
 ): AnnotationTask {
   const primaryClipAssetId = clipIds[0] ?? '50000000-0000-4000-8000-000000000001'
   const confirmedViewSet = taskViewSet(captureGroupId)
+  const cameraViews =
+    options.cameraViews ??
+    (options.revision ? revisionCameraViewsFixture() : [cameraViewFixture(1), cameraViewFixture(2)])
   return {
     annotation_task_id: taskId,
     project_id: projectId,
     capture_group_id: captureGroupId,
     primary_clip_asset_id: primaryClipAssetId,
     primary_camera_number: 1,
+    camera_views: cameraViews,
     capture_group_quality_review_id: '45000000-0000-4000-8000-000000000001',
     group_quality_revision: 1,
     confirmed_view_set: confirmedViewSet,
@@ -620,7 +665,7 @@ export function groupTask(
     created_by: 'system',
     status: options.revision ? 'COMPLETED' : 'ASSIGNED',
     can_submit: options.revision ? false : canSubmit,
-    can_select_primary: options.revision ? false : true,
+    can_select_primary: false,
     can_review: false,
     can_recheck_capture_group_cleaning: Boolean(options.revision),
     annotation_revision: options.revision
@@ -629,10 +674,7 @@ export function groupTask(
           label_schema_id: schemaId,
           label_schema_digest: 'a'.repeat(64),
           revision_number: 1,
-          annotation_document: {
-            schema_version: 'annotation-document.v1',
-            segments: [{ start_ms: 0, end_ms: 1000, label: 'acquire_item' }],
-          },
+          annotation_document: groupAnnotationDocumentFixture(cameraViews, captureGroupId),
           submitted_by: 'reviewer',
           submitted_at: '2026-08-20T01:03:00Z',
           capture_group_id: captureGroupId,
@@ -806,12 +848,14 @@ export function submittedGroupTask(
   group: CaptureGroup,
   options: {
     canReview?: boolean
+    cameraViews?: AnnotationCameraView[]
     confirmedViewSet?: CaptureGroupViewSet | null
     annotationRevisionId?: string
     note?: string
   } = {},
 ): AnnotationTask {
   const base = groupTask(group.capture_group_id, false, { revision: true })
+  const cameraViews = options.cameraViews ?? cameraViewsForGroup(group, 'SUBMITTED')
   const viewSet =
     options.confirmedViewSet ??
     qualityFixture(group, 'QUALIFIED_WITH_EXCLUSIONS').confirmed_view_set
@@ -825,11 +869,12 @@ export function submittedGroupTask(
     can_review: options.canReview ?? true,
     can_recheck_capture_group_cleaning: false,
     confirmed_view_set: viewSet,
+    camera_views: cameraViews,
     annotation_revision: {
       ...revision,
       annotation_revision_id: annotationRevisionId,
       annotation_document: {
-        ...revision.annotation_document,
+        ...groupAnnotationDocumentFixture(cameraViews, group.capture_group_id),
         note: options.note ?? '本次正式动作 Revision 备注',
       },
       submitted_by: 'annotator',
@@ -844,6 +889,165 @@ export function submittedGroupTask(
     },
     version: 1,
   }
+}
+
+export function cameraViewFixture(
+  cameraNumber: number,
+  overrides: Partial<AnnotationCameraView> = {},
+): AnnotationCameraView {
+  const suffix = String(cameraNumber).padStart(12, '0')
+  return {
+    annotation_task_id: taskId,
+    camera_number: cameraNumber,
+    camera_stream_id: `41000000-0000-4000-8000-${suffix}`,
+    clip_asset_id: `50000000-0000-4000-8000-${suffix}`,
+    source_asset_sha256: 'c'.repeat(64),
+    media_status: 'INGESTED',
+    camera_stream_version: 1,
+    clip_asset_version: 1,
+    version: 0,
+    state: 'PENDING',
+    segments: [],
+    note: '',
+    exclusion_reason: null,
+    ...overrides,
+  }
+}
+
+function revisionCameraViewsFixture(): AnnotationCameraView[] {
+  return [
+    cameraViewFixture(1, {
+      version: 1,
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'segment-camera-1',
+          start_ms: 12345,
+          end_ms: 18760,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    }),
+    cameraViewFixture(2, {
+      version: 1,
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'segment-camera-2',
+          start_ms: 0,
+          end_ms: 1000,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    }),
+  ]
+}
+
+function groupAnnotationDocumentFixture(
+  cameraViews: AnnotationCameraView[],
+  captureGroupId: string,
+): GroupAnnotationDocument {
+  const availableViews = cameraViews.filter(
+    (view) => view.state === 'SUBMITTED' && view.clip_asset_id,
+  )
+  const correspondences: AnnotationCorrespondence[] = []
+  const segmentRelations = new Map<string, AnnotationCorrespondence>()
+  const maxSegmentCount = Math.max(0, ...availableViews.map((view) => view.segments.length))
+
+  for (let index = 0; index < maxSegmentCount; index += 1) {
+    const segments = availableViews.flatMap((view) => {
+      const segment = view.segments[index]
+      return segment ? [{ camera_number: view.camera_number, segment_id: segment.segment_id }] : []
+    })
+    const status = segments.length > 1 ? 'CONFIRMED' : 'UNCERTAIN'
+    const correspondence: AnnotationCorrespondence = {
+      correspondence_id: `correspondence-${index + 1}`,
+      status,
+      segments,
+      ...(status === 'UNCERTAIN' ? { reason: '合成 fixture 中只有一个机位有可用动作片段。' } : {}),
+    }
+    correspondences.push(correspondence)
+    for (const segment of segments) {
+      segmentRelations.set(`${segment.camera_number}:${segment.segment_id}`, correspondence)
+    }
+  }
+
+  const revisionViews: AnnotationRevisionCameraView[] = cameraViews.map((view) => {
+    const disposition = view.state === 'EXCLUDED' || !view.clip_asset_id ? 'EXCLUDED' : 'SUBMITTED'
+    const segments: AnnotationRevisionCameraViewSegment[] =
+      disposition === 'SUBMITTED'
+        ? view.segments.map((segment) => {
+            const correspondence = segmentRelations.get(
+              `${view.camera_number}:${segment.segment_id}`,
+            )
+            return {
+              ...segment,
+              correspondence_id:
+                correspondence?.correspondence_id ??
+                `unmapped-${view.camera_number}-${segment.segment_id}`,
+              correspondence_status: correspondence?.status ?? 'UNCERTAIN',
+            }
+          })
+        : []
+    return {
+      camera_number: view.camera_number,
+      camera_stream_id: view.camera_stream_id,
+      clip_asset_id: view.clip_asset_id,
+      clip_asset_sha256: view.source_asset_sha256,
+      camera_stream_version: Math.max(1, view.version),
+      clip_asset_version: Math.max(1, view.version),
+      media_status: view.media_status,
+      disposition,
+      included: disposition === 'SUBMITTED',
+      ...(disposition === 'SUBMITTED' ? { note: view.note } : {}),
+      exclusion_reason:
+        disposition === 'EXCLUDED'
+          ? (view.exclusion_reason ?? '合成 fixture 中无可用视频。')
+          : null,
+      segments,
+    }
+  })
+
+  return {
+    schema_version: 'annotation-document.v2',
+    capture_group_id: captureGroupId,
+    expected_task_version: 0,
+    input_version: 'capture-group-view-set.v1:synthetic',
+    label_schema_id: schemaId,
+    label_schema_digest: 'a'.repeat(64),
+    camera_views: revisionViews,
+    correspondences,
+  }
+}
+
+function cameraViewsForGroup(
+  group: CaptureGroup,
+  state: AnnotationCameraView['state'],
+): AnnotationCameraView[] {
+  return group.streams.map((stream, index) =>
+    cameraViewFixture(stream.camera_number, {
+      camera_stream_id: stream.camera_stream_id,
+      clip_asset_id: stream.clip_asset_id,
+      source_asset_sha256: 'c'.repeat(64),
+      media_status: stream.stream_status,
+      version: 1,
+      state,
+      segments:
+        state === 'SUBMITTED'
+          ? [
+              {
+                segment_id: `segment-camera-${stream.camera_number}`,
+                start_ms: 100 + index * 50,
+                end_ms: 900 + index * 50,
+                label: 'acquire_item',
+                source_candidate_ids: [],
+              },
+            ]
+          : [],
+    }),
+  )
 }
 
 function taskViewSet(captureGroupId: string): CaptureGroupViewSet {

@@ -69,10 +69,10 @@ V1.35 的唯一主链：
                            Export Eligibility → human-demonstration-hdf5.v2
 ```
 
-- **数据建模边界**：`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象；`CaptureGroup` 是一次采集记录；`CameraStream` 是视角。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
+- **数据建模边界**：`ClipAsset` 是不可变视频证据对象，不是独立的产品工作流对象；`CaptureGroup` 是一次采集记录；`CameraStream` 是视角。采集组内的所有机位均为等权观测者，**不设人为的主副机位之分**。Local Upload 的单视频场景统一建模为 `CaptureGroup → CameraStream #1 → ClipAsset`，不是第二条 single-video 流程。
 - **设备与采集边界**：采集端负责采集、缓存和上传策略；平台不控制相机或边端设备。
-- **双轨 AI 证据链条**：MediaPipe 与 Action Candidate 独立运行。系统自动准备标注草稿，正确片段无需逐段采纳，用户可修改并最后显式提交；已提交 Revision 经现有 Review APPROVED 后才进入 HDF5 最终准入。
-- **规范导出**：当前唯一导出为 `human-demonstration-hdf5.v2`（具身智能双臂张量规整格式）。
+- **全机位自动事实与双轨 AI 证据链条**：各机位手部骨骼（MediaPipe）与动作候选（Action Candidate）均为系统全自动并发检测生成，实事求是反映各视角的物理事实。系统自动为各机位铺设时间轴草稿，标注员核对多机位对应关系后显式提交整组标注成果包；复核员对各机位的动作呈现与手部质量进行全视角联合核验，审核通过后才进入 HDF5 最终准入。
+- **规范导出**：当前唯一导出为 `human-demonstration-hdf5.v2`（具身智能双臂多视角规整格式，整合所有复核合格机位的动作对齐样本）。
 - **历史状态清理**：领域模型、状态机和异步协议中的历史产品段落仅供参考。媒体就绪后的 Action Candidate 自动派发已接线，真实 Worker 联调仍待验收；人工任务只在进入人工提交路径时准备。自动化准备不代替提交和复核，不覆盖人工修改。D1 已停止新的 Cleaning 写入与 recheck，历史 Cleaning 仅作只读兼容。
 
 ## 本地运行

@@ -1,6 +1,7 @@
 package com.medicationvideo.platform.datasetexport;
 
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -17,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -83,10 +86,16 @@ class HumanDemonstrationHdf5ExportContractTests {
 
 	@Test
 	void exportsApprovedHumanLabelsAndCurrentMediapipeFactsAsReadableHdf5() throws Exception {
-		var group = createGroup(1, 1, "COMPLETE", 1);
-		var ai = insertAiJob(group.clipAssetIds().getFirst(), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED",
-				"HAND_DETECTED", List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
-		var revisionId = approveRevision(group, 900, "hdf5-export");
+		var group = createGroup(3, 3, "COMPLETE", 3);
+		var ai1 = insertAiJob(group.clipAssetIds().get(0), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
+		var ai2 = insertAiJob(group.clipAssetIds().get(1), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(1520, 0, "RIGHT", "0.9200", 2)));
+		insertAiJob(group.clipAssetIds().get(2), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(520, 0, "LEFT", "0.9300", 3)));
+		var revisionId = approveRevision(group,
+				List.of(new CameraAnnotation(1, 450, 900), new CameraAnnotation(2, 1400, 1800)), List.of(3),
+				"hdf5-export");
 
 		var mvcResult = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
@@ -109,19 +118,37 @@ class HumanDemonstrationHdf5ExportContractTests {
 			var episode = file.getByPath("/data/demo_000000");
 			assertEquals(group.captureGroupId().toString(), episode.getAttribute("capture_group_id").getData());
 			assertEquals(revisionId.toString(), episode.getAttribute("annotation_revision_id").getData());
-			assertEquals(SHA256, episode.getAttribute("primary_clip_asset_sha256").getData());
+			assertEquals(SHA256,
+					file.getByPath("/data/demo_000000/samples/sources/camera_01")
+						.getAttribute("clip_asset_sha256")
+						.getData());
+			assertEquals(SHA256,
+					file.getByPath("/data/demo_000000/samples/sources/camera_02")
+						.getAttribute("clip_asset_sha256")
+						.getData());
 			assertEquals("acquire_item",
 					((String[]) file.getDatasetByPath("/data/demo_000000/annotations/label").getData())[0]);
 			assertEquals(900L,
 					((long[]) file.getDatasetByPath("/data/demo_000000/annotations/segment_end_ms").getData())[0]);
 			var candidates = "/data/demo_000000/views/camera_01/candidates/";
-			assertEquals(ai.jobId().toString(),
-					file.getByPath("/data/demo_000000/views/camera_01").getAttribute("ai_job_id").getData());
 			assertEquals(520L, ((long[]) file.getDatasetByPath(candidates + "frame_timestamp_ms").getData())[0]);
+			assertEquals(ai1.jobId().toString(),
+					file.getByPath("/data/demo_000000/views/camera_01").getAttribute("ai_job_id").getData());
+			assertEquals(ai2.jobId().toString(),
+					file.getByPath("/data/demo_000000/views/camera_02").getAttribute("ai_job_id").getData());
+			assertEquals(1520L,
+					((long[]) file.getDatasetByPath("/data/demo_000000/views/camera_02/candidates/frame_timestamp_ms")
+						.getData())[0]);
+			assertFalse(((io.jhdf.api.Group) file.getByPath("/data/demo_000000/views")).getChildren()
+				.containsKey("camera_03"));
 			var landmarks = (float[][][]) file.getDatasetByPath(candidates + "landmarks").getData();
 			assertEquals(1, landmarks.length);
 			assertEquals(21, landmarks[0].length);
 			assertEquals(3, landmarks[0][0].length);
+			assertArrayEquals(new int[] { 1, 2 },
+					(int[]) file.getDatasetByPath("/data/demo_000000/samples/camera_number").getData());
+			assertArrayEquals(new long[] { 520, 1520 },
+					(long[]) file.getDatasetByPath("/data/demo_000000/samples/frame_timestamp_ms").getData());
 		}
 	}
 
@@ -183,9 +210,11 @@ class HumanDemonstrationHdf5ExportContractTests {
 			assertFalse(episode.getChildren().containsKey("views"));
 			var samples = file.getByPath("/data/demo_000000/samples");
 			assertEquals("dual-hand-tensor.v2", samples.getAttribute("layout").getData());
-			assertEquals(1280, samples.getAttribute("image_width").getData());
-			assertEquals(720, samples.getAttribute("image_height").getData());
 			assertEquals(1, samples.getAttribute("step_count").getData());
+			assertArrayEquals(new int[] { 1280 },
+					(int[]) file.getDatasetByPath("/data/demo_000000/samples/image_width").getData());
+			assertArrayEquals(new int[] { 720 },
+					(int[]) file.getDatasetByPath("/data/demo_000000/samples/image_height").getData());
 
 			var landmarks = (float[][][][]) file.getDatasetByPath("/data/demo_000000/samples/landmarks").getData();
 			assertEquals(1, landmarks.length);
@@ -196,10 +225,19 @@ class HumanDemonstrationHdf5ExportContractTests {
 			var handMask = (int[][]) file.getDatasetByPath("/data/demo_000000/samples/hand_mask").getData();
 			assertEquals(1, handMask[0][0]); // LEFT hand present
 			assertEquals(0, handMask[0][1]); // RIGHT hand absent
+			assertArrayEquals(new String[] { "UNCERTAIN" },
+					(String[]) file.getDatasetByPath("/data/demo_000000/annotations/correspondences/status").getData());
+			assertArrayEquals(new String[] { "Single participating camera in synthetic test" },
+					(String[]) file.getDatasetByPath("/data/demo_000000/annotations/correspondences/reason").getData());
 		}
 	}
 
 	private UUID approveRevision(GroupFixture group, int endMs, String prefix) throws Exception {
+		return approveRevision(group, List.of(new CameraAnnotation(1, 0, endMs)), List.of(), prefix);
+	}
+
+	private UUID approveRevision(GroupFixture group, List<CameraAnnotation> annotations,
+			List<Integer> excludedCameraNumbers, String prefix) throws Exception {
 		recordGroup(group, "QUALIFIED", prefix + "-quality").andExpect(status().isOk());
 		this.mockMvc
 			.perform(post("/api/v1/projects/{projectId}/capture-groups/{captureGroupId}/annotation-tasks", PROJECT_ID,
@@ -211,8 +249,48 @@ class HumanDemonstrationHdf5ExportContractTests {
 				.content("{\"assignee_actor_id\":\"%s\"}".formatted(ProjectMembershipTestData.MEMBER_ACTOR)))
 			.andExpect(status().isCreated());
 		var taskId = taskId(group);
-		selectPrimary(taskId, group.clipAssetIds().getFirst()).andExpect(status().isOk());
-		var revision = submit(taskId, prefix + "-submit", endMs).andExpect(status().isCreated()).andReturn();
+		var inputVersion = this.jdbcTemplate.queryForObject(
+				"SELECT group_input_version FROM annotation_task WHERE annotation_task_id = ?", String.class, taskId);
+		var segmentIdsByCamera = new HashMap<Integer, UUID>();
+		for (var annotation : annotations) {
+			var segmentId = UUID.randomUUID();
+			segmentIdsByCamera.put(annotation.cameraNumber(), segmentId);
+			updateCameraView(taskId, annotation.cameraNumber(), prefix, inputVersion, "SUBMITTED", annotation.startMs(),
+					annotation.endMs(), segmentId, null)
+				.andExpect(status().isOk());
+		}
+		for (var cameraNumber : excludedCameraNumbers) {
+			updateCameraView(taskId, cameraNumber, prefix, inputVersion, "EXCLUDED", 0, 0, null,
+					"Synthetic camera exclusion")
+				.andExpect(status().isOk());
+		}
+		var correspondences = new ArrayList<String>();
+		if (annotations.size() > 1) {
+			var memberJson = annotations.stream().map(annotation -> {
+				return "{\"camera_number\":%d,\"segment_id\":\"%s\"}".formatted(annotation.cameraNumber(),
+						segmentIdsByCamera.get(annotation.cameraNumber()));
+			}).collect(Collectors.joining(","));
+			correspondences.add("{\"correspondence_id\":\"%s\",\"status\":\"CONFIRMED\",\"segments\":[%s]}"
+				.formatted(UUID.randomUUID(), memberJson));
+		}
+		else {
+			var annotation = annotations.getFirst();
+			correspondences.add(
+					"{\"correspondence_id\":\"%s\",\"status\":\"UNCERTAIN\",\"reason\":\"Single participating camera in synthetic test\",\"segments\":[{\"camera_number\":%d,\"segment_id\":\"%s\"}]}"
+						.formatted(UUID.randomUUID(), annotation.cameraNumber(),
+								segmentIdsByCamera.get(annotation.cameraNumber())));
+		}
+		var taskVersion = this.jdbcTemplate
+			.queryForObject("SELECT version FROM annotation_task WHERE annotation_task_id = ?", Long.class, taskId);
+		var revision = this.mockMvc
+			.perform(post("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/revisions", PROJECT_ID, taskId)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.header("Idempotency-Key", key(prefix + "-submit"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"expected_task_version\":%d,\"expected_input_version\":\"%s\",\"correspondences\":[%s]}"
+					.formatted(taskVersion, inputVersion, String.join(",", correspondences))))
+			.andExpect(status().isCreated())
+			.andReturn();
 		var revisionId = UUID
 			.fromString(JsonPath.read(revision.getResponse().getContentAsString(), "$.annotation_revision_id"));
 		this.mockMvc.perform(
@@ -220,7 +298,8 @@ class HumanDemonstrationHdf5ExportContractTests {
 					.header("Authorization", "Bearer " + ADMIN_TOKEN)
 					.header("Idempotency-Key", key(prefix + "-review"))
 					.contentType(MediaType.APPLICATION_JSON)
-					.content("{\"decision\":\"APPROVED\"}"))
+					.content("{\"decision\":\"APPROVED\",\"reviewed_camera_numbers\":%s,\"return_camera_numbers\":[]}"
+						.formatted(IntStream.rangeClosed(1, group.cameraStreamIds().size()).boxed().toList())))
 			.andExpect(status().isCreated());
 		return revisionId;
 	}
@@ -235,34 +314,32 @@ class HumanDemonstrationHdf5ExportContractTests {
 			.content("{\"result\":\"%s\",\"reason\":\"Synthetic test\",\"expected_revision\":0}".formatted(result)));
 	}
 
-	private ResultActions selectPrimary(UUID taskId, UUID clipAssetId) throws Exception {
+	private ResultActions updateCameraView(UUID taskId, int cameraNumber, String prefix, String inputVersion,
+			String state, long startMs, long endMs, UUID segmentId, String exclusionReason) throws Exception {
+		var cameraViewVersion = this.jdbcTemplate.queryForObject(
+				"SELECT version FROM annotation_task_view WHERE annotation_task_id = ? AND camera_number = ?",
+				Long.class, taskId, cameraNumber);
+		var segmentJson = "SUBMITTED".equals(state)
+				? "[{\"segment_id\":\"%s\",\"start_ms\":%d,\"end_ms\":%d,\"label\":\"acquire_item\",\"source_candidate_ids\":[]}]"
+					.formatted(segmentId, startMs, endMs)
+				: "[]";
 		return this.mockMvc
-			.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/primary-view", PROJECT_ID, taskId)
+			.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/camera-views/{cameraNumber}",
+					PROJECT_ID, taskId, cameraNumber)
 				.header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.header("Idempotency-Key", key(prefix + "-camera-" + cameraNumber))
+				.header("X-Request-Id", key(prefix + "-camera-request-" + cameraNumber))
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"clip_asset_id\":\"%s\"}".formatted(clipAssetId)));
-	}
-
-	private ResultActions submit(UUID taskId, String prefix, int endMs) throws Exception {
-		return this.mockMvc
-			.perform(post("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/revisions", PROJECT_ID, taskId)
-				.header("Authorization", "Bearer " + MEMBER_TOKEN)
-				.header("Idempotency-Key", key(prefix))
-				.header("X-Request-Id", key(prefix + "-request"))
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(
-						"{\"segments\":[{\"start_ms\":0,\"end_ms\":%d,\"label\":\"acquire_item\"}]}".formatted(endMs)));
+				.content(("{\"expected_version\":%d,\"expected_input_version\":\"%s\",\"state\":\"%s\","
+						+ "\"segments\":%s,\"note\":\"\",\"exclusion_reason\":%s}")
+					.formatted(cameraViewVersion, inputVersion, state, segmentJson,
+							"EXCLUDED".equals(state) ? "\"" + exclusionReason + "\"" : "null")));
 	}
 
 	private UUID taskId(GroupFixture group) {
 		return this.jdbcTemplate.queryForObject(
 				"SELECT annotation_task_id FROM annotation_task WHERE project_id = ? AND capture_group_id = ?",
 				UUID.class, PROJECT_ID, group.captureGroupId());
-	}
-
-	private UUID candidateId(UUID jobId) {
-		return this.jdbcTemplate.queryForObject(
-				"SELECT candidate_annotation_id FROM candidate_annotation WHERE ai_job_id = ?", UUID.class, jobId);
 	}
 
 	private AiFixture insertAiJob(UUID clipAssetId, String jobStatus, String jobHandResult, String attemptStatus,
@@ -486,6 +563,16 @@ class HumanDemonstrationHdf5ExportContractTests {
 		this.jdbcTemplate.update("DELETE FROM capture_group_cleaning WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM annotation_review WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM annotation_revision WHERE project_id = ?", PROJECT_ID);
+		this.jdbcTemplate.execute(
+				"ALTER TABLE annotation_task_view_history DISABLE TRIGGER trg_annotation_task_view_history_append_only");
+		try {
+			this.jdbcTemplate.update("DELETE FROM annotation_task_view_history WHERE project_id = ?", PROJECT_ID);
+		}
+		finally {
+			this.jdbcTemplate.execute(
+					"ALTER TABLE annotation_task_view_history ENABLE TRIGGER trg_annotation_task_view_history_append_only");
+		}
+		this.jdbcTemplate.update("DELETE FROM annotation_task_view WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM annotation_task WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM capture_group_quality_review WHERE project_id = ?", PROJECT_ID);
 		this.jdbcTemplate.update("DELETE FROM quality_review WHERE project_id = ?", PROJECT_ID);
@@ -542,6 +629,9 @@ class HumanDemonstrationHdf5ExportContractTests {
 	}
 
 	private record CandidateSpec(long frameTimestampMs, int handIndex, String handedness, String score, int seed) {
+	}
+
+	private record CameraAnnotation(int cameraNumber, long startMs, long endMs) {
 	}
 
 }
