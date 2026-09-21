@@ -4,7 +4,7 @@ param(
     [ValidateSet('start', 'restart', '')]
     [string]$Action = '',
 
-    [Alias('Restart', 'restart')]
+    [Alias('Restart')]
     [switch]$RestartApi,
 
     [switch]$AiWorker,
