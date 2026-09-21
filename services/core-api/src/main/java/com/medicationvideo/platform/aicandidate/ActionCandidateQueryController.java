@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.medicationvideo.platform.iamproject.PlatformActor;
@@ -31,20 +32,24 @@ class ActionCandidateQueryController {
 
 	@GetMapping("/projects/{projectId}/capture-groups/{captureGroupId}/action-candidates")
 	ResponseEntity<List<ActionCandidateResponse>> listCandidates(@PathVariable UUID projectId,
-			@PathVariable UUID captureGroupId, Authentication authentication) {
+			@PathVariable UUID captureGroupId, @RequestParam(name = "clip_asset_id", required = false) UUID clipAssetId,
+			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.projectAccessService.requireMember(projectId, actor.actorId());
-		return ResponseEntity.ok()
-			.cacheControl(CacheControl.noStore())
-			.body(this.service.listByCaptureGroup(projectId, captureGroupId));
+		List<ActionCandidateResponse> candidates = clipAssetId != null
+				? this.service.listByCaptureGroup(projectId, captureGroupId, clipAssetId)
+				: this.service.listByCaptureGroup(projectId, captureGroupId);
+		return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(candidates);
 	}
 
 	@GetMapping("/projects/{projectId}/capture-groups/{captureGroupId}/action-candidate-job")
 	ResponseEntity<ActionCandidateJobResponse> getJobStatus(@PathVariable UUID projectId,
-			@PathVariable UUID captureGroupId, Authentication authentication) {
+			@PathVariable UUID captureGroupId, @RequestParam(name = "clip_asset_id", required = false) UUID clipAssetId,
+			Authentication authentication) {
 		var actor = requireActor(authentication);
 		this.projectAccessService.requireMember(projectId, actor.actorId());
-		var status = this.service.getJobStatus(projectId, captureGroupId);
+		var status = clipAssetId != null ? this.service.getJobStatus(projectId, captureGroupId, clipAssetId)
+				: this.service.getJobStatus(projectId, captureGroupId);
 		if (status == null) {
 			return ResponseEntity.noContent().build();
 		}

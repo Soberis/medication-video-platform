@@ -1,8 +1,9 @@
-import { Alert, Button, Modal, Skeleton } from 'antd'
+import { Alert, App as AntdApp, Button, Modal, Skeleton } from 'antd'
 import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
+import { recordQualityReview, type QualityReviewReasonCode } from '@/api/quality'
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
 import { PageHeader } from '@/components/PageHeader'
@@ -56,6 +57,7 @@ function CaptureGroupHeaderStatus({ group }: { group: CaptureGroup }) {
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const { session } = useAuth()
+  const { message } = AntdApp.useApp()
   const location = useLocation()
   const navigate = useNavigate()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
@@ -239,15 +241,54 @@ export default function CaptureGroupDetailView() {
     return null
   }, [selectedMediaReport])
 
+  const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
+  const humanTask = data.taskVisibility === 'visible' ? data.task : null
+  const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
+  const primaryLocked = Boolean(humanTask?.annotation_revision)
+  const [selectedPrimaryClipAssetId, setSelectedPrimaryClipAssetId] = useState<string | null>(null)
+
+  const effectivePrimaryClipAssetId = useMemo(() => {
+    if (primaryLocked) {
+      return (
+        humanTask?.annotation_revision?.primary_clip_asset_id ??
+        humanTask?.primary_clip_asset_id ??
+        null
+      )
+    }
+    return (
+      selectedPrimaryClipAssetId ??
+      humanTask?.primary_clip_asset_id ??
+      data.selectedClipAssetId ??
+      viewRows.find(
+        (view) => view.stream?.clip_asset_id && view.stream.stream_status === 'INGESTED',
+      )?.stream?.clip_asset_id ??
+      viewRows.find((view) => view.stream?.clip_asset_id)?.stream?.clip_asset_id ??
+      null
+    )
+  }, [
+    data.selectedClipAssetId,
+    humanTask?.annotation_revision?.primary_clip_asset_id,
+    humanTask?.primary_clip_asset_id,
+    primaryLocked,
+    selectedPrimaryClipAssetId,
+    viewRows,
+  ])
+
+  const canChangePrimary =
+    !primaryLocked && !hasUnsavedAnnotation && (!humanTask || humanTask.can_select_primary)
+
   const handleSelectView = useCallback(
     (clipAssetId: string) => {
       const wasPlaybackActive = Boolean(playbackGrant || playbackState === 'ready')
       data.setSelectedClipAssetId(clipAssetId)
+      if (canChangePrimary) {
+        setSelectedPrimaryClipAssetId(clipAssetId)
+      }
       if (wasPlaybackActive) {
         shouldAutoStartPlaybackRef.current = true
       }
     },
-    [data, playbackGrant, playbackState],
+    [canChangePrimary, data, playbackGrant, playbackState],
   )
 
   useEffect(() => {
@@ -276,9 +317,37 @@ export default function CaptureGroupDetailView() {
     startPlayback,
   ])
 
-  const isReceiptFinalizationPending = data.isFinalizingReceipt || isReceiptFinalizePending
-  const humanTask = data.taskVisibility === 'visible' ? data.task : null
-  const taskDestination = humanTask ? captureGroupTaskDestination(humanTask) : null
+  const handlePrimaryViewSelect = useCallback(
+    (clipAssetId: string) => {
+      setSelectedPrimaryClipAssetId(clipAssetId)
+      handleSelectView(clipAssetId)
+    },
+    [handleSelectView],
+  )
+
+  const handleToggleExcludeView = useCallback(
+    async (clipAssetId: string) => {
+      const currentReview = data.viewReviews[clipAssetId]
+      const isCurrentlyExcluded = currentReview?.decision === 'REJECTED'
+      const nextDecision = isCurrentlyExcluded ? 'QUALIFIED' : 'REJECTED'
+      const nextReason: QualityReviewReasonCode = isCurrentlyExcluded
+        ? 'MEETS_REQUIREMENTS'
+        : 'OTHER_QUALITY_FAILURE'
+      try {
+        await recordQualityReview(projectId, clipAssetId, {
+          decision: nextDecision,
+          reason_code: nextReason,
+          expected_version: currentReview?.version ?? 0,
+        })
+        await data.refresh()
+        message.success(isCurrentlyExcluded ? '已恢复该机位' : '已排除该机位')
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '机位状态更新失败，请重试')
+      }
+    },
+    [data, message, projectId],
+  )
+
   const handleDiscardVideo = useCallback(async () => {
     await data.refresh()
     navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
@@ -318,7 +387,7 @@ export default function CaptureGroupDetailView() {
         (fallbackFocusTargetId ? document.getElementById(fallbackFocusTargetId) : null)
       if (!target) return
       appliedFocus.current = location.key
-      target.scrollIntoView?.({ block: 'start', behavior: 'auto' })
+      target.scrollIntoView?.({ block: 'nearest', behavior: 'auto' })
       if (target instanceof HTMLElement) target.focus({ preventScroll: true })
     }, 0)
     return () => window.clearTimeout(timer)
@@ -343,32 +412,33 @@ export default function CaptureGroupDetailView() {
           task={humanTask}
           schema={data.schema}
           onRefresh={data.refresh}
+          onPlaySegment={handlePlaySegment}
+          activeCameraNumber={selectedStream?.camera_number ?? 1}
         />
       )
     }
 
-    const activePrimaryId =
-      humanTask?.primary_clip_asset_id ??
-      viewState.selectedStream?.clip_asset_id ??
-      viewRows.find((view) => view.stream?.clip_asset_id)?.stream?.clip_asset_id ??
-      null
+    const activePrimaryId = effectivePrimaryClipAssetId
+
+    const currentViewClipAssetId = viewState.selectedStream?.clip_asset_id ?? data.selectedClipAssetId
+    const isPrimaryActive = Boolean(activePrimaryId && currentViewClipAssetId === activePrimaryId)
 
     const handlePlaySegmentForAnnotation = (startMs: number, endMs: number) => {
-      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+      if (activePrimaryId && currentViewClipAssetId !== activePrimaryId) {
         handleSelectView(activePrimaryId)
       }
       handlePlaySegment(startMs, endMs)
     }
 
     const handlePlayAtMsForAnnotation = (timeMs: number) => {
-      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+      if (activePrimaryId && currentViewClipAssetId !== activePrimaryId) {
         handleSelectView(activePrimaryId)
       }
       handlePlayAtMs(timeMs)
     }
 
     const handleSeekToMsForAnnotation = (timeMs: number) => {
-      if (activePrimaryId && data.selectedClipAssetId !== activePrimaryId) {
+      if (activePrimaryId && currentViewClipAssetId !== activePrimaryId) {
         handleSelectView(activePrimaryId)
       }
       handleSeekToMs(timeMs)
@@ -384,14 +454,14 @@ export default function CaptureGroupDetailView() {
         schema={data.schema}
         viewRows={viewRows}
         viewReviews={data.viewReviews}
+        externalPrimaryClipAssetId={effectivePrimaryClipAssetId}
+        onPrimaryViewSelect={handlePrimaryViewSelect}
         assigneeActorId={session?.username ?? ''}
         canPrepareTask={session?.role === 'ADMIN' && data.taskVisibility === 'visible'}
-        currentPlaybackTimeMs={
-          data.selectedClipAssetId === activePrimaryId ? currentPlaybackTimeMs : null
-        }
-        totalDurationMs={data.selectedClipAssetId === activePrimaryId ? totalDurationMs : null}
+        currentPlaybackTimeMs={isPrimaryActive ? currentPlaybackTimeMs : null}
+        totalDurationMs={isPrimaryActive ? totalDurationMs : null}
         hasNoHandDetected={
-          data.selectedClipAssetId === activePrimaryId &&
+          isPrimaryActive &&
           viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
           viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
         }
@@ -529,12 +599,13 @@ export default function CaptureGroupDetailView() {
               <div className="capture-group-video-column">
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
-                  task={humanTask}
+                  primaryClipAssetId={effectivePrimaryClipAssetId}
                   viewReviews={data.viewReviews}
                   viewState={viewState}
                   externalVideoRef={videoRef}
                   initialPlaybackTimeMs={preservedPlaybackTimeMs}
                   onSelectView={handleSelectView}
+                  onToggleExcludeView={handleToggleExcludeView}
                   onPlaybackTimeChange={handlePlaybackTimeChange}
                   isCompleted={humanTask?.status === 'COMPLETED'}
                 />

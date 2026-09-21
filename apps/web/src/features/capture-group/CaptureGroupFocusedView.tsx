@@ -1,8 +1,7 @@
-import { Alert, Descriptions } from 'antd'
+import { Button, Descriptions } from 'antd'
 import { Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import type { AnnotationTask } from '@/api/annotation'
 import type { QualityReview } from '@/api/quality'
 import { MediaReportCard, PlaybackCard } from '@/components/AssetDetailSections'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
@@ -13,10 +12,11 @@ import { mediaStatusLabels, viewQualityLabels } from '@/features/capture-group-p
 
 interface CaptureGroupFocusedViewProps {
   viewRows: GroupViewRow[]
-  task: AnnotationTask | null
+  primaryClipAssetId?: string | null
   viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
   onSelectView: (clipAssetId: string) => void
+  onToggleExcludeView?: (clipAssetId: string) => Promise<void>
   onPlaybackTimeChange?: (timeMs: number | null) => void
   isCompleted?: boolean
   externalVideoRef?: React.RefObject<HTMLVideoElement | null>
@@ -25,10 +25,11 @@ interface CaptureGroupFocusedViewProps {
 
 export function CaptureGroupFocusedView({
   viewRows,
-  task,
+  primaryClipAssetId,
   viewReviews,
   viewState,
   onSelectView,
+  onToggleExcludeView,
   onPlaybackTimeChange,
   isCompleted = false,
   externalVideoRef,
@@ -145,11 +146,9 @@ export function CaptureGroupFocusedView({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [canPlay, isRequestingPlayback, playbackGrant, playbackState, startPlayback, videoRef])
-  const isPrimary = Boolean(
-    selectedStream && task?.primary_clip_asset_id === selectedStream.clip_asset_id,
-  )
-  const isSupporting = Boolean(selectedStream && task?.primary_clip_asset_id && !isPrimary)
+
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const resolvedPrimaryClipAssetId = primaryClipAssetId ?? null
 
   const focusedView = (
     <section
@@ -159,15 +158,6 @@ export function CaptureGroupFocusedView({
       <h2 id="capture-group-focused-title" className="visually-hidden">
         视频
       </h2>
-      {isSupporting ? (
-        <Alert
-          className="capture-group-supporting-warning"
-          type="info"
-          showIcon
-          title="当前为参考视图"
-          description="标注时间仍以主视图为准。"
-        />
-      ) : null}
       {viewRows.length > 1 ? (
         <div className="capture-group-compare-strip" role="group" aria-label="采集记录机位选择">
           <div className="capture-group-compare-list">
@@ -176,16 +166,24 @@ export function CaptureGroupFocusedView({
               const isCurrent = Boolean(
                 stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
               )
+              const isBaseline = Boolean(
+                stream && stream.clip_asset_id === primaryClipAssetId,
+              )
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
+              const isExcluded = decision?.decision === 'REJECTED'
               const qualityLabel = stream
-                ? `机位质量 · ${viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
+                ? `机位质量 · ${isExcluded ? '已排除' : viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
                 : null
               const mediaLabel = stream
                 ? (mediaStatusLabels[stream.stream_status] ?? '媒体状态暂不可用')
                 : '缺失'
+              const isStreamError =
+                !stream ||
+                stream.stream_status === 'INGEST_FAILED' ||
+                stream.stream_status === 'UNAVAILABLE'
               return (
                 <button
-                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}`}
+                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}${isExcluded ? ' is-excluded' : ''}`}
                   type="button"
                   key={view.cameraNumber}
                   disabled={!stream}
@@ -193,15 +191,16 @@ export function CaptureGroupFocusedView({
                   aria-current={isCurrent ? 'true' : undefined}
                   aria-label={[
                     `机位 ${view.cameraNumber}`,
-                    mediaLabel,
+                    isBaseline ? '标注基准' : null,
+                    isExcluded ? '已排除' : null,
+                    isStreamError ? mediaLabel : null,
                     qualityLabel,
-                    stream && stream.clip_asset_id === task?.primary_clip_asset_id
-                      ? '标注基准'
-                      : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  title={[mediaLabel, qualityLabel].filter(Boolean).join(' · ')}
+                  title={[mediaLabel, isExcluded ? '已排除此视角' : qualityLabel, isBaseline ? '标注基准机位' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
                   onKeyDown={(event) => {
                     if (
@@ -231,20 +230,43 @@ export function CaptureGroupFocusedView({
                     }
                   }}
                 >
-                  <span className="capture-group-compare-thumbnail" aria-hidden="true">
-                    <Video size={16} strokeWidth={1.7} />
+                  <span className="capture-group-compare-thumbnail capture-group-compare-icon" aria-hidden="true">
+                    <Video size={14} strokeWidth={1.75} />
                   </span>
-                  <span>
-                    <strong>机位 {view.cameraNumber}</strong>
-                    {stream && stream.clip_asset_id === task?.primary_clip_asset_id ? (
-                      <small>· 标注基准</small>
-                    ) : null}
-                    {stream?.stream_status !== 'INGESTED' ? <small>{mediaLabel}</small> : null}
-                  </span>
+                  <span className="capture-group-compare-name">机位 {view.cameraNumber}</span>
+                  {isBaseline ? (
+                    <span className="capture-group-compare-badge">标注基准</span>
+                  ) : isExcluded ? (
+                    <span className="capture-group-compare-badge is-excluded">已排除</span>
+                  ) : null}
+                  {isStreamError ? (
+                    <span className="capture-group-compare-status is-error">
+                      {!stream ? '缺失' : '不可用'}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}
           </div>
+          {onToggleExcludeView && selectedStream && !isCompleted && selectedStream.clip_asset_id !== primaryClipAssetId ? (
+            <div className="capture-group-compare-actions" style={{ marginLeft: 'auto' }}>
+              {viewReviews[selectedStream.clip_asset_id]?.decision === 'REJECTED' ? (
+                <Button
+                  size="small"
+                  onClick={() => void onToggleExcludeView(selectedStream.clip_asset_id)}
+                >
+                  恢复此机位
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  onClick={() => void onToggleExcludeView(selectedStream.clip_asset_id)}
+                >
+                  排除此机位
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <PlaybackCard

@@ -420,10 +420,10 @@ export function stubGroupDetail(
         }),
       )
     }
-    if (url.endsWith('/action-candidates')) {
+    if (url.includes('/action-candidates') && !url.includes('/action-candidate-jobs')) {
       return Promise.resolve(jsonResponse(options.actionCandidates ?? []))
     }
-    if (url.endsWith('/action-candidate-job')) {
+    if (url.includes('/action-candidate-job') && !url.includes('/action-candidate-jobs')) {
       return Promise.resolve(jsonResponse(options.actionCandidateJob ?? null))
     }
     if (url.endsWith('/action-candidate-jobs') && init?.method === 'POST') {

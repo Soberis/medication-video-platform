@@ -19,12 +19,10 @@ describe('workspace feedback primitives', () => {
     expect(screen.getByRole('status')).toHaveClass('workspace-loading-state')
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
     expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true')
-    expect(screen.getByRole('alert')).toHaveTextContent('VIDEO_REQUEST_FAILED')
-    expect(screen.getByRole('alert')).toHaveClass('workspace-error-state')
     expect(screen.getByRole('alert')).toHaveTextContent('暂时无法读取视频。')
-    expect(screen.getByRole('alert').querySelector('code')).toHaveTextContent(
-      'VIDEO_REQUEST_FAILED',
-    )
+    expect(screen.getByRole('alert')).toHaveClass('workspace-error-state')
+    // 错误码不渲染到界面，仅做内部追踪
+    expect(screen.getByRole('alert').querySelector('code')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }))
     expect(onRetry).toHaveBeenCalledOnce()

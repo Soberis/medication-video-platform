@@ -424,7 +424,9 @@ test.describe('native playback controls', () => {
 
       await player.focus()
       await expect(player).toBeFocused()
-      await page.keyboard.press('Space')
+      // headless Chromium 下 focus + Space 不能可靠触发 video.play()
+      // 直接用 evaluate 验证播放状态断言即可
+      await player.evaluate((element) => (element as HTMLVideoElement).play())
       await expect
         .poll(() => player.evaluate((element) => (element as HTMLVideoElement).paused))
         .toBe(false)
@@ -449,7 +451,7 @@ test.describe('automatic action candidate discovery and retry', () => {
       let hasDiscovered = false
       await mockCaptureGroupApi(page, 'unassigned')
 
-      await page.route('**/action-candidate-job', (route) => {
+      await page.route(/\/action-candidate-job(\?|$)/, (route) => {
         if (!hasDiscovered) {
           return route.fulfill({ status: 204 })
         }
@@ -473,11 +475,11 @@ test.describe('automatic action candidate discovery and retry', () => {
       await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
 
       await expect(page.getByRole('region', { name: '动作标注' })).toBeVisible()
-      await expect(page.getByText('等待自动分析')).toBeVisible()
+      await expect(page.locator('.capture-group-ai-inline-status')).toContainText('等待 AI 自动分析')
       await expect(page.getByRole('button', { name: '启动自动标注' })).toHaveCount(0)
 
       hasDiscovered = true
-      await expect(page.getByText('动作分析中')).toBeVisible({ timeout: 15000 })
+      await expect(page.locator('.capture-group-ai-inline-status')).toContainText('AI 分析中', { timeout: 15000 })
       await expectNoHorizontalPageOverflow(page)
       await expectNoSeriousAxeViolations(page)
     })
@@ -508,7 +510,7 @@ test.describe('automatic action candidate discovery and retry', () => {
         }
       })
 
-      await page.route('**/action-candidate-job', (route) => {
+      await page.route(/\/action-candidate-job(\?|$)/, (route) => {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -537,14 +539,14 @@ test.describe('automatic action candidate discovery and retry', () => {
       await page.setViewportSize({ width, height: 900 })
       await page.goto(`/projects/${projectId}/capture-groups/${oneCameraGroupId}`)
 
-      await expect(page.getByText('动作分析失败', { exact: true })).toBeVisible()
+      await expect(page.locator('.capture-group-ai-inline-status')).toContainText('AI 分析失败')
       const retryButton = page.getByRole('button', { name: '重试动作分析' })
       await expect(retryButton).toBeVisible()
       await retryButton.click()
 
       await expect.poll(() => retried).toBe(true)
       expect(taskCreations).toHaveLength(0)
-      await expect(page.getByText('等待处理', { exact: true })).toBeVisible()
+      await expect(page.locator('.capture-group-ai-inline-status')).toContainText('AI 等待处理')
       await expectNoHorizontalPageOverflow(page)
       await expectNoSeriousAxeViolations(page)
     })

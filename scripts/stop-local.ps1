@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$KeepInfrastructure,
-    [switch]$IncludeListeningApps
+    [switch]$IncludeListeningApps,
+    [switch]$ResetVolumes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,9 +101,18 @@ $composeEnvironmentArguments = @('--env-file', $exampleEnvFile)
 if (Test-Path -LiteralPath $localEnvFile) {
     $composeEnvironmentArguments += @('--env-file', $localEnvFile)
 }
-& docker compose @composeEnvironmentArguments -f $composeFile down
+$composeArguments = @('compose') + $composeEnvironmentArguments + @('-f', $composeFile, 'down')
+if ($ResetVolumes) {
+    $composeArguments += @('-v')
+}
+& docker @composeArguments
 if ($LASTEXITCODE -ne 0) {
     throw 'Docker Compose did not stop cleanly.'
 }
 
-Write-Host 'Local applications and infrastructure stopped. Volumes were preserved.' -ForegroundColor Green
+if ($ResetVolumes) {
+    Write-Host 'Local applications and infrastructure stopped. Volumes were REMOVED and reset.' -ForegroundColor Yellow
+}
+else {
+    Write-Host 'Local applications and infrastructure stopped. Volumes were preserved.' -ForegroundColor Green
+}

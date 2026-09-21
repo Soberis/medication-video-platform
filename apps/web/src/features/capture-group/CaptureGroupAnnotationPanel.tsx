@@ -45,7 +45,6 @@ import {
   formatTaskStatus,
   getActionDisplayName,
   getActionStyle,
-  groupViewDecision,
   initialDraftSegments,
   validActionCandidates,
   sortedSchemaLabels,
@@ -55,7 +54,7 @@ import {
   type GroupViewRow,
   type SegmentValidationErrors,
 } from '@/features/capture-group/capture-group-detail-model'
-import { groupQualityLabels, viewQualityLabels } from '@/features/capture-group-presentation'
+import { groupQualityLabels } from '@/features/capture-group-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
 
 interface CaptureGroupAnnotationPanelProps {
@@ -66,7 +65,7 @@ interface CaptureGroupAnnotationPanelProps {
   task: AnnotationTask | null
   schema: AnnotationLabelSchema | null
   viewRows: GroupViewRow[]
-  viewReviews: Record<string, QualityReview>
+  viewReviews?: Record<string, QualityReview>
   assigneeActorId?: string
   currentPlaybackTimeMs: number | null
   totalDurationMs?: number | null
@@ -79,6 +78,8 @@ interface CaptureGroupAnnotationPanelProps {
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
   onDiscardVideo?: () => Promise<void> | void
   canPrepareTask?: boolean
+  externalPrimaryClipAssetId?: string | null
+  onPrimaryViewSelect?: (clipAssetId: string) => void
 }
 
 function hasOverlapWith(
@@ -109,7 +110,6 @@ export function CaptureGroupAnnotationPanel({
   task,
   schema,
   viewRows,
-  viewReviews,
   assigneeActorId = '',
   currentPlaybackTimeMs,
   totalDurationMs,
@@ -122,10 +122,10 @@ export function CaptureGroupAnnotationPanel({
   onRefresh,
   onDiscardVideo,
   canPrepareTask = false,
+  externalPrimaryClipAssetId,
+  viewReviews,
 }: CaptureGroupAnnotationPanelProps) {
   const { message, modal } = AntdApp.useApp()
-  const [isSelectingPrimary, setIsSelectingPrimary] = useState(false)
-  const [selectedPrimaryClipAssetId, setSelectedPrimaryClipAssetId] = useState<string | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftAnnotationSegment[]>([])
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [annotationNote, setAnnotationNote] = useState('')
@@ -164,10 +164,15 @@ export function CaptureGroupAnnotationPanel({
     })
   }
 
-  const fallbackPrimaryStream = viewRows.find((view) => view.stream?.clip_asset_id)?.stream
+  const primaryLocked = Boolean(task?.annotation_revision)
+  const fallbackPrimaryStream =
+    viewRows.find((view) => view.stream?.clip_asset_id && view.stream.stream_status === 'INGESTED')?.stream ??
+    viewRows.find((view) => view.stream?.clip_asset_id)?.stream
   const fallbackPrimaryClipAssetId =
-    selectedPrimaryClipAssetId ?? fallbackPrimaryStream?.clip_asset_id ?? null
-  const effectivePrimaryClipAssetId = task?.primary_clip_asset_id ?? fallbackPrimaryClipAssetId
+    externalPrimaryClipAssetId ?? fallbackPrimaryStream?.clip_asset_id ?? null
+  const effectivePrimaryClipAssetId = primaryLocked
+    ? (task?.annotation_revision?.primary_clip_asset_id ?? task?.primary_clip_asset_id ?? fallbackPrimaryClipAssetId)
+    : (externalPrimaryClipAssetId ?? task?.primary_clip_asset_id ?? fallbackPrimaryStream?.clip_asset_id ?? null)
 
   const fallbackContext = useMemo(
     () => ({
@@ -192,13 +197,16 @@ export function CaptureGroupAnnotationPanel({
   const groupQualityDowngraded =
     groupQuality?.result === 'NEEDS_REVIEW' || groupQuality?.result === 'REJECTED'
   const groupQualityReceiving = group.receipt_state === 'RECEIVING'
-  const primaryLocked = Boolean(task?.annotation_revision)
-  const primaryCameraNumber =
-    task?.annotation_revision?.primary_camera_number ??
-    task?.primary_camera_number ??
-    viewRows.find((view) => view.stream?.clip_asset_id === effectivePrimaryClipAssetId)
-      ?.cameraNumber ??
-    null
+  const primaryCameraNumber = primaryLocked
+    ? (task?.annotation_revision?.primary_camera_number ??
+       task?.primary_camera_number ??
+       viewRows.find((view) => view.stream?.clip_asset_id === effectivePrimaryClipAssetId)
+         ?.cameraNumber ??
+       null)
+    : (viewRows.find((view) => view.stream?.clip_asset_id === effectivePrimaryClipAssetId)
+         ?.cameraNumber ??
+       task?.primary_camera_number ??
+       null)
   const canSubmitRevision = Boolean(
     !contextChanged &&
       !groupQualityDowngraded &&
@@ -285,8 +293,8 @@ export function CaptureGroupAnnotationPanel({
       try {
         if (document.hidden) return
         const [job, candidates] = await Promise.all([
-          fetchActionCandidateJob(projectId, captureGroupId),
-          fetchActionCandidates(projectId, captureGroupId),
+          fetchActionCandidateJob(projectId, captureGroupId, effectivePrimaryClipAssetId),
+          fetchActionCandidates(projectId, captureGroupId, effectivePrimaryClipAssetId),
         ])
         if (cancelled) return
         lastActionQueryContext.current = actionQueryContext
@@ -334,20 +342,6 @@ export function CaptureGroupAnnotationPanel({
     annotationFormRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }, [segmentErrors])
 
-  const primaryOptions = viewRows.map((view) => {
-    const decision = groupViewDecision(view, viewReviews)
-    const enabled = Boolean(
-      view.stream &&
-        view.stream.stream_status === 'INGESTED' &&
-        viewReviews[view.stream.clip_asset_id]?.decision === 'QUALIFIED',
-    )
-    return {
-      value: view.stream?.clip_asset_id ?? `missing-${view.cameraNumber}`,
-      label: `机位 ${view.cameraNumber} · ${view.stream ? viewQualityLabels[decision] : '缺失'}`,
-      disabled: !enabled,
-    }
-  })
-
   const annotationBlockingReason = groupQualityReceiving
     ? '接收仍在进行中，暂不能开始人工标签。'
     : groupQualityDowngraded
@@ -361,34 +355,6 @@ export function CaptureGroupAnnotationPanel({
             : task && !task.can_submit
               ? '当前账号不允许提交该任务的修订；请查看服务端任务状态与项目权限。'
               : ''
-
-  async function choosePrimaryView(clipAssetId: string) {
-    if (primaryLocked || effectivePrimaryClipAssetId === clipAssetId || isSelectingPrimary) {
-      return
-    }
-    if (task && !task.can_select_primary) return
-    if (isDirty && !window.confirm('切换标注主视图会丢弃当前未提交的时间段和备注，继续？')) return
-    setSelectedPrimaryClipAssetId(clipAssetId)
-    if (task) {
-      setIsSelectingPrimary(true)
-      try {
-        const updatedTask = await selectAnnotationPrimaryView(
-          projectId,
-          task.annotation_task_id,
-          clipAssetId,
-        )
-        onTaskChange(updatedTask)
-        setIsDirty(false)
-        void message.success('主视图已保存；动作时间段将以该机位为准。')
-      } catch (error) {
-        void message.error(
-          error instanceof Error ? error.message : '主视图暂未保存，请刷新后重试。',
-        )
-      } finally {
-        setIsSelectingPrimary(false)
-      }
-    }
-  }
 
   async function submitRevision(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -571,16 +537,54 @@ export function CaptureGroupAnnotationPanel({
         if (!effectivePrimaryClipAssetId) {
           throw new Error('请先为标注任务选择主视频。')
         }
-        await recordQualityReview(projectId, effectivePrimaryClipAssetId, {
-          decision: 'QUALIFIED',
-          reason_code: 'MEETS_REQUIREMENTS',
-          expected_version: 0,
-        })
+        const availableStreams = (group.streams || []).filter(
+          (s) => s.clip_asset_id && s.stream_status === 'INGESTED',
+        )
+        const targetStreams =
+          availableStreams.length > 0
+            ? availableStreams
+            : viewRows
+                .map((r) => r.stream)
+                .filter((s): s is NonNullable<typeof s> => Boolean(s?.clip_asset_id))
+
+        for (const stream of targetStreams) {
+          const clipId = stream.clip_asset_id
+          const existingReview = viewReviews?.[clipId]
+          if (existingReview?.decision === 'QUALIFIED' || existingReview?.decision === 'REJECTED') {
+            continue
+          }
+          try {
+            await recordQualityReview(projectId, clipId, {
+              decision: 'QUALIFIED',
+              reason_code: 'MEETS_REQUIREMENTS',
+              expected_version: existingReview?.version ?? 0,
+            })
+          } catch (err) {
+            if (err instanceof Error && err.message.includes('CONFLICT')) {
+              // 忽略版本冲突，已在别处提交
+            } else {
+              throw err
+            }
+          }
+        }
+
+        const anyRejected = targetStreams.some(
+          (s) => viewReviews?.[s.clip_asset_id]?.decision === 'REJECTED',
+        )
+        const anyMissing =
+          group.receipt_state === 'INCOMPLETE' ||
+          targetStreams.some((s) => s.stream_status !== 'INGESTED')
+        const groupDecision =
+          anyRejected || anyMissing ? 'QUALIFIED_WITH_EXCLUSIONS' : 'QUALIFIED'
+        const groupReason = anyRejected
+          ? '排除部分不合格机位，其余符合配药标注要求'
+          : '符合配药动作标注要求'
+
         await recordCaptureGroupQualityReview(
           projectId,
           captureGroupId,
-          'QUALIFIED',
-          '符合配药动作标注要求',
+          groupDecision,
+          groupReason,
           groupQuality?.revision ?? 0,
         )
       }
@@ -588,7 +592,7 @@ export function CaptureGroupAnnotationPanel({
       onTaskChange(prepared)
     }
     if (
-      !prepared.primary_clip_asset_id &&
+      prepared.primary_clip_asset_id !== effectivePrimaryClipAssetId &&
       effectivePrimaryClipAssetId &&
       prepared.can_select_primary
     ) {
@@ -701,24 +705,21 @@ export function CaptureGroupAnnotationPanel({
       {viewRows.length > 1 || !effectivePrimaryClipAssetId ? (
         <div className="capture-group-primary-view-control">
           <div>
-            <strong>
+            <strong>主视图 · 时间基准</strong>
+            <p>
               {primaryLocked
-                ? `${primaryCameraNumber === null ? '主视图' : `机位 ${primaryCameraNumber}`} · 已锁定`
-                : '主视图 · 时间基准'}
-            </strong>
-            {!primaryLocked ? <p>当前输入提交后锁定</p> : null}
+                ? '已随首次修订提交锁定'
+                : '当前输入提交后锁定'}
+            </p>
           </div>
-          <Select
-            aria-label="主视图"
-            value={effectivePrimaryClipAssetId ?? undefined}
-            placeholder="选择主视图"
-            disabled={
-              primaryLocked || isSelectingPrimary || (task ? !task.can_select_primary : false)
-            }
-            loading={isSelectingPrimary}
-            options={primaryOptions}
-            onChange={(value) => void choosePrimaryView(value)}
-          />
+          <div className="capture-group-primary-view-badge-wrap">
+            <span
+              className={`capture-group-primary-view-badge${primaryLocked ? ' is-locked' : ''}`}
+            >
+              {primaryCameraNumber !== null ? `机位 ${primaryCameraNumber}` : '待指定'}
+              {primaryLocked ? ' · 已锁定' : ''}
+            </span>
+          </div>
         </div>
       ) : null}
       {annotationBlockingReason ? (

@@ -60,7 +60,8 @@ export function EmptyState({ children, className = '', description }: EmptyState
 export interface ErrorStateProps {
   children: ReactNode
   className?: string
-  code?: ReactNode
+  /** 错误码仅用于内部追踪，不渲染到界面。 */
+  code?: string
   onRetry?: () => void
   retryLabel?: ReactNode
 }
@@ -68,14 +69,12 @@ export interface ErrorStateProps {
 export function ErrorState({
   children,
   className = '',
-  code,
   onRetry,
   retryLabel = '重试',
 }: ErrorStateProps) {
   return (
     <div className={`workspace-error workspace-error-state ${className}`.trim()} role="alert">
       <div className="workspace-error-message">{children}</div>
-      {code ? <code>{code}</code> : null}
       {onRetry ? <Button onClick={onRetry}>{retryLabel}</Button> : null}
     </div>
   )

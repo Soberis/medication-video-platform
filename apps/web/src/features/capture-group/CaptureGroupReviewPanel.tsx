@@ -1,6 +1,8 @@
 import { Alert, App as AntdApp, Button, Input } from 'antd'
-import { Check, CircleAlert, FileCheck2, History } from 'lucide-react'
+import { Check, CircleAlert, FileCheck2, History, Play } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
+import { paths } from '@/app/paths'
 
 import {
   reviewAnnotationRevision,
@@ -43,6 +45,8 @@ export interface CaptureGroupReviewPanelProps {
   task: AnnotationTask | null
   schema: AnnotationLabelSchema | null
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
+  onPlaySegment?: (startMs: number, endMs: number) => void
+  activeCameraNumber?: number | null
 }
 
 export function CaptureGroupReviewPanel({
@@ -53,7 +57,10 @@ export function CaptureGroupReviewPanel({
   task,
   schema,
   onRefresh,
+  onPlaySegment,
+  activeCameraNumber,
 }: CaptureGroupReviewPanelProps) {
+  const navigate = useNavigate()
   const { message, modal } = AntdApp.useApp()
   const [reviewingDecision, setReviewingDecision] = useState<AnnotationReview['decision'] | null>(
     null,
@@ -228,18 +235,40 @@ export function CaptureGroupReviewPanel({
         <div className="capture-group-review-approved-banner">
           <div className="banner-status">
             <StatusIndicator tone="success">人工复核已通过</StatusIndicator>
-            <p role="status">标注已完成人工复核确认，可返回视频列表选择导出。</p>
+            <p role="status">
+              {group.expected_camera_count > 1
+                ? `合组全部 ${group.received_camera_count} 个机位已基于机位 ${primaryCameraNumber ?? 1}（时间基准）整体完成标注与复核，可返回视频列表直接选择导出。`
+                : '标注已完成人工复核确认，可返回视频列表选择导出。'}
+            </p>
           </div>
-          <Button
-            type="text"
-            size="small"
-            aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
-            aria-expanded={isCompletedDetailOpen}
-            onClick={() => setIsCompletedDetailOpen((open) => !open)}
-          >
-            {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
-          </Button>
+          <div className="capture-group-approved-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => navigate(paths.captureGroups(projectId))}
+            >
+              前往导出数据
+            </Button>
+            <Button
+              type="text"
+              size="small"
+              aria-controls={isCompletedDetailOpen ? 'capture-group-review-details' : undefined}
+              aria-expanded={isCompletedDetailOpen}
+              onClick={() => setIsCompletedDetailOpen((open) => !open)}
+            >
+              {isCompletedDetailOpen ? '收起复核详情' : '查看复核详情'}
+            </Button>
+          </div>
         </div>
+      ) : null}
+      {revision?.annotation_document?.segments ? (
+        <FormalAnnotationIntervals
+          primaryCameraNumber={primaryCameraNumber}
+          activeCameraNumber={activeCameraNumber}
+          schema={schema}
+          segments={revision.annotation_document.segments}
+          onPlaySegment={onPlaySegment}
+        />
       ) : null}
       {!task ? (
         <p className="form-hint">当前没有可见的人工标签任务，暂不能读取修订、复核事实。</p>
@@ -340,12 +369,6 @@ export function CaptureGroupReviewPanel({
             </p>
           )}
 
-          <FormalAnnotationIntervals
-            primaryCameraNumber={primaryCameraNumber}
-            schema={schema}
-            segments={revision.annotation_document.segments}
-          />
-
           {isReviewApproved ? (
             <details className="capture-group-review-detail-disclosure">
               <summary>查看已确认机位、检测证据与修订历史</summary>
@@ -420,12 +443,16 @@ const INITIAL_INTERVAL_VISIBLE_COUNT = 4
 
 function FormalAnnotationIntervals({
   primaryCameraNumber,
+  activeCameraNumber,
   schema,
   segments,
+  onPlaySegment,
 }: {
   primaryCameraNumber: number | null
+  activeCameraNumber?: number | null
   schema: AnnotationLabelSchema | null
   segments: AnnotationSegment[] | undefined
+  onPlaySegment?: (startMs: number, endMs: number) => void
 }) {
   const safeSegments = Array.isArray(segments) ? segments : []
   const [isExpanded, setIsExpanded] = useState(false)
@@ -439,12 +466,15 @@ function FormalAnnotationIntervals({
       <div className="capture-group-review-subheading">
         <div>
           <span className="app-eyebrow">正式标注动作</span>
-          <h3>正式动作区间</h3>
+          <h3>正式动作区间（已生效）</h3>
         </div>
         <div className="capture-group-intervals-actions">
           <span>
-            {primaryCameraNumber ? `机位 ${primaryCameraNumber} · ` : ''}共 {safeSegments.length}{' '}
-            个动作段
+            {primaryCameraNumber ? `基准：机位 ${primaryCameraNumber} · ` : ''}
+            {activeCameraNumber && activeCameraNumber !== primaryCameraNumber
+              ? `当前画面：机位 ${activeCameraNumber}（共享同步） · `
+              : ''}
+            共 {safeSegments.length} 个动作段
           </span>
           {hasMore ? (
             <Button type="text" size="small" onClick={() => setIsExpanded((prev) => !prev)}>
@@ -467,6 +497,18 @@ function FormalAnnotationIntervals({
                     : '时间暂不可用'}
                 </span>
                 <span className="capture-group-action-name">{labelName ?? segment.label}</span>
+                {onPlaySegment ? (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Play aria-hidden="true" size={12} />}
+                    onClick={() => onPlaySegment(segment.start_ms, segment.end_ms)}
+                    style={{ marginLeft: 'auto', flex: 'none' }}
+                    title="在当前机位播放此动作片段"
+                  >
+                    播放
+                  </Button>
+                ) : null}
               </li>
             )
           })}

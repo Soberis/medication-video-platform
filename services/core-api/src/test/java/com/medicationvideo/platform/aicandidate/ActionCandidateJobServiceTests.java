@@ -319,6 +319,37 @@ class ActionCandidateJobServiceTests {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	void listByCaptureGroupWithExplicitClipAssetIdSkipsAutoResolve() {
+		var callerClipAssetId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+		when(this.jdbcTemplate.query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID),
+				eq(callerClipAssetId)))
+			.thenReturn(List.of());
+
+		var results = this.service.listByCaptureGroup(PROJECT_ID, CAPTURE_GROUP_ID, callerClipAssetId);
+
+		assertEquals(0, results.size());
+		verify(this.jdbcTemplate).query(anyString(), any(RowMapper.class), eq(PROJECT_ID), eq(CAPTURE_GROUP_ID),
+				eq(callerClipAssetId));
+		// resolveTaskPrimaryClipAssetId must NOT be called when caller specifies the clip
+		verifyNoInteractions(this.actionEnvelopeFactory);
+	}
+
+	@Test
+	void getJobStatusWithExplicitClipAssetIdSkipsAutoResolve() {
+		var callerClipAssetId = UUID.fromString("00000000-0000-0000-0000-000000000099");
+		when(this.jobRepository.findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, callerClipAssetId))
+			.thenReturn(List.of());
+
+		var result = this.service.getJobStatus(PROJECT_ID, CAPTURE_GROUP_ID, callerClipAssetId);
+
+		assertEquals(null, result);
+		verify(this.jobRepository).findAllByProjectIdAndClipAssetIdOrderByCreatedAtDesc(PROJECT_ID, callerClipAssetId);
+		// resolveTaskPrimaryClipAssetId must NOT be called when caller specifies the clip
+		verifyNoInteractions(this.actionEnvelopeFactory);
+	}
+
+	@Test
 	void queueActionCandidateJobResolvesNullRequestIdAndTraceId() {
 		when(this.actionEnvelopeFactory.resolveLabelSnapshot(PROJECT_ID, CAPTURE_GROUP_ID))
 			.thenReturn(new ActionLabelSnapshot(UUID.randomUUID(), UUID.randomUUID(), "c".repeat(64),

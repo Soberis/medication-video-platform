@@ -3457,16 +3457,24 @@ paths:
       tags: [AI Candidates]
       summary: Read stored action candidates for a project capture group
       description: >-
-        Requires active project membership. Returns candidates only from the latest successful
-        action job on the annotation task's selected primary clip. A newer unfinished job
-        suppresses older results. Returns an empty list when no task primary exists.
-        Stored candidates are drafts, never submitted or approved annotations.
+        Requires active project membership. When clip_asset_id is provided, returns candidates for
+        that specific clip from the latest successful action job. When omitted, defaults to the
+        annotation task's selected primary clip, or the lowest camera_index clip if no task exists.
+        A newer unfinished job suppresses older results. Returns an empty list when no matching
+        clip or candidates exist. Stored candidates are drafts, never submitted or approved annotations.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - name: capture_group_id
           in: path
           required: true
+          schema: { type: string, format: uuid }
+        - name: clip_asset_id
+          in: query
+          required: false
+          description: >-
+            Optional. The specific clip asset to query candidates for. When omitted, the server
+            resolves the primary clip from the annotation task or the lowest camera_index stream.
           schema: { type: string, format: uuid }
       responses:
         "200":
@@ -3486,14 +3494,22 @@ paths:
       tags: [AI Candidates]
       summary: Read latest action candidate job status for a capture group
       description: >-
-        Requires active project membership. Returns 200 with the latest action candidate
-        job on the task's selected primary clip, or 204 No Content if none exists.
+        Requires active project membership. When clip_asset_id is provided, returns the latest
+        action candidate job for that specific clip, or 204 if none exists. When omitted, defaults
+        to the task's selected primary clip or the lowest camera_index clip without a task.
       security: [{ sessionCookie: [] }]
       parameters:
         - $ref: "#/components/parameters/ProjectId"
         - name: capture_group_id
           in: path
           required: true
+          schema: { type: string, format: uuid }
+        - name: clip_asset_id
+          in: query
+          required: false
+          description: >-
+            Optional. The specific clip asset to query the job status for. When omitted, the server
+            resolves the primary clip from the annotation task or the lowest camera_index stream.
           schema: { type: string, format: uuid }
       responses:
         "200":

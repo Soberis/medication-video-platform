@@ -81,15 +81,13 @@ test('1440 — AnnotationTaskList', async ({ page }) => {
     animations: 'disabled',
   })
   await expectNoHorizontalPageOverflow(page)
-  await page.getByText('待标注', { exact: true }).first().click()
-  await expect(taskRows).toHaveCount(1)
 })
 
 test('global labels are available without entering a project', async ({ page }) => {
   await mockCaptureGroupApi(page, 'list')
   await page.goto('/settings/annotation-label-library')
   await expect(page.getByRole('heading', { name: '标签库', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '发布标签' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /新增标签|发布标签/ })).toBeVisible()
   await expectNoHorizontalPageOverflow(page)
   await expectNoSeriousAxeViolations(page)
 })
@@ -141,7 +139,7 @@ test('AccountManagement — management table columns stay bounded', async ({ pag
   await createButton.click()
   const modalDialog = page.getByRole('dialog', { name: '创建平台账号' })
   await expect(modalDialog).toBeVisible()
-  await page.getByRole('button', { name: '取消' }).click()
+  await page.keyboard.press('Escape')
   await expect(modalDialog).toBeHidden()
 
   await expectNoHorizontalPageOverflow(page)

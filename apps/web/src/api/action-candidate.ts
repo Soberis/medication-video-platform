@@ -49,17 +49,17 @@ export interface ActionCandidateJob {
 export async function fetchActionCandidates(
   projectId: string,
   captureGroupId: string,
+  clipAssetId?: string | null,
 ): Promise<ActionCandidate[]> {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}/action-candidates`,
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        ...csrfHeaders(),
-      },
+  const base = `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}/action-candidates`
+  const url = clipAssetId ? `${base}?clip_asset_id=${encodeURIComponent(clipAssetId)}` : base
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...csrfHeaders(),
     },
-  )
+  })
   if (!response.ok) {
     if (response.status === 404) return []
     throw new Error(`Failed to fetch action candidates: ${response.status}`)
@@ -70,17 +70,17 @@ export async function fetchActionCandidates(
 export async function fetchActionCandidateJob(
   projectId: string,
   captureGroupId: string,
+  clipAssetId?: string | null,
 ): Promise<ActionCandidateJob | null> {
-  const response = await fetch(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}/action-candidate-job`,
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        ...csrfHeaders(),
-      },
+  const base = `/api/v1/projects/${encodeURIComponent(projectId)}/capture-groups/${encodeURIComponent(captureGroupId)}/action-candidate-job`
+  const url = clipAssetId ? `${base}?clip_asset_id=${encodeURIComponent(clipAssetId)}` : base
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...csrfHeaders(),
     },
-  )
+  })
   if (!response.ok) {
     if (response.status === 204 || response.status === 404) return null
     throw new Error(`Failed to fetch action candidate job: ${response.status}`)

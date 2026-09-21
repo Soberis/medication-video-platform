@@ -584,7 +584,7 @@ describe('annotation task list view', () => {
         ),
     )
     renderView()
-    expect(await screen.findByText('ANNOTATION_TASK_NOT_FOUND')).toBeInTheDocument()
+    expect(await screen.findByText('标注任务不存在，请刷新任务列表。')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 

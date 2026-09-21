@@ -81,6 +81,6 @@ describe('CaptureGroup data-group list', () => {
     })
 
     expect(await screen.findByText('暂时无法读取采集记录，请稍后重试。')).toBeInTheDocument()
-    expect(screen.getByText('CAPTURE_GROUP_LIST_FAILED')).toBeInTheDocument()
+    expect(screen.queryByText('CAPTURE_GROUP_LIST_FAILED')).toBeNull()
   })
 })

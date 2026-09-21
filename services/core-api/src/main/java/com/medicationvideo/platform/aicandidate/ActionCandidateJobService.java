@@ -486,6 +486,11 @@ public class ActionCandidateJobService {
 	@Transactional(readOnly = true)
 	public ActionCandidateJobResponse getJobStatus(UUID projectId, UUID captureGroupId) {
 		var clipAssetId = this.actionEnvelopeFactory.resolveTaskPrimaryClipAssetId(projectId, captureGroupId);
+		return getJobStatus(projectId, captureGroupId, clipAssetId);
+	}
+
+	@Transactional(readOnly = true)
+	public ActionCandidateJobResponse getJobStatus(UUID projectId, UUID captureGroupId, UUID clipAssetId) {
 		if (clipAssetId == null) {
 			return null;
 		}
