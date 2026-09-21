@@ -722,8 +722,8 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("authorization-qualified"))
 			.andExpect(status().isOk());
 		var taskId = taskId(group);
-		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_NOT_ASSIGNEE"));
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), ADMIN_TOKEN).andExpect(status().isOk());
+		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
 
 		var otherGroup = createGroup(OTHER_PROJECT_ID, 1, 1, "COMPLETE", 1);
 		this.mockMvc

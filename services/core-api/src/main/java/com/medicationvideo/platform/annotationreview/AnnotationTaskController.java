@@ -87,8 +87,8 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationRevisionRequest request, Authentication authentication) {
 		var response = this.service.submitRevision(projectId, annotationTaskId, requireActor(authentication).actorId(),
-				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
-				MDC.get("traceId"),
+				isPlatformAdministrator(authentication), idempotencyKey,
+				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				new AnnotationRevisionSubmitCommand(request.expectedTaskVersion(), request.expectedInputVersion(),
 						request.correspondences()
 							.stream()
@@ -118,7 +118,7 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationCameraViewUpdateRequest request, Authentication authentication) {
 		var response = this.service.updateCameraView(projectId, annotationTaskId, cameraNumber,
-				requireActor(authentication).actorId(), idempotencyKey,
+				requireActor(authentication).actorId(), isPlatformAdministrator(authentication), idempotencyKey,
 				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
 				new AnnotationCameraViewUpdateCommand(request.expectedVersion(), request.expectedInputVersion(),
 						request.state(),

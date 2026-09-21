@@ -131,14 +131,12 @@ class AnnotationTaskService {
 
 	@Transactional
 	AnnotationTaskResponse updateCameraView(UUID projectId, UUID annotationTaskId, int cameraNumber, String actorId,
-			String idempotencyKey, String requestId, String traceId, AnnotationCameraViewUpdateCommand request) {
-		this.projectAccessService.requireMember(projectId, actorId);
+			boolean platformAdministrator, String idempotencyKey, String requestId, String traceId,
+			AnnotationCameraViewUpdateCommand request) {
+		var role = this.projectAccessService.requireMember(projectId, actorId);
+		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
 		var task = this.repository.findForUpdate(projectId, annotationTaskId)
 			.orElseThrow(AnnotationTaskService::taskNotFound);
-		if (!task.getAssigneeActorId().equals(actorId)) {
-			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_ASSIGNEE",
-					"Only the assigned project member can edit camera views.", 403);
-		}
 		this.captureGroupAnnotationWorkflow.requireCurrentGroupInput(projectId, task);
 		var view = this.taskViewRepository.findForUpdate(projectId, annotationTaskId, cameraNumber)
 			.orElseThrow(() -> new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_NOT_FOUND",
@@ -165,7 +163,8 @@ class AnnotationTaskService {
 			.getCurrentDecisions(projectId, List.of(task.getCaptureGroupId()))
 			.stream()
 			.anyMatch(decision -> decision.captureGroupId().equals(task.getCaptureGroupId()) && decision.isAdmitting());
-		var response = AnnotationTaskResponse.from(task, actorId, false, revision, review, cleaning, admitting);
+		var response = AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision, review, cleaning,
+				admitting);
 		if (changed) {
 			this.captureGroupAnnotationWorkflow.recordCameraViewUpdated(projectId, task, view, actorId, requestId,
 					traceId);
@@ -175,14 +174,12 @@ class AnnotationTaskService {
 
 	@Transactional
 	AnnotationRevisionResponse submitRevision(UUID projectId, UUID annotationTaskId, String actorId,
-			String idempotencyKey, String requestId, String traceId, AnnotationRevisionSubmitCommand request) {
-		this.projectAccessService.requireMember(projectId, actorId);
+			boolean platformAdministrator, String idempotencyKey, String requestId, String traceId,
+			AnnotationRevisionSubmitCommand request) {
+		var role = this.projectAccessService.requireMember(projectId, actorId);
+		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
 		var task = this.repository.findForUpdate(projectId, annotationTaskId)
 			.orElseThrow(AnnotationTaskService::taskNotFound);
-		if (!task.getAssigneeActorId().equals(actorId)) {
-			throw new AnnotationTaskException("ANNOTATION_TASK_NOT_ASSIGNEE",
-					"Only the assigned project member can submit this annotation task.", 403);
-		}
 		var replay = this.revisionRepository
 			.findByAnnotationTaskIdAndSubmittedByAndIdempotencyKey(task.getAnnotationTaskId(), actorId, idempotencyKey);
 		if (replay.isPresent()) {
@@ -600,7 +597,7 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				null, null, task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(),
 				task.getConfirmedViewSet(), task.getGroupInputVersion(), task.getLabelSchemaId(),
 				task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
-				canSubmit(task, actorId, captureGroupQualityAdmitting),
+				canSubmit(task, actorId, projectAdministrator, captureGroupQualityAdmitting),
 				canSelectPrimary(task, actorId, revision, captureGroupQualityAdmitting),
 				canReview(task, actorId, projectAdministrator, revision, review, captureGroupQualityAdmitting),
 				// Kept as a false compatibility field; D1 removed the recheck capability.
@@ -620,9 +617,9 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				this.createdAt, this.updatedAt, this.version, List.copyOf(views), progress);
 	}
 
-	private static boolean canSubmit(AnnotationTask task, String actorId, boolean captureGroupQualityAdmitting) {
-		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && task.getAssigneeActorId().equals(actorId)
-				&& captureGroupQualityAdmitting;
+	private static boolean canSubmit(AnnotationTask task, String actorId, boolean projectAdministrator,
+			boolean captureGroupQualityAdmitting) {
+		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting;
 	}
 
 	private static boolean canSelectPrimary(AnnotationTask task, String actorId, AnnotationRevision revision,

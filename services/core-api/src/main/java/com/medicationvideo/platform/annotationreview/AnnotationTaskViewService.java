@@ -269,9 +269,7 @@ class AnnotationTaskViewService {
 				if (source == null || !Objects.equals(source.candidateId(), candidateId)
 						|| !Objects.equals(source.clipAssetId(), view.getClipAssetId())
 						|| !Objects.equals(source.labelSchemaId(), task.getLabelSchemaId())
-						|| !Objects.equals(source.labelSchemaDigest(), task.getLabelSchemaDigest())
-						|| source.startMs() < segment.startMs() || source.endMs() > segment.endMs()
-						|| !Objects.equals(source.label(), segment.label())) {
+						|| !Objects.equals(source.labelSchemaDigest(), task.getLabelSchemaDigest())) {
 					throw invalidCandidateSource();
 				}
 			}
