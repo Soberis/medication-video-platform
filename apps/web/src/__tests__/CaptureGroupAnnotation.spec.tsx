@@ -639,8 +639,10 @@ describe('CaptureGroup annotation workflow', () => {
     await user.click(startButton)
     await user.click(endButton)
 
-    expect(within(form).getByLabelText('开始时间（毫秒）')).toHaveValue(12345)
-    expect(within(form).getByLabelText('结束时间（毫秒）')).toHaveValue(12345)
+    await waitFor(() => {
+      expect(within(form).getByLabelText('开始时间（毫秒）')).toHaveValue(12345)
+      expect(within(form).getByLabelText('结束时间（毫秒）')).toHaveValue(12345)
+    })
     expect(
       fetchMock.mock.calls.filter(
         ([input, init]) => String(input).endsWith('/revisions') && init?.method === 'POST',

@@ -151,22 +151,30 @@ export function captureGroupTaskDestination(
   task: Pick<
     AnnotationTask,
     | 'capture_group_id'
+    | 'primary_clip_asset_id'
     | 'status'
     | 'can_submit'
+    | 'can_select_primary'
     | 'can_review'
     | 'camera_views'
     | 'annotation_revision'
   >,
 ): CaptureGroupTaskDestination | null {
-  if (task.status === 'ASSIGNED' && task.can_submit) {
+  if (task.status === 'ASSIGNED' && (task.can_submit || task.can_select_primary)) {
+    const hasStarted =
+      task.camera_views?.some((view) => view.state === 'DRAFT' || view.state === 'SUBMITTED') ||
+      Boolean(task.primary_clip_asset_id)
+
     return {
       focus: 'annotation',
       actionLabel:
         task.annotation_revision?.review?.decision === 'REJECTED'
           ? '修改标注'
-          : task.camera_views?.some((view) => view.state === 'DRAFT' || view.state === 'SUBMITTED')
+          : hasStarted
             ? '继续标注'
-            : '开始标注',
+            : task.can_select_primary && !task.primary_clip_asset_id
+              ? '选择主视图'
+              : '开始标注',
     }
   }
 

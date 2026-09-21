@@ -10,10 +10,17 @@ import type { GroupViewRow } from '@/features/capture-group/capture-group-detail
 import type { CaptureGroupViewState } from '@/features/capture-group/use-capture-group-view'
 import { mediaStatusLabels, viewQualityLabels } from '@/features/capture-group-presentation'
 
+import type { AnnotationTask } from '@/api/annotation'
+import {
+  computeGroupCameraSummary,
+  getCameraProcessingStatus,
+} from '@/features/capture-group/capture-group-detail-model'
+
 interface CaptureGroupFocusedViewProps {
   viewRows: GroupViewRow[]
   viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
+  task?: AnnotationTask | null
   onSelectView: (clipAssetId: string) => void
   onToggleExcludeView?: (clipAssetId: string) => Promise<void>
   onPlaybackTimeChange?: (timeMs: number | null) => void
@@ -26,6 +33,7 @@ export function CaptureGroupFocusedView({
   viewRows,
   viewReviews,
   viewState,
+  task = null,
   onSelectView,
   onToggleExcludeView,
   onPlaybackTimeChange,
@@ -164,7 +172,8 @@ export function CaptureGroupFocusedView({
                 stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
               )
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
-              const isExcluded = decision?.decision === 'REJECTED'
+              const cameraStatus = task ? getCameraProcessingStatus(view.cameraNumber, task) : null
+              const isExcluded = decision?.decision === 'REJECTED' || cameraStatus?.status === 'EXCLUDED'
               const qualityLabel = stream
                 ? `机位质量 · ${isExcluded ? '已排除' : viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
                 : null
@@ -177,7 +186,7 @@ export function CaptureGroupFocusedView({
                 stream.stream_status === 'UNAVAILABLE'
               return (
                 <button
-                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}${isExcluded ? ' is-excluded' : ''}`}
+                  className={`capture-group-compare-item${isCurrent ? ' is-current' : ''}${isExcluded ? ' is-excluded' : ''}${cameraStatus ? ` is-camera-${cameraStatus.status.toLowerCase()}` : ''}`}
                   type="button"
                   key={view.cameraNumber}
                   disabled={!stream}
@@ -186,12 +195,17 @@ export function CaptureGroupFocusedView({
                   aria-label={[
                     `机位 ${view.cameraNumber}`,
                     isExcluded ? '已排除' : null,
+                    cameraStatus && cameraStatus.status !== 'PENDING' ? cameraStatus.label : null,
                     mediaLabel,
                     qualityLabel,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
-                  title={[mediaLabel, isExcluded ? '已排除此视角' : qualityLabel]
+                  title={[
+                    mediaLabel,
+                    isExcluded ? '已排除此视角' : qualityLabel,
+                    cameraStatus ? `标注：${cameraStatus.label}` : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                   onClick={() => stream && onSelectView(stream.clip_asset_id)}
@@ -227,33 +241,25 @@ export function CaptureGroupFocusedView({
                     <Video size={14} strokeWidth={1.75} />
                   </span>
                   <span className="capture-group-compare-name">机位 {view.cameraNumber}</span>
-                  {isExcluded ? (
+                  {cameraStatus && cameraStatus.status === 'SUBMITTED' ? (
+                    <span className="capture-group-compare-badge is-submitted" title="已提交">已提交</span>
+                  ) : cameraStatus && cameraStatus.status === 'DRAFT' ? (
+                    <span className="capture-group-compare-badge is-draft" title="编辑中">编辑中</span>
+                  ) : isExcluded ? (
                     <span className="capture-group-compare-badge is-excluded">已排除</span>
                   ) : null}
-                  <span className={`capture-group-compare-status${isStreamError ? ' is-error' : ''}`}>
-                    {!stream ? '缺失' : mediaLabel}
-                  </span>
+                  {isStreamError ? (
+                    <span className="capture-group-compare-status is-error">
+                      {!stream ? '缺失' : mediaLabel}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}
           </div>
-          {onToggleExcludeView && selectedStream && !isCompleted ? (
-            <div className="capture-group-compare-actions" style={{ marginLeft: 'auto' }}>
-              {viewReviews[selectedStream.clip_asset_id]?.decision === 'REJECTED' ? (
-                <Button
-                  size="small"
-                  onClick={() => void onToggleExcludeView(selectedStream.clip_asset_id)}
-                >
-                  恢复此机位
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  onClick={() => void onToggleExcludeView(selectedStream.clip_asset_id)}
-                >
-                  排除此机位
-                </Button>
-              )}
+          {task && viewRows.length > 1 ? (
+            <div className="capture-group-compare-summary-pill" style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--app-color-foreground-secondary)' }}>
+              {computeGroupCameraSummary(viewRows, task, {}).displayText}
             </div>
           ) : null}
         </div>

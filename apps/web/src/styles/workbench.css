@@ -4,6 +4,9 @@
   display: grid;
   gap: var(--app-space-12);
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .playback-idle-stage {
@@ -12,6 +15,10 @@
   justify-items: center;
   gap: var(--app-space-16);
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   /* An unauthorised player is an invitation to inspect, not the main work surface.
    * Keep it compact while retaining enough room for the state and action copy. */
   min-height: clamp(240px, 36vh, 360px);

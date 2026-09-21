@@ -567,6 +567,7 @@ export default function CaptureGroupDetailView() {
                   viewRows={viewRows}
                   viewReviews={data.viewReviews}
                   viewState={viewState}
+                  task={humanTask}
                   externalVideoRef={videoRef}
                   initialPlaybackTimeMs={preservedPlaybackTimeMs}
                   onSelectView={handleSelectView}

@@ -487,3 +487,71 @@ export function sortedSchemaLabels(schema: AnnotationLabelSchema | null) {
       left.sort_order - right.sort_order || left.label_id.localeCompare(right.label_id),
   )
 }
+
+export type CameraProcessingStatus = 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED'
+
+export interface CameraStatusMeta {
+  status: CameraProcessingStatus
+  label: string
+  tone: StatusIndicatorTone
+}
+
+export function getCameraProcessingStatus(
+  cameraNumber: number,
+  task: AnnotationTask | null,
+  draft?: { dirty?: boolean; segments?: unknown[]; exclusionReason?: string },
+): CameraStatusMeta {
+  const view = task?.camera_views?.find((v) => v.camera_number === cameraNumber)
+  if (view?.state === 'EXCLUDED') {
+    return { status: 'EXCLUDED', label: '已排除', tone: 'neutral' }
+  }
+  if (view?.state === 'SUBMITTED') {
+    return { status: 'SUBMITTED', label: '已提交', tone: 'success' }
+  }
+  if (draft?.dirty || view?.state === 'DRAFT') {
+    return { status: 'DRAFT', label: '编辑中', tone: 'information' }
+  }
+  return { status: 'PENDING', label: '待处理', tone: 'neutral' }
+}
+
+export function computeGroupCameraSummary(
+  viewRows: GroupViewRow[],
+  task: AnnotationTask | null,
+  cameraDrafts: Record<string, { dirty?: boolean; segments?: unknown[]; exclusionReason?: string }>,
+) {
+  let submitted = 0
+  let excluded = 0
+  let drafting = 0
+  let pending = 0
+
+  for (const row of viewRows) {
+    const meta = getCameraProcessingStatus(
+      row.cameraNumber,
+      task,
+      cameraDrafts[String(row.cameraNumber)],
+    )
+    if (meta.status === 'SUBMITTED') submitted++
+    else if (meta.status === 'EXCLUDED') excluded++
+    else if (meta.status === 'DRAFT') drafting++
+    else pending++
+  }
+
+  const total = viewRows.length
+  return {
+    total,
+    submitted,
+    excluded,
+    drafting,
+    pending,
+    isAllResolved: submitted + excluded === total && submitted > 0 && drafting === 0,
+    displayText: [
+      `已提交 ${submitted} / ${total}`,
+      excluded > 0 ? `已排除 ${excluded} / ${total}` : null,
+      drafting > 0 ? `编辑中 ${drafting} / ${total}` : null,
+      pending > 0 ? `待处理 ${pending} / ${total}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  }
+}
+

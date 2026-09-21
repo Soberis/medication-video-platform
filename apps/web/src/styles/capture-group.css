@@ -20,13 +20,13 @@
 .capture-group-workspace {
   display: grid;
   grid-template-areas: 'video action';
-  grid-template-columns: minmax(0, 1fr) clamp(350px, 26vw, 440px);
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 420px);
   width: 100%;
   min-width: 0;
   max-width: 100%;
   align-items: start;
   gap: var(--app-space-16);
-  margin-top: var(--app-space-16);
+  margin-top: var(--app-space-12);
 }
 
 .capture-group-workspace[data-stage='COMPLETED'] {
@@ -47,11 +47,13 @@
 
 .capture-group-video-column {
   grid-area: video;
+  overflow: hidden;
 }
 
 .capture-group-action-column {
   grid-area: action;
   width: 100%;
+  min-width: 0;
   overflow-x: clip;
   container-type: inline-size;
 }
@@ -175,6 +177,18 @@
   background: var(--app-color-primary-subtle);
   color: var(--app-color-primary);
   line-height: 1.2;
+}
+
+.capture-group-compare-badge.is-submitted {
+  background: #f6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}
+
+.capture-group-compare-badge.is-draft {
+  background: #e6f4ff;
+  color: #0958d9;
+  border: 1px solid #91caff;
 }
 
 .capture-group-compare-badge.is-excluded {
@@ -1306,6 +1320,84 @@
   background: var(--app-color-destructive-surface);
 }
 
+/* --- Active Camera Action Bar --- */
+.capture-group-camera-action-bar {
+  margin-top: var(--app-space-16);
+  padding-top: var(--app-space-12);
+  border-top: 1px solid var(--app-color-border-subtle);
+}
+
+.camera-action-button-group {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-8);
+  flex-wrap: wrap;
+}
+
+.camera-action-state-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-12);
+  padding: 10px 14px;
+  border-radius: var(--app-radius-md);
+}
+
+.camera-action-state-banner.is-submitted {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #237804;
+}
+
+.camera-action-state-banner.is-submitted p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #389e0d;
+}
+
+.camera-action-state-banner.is-excluded {
+  background: var(--app-color-surface-muted);
+  border: 1px solid var(--app-color-border-subtle);
+  color: var(--app-color-foreground-secondary);
+}
+
+.camera-action-state-banner.is-excluded p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--app-color-foreground-muted);
+}
+
+/* --- Group Submission Bottom Panel --- */
+.capture-group-group-submission-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-16);
+  margin-top: var(--app-space-20);
+  padding: var(--app-space-16);
+  background: var(--app-color-surface-muted);
+  border: 1px solid var(--app-color-border-subtle);
+  border-radius: var(--app-radius-md);
+}
+
+.capture-group-group-submission-panel .group-submission-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.capture-group-group-submission-panel .submission-helper-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--app-color-foreground-muted);
+  line-height: 1.4;
+}
+
+.capture-group-group-submission-panel .group-submit-btn {
+  flex-shrink: 0;
+}
+
 .capture-group-readonly-segments,
 .capture-group-confirmed-view-set ul,
 .capture-group-quality-history ol {
@@ -2143,7 +2235,7 @@
   color: var(--app-color-foreground-muted);
 }
 
-@media (min-width: 1101px) {
+@media (min-width: 1201px) {
   /* Keep the evidence surface in view beside long forms while leaving one
    * document scrollbar. The media stage keeps its own fullscreen container. */
   .capture-group-video-column {
@@ -2157,7 +2249,7 @@
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .capture-group-workspace {
     grid-template-areas:
       'video'
