@@ -39,6 +39,30 @@ const emptyProgress = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('annotation task API', () => {
+  it.each([
+    [
+      'ANNOTATION_CANDIDATE_SOURCE_INVALID',
+      'AI 候选来源与当前机位或标签规范不一致，请刷新候选后重试。',
+    ],
+    ['ANNOTATION_CAMERA_VIEW_VERSION_CONFLICT', '此机位已被更新，请刷新后重新提交。'],
+    ['ANNOTATION_CAMERA_VIEW_SEGMENT_OVERLAP', '本机位的动作时间段存在重叠，请调整后提交。'],
+  ])('explains camera submission failures: %s', async (errorCode, message) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ error_code: errorCode }, { status: 409 })),
+    )
+    await expect(
+      updateAnnotationCameraView(projectId, taskId, 1, {
+        expected_version: 0,
+        expected_input_version: groupInputVersion,
+        state: 'SUBMITTED',
+        segments: [],
+        note: '',
+        exclusion_reason: null,
+      }),
+    ).rejects.toMatchObject({ message, errorCode })
+  })
+
   it('downloads the approved HDF5 demonstration with the server filename', async () => {
     const fileName = 'human_demonstration_hdf5_v2_event_60000000_20260905T010203Z.hdf5'
     const fetchMock = vi.fn().mockResolvedValue(

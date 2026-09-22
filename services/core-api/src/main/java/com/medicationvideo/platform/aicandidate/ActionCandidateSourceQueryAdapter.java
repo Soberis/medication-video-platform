@@ -33,7 +33,7 @@ class ActionCandidateSourceQueryAdapter implements ActionCandidateSourceQueryPor
 			 WHERE c.project_id = ?
 			   AND c.capture_group_id = ?
 			   AND c.clip_asset_id = ?
-			   AND c.annotation_task_id = ?
+			   AND (c.annotation_task_id = ? OR c.annotation_task_id IS NULL)
 			   AND c.label_schema_id = ?
 			   AND c.label_schema_digest = ?
 			   AND c.ai_job_id = (
@@ -49,7 +49,7 @@ class ActionCandidateSourceQueryAdapter implements ActionCandidateSourceQueryPor
 			   AND j.clip_asset_id = ?
 			   AND j.algorithm_key = 'QWEN3_5_ACTION'
 			   AND j.status = 'SUCCEEDED'
-			   AND j.annotation_task_id = ?
+			   AND j.annotation_task_id IS NOT DISTINCT FROM c.annotation_task_id
 			   AND j.label_schema_id = ?
 			   AND j.label_schema_digest = ?
 			   AND j.allowed_labels ?? c.action_label
@@ -92,7 +92,6 @@ class ActionCandidateSourceQueryAdapter implements ActionCandidateSourceQueryPor
 		parameters.add(clipAssetId);
 		parameters.add(projectId);
 		parameters.add(clipAssetId);
-		parameters.add(annotationTaskId);
 		parameters.add(labelSchemaId);
 		parameters.add(labelSchemaDigest);
 		parameters.addAll(orderedIds);

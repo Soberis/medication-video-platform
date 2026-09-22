@@ -215,7 +215,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.queryByRole('button', { name: '导出人工标注' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交复核' })).toBeInTheDocument()
   })
 
   it('renders an existing human-label task without making it the default machine path', async () => {
@@ -237,7 +237,7 @@ describe('CaptureGroup detail views', () => {
 
     expect(await screen.findByRole('heading', { level: 2, name: '动作标注' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /机位 1/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交复核' })).toBeInTheDocument()
   })
 
   it('keeps a missing machine result explicit while exposing the manual quality gate', async () => {

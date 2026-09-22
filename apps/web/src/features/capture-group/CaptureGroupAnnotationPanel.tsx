@@ -421,8 +421,7 @@ export function CaptureGroupAnnotationPanel({
   useEffect(() => {
     if (
       isDirty ||
-      !hasAutoLoadedAiDraft ||
-      validCandidates.length <= AUTO_COLLAPSE_SEGMENT_THRESHOLD ||
+      visibleDraftSegments.length <= AUTO_COLLAPSE_SEGMENT_THRESHOLD ||
       autoCollapsedDraftContext.current === draftContext
     ) {
       return
@@ -430,7 +429,7 @@ export function CaptureGroupAnnotationPanel({
     autoCollapsedDraftContext.current = draftContext
     setIsAllCollapsed(true)
     setCollapsedSegments({})
-  }, [draftContext, hasAutoLoadedAiDraft, isDirty, validCandidates.length])
+  }, [draftContext, isDirty, visibleDraftSegments.length])
 
   const actionJobStatus = currentActionJob?.status
   const lastActionQueryContext = useRef<string | null>(null)
@@ -514,19 +513,17 @@ export function CaptureGroupAnnotationPanel({
           ? '标签规范暂时无法读取，当前不能提交新的修订。'
           : task && task.status !== 'ASSIGNED'
             ? `当前任务状态：${formatTaskStatus(task)}。`
-            : task && !allCameraViewsResolved
-              ? '请先完成并提交或排除所有预期机位，再提交整组修订。'
-              : task && !task.can_submit
-                ? '当前账号不允许提交整组修订；请查看服务端任务状态与项目权限。'
-                : activeCameraNumber !== null && !activeClipAssetId
-                  ? '当前机位缺少可编辑视频；请在机位清单中标记排除。'
-                  : activeCameraView?.state === 'SUBMITTED'
-                    ? '当前机位已单独提交；如需修改，请先在机位清单中重新打开。'
-                    : activeCameraView?.state === 'EXCLUDED'
-                      ? '当前机位已排除；如需继续编辑，请先恢复此机位。'
-                      : isCurrentCameraQualityExcluded
-                        ? '当前机位已被质量检查排除，不能提交该机位标注。'
-                        : ''
+            : task && allCameraViewsResolved && !task.can_submit
+              ? '当前账号不允许提交整组修订；请查看服务端任务状态与项目权限。'
+              : activeCameraNumber !== null && !activeClipAssetId
+                ? '当前机位缺少可编辑视频；请在机位清单中标记排除。'
+                : activeCameraView?.state === 'SUBMITTED'
+                  ? '当前机位已单独提交；如需修改，请先在机位清单中重新打开。'
+                  : activeCameraView?.state === 'EXCLUDED'
+                    ? '当前机位已排除；如需继续编辑，请先恢复此机位。'
+                    : isCurrentCameraQualityExcluded
+                      ? '当前机位已被质量检查排除，不能提交该机位标注。'
+                      : ''
 
   function getCameraDraft(cameraNumber: number) {
     const key = String(cameraNumber)
@@ -913,24 +910,13 @@ export function CaptureGroupAnnotationPanel({
           className="capture-group-annotation-form"
           onSubmit={(event) => void submitRevision(event)}
         >
-          {/* --- Multi-camera intro banner --- */}
-          <div className="capture-group-multicam-banner">
-            <div className="multicam-banner-left">
-              <strong>整组机位标注</strong>
-              <span className="multicam-banner-hint">
-                每路机位独立编辑、保存和提交；不同机位时间轴彼此独立。
-              </span>
-            </div>
-            <div className="multicam-banner-right">
-              <span className="current-camera-indicator">机位 {activeCameraNumber ?? 1}</span>
-            </div>
-          </div>
-
           {/* --- STICKY TOOLBAR: Action Segments Heading & Top Submit --- */}
           <div className="capture-group-annotation-sticky-bar">
             <div className="capture-group-annotation-sticky-main">
               <div className="capture-group-annotation-sticky-summary">
-                <h3 className="capture-group-annotation-sticky-title">动作时间段</h3>
+                <h3 className="capture-group-annotation-sticky-title">
+                  机位 {activeCameraNumber ?? '—'}
+                </h3>
                 {visibleDraftSegments.length > 0 && (
                   <span className="capture-group-annotation-summary-text">
                     {visibleDraftSegments.length} 段
@@ -1091,28 +1077,24 @@ export function CaptureGroupAnnotationPanel({
                   <strong>本机位标注已确认提交</strong>
                   <p>已确认 {activeCameraView.segments.length} 段动作，随时可重新编辑</p>
                 </div>
-                <Button
-                  disabled={!canUpdateCameraViews()}
-                  loading={isSubmittingRevision}
-                  onClick={() =>
-                    activeCameraNumber !== null && void saveCameraView(activeCameraNumber, 'DRAFT')
-                  }
-                >
-                  重新编辑
-                </Button>
               </div>
             ) : (
               <div className="camera-action-button-group">
-                <Button
-                  htmlType="button"
-                  disabled={activeCameraNumber === null || !canUpdateCameraViews()}
-                  loading={isSubmittingRevision}
-                  onClick={() =>
-                    activeCameraNumber !== null && void saveCameraView(activeCameraNumber, 'DRAFT')
-                  }
-                >
-                  保存本机位草稿
-                </Button>
+                <details>
+                  <summary>暂存，稍后继续</summary>
+                  <Button
+                    type="text"
+                    htmlType="button"
+                    disabled={activeCameraNumber === null || !canUpdateCameraViews()}
+                    loading={isSubmittingRevision}
+                    onClick={() =>
+                      activeCameraNumber !== null &&
+                      void saveCameraView(activeCameraNumber, 'DRAFT')
+                    }
+                  >
+                    保存本机位草稿
+                  </Button>
+                </details>
                 <Button
                   type="primary"
                   htmlType="button"
@@ -1141,7 +1123,7 @@ export function CaptureGroupAnnotationPanel({
             )}
           </div>
 
-          {needsCorrespondenceReason && task?.status === 'ASSIGNED' ? (
+          {allCameraViewsResolved && needsCorrespondenceReason && task?.status === 'ASSIGNED' ? (
             <label className="capture-group-note-field">
               <span>跨机位对应未确认的原因</span>
               <Input.TextArea
@@ -1158,17 +1140,18 @@ export function CaptureGroupAnnotationPanel({
           {/* --- 整组送审操作栏 --- */}
           <div className="capture-group-group-submission-panel">
             <div className="group-submission-info">
-              <span className="app-eyebrow">整组复核</span>
               <p className="submission-helper-text">
                 {canSubmitGroupRevision
                   ? `全部 ${allCameraNumbers.length} 路机位处理明确，可整组送审。`
-                  : !hasParticipatingSubmittedCamera
-                    ? '至少需要保留一个参与机位提交标注，方可送审。'
-                    : needsCorrespondenceReason && !correspondenceReason.trim()
-                      ? '跨机位对应尚未确认，请说明原因；各路标注将按独立时间轴送审。'
-                      : hasUnsavedDraftChanges
-                        ? '当前机位有未提交的草稿修改，请先提交或保存本机位草稿。'
-                        : '需所有机位均已提交标注或明确排除，方可整组送审。'}
+                  : !allCameraViewsResolved
+                    ? '完成各机位后，提交复核。'
+                    : !hasParticipatingSubmittedCamera
+                      ? '至少需要保留一个参与机位提交标注，方可送审。'
+                      : needsCorrespondenceReason && !correspondenceReason.trim()
+                        ? '跨机位对应尚未确认，请说明原因；各路标注将按独立时间轴送审。'
+                        : hasUnsavedDraftChanges
+                          ? '当前机位有未提交的草稿修改，请先提交或保存本机位草稿。'
+                          : '需所有机位均已提交标注或明确排除，方可整组送审。'}
               </p>
             </div>
             <Button
@@ -1176,12 +1159,11 @@ export function CaptureGroupAnnotationPanel({
               size="middle"
               className="group-submit-btn"
               htmlType="submit"
-              aria-label="提交整组标注"
               icon={<Check size={14} strokeWidth={2.2} />}
               loading={isSubmittingRevision}
               disabled={!canSubmitGroupRevision}
             >
-              提交整组标注
+              提交复核
             </Button>
           </div>
 

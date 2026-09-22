@@ -484,6 +484,13 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     // Keep the stable fallback for proxy and non-JSON failures.
   }
   const messages: Record<string, string> = {
+    ANNOTATION_CANDIDATE_SOURCE_INVALID:
+      'AI 候选来源与当前机位或标签规范不一致，请刷新候选后重试。',
+    ANNOTATION_CANDIDATE_SOURCE_UNAVAILABLE: '暂时无法核验 AI 候选来源，请稍后重试。',
+    ANNOTATION_CAMERA_VIEW_VERSION_CONFLICT: '此机位已被更新，请刷新后重新提交。',
+    ANNOTATION_CAMERA_VIEW_INPUT_VERSION_CONFLICT: '采集输入已变化，请刷新任务后重新提交。',
+    ANNOTATION_CAMERA_VIEW_SEGMENT_OVERLAP: '本机位的动作时间段存在重叠，请调整后提交。',
+    ANNOTATION_TASK_NOT_EDITABLE: '整组标注已提交复核，当前不能修改机位标注。',
     ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问标注任务的权限。',
     ANNOTATION_TASK_NOT_FOUND: '标注任务不存在，请刷新任务列表。',
     ANNOTATION_REVISION_NOT_FOUND: '标注修订不存在，请刷新任务列表。',

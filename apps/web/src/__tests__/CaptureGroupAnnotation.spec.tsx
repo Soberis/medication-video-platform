@@ -183,6 +183,50 @@ describe('action label presentation', () => {
 })
 
 describe('CaptureGroup annotation workflow', () => {
+  it('keeps a long saved camera draft compact and submits without a separate draft save', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    task.camera_views = [
+      cameraViewFixture(1, {
+        state: 'DRAFT',
+        segments: Array.from({ length: 12 }, (_, index) => ({
+          segment_id: `segment-${index}`,
+          start_ms: index * 100,
+          end_ms: index * 100 + 90,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        })),
+      }),
+    ]
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'FAILED',
+    })
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+    await screen.findByRole('button', { name: '展开全部' })
+    expect(screen.queryByLabelText('开始时间（毫秒）')).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: '提交标注' }))
+    await waitFor(() => {
+      const writes = fetchMock.mock.calls.filter(
+        ([url, init]) => String(url).endsWith('/camera-views/1') && init?.method === 'PUT',
+      )
+      expect(writes).toHaveLength(1)
+      expect(JSON.parse(String(writes[0]![1]?.body))).toMatchObject({
+        state: 'SUBMITTED',
+        segments: task.camera_views![0]!.segments,
+      })
+    })
+  })
+
   it('lets the assigned annotator save a camera draft before the group revision is submittable', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
@@ -205,9 +249,17 @@ describe('CaptureGroup annotation workflow', () => {
 
     await screen.findByLabelText('开始时间（毫秒）')
     await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toBeEnabled())
+    expect(
+      screen.getByRole('button', { name: '保存本机位草稿' }).closest('details'),
+    ).not.toHaveAttribute('open')
+    expect(screen.queryByText('整组机位标注')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('请先完成并提交或排除所有预期机位，再提交整组修订。'),
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByText('暂存，稍后继续'))
     const saveButton = screen.getByRole('button', { name: '保存本机位草稿' })
     expect(saveButton).toBeEnabled()
-    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
 
     const start = screen.getByLabelText('开始时间（毫秒）')
     await user.clear(start)
@@ -253,7 +305,7 @@ describe('CaptureGroup annotation workflow', () => {
       { camera_number: 1, state: 'DRAFT' },
       { camera_number: 2, state: 'PENDING' },
     ])
-    expect(screen.getByRole('button', { name: '提交整组标注' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
   })
 
   it('keeps automatic action drafting independent from no-hand detection and protects edits', async () => {
@@ -377,7 +429,7 @@ describe('CaptureGroup annotation workflow', () => {
     await user.click(within(auditDetails).getByText('人工标签修订、复核与适用性检查'))
     expect(within(auditDetails).getByText('任务 ID')).toBeInTheDocument()
     expect(within(auditDetails).getByText('第 1 次正式修订')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '提交整组标注' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '提交复核' })).not.toBeInTheDocument()
     expect(
       within(auditDetails).getByRole('link', { name: '打开采集记录人工标签任务上下文' }),
     ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
@@ -448,12 +500,12 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交整组标注' })
+    const submitButton = await screen.findByRole('button', { name: '提交复核' })
     const annotationSection = screen.getByRole('region', { name: '动作标注' })
     expect(within(annotationSection).getByText('待提交')).toBeInTheDocument()
     expect(within(annotationSection).queryByText(task.assignee_actor_id)).not.toBeInTheDocument()
-    expect(within(annotationSection).getByText('整组机位标注')).toBeInTheDocument()
-    expect(within(annotationSection).getByText(/时间轴彼此独立/)).toBeInTheDocument()
+    expect(within(annotationSection).queryByText('整组机位标注')).not.toBeInTheDocument()
+    expect(within(annotationSection).queryByText(/时间轴彼此独立/)).not.toBeInTheDocument()
     expect(within(annotationSection).getByText('机位 1')).toBeInTheDocument()
     const camera2Btn = screen.getByRole('button', { name: /机位 2/ })
     await user.click(camera2Btn)
@@ -484,7 +536,7 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    const form = (await screen.findByRole('button', { name: '提交整组标注' })).closest('form')
+    const form = (await screen.findByRole('button', { name: '提交复核' })).closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     const startInput = within(form).getByLabelText('开始时间（毫秒）')
     const endInput = within(form).getByLabelText('结束时间（毫秒）')
@@ -525,7 +577,7 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交整组标注' })
+    const submitButton = await screen.findByRole('button', { name: '提交复核' })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     expect(within(form).getByText('动作标签')).toBeInTheDocument()
@@ -562,7 +614,7 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    const submitButton = await screen.findByRole('button', { name: '提交整组标注' })
+    const submitButton = await screen.findByRole('button', { name: '提交复核' })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     await user.click(within(form).getByRole('button', { name: '提交本机位' }))
@@ -627,7 +679,7 @@ describe('CaptureGroup annotation workflow', () => {
     fireEvent.loadedMetadata(video)
     fireEvent.timeUpdate(video)
 
-    const form = (await screen.findByRole('button', { name: '提交整组标注' })).closest('form')
+    const form = (await screen.findByRole('button', { name: '提交复核' })).closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
     const startButton = await within(form).findByRole('button', {
       name: '第 1 个时间段：使用当前时间作为开始',
@@ -943,7 +995,7 @@ describe('simple camera submission workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
       session: { username: 'reviewer', role: 'MEMBER' },
     })
-    const submit = await screen.findByRole('button', { name: '提交整组标注' })
+    const submit = await screen.findByRole('button', { name: '提交复核' })
     expect(submit).toBeDisabled()
     await user.type(
       screen.getByRole('textbox', { name: '跨机位对应未确认的原因' }),

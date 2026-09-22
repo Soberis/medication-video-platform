@@ -80,12 +80,15 @@
 
 .capture-group-compare-strip {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-8);
   align-items: center;
   width: 100%;
 }
 
 .capture-group-compare-list {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--app-space-4);
   padding: 3px;
@@ -104,6 +107,7 @@
 
 .capture-group-compare-item {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
   height: 30px;

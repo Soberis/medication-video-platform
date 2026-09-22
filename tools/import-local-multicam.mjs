@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-import { SyntheticUploadClient, normalizeCameraNumbers, PlatformApiError } from './synthetic-upload-client/upload-client.mjs'
+import { SyntheticUploadClient, PlatformApiError } from './synthetic-upload-client/upload-client.mjs'
 import { SyntheticCaptureGroupWorkflowClient } from './synthetic-capture-group-client/workflow-client.mjs'
 
 const DEFAULT_BASE_URL = 'http://localhost:8080'
@@ -103,8 +103,9 @@ export async function resolveProject(baseUrl, token, requested) {
     if (byId) return byId
 
     // 2. Exact name match (case-insensitive)
-    const byName = items.find((p) => p.display_name.trim().toLowerCase() === requested.trim().toLowerCase())
-    if (byName) return byName
+    const byName = items.filter((p) => p.display_name.trim().toLowerCase() === requested.trim().toLowerCase())
+    if (byName.length === 1) return byName[0]
+    if (byName.length > 1) throw new Error('项目名称匹配多个结果，请指定项目 ID。')
 
     // 3. Partial name match
     const matches = items.filter((p) => p.display_name.toLowerCase().includes(requested.toLowerCase()))
@@ -119,6 +120,13 @@ export async function resolveProject(baseUrl, token, requested) {
   const nonSynthetic = items.filter((p) => p.display_name !== '本地合成上传验证')
   nonSynthetic.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
   return nonSynthetic.length > 0 ? nonSynthetic[0] : items[0]
+}
+
+export async function requestMediaProbes(workflow, views) {
+  for (const view of views) {
+    await workflow.requestMediaProbe(view.clipAssetId)
+    console.log(`   机位 ${view.cameraNumber} (Asset: ${view.clipAssetId}) 媒体探测请求已接受`)
+  }
 }
 
 async function main() {
@@ -217,12 +225,6 @@ async function main() {
   const captureGroupKey = values.key || `local-group-${Date.now().toString(36)}`
   const sourceBatchId = `local-batch-${randomUUID()}`
 
-  const adminUploadClient = new SyntheticUploadClient({
-    baseUrl: values.baseUrl,
-    projectId: targetProjectId,
-    bearerToken: values.adminToken,
-  })
-
   const uploadClient = new SyntheticUploadClient({
     baseUrl: values.baseUrl,
     projectId: targetProjectId,
@@ -238,7 +240,7 @@ async function main() {
 
   console.log('\n1. 正在初始化相机通道与机位配置...')
   const cameraSetKey = `local-camset-${expectedCameraNumbers.join('-')}-${Date.now().toString(36)}`
-  const cameraSet = await adminUploadClient.provisionSyntheticCameraSet({
+  const cameraSet = await uploadClient.provisionSyntheticCameraSet({
     cameraNumbers: expectedCameraNumbers,
     cameraSetKey,
     layoutVersion: 'local-multicam-v1',
@@ -263,15 +265,8 @@ async function main() {
   await workflow.finalizeCaptureGroup(uploaded.captureGroupId)
   console.log('   采集组已进入正式状态 (COMPLETE)')
 
-  console.log('\n4. 正在触发媒体探测 (Media Probe) 与手部 AI (MediaPipe)...')
-  for (const view of uploaded.views) {
-    try {
-      await workflow.requestMediaProbe(view.clipAssetId)
-      console.log(`   机位 ${view.cameraNumber} (Asset: ${view.clipAssetId}) 媒体探测已触发`)
-    } catch (err) {
-      console.log(`   机位 ${view.cameraNumber} 媒体探测已在队列中`)
-    }
-  }
+  console.log('\n4. 正在请求媒体探测 (Media Probe)...')
+  await requestMediaProbes(workflow, uploaded.views)
 
   console.log('\n========================================')
   console.log('            多相机合组导入成功！')

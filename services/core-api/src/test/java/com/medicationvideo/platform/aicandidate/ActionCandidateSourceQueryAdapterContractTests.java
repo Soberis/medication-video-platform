@@ -131,6 +131,28 @@ class ActionCandidateSourceQueryAdapterContractTests {
 	}
 
 	@Test
+	void acceptsCandidatesGeneratedBeforeTheHumanTaskWithoutRelaxingFrozenSourceContext() {
+		var jobId = UUID.randomUUID();
+		insertJob(jobId, null, this.labelSchemaId, SCHEMA_DIGEST, "[\"draw_liquid\"]",
+				Instant.parse("2026-09-20T00:00:00Z"), "SUCCEEDED");
+		insertSuccessfulAttempt(jobId);
+		var validId = UUID.randomUUID();
+		var wrongTaskId = UUID.randomUUID();
+		var wrongSchemaId = UUID.randomUUID();
+		insertCandidate(jobId, validId, this.projectId, this.captureGroupId, this.clipAssetId, null, this.labelSchemaId,
+				SCHEMA_DIGEST, "draw_liquid", 100, 500);
+		insertCandidate(jobId, wrongTaskId, this.projectId, this.captureGroupId, this.clipAssetId,
+				this.annotationTaskId, this.labelSchemaId, SCHEMA_DIGEST, "draw_liquid", 100, 500);
+		insertCandidate(jobId, wrongSchemaId, this.projectId, this.captureGroupId, this.clipAssetId, null,
+				UUID.randomUUID(), SCHEMA_DIGEST, "draw_liquid", 100, 500);
+		assertEquals(Set.of(validId),
+				this.sourceQuery
+					.findEligible(this.projectId, this.captureGroupId, this.annotationTaskId, this.clipAssetId,
+							this.labelSchemaId, SCHEMA_DIGEST, Set.of(validId, wrongTaskId, wrongSchemaId))
+					.keySet());
+	}
+
+	@Test
 	void ignoresCandidatesAfterANewerJobSupersedesTheirSource() {
 		var oldJobId = UUID.randomUUID();
 		insertJob(oldJobId, this.annotationTaskId, this.labelSchemaId, SCHEMA_DIGEST, "[\"draw_liquid\"]",
