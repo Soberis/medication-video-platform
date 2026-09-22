@@ -1,4 +1,4 @@
-import { Alert, App as AntdApp, Button, Checkbox, Input } from 'antd'
+import { Alert, App as AntdApp, Button, Checkbox, Input, Tooltip } from 'antd'
 import { Check, CircleAlert, FileCheck2, History, Play } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -92,78 +92,56 @@ export function CaptureGroupReviewPanel({
       ...(viewSet?.views ?? []).map((view) => view.camera_number),
     ]),
   ].sort((a, b) => a - b)
-  const [reviewSelection, setReviewSelection] = useState<{
-    revisionId: string
-    reviewedCameraNumbers: number[]
-    returnCameraNumbers: number[]
-  } | null>(null)
-  const reviewedCameraNumbers =
-    review?.reviewed_camera_numbers ??
-    (reviewSelection && revision && reviewSelection.revisionId === revision.annotation_revision_id
-      ? reviewSelection.reviewedCameraNumbers
-      : [])
+  const revisionReviewKey = [
+    revision?.annotation_revision_id ?? 'no-revision',
+    review?.decision ?? 'no-review',
+    ...(review?.return_camera_numbers ?? []),
+  ].join(':')
+  const [returnCameraSelection, setReturnCameraSelection] = useState<{
+    key: string
+    numbers: number[]
+  }>({
+    key: revisionReviewKey,
+    numbers: review?.return_camera_numbers ?? [],
+  })
   const returnCameraNumbers =
-    review?.return_camera_numbers ??
-    (reviewSelection && revision && reviewSelection.revisionId === revision.annotation_revision_id
-      ? reviewSelection.returnCameraNumbers
-      : [])
-  const canFinalizeReview = Boolean(
-    canReview &&
-      cameraNumbers.length > 0 &&
-      cameraNumbers.every((number) => reviewedCameraNumbers.includes(number)) &&
-      cameraNumbers.every((number) => {
-        const state = cameraViewState(number)
-        return state === 'SUBMITTED' || state === 'EXCLUDED'
-      }),
-  )
+    returnCameraSelection.key === revisionReviewKey
+      ? returnCameraSelection.numbers
+      : (review?.return_camera_numbers ?? [])
+  const allCamerasSubmittedOrExcluded =
+    cameraNumbers.length > 0 &&
+    cameraNumbers.every((number) => {
+      const state = cameraViewState(number)
+      return state === 'SUBMITTED' || state === 'EXCLUDED'
+    })
+  const unsubmittedCameraNumbers = cameraNumbers.filter((number) => {
+    const state = cameraViewState(number)
+    return state !== 'SUBMITTED' && state !== 'EXCLUDED'
+  })
+  const canFinalizeReview = Boolean(canReview && allCamerasSubmittedOrExcluded)
   const isReviewApproved = review?.decision === 'APPROVED'
   const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
   const [expandedReviewCameras, setExpandedReviewCameras] = useState<number[]>([])
 
-  function updateReviewedCamera(cameraNumber: number, reviewed: boolean) {
-    if (!revision) return
-    const current =
-      reviewSelection?.revisionId === revision.annotation_revision_id
-        ? reviewSelection
-        : {
-            revisionId: revision.annotation_revision_id,
-            reviewedCameraNumbers: [],
-            returnCameraNumbers: [],
-          }
-    const nextReviewed = reviewed
-      ? [...new Set([...current.reviewedCameraNumbers, cameraNumber])]
-      : current.reviewedCameraNumbers.filter((number) => number !== cameraNumber)
-    setReviewSelection({
-      ...current,
-      reviewedCameraNumbers: nextReviewed,
-      returnCameraNumbers: reviewed
-        ? current.returnCameraNumbers
-        : current.returnCameraNumbers.filter((number) => number !== cameraNumber),
-    })
-  }
-
   function updateReturnCamera(cameraNumber: number, shouldReturn: boolean) {
-    if (!revision) return
-    const current =
-      reviewSelection?.revisionId === revision.annotation_revision_id
-        ? reviewSelection
-        : {
-            revisionId: revision.annotation_revision_id,
-            reviewedCameraNumbers: [],
-            returnCameraNumbers: [],
-          }
-    setReviewSelection({
-      ...current,
-      returnCameraNumbers: shouldReturn
-        ? [...new Set([...current.returnCameraNumbers, cameraNumber])]
-        : current.returnCameraNumbers.filter((number) => number !== cameraNumber),
+    setReturnCameraSelection((selection) => {
+      const current =
+        selection.key === revisionReviewKey
+          ? selection.numbers
+          : (review?.return_camera_numbers ?? [])
+      return {
+        key: revisionReviewKey,
+        numbers: shouldReturn
+          ? [...new Set([...current, cameraNumber])]
+          : current.filter((number) => number !== cameraNumber),
+      }
     })
   }
 
   function openReview(decision: AnnotationReview['decision']) {
     if (!task || !revision || !task.can_review || reviewingDecision) return
     if (!canFinalizeReview) {
-      void message.warning('请先逐机位查看并勾选已复核状态。')
+      void message.warning('请先处理完所有机位：每个机位都必须提交标注或排除。')
       return
     }
     if (decision === 'REJECTED' && returnCameraNumbers.length === 0) {
@@ -206,8 +184,8 @@ export function CaptureGroupReviewPanel({
             {
               reviewedCameraNumbers:
                 decision === 'REJECTED'
-                  ? reviewedCameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
-                  : reviewedCameraNumbers,
+                  ? cameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
+                  : cameraNumbers,
               returnCameraNumbers: decision === 'REJECTED' ? returnCameraNumbers : [],
             },
           )
@@ -358,12 +336,10 @@ export function CaptureGroupReviewPanel({
             <div>
               <h3>机位复核</h3>
             </div>
-            <span>
-              {reviewedCameraNumbers.length} / {cameraNumbers.length} 已查看
-            </span>
+            <span>{cameraNumbers.length} 个机位</span>
           </div>
           <p className="form-hint">
-            逐机位查看动作段，完成后勾选“已查看”；需要修改时再选择“退回”。
+            逐机位查看动作段；需要修改时勾选“退回此机位”，然后点击“退回修改”。
           </p>
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
@@ -397,21 +373,10 @@ export function CaptureGroupReviewPanel({
                     </StatusIndicator>
                   </div>
                   <div className="capture-group-review-camera-lane-controls">
-                    <Checkbox
-                      checked={reviewedCameraNumbers.includes(cameraNumber)}
-                      disabled={!canReview || Boolean(review)}
-                      onChange={(event) => updateReviewedCamera(cameraNumber, event.target.checked)}
-                    >
-                      已查看此机位
-                    </Checkbox>
                     {canReturnLane ? (
                       <Checkbox
                         checked={returnCameraNumbers.includes(cameraNumber)}
-                        disabled={
-                          !canReview ||
-                          Boolean(review) ||
-                          !reviewedCameraNumbers.includes(cameraNumber)
-                        }
+                        disabled={!canReview || Boolean(review)}
                         onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
                       >
                         退回此机位
@@ -482,29 +447,6 @@ export function CaptureGroupReviewPanel({
               </article>
             )
           })}
-          {groupDocument?.correspondences.length ? (
-            <div className="capture-group-review-correspondences">
-              <h4>动作对应关系</h4>
-              <ul>
-                {groupDocument.correspondences.map((correspondence) => (
-                  <li key={correspondence.correspondence_id}>
-                    <strong>{correspondence.status === 'CONFIRMED' ? '已确认' : '不确定'}</strong>
-                    <span>
-                      {correspondence.segments
-                        .map((item) => {
-                          const segment = cameraViews
-                            .find((view) => view.camera_number === item.camera_number)
-                            ?.segments.find((candidate) => candidate.segment_id === item.segment_id)
-                          return `机位 ${item.camera_number}${segment ? ` · ${getActionDisplayName(segment.label, schema)} ${formatAnnotationTime(segment.start_ms)}–${formatAnnotationTime(segment.end_ms)}` : ''}`
-                        })
-                        .join('；')}
-                    </span>
-                    {correspondence.reason ? <small>{correspondence.reason}</small> : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </section>
       ) : null}
       {revision?.annotation_document.schema_version === 'annotation-document.v1' ? (
@@ -568,27 +510,46 @@ export function CaptureGroupReviewPanel({
           </div>
 
           {canReview ? (
-            <div className="capture-group-review-actions" aria-label="人工标签复核操作">
-              <Button
-                type="primary"
-                loading={reviewingDecision === 'APPROVED'}
-                disabled={reviewingDecision !== null || !canFinalizeReview}
-                onClick={() => openReview('APPROVED')}
-              >
-                通过复核
-              </Button>
-              <Button
-                danger
-                loading={reviewingDecision === 'REJECTED'}
-                disabled={
-                  reviewingDecision !== null ||
-                  !canFinalizeReview ||
-                  returnCameraNumbers.length === 0
-                }
-                onClick={() => openReview('REJECTED')}
-              >
-                退回修改
-              </Button>
+            <div className="capture-group-review-actions-container">
+              <div className="capture-group-review-actions" aria-label="人工标签复核操作">
+                <Tooltip
+                  title={
+                    !allCamerasSubmittedOrExcluded
+                      ? `机位 ${unsubmittedCameraNumbers.join('、')} 尚未处于提交或排除状态`
+                      : undefined
+                  }
+                >
+                  <span>
+                    <Button
+                      type="primary"
+                      loading={reviewingDecision === 'APPROVED'}
+                      disabled={reviewingDecision !== null || !canFinalizeReview}
+                      onClick={() => openReview('APPROVED')}
+                    >
+                      通过复核
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Button
+                  danger
+                  loading={reviewingDecision === 'REJECTED'}
+                  disabled={
+                    reviewingDecision !== null ||
+                    !canFinalizeReview ||
+                    returnCameraNumbers.length === 0
+                  }
+                  onClick={() => openReview('REJECTED')}
+                >
+                  退回修改
+                </Button>
+              </div>
+              {!canFinalizeReview && !allCamerasSubmittedOrExcluded && (
+                <div className="capture-group-review-disabled-hint" role="status">
+                  <span className="hint-warning">
+                    阻断：机位 {unsubmittedCameraNumbers.join('、')} 尚未提交或排除标注。
+                  </span>
+                </div>
+              )}
             </div>
           ) : review ? (
             <Alert

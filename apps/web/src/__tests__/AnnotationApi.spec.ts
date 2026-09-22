@@ -45,7 +45,12 @@ describe('annotation task API', () => {
       'AI 候选来源与当前机位或标签规范不一致，请刷新候选后重试。',
     ],
     ['ANNOTATION_CAMERA_VIEW_VERSION_CONFLICT', '此机位已被更新，请刷新后重新提交。'],
+    ['ANNOTATION_TASK_INPUT_VERSION_CONFLICT', '采集输入已变化，请刷新任务后重新提交。'],
     ['ANNOTATION_CAMERA_VIEW_SEGMENT_OVERLAP', '本机位的动作时间段存在重叠，请调整后提交。'],
+    [
+      'ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED',
+      '提交本机位标注至少需要一段有效动作；没有可确认动作时请排除本机位。',
+    ],
   ])('explains camera submission failures: %s', async (errorCode, message) => {
     vi.stubGlobal(
       'fetch',

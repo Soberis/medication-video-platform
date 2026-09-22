@@ -490,6 +490,8 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_CAMERA_VIEW_VERSION_CONFLICT: '此机位已被更新，请刷新后重新提交。',
     ANNOTATION_CAMERA_VIEW_INPUT_VERSION_CONFLICT: '采集输入已变化，请刷新任务后重新提交。',
     ANNOTATION_CAMERA_VIEW_SEGMENT_OVERLAP: '本机位的动作时间段存在重叠，请调整后提交。',
+    ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED:
+      '提交本机位标注至少需要一段有效动作；没有可确认动作时请排除本机位。',
     ANNOTATION_TASK_NOT_EDITABLE: '整组标注已提交复核，当前不能修改机位标注。',
     ANNOTATION_TASK_ACCESS_DENIED: '当前身份没有访问标注任务的权限。',
     ANNOTATION_TASK_NOT_FOUND: '标注任务不存在，请刷新任务列表。',
@@ -497,6 +499,7 @@ async function annotationTaskApiError(response: Response): Promise<AnnotationTas
     ANNOTATION_TASK_QUALITY_NOT_QUALIFIED: '该机位视频尚未完成处理，暂不能开始标注。',
     ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED:
       '采集记录尚未就绪：请等待视频处理完成，并至少保留一路可标注机位。',
+    ANNOTATION_TASK_INPUT_VERSION_CONFLICT: '采集输入已变化，请刷新任务后重新提交。',
     ANNOTATION_TASK_ALREADY_ASSIGNED: '该采集记录已分配给其他成员，请刷新任务状态。',
     ANNOTATION_TASK_ASSIGNMENT_IDEMPOTENCY_KEY_REUSED: '本次分配请求与已有请求冲突，请刷新后重试。',
     ANNOTATION_TASK_NOT_READY: '采集记录中的视频完成媒体检测后才能开始标注。',

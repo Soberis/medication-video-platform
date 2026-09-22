@@ -433,6 +433,9 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .capture-group-review-camera-segments li {
@@ -1255,6 +1258,14 @@
   border-top: 1px solid var(--app-color-border-subtle);
 }
 
+.capture-group-camera-disposition-hint {
+  margin: 0 0 var(--app-space-8);
+  color: var(--app-color-foreground-muted);
+  font-size: var(--app-font-size-helper);
+  line-height: var(--app-line-height-body);
+  overflow-wrap: anywhere;
+}
+
 .camera-action-button-group {
   display: flex;
   align-items: center;
@@ -1267,8 +1278,13 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-12);
+  min-width: 0;
   padding: 10px 14px;
   border-radius: var(--app-radius-md);
+}
+
+.camera-action-state-info {
+  min-width: 0;
 }
 
 .camera-action-state-banner.is-submitted {
@@ -1293,6 +1309,43 @@
   margin: 2px 0 0;
   font-size: 12px;
   color: var(--app-color-foreground-muted);
+  overflow-wrap: anywhere;
+}
+
+.camera-exclusion-scope-hint,
+.camera-exclusion-draft-warning {
+  margin: 0 0 var(--app-space-12);
+  line-height: var(--app-line-height-body);
+}
+
+.camera-exclusion-draft-warning {
+  color: var(--app-color-warning);
+}
+
+.camera-exclusion-reason-shortcuts {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--app-space-8);
+  margin-bottom: var(--app-space-8);
+  flex-wrap: wrap;
+}
+
+.camera-exclusion-reason-label {
+  flex: 0 0 auto;
+  padding-top: 3px;
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
+}
+
+.camera-exclusion-reason-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+}
+
+.camera-exclusion-reason-field > span {
+  color: var(--app-color-foreground-secondary);
+  font-size: var(--app-font-size-helper);
 }
 
 /* --- Group Submission Bottom Panel --- */
@@ -1740,12 +1793,29 @@
   overflow-wrap: anywhere;
 }
 
+.capture-group-review-actions-container {
+  display: grid;
+  gap: var(--app-space-6, 6px);
+  padding-top: var(--app-space-4);
+}
+
 .capture-group-review-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--app-space-8);
-  padding-top: var(--app-space-4);
+}
+
+.capture-group-review-disabled-hint {
+  display: flex;
+  justify-content: flex-end;
+  font-size: var(--app-font-size-helper);
+  color: var(--app-color-foreground-muted);
+  line-height: var(--app-line-height-body);
+}
+
+.capture-group-review-disabled-hint .hint-warning {
+  color: var(--app-color-warning, #b45309);
 }
 
 .capture-group-cleaning-summary {

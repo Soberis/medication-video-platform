@@ -214,7 +214,7 @@ describe('CaptureGroup annotation workflow', () => {
     })
     await screen.findByRole('button', { name: '展开全部' }, { timeout: 10000 })
     expect(screen.getAllByTitle('点击展开微调')).toHaveLength(9)
-    fireEvent.click(screen.getByRole('button', { name: '提交标注' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交本机位标注' }))
     await waitFor(() => {
       const writes = fetchMock.mock.calls.filter(
         ([url, init]) => String(url).endsWith('/camera-views/1') && init?.method === 'PUT',
@@ -254,7 +254,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(
       screen.queryByText('请先完成并提交或排除所有预期机位，再提交整组修订。'),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '排除此机位' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '排除本机位' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
   })
 
@@ -566,7 +566,7 @@ describe('CaptureGroup annotation workflow', () => {
     const submitButton = await screen.findByRole('button', { name: '提交复核' })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
-    await user.click(within(form).getByRole('button', { name: '提交标注' }))
+    await user.click(within(form).getByRole('button', { name: '提交本机位标注' }))
 
     expect(screen.getAllByText('请选择标签。').length).toBeGreaterThan(0)
     const labelField = within(form).getByRole('combobox', {
@@ -918,9 +918,9 @@ describe('simple camera submission workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
 
-    const submit = await screen.findByRole('button', { name: '提交标注' })
+    const submit = await screen.findByRole('button', { name: '提交本机位标注' })
     expect(submit).toBeEnabled()
-    expect(screen.getAllByRole('button', { name: '提交标注' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '提交本机位标注' })).toHaveLength(1)
     await user.click(submit)
 
     await waitFor(() =>
@@ -945,15 +945,84 @@ describe('simple camera submission workflow', () => {
     ).toBe(false)
   })
 
-  it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
+  it('can exclude a previously submitted camera directly before group submission', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
       receipt: 'COMPLETE',
     })
     const task = groupTask(groupId, true)
+    task.camera_views = [
+      cameraViewFixture(1, {
+        state: 'SUBMITTED',
+        version: 1,
+        segments: [
+          {
+            segment_id: 'submitted-before-exclusion',
+            start_ms: 1000,
+            end_ms: 1800,
+            label: 'acquire_item',
+            source_candidate_ids: [],
+          },
+        ],
+        note: '此前已确认',
+      }),
+    ]
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+
+    await user.click(await screen.findByRole('button', { name: '排除本机位' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/已提交人工标注/)).toBeInTheDocument()
+    await user.type(within(dialog).getByRole('textbox'), '重新核对后确认该机位不纳入本次修订')
+    await user.click(within(dialog).getByRole('button', { name: /确认排除本机位/ }))
+
+    const updates = () =>
+      fetchMock.mock.calls.filter(
+        ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+      )
+    await waitFor(() => expect(updates()).toHaveLength(1))
+    expect(JSON.parse(String(updates()[0]?.[1]?.body))).toMatchObject({
+      state: 'EXCLUDED',
+      segments: [],
+      note: '',
+      exclusion_reason: '重新核对后确认该机位不纳入本次修订',
+    })
+  })
+
+  it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true, { revision: true })
+    task.status = 'ASSIGNED'
+    task.can_submit = true
     task.assignee_actor_id = 'another-project-member'
     task.camera_views = [cameraViewFixture(1, { state: 'DRAFT', note: 'old draft note' })]
+    if (task.annotation_revision?.annotation_document.schema_version === 'annotation-document.v2') {
+      const restoredRevisionCamera = task.annotation_revision.annotation_document.camera_views.find(
+        (view) => view.camera_number === 1,
+      )
+      if (restoredRevisionCamera) {
+        restoredRevisionCamera.segments = restoredRevisionCamera.segments.map((segment) => ({
+          ...segment,
+          start_ms: 100,
+          end_ms: 760,
+        }))
+      }
+    }
     const fetchMock = stubGroupDetail(group, {
       task,
       quality: qualityFixture(group, 'QUALIFIED'),
@@ -965,11 +1034,20 @@ describe('simple camera submission workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
       session: { username: 'reviewer', role: 'MEMBER' },
     })
-    await user.click(await screen.findByRole('button', { name: '排除此机位' }))
+    await user.click(await screen.findByRole('button', { name: '排除本机位' }))
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByRole('textbox'), '测试镜头被遮挡')
-    await user.click(within(dialog).getByRole('button', { name: '确认排除' }))
-    await screen.findByText('本机位已排除')
+    await user.click(within(dialog).getByRole('button', { name: /取\s*消/ }))
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+      ),
+    ).toHaveLength(0)
+    await user.click(await screen.findByRole('button', { name: '排除本机位' }))
+    const reopenedDialog = await screen.findByRole('dialog')
+    await user.type(within(reopenedDialog).getByRole('textbox'), '测试镜头被遮挡')
+    await user.click(within(reopenedDialog).getByRole('button', { name: /确认排除本机位/ }))
+    await screen.findByRole('button', { name: /取消排除/ })
     const updates = () =>
       fetchMock.mock.calls.filter(
         ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
@@ -979,7 +1057,7 @@ describe('simple camera submission workflow', () => {
       exclusion_reason: '测试镜头被遮挡',
       segments: [],
     })
-    await user.click(await screen.findByRole('button', { name: /恢复此机位/ }))
+    await user.click(await screen.findByRole('button', { name: /取消排除/ }))
     await waitFor(() => expect(updates()).toHaveLength(2))
     expect(JSON.parse(String(updates()[1]?.[1]?.body))).toMatchObject({
       state: 'PENDING',
@@ -987,7 +1065,165 @@ describe('simple camera submission workflow', () => {
       note: '',
       exclusion_reason: null,
     })
+    const submit = await screen.findByRole('button', { name: '提交本机位标注' })
+    await waitFor(() => expect(submit).toBeEnabled(), { timeout: 5000 })
+    await user.click(submit)
+    await waitFor(() => expect(updates()).toHaveLength(3))
+    expect(JSON.parse(String(updates()[2]?.[1]?.body))).toMatchObject({
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'segment-camera-1',
+          start_ms: 100,
+          end_ms: 760,
+          label: 'acquire_item',
+        },
+      ],
+    })
     expect(screen.queryByRole('button', { name: '废弃视频' })).not.toBeInTheDocument()
+  })
+
+  it('requires explicit task re-preparation when the loaded capture input is stale', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    task.camera_views = [cameraViewFixture(1)]
+    const refreshedTask = {
+      ...task,
+      group_input_version: 'capture-group-view-set.v1:refreshed',
+      version: task.version + 1,
+      camera_views: [cameraViewFixture(1)],
+    }
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      taskResponses: [task, refreshedTask],
+      taskAfterAssignment: refreshedTask,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+      cameraViewUpdateError: {
+        status: 409,
+        errorCode: 'ANNOTATION_CAMERA_VIEW_INPUT_VERSION_CONFLICT',
+      },
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'ADMIN' },
+    })
+
+    await user.click(await screen.findByRole('button', { name: '排除本机位' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox'), '采集输入已变化')
+    await user.click(within(dialog).getByRole('button', { name: /确认排除本机位/ }))
+
+    expect(await screen.findByText('采集输入已变化，当前标注任务已过期。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '刷新并重新准备任务' })).toBeEnabled()
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
+          init?.method === 'POST',
+      ),
+    ).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: '刷新并重新准备任务' }))
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input, init]) =>
+            String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
+            init?.method === 'POST',
+        ),
+      ).toHaveLength(1),
+    )
+    await waitFor(() =>
+      expect(screen.queryByText('采集输入已变化，当前标注任务已过期。')).not.toBeInTheDocument(),
+    )
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('restores the current AI candidate draft after exclusion and resubmits it', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    task.camera_views = [cameraViewFixture(1, { state: 'DRAFT' })]
+    const candidate = {
+      action_candidate_id: 'candidate-after-restore',
+      ai_job_id: 'job-after-restore',
+      project_id: projectId,
+      capture_group_id: groupId,
+      clip_asset_id: task.camera_views[0]!.clip_asset_id!,
+      start_ms: 1000,
+      end_ms: 1800,
+      action_label: 'acquire_item',
+      confidence: 0.9,
+      source_window: 1,
+      stitched_windows: [],
+      created_at: '2026-09-10T00:00:00Z',
+    }
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'HAND_DETECTED',
+      actionCandidates: [candidate],
+    })
+    const user = userEvent.setup()
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+
+    await user.click(await screen.findByRole('button', { name: '排除本机位' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox'), '测试排除后恢复')
+    await user.click(within(dialog).getByRole('button', { name: /确认排除本机位/ }))
+    await screen.findByRole('button', { name: /取消排除/ })
+    await user.click(await screen.findByRole('button', { name: /取消排除/ }))
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+        ),
+      ).toHaveLength(2),
+    )
+
+    const submit = await screen.findByRole('button', { name: '提交本机位标注' })
+    await waitFor(() => expect(submit).toBeEnabled(), { timeout: 5000 })
+    await user.click(submit)
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(
+          ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+        ),
+      ).toHaveLength(3),
+    )
+    const updates = fetchMock.mock.calls.filter(
+      ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+    )
+    expect(JSON.parse(String(updates[2]?.[1]?.body))).toMatchObject({
+      state: 'SUBMITTED',
+      segments: [
+        {
+          start_ms: 1000,
+          end_ms: 1800,
+          label: 'acquire_item',
+          source_candidate_ids: ['candidate-after-restore'],
+        },
+      ],
+    })
   })
 
   it('records independent-timeline correspondences without asking for a human reason', async () => {

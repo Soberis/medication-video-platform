@@ -242,10 +242,12 @@ export function stubGroupDetail(
     reviewError?: { status: number; body: object }
     actionCandidates?: unknown[]
     actionCandidateJob?: unknown | null
+    cameraViewUpdateError?: { status: number; errorCode?: string }
   },
 ) {
   let taskResponseIndex = 0
   let groupResponseIndex = 0
+  let cameraViewUpdateErrorUsed = false
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     if (url.endsWith(`/capture-groups/${group.capture_group_id}/receipt/finalize`)) {
@@ -380,6 +382,18 @@ export function stubGroupDetail(
     }
     const cameraViewUpdate = url.match(/\/annotation-tasks\/([^/]+)\/camera-views\/(\d+)$/)
     if (cameraViewUpdate && init?.method === 'PUT') {
+      if (options.cameraViewUpdateError && !cameraViewUpdateErrorUsed) {
+        cameraViewUpdateErrorUsed = true
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error_code:
+                options.cameraViewUpdateError.errorCode ?? 'ANNOTATION_TASK_REQUEST_FAILED',
+            },
+            { status: options.cameraViewUpdateError.status },
+          ),
+        )
+      }
       const [, annotationTaskId, cameraNumberValue] = cameraViewUpdate
       const cameraNumber = Number(cameraNumberValue)
       const currentTask = options.task

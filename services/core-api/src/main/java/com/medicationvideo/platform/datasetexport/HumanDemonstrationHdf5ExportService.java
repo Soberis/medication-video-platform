@@ -154,6 +154,9 @@ class HumanDemonstrationHdf5ExportService {
 		if (includedViews.isEmpty()) {
 			throw invalid("The approved revision has no participating camera.");
 		}
+		if (includedViews.stream().anyMatch(view -> view.segments() == null || view.segments().isEmpty())) {
+			throw invalid("An included camera must have at least one approved annotation segment.");
+		}
 		var currentViews = group.views()
 			.stream()
 			.collect(Collectors.toMap(CaptureGroupView::cameraNumber, view -> view, (left, right) -> {

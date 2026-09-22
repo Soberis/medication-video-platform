@@ -145,9 +145,10 @@ class AnnotationTaskViewService {
 					"An excluded camera view must be restored to PENDING before editing or submitting it again.", 409);
 		}
 		else if (request.state() == AnnotationTaskViewState.EXCLUDED) {
-			if (reason == null || reason.length() > 1000 || !normalizedSegments.isEmpty()) {
+			if (reason == null || reason.length() > 1000 || !normalizedSegments.isEmpty()
+					|| !normalizedNote.isEmpty()) {
 				throw new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_EXCLUSION_INVALID",
-						"An excluded camera view needs a reason and cannot submit segments.", 400);
+						"An excluded camera view needs a reason and cannot retain annotation segments or notes.", 400);
 			}
 		}
 		else if (reason != null) {
@@ -155,6 +156,11 @@ class AnnotationTaskViewService {
 					"Only excluded camera views may have an exclusion reason.", 400);
 		}
 		validateSegmentStructure(normalizedSegments);
+		if (request.state() == AnnotationTaskViewState.SUBMITTED && normalizedSegments.isEmpty()) {
+			throw new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED",
+					"A submitted camera view must contain at least one action segment; exclude it if it should not contribute.",
+					400);
+		}
 		if (!normalizedSegments.isEmpty()) {
 			this.labelSchemaService.requireAllowedPrimaryStepLabels(task.getLabelSchemaId(),
 					task.getLabelSchemaDigest(),

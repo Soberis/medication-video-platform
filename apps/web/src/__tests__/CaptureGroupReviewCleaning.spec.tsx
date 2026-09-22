@@ -38,7 +38,6 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await markAllReviewCamerasAsReviewed(user)
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
@@ -283,8 +282,7 @@ describe('CaptureGroup Review and event cleaning', () => {
       const user = userEvent.setup()
       renderCaptureGroup()
 
-      await markAllReviewCamerasAsReviewed(user)
-      await user.click(screen.getAllByRole('checkbox', { name: '退回此机位' })[0]!)
+      await user.click((await screen.findAllByRole('checkbox', { name: '退回此机位' }))[0]!)
       await user.click(await screen.findByRole('button', { name: '退回修改' }))
       const dialog = await screen.findByRole('dialog')
       await user.type(
@@ -342,7 +340,6 @@ describe('CaptureGroup Review and event cleaning', () => {
     const user = userEvent.setup()
     renderCaptureGroup()
 
-    await markAllReviewCamerasAsReviewed(user)
     await user.click(await screen.findByRole('button', { name: '通过复核' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: '通过复核' }))
@@ -426,9 +423,4 @@ function renderCaptureGroup() {
     path: '/projects/:projectId/capture-groups/:captureGroupId',
     route: `/projects/${projectId}/capture-groups/${groupId}?focus=review`,
   })
-}
-
-async function markAllReviewCamerasAsReviewed(user: ReturnType<typeof userEvent.setup>) {
-  const checkboxes = await screen.findAllByRole('checkbox', { name: '已查看此机位' })
-  for (const checkbox of checkboxes) await user.click(checkbox)
 }

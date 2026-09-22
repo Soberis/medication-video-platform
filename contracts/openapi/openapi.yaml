@@ -2102,8 +2102,9 @@ paths:
         Updates one camera's server-owned annotation state within the existing CaptureGroup task.
         Each camera keeps its own clip identity and local timestamp axis. PENDING means no edits
         have been saved; DRAFT saves editable work, SUBMITTED confirms only this camera's result,
-        and EXCLUDED records a reversible exclusion decision. Restore returns an excluded camera
-        to PENDING and requires re-confirmation. This operation never creates an AnnotationRevision
+        and EXCLUDED records a reversible exclusion decision. SUBMITTED requires at least one
+        valid annotation segment; a camera with no participating action must be EXCLUDED. Restore
+        returns an excluded camera to PENDING and requires re-confirmation. This operation never creates an AnnotationRevision
         or review. The expected view version and group input version are checked atomically, and an
         Idempotency-Key replays the identical mutation.
       security:
@@ -2703,9 +2704,10 @@ paths:
         Requires global ADMIN authority or an ACTIVE project membership; the caller need not be the recorded task assignee. The request
         freezes the already persisted camera states into annotation-document.v2; it does not accept
         a single shared segment list. Every expected camera slot, including missing cameras, must
-        be SUBMITTED or EXCLUDED, at least one camera must be SUBMITTED, and no view may have an
-        unsaved DRAFT. Segment bounds are validated against that camera's verified media duration
-        and original timestamp axis. Explicit correspondences distinguish CONFIRMED actions from
+        be SUBMITTED or EXCLUDED, at least one camera must be SUBMITTED, every SUBMITTED camera must
+        contain at least one valid action segment, and no view may have an unsaved DRAFT. A camera
+        with no participating action must be EXCLUDED. Segment bounds are validated against that
+        camera's verified media duration and original timestamp axis. Explicit correspondences distinguish CONFIRMED actions from
         UNCERTAIN observations, which require a reason; time proximity, equal labels, or equal list
         positions never imply synchronization. The group input and task versions are checked
         atomically. Idempotency-Key replays the identical submission without a second revision.
@@ -5876,6 +5878,7 @@ components:
         segments:
           type: array
           maxItems: 200
+          description: SUBMITTED requires at least one valid segment; PENDING, DRAFT, and EXCLUDED may be empty according to their state rules.
           items:
             $ref: "#/components/schemas/AnnotationCameraViewSegment"
         note:
@@ -5915,6 +5918,7 @@ components:
         segments:
           type: array
           maxItems: 200
+          description: "State-dependent field: SUBMITTED requires at least one valid segment; EXCLUDED must be empty; PENDING and DRAFT may be empty."
           items:
             type: object
             additionalProperties: false
@@ -5928,8 +5932,15 @@ components:
                 type: array
                 uniqueItems: true
                 items: { type: string, format: uuid }
-        note: { type: string, maxLength: 1000, pattern: '^[^\x00-\x1F\x7F]*$' }
-        exclusion_reason: { type: [string, "null"], maxLength: 1000 }
+        note:
+          type: string
+          maxLength: 1000
+          pattern: '^[^\x00-\x1F\x7F]*$'
+          description: Must be empty when state is EXCLUDED.
+        exclusion_reason:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Required and nonblank for EXCLUDED; null for other states.
     AnnotationCorrespondence:
       type: object
       additionalProperties: false

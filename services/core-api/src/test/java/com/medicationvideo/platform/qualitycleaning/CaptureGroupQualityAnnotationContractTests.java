@@ -226,6 +226,39 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
+	void cameraSubmissionRequiresAtLeastOneAnnotationSegment() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("empty-submit-quality"))
+			.andExpect(status().isOk());
+		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("empty-submit-assignment"))
+			.andExpect(status().isCreated());
+		var taskId = taskId(group);
+		var view = this.jdbcTemplate.queryForMap("""
+				SELECT v.camera_number, v.version, t.group_input_version
+				FROM annotation_task_view v
+				JOIN annotation_task t ON t.annotation_task_id = v.annotation_task_id
+				WHERE v.annotation_task_id = ?
+				""", taskId);
+		var cameraNumber = ((Number) view.get("camera_number")).intValue();
+		this.mockMvc
+			.perform(put("/api/v1/projects/{projectId}/annotation-tasks/{taskId}/camera-views/{cameraNumber}",
+					PROJECT_ID, taskId, cameraNumber)
+				.header("Authorization", "Bearer " + MEMBER_TOKEN)
+				.header("Idempotency-Key", key("empty-submit-camera"))
+				.header("X-Request-Id", key("empty-submit-camera-request"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"expected_version":%d,"expected_input_version":"%s","state":"SUBMITTED",
+						 "segments":[],"note":"","exclusion_reason":null}
+						""".formatted(((Number) view.get("version")).longValue(), view.get("group_input_version"))))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED"));
+		assertEquals("PENDING", this.jdbcTemplate.queryForObject(
+				"SELECT view_state FROM annotation_task_view WHERE annotation_task_id = ? AND camera_number = ?",
+				String.class, taskId, cameraNumber));
+	}
+
+	@Test
 	void reviewCanReturnAnExcludedCameraWithoutReopeningOtherCameras() throws Exception {
 		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, key("excluded-return-quality"))

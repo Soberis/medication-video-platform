@@ -238,6 +238,9 @@ class AnnotationTaskService {
 					&& view.state() != AnnotationTaskViewState.EXCLUDED)) {
 			throw invalidViewDisposition();
 		}
+		if (submittedViews.stream().anyMatch(view -> view.segments().isEmpty())) {
+			throw submittedCameraSegmentsRequired();
+		}
 		var correspondences = toCorrespondenceDocument(request.correspondences());
 		var correspondenceBySegment = new HashMap<String, Map<String, Object>>();
 		var segmentLabels = new HashMap<String, String>();
@@ -468,6 +471,12 @@ class AnnotationTaskService {
 	private static AnnotationTaskException invalidViewDisposition() {
 		return new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_DISPOSITION_INCOMPLETE",
 				"Every frozen camera slot must be submitted or excluded before group submission.", 409);
+	}
+
+	private static AnnotationTaskException submittedCameraSegmentsRequired() {
+		return new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED",
+				"Every submitted camera must contain at least one action segment; restore and annotate it or exclude it.",
+				409);
 	}
 
 	private static AnnotationTaskException invalidCorrespondence() {

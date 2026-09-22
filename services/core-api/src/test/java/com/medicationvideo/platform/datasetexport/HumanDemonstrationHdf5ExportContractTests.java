@@ -81,16 +81,17 @@ class HumanDemonstrationHdf5ExportContractTests {
 
 	@Test
 	void exportsApprovedHumanLabelsAndCurrentMediapipeFactsAsReadableHdf5() throws Exception {
-		var group = createGroup(3, 3, "COMPLETE", 3);
+		var group = createGroup(4, 4, "COMPLETE", 4);
 		var ai1 = insertAiJob(group.clipAssetIds().get(0), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
 				List.of(new CandidateSpec(520, 0, "LEFT", "0.9100", 1)));
 		var ai2 = insertAiJob(group.clipAssetIds().get(1), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
 				List.of(new CandidateSpec(1520, 0, "RIGHT", "0.9200", 2)));
 		insertAiJob(group.clipAssetIds().get(2), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
 				List.of(new CandidateSpec(520, 0, "LEFT", "0.9300", 3)));
-		var revisionId = approveRevision(group,
-				List.of(new CameraAnnotation(1, 450, 900), new CameraAnnotation(2, 1400, 1800)), List.of(3),
-				"hdf5-export");
+		var ai4 = insertAiJob(group.clipAssetIds().get(3), "SUCCEEDED", "HAND_DETECTED", "SUCCEEDED", "HAND_DETECTED",
+				List.of(new CandidateSpec(2520, 0, "RIGHT", "0.9400", 4)));
+		var revisionId = approveRevision(group, List.of(new CameraAnnotation(1, 450, 900),
+				new CameraAnnotation(2, 1400, 1800), new CameraAnnotation(4, 2400, 2800)), List.of(3), "hdf5-export");
 
 		var mvcResult = this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/human-demonstrations/hdf5/v2/download", PROJECT_ID)
@@ -121,6 +122,11 @@ class HumanDemonstrationHdf5ExportContractTests {
 					file.getByPath("/data/demo_000000/samples/sources/camera_02")
 						.getAttribute("clip_asset_sha256")
 						.getData());
+			assertEquals(SHA256,
+					file.getByPath("/data/demo_000000/samples/sources/camera_04")
+						.getAttribute("clip_asset_sha256")
+						.getData());
+			assertEquals(3, ((Number) episode.getAttribute("included_camera_count").getData()).intValue());
 			assertEquals("acquire_item",
 					((String[]) file.getDatasetByPath("/data/demo_000000/annotations/label").getData())[0]);
 			assertEquals(900L,
@@ -131,6 +137,8 @@ class HumanDemonstrationHdf5ExportContractTests {
 					file.getByPath("/data/demo_000000/views/camera_01").getAttribute("ai_job_id").getData());
 			assertEquals(ai2.jobId().toString(),
 					file.getByPath("/data/demo_000000/views/camera_02").getAttribute("ai_job_id").getData());
+			assertEquals(ai4.jobId().toString(),
+					file.getByPath("/data/demo_000000/views/camera_04").getAttribute("ai_job_id").getData());
 			assertEquals(1520L,
 					((long[]) file.getDatasetByPath("/data/demo_000000/views/camera_02/candidates/frame_timestamp_ms")
 						.getData())[0]);
@@ -140,9 +148,9 @@ class HumanDemonstrationHdf5ExportContractTests {
 			assertEquals(1, landmarks.length);
 			assertEquals(21, landmarks[0].length);
 			assertEquals(3, landmarks[0][0].length);
-			assertArrayEquals(new int[] { 1, 2 },
+			assertArrayEquals(new int[] { 1, 2, 4 },
 					(int[]) file.getDatasetByPath("/data/demo_000000/samples/camera_number").getData());
-			assertArrayEquals(new long[] { 520, 1520 },
+			assertArrayEquals(new long[] { 520, 1520, 2520 },
 					(long[]) file.getDatasetByPath("/data/demo_000000/samples/frame_timestamp_ms").getData());
 		}
 	}

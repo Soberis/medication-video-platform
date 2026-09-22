@@ -402,6 +402,10 @@ class CaptureGroupAnnotationWorkflow {
 			var segments = view.get("segments") instanceof List<?> rows
 					? rows.stream().map(CaptureGroupAnnotationWorkflow::toRevisionSegment).toList()
 					: List.<AnnotationSegmentCommand>of();
+			if (segments.isEmpty()) {
+				throw new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_SEGMENTS_REQUIRED",
+						"Every included camera must contain at least one action segment before approval.", 409);
+			}
 			if (segments.stream().anyMatch(segment -> segment.startMs() < 0 || segment.endMs() <= segment.startMs())) {
 				throw new AnnotationTaskException("ANNOTATION_REVISION_DOCUMENT_INVALID",
 						"A submitted camera segment has an invalid local time range.", 409);
