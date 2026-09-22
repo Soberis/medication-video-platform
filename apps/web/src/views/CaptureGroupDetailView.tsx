@@ -369,8 +369,6 @@ export default function CaptureGroupDetailView() {
         <CaptureGroupReviewPanel
           projectId={projectId}
           group={data.group}
-          groupQuality={data.groupQuality}
-          groupQualityVisibility={data.groupQualityVisibility}
           task={humanTask}
           schema={data.schema}
           onRefresh={data.refresh}
@@ -402,21 +400,15 @@ export default function CaptureGroupDetailView() {
         projectId={projectId}
         captureGroupId={captureGroupId}
         group={data.group}
-        groupQuality={data.groupQuality}
         task={humanTask}
         schema={data.schema}
         viewRows={viewRows}
-        viewReviews={data.viewReviews}
         activeCameraNumber={activeCameraNumber}
         activeClipAssetId={selectedStream?.clip_asset_id ?? null}
         assigneeActorId={session?.username ?? ''}
         canPrepareTask={Boolean(session) && data.taskVisibility === 'visible'}
         currentPlaybackTimeMs={currentPlaybackTimeMs}
         totalDurationMs={totalDurationMs}
-        hasNoHandDetected={
-          viewState.candidateResponse?.job?.status === 'SUCCEEDED' &&
-          viewState.candidateResponse?.job?.hand_result === 'NO_HAND_DETECTED'
-        }
         onPlaySegment={handlePlaySegmentForAnnotation}
         onPlayAtMs={handlePlayAtMsForAnnotation}
         onSeekToMs={handleSeekToMsForAnnotation}
@@ -434,9 +426,6 @@ export default function CaptureGroupDetailView() {
         projectId={projectId}
         captureGroupId={captureGroupId}
         group={data.group}
-        groupQuality={humanTask ? data.groupQuality : null}
-        groupQualityVisibility={data.groupQualityVisibility}
-        qualityHistory={humanTask ? data.qualityHistory : []}
         selectedView={selectedView}
         task={humanTask}
       />
@@ -530,9 +519,6 @@ export default function CaptureGroupDetailView() {
               title="人工任务状态暂不可用；采集记录、播放器和机器证据仍可查看。"
             />
           ) : null}
-          {humanTask && data.qualityErrorMessage ? (
-            <Alert type="warning" showIcon title={data.qualityErrorMessage} />
-          ) : null}
           {humanTask && data.taskErrorMessage ? (
             <Alert type="warning" showIcon title={data.taskErrorMessage} />
           ) : null}
@@ -550,7 +536,6 @@ export default function CaptureGroupDetailView() {
               <div className="capture-group-video-column">
                 <CaptureGroupFocusedView
                   viewRows={viewRows}
-                  viewReviews={data.viewReviews}
                   viewState={viewState}
                   task={humanTask}
                   externalVideoRef={videoRef}

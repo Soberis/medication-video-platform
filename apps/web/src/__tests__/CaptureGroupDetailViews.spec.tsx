@@ -17,7 +17,7 @@ import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 afterEach(() => vi.unstubAllGlobals())
 
-it('shows all five cameras and limits the visible status to the selected camera', async () => {
+it('keeps camera tabs free of status badges while dispositions stay in the accessible name', async () => {
   const numbers = [1, 2, 3, 4, 5]
   const group = captureGroupFixture(groupId, {
     expected: numbers,
@@ -25,7 +25,42 @@ it('shows all five cameras and limits the visible status to the selected camera'
     receipt: 'COMPLETE',
   })
   const task = groupTask(groupId, false)
-  task.camera_views = numbers.map((number) => cameraViewFixture(number, { state: 'DRAFT' }))
+  task.camera_views = [
+    cameraViewFixture(1, {
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'segment-1a',
+          start_ms: 0,
+          end_ms: 1000,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+        {
+          segment_id: 'segment-1b',
+          start_ms: 1500,
+          end_ms: 2500,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    }),
+    cameraViewFixture(2, {
+      state: 'SUBMITTED',
+      segments: [
+        {
+          segment_id: 'segment-2a',
+          start_ms: 0,
+          end_ms: 1000,
+          label: 'acquire_item',
+          source_candidate_ids: [],
+        },
+      ],
+    }),
+    cameraViewFixture(3, { state: 'EXCLUDED', exclusion_reason: '镜头遮挡' }),
+    cameraViewFixture(4, { state: 'DRAFT' }),
+    cameraViewFixture(5, { state: 'DRAFT' }),
+  ]
   stubGroupDetail(group, {
     task,
     quality: qualityFixture(group, 'QUALIFIED'),
@@ -36,16 +71,31 @@ it('shows all five cameras and limits the visible status to the selected camera'
     route: `/projects/${projectId}/capture-groups/${groupId}`,
   })
   const switcher = await screen.findByRole('group', { name: '采集记录机位选择' })
-  await waitFor(() => expect(within(switcher).getAllByText('编辑中')).toHaveLength(1))
-  for (const number of numbers)
-    expect(
-      within(switcher).getByRole('button', { name: new RegExp(`机位 ${number}`) }),
-    ).toBeEnabled()
-  const fifth = within(switcher).getByRole('button', { name: /机位 5/ })
+  const tab = (number: number) =>
+    within(switcher).getByRole('button', { name: new RegExp(`机位 ${number}`) })
+
+  // 机位选择条：仅当前选中的机位展示处置状态徽章，其余未选中机位保持纯净机位号。
+  for (const number of numbers) {
+    expect(tab(number)).toHaveTextContent(`机位 ${number}`)
+    if (number === 1) {
+      expect(tab(number)).toHaveTextContent('已提交')
+    } else {
+      expect(tab(number)).not.toHaveTextContent(/已提交|已排除|编辑中|待处理/)
+    }
+  }
+  expect(tab(1).getAttribute('aria-label')).toContain('已提交 2 段')
+  expect(tab(2).getAttribute('aria-label')).toContain('已提交 1 段')
+  expect(tab(3).getAttribute('aria-label')).toContain('已排除')
+  expect(tab(4).getAttribute('aria-label')).toContain('编辑中')
+  expect(tab(5).getAttribute('aria-label')).toContain('编辑中')
+  for (const number of numbers) expect(tab(number)).toBeEnabled()
+
+  const fifth = tab(5)
   await userEvent.setup().click(fifth)
   expect(fifth).toHaveAttribute('aria-pressed', 'true')
-  expect(within(fifth).getByText('编辑中')).toBeInTheDocument()
-  expect(within(switcher).getAllByText('编辑中')).toHaveLength(1)
+  // 切换机位后，当前机位（机位 5）显示状态，之前选中的机位 1 恢复纯净名称。
+  expect(fifth).toHaveTextContent('编辑中')
+  expect(tab(1)).not.toHaveTextContent(/已提交|已排除|编辑中|待处理/)
 })
 
 describe('CaptureGroup detail views', () => {
@@ -223,7 +273,7 @@ describe('CaptureGroup detail views', () => {
     expect(await navigator.clipboard.readText()).toBe(fullVersion)
   })
 
-  it('lets a project administrator opt into the human annotation task after quality admission', async () => {
+  it('lets a project administrator start the human annotation task once the capture input is ready', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -272,7 +322,7 @@ describe('CaptureGroup detail views', () => {
     expect(screen.getByRole('button', { name: '提交复核' })).toBeInTheDocument()
   })
 
-  it('keeps a missing machine result explicit while exposing the manual quality gate', async () => {
+  it('keeps a missing machine result explicit without a separate quality gate', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1],

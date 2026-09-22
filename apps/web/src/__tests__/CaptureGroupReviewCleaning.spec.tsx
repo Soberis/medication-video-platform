@@ -184,6 +184,51 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(within(reviewLanes).queryByText('00:03.000 → 00:03.500')).not.toBeInTheDocument()
   })
 
+  it('keeps long camera review intervals collapsed until requested', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const task = submittedGroupTask(group)
+    const annotationDocument = task.annotation_revision?.annotation_document
+    const snapshotCamera1 =
+      annotationDocument && annotationDocument.schema_version === 'annotation-document.v2'
+        ? annotationDocument.camera_views.find((view) => view.camera_number === 1)
+        : undefined
+    if (!snapshotCamera1) {
+      throw new Error('Expected camera 1 in submitted review fixture')
+    }
+    snapshotCamera1.segments = Array.from({ length: 8 }, (_, index) => ({
+      segment_id: `compact-review-${index + 1}`,
+      start_ms: index * 1000,
+      end_ms: index * 1000 + 500,
+      label: 'acquire_item',
+      source_candidate_ids: [],
+      correspondence_id: `compact-correspondence-${index + 1}`,
+      correspondence_status: 'CONFIRMED' as const,
+    }))
+    stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+
+    const user = userEvent.setup()
+    renderCaptureGroup()
+
+    const reviewLanes = await screen.findByRole('region', { name: '逐机位复核' })
+    expect(within(reviewLanes).getByText('8 段')).toBeInTheDocument()
+    const expandButton = within(reviewLanes).getByRole('button', { name: '查看全部 8 段' })
+    expect(expandButton).toBeInTheDocument()
+    expect(within(reviewLanes).queryByText('00:07 → 00:07.500')).not.toBeInTheDocument()
+
+    await user.click(expandButton)
+
+    expect(within(reviewLanes).getByText('00:07 → 00:07.500')).toBeInTheDocument()
+    expect(within(reviewLanes).getByRole('button', { name: '收起动作段' })).toBeInTheDocument()
+  })
+
   it('does not expose Review actions when the server denies reviewer permission', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
@@ -335,7 +380,7 @@ describe('CaptureGroup Review and event cleaning', () => {
 
     await user.click(await screen.findByRole('button', { name: '查看复核详情' }))
 
-    const rejectedViews = await screen.findByRole('list', { name: '拒绝 / 缺失机位' })
+    const rejectedViews = await screen.findByRole('list', { name: '排除 / 缺失机位' })
     expect(within(rejectedViews).getByText('机位 2')).toBeInTheDocument()
     expect(within(rejectedViews).getByText(/机位缺失/)).toBeInTheDocument()
     expect(

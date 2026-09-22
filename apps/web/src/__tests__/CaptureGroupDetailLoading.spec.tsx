@@ -76,15 +76,15 @@ describe('CaptureGroup detail loading', () => {
     await waitFor(() => expect(result.current.taskVisibility).toBe('unavailable'))
     expect(result.current.group?.capture_group_id).toBe(groupId)
     expect(result.current.task).toBeNull()
-    expect(result.current.groupQualityVisibility).toBe('loaded')
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/capture-groups/'))).toBe(
       true,
     )
+    // 组质量准入已改为系统冻结，前端详情不再拉取人工质量事实。
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes('/capture-groups/' + groupId + '/quality-review'),
       ),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('keeps ASSIGNEE empty distinct from a project-wide empty task scope while loading facts', async () => {
@@ -101,7 +101,7 @@ describe('CaptureGroup detail loading', () => {
     expect(assignee.result.current.task).toBeNull()
     expect(
       assigneeFetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review')),
-    ).toBe(true)
+    ).toBe(false)
 
     assignee.unmount()
     const projectFetchMock = stubHookDetail([group], {
@@ -112,10 +112,10 @@ describe('CaptureGroup detail loading', () => {
     expect(project.result.current.task).toBeNull()
     expect(
       projectFetchMock.mock.calls.some(([input]) => String(input).endsWith('/quality-review')),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('loads quality facts and the schema after the optional human task becomes visible', async () => {
+  it('loads the label schema after the optional human task becomes visible', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -147,47 +147,20 @@ describe('CaptureGroup detail loading', () => {
 
     await waitFor(() => expect(result.current.task?.capture_group_id).toBe(groupId))
     await waitFor(() => {
+      // 组质量准入已改为系统冻结，前端不再拉取人工质量及其历史。
       expect(
         fetchMock.mock.calls.some(([input]) =>
-          String(input).endsWith(`/capture-groups/${groupId}/quality-review`),
+          String(input).includes(`/capture-groups/${groupId}/quality-review`),
         ),
-      ).toBe(true)
-      expect(
-        fetchMock.mock.calls.some(([input]) =>
-          String(input).endsWith(`/capture-groups/${groupId}/quality-review/history`),
-        ),
-      ).toBe(true)
+      ).toBe(false)
       expect(
         fetchMock.mock.calls.some(([input]) => String(input).endsWith('/annotation-label-schema')),
       ).toBe(true)
-      expect(
-        fetchMock.mock.calls.some(([input]) =>
-          String(input).includes(`/clip-assets/${clipIds[0]}/quality-review`),
-        ),
-      ).toBe(true)
     })
-  })
-
-  it('keeps the primary state available when optional human quality fails', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1],
-      received: [1],
-      receipt: 'COMPLETE',
-    })
-    const fetchMock = stubHookDetail(
-      [group],
-      { [projectId]: Promise.resolve(jsonResponse(taskList([groupTask(groupId, true)]))) },
-      { qualityError: true },
+    // 机位级质量评审已退出标注准入，页面不再逐机位拉取该事实。
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/clip-assets/'))).toBe(
+      false,
     )
-    const { result } = renderDetailHook(projectId, groupId)
-
-    await waitFor(() => expect(result.current.groupLoadState).toBe('success'))
-    await waitFor(() => expect(result.current.groupQualityVisibility).toBe('unavailable'))
-    expect(result.current.group?.capture_group_id).toBe(groupId)
-    expect(result.current.selectedClipAssetId).toBe(clipIds[0])
-    expect(
-      fetchMock.mock.calls.some(([input]) => String(input).endsWith('/annotation-tasks')),
-    ).toBe(true)
   })
 
   it('ignores a delayed Group A task response after switching project and group', async () => {

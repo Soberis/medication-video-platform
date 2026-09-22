@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import type { AnnotationTask } from '@/api/annotation'
-import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
+import type { CaptureGroup } from '@/api/capture-groups'
 import { paths } from '@/app/paths'
 import { CopyableText } from '@/components/data/CopyableText'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -17,17 +17,10 @@ import {
 } from '@/features/capture-group/capture-group-detail-model'
 import {
   captureGroupTaskDestination,
-  formatViewQualitySummary,
-  groupQualityDisplayLabel,
-  groupQualityDisplayTone,
-  groupQualityLabels,
-  groupQualityTone,
   mediaStatusLabels,
   receiptStateLabels,
   syncSafety,
   technicalQualityLabels,
-  viewQualityLabels,
-  type CaptureGroupQualityVisibility,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 
@@ -60,9 +53,6 @@ interface CaptureGroupInspectorProps {
   projectId: string
   captureGroupId: string
   group: CaptureGroup
-  groupQuality: CaptureGroupQualityReview | null
-  groupQualityVisibility: CaptureGroupQualityVisibility
-  qualityHistory: CaptureGroupQualityReview[]
   selectedView: GroupViewRow | null
   task: AnnotationTask | null
 }
@@ -71,9 +61,6 @@ export function CaptureGroupInspector({
   projectId,
   captureGroupId,
   group,
-  groupQuality,
-  groupQualityVisibility,
-  qualityHistory,
   selectedView,
   task,
 }: CaptureGroupInspectorProps) {
@@ -97,14 +84,7 @@ export function CaptureGroupInspector({
     selectedMountPosition &&
       selectedMountPosition !== deviceLabel,
   )
-  const taskFocus =
-    groupQuality &&
-    groupQuality.result !== 'QUALIFIED' &&
-    groupQuality.result !== 'QUALIFIED_WITH_EXCLUSIONS'
-      ? 'annotation'
-      : task
-        ? (captureGroupTaskDestination(task)?.focus ?? 'annotation')
-        : 'annotation'
+  const taskFocus = task ? (captureGroupTaskDestination(task)?.focus ?? 'annotation') : 'annotation'
 
   return (
     <aside className="capture-group-inspector" aria-labelledby="capture-group-inspector-title">
@@ -256,74 +236,6 @@ export function CaptureGroupInspector({
           ) : null}
         </InspectorSection>
       </ProgressiveDetail>
-
-      {task ? (
-        <ProgressiveDetail
-          title="人工标签质量事实"
-          summary={groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-        >
-          <InspectorSection title="人工标签质量事实" titleId="capture-group-quality-facts">
-            <div className="capture-group-inspector-status">
-              <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
-                {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-              </StatusIndicator>
-              {groupQuality?.reviewer_actor_id ? (
-                <span>记录人：{groupQuality.reviewer_actor_id}</span>
-              ) : null}
-              {groupQuality?.decided_at ? (
-                <span>{formatDateTime(groupQuality.decided_at)}</span>
-              ) : null}
-            </div>
-            {groupQuality?.reason ? <p className="form-hint">理由：{groupQuality.reason}</p> : null}
-            {groupQualityVisibility === 'unavailable' ? (
-              <div className="capture-group-inspector-status" role="status">
-                <span>暂时无法读取人工标签质量，请刷新后重试。</span>
-              </div>
-            ) : null}
-            {groupQualityVisibility === 'forbidden' ? (
-              <div className="capture-group-inspector-status" role="status">
-                <span>当前账号无权查看人工标签质量。</span>
-              </div>
-            ) : null}
-            {groupQuality?.confirmed_view_set ? (
-              <div className="capture-group-confirmed-view-set capture-group-stack">
-                <strong>本次结论使用的机位集合</strong>
-                <span>{formatViewQualitySummary(groupQuality)}</span>
-                {groupQuality.input_version ? (
-                  <span>
-                    确认输入版本：
-                    <InputVersionValue value={groupQuality.input_version} />
-                  </span>
-                ) : null}
-                <ul>
-                  {groupQuality.confirmed_view_set.views.map((view) => (
-                    <li key={view.camera_number}>
-                      机位 {view.camera_number} · {viewQualityLabels[view.quality_review_decision]}
-                      {view.quality_review_decision === 'REJECTED' ? ' · 已排除但保留' : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {qualityHistory.length ? (
-              <details className="capture-group-quality-history capture-group-stack">
-                <summary>查看追加质量历史（{qualityHistory.length} 条）</summary>
-                <ol>
-                  {qualityHistory.map((entry) => (
-                    <li key={entry.capture_group_quality_review_id ?? `revision-${entry.revision}`}>
-                      <StatusIndicator tone={groupQualityTone(entry.result)}>
-                        第 {entry.revision} 次 · {groupQualityLabels[entry.result]}
-                      </StatusIndicator>
-                      {entry.reason ? <span>{entry.reason}</span> : null}
-                      {entry.decided_at ? <small>{formatDateTime(entry.decided_at)}</small> : null}
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            ) : null}
-          </InspectorSection>
-        </ProgressiveDetail>
-      ) : null}
 
       {task ? (
         <ProgressiveDetail

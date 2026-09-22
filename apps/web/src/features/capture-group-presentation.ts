@@ -1,10 +1,4 @@
-import type {
-  CaptureGroup,
-  CaptureGroupQualityResult,
-  CaptureGroupQualityReview,
-  CaptureGroupQualityView,
-  CaptureGroupStream,
-} from '@/api/capture-groups'
+import type { CaptureGroup, CaptureGroupStream } from '@/api/capture-groups'
 import type { AnnotationTask } from '@/api/annotation'
 import type { CaptureGroupFocus } from '@/app/paths'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
@@ -14,41 +8,6 @@ export const receiptStateLabels: Record<CaptureGroup['receipt_state'], string> =
   COMPLETE: '已完整接收',
   INCOMPLETE: '接收完成 · 有缺失',
 }
-
-export const groupQualityLabels: Record<CaptureGroupQualityResult, string> = {
-  UNREVIEWED: '待判断',
-  QUALIFIED: '合格',
-  QUALIFIED_WITH_EXCLUSIONS: '合格（排除部分机位）',
-  NEEDS_REVIEW: '需复核',
-  REJECTED: '不合格',
-}
-
-export type CaptureGroupQualityVisibility = 'loading' | 'loaded' | 'unavailable' | 'forbidden'
-
-export function groupQualityDisplayLabel(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-) {
-  if (visibility === 'loading') return '读取中'
-  if (visibility === 'forbidden') return '无权查看'
-  if (visibility === 'unavailable' || !quality) return '暂不可用'
-  return groupQualityLabels[quality.result]
-}
-
-export function groupQualityDisplayTone(
-  visibility: CaptureGroupQualityVisibility,
-  quality: CaptureGroupQualityReview | null,
-): StatusIndicatorTone {
-  return visibility === 'loaded' && quality ? groupQualityTone(quality.result) : 'neutral'
-}
-
-export const viewQualityLabels: Record<CaptureGroupQualityView['quality_review_decision'], string> =
-  {
-    UNREVIEWED: '待判断',
-    QUALIFIED: '合格',
-    NEEDS_REVIEW: '需复核',
-    REJECTED: '不合格',
-  }
 
 export const mediaStatusLabels: Record<string, string> = {
   MISSING: '缺失',
@@ -85,36 +44,6 @@ export function receiptTone(state: CaptureGroup['receipt_state']): StatusIndicat
   if (state === 'COMPLETE') return 'success'
   if (state === 'INCOMPLETE') return 'warning'
   return 'information'
-}
-
-export function groupQualityTone(result: CaptureGroupQualityResult): StatusIndicatorTone {
-  if (result === 'QUALIFIED' || result === 'QUALIFIED_WITH_EXCLUSIONS') return 'success'
-  if (result === 'NEEDS_REVIEW') return 'warning'
-  if (result === 'REJECTED') return 'destructive'
-  return 'neutral'
-}
-
-export function formatViewQualitySummary(review: CaptureGroupQualityReview | null) {
-  const views = review?.confirmed_view_set?.views ?? []
-  if (!views.length) return '未形成整体质量快照'
-  const counts = views.reduce(
-    (summary, view) => {
-      summary[view.quality_review_decision] += 1
-      return summary
-    },
-    { QUALIFIED: 0, NEEDS_REVIEW: 0, REJECTED: 0, UNREVIEWED: 0 } as Record<
-      CaptureGroupQualityView['quality_review_decision'],
-      number
-    >,
-  )
-  return [
-    counts.QUALIFIED ? `${counts.QUALIFIED} 合格` : '',
-    counts.NEEDS_REVIEW ? `${counts.NEEDS_REVIEW} 需复核` : '',
-    counts.REJECTED ? `${counts.REJECTED} 不合格` : '',
-    counts.UNREVIEWED ? `${counts.UNREVIEWED} 待判断` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
 }
 
 export type CaptureGroupTaskVisibility = 'visible' | 'permission-limited' | 'unavailable'

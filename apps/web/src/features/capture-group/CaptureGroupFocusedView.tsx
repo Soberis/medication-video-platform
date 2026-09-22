@@ -2,23 +2,18 @@ import { Descriptions } from 'antd'
 import { Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import type { QualityReview } from '@/api/quality'
 import { MediaReportCard, PlaybackCard } from '@/components/AssetDetailSections'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
 import type { GroupViewRow } from '@/features/capture-group/capture-group-detail-model'
 import type { CaptureGroupViewState } from '@/features/capture-group/use-capture-group-view'
-import { mediaStatusLabels, viewQualityLabels } from '@/features/capture-group-presentation'
+import { mediaStatusLabels } from '@/features/capture-group-presentation'
 
 import type { AnnotationTask } from '@/api/annotation'
-import {
-  computeGroupCameraSummary,
-  getCameraProcessingStatus,
-} from '@/features/capture-group/capture-group-detail-model'
+import { getCameraProcessingStatus } from '@/features/capture-group/capture-group-detail-model'
 
 interface CaptureGroupFocusedViewProps {
   viewRows: GroupViewRow[]
-  viewReviews: Record<string, QualityReview>
   viewState: CaptureGroupViewState
   task?: AnnotationTask | null
   onSelectView: (clipAssetId: string) => void
@@ -30,7 +25,6 @@ interface CaptureGroupFocusedViewProps {
 
 export function CaptureGroupFocusedView({
   viewRows,
-  viewReviews,
   viewState,
   task = null,
   onSelectView,
@@ -63,7 +57,6 @@ export function CaptureGroupFocusedView({
   } = viewState
   const internalVideoRef = useRef<HTMLVideoElement | null>(null)
   const videoRef = externalVideoRef ?? internalVideoRef
-  const cameraSummary = computeGroupCameraSummary(viewRows, task ?? null, {})
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -179,12 +172,12 @@ export function CaptureGroupFocusedView({
               const isCurrent = Boolean(
                 stream && stream.clip_asset_id === selectedStream?.clip_asset_id,
               )
-              const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
               const cameraStatus = task ? getCameraProcessingStatus(view.cameraNumber, task) : null
-              const isExcluded =
-                decision?.decision === 'REJECTED' || cameraStatus?.status === 'EXCLUDED'
-              const qualityLabel = stream
-                ? `机位质量 · ${isExcluded ? '已排除' : viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
+              const isExcluded = cameraStatus?.status === 'EXCLUDED'
+              const statusLabel = cameraStatus
+                ? cameraStatus.status === 'SUBMITTED' && cameraStatus.segmentCount !== null
+                  ? `${cameraStatus.label} ${cameraStatus.segmentCount} 段`
+                  : cameraStatus.label
                 : null
               const mediaLabel = stream
                 ? (mediaStatusLabels[stream.stream_status] ?? '媒体状态暂不可用')
@@ -201,19 +194,13 @@ export function CaptureGroupFocusedView({
                   disabled={!stream}
                   aria-pressed={isCurrent}
                   aria-current={isCurrent ? 'true' : undefined}
-                  aria-label={[
-                    `机位 ${view.cameraNumber}`,
-                    isExcluded ? '已排除' : null,
-                    cameraStatus && cameraStatus.status !== 'PENDING' ? cameraStatus.label : null,
-                    mediaLabel,
-                    qualityLabel,
-                  ]
+                  aria-label={[`机位 ${view.cameraNumber}`, statusLabel, mediaLabel]
                     .filter(Boolean)
                     .join(' · ')}
                   title={[
+                    `机位 ${view.cameraNumber}`,
                     mediaLabel,
-                    isExcluded ? '已排除此视角' : qualityLabel,
-                    cameraStatus ? `标注：${cameraStatus.label}` : null,
+                    cameraStatus ? `标注：${statusLabel}` : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -269,18 +256,6 @@ export function CaptureGroupFocusedView({
               )
             })}
           </div>
-          {task && viewRows.length > 1 ? (
-            <div
-              className="capture-group-compare-summary-pill"
-              style={{
-                marginLeft: 'auto',
-                fontSize: '12px',
-                color: 'var(--app-color-foreground-secondary)',
-              }}
-            >
-              已完成 {cameraSummary.submitted + cameraSummary.excluded} / {cameraSummary.total}
-            </div>
-          ) : null}
         </div>
       ) : null}
       <PlaybackCard

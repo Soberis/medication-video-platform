@@ -326,12 +326,12 @@ export function useCaptureGroupView(projectId: string, selectedView: GroupViewRo
         : selectedDetail.status === 'INGEST_FAILED'
           ? {
               title: '媒体检测失败',
-              description: '可继续人工查看，但不能记录机位质量。',
+              description: '可继续人工查看，但该机位不能进入标注。',
               type: 'error',
             }
           : {
               title: mediaStatusLabels[selectedDetail.status] ?? '媒体尚未就绪',
-              description: '媒体事实尚未完成，暂不能记录机位质量。',
+              description: '媒体事实尚未完成，该机位暂不能进入标注。',
               type: 'warning',
             }
       : {

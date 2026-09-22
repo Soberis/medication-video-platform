@@ -14,7 +14,7 @@ import {
   type CaptureGroupEvidence,
   type CaptureGroupViewSet,
 } from '@/api/annotation'
-import type { CaptureGroup, CaptureGroupQualityReview } from '@/api/capture-groups'
+import type { CaptureGroup } from '@/api/capture-groups'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { MetadataList } from '@/components/data/MetadataList'
 import { Section } from '@/components/workspace/Section'
@@ -25,12 +25,8 @@ import {
   getActionDisplayName,
 } from '@/features/capture-group/capture-group-detail-model'
 import {
-  groupQualityDisplayLabel,
-  groupQualityDisplayTone,
   receiptStateLabels,
   syncReliabilityDisplayLabel,
-  type CaptureGroupQualityVisibility,
-  viewQualityLabels,
 } from '@/features/capture-group-presentation'
 import { formatDateTime } from '@/features/catalog/catalog-presentation'
 import type { CaptureGroupDetailRefreshOptions } from '@/features/capture-group/use-capture-group-detail-data'
@@ -40,8 +36,6 @@ type CleaningResult = CaptureGroupCleaning
 export interface CaptureGroupReviewPanelProps {
   projectId: string
   group: CaptureGroup
-  groupQuality: CaptureGroupQualityReview | null
-  groupQualityVisibility: CaptureGroupQualityVisibility
   task: AnnotationTask | null
   schema: AnnotationLabelSchema | null
   onRefresh: (options?: CaptureGroupDetailRefreshOptions) => Promise<boolean>
@@ -53,8 +47,6 @@ export interface CaptureGroupReviewPanelProps {
 export function CaptureGroupReviewPanel({
   projectId,
   group,
-  groupQuality,
-  groupQualityVisibility,
   task,
   schema,
   onRefresh,
@@ -126,6 +118,7 @@ export function CaptureGroupReviewPanel({
   )
   const isReviewApproved = review?.decision === 'APPROVED'
   const [isCompletedDetailOpen, setIsCompletedDetailOpen] = useState(false)
+  const [expandedReviewCameras, setExpandedReviewCameras] = useState<number[]>([])
 
   function updateReviewedCamera(cameraNumber: number, reviewed: boolean) {
     if (!revision) return
@@ -243,15 +236,15 @@ export function CaptureGroupReviewPanel({
 
       <div className="capture-group-review-evidence-grid">
         <EvidenceViewList
-          title="参与的合格机位"
+          title="参与机位"
           views={qualifiedViews}
           emptyText="当前没有已确认的参与机位。"
           tone="success"
         />
         <EvidenceViewList
-          title="拒绝 / 缺失机位"
+          title="排除 / 缺失机位"
           views={rejectedMissingViews}
-          emptyText="没有拒绝或缺失机位。"
+          emptyText="没有排除或缺失机位。"
           tone="warning"
         />
       </div>
@@ -339,10 +332,7 @@ export function CaptureGroupReviewPanel({
                 : '标注已完成人工复核确认，可返回视频列表选择导出。'}
             </p>
           </div>
-          <div
-            className="capture-group-approved-actions"
-            style={{ display: 'flex', gap: 8, alignItems: 'center' }}
-          >
+          <div className="capture-group-approved-actions">
             <Button
               type="primary"
               size="small"
@@ -366,19 +356,20 @@ export function CaptureGroupReviewPanel({
         <section className="capture-group-review-camera-lanes" aria-label="逐机位复核">
           <div className="capture-group-review-subheading">
             <div>
-              <span className="app-eyebrow">逐路核验</span>
-              <h3>各机位标注与复核范围</h3>
+              <h3>机位复核</h3>
             </div>
             <span>
-              {reviewedCameraNumbers.length} / {cameraNumbers.length} 路已查看
+              {reviewedCameraNumbers.length} / {cameraNumbers.length} 已查看
             </span>
           </div>
           <p className="form-hint">
-            每路时间戳只属于对应机位。逐路查看标注后勾选“已复核”；退回时选择需要重新编辑的机位，其余已提交机位保持不变。
+            逐机位查看动作段，完成后勾选“已查看”；需要修改时再选择“退回”。
           </p>
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
             const state = cameraViewState(cameraNumber)
+            const segmentCount = cameraView?.segments.length ?? 0
+            const isSegmentsExpanded = expandedReviewCameras.includes(cameraNumber)
             const canReturnLane = state === 'SUBMITTED' || state === 'EXCLUDED'
             const laneStatus =
               state === 'SUBMITTED'
@@ -405,58 +396,86 @@ export function CaptureGroupReviewPanel({
                       {laneStatus}
                     </StatusIndicator>
                   </div>
-                  <Checkbox
-                    checked={reviewedCameraNumbers.includes(cameraNumber)}
-                    disabled={!canReview || Boolean(review)}
-                    onChange={(event) => updateReviewedCamera(cameraNumber, event.target.checked)}
-                  >
-                    已查看此机位
-                  </Checkbox>
-                  {canReturnLane ? (
+                  <div className="capture-group-review-camera-lane-controls">
                     <Checkbox
-                      checked={returnCameraNumbers.includes(cameraNumber)}
-                      disabled={
-                        !canReview ||
-                        Boolean(review) ||
-                        !reviewedCameraNumbers.includes(cameraNumber)
-                      }
-                      onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
+                      checked={reviewedCameraNumbers.includes(cameraNumber)}
+                      disabled={!canReview || Boolean(review)}
+                      onChange={(event) => updateReviewedCamera(cameraNumber, event.target.checked)}
                     >
-                      退回此机位
+                      已查看此机位
                     </Checkbox>
-                  ) : null}
+                    {canReturnLane ? (
+                      <Checkbox
+                        checked={returnCameraNumbers.includes(cameraNumber)}
+                        disabled={
+                          !canReview ||
+                          Boolean(review) ||
+                          !reviewedCameraNumbers.includes(cameraNumber)
+                        }
+                        onChange={(event) => updateReturnCamera(cameraNumber, event.target.checked)}
+                      >
+                        退回此机位
+                      </Checkbox>
+                    ) : null}
+                  </div>
                 </div>
-                {cameraView?.segments.length ? (
-                  <ol className="capture-group-review-camera-segments">
-                    {cameraView.segments.map((segment, index) => (
-                      <li key={segment.segment_id}>
-                        <span className="capture-group-time-pill">
-                          {formatAnnotationTime(segment.start_ms) ?? '时间暂不可用'} →{' '}
-                          {formatAnnotationTime(segment.end_ms) ?? '时间暂不可用'}
-                        </span>
-                        <span>{getActionDisplayName(segment.label, schema)}</span>
+                <div className="capture-group-review-camera-segments-block">
+                  <div className="capture-group-review-camera-segments-heading">
+                    <span>动作段</span>
+                    <span>{segmentCount ? `${segmentCount} 段` : '无动作段'}</span>
+                  </div>
+                  {segmentCount ? (
+                    <>
+                      <ol className="capture-group-review-camera-segments">
+                        {cameraView!.segments
+                          .slice(0, isSegmentsExpanded ? undefined : 6)
+                          .map((segment, index) => (
+                            <li key={segment.segment_id}>
+                              <span className="capture-group-time-pill">
+                                {formatAnnotationTime(segment.start_ms) ?? '时间暂不可用'} →{' '}
+                                {formatAnnotationTime(segment.end_ms) ?? '时间暂不可用'}
+                              </span>
+                              <span>{getActionDisplayName(segment.label, schema)}</span>
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<Play size={12} />}
+                                disabled={!onPlaySegment && !onSelectCamera}
+                                onClick={() =>
+                                  activeCameraNumber === cameraNumber
+                                    ? onPlaySegment?.(segment.start_ms, segment.end_ms)
+                                    : onSelectCamera?.(cameraNumber)
+                                }
+                              >
+                                {activeCameraNumber === cameraNumber ? '播放' : '切换机位'}
+                              </Button>
+                              <span className="visually-hidden">
+                                机位 {cameraNumber} 第 {index + 1} 段
+                              </span>
+                            </li>
+                          ))}
+                      </ol>
+                      {segmentCount > 6 ? (
                         <Button
                           type="text"
                           size="small"
-                          icon={<Play size={12} />}
-                          disabled={!onPlaySegment && !onSelectCamera}
+                          className="capture-group-review-expand-segments"
                           onClick={() =>
-                            activeCameraNumber === cameraNumber
-                              ? onPlaySegment?.(segment.start_ms, segment.end_ms)
-                              : onSelectCamera?.(cameraNumber)
+                            setExpandedReviewCameras((current) =>
+                              isSegmentsExpanded
+                                ? current.filter((number) => number !== cameraNumber)
+                                : [...current, cameraNumber],
+                            )
                           }
                         >
-                          {activeCameraNumber === cameraNumber ? '播放' : '切换机位'}
+                          {isSegmentsExpanded ? '收起动作段' : `查看全部 ${segmentCount} 段`}
                         </Button>
-                        <span className="visually-hidden">
-                          机位 {cameraNumber} 第 {index + 1} 段
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="form-hint">此机位没有已提交动作片段。</p>
-                )}
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="form-hint">此机位没有已提交动作片段。</p>
+                  )}
+                </div>
                 {state === 'EXCLUDED' && cameraView?.exclusion_reason ? (
                   <p className="form-hint">排除原因：{cameraView.exclusion_reason}</p>
                 ) : null}
@@ -546,16 +565,6 @@ export function CaptureGroupReviewPanel({
                 },
               ]}
             />
-            <div className="capture-group-review-quality-fact">
-              <span className="app-eyebrow">当前整体质量</span>
-              <StatusIndicator tone={groupQualityDisplayTone(groupQualityVisibility, groupQuality)}>
-                {groupQualityDisplayLabel(groupQualityVisibility, groupQuality)}
-              </StatusIndicator>
-              {groupQuality?.reason ? <p>理由：{groupQuality.reason}</p> : null}
-              {groupQuality?.decided_at ? (
-                <span>记录时间：{formatDateTime(groupQuality.decided_at)}</span>
-              ) : null}
-            </div>
           </div>
 
           {canReview ? (
@@ -758,7 +767,6 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
       {safeViews.length ? (
         <ul className="capture-group-evidence-list" aria-label={title}>
           {safeViews.map((view, index) => {
-            const qualityDecision = viewQualityDecision(view)
             const rejectionReason = stringValue(view, 'rejection_reason')
             const actionLinked = booleanValue(view, 'primary')
             return (
@@ -767,11 +775,7 @@ function EvidenceViewList({ title, views, emptyText, tone }: EvidenceViewListPro
                   {evidenceViewName(view, index)}
                   {actionLinked ? ' · 动作区间关联' : ''}
                 </strong>
-                <span>
-                  {qualityDecision ? `质量判断：${viewQualityLabels[qualityDecision]}` : ''}
-                  {qualityDecision && rejectionReason ? ' · ' : ''}
-                  {rejectionReason ? viewRejectionReasonLabel(rejectionReason) : ''}
-                </span>
+                {rejectionReason ? <span>{viewRejectionReasonLabel(rejectionReason)}</span> : null}
                 <StatusIndicator tone={tone}>
                   {tone === 'success' ? '参与' : '排除'}
                 </StatusIndicator>
@@ -1081,19 +1085,11 @@ function evidenceViewName(evidence: CaptureGroupEvidence, index: number) {
   return cameraNumber === null ? `机位 ${index + 1}` : `机位 ${cameraNumber}`
 }
 
-function viewQualityDecision(evidence: CaptureGroupEvidence) {
-  const decision =
-    stringValue(evidence, 'quality_decision') ?? stringValue(evidence, 'quality_review_decision')
-  return decision && decision in viewQualityLabels
-    ? (decision as keyof typeof viewQualityLabels)
-    : null
-}
-
 const viewRejectionReasonLabels: Record<string, string> = {
   MISSING_VIEW: '机位缺失',
   VIEW_NOT_REVIEWABLE: '机位暂不可复核',
-  VIEW_NOT_QUALIFIED: '机位质量未合格',
-  VIEW_QUALITY_NOT_QUALIFIED: '机位质量未合格',
+  VIEW_NOT_QUALIFIED: '机位暂不可标注',
+  VIEW_QUALITY_NOT_QUALIFIED: '机位暂不可标注',
 }
 
 function viewRejectionReasonLabel(value: string) {

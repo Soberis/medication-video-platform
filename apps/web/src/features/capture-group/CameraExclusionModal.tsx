@@ -1,4 +1,4 @@
-import { Modal, Input } from 'antd'
+import { Modal, Input, Tag, Space } from 'antd'
 
 interface CameraExclusionModalProps {
   open: boolean
@@ -9,6 +9,14 @@ interface CameraExclusionModalProps {
   onConfirm: () => void | Promise<void>
   onCancel: () => void
 }
+
+const COMMON_EXCLUSION_REASONS = [
+  '镜头遮挡/反光',
+  '未对准操作区',
+  '无有效手部动作',
+  '画面模糊',
+  '人工排除',
+]
 
 export function CameraExclusionModal({
   open,
@@ -28,18 +36,34 @@ export function CameraExclusionModal({
       okText="确认排除"
       okButtonProps={{
         danger: true,
-        disabled: !reason.trim(),
         loading: isSubmitting,
       }}
       cancelText="取消"
       width={480}
     >
       <p className="form-hint" style={{ marginBottom: 12 }}>
-        排除后该机位将不参与本次数据使用与导出，视频与排除记录将完整保留，可随时恢复。
+        排除后该机位将不参与本次多机位动作核对与复核，视频与记录完整保留，可随时恢复。
       </p>
+      <div style={{ marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary, #666)', marginRight: 8 }}>
+          快捷原因：
+        </span>
+        <Space size={[4, 8]} wrap>
+          {COMMON_EXCLUSION_REASONS.map((item) => (
+            <Tag
+              key={item}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+              color={reason === item ? 'blue' : undefined}
+              onClick={() => onReasonChange(item)}
+            >
+              {item}
+            </Tag>
+          ))}
+        </Space>
+      </div>
       <Input.TextArea
         rows={3}
-        placeholder="请输入排除原因（例如：镜头遮挡、画面模糊、无有效操作等）"
+        placeholder="可直接点击上方标签，或输入排除原因（选填，默认：人工排除）"
         maxLength={500}
         value={reason}
         onChange={(e) => onReasonChange(e.target.value)}

@@ -5,11 +5,7 @@ import {
   CaptureGroupApiError,
   finalizeCaptureGroupReceipt,
   getCaptureGroup,
-  getCaptureGroupQualityReview,
-  isCaptureGroupQualityForbidden,
-  listCaptureGroupQualityReviewHistory,
   type CaptureGroup,
-  type CaptureGroupQualityReview,
 } from '@/api/capture-groups'
 import {
   getAnnotationLabelSchema,
@@ -18,11 +14,7 @@ import {
   type AnnotationTask,
 } from '@/api/annotation'
 import { CatalogApiError } from '@/api/catalog'
-import { getQualityReview, type QualityReview } from '@/api/quality'
-import type {
-  CaptureGroupQualityVisibility,
-  CaptureGroupTaskVisibility,
-} from '@/features/capture-group-presentation'
+import type { CaptureGroupTaskVisibility } from '@/features/capture-group-presentation'
 
 export interface CaptureGroupDetailRefreshOptions {
   focusNextPendingView?: boolean
@@ -33,21 +25,13 @@ export const RECEIPT_POLL_INTERVAL_MS = 5_000
 export function useCaptureGroupDetailData(projectId: string, captureGroupId: string) {
   const { message } = AntdApp.useApp()
   const [group, setGroup] = useState<CaptureGroup | null>(null)
-  const [groupQuality, setGroupQuality] = useState<CaptureGroupQualityReview | null>(null)
-  const [groupQualityVisibility, setGroupQualityVisibility] =
-    useState<CaptureGroupQualityVisibility>('loading')
-  const [qualityHistory, setQualityHistory] = useState<CaptureGroupQualityReview[]>([])
   const [task, setTask] = useState<AnnotationTask | null>(null)
   const [taskVisibility, setTaskVisibility] = useState<CaptureGroupTaskVisibility>('visible')
   const [schema, setSchema] = useState<AnnotationLabelSchema | null>(null)
-  const [viewReviews, setViewReviews] = useState<Record<string, QualityReview>>({})
-  const [viewReviewErrors, setViewReviewErrors] = useState<Record<string, string>>({})
   const [groupLoadState, setGroupLoadState] = useState<'loading' | 'success' | 'error'>('loading')
   const [groupErrorCode, setGroupErrorCode] = useState('')
   const [groupErrorMessage, setGroupErrorMessage] = useState('')
-  const [qualityErrorMessage, setQualityErrorMessage] = useState('')
   const [taskErrorMessage, setTaskErrorMessage] = useState('')
-  const [viewQualityLoading, setViewQualityLoading] = useState(true)
   const [isFinalizingReceipt, setIsFinalizingReceipt] = useState(false)
   const [selectedClipAssetId, setSelectedClipAssetId] = useState<string | null>(null)
   const groupRequest = useRef<AbortController | null>(null)
@@ -96,74 +80,34 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
         setTask(nextTask)
         setTaskVisibility(nextTaskVisibility)
 
-        // Load quality facts for both paths: quality is the explicit opt-in gate
-        // for human labeling, so it must be visible before a task exists.
-        const [qualityResult, historyResult, schemaResult] = await Promise.allSettled([
-          getCaptureGroupQualityReview(projectId, captureGroupId, request.signal),
-          listCaptureGroupQualityReviewHistory(projectId, captureGroupId, request.signal),
+        const [schemaResult] = await Promise.allSettled([
           getAnnotationLabelSchema(projectId, request.signal),
         ])
         if (!isCurrent()) return
 
-        const nextQuality = qualityResult.status === 'fulfilled' ? qualityResult.value : null
-        const nextQualityVisibility: CaptureGroupQualityVisibility =
-          qualityResult.status === 'fulfilled'
-            ? 'loaded'
-            : isCaptureGroupQualityForbidden(qualityResult.reason)
-              ? 'forbidden'
-              : 'unavailable'
-        setGroupQuality(nextQuality)
-        setGroupQualityVisibility(nextQualityVisibility)
-        setQualityHistory(historyResult.status === 'fulfilled' ? historyResult.value.items : [])
         setSchema(schemaResult.status === 'fulfilled' ? schemaResult.value : null)
-        if (qualityResult.status === 'rejected') {
-          setQualityErrorMessage(
-            nextQualityVisibility === 'forbidden'
-              ? '当前账号无权读取人工标签的质量事实；详情仍保留采集记录与机位事实。'
-              : '暂时无法读取人工标签的质量事实；采集记录与机器证据仍可查看。',
-          )
-        }
         if (nextTask && schemaResult.status === 'rejected') {
           setTaskErrorMessage('标签规范暂时无法读取，当前不能提交新的修订。')
         }
 
-        const reviewResults = await Promise.allSettled(
-          nextGroup.streams.map(async (stream) => {
-            return getQualityReview(projectId, stream.clip_asset_id, request.signal)
-          }),
-        )
-        if (!isCurrent()) return
-        const nextReviews: Record<string, QualityReview> = {}
-        const nextReviewErrors: Record<string, string> = {}
-        reviewResults.forEach((result, index) => {
-          const stream = nextGroup.streams[index]
-          if (!stream) return
-          if (result.status === 'fulfilled') {
-            nextReviews[stream.clip_asset_id] = result.value
-          } else {
-            nextReviewErrors[stream.clip_asset_id] =
-              result.reason instanceof Error ? result.reason.message : '当前机位质量暂时无法读取。'
-          }
-        })
-        setViewReviews(nextReviews)
-        setViewReviewErrors(nextReviewErrors)
-        setViewQualityLoading(false)
+        // 机位处置进度是唯一的机位状态事实：默认选中第一路仍待处理的已入库机位。
         setSelectedClipAssetId((current) => {
           const presentIds = new Set(nextGroup.streams.map((stream) => stream.clip_asset_id))
-          const pendingStream = nextGroup.streams.find((stream) => {
-            const review = nextReviews[stream.clip_asset_id]
-            return (
-              stream.stream_status === 'INGESTED' &&
-              !nextReviewErrors[stream.clip_asset_id] &&
-              (!review || (review.decision !== 'QUALIFIED' && review.decision !== 'REJECTED'))
+          const ingestableStreams = nextGroup.streams.filter(
+            (stream) => stream.stream_status === 'INGESTED',
+          )
+          const pendingStream = ingestableStreams.find((stream) => {
+            const view = nextTask?.camera_views?.find(
+              (candidate) => candidate.clip_asset_id === stream.clip_asset_id,
             )
+            return !view || view.state === 'PENDING' || view.state === 'DRAFT'
           })
           if (focusNextPendingView && current === selectedClipAssetIdAtGroupLoad && pendingStream) {
             return pendingStream.clip_asset_id
           }
           if (current && presentIds.has(current)) return current
           if (pendingStream) return pendingStream.clip_asset_id
-          return nextGroup.streams.find((stream) => stream.clip_asset_id)?.clip_asset_id ?? null
+          return ingestableStreams[0]?.clip_asset_id ?? nextGroup.streams[0]?.clip_asset_id ?? null
         })
       } finally {
         if (humanRequest.current === request) humanRequest.current = null
@@ -196,17 +140,10 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
       setGroupLoadState('loading')
       setGroupErrorCode('')
       setGroupErrorMessage('')
-      setQualityErrorMessage('')
       setTaskErrorMessage('')
       setTask(null)
       setTaskVisibility('visible')
-      setGroupQuality(null)
-      setGroupQualityVisibility('loading')
-      setQualityHistory([])
       setSchema(null)
-      setViewReviews({})
-      setViewReviewErrors({})
-      setViewQualityLoading(true)
 
       try {
         const nextGroup = await getCaptureGroup(projectId, captureGroupId, request.signal)
@@ -329,38 +266,20 @@ export function useCaptureGroupDetailData(projectId: string, captureGroupId: str
     }
   }, [captureGroupId, group, isFinalizingReceipt, message, projectId, refresh])
 
-  const updateViewReview = useCallback((review: QualityReview) => {
-    setViewReviews((current) => ({ ...current, [review.clip_asset_id]: review }))
-    setViewReviewErrors((current) => {
-      if (!current[review.clip_asset_id]) return current
-      const next = { ...current }
-      delete next[review.clip_asset_id]
-      return next
-    })
-  }, [])
-
   return {
     group,
-    groupQuality,
-    groupQualityVisibility,
-    qualityHistory,
     task,
     taskVisibility,
     schema,
-    viewReviews,
-    viewReviewErrors,
     groupLoadState,
     groupErrorCode,
     groupErrorMessage,
-    qualityErrorMessage,
     taskErrorMessage,
-    viewQualityLoading,
     selectedClipAssetId,
     isFinalizingReceipt,
     refresh,
     finalizeReceipt,
     setTask,
     setSelectedClipAssetId,
-    updateViewReview,
   }
 }

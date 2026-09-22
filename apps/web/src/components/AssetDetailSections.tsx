@@ -397,7 +397,7 @@ export function MediaReportCard({
       <Alert
         type="error"
         title="媒体检测失败"
-        description="该视频仍可人工查看，但不能记录质量结论或开始配药动作标注。"
+        description="该视频仍可人工查看，但媒体检测未通过，暂不能开始配药动作标注。"
         showIcon
       />
     )

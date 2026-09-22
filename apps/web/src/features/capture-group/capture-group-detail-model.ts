@@ -1,10 +1,6 @@
 import type { ActionCandidate } from '@/api/action-candidate'
 import type { AnnotationLabelSchema, AnnotationSegment, AnnotationTask } from '@/api/annotation'
-import type {
-  CaptureGroup,
-  CaptureGroupQualityReview,
-  CaptureGroupStream,
-} from '@/api/capture-groups'
+import type { CaptureGroup, CaptureGroupStream } from '@/api/capture-groups'
 import type { HandPoseCandidateResponse } from '@/api/catalog'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-state'
@@ -445,10 +441,6 @@ export function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
   return task.status === 'SUBMITTED' ? 'information' : 'neutral'
 }
 
-export function currentGroupQualityAdmitting(quality: CaptureGroupQualityReview | null) {
-  return quality?.result === 'QUALIFIED' || quality?.result === 'QUALIFIED_WITH_EXCLUSIONS'
-}
-
 export function createGroupViewRows(group: CaptureGroup | null): GroupViewRow[] {
   if (!group) return []
   return group.expected_camera_numbers.map((cameraNumber) => ({
@@ -485,6 +477,8 @@ export interface CameraStatusMeta {
   status: CameraProcessingStatus
   label: string
   tone: StatusIndicatorTone
+  /** 已提交机位的动作段数；其余状态为 null。 */
+  segmentCount: number | null
 }
 
 export function getCameraProcessingStatus(
@@ -494,15 +488,20 @@ export function getCameraProcessingStatus(
 ): CameraStatusMeta {
   const view = task?.camera_views?.find((v) => v.camera_number === cameraNumber)
   if (view?.state === 'EXCLUDED') {
-    return { status: 'EXCLUDED', label: '已排除', tone: 'neutral' }
+    return { status: 'EXCLUDED', label: '已排除', tone: 'neutral', segmentCount: null }
   }
   if (view?.state === 'SUBMITTED') {
-    return { status: 'SUBMITTED', label: '已提交', tone: 'success' }
+    return {
+      status: 'SUBMITTED',
+      label: '已提交',
+      tone: 'success',
+      segmentCount: view.segments.length,
+    }
   }
   if (draft?.dirty || view?.state === 'DRAFT') {
-    return { status: 'DRAFT', label: '编辑中', tone: 'information' }
+    return { status: 'DRAFT', label: '编辑中', tone: 'information', segmentCount: null }
   }
-  return { status: 'PENDING', label: '待处理', tone: 'neutral' }
+  return { status: 'PENDING', label: '待处理', tone: 'neutral', segmentCount: null }
 }
 
 export function computeGroupCameraSummary(
@@ -545,4 +544,3 @@ export function computeGroupCameraSummary(
       .join(' · '),
   }
 }
-

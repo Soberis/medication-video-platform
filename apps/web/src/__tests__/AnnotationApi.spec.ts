@@ -125,7 +125,7 @@ describe('annotation task API', () => {
     })
     await expect(listAnnotationTasks(projectId)).rejects.toMatchObject({
       errorCode: 'ANNOTATION_TASK_QUALITY_NOT_QUALIFIED',
-      message: '采集记录整体质量为“合格”后才能开始标注。',
+      message: '该机位视频尚未完成处理，暂不能开始标注。',
     })
   })
 

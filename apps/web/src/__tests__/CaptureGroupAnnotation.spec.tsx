@@ -212,7 +212,7 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
       session: { username: 'reviewer', role: 'MEMBER' },
     })
-    await screen.findByRole('button', { name: '展开全部' })
+    await screen.findByRole('button', { name: '展开全部' }, { timeout: 10000 })
     expect(screen.getAllByTitle('点击展开微调')).toHaveLength(9)
     fireEvent.click(screen.getByRole('button', { name: '提交标注' }))
     await waitFor(() => {
@@ -225,21 +225,20 @@ describe('CaptureGroup annotation workflow', () => {
         segments: task.camera_views![0]!.segments,
       })
     })
-  })
+  }, 25000)
 
-  it('lets the assigned annotator save a camera draft before the group revision is submittable', async () => {
+  it('does not expose intermediate draft saves and keeps exclude action available before submission', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
       receipt: 'COMPLETE',
     })
     const task = groupTask(groupId, false)
-    const fetchMock = stubGroupDetail(group, {
+    stubGroupDetail(group, {
       task,
       quality: qualityFixture(group, 'QUALIFIED'),
       candidateStatus: 'FAILED',
     })
-    const user = userEvent.setup()
 
     renderRoute(<CaptureGroupDetailView />, {
       path: '/projects/:projectId/capture-groups/:captureGroupId',
@@ -249,62 +248,13 @@ describe('CaptureGroup annotation workflow', () => {
 
     await screen.findByLabelText('开始时间（毫秒）')
     await waitFor(() => expect(screen.getByLabelText('开始时间（毫秒）')).toBeEnabled())
-    expect(
-      screen.getByRole('button', { name: '保存本机位草稿' }).closest('details'),
-    ).not.toHaveAttribute('open')
+    expect(screen.queryByText('暂存，稍后继续')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存本机位草稿' })).not.toBeInTheDocument()
     expect(screen.queryByText('整组机位标注')).not.toBeInTheDocument()
     expect(
       screen.queryByText('请先完成并提交或排除所有预期机位，再提交整组修订。'),
     ).not.toBeInTheDocument()
-    await user.click(screen.getByText('暂存，稍后继续'))
-    const saveButton = screen.getByRole('button', { name: '保存本机位草稿' })
-    expect(saveButton).toBeEnabled()
-    expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
-
-    const start = screen.getByLabelText('开始时间（毫秒）')
-    await user.clear(start)
-    await user.type(start, '250')
-    await user.click(saveButton)
-
-    await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.some(
-          ([url, init]) =>
-            String(url).endsWith(`/annotation-tasks/${task.annotation_task_id}/camera-views/1`) &&
-            init?.method === 'PUT',
-        ),
-      ).toBe(true)
-    })
-    const updateCall = fetchMock.mock.calls.find(
-      ([url, init]) =>
-        String(url).endsWith(`/annotation-tasks/${task.annotation_task_id}/camera-views/1`) &&
-        init?.method === 'PUT',
-    )
-    const updateBody = JSON.parse(String(updateCall?.[1]?.body)) as {
-      segments: Array<{ segment_id: string }>
-    }
-    expect(updateBody.segments[0]?.segment_id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    )
-    expect(updateBody).toMatchObject({
-      expected_version: 0,
-      expected_input_version: task.group_input_version,
-      state: 'DRAFT',
-      segments: [
-        {
-          start_ms: 250,
-          end_ms: 1000,
-          label: '',
-          source_candidate_ids: [],
-        },
-      ],
-    })
-    expect(
-      task.camera_views?.map(({ camera_number, state }) => ({ camera_number, state })),
-    ).toEqual([
-      { camera_number: 1, state: 'DRAFT' },
-      { camera_number: 2, state: 'PENDING' },
-    ])
+    expect(screen.getByRole('button', { name: '排除此机位' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '提交复核' })).toBeDisabled()
   })
 
@@ -325,10 +275,8 @@ describe('CaptureGroup annotation workflow', () => {
       route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
       session: { username: 'reviewer', role: 'MEMBER' },
     })
-    await screen.findByLabelText('开始时间（毫秒）')
-    await waitFor(() =>
-      expect(document.body.textContent).toContain('MediaPipe 在采样帧中未检测到手'),
-    )
+    expect(await screen.findByText('手部检测：已完成 · 未检测到手部')).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('MediaPipe 在采样帧中未检测到手')
     expect(screen.queryByRole('button', { name: '启动自动标注' })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('开始时间（毫秒）'), '1')
     expect(screen.queryByRole('button', { name: '载入动作草稿' })).not.toBeInTheDocument()
@@ -388,7 +336,7 @@ describe('CaptureGroup annotation workflow', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(paths.captureGroups(projectId)))
   }, 30000)
 
-  it('keeps one downgraded task and disables new Revision submission while preserving history and navigation', async () => {
+  it('keeps a completed task read-only and navigates to its review result regardless of historical quality state', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -409,6 +357,7 @@ describe('CaptureGroup annotation workflow', () => {
         },
       ],
     }))
+    // 历史质量记录停留在“待复核”，但质量关卡已取消：它只读保留，不再阻塞或改写导航。
     const fetchMock = stubGroupDetail(group, {
       task,
       quality: qualityFixture(group, 'NEEDS_REVIEW'),
@@ -432,7 +381,7 @@ describe('CaptureGroup annotation workflow', () => {
     expect(screen.queryByRole('button', { name: '提交复核' })).not.toBeInTheDocument()
     expect(
       within(auditDetails).getByRole('link', { name: '打开采集记录人工标签任务上下文' }),
-    ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'annotation'))
+    ).toHaveAttribute('href', paths.captureGroupFocus(projectId, groupId, 'review'))
     expect(
       fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/revisions')),
     ).toHaveLength(0)
@@ -918,7 +867,7 @@ describe('CaptureGroup annotation workflow', () => {
 })
 
 describe('simple camera submission workflow', () => {
-  it('submits one camera directly when quality is still unreviewed', async () => {
+  it('submits one camera while the group quality record is still unreviewed', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],
       received: [1],
@@ -978,31 +927,22 @@ describe('simple camera submission workflow', () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            String(input).endsWith(`/capture-groups/${groupId}/quality-review`) &&
-            init?.method === 'PUT',
+            String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
+            init?.method === 'POST',
         ),
       ).toBe(true),
     )
     expect(
       fetchMock.mock.calls.some(
-        ([input, init]) =>
-          String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
-          init?.method === 'POST',
-      ),
-    ).toBe(true)
-    expect(
-      fetchMock.mock.calls.some(
-        ([input, init]) =>
-          String(input).endsWith(
-            `/clip-assets/${group.streams[0]!.clip_asset_id}/quality-review`,
-          ) && init?.method === 'PUT',
-      ),
-    ).toBe(true)
-    expect(
-      fetchMock.mock.calls.some(
         ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
       ),
     ).toBe(true)
+    // 提交机位标注不再需要任何人工质量确认动作。
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).includes('/quality-review') && init?.method === 'PUT',
+      ),
+    ).toBe(false)
   })
 
   it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
@@ -1050,7 +990,7 @@ describe('simple camera submission workflow', () => {
     expect(screen.queryByRole('button', { name: '废弃视频' })).not.toBeInTheDocument()
   })
 
-  it('does not infer confirmed correspondence from equal labels and overlapping local times', async () => {
+  it('records independent-timeline correspondences without asking for a human reason', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1, 2],
       received: [1, 2],
@@ -1083,11 +1023,8 @@ describe('simple camera submission workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
     const submit = await screen.findByRole('button', { name: '提交复核' })
-    expect(submit).toBeDisabled()
-    await user.type(
-      screen.getByRole('textbox', { name: '跨机位对应未确认的原因' }),
-      '测试视频来自不同操作',
-    )
+    expect(submit).toBeEnabled()
+    expect(screen.queryByRole('textbox', { name: '跨机位对应未确认的原因' })).toBeNull()
     await user.click(submit)
     await waitFor(() =>
       expect(
@@ -1106,7 +1043,7 @@ describe('simple camera submission workflow', () => {
         [1, 2].map((camera) =>
           expect.objectContaining({
             status: 'UNCERTAIN',
-            reason: '测试视频来自不同操作',
+            reason: '各路机位按独立时间轴送审，未确认跨机位对应。',
             segments: [{ camera_number: camera, segment_id: `segment-${camera}` }],
           }),
         ),
