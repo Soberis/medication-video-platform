@@ -63,6 +63,7 @@ export function CaptureGroupFocusedView({
   } = viewState
   const internalVideoRef = useRef<HTMLVideoElement | null>(null)
   const videoRef = externalVideoRef ?? internalVideoRef
+  const cameraSummary = computeGroupCameraSummary(viewRows, task ?? null, {})
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -252,16 +253,12 @@ export function CaptureGroupFocusedView({
                     <Video size={14} strokeWidth={1.75} />
                   </span>
                   <span className="capture-group-compare-name">机位 {view.cameraNumber}</span>
-                  {cameraStatus && cameraStatus.status === 'SUBMITTED' ? (
-                    <span className="capture-group-compare-badge is-submitted" title="已提交">
-                      已提交
+                  {isCurrent && (isExcluded || cameraStatus) ? (
+                    <span
+                      className={`capture-group-compare-badge is-${isExcluded ? 'excluded' : cameraStatus!.status.toLowerCase()}`}
+                    >
+                      {isExcluded ? '已排除' : cameraStatus!.label}
                     </span>
-                  ) : cameraStatus && cameraStatus.status === 'DRAFT' ? (
-                    <span className="capture-group-compare-badge is-draft" title="编辑中">
-                      编辑中
-                    </span>
-                  ) : isExcluded ? (
-                    <span className="capture-group-compare-badge is-excluded">已排除</span>
                   ) : null}
                   {isStreamError ? (
                     <span className="capture-group-compare-status is-error">
@@ -281,7 +278,7 @@ export function CaptureGroupFocusedView({
                 color: 'var(--app-color-foreground-secondary)',
               }}
             >
-              {computeGroupCameraSummary(viewRows, task, {}).displayText}
+              已完成 {cameraSummary.submitted + cameraSummary.excluded} / {cameraSummary.total}
             </div>
           ) : null}
         </div>

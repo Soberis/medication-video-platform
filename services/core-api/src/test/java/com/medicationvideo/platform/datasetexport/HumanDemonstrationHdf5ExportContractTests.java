@@ -46,8 +46,6 @@ class HumanDemonstrationHdf5ExportContractTests {
 
 	private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000740");
 
-	private static final UUID OTHER_PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000741");
-
 	private static final String MEMBER_TOKEN = "synthetic-test-bearer-token-do-not-reuse";
 
 	private static final String ADMIN_TOKEN = "synthetic-test-admin-bearer-token-do-not-reuse";

@@ -14,6 +14,8 @@ export type CaptureGroupQualityResult =
   | 'NEEDS_REVIEW'
   | 'REJECTED'
 
+export type CaptureGroupQualityCommandResult = Exclude<CaptureGroupQualityResult, 'UNREVIEWED'>
+
 export interface CaptureGroupSnapshotMember {
   camera_channel_id: string
   camera_index: number
@@ -179,8 +181,7 @@ const errorMessages: Record<string, string> = {
     '当前采集记录整体质量不是“合格”，暂不能提交新的标注修订。',
   ANNOTATION_PRIMARY_VIEW_NOT_ELIGIBLE: '该机位必须已接收、媒体可用且人工判定合格。',
   ANNOTATION_PRIMARY_VIEW_FROZEN: '正式修订已存在，不能修改已提交机位。',
-  ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED:
-    '采集记录事实已变化，请刷新并重新核验各机位。',
+  ANNOTATION_PRIMARY_VIEW_INPUT_CHANGED: '采集记录事实已变化，请刷新并重新核验各机位。',
   ANNOTATION_TASK_NOT_ASSIGNEE: '只有任务执行人可以更新机位标注。',
   ANNOTATION_TASK_NOT_FOUND: '未找到该标注任务，请刷新后重试。',
   ANNOTATION_PRIMARY_VIEW_REQUIRED: '提交整组标注前，请先逐机位提交或排除。',
@@ -255,6 +256,29 @@ export function listCaptureGroupQualityReviewHistory(
     `${path(projectId, captureGroupId)}/quality-review/history`,
     signal,
   )
+}
+
+export async function recordCaptureGroupQualityReview(
+  projectId: string,
+  captureGroupId: string,
+  result: CaptureGroupQualityCommandResult,
+  reason: string,
+  expectedRevision: number,
+) {
+  const response = await fetch(`${path(projectId, captureGroupId)}/quality-review`, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': crypto.randomUUID(),
+      'X-Request-Id': crypto.randomUUID(),
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify({ result, reason: reason.trim(), expected_revision: expectedRevision }),
+    cache: 'no-store',
+  })
+  if (response.ok) return (await response.json()) as CaptureGroupQualityReview
+  throw await toCaptureGroupError(response)
 }
 
 function path(projectId: string, captureGroupId: string) {

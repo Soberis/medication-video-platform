@@ -193,7 +193,7 @@ describe('CaptureGroup annotation workflow', () => {
     task.camera_views = [
       cameraViewFixture(1, {
         state: 'DRAFT',
-        segments: Array.from({ length: 12 }, (_, index) => ({
+        segments: Array.from({ length: 9 }, (_, index) => ({
           segment_id: `segment-${index}`,
           start_ms: index * 100,
           end_ms: index * 100 + 90,
@@ -213,8 +213,8 @@ describe('CaptureGroup annotation workflow', () => {
       session: { username: 'reviewer', role: 'MEMBER' },
     })
     await screen.findByRole('button', { name: '展开全部' })
-    expect(screen.queryByLabelText('开始时间（毫秒）')).not.toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: '提交标注' }))
+    expect(screen.getAllByTitle('点击展开微调')).toHaveLength(9)
+    fireEvent.click(screen.getByRole('button', { name: '提交标注' }))
     await waitFor(() => {
       const writes = fetchMock.mock.calls.filter(
         ([url, init]) => String(url).endsWith('/camera-views/1') && init?.method === 'PUT',
@@ -617,7 +617,7 @@ describe('CaptureGroup annotation workflow', () => {
     const submitButton = await screen.findByRole('button', { name: '提交复核' })
     const form = submitButton.closest('form')
     if (!form) throw new Error('Annotation form was not mounted.')
-    await user.click(within(form).getByRole('button', { name: '提交本机位' }))
+    await user.click(within(form).getByRole('button', { name: '提交标注' }))
 
     expect(screen.getAllByText('请选择标签。').length).toBeGreaterThan(0)
     const labelField = within(form).getByRole('combobox', {
@@ -918,6 +918,93 @@ describe('CaptureGroup annotation workflow', () => {
 })
 
 describe('simple camera submission workflow', () => {
+  it('submits one camera directly when quality is still unreviewed', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const assignedTask = groupTask(groupId, true)
+    assignedTask.camera_views = [cameraViewFixture(1)]
+    const fetchMock = stubGroupDetail(group, {
+      task: assignedTask,
+      taskResponses: [null, assignedTask],
+      taskAfterAssignment: assignedTask,
+      quality: qualityFixture(group, 'UNREVIEWED'),
+      candidateStatus: 'HAND_DETECTED',
+      viewQualityByCamera: {
+        1: {
+          quality_review_id: null,
+          project_id: projectId,
+          clip_asset_id: group.streams[0]!.clip_asset_id,
+          decision: 'UNREVIEWED',
+          reason_code: null,
+          reviewed_by: null,
+          reviewed_at: null,
+          version: 0,
+        },
+      },
+      actionCandidates: [
+        {
+          action_candidate_id: 'candidate-direct-submit',
+          ai_job_id: 'job-direct-submit',
+          project_id: projectId,
+          capture_group_id: groupId,
+          clip_asset_id: group.streams[0]!.clip_asset_id,
+          start_ms: 1000,
+          end_ms: 1800,
+          action_label: 'acquire_item',
+          confidence: 0.92,
+          source_window: 1,
+          stitched_windows: [],
+          created_at: '2026-09-10T00:00:00Z',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+
+    const submit = await screen.findByRole('button', { name: '提交标注' })
+    expect(submit).toBeEnabled()
+    expect(screen.getAllByRole('button', { name: '提交标注' })).toHaveLength(1)
+    await user.click(submit)
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([input, init]) =>
+            String(input).endsWith(`/capture-groups/${groupId}/quality-review`) &&
+            init?.method === 'PUT',
+        ),
+      ).toBe(true),
+    )
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith(`/capture-groups/${groupId}/annotation-tasks`) &&
+          init?.method === 'POST',
+      ),
+    ).toBe(true)
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).endsWith(
+            `/clip-assets/${group.streams[0]!.clip_asset_id}/quality-review`,
+          ) && init?.method === 'PUT',
+      ),
+    ).toBe(true)
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+      ),
+    ).toBe(true)
+  })
+
   it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
     const group = captureGroupFixture(groupId, {
       expected: [1],

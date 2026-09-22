@@ -7,6 +7,7 @@ import {
   groupId,
   captureGroupFixture,
   groupTask,
+  cameraViewFixture,
   qualityFixture,
   stubGroupDetail,
 } from './capture-group-fixtures'
@@ -15,6 +16,37 @@ import { renderRoute, renderRouter } from '@/test/render'
 import CaptureGroupDetailView from '@/views/CaptureGroupDetailView'
 
 afterEach(() => vi.unstubAllGlobals())
+
+it('shows all five cameras and limits the visible status to the selected camera', async () => {
+  const numbers = [1, 2, 3, 4, 5]
+  const group = captureGroupFixture(groupId, {
+    expected: numbers,
+    received: numbers,
+    receipt: 'COMPLETE',
+  })
+  const task = groupTask(groupId, false)
+  task.camera_views = numbers.map((number) => cameraViewFixture(number, { state: 'DRAFT' }))
+  stubGroupDetail(group, {
+    task,
+    quality: qualityFixture(group, 'QUALIFIED'),
+    candidateStatus: 'FAILED',
+  })
+  renderRoute(<CaptureGroupDetailView />, {
+    path: '/projects/:projectId/capture-groups/:captureGroupId',
+    route: `/projects/${projectId}/capture-groups/${groupId}`,
+  })
+  const switcher = await screen.findByRole('group', { name: '采集记录机位选择' })
+  await waitFor(() => expect(within(switcher).getAllByText('编辑中')).toHaveLength(1))
+  for (const number of numbers)
+    expect(
+      within(switcher).getByRole('button', { name: new RegExp(`机位 ${number}`) }),
+    ).toBeEnabled()
+  const fifth = within(switcher).getByRole('button', { name: /机位 5/ })
+  await userEvent.setup().click(fifth)
+  expect(fifth).toHaveAttribute('aria-pressed', 'true')
+  expect(within(fifth).getByText('编辑中')).toBeInTheDocument()
+  expect(within(switcher).getAllByText('编辑中')).toHaveLength(1)
+})
 
 describe('CaptureGroup detail views', () => {
   it('loads action status for the selected camera after the previous job reached a terminal state', async () => {

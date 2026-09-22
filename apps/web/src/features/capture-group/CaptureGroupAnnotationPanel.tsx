@@ -19,8 +19,12 @@ import {
   type AnnotationSegment,
   type AnnotationTask,
 } from '@/api/annotation'
-import { type CaptureGroup, type CaptureGroupQualityReview } from '@/api/capture-groups'
-import type { QualityReview } from '@/api/quality'
+import {
+  recordCaptureGroupQualityReview,
+  type CaptureGroup,
+  type CaptureGroupQualityReview,
+} from '@/api/capture-groups'
+import { recordQualityReview, type QualityReview } from '@/api/quality'
 import { StatusBadge, type StatusBadgeTone } from '@/components/StatusBadge'
 import { StatusIndicator } from '@/components/status/StatusIndicator'
 import { Section } from '@/components/workspace/Section'
@@ -186,6 +190,7 @@ export function CaptureGroupAnnotationPanel({
   const [cameraDrafts, setCameraDrafts] = useState<Record<string, CameraDraftState>>({})
   const [segmentErrors, setSegmentErrors] = useState<Record<number, SegmentValidationErrors>>({})
   const [isSubmittingRevision, setIsSubmittingRevision] = useState(false)
+  const [isConfirmingQuality, setIsConfirmingQuality] = useState(false)
   const [isRetryingAction, setIsRetryingAction] = useState(false)
 
   async function handleRetryActionJob() {
@@ -288,6 +293,28 @@ export function CaptureGroupAnnotationPanel({
   const groupQualityReceiving = group.receipt_state === 'RECEIVING'
   const isCurrentCameraQualityExcluded = Boolean(
     activeClipAssetId && viewReviews?.[activeClipAssetId]?.decision === 'REJECTED',
+  )
+  const receivedStreams = viewRows
+    .map((view) => view.stream)
+    .filter((stream): stream is NonNullable<typeof stream> => Boolean(stream))
+  const canBootstrapGroupQuality = Boolean(
+    canPrepareTask &&
+      !currentGroupQualityAdmitting(groupQuality) &&
+      !groupQualityDowngraded &&
+      !groupQualityReceiving &&
+      receivedStreams.length > 0 &&
+      receivedStreams.every(
+        (stream) =>
+          stream.stream_status === 'INGESTED' &&
+          ['UNREVIEWED', 'QUALIFIED', 'REJECTED'].includes(
+            viewReviews?.[stream.clip_asset_id]?.decision ?? 'UNREVIEWED',
+          ),
+      ) &&
+      receivedStreams.some((stream) =>
+        ['UNREVIEWED', 'QUALIFIED'].includes(
+          viewReviews?.[stream.clip_asset_id]?.decision ?? 'UNREVIEWED',
+        ),
+      ),
   )
   const canEditActiveCamera = Boolean(
     !contextChanged &&
@@ -507,7 +534,7 @@ export function CaptureGroupAnnotationPanel({
     ? '接收仍在进行中，暂不能开始人工标签。'
     : groupQualityDowngraded
       ? '当前整体质量为需复核或不合格；任务和历史仍保留，但不能提交新的修订。'
-      : task && !currentGroupQualityAdmitting(groupQuality)
+      : !currentGroupQualityAdmitting(groupQuality) && !canBootstrapGroupQuality
         ? '当前整体质量尚未通过准入，暂不能编辑或提交机位标注。'
         : !sortedLabels.length
           ? '标签规范暂时无法读取，当前不能提交新的修订。'
@@ -544,12 +571,48 @@ export function CaptureGroupAnnotationPanel({
     }
   }
 
+  async function bootstrapGroupQualityForAnnotation() {
+    if (!canBootstrapGroupQuality || isConfirmingQuality) return
+    setIsConfirmingQuality(true)
+    try {
+      const reviewResults = await Promise.all(
+        receivedStreams.map(async (stream) => {
+          const currentReview = viewReviews?.[stream.clip_asset_id]
+          if (currentReview?.decision === 'QUALIFIED' || currentReview?.decision === 'REJECTED') {
+            return currentReview
+          }
+          return recordQualityReview(projectId, stream.clip_asset_id, {
+            decision: 'QUALIFIED',
+            reason_code: 'MEETS_REQUIREMENTS',
+            expected_version: currentReview?.version ?? 0,
+          })
+        }),
+      )
+      const hasRejectedView = reviewResults.some((review) => review?.decision === 'REJECTED')
+      const hasMissingView = viewRows.some((view) => !view.stream)
+      await recordCaptureGroupQualityReview(
+        projectId,
+        captureGroupId,
+        hasRejectedView || hasMissingView ? 'QUALIFIED_WITH_EXCLUSIONS' : 'QUALIFIED',
+        '提交标注时按已入库视频进入动作标注，异常机位可在此处排除。',
+        groupQuality?.revision ?? 0,
+      )
+    } catch (error) {
+      await onRefresh().catch(() => false)
+      throw error
+    } finally {
+      setIsConfirmingQuality(false)
+    }
+  }
+
   async function saveCameraView(
     cameraNumber: number,
     nextState: 'PENDING' | 'DRAFT' | 'SUBMITTED' | 'EXCLUDED',
     reason = '',
   ) {
-    if (isSubmittingRevision || !canUpdateCameraViews()) return false
+    if (isSubmittingRevision || (!canUpdateCameraViews() && !canBootstrapGroupQuality)) {
+      return false
+    }
     const targetCameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
     const targetRow = viewRows.find((view) => view.cameraNumber === cameraNumber)
     const targetClipAssetId = targetRow?.stream?.clip_asset_id ?? null
@@ -582,6 +645,10 @@ export function CaptureGroupAnnotationPanel({
 
     setIsSubmittingRevision(true)
     try {
+      const didBootstrapQuality = canBootstrapGroupQuality
+      if (didBootstrapQuality) {
+        await bootstrapGroupQualityForAnnotation()
+      }
       const activeTask = await prepareAnnotationTask()
       const updatedTask = await updateAnnotationCameraView(
         projectId,
@@ -634,6 +701,9 @@ export function CaptureGroupAnnotationPanel({
         }))
       }
       setSegmentErrors({})
+      if (didBootstrapQuality) {
+        await onRefresh()
+      }
       void message.success(
         nextState === 'SUBMITTED'
           ? `机位 ${cameraNumber} 标注已提交。`
@@ -654,7 +724,7 @@ export function CaptureGroupAnnotationPanel({
 
   function canUpdateCameraViews() {
     return (
-      currentGroupQualityAdmitting(groupQuality) &&
+      (currentGroupQualityAdmitting(groupQuality) || canBootstrapGroupQuality) &&
       (task
         ? task.capture_group_id === captureGroupId && task.status === 'ASSIGNED'
         : canPrepareTask)
@@ -809,9 +879,6 @@ export function CaptureGroupAnnotationPanel({
       if (!canPrepareTask || !assigneeActorId.trim()) {
         throw new Error('当前账号没有项目标注权限。')
       }
-      if (!currentGroupQualityAdmitting(groupQuality)) {
-        throw new Error('请先完成视频质量确认，再提交标注。')
-      }
       prepared = await assignCaptureGroupHumanLabelTask(projectId, captureGroupId, assigneeActorId)
       onTaskChange(prepared)
     }
@@ -858,6 +925,8 @@ export function CaptureGroupAnnotationPanel({
               <StatusIndicator tone={taskStatusTone(task)}>
                 {formatTaskStatus(task)}
               </StatusIndicator>
+            ) : canPrepareTask ? (
+              <StatusIndicator tone="information">就绪可标注</StatusIndicator>
             ) : (
               <StatusIndicator tone="neutral">尚未分配标注任务</StatusIndicator>
             )}
@@ -961,13 +1030,17 @@ export function CaptureGroupAnnotationPanel({
                     htmlType="button"
                     aria-label="提交标注"
                     className="capture-group-sticky-submit-btn"
-                    disabled={!canEditActiveCamera || visibleDraftSegments.length === 0}
-                    loading={isSubmittingRevision}
-                    icon={<Check size={13} strokeWidth={2.2} />}
-                    onClick={() =>
-                      activeCameraNumber !== null &&
-                      void saveCameraView(activeCameraNumber, 'SUBMITTED')
+                    disabled={
+                      visibleDraftSegments.length === 0 ||
+                      (!canEditActiveCamera && !canBootstrapGroupQuality)
                     }
+                    loading={isSubmittingRevision || isConfirmingQuality}
+                    icon={<Check size={13} strokeWidth={2.2} />}
+                    onClick={() => {
+                      if (activeCameraNumber !== null) {
+                        void saveCameraView(activeCameraNumber, 'SUBMITTED')
+                      }
+                    }}
                   >
                     提交标注
                   </Button>
@@ -1096,22 +1169,12 @@ export function CaptureGroupAnnotationPanel({
                   </Button>
                 </details>
                 <Button
-                  type="primary"
-                  htmlType="button"
-                  disabled={!canEditActiveCamera || visibleDraftSegments.length === 0}
-                  loading={isSubmittingRevision}
-                  icon={<Check size={14} strokeWidth={2.2} />}
-                  onClick={() =>
-                    activeCameraNumber !== null &&
-                    void saveCameraView(activeCameraNumber, 'SUBMITTED')
-                  }
-                >
-                  提交本机位
-                </Button>
-                <Button
                   danger
                   type="text"
-                  disabled={!canUpdateCameraViews() || activeCameraNumber === null}
+                  disabled={
+                    (!canUpdateCameraViews() && !canBootstrapGroupQuality) ||
+                    activeCameraNumber === null
+                  }
                   onClick={() => {
                     setExcludeModalReason(activeCameraView?.exclusion_reason ?? '')
                     setIsExcludeModalOpen(true)
@@ -1142,16 +1205,16 @@ export function CaptureGroupAnnotationPanel({
             <div className="group-submission-info">
               <p className="submission-helper-text">
                 {canSubmitGroupRevision
-                  ? `全部 ${allCameraNumbers.length} 路机位处理明确，可整组送审。`
+                  ? `全部 ${allCameraNumbers.length} 路机位已确认处置（${submittedCameraCount} 路已提交标注${allCameraNumbers.length > submittedCameraCount ? `，${allCameraNumbers.length - submittedCameraCount} 路已排除` : ''}），可提交整组复核。`
                   : !allCameraViewsResolved
-                    ? '完成各机位后，提交复核。'
+                    ? `进度：已确认 ${cameraViews.filter((v) => v.state === 'SUBMITTED' || v.state === 'EXCLUDED').length}/${allCameraNumbers.length} 路机位。全部机位均完成标注或排除后，方可整组提交复核。`
                     : !hasParticipatingSubmittedCamera
-                      ? '至少需要保留一个参与机位提交标注，方可送审。'
+                      ? '至少需要保留一个参与机位提交标注，方可提交整组复核。'
                       : needsCorrespondenceReason && !correspondenceReason.trim()
                         ? '跨机位对应尚未确认，请说明原因；各路标注将按独立时间轴送审。'
                         : hasUnsavedDraftChanges
                           ? '当前机位有未提交的草稿修改，请先提交或保存本机位草稿。'
-                          : '需所有机位均已提交标注或明确排除，方可整组送审。'}
+                          : '需所有机位均已提交标注或明确排除，方可提交整组复核。'}
               </p>
             </div>
             <Button

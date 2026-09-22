@@ -877,21 +877,6 @@ class CaptureGroupQualityAnnotationContractTests {
 						taskId(newGroup)));
 	}
 
-	private UUID approveRevision(GroupFixture group, String groupQualityResult, String prefix, int endMs)
-			throws Exception {
-		recordGroup(group, MEMBER_TOKEN, groupQualityResult, BASE_REASON, 0, key(prefix + "-quality"))
-			.andExpect(status().isOk());
-		var taskId = taskId(group);
-		saveCameraDraft(taskId, group.clipAssetIds().getFirst(), MEMBER_TOKEN).andExpect(status().isOk());
-		var revision = submit(group, taskId, MEMBER_TOKEN, key(prefix + "-submit"), endMs)
-			.andExpect(status().isCreated())
-			.andReturn();
-		var revisionId = UUID
-			.fromString(JsonPath.read(revision.getResponse().getContentAsString(), "$.annotation_revision_id"));
-		approveRevisionOnly(revisionId, prefix + "-approve");
-		return revisionId;
-	}
-
 	private void approveRevisionOnly(UUID revisionId, String prefix) throws Exception {
 		this.mockMvc.perform(
 				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
