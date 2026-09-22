@@ -79,7 +79,7 @@ describe('capture group list view', () => {
     expect(within(dialog).getByRole('button', { name: '下载 HDF5' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /项目全部|选择全部/ })).not.toBeInTheDocument()
   })
-  it('does not offer project export to a platform admin with only project membership', async () => {
+  it('offers project export to a platform admin without project membership', async () => {
     stubGroupList([], [], { projectRole: 'MEMBER', taskScope: 'ASSIGNEE' })
     renderRouter(
       [{ path: '/projects/:projectId/capture-groups', element: <CaptureGroupListView /> }],
@@ -87,7 +87,7 @@ describe('capture group list view', () => {
       { username: 'admin', role: 'ADMIN' },
     )
     await screen.findByText('合成数据项目')
-    expect(screen.queryByRole('button', { name: '导出数据' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出数据' })).toBeInTheDocument()
   })
   it('keeps the data-group facts and optional human-label entry separate', async () => {
     const activeGroup = captureGroupFixture(groupId, {
@@ -125,6 +125,18 @@ describe('capture group list view', () => {
       'true',
     )
     expect(screen.getByText('共 2 条采集记录')).toBeInTheDocument()
+    const toolbar = screen
+      .getByRole('combobox', { name: '视频视图' })
+      .closest('.capture-group-list-toolbar')
+    if (!toolbar) throw new Error('Capture group list toolbar was not mounted.')
+    const toolbarFilters = toolbar.querySelector<HTMLElement>('.capture-group-list-toolbar-filters')
+    const toolbarActions = toolbar.querySelector<HTMLElement>('.capture-group-list-toolbar-actions')
+    if (!toolbarFilters || !toolbarActions) {
+      throw new Error('Capture group list toolbar groups were not mounted.')
+    }
+    expect(within(toolbarFilters).getByText('共 2 条采集记录')).toBeInTheDocument()
+    expect(within(toolbarActions).getByRole('textbox')).toBeInTheDocument()
+    expect(within(toolbarActions).queryByText('共 2 条采集记录')).not.toBeInTheDocument()
     expect(activeRow).toHaveTextContent('待提交')
     expect(activeRow).toHaveTextContent('1/1 机位已收')
 

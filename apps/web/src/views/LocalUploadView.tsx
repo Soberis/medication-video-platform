@@ -12,6 +12,7 @@ import {
   type LocalUploadTask,
   type LocalUploadTaskStatus,
 } from '@/app/local-upload'
+import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { MetadataList } from '@/components/data/MetadataList'
@@ -97,6 +98,8 @@ function uploadResultDescription(
 export default function LocalUploadView() {
   const [searchParams] = useSearchParams()
   const initialProjectId = searchParams.get('projectId') ?? ''
+  const { session } = useAuth()
+  const isPlatformAdministrator = session?.role === 'ADMIN'
   const [projects, setProjects] = useState<DataProject[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -265,11 +268,11 @@ export default function LocalUploadView() {
                 value={selectedProjectId || undefined}
                 loading={projectLoadState === 'loading'}
                 disabled={isUploading || projectLoadState !== 'success'}
-                placeholder="选择已加入的项目"
+                placeholder={isPlatformAdministrator ? '选择项目' : '选择已加入的项目'}
                 onChange={selectProject}
                 options={projects.map((project) => ({
                   value: project.project_id,
-                  label: `${project.display_name}（${project.current_role === 'ADMIN' ? '管理员' : '成员'}）`,
+                  label: `${project.display_name}（${isPlatformAdministrator || project.current_role === 'ADMIN' ? '管理员' : '成员'}）`,
                 }))}
               />
             </div>
@@ -513,7 +516,13 @@ export default function LocalUploadView() {
         </section>
       ) : null}
       {projectLoadState === 'success' && projects.length === 0 ? (
-        <EmptyState description="当前账号尚未加入项目，无法上传视频。请联系管理员添加项目成员。" />
+        <EmptyState
+          description={
+            isPlatformAdministrator
+              ? '当前没有可用项目，请先创建一个 ACTIVE 项目。'
+              : '当前账号尚未加入项目，无法上传视频。请联系管理员添加项目成员。'
+          }
+        />
       ) : null}
     </>
   )

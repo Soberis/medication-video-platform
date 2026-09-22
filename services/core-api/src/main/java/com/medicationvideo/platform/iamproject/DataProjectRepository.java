@@ -30,4 +30,6 @@ interface DataProjectRepository extends JpaRepository<DataProject, UUID> {
 	List<DataProject> findVisibleProjects(@Param("projectIds") Collection<UUID> projectIds,
 			@Param("status") ProjectStatus status);
 
+	List<DataProject> findAllByStatusOrderByCreatedAtAscProjectIdAsc(ProjectStatus status);
+
 }

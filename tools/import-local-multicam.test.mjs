@@ -18,3 +18,17 @@ test('project selection uses authorized results and rejects ambiguous partial na
   assert.deepEqual(await resolveProject('http://localhost:8080', 'synthetic-test-token', 'project-b'), items[1])
   await assert.rejects(resolveProject('http://localhost:8080', 'synthetic-test-token', '测试'), /匹配多个结果/)
 })
+
+test('project resolution does not mutate project memberships', async (t) => {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push({ url, init })
+    return Response.json({ items: [{ project_id: 'project-a', display_name: '测试 A' }] })
+  })
+
+  await resolveProject('http://localhost:8080', 'synthetic-test-token', 'project-a')
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].init?.method, undefined)
+  assert.match(calls[0].init.headers.Authorization, /synthetic-test-token/)
+})

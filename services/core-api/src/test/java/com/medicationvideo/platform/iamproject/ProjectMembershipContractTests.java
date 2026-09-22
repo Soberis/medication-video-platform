@@ -263,6 +263,21 @@ class ProjectMembershipContractTests {
 	}
 
 	@Test
+	void platformAdministratorCanArchiveAProjectWithoutMembership() throws Exception {
+		var projectId = createProjectId("project-archive-orphan-0001", "Synthetic Orphan Project");
+		this.jdbcTemplate.update("DELETE FROM membership WHERE project_id = ?", projectId);
+
+		this.mockMvc
+			.perform(delete("/api/v1/projects/{projectId}", projectId).header("Authorization", "Bearer " + ADMIN_TOKEN)
+				.header("X-Request-Id", "project-archive-orphan-request-0001"))
+			.andExpect(status().isNoContent());
+
+		assertEquals("ARCHIVED", this.jdbcTemplate.queryForObject("SELECT status FROM project WHERE project_id = ?",
+				String.class, projectId));
+		assertEquals(1, countAudit(projectId, "PROJECT_ARCHIVED"));
+	}
+
+	@Test
 	void concurrentProjectCreationProducesOneProjectMembershipAndAuditPair() throws Exception {
 		var concurrency = 4;
 		var insertReady = new CountDownLatch(concurrency);

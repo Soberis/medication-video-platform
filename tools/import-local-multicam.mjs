@@ -80,6 +80,7 @@ async function checkFileReadable(path, label) {
 }
 
 export async function resolveProject(baseUrl, token, requested) {
+  // 本地合成测试使用同一个 admin token 查询和写入目标项目。
   let items = []
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/projects`, {
@@ -93,7 +94,7 @@ export async function resolveProject(baseUrl, token, requested) {
   }
 
   if (items.length === 0) {
-    throw new Error('当前账号没有可访问的项目，请先由管理员添加项目成员。')
+    throw new Error('当前账号没有可访问的项目，请先由项目管理员添加成员。')
   }
 
   if (requested) {
@@ -184,7 +185,7 @@ async function main() {
     }
   }
 
-  const targetProject = await resolveProject(values.baseUrl, values.token, requestedProject)
+  const targetProject = await resolveProject(values.baseUrl, values.adminToken, requestedProject)
   const targetProjectId = targetProject.project_id
 
   console.log('\n========================================')
@@ -225,13 +226,13 @@ async function main() {
   const uploadClient = new SyntheticUploadClient({
     baseUrl: values.baseUrl,
     projectId: targetProjectId,
-    bearerToken: values.token,
+    bearerToken: values.adminToken,
   })
 
   const workflow = new SyntheticCaptureGroupWorkflowClient({
     baseUrl: values.baseUrl,
     projectId: targetProjectId,
-    bearerToken: values.token,
+    bearerToken: values.adminToken,
     adminBearerToken: values.adminToken,
   })
 

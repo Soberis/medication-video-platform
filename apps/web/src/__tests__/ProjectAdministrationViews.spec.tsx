@@ -85,6 +85,20 @@ describe('ProjectMembershipView', () => {
     expect(screen.queryByRole('columnheader', { name: '操作' })).not.toBeInTheDocument()
   })
 
+  it('lets a platform admin manage members even when the project payload has no admin role', async () => {
+    vi.stubGlobal('fetch', membershipFetch(projectWithRole('MEMBER')))
+    renderRoute(<ProjectMembershipView />, {
+      route: `/projects/${projectId}/members`,
+      path: '/projects/:projectId/members',
+      session: { username: 'admin', role: 'ADMIN' },
+    })
+
+    expect(await screen.findByRole('heading', { name: '项目成员列表' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '添加成员' })).toBeInTheDocument()
+    expect(screen.queryByText('当前账号无权管理成员')).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: '操作' })).toBeInTheDocument()
+  })
+
   it('requires confirmation before removing a project member', async () => {
     const fetchMock = membershipFetch(projectWithRole('ADMIN'))
     vi.stubGlobal('fetch', fetchMock)

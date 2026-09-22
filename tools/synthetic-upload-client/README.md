@@ -22,8 +22,9 @@ $env:DEV_ADMIN_BEARER_TOKEN='synthetic-local-admin-bearer-token-do-not-reuse'
 pnpm run synthetic-upload
 ```
 
-默认 `local` profile 会创建名为“本地合成上传验证”的保留项目，并仅为
-`local-synthetic-uploader`、`local-synthetic-admin` 两个开发身份授予成员资格；这样工具无需手工创建项目。
+默认 `local` profile 会创建名为“本地合成上传验证”的保留项目，作为没有显式目标时的本地夹具。
+本地合成 bearer 只用于测试：在 `local` profile 下可直接操作明确指定的 ACTIVE 项目，不要求先创建
+`local-synthetic-uploader`/`local-synthetic-admin` 的项目成员关系，也不会把这条旁路带入生产。
 设置 `LOCAL_SYNTHETIC_PROJECT_ENABLED=false` 可关闭该开发夹具。此行为不在生产或其他 profile 中加载。
 
 可选环境变量：

@@ -2,8 +2,10 @@ package com.medicationvideo.platform.iamproject;
 
 import java.util.UUID;
 
-import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,21 +16,38 @@ public class ProjectAccessService {
 
 	private final ProjectMembershipRepository membershipRepository;
 
-	ProjectAccessService(DataProjectRepository projectRepository, ProjectMembershipRepository membershipRepository) {
+	private final boolean localSyntheticBypass;
+
+	@Autowired
+	ProjectAccessService(DataProjectRepository projectRepository, ProjectMembershipRepository membershipRepository,
+			@Value("${platform.security.local-synthetic-bypass:false}") boolean localSyntheticBypass) {
 		this.projectRepository = projectRepository;
 		this.membershipRepository = membershipRepository;
+		this.localSyntheticBypass = localSyntheticBypass;
+	}
+
+	ProjectAccessService(DataProjectRepository projectRepository, ProjectMembershipRepository membershipRepository) {
+		this(projectRepository, membershipRepository, false);
 	}
 
 	@Transactional(readOnly = true)
 	public ProjectRole requireMember(UUID projectId, String actorId) {
 		requireActiveProject(projectId);
+		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		return requireActiveMembership(projectId, actorId).getRole();
 	}
 
 	@Transactional(readOnly = true)
 	public ProjectRole requireAdministrator(UUID projectId, String actorId) {
-		requireEnabledPlatformAdministrator();
+		if (!isLocalSyntheticActor(actorId)) {
+			requireEnabledPlatformAdministrator();
+		}
 		requireActiveProject(projectId);
+		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		var membership = requireActiveMembership(projectId, actorId);
 		if (membership.getRole() != ProjectRole.ADMIN) {
 			throw new ProjectAccessException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
@@ -40,6 +59,9 @@ public class ProjectAccessService {
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireMember(UUID projectId, String actorId) {
 		lockActiveProjectForSystemProcessing(projectId);
+		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		return requireActiveMembership(projectId, actorId).getRole();
 	}
 
@@ -58,11 +80,16 @@ public class ProjectAccessService {
 
 	@Transactional(propagation = Propagation.MANDATORY)
 	public ProjectRole lockAndRequireAdministrator(UUID projectId, String actorId) {
-		requireEnabledPlatformAdministrator();
+		if (!isLocalSyntheticActor(actorId)) {
+			requireEnabledPlatformAdministrator();
+		}
 		var project = this.projectRepository.findForUpdate(projectId)
 			.orElseThrow(ProjectAccessService::projectNotFound);
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
 			throw projectNotFound();
+		}
+		if (isLocalSyntheticActor(actorId) || isPlatformAdministrator(actorId)) {
+			return ProjectRole.ADMIN;
 		}
 		var membership = requireActiveMembership(projectId, actorId);
 		if (membership.getRole() != ProjectRole.ADMIN) {
@@ -83,12 +110,36 @@ public class ProjectAccessService {
 			.orElseThrow(ProjectAccessService::projectNotFound);
 	}
 
-	private void requireEnabledPlatformAdministrator() {
+	private boolean isLocalSyntheticActor(String actorId) {
+		return this.localSyntheticBypass && isCurrentActor(actorId)
+				&& ("local-synthetic-admin".equals(actorId) || "local-synthetic-uploader".equals(actorId));
+	}
+
+	static boolean isPlatformAdministrator() {
 		var authentication = SecurityContextHolder.getContext().getAuthentication();
-		if (authentication == null || !authentication.isAuthenticated()
-				|| authentication.getAuthorities()
+		return authentication != null && authentication.isAuthenticated()
+				&& authentication.getAuthorities()
 					.stream()
-					.noneMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+					.anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+	}
+
+	static boolean isPlatformAdministrator(String actorId) {
+		return isPlatformAdministrator() && isCurrentActor(actorId);
+	}
+
+	private static boolean isCurrentActor(String actorId) {
+		var authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null || !authentication.isAuthenticated()) {
+			return false;
+		}
+		if (authentication.getPrincipal() instanceof ProjectActor actor) {
+			return actor.actorId().equals(actorId);
+		}
+		return actorId.equals(authentication.getName());
+	}
+
+	private void requireEnabledPlatformAdministrator() {
+		if (!isPlatformAdministrator()) {
 			throw administratorRequired();
 		}
 	}

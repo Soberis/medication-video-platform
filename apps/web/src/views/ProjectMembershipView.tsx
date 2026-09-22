@@ -13,6 +13,7 @@ import {
   type ProjectRole,
   upsertProjectMembership,
 } from '@/api/projects'
+import { useAuth } from '@/app/auth'
 import { PageHeader } from '@/components/PageHeader'
 import { ProjectBreadcrumb } from '@/components/ProjectBreadcrumb'
 import { RefreshButton } from '@/components/RefreshButton'
@@ -27,6 +28,7 @@ interface MembershipFields {
 export default function ProjectMembershipView() {
   const { projectId = '' } = useParams()
   const { message, modal } = AntdApp.useApp()
+  const { session } = useAuth()
   const [form] = Form.useForm<MembershipFields>()
   const [accounts, setAccounts] = useState<PlatformAccount[]>([])
   const [memberships, setMemberships] = useState<ProjectMembership[]>([])
@@ -38,7 +40,7 @@ export default function ProjectMembershipView() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingActorId, setEditingActorId] = useState<string | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
-  const canManageMembers = projectRole === 'ADMIN'
+  const canManageMembers = session?.role === 'ADMIN' || projectRole === 'ADMIN'
   const availableAccounts = useMemo(() => accounts.filter((account) => account.enabled), [accounts])
 
   const loadMemberships = useCallback(async () => {

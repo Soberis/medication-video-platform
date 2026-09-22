@@ -11,6 +11,7 @@ import {
   renameProject,
   type DataProject,
 } from '@/api/projects'
+import { useAuth } from '@/app/auth'
 import { paths } from '@/app/paths'
 import { PageHeader } from '@/components/PageHeader'
 import { usePromptDialog } from '@/components/PromptDialog'
@@ -33,6 +34,7 @@ export default function ProjectListView() {
   const { message, modal } = AntdApp.useApp()
   const navigate = useNavigate()
   const prompt = usePromptDialog()
+  const { session } = useAuth()
   const [projects, setProjects] = useState<DataProject[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [errorCode, setErrorCode] = useState('')
@@ -44,6 +46,7 @@ export default function ProjectListView() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [sortKey, setSortKey] = useState<ProjectSortKey>('created_desc')
   const activeRequest = useRef<AbortController | null>(null)
+  const isPlatformAdministrator = session?.role === 'ADMIN'
 
   const loadProjects = useCallback(async () => {
     activeRequest.current?.abort()
@@ -301,14 +304,16 @@ export default function ProjectListView() {
                       </strong>
                       <div className="project-card-badges">
                         <StatusBadge className="project-role-badge" tone="neutral">
-                          {project.current_role === 'ADMIN' ? '项目管理员' : '成员'}
+                          {isPlatformAdministrator || project.current_role === 'ADMIN'
+                            ? '项目管理员'
+                            : '成员'}
                         </StatusBadge>
                         {project.status === 'ARCHIVED' ? (
                           <StatusBadge tone="neutral">已归档</StatusBadge>
                         ) : null}
                       </div>
                     </div>
-                    {project.current_role === 'ADMIN' ? (
+                    {isPlatformAdministrator || project.current_role === 'ADMIN' ? (
                       <div onClick={(event) => event.stopPropagation()}>
                         <Dropdown
                           trigger={['click']}

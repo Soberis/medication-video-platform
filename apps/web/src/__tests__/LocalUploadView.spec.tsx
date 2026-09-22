@@ -2,6 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { PlatformSession } from '@/api/auth'
 import * as localUploadApi from '@/api/local-upload'
 import AppShell from '@/App'
 import { LocalUploadProvider } from '@/app/local-upload'
@@ -28,6 +29,18 @@ afterEach(() => {
 })
 
 describe('LocalUploadView', () => {
+  it('labels every active project as available to a platform admin', async () => {
+    stubCatalog([project])
+    const user = userEvent.setup()
+    renderLocalUpload({ username: 'admin', role: 'ADMIN' })
+
+    const select = await screen.findByRole('combobox', { name: '所属项目' })
+    await waitFor(() => expect(select).not.toBeDisabled())
+    await user.click(select)
+
+    expect(await screen.findByText('合成测试项目（管理员）')).toBeInTheDocument()
+  })
+
   it('shows each selected local video as a separate queued upload', async () => {
     stubCatalog([project])
     const user = userEvent.setup()
@@ -491,11 +504,12 @@ describe('LocalUploadView', () => {
   })
 })
 
-function renderLocalUpload() {
+function renderLocalUpload(session: PlatformSession | null = null) {
   return renderRoute(
     <LocalUploadProvider>
       <LocalUploadView />
     </LocalUploadProvider>,
+    { session },
   )
 }
 

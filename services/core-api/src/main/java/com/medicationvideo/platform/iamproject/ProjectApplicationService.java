@@ -65,6 +65,12 @@ class ProjectApplicationService {
 
 	@Transactional(readOnly = true)
 	ProjectListResponse list(String actorId, boolean canCreateProjects) {
+		if (canCreateProjects) {
+			// 平台管理员可以看到并操作所有项目
+			var projects = this.projectRepository.findAllByStatusOrderByCreatedAtAscProjectIdAsc(ProjectStatus.ACTIVE);
+			return new ProjectListResponse(
+					projects.stream().map(project -> ProjectResponse.from(project, ProjectRole.ADMIN)).toList(), true);
+		}
 		var memberships = this.membershipRepository.findAllByActorIdAndStatusOrderByCreatedAtAscMembershipIdAsc(actorId,
 				MembershipStatus.ACTIVE);
 		if (memberships.isEmpty()) {
@@ -80,17 +86,19 @@ class ProjectApplicationService {
 
 	@Transactional(readOnly = true)
 	ProjectResponse get(UUID projectId, String actorId) {
-		var membership = requireVisibleMembership(projectId, actorId);
 		var project = this.projectRepository.findByProjectIdAndStatus(projectId, ProjectStatus.ACTIVE)
 			.orElseThrow(ProjectApplicationService::projectNotFound);
-		return ProjectResponse.from(project, membership.getRole());
+		if (ProjectAccessService.isPlatformAdministrator(actorId)) {
+			return ProjectResponse.from(project, ProjectRole.ADMIN);
+		}
+		return ProjectResponse.from(project, requireVisibleMembership(projectId, actorId).getRole());
 	}
 
 	@Transactional
 	ProjectResponse rename(UUID projectId, String actorId, String requestId, String traceId,
 			ProjectRenameRequest request) {
 		var project = lockActiveProject(projectId);
-		var membership = requireAdministrator(projectId, actorId);
+		var role = requireAdministrator(projectId, actorId);
 		var displayName = request.displayName().trim();
 		if (!project.getDisplayName().equals(displayName)) {
 			var oldDisplayName = project.getDisplayName();
@@ -99,7 +107,7 @@ class ProjectApplicationService {
 			recordProjectChanged(project, actorId, "PROJECT_RENAMED", "PROJECT_RENAMED", requestId, traceId,
 					Map.of("old_display_name", oldDisplayName, "new_display_name", displayName));
 		}
-		return ProjectResponse.from(project, membership.getRole());
+		return ProjectResponse.from(project, role);
 	}
 
 	@Transactional
@@ -231,7 +239,10 @@ class ProjectApplicationService {
 			.orElseThrow(ProjectApplicationService::projectNotFound);
 	}
 
-	private ProjectMembership requireAdministrator(UUID projectId, String actorId) {
+	private ProjectRole requireAdministrator(UUID projectId, String actorId) {
+		if (ProjectAccessService.isPlatformAdministrator(actorId)) {
+			return ProjectRole.ADMIN;
+		}
 		var membership = this.membershipRepository.findByProjectIdAndActorId(projectId, actorId)
 			.orElseThrow(ProjectApplicationService::projectNotFound);
 		if (!membership.isActive()) {
@@ -241,7 +252,7 @@ class ProjectApplicationService {
 			throw new ProjectApiException("PROJECT_ACCESS_DENIED", "Project administrator membership is required.",
 					403);
 		}
-		return membership;
+		return membership.getRole();
 	}
 
 	private void requireAnotherAdministrator(UUID projectId) {

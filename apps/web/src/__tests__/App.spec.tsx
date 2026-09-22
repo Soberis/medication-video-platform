@@ -408,6 +408,36 @@ describe('App', () => {
     expect(screen.queryByText('归档项目')).not.toBeInTheDocument()
   })
 
+  it('lets a platform admin manage every active project', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              project_id: '30000000-0000-4000-8000-000000000001',
+              display_name: '无项目成员关系的项目',
+              status: 'ACTIVE',
+              current_role: 'MEMBER',
+              created_at: '2026-07-20T00:00:00Z',
+            },
+          ],
+          can_create_projects: true,
+        }),
+      ),
+    )
+    renderRoute(<ProjectListView />, {
+      route: '/projects',
+      path: '/projects',
+      session: { username: 'admin', role: 'ADMIN' },
+    })
+
+    expect(
+      await screen.findByRole('button', { name: '管理项目：无项目成员关系的项目' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('项目管理员')).toBeInTheDocument()
+  })
+
   it('navigates to capture groups when clicking the project row or title', async () => {
     const project = projectFixture('临床试验项目')
     vi.stubGlobal('fetch', projectListFetch([project], false))

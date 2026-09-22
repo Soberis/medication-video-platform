@@ -53,6 +53,7 @@ export default function CaptureGroupListView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeView = searchParams.get('view') ?? 'all'
   const { session } = useAuth()
+  const isPlatformAdministrator = session?.role === 'ADMIN'
   const viewer = `${session?.username}:${session?.role}`
   const savedList = (location.state as { captureGroupList?: ListReturnState } | null)
     ?.captureGroupList
@@ -351,7 +352,7 @@ export default function CaptureGroupListView() {
                 >
                   上传视频
                 </Button>
-                {currentProject?.current_role === 'ADMIN' ? (
+                {isPlatformAdministrator || currentProject?.current_role === 'ADMIN' ? (
                   <ExportDataMenu key={`${projectId}:${viewer}`} projectId={projectId} />
                 ) : null}
               </>
@@ -388,6 +389,11 @@ export default function CaptureGroupListView() {
               ...(activeView === 'tasks' ? [{ label: '全部任务', value: 'tasks' }] : []),
             ]}
           />
+          {activeView === 'all' && rows.length ? (
+            <span className="capture-group-list-count">
+              {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
+            </span>
+          ) : null}
         </div>
         {rows.length || activeView !== 'all' ? (
           <div className="capture-group-list-toolbar-actions">
@@ -408,11 +414,6 @@ export default function CaptureGroupListView() {
                 }
               }}
             />
-            {activeView === 'all' && rows.length ? (
-              <span className="capture-group-list-count">
-                {nextCursor ? `已显示 ${rows.length} 条采集记录` : `共 ${rows.length} 条采集记录`}
-              </span>
-            ) : null}
           </div>
         ) : null}
       </div>
