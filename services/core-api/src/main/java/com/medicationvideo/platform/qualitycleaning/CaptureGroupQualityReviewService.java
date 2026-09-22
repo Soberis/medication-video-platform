@@ -1,11 +1,7 @@
 package com.medicationvideo.platform.qualitycleaning;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +21,13 @@ import com.medicationvideo.platform.governance.AuditEventRecorder;
 import com.medicationvideo.platform.governance.AuditOutcome;
 import com.medicationvideo.platform.iamproject.ProjectAccessService;
 
+/**
+ * CaptureGroup 组级质量记录的历史面。
+ *
+ * <p>
+ * 自输入冻结接管标注准入后，本服务不再参与任何准入判断：标注、复核与导出只读 {@link CaptureGroupInputFreezeQueryService}
+ * 的冻结快照。此处保留组质量记录的读写与历史查询， 用于展示与审计回溯；记录页的既有校验语义保持不变。
+ */
 @Service
 class CaptureGroupQualityReviewService {
 
@@ -34,8 +37,6 @@ class CaptureGroupQualityReviewService {
 
 	private final CaptureGroupViewQueryService captureGroupViewQueryService;
 
-	private final CaptureGroupQualityQueryService captureGroupQualityQueryService;
-
 	private final QualityReviewQueryService qualityReviewQueryService;
 
 	private final CaptureGroupQualityReviewRepository repository;
@@ -44,12 +45,10 @@ class CaptureGroupQualityReviewService {
 
 	CaptureGroupQualityReviewService(ProjectAccessService projectAccessService,
 			CaptureGroupViewQueryService captureGroupViewQueryService,
-			CaptureGroupQualityQueryService captureGroupQualityQueryService,
 			QualityReviewQueryService qualityReviewQueryService, CaptureGroupQualityReviewRepository repository,
 			AuditEventRecorder auditRecorder) {
 		this.projectAccessService = projectAccessService;
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
-		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
 		this.qualityReviewQueryService = qualityReviewQueryService;
 		this.repository = repository;
 		this.auditRecorder = auditRecorder;
@@ -67,9 +66,17 @@ class CaptureGroupQualityReviewService {
 	@Transactional(readOnly = true)
 	CaptureGroupQualityReviewBatchResponse batch(UUID projectId, List<UUID> captureGroupIds, String actorId) {
 		this.projectAccessService.requireMember(projectId, actorId);
-		var items = this.captureGroupQualityQueryService.getCurrentDecisions(projectId, captureGroupIds)
-			.stream()
-			.map(CaptureGroupQualityReviewResponse::from)
+		var distinctIds = captureGroupIds.stream().distinct().toList();
+		var currentByGroup = new LinkedHashMap<UUID, CaptureGroupQualityReview>();
+		if (!distinctIds.isEmpty()) {
+			this.repository
+				.findAllByProjectIdAndCaptureGroupIdInOrderByCaptureGroupIdAscRevisionDesc(projectId, distinctIds)
+				.forEach(review -> currentByGroup.putIfAbsent(review.getCaptureGroupId(), review));
+		}
+		var items = distinctIds.stream()
+			.map(captureGroupId -> currentByGroup.containsKey(captureGroupId)
+					? CaptureGroupQualityReviewResponse.from(currentByGroup.get(captureGroupId))
+					: CaptureGroupQualityReviewResponse.unreviewed(projectId, captureGroupId))
 			.toList();
 		return new CaptureGroupQualityReviewBatchResponse(items);
 	}
@@ -116,7 +123,6 @@ class CaptureGroupQualityReviewService {
 
 		var decisions = this.qualityReviewQueryService.findCurrentDecisions(projectId,
 				facts.views().stream().map(CaptureGroupView::clipAssetId).filter(java.util.Objects::nonNull).toList());
-		var viewSet = confirmedViewSet(facts, decisions);
 		var qualifiedCount = decisions.values()
 			.stream()
 			.filter(QualityReviewQueryService.CurrentDecision::isQualified)
@@ -130,20 +136,19 @@ class CaptureGroupQualityReviewService {
 			validateAdmittingResult(facts, decisions, command.result());
 		}
 
-		var viewSetSha256 = digestViewSet(facts, decisions);
-		var inputVersion = "capture-group-view-set.v1:" + viewSetSha256;
+		var snapshot = CaptureGroupInputFreeze.of(facts);
 		var now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-		var review = this.repository.saveAndFlush(
-				CaptureGroupQualityReview.record(projectId, captureGroupId, command.result(), normalizedReason, actorId,
-						currentRevision + 1, viewSet, inputVersion, viewSetSha256, idempotencyKey, now));
-		this.auditRecorder.record(
-				new AuditEventCommand(now, AuditActorType.USER, actorId, projectId, "CAPTURE_GROUP_QUALITY_REVIEWED",
-						"CaptureGroupQualityReview", review.getCaptureGroupQualityReviewId().toString(),
-						Long.toString(review.getRevision()), AuditOutcome.SUCCEEDED, review.getResult().name(),
-						requestId, traceId, "PROJECT_MEMBERSHIP_" + projectRole.name(),
-						Map.of("capture_group_id", captureGroupId.toString(), "result", review.getResult().name(),
-								"reason", review.getReason(), "revision", Long.toString(review.getRevision()),
-								"input_version", inputVersion, "confirmed_view_set_sha256", viewSetSha256)));
+		var review = this.repository.saveAndFlush(CaptureGroupQualityReview.record(projectId, captureGroupId,
+				command.result(), normalizedReason, actorId, currentRevision + 1, snapshot.confirmedViewSet(),
+				snapshot.inputVersion(), snapshot.viewSetSha256(), idempotencyKey, now));
+		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
+				"CAPTURE_GROUP_QUALITY_REVIEWED", "CaptureGroupQualityReview",
+				review.getCaptureGroupQualityReviewId().toString(), Long.toString(review.getRevision()),
+				AuditOutcome.SUCCEEDED, review.getResult().name(), requestId, traceId,
+				"PROJECT_MEMBERSHIP_" + projectRole.name(),
+				Map.of("capture_group_id", captureGroupId.toString(), "result", review.getResult().name(), "reason",
+						review.getReason(), "revision", Long.toString(review.getRevision()), "input_version",
+						snapshot.inputVersion(), "confirmed_view_set_sha256", snapshot.viewSetSha256())));
 		return CaptureGroupQualityReviewResponse.from(review);
 	}
 
@@ -177,74 +182,6 @@ class CaptureGroupQualityReviewService {
 
 	private static boolean isResolved(QualityReviewQueryService.CurrentDecision decision) {
 		return decision != null && (decision.isQualified() || "REJECTED".equals(decision.decision()));
-	}
-
-	static Map<String, Object> confirmedViewSet(CaptureGroupFacts facts,
-			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions) {
-		var root = new LinkedHashMap<String, Object>();
-		root.put("schema_version", "capture-group-view-set.v1");
-		root.put("capture_group_id", facts.captureGroupId().toString());
-		root.put("capture_group_version", facts.captureGroupVersion());
-		root.put("camera_set_snapshot_id", facts.cameraSetSnapshotId().toString());
-		root.put("receipt_state", facts.receiptState().name());
-		root.put("views", facts.views().stream().map(view -> viewSnapshot(view, decisions)).toList());
-		return root;
-	}
-
-	private static Map<String, Object> viewSnapshot(CaptureGroupView view,
-			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions) {
-		var quality = view.clipAssetId() == null ? null : decisions.get(view.clipAssetId());
-		var snapshot = new LinkedHashMap<String, Object>();
-		snapshot.put("camera_number", view.cameraNumber());
-		snapshot.put("camera_stream_id", view.cameraStreamId() == null ? null : view.cameraStreamId().toString());
-		snapshot.put("clip_asset_id", view.clipAssetId() == null ? null : view.clipAssetId().toString());
-		snapshot.put("camera_channel_id", view.cameraChannelId() == null ? null : view.cameraChannelId().toString());
-		snapshot.put("present", view.present());
-		snapshot.put("media_status", view.mediaStatus());
-		snapshot.put("technical_quality_status", view.technicalQualityStatus());
-		snapshot.put("stream_version", view.streamVersion());
-		snapshot.put("clip_asset_version", view.clipAssetVersion());
-		snapshot.put("asset_available", view.assetAvailable());
-		snapshot.put("quality_review_decision", quality == null ? "UNREVIEWED" : quality.decision());
-		snapshot.put("quality_review_version", quality == null ? 0 : quality.version());
-		return snapshot;
-	}
-
-	private static String digestViewSet(CaptureGroupFacts facts,
-			Map<UUID, QualityReviewQueryService.CurrentDecision> decisions) {
-		try {
-			var canonical = new StringBuilder();
-			append(canonical, facts.captureGroupId());
-			append(canonical, facts.captureGroupVersion());
-			append(canonical, facts.cameraSetSnapshotId());
-			append(canonical, facts.receiptState());
-			for (var view : facts.views()) {
-				append(canonical, view.cameraNumber());
-				append(canonical, view.cameraStreamId());
-				append(canonical, view.clipAssetId());
-				append(canonical, view.cameraChannelId());
-				append(canonical, view.present());
-				append(canonical, view.mediaStatus());
-				append(canonical, view.technicalQualityStatus());
-				append(canonical, view.streamVersion());
-				append(canonical, view.clipAssetVersion());
-				append(canonical, view.assetAvailable());
-				var quality = view.clipAssetId() == null ? null : decisions.get(view.clipAssetId());
-				append(canonical, quality == null ? "UNREVIEWED" : quality.decision());
-				append(canonical, quality == null ? 0 : quality.version());
-			}
-			return HexFormat.of()
-				.formatHex(MessageDigest.getInstance("SHA-256")
-					.digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
-		}
-		catch (NoSuchAlgorithmException exception) {
-			throw new IllegalStateException("SHA-256 is unavailable.", exception);
-		}
-	}
-
-	private static void append(StringBuilder target, Object value) {
-		var text = value == null ? "" : value.toString();
-		target.append(text.length()).append(':').append(text).append('\n');
 	}
 
 	private static String normalizeReason(String reason) {

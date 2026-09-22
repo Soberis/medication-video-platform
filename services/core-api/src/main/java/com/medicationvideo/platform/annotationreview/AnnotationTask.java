@@ -155,8 +155,7 @@ class AnnotationTask {
 	}
 
 	boolean isRevisionForCurrentGroupInput(AnnotationRevision revision) {
-		return Objects.equals(this.groupInputVersion, revision.getInputVersion())
-				&& Objects.equals(this.confirmedViewSet, revision.getConfirmedViewSet());
+		return Objects.equals(this.groupInputVersion, revision.getInputVersion());
 	}
 
 	void touch(Instant now) {
@@ -165,8 +164,9 @@ class AnnotationTask {
 
 	boolean refreshGroupQualitySnapshot(UUID captureGroupQualityReviewId, long groupQualityRevision,
 			Map<String, Object> confirmedViewSet, String groupInputVersion, Instant now) {
-		var inputChanged = !Objects.equals(this.confirmedViewSet, confirmedViewSet)
-				|| !Objects.equals(this.groupInputVersion, groupInputVersion);
+		// inputVersion 是 confirmedViewSet 全部内容的规范化摘要：摘要相同即快照相同。
+		// 不能逐字段比较 Map——快照经 jsonb 往返后装箱数值类型会变化（Long/Integer），比较会误判为“输入已变”。
+		var inputChanged = !Objects.equals(this.groupInputVersion, groupInputVersion);
 		if (!inputChanged && Objects.equals(this.captureGroupQualityReviewId, captureGroupQualityReviewId)
 				&& Objects.equals(this.groupQualityRevision, groupQualityRevision)) {
 			return false;

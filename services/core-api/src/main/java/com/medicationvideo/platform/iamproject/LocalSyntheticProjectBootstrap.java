@@ -50,17 +50,18 @@ class LocalSyntheticProjectBootstrap {
 		}
 
 		var project = projects.findById(projectId)
+			.or(() -> projects.findByCreatedByAndIdempotencyKey(BOOTSTRAP_ACTOR, PROJECT_IDEMPOTENCY_KEY))
 			.orElseGet(() -> projects.save(DataProject.create(projectId, PROJECT_NAME, BOOTSTRAP_ACTOR,
 					PROJECT_IDEMPOTENCY_KEY, PROJECT_FINGERPRINT, Instant.now())));
 		if (project.getStatus() != ProjectStatus.ACTIVE) {
-			LOGGER.warn("Local synthetic project {} is archived; skip synthetic memberships.", projectId);
+			LOGGER.warn("Local synthetic project {} is archived; skip synthetic memberships.", project.getProjectId());
 			return;
 		}
 		if (!uploaderToken.isBlank()) {
-			ensureMembership(memberships, projectId, UPLOADER_ACTOR, ProjectRole.MEMBER);
+			ensureMembership(memberships, project.getProjectId(), UPLOADER_ACTOR, ProjectRole.MEMBER);
 		}
 		if (!adminToken.isBlank()) {
-			ensureMembership(memberships, projectId, ADMIN_ACTOR, ProjectRole.ADMIN);
+			ensureMembership(memberships, project.getProjectId(), ADMIN_ACTOR, ProjectRole.ADMIN);
 		}
 	}
 

@@ -21,8 +21,7 @@ import com.medicationvideo.platform.aicandidate.ActionCandidateSourceQueryPort;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupFacts;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
-import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
-import com.medicationvideo.platform.qualitycleaning.QualityReviewQueryService;
+import com.medicationvideo.platform.qualitycleaning.CaptureGroupInputFreeze;
 
 /** Read-only, provenance-checked snapshot seam consumed by dataset export. */
 @Service
@@ -36,23 +35,16 @@ public class ApprovedCaptureGroupAnnotationQueryService {
 
 	private final AnnotationReviewRepository reviewRepository;
 
-	private final CaptureGroupQualityQueryService groupQualityQueryService;
-
-	private final QualityReviewQueryService viewQualityQueryService;
-
 	private final ObjectProvider<ActionCandidateSourceQueryPort> candidateSource;
 
 	public ApprovedCaptureGroupAnnotationQueryService(CaptureGroupViewQueryService captureGroupViewQueryService,
 			AnnotationTaskRepository taskRepository, AnnotationRevisionRepository revisionRepository,
-			AnnotationReviewRepository reviewRepository, CaptureGroupQualityQueryService groupQualityQueryService,
-			QualityReviewQueryService viewQualityQueryService,
+			AnnotationReviewRepository reviewRepository,
 			ObjectProvider<ActionCandidateSourceQueryPort> candidateSource) {
 		this.captureGroupViewQueryService = captureGroupViewQueryService;
 		this.taskRepository = taskRepository;
 		this.revisionRepository = revisionRepository;
 		this.reviewRepository = reviewRepository;
-		this.groupQualityQueryService = groupQualityQueryService;
-		this.viewQualityQueryService = viewQualityQueryService;
 		this.candidateSource = candidateSource;
 	}
 
@@ -89,18 +81,8 @@ public class ApprovedCaptureGroupAnnotationQueryService {
 				: this.reviewRepository.findAllByAnnotationRevisionIdIn(revisionIds)
 					.stream()
 					.collect(Collectors.toUnmodifiableMap(AnnotationReview::getAnnotationRevisionId, review -> review));
-		var groupQuality = this.groupQualityQueryService
-			.getCurrentDecisions(projectId, allFacts.stream().map(CaptureGroupFacts::captureGroupId).toList())
-			.stream()
-			.collect(Collectors.toUnmodifiableMap(CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
-					decision -> decision));
-		var viewQuality = this.viewQualityQueryService.findCurrentDecisions(projectId,
-				allFacts.stream()
-					.flatMap(facts -> facts.views().stream())
-					.map(CaptureGroupView::clipAssetId)
-					.filter(Objects::nonNull)
-					.distinct()
-					.toList());
+		var inputFreezeByGroup = allFacts.stream()
+			.collect(Collectors.toUnmodifiableMap(CaptureGroupFacts::captureGroupId, CaptureGroupInputFreeze::of));
 		var snapshots = new ArrayList<ApprovedGroupSnapshot>();
 		for (var task : tasks) {
 			var revision = latestByTask.get(task.getAnnotationTaskId());
@@ -110,12 +92,11 @@ public class ApprovedCaptureGroupAnnotationQueryService {
 				continue;
 			}
 			var facts = factsByGroup.get(task.getCaptureGroupId());
-			var quality = groupQuality.get(task.getCaptureGroupId());
-			if (facts == null || quality == null || !quality.isAdmitting()
-					|| !Objects.equals(quality.inputVersion(), revision.getInputVersion())
-					|| !Objects.equals(quality.confirmedViewSet(), revision.getConfirmedViewSet())
-					|| !CaptureGroupAnnotationWorkflow.viewSetStillCurrent(revision.getConfirmedViewSet(), facts,
-							viewQuality)) {
+			var freeze = inputFreezeByGroup.get(task.getCaptureGroupId());
+			// 只比对 inputVersion 摘要与逐机位事实：冻结快照经 JSON 往返后装箱数值类型会变化，整表 equals 不可靠。
+			if (facts == null || freeze == null || !freeze.admitting()
+					|| !Objects.equals(freeze.inputVersion(), revision.getInputVersion())
+					|| !CaptureGroupAnnotationWorkflow.viewSetStillCurrent(revision.getConfirmedViewSet(), facts)) {
 				throw notEligible();
 			}
 			var snapshot = toSnapshot(task, revision, review, facts);

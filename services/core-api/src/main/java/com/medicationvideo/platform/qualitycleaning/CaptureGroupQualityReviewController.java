@@ -104,13 +104,6 @@ record CaptureGroupQualityReviewResponse(UUID captureGroupQualityReviewId, UUID 
 		String result, String reason, String reviewerActorId, long revision, long version, Instant decidedAt,
 		Map<String, Object> confirmedViewSet, String inputVersion, String confirmedViewSetSha256) {
 
-	static CaptureGroupQualityReviewResponse from(CaptureGroupQualityQueryService.CurrentDecision decision) {
-		return new CaptureGroupQualityReviewResponse(decision.captureGroupQualityReviewId(), decision.projectId(),
-				decision.captureGroupId(), decision.result(), decision.reason(), decision.reviewerActorId(),
-				decision.revision(), decision.revision(), decision.decidedAt(), decision.confirmedViewSet(),
-				decision.inputVersion(), decision.confirmedViewSetSha256());
-	}
-
 	static CaptureGroupQualityReviewResponse from(CaptureGroupQualityReview review) {
 		return new CaptureGroupQualityReviewResponse(review.getCaptureGroupQualityReviewId(), review.getProjectId(),
 				review.getCaptureGroupId(), review.getResult().name(), review.getReason(), review.getReviewerActorId(),

@@ -23,7 +23,7 @@ import com.medicationvideo.platform.iamproject.ProjectAccessService;
 import com.medicationvideo.platform.iamproject.ProjectRole;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningQueryService;
 import com.medicationvideo.platform.qualitycleaning.CaptureGroupCleaningSummary;
-import com.medicationvideo.platform.qualitycleaning.CaptureGroupQualityQueryService;
+import com.medicationvideo.platform.qualitycleaning.CaptureGroupInputFreezeQueryService;
 
 @Service
 class AnnotationTaskService {
@@ -32,7 +32,7 @@ class AnnotationTaskService {
 
 	private final CaptureGroupCleaningQueryService captureGroupCleaningQueryService;
 
-	private final CaptureGroupQualityQueryService captureGroupQualityQueryService;
+	private final CaptureGroupInputFreezeQueryService captureGroupInputFreezeQueryService;
 
 	private final AnnotationLabelSchemaService labelSchemaService;
 
@@ -50,14 +50,14 @@ class AnnotationTaskService {
 
 	AnnotationTaskService(ProjectAccessService projectAccessService,
 			CaptureGroupCleaningQueryService captureGroupCleaningQueryService,
-			CaptureGroupQualityQueryService captureGroupQualityQueryService,
+			CaptureGroupInputFreezeQueryService captureGroupInputFreezeQueryService,
 			AnnotationLabelSchemaService labelSchemaService,
 			CaptureGroupAnnotationWorkflow captureGroupAnnotationWorkflow, AnnotationTaskRepository repository,
 			AnnotationRevisionRepository revisionRepository, AnnotationReviewRepository reviewRepository,
 			AnnotationTaskViewRepository taskViewRepository, AnnotationTaskViewService taskViewService) {
 		this.projectAccessService = projectAccessService;
 		this.captureGroupCleaningQueryService = captureGroupCleaningQueryService;
-		this.captureGroupQualityQueryService = captureGroupQualityQueryService;
+		this.captureGroupInputFreezeQueryService = captureGroupInputFreezeQueryService;
 		this.labelSchemaService = labelSchemaService;
 		this.captureGroupAnnotationWorkflow = captureGroupAnnotationWorkflow;
 		this.repository = repository;
@@ -83,13 +83,6 @@ class AnnotationTaskService {
 			.filter(revision -> tasksById.get(revision.getAnnotationTaskId()).isRevisionForCurrentGroupInput(revision))
 			.collect(java.util.stream.Collectors.toMap(AnnotationRevision::getAnnotationTaskId, revision -> revision,
 					(left, right) -> left.getRevisionNumber() >= right.getRevisionNumber() ? left : right));
-		var captureGroupIds = tasks.stream().map(AnnotationTask::getCaptureGroupId).distinct().toList();
-		var currentGroupQualityById = this.captureGroupQualityQueryService
-			.getCurrentDecisions(projectId, captureGroupIds)
-			.stream()
-			.collect(java.util.stream.Collectors.toUnmodifiableMap(
-					CaptureGroupQualityQueryService.CurrentDecision::captureGroupId,
-					CaptureGroupQualityQueryService.CurrentDecision::isAdmitting));
 		Map<UUID, AnnotationReview> reviewsByRevisionId = revisionsByTaskId.isEmpty() ? Map.of() : this.reviewRepository
 			.findAllByAnnotationRevisionIdIn(
 					revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList())
@@ -102,8 +95,7 @@ class AnnotationTaskService {
 			var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
 			return AnnotationTaskResponse.from(task, projectAdministrator, revision,
 					revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()),
-					revision == null ? null : captureGroupCleaningByRevisionId.get(revision.getAnnotationRevisionId()),
-					currentGroupQualityById.getOrDefault(task.getCaptureGroupId(), false));
+					revision == null ? null : captureGroupCleaningByRevisionId.get(revision.getAnnotationRevisionId()));
 		}).toList();
 		var viewsByTask = this.taskViewService.findAll(tasksById.keySet())
 			.stream()
@@ -153,11 +145,7 @@ class AnnotationTaskService {
 				: this.captureGroupCleaningQueryService
 					.findLatestByAnnotationRevisionIds(List.of(revision.getAnnotationRevisionId()))
 					.get(revision.getAnnotationRevisionId());
-		var admitting = this.captureGroupQualityQueryService
-			.getCurrentDecisions(projectId, List.of(task.getCaptureGroupId()))
-			.stream()
-			.anyMatch(decision -> decision.captureGroupId().equals(task.getCaptureGroupId()) && decision.isAdmitting());
-		var response = AnnotationTaskResponse.from(task, projectAdministrator, revision, review, cleaning, admitting);
+		var response = AnnotationTaskResponse.from(task, projectAdministrator, revision, review, cleaning);
 		if (changed) {
 			this.captureGroupAnnotationWorkflow.recordCameraViewUpdated(projectId, task, view, actorId, requestId,
 					traceId);
@@ -576,14 +564,13 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 	}
 
 	static AnnotationTaskResponse from(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
-			AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning,
-			boolean captureGroupQualityAdmitting) {
+			AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning) {
 		return new AnnotationTaskResponse(task.getAnnotationTaskId(), task.getProjectId(), task.getCaptureGroupId(),
 				null, null, task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(),
 				task.getConfirmedViewSet(), task.getGroupInputVersion(), task.getLabelSchemaId(),
 				task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
-				task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting,
-				canReview(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
+				task.getStatus() == AnnotationTaskStatus.ASSIGNED,
+				canReview(task, projectAdministrator, revision, review),
 				AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
 				task.getUpdatedAt(), task.getVersion(), List.of(), AnnotationTaskCameraViewProgress.from(List.of()));
 	}
@@ -601,9 +588,9 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 	}
 
 	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
-			AnnotationReview review, boolean captureGroupQualityAdmitting) {
+			AnnotationReview review) {
 		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
-				&& review == null && captureGroupQualityAdmitting;
+				&& review == null;
 	}
 
 }

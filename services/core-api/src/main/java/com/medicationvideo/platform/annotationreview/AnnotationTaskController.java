@@ -255,8 +255,16 @@ class AnnotationTaskExceptionHandler {
 
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	ResponseEntity<AnnotationTaskErrorResponse> conflict(DataIntegrityViolationException exception) {
-		return error(HttpStatus.CONFLICT, "ANNOTATION_TASK_ALREADY_EXISTS",
-				"The CaptureGroup already has an annotation task in this project.");
+		var specific = exception.getMostSpecificCause();
+		var message = specific != null ? specific.getMessage() : exception.getMessage();
+		if (message != null && (message.contains("uk_annotation_task_capture_group")
+				|| message.contains("annotation_task_capture_group")
+				|| message.contains("uk_annotation_task_idempotency"))) {
+			return error(HttpStatus.CONFLICT, "ANNOTATION_TASK_ALREADY_EXISTS",
+					"The CaptureGroup already has an annotation task in this project.");
+		}
+		return error(HttpStatus.CONFLICT, "INVALID_ANNOTATION_TASK",
+				"The annotation task operation violates data integrity constraints.");
 	}
 
 	private static ResponseEntity<AnnotationTaskErrorResponse> error(HttpStatus status, String errorCode,

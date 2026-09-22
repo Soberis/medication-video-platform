@@ -82,7 +82,8 @@ class AuditEvent {
 		this.objectVersion = command.objectVersion();
 		this.outcome = command.outcome();
 		this.reasonCode = command.reasonCode();
-		this.requestId = command.requestId();
+		this.requestId = (command.requestId() != null && !command.requestId().isBlank()) ? command.requestId()
+				: UUID.randomUUID().toString();
 		this.traceId = command.traceId();
 		this.authorizationReference = command.authorizationReference();
 		this.details = command.details();

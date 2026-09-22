@@ -494,7 +494,7 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordGroup(group, MEMBER_TOKEN, "REJECTED", "View quality rejected", 2, key("downgrade-rejected"))
 			.andExpect(status().isOk());
 		submit(group, taskId, MEMBER_TOKEN, key("downgrade-blocked"), 10).andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error_code").value("ANNOTATION_TASK_GROUP_QUALITY_NOT_QUALIFIED"));
+			.andExpect(jsonPath("$.error_code").value("ANNOTATION_CAMERA_VIEW_DISPOSITION_INCOMPLETE"));
 		assertEquals(0, count("SELECT count(*) FROM annotation_revision WHERE annotation_task_id = ?", taskId));
 
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", "View quality rechecked", 3, key("downgrade-requalified"))
@@ -532,6 +532,8 @@ class CaptureGroupQualityAnnotationContractTests {
 
 		recordViewQuality(group.clipAssetIds().getLast(), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
 			.andExpect(status().isOk());
+		this.jdbcTemplate.update("UPDATE camera_stream SET version = version + 1 WHERE clip_asset_id = ?",
+				group.clipAssetIds().getLast());
 		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Supporting view changed", 1, key("stale-input-review"))
 			.andExpect(status().isOk());
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 2,
@@ -593,6 +595,9 @@ class CaptureGroupQualityAnnotationContractTests {
 
 		recordViewQuality(group.clipAssetIds().getFirst(), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
 			.andExpect(status().isOk());
+		this.jdbcTemplate.update(
+				"UPDATE camera_stream SET stream_status = 'INGEST_FAILED', version = version + 1 WHERE clip_asset_id = ?",
+				group.clipAssetIds().getFirst());
 		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Camera quality changed", 1, key("camera-ineligible-review"))
 			.andExpect(status().isOk());
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "One camera remains eligible", 2,
@@ -751,6 +756,8 @@ class CaptureGroupQualityAnnotationContractTests {
 		recordViewQuality(group.clipAssetIds().get(1), MEMBER_TOKEN, "REJECTED", "WRONG_SCENE", 0)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.version").value(1));
+		this.jdbcTemplate.update("UPDATE camera_stream SET version = version + 1 WHERE clip_asset_id = ?",
+				group.clipAssetIds().get(1));
 		recordGroup(group, MEMBER_TOKEN, "NEEDS_REVIEW", "Supporting view changed", 3, key("input-changed-review"))
 			.andExpect(status().isOk());
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", "Changed input requalified", 4,
