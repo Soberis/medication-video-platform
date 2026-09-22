@@ -108,17 +108,17 @@ flowchart LR
 
 ### 4.2 不变量
 
-- 用户有系统身份不等于拥有任何项目数据权限。
+- 普通用户的系统身份不自动授予项目数据权限；全局 `ADMIN` 是平台管理员，可访问和管理所有项目。
 - 权限判断至少包含 tenant、project、classification、purpose、expiry 和 task assignment。
 - 角色变更不能追溯性改变历史审计中的当时授权上下文。
 - ARCHIVED 项目禁止新的项目内读取和操作；P0 不通过项目管理界面提供恢复或物理删除。
-- P0 的界面角色只有 `ADMIN` 和 `MEMBER`，它们是细粒度权限项的模板，不是绕过 purpose、project、privacy、task assignment 或审批守卫的通行证。
+- P0 的界面角色只有 `ADMIN` 和 `MEMBER`；全局 `ADMIN` 可管理所有项目，`MEMBER` 仍受项目 membership、purpose、privacy、task assignment 和审批守卫约束。
 
 ### 4.3 当前实现边界
 
 - Flyway V22 和 V29 已实现 `project`、`membership`、项目归档状态和幂等成员命令证据；项目创建原子建立首个 `ADMIN`，成员变更按 project 行锁串行并写追加式审计。
-- 普通用户只能列出和读取其 `ACTIVE` Membership 对应的 Project；成员清单和变更要求项目内 `ACTIVE ADMIN`，且最后一个活动管理员不可移除或降级。
-- ACTIVE 项目的管理员可修改显示名称或归档项目；两者保留稳定 project ID，归档不级联删除成员、视频、对象或审计记录。
+- 普通用户只能列出和读取其 `ACTIVE` Membership 对应的 Project；全局 `ADMIN` 可列出和读取所有 ACTIVE 项目。成员清单和变更由全局 `ADMIN` 管理，且最后一个活动管理员不可移除或降级。
+- 全局 `ADMIN` 可修改任意 ACTIVE 项目的显示名称或归档项目；两者保留稳定 project ID，归档不级联删除成员、视频、对象或审计记录。
 - 当前没有从既有 UploadBatch、ClipAsset 或审计活动反推 Membership。既有资产 API 接入 Membership、Tenant 语义、RoleBinding、PurposeGrant、项目关闭和平台账号启停/密码重置生命周期属于后续经批准切片。
 
 ## 5. `assetcapture`
@@ -140,7 +140,7 @@ flowchart LR
 - `storage_upload_id` 只用于服务端恢复、完成和中止，不通过控制面响应直接暴露。
 - `upload_part` 保存 part number、期望字节数、期望 SHA-256、状态和授权到期时间，不保存预签名 URL。
 - 同一文件只能有一个活动 multipart 会话；同一 `(upload_file_id, part_number)` 只能有一个不可变期望摘要。
-- Abort 仅允许批次发起人或项目管理员；TTL 到期必须记录 `EXPIRED`，不能降格成用户 `ABORTED`。
+- Abort 仅允许批次发起人、项目管理员或全局 `ADMIN`；TTL 到期必须记录 `EXPIRED`，不能降格成用户 `ABORTED`。
 - 批次/文件终态、逐文件清理任务和追加式审计必须原子提交；对象存储 Abort/Delete 不占用该数据库事务。
 - `upload_cleanup_task` 对每个 UploadFile 唯一，使用 claim lease 和有限重试；终态 `FAILED` 必须告警，不得假定对象已清理。
 - 清理任务保留服务端对象引用能力但任何查询响应、日志和指标不得暴露对象 key、upload ID 或预签名 URL。

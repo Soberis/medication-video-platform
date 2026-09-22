@@ -33,14 +33,15 @@ tags:
       enable and disable MEMBER accounts. This directory never exposes password hashes.
   - name: Projects
     description: >-
-      Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Administrators
-      may rename an ACTIVE project or archive it without physically deleting its data; membership
-      changes are project-scoped, administrator-controlled, idempotent and append-only audited.
+      Data-project and ADMIN/MEMBER membership lifecycle owned by the iamproject module. Global ADMIN
+      accounts may view and manage every project, including renaming an ACTIVE project or archiving it
+      without physically deleting its data; membership changes are project-scoped, administrator-controlled,
+      idempotent and append-only audited.
   - name: Uploads
     description: >-
-      Upload batch lifecycle owned by the assetcapture module. Every command and read requires an
-      ACTIVE membership in the owning project; a batch outside that scope is hidden as
-      UPLOAD_BATCH_NOT_FOUND.
+      Upload batch lifecycle owned by the assetcapture module. Every command and read requires
+      global ADMIN authority or an ACTIVE membership in the owning project; a batch outside that
+      scope is hidden as UPLOAD_BATCH_NOT_FOUND.
   - name: Quality Review
     description: >-
       Project-member human decisions about whether an INGESTED ClipAsset is suitable for annotation
@@ -48,7 +49,7 @@ tags:
   - name: Annotation Tasks
     description: >-
       Project-scoped human annotation queue containing exactly one task per admitted CaptureGroup.
-      Active project members can read, edit and submit project tasks; only project administrators can review. ClipAsset remains evidence inside the group.
+      Global ADMIN accounts and active project members can read, edit and submit project tasks; only project administrators can review. ClipAsset remains evidence inside the group.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -61,7 +62,7 @@ tags:
       MediaPipe facts. It contains no video bytes, patient identity, storage locations, robot states or actions.
   - name: Video Playback
     description: >-
-      Explicit, short-lived raw-video access for an internal account with ACTIVE project membership.
+      Explicit, short-lived raw-video access for an internal account with global ADMIN authority or ACTIVE project membership.
       It is for human review, not download, annotation or a privacy-release decision.
   - name: Media Jobs
     description: >-
@@ -414,8 +415,9 @@ paths:
         - Projects
       summary: List projects visible to the authenticated member
       description: >-
-        Returns only ACTIVE projects with an ACTIVE membership for the authenticated actor, plus the
-        server-evaluated capability to create a project.
+        Returns ACTIVE projects visible to the authenticated actor. Global ADMIN accounts receive all
+        ACTIVE projects with ADMIN capability; other actors receive projects with an ACTIVE
+        membership. The response also includes the server-evaluated capability to create a project.
       responses:
         "200":
           description: Authorized projects, ordered deterministically.
@@ -438,6 +440,9 @@ paths:
       tags:
         - Projects
       summary: Read an authorized project
+      description: >-
+        Global ADMIN accounts may read any ACTIVE project without project membership. Other actors
+        must have an ACTIVE membership in the project.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
@@ -474,7 +479,7 @@ paths:
         - Projects
       summary: Rename an active data project
       description: >-
-        Requires an ACTIVE ADMIN membership. Changes only the display name; project ID, memberships,
+        Requires global ADMIN authority. Changes only the display name; project ID, memberships,
         folders, videos and audit history are unchanged. Repeating the same desired name has no
         additional business side effect.
       parameters:
@@ -509,7 +514,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -526,7 +531,7 @@ paths:
         - Projects
       summary: Archive a data project without physically deleting its data
       description: >-
-        Requires an ACTIVE ADMIN membership. ARCHIVED projects disappear from normal project lists
+        Requires global ADMIN authority. ARCHIVED projects disappear from normal project lists
         and reject future project-scoped access. This command retains project, membership, video,
         object-storage and audit records; P0 has no project hard-delete endpoint.
       parameters:
@@ -551,7 +556,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -568,7 +573,7 @@ paths:
       tags:
         - Projects
       summary: List project memberships
-      description: Requires an ACTIVE ADMIN membership in the project.
+      description: Requires global ADMIN authority.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
       responses:
@@ -594,7 +599,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -612,7 +617,7 @@ paths:
         - Projects
       summary: Grant, reactivate or change a project membership
       description: >-
-        Requires an ACTIVE ADMIN membership. The command is idempotent per project, administrator
+        Requires global ADMIN authority. The command is idempotent per project, administrator
         and Idempotency-Key. Demoting the final ACTIVE administrator is rejected.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -648,7 +653,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -673,7 +678,7 @@ paths:
         - Projects
       summary: Remove a project membership
       description: >-
-        Requires an ACTIVE ADMIN membership. Removal preserves the membership record and audit
+        Requires global ADMIN authority. Removal preserves the membership record and audit
         history. Removing the final ACTIVE administrator is rejected.
       parameters:
         - $ref: "#/components/parameters/ProjectId"
@@ -703,7 +708,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -729,8 +734,9 @@ paths:
         - Uploads
       summary: Initialize an upload batch
       description: >-
-        Requires an ACTIVE ADMIN or MEMBER membership in project_id for HOSPITAL_REMOTE uploads;
-        PLATFORM_LOCAL uploads require an ACTIVE project ADMIN. Creates a durable upload batch
+        Requires global ADMIN authority or an ACTIVE ADMIN or MEMBER membership in project_id for
+        HOSPITAL_REMOTE uploads; PLATFORM_LOCAL uploads require global ADMIN authority or an ACTIVE
+        project ADMIN. Creates a durable upload batch
         identity without proxying file bytes or starting multipart upload. Reusing the same
         Idempotency-Key in the same project with an identical request returns the original result.
         Reusing it with different content returns a conflict.
@@ -763,13 +769,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE project ADMIN membership is required for PLATFORM_LOCAL uploads.
+          description: Global ADMIN authority or an ACTIVE project ADMIN membership is required for PLATFORM_LOCAL uploads.
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
-          description: The project does not exist in the caller's ACTIVE membership scope.
+          description: The project does not exist or is not ACTIVE.
           content:
             application/problem+json:
               schema:
@@ -787,9 +793,9 @@ paths:
         - Uploads
       summary: Read upload batch progress
       description: >-
-        Requires an ACTIVE membership in the batch's owning project and returns the current
+        Requires global ADMIN authority or an ACTIVE membership in the batch's owning project and returns the current
         project-scoped batch summary derived from persisted platform state. PLATFORM_LOCAL batches
-        require an ACTIVE project ADMIN membership.
+        require global ADMIN authority or an ACTIVE project ADMIN membership.
         This safe read does not list or mutate object storage. Uploaded Part and byte totals may
         therefore lag a direct upload until the client explicitly confirms or reconciles Parts.
       parameters:
@@ -825,7 +831,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -843,10 +849,9 @@ paths:
         - Uploads
       summary: Terminate an incomplete upload batch and durably schedule storage cleanup
       description: >-
-        Idempotently terminates an INITIATED or UPLOADING batch. Only the recorded batch initiator
-        with an ACTIVE membership or an ACTIVE project ADMIN may call this command; PLATFORM_LOCAL
-        batches require the project ADMIN path. A local token's
-        global authority is not treated as project administration. If the server TTL has already
+        Idempotently terminates an INITIATED or UPLOADING batch. The recorded batch initiator with
+        an ACTIVE membership or a global ADMIN may call this command; PLATFORM_LOCAL batches require
+        global ADMIN authority or an ACTIVE project ADMIN. If the server TTL has already
         elapsed, the command records EXPIRED rather than incorrectly recording a user abort.
         Batch and file terminal states, cleanup tasks and an append-only audit event commit in one
         database transaction; S3 Multipart Abort or deletion of an already completed abandoned
@@ -895,7 +900,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: Caller lacks the required batch role; PLATFORM_LOCAL batches require a project ADMIN.
+          description: Caller lacks the required batch role; PLATFORM_LOCAL batches require global ADMIN authority or a project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -920,7 +925,7 @@ paths:
         - Uploads
       summary: List file progress for an upload batch
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Returns deterministic file summaries with persisted Part counts, confirmed bytes, file
         lifecycle state and stable completion error codes. This read does not contact object
         storage; use the explicit Part reconciliation command after an interrupted direct upload.
@@ -958,7 +963,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -976,7 +981,7 @@ paths:
         - Uploads
       summary: Complete a verified upload batch and bind raw video assets
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Called automatically by the edge uploader after every declared file has completed final
         object size and full-file SHA-256 verification. The command locks the batch, checks exact
         file count and total bytes, verifies the upload-file-manifest-v1 digest, and creates one
@@ -1018,7 +1023,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1044,7 +1049,7 @@ paths:
         - Uploads
       summary: Assemble one capture session from verified uploaded metadata
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         For HOSPITAL_REMOTE batches, this operation locates exactly one uploaded
         METADATA file with application/json content type, enforces a 1 MiB safety limit, reads it
         from object storage, verifies its already-recorded size and SHA-256 again, and parses the
@@ -1093,7 +1098,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1125,7 +1130,7 @@ paths:
         - Uploads
       summary: Register one immutable file manifest entry
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Registers control-plane metadata for one file in an initialized batch and calculates the
         expected number of parts. This operation does not proxy bytes, create an object-storage
         multipart session, issue a signed URL or move the batch to UPLOADING. Replaying the same
@@ -1172,7 +1177,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1198,7 +1203,7 @@ paths:
         - Uploads
       summary: Create the file's object-storage multipart session
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Creates at most one S3-compatible multipart session for a registered file. Every file and
         byte declared by the batch manifest must already be registered. This natural-resource PUT
         is replay-safe, does not expose the storage upload ID, does not issue upload credentials and
@@ -1236,7 +1241,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1266,7 +1271,7 @@ paths:
         - Uploads
       summary: Complete and verify one multipart file
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Acquires a bounded completion lease, reads the authoritative current Part list from object
         storage, requires continuous Part numbers and exact manifest size, and submits those current
         ETags to S3 CompleteMultipartUpload. It then inspects and streams the completed object to
@@ -1306,7 +1311,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1338,7 +1343,7 @@ paths:
         - Uploads
       summary: Authorize a direct upload of one immutable part
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Registers the expected SHA-256 for a part and returns a short-lived pre-signed PUT URL.
         Repeating the same part and hash reissues a fresh authorization; changing the hash returns
         a conflict. The response is a temporary credential, must not be logged or persisted by the
@@ -1397,7 +1402,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1427,7 +1432,7 @@ paths:
         - Uploads
       summary: Confirm one part from object-storage state
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Queries object storage for the authorized part and records it as UPLOADED only when the
         stored part number and byte length match the immutable manifest. The caller does not submit
         an ETag, so client-controlled metadata cannot confirm missing bytes. An identical replay is
@@ -1474,7 +1479,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1506,7 +1511,7 @@ paths:
         - Uploads
       summary: Read persisted multipart progress
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Returns the current platform record for authorized and confirmed parts without issuing
         credentials or changing upload state. After an interrupted client reconnects, it should
         reconcile storage state first and then use this representation to decide which parts still
@@ -1550,7 +1555,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1574,7 +1579,7 @@ paths:
         - Uploads
       summary: Reconcile persisted progress with object storage
       description: >-
-        Requires an ACTIVE batch operator; PLATFORM_LOCAL batches require an ACTIVE project ADMIN.
+        Requires global ADMIN authority or an ACTIVE batch operator; PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN.
         Idempotently lists the multipart upload in object storage and confirms every tracked part
         whose stored byte length matches the immutable manifest. This explicit command recovers
         parts uploaded before a client interruption without giving a state-changing side effect to
@@ -1613,7 +1618,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: PLATFORM_LOCAL batches require an ACTIVE project ADMIN membership.
+          description: PLATFORM_LOCAL batches require global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
@@ -1643,7 +1648,7 @@ paths:
         - Camera Configuration
       summary: Provision a stable logical camera channel
       description: >-
-        Requires an ACTIVE ADMIN membership. This administrative or deployment-time operation maps
+        Requires global ADMIN authority or an ACTIVE project ADMIN membership. This administrative or deployment-time operation maps
         a project-scoped, non-secret
         provisioning key to an immutable platform CameraChannel ID. Repeating the same natural-key
         PUT returns the original resource. The provisioning key is a technical integration key,
@@ -1690,13 +1695,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The caller is an ACTIVE project MEMBER but not an ADMIN.
+          description: The caller lacks global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
-          description: The project does not exist in the caller's ACTIVE membership scope.
+          description: The project does not exist or is not ACTIVE.
           content:
             application/problem+json:
               schema:
@@ -1708,7 +1713,7 @@ paths:
         - Camera Configuration
       summary: Create an immutable CameraSet configuration version
       description: >-
-        Requires an ACTIVE ADMIN membership. This administrative or deployment-time operation
+        Requires global ADMIN authority or an ACTIVE project ADMIN membership. This administrative or deployment-time operation
         creates an immutable, project-scoped
         CameraSet version from previously provisioned logical channels. Member order in the request
         is insignificant; camera_index defines canonical order. Repeating the same natural-key PUT
@@ -1770,13 +1775,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The caller is an ACTIVE project MEMBER but not an ADMIN.
+          description: The caller lacks global ADMIN authority or an ACTIVE project ADMIN membership.
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
-          description: The project does not exist in the caller's ACTIVE membership scope.
+          description: The project does not exist or is not ACTIVE.
           content:
             application/problem+json:
               schema:
@@ -1985,7 +1990,7 @@ paths:
         - Quality Review
       summary: Record or revise the human quality conclusion for a CaptureGroup
       description: >-
-        Requires an ACTIVE project member and writes one immutable group-quality fact. RECEIVING
+        Requires global ADMIN authority or an ACTIVE project member and writes one immutable group-quality fact. RECEIVING
         groups cannot be finalized as QUALIFIED or QUALIFIED_WITH_EXCLUSIONS; only COMPLETE or
         INCOMPLETE receipts may be admitted to annotation. A qualifying decision requires at least
         one current human-qualified participating view. Repeating an Idempotency-Key is safe, while
@@ -2050,7 +2055,7 @@ paths:
         - Annotation
       summary: Explicitly assign an optional human-label task for a CaptureGroup
       description: >-
-        An ACTIVE project member may prepare their own task; assigning another member requires a project administrator.
+        A global ADMIN or ACTIVE project member may prepare their own task; assigning another member requires a project administrator.
         The CaptureGroup must have a current admitting human-quality conclusion. This command is
         the explicit opt-in boundary for the human-label path; qualifying a CaptureGroup alone does
         not create a task. Existing tasks are reused without changing their recorded assignee.
@@ -2186,7 +2191,7 @@ paths:
         - Asset Catalog
       summary: Soft-delete one selected video asset
       description: >-
-        Requires ACTIVE ADMIN membership in the explicit project. The command never deletes the
+        Requires global ADMIN authority or ACTIVE ADMIN membership in the explicit project. The command never deletes the
         underlying object synchronously and never deletes sibling streams or historical evidence.
         It hides the asset from ordinary catalog reads and marks its bound stream unavailable; a
         repeated deletion is a no-op and does not add another audit event.
@@ -2215,7 +2220,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The caller is not an ACTIVE project administrator.
+          description: Global ADMIN authority or an ACTIVE project administrator membership is required.
           content:
             application/problem+json:
               schema:
@@ -2233,7 +2238,7 @@ paths:
         - Media Jobs
       summary: Explicitly start the baseline media check for one uploaded video
       description: >-
-        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        Requires an authenticated account with global ADMIN authority or an ACTIVE ADMIN or MEMBER membership in the
         explicit project. It accepts only an undeleted video asset in UPLOADED state, atomically
         creates (or returns) the one baseline MEDIA_PROBE job, attempt and Outbox envelope, and
         returns the durable queued job. This request does not play the video and does not block
@@ -2278,7 +2283,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The caller has no active membership in the project.
+          description: The caller has neither global ADMIN authority nor an ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -2328,7 +2333,7 @@ paths:
         - AI Candidates
       summary: Queue one offline MediaPipe Hand Landmarker candidate job
       description: >-
-        Requires an authenticated ACTIVE project member and an approved offline model SHA-256 in server
+        Requires an authenticated global ADMIN or ACTIVE project member and an approved offline model SHA-256 in server
         configuration. The platform snapshots a media-processed video input, creates attempt 1 and a
         transactional Outbox envelope. Results remain candidate annotations and cannot create formal
         annotations, quality decisions or dataset entries automatically.
@@ -2418,7 +2423,8 @@ paths:
       tags: [AI Candidates]
       summary: Get the latest hand pose run and candidate keypoints for a video
       description: >-
-        Returns candidate-only output for the latest job. It is visible to project members but is
+        Returns candidate-only output for the latest job. It is visible to global ADMIN accounts and
+        active project members but is
         never a formal annotation, quality decision or dataset input until the normal human review
         flow records a separate annotation revision.
       security: [{ sessionCookie: [] }]
@@ -2446,7 +2452,7 @@ paths:
         - Media Jobs
       summary: Read the immutable successful media report for one video asset
       description: >-
-        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        Requires an authenticated account with global ADMIN authority or an ACTIVE ADMIN or MEMBER membership in the
         explicit project. A report is available only after a Worker has independently verified
         the uploaded input digest and completed a full video-stream decode. This response contains
         technical facts only and never exposes an object location, signed URL or Worker capability.
@@ -2477,7 +2483,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The caller has no active membership in the project.
+          description: The caller has neither global ADMIN authority nor an ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -2495,7 +2501,7 @@ paths:
         - Video Playback
       summary: Issue a short-lived video address for internal data review
       description: >-
-        Requires an authenticated account with an ACTIVE ADMIN or MEMBER membership in the
+        Requires an authenticated account with global ADMIN authority or an ACTIVE ADMIN or MEMBER membership in the
         explicit project. The asset must be an undeleted video/mp4 whose upload completed its
         integrity checks; media probing is not a playback prerequisite. The signed URL is
         returned only in this no-store response and is never persisted or written to audit
@@ -2536,7 +2542,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The authenticated account has no ACTIVE membership in the project.
+          description: The authenticated account has neither global ADMIN authority nor an ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -2621,7 +2627,7 @@ paths:
         - Annotation Tasks
       summary: Read the current immutable P0 primary-Step label schema
       description: >-
-        Requires an ACTIVE project membership. The response contains stable label identifiers,
+        Requires global ADMIN authority or an ACTIVE project membership. The response contains stable label identifiers,
         Chinese display names, definitions, ordering and the immutable schema digest used by newly
         created annotation tasks. Clients must submit label_id values rather than display text.
       security:
@@ -2657,7 +2663,7 @@ paths:
         - Annotation Tasks
       summary: List annotation tasks visible to the current project member
       description: >-
-        Requires an ACTIVE project membership. All members receive the project queue; task assignee
+        Requires global ADMIN authority or an ACTIVE project membership. All members receive the project queue; task assignee
         is attribution, not an access restriction. Only administrators may review. The response
         includes mutually exclusive progress counts over exactly the same visible tasks and from
         the same consistent read; the browser does not calculate project workload from other pages.
@@ -2694,7 +2700,7 @@ paths:
         - Annotation Tasks
       summary: Submit one immutable group annotation revision for an assigned task
       description: >-
-        Requires an ACTIVE project membership; the caller need not be the recorded task assignee. The request
+        Requires global ADMIN authority or an ACTIVE project membership; the caller need not be the recorded task assignee. The request
         freezes the already persisted camera states into annotation-document.v2; it does not accept
         a single shared segment list. Every expected camera slot, including missing cameras, must
         be SUBMITTED or EXCLUDED, at least one camera must be SUBMITTED, and no view may have an
@@ -2748,7 +2754,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: An ACTIVE project membership and task assignment are required.
+          description: Global ADMIN authority or an ACTIVE project membership and task assignment are required.
           content:
             application/problem+json:
               schema:
@@ -2772,7 +2778,7 @@ paths:
         - Annotation Tasks
       summary: Record one administrator decision for a submitted annotation revision
       description: >-
-        Requires global ROLE_ADMIN plus ACTIVE project ADMIN membership. Administrators may confirm
+        Requires global ROLE_ADMIN. Administrators may confirm
         their own submissions; no second person is required. Immutable audit facts remain unchanged.
         Approval requires the reviewer to confirm every camera in the frozen view set and validates
         each submitted camera's local bounds and explicit correspondence records. A rejection names
@@ -2826,7 +2832,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: A global administrator with ACTIVE project ADMIN membership is required.
+          description: Global ADMIN authority is required.
           content:
             application/problem+json:
               schema:
@@ -2850,7 +2856,7 @@ paths:
         - Quality Review
       summary: Read the current human quality conclusion for a video
       description: >-
-        Requires an ACTIVE ADMIN or MEMBER membership in the explicit project. An undeleted asset
+        Requires global ADMIN authority or an ACTIVE ADMIN or MEMBER membership in the explicit project. An undeleted asset
         without a conclusion returns UNREVIEWED with version 0. The response never exposes storage
         details.
       security:
@@ -2875,7 +2881,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The authenticated account has no ACTIVE membership in the project.
+          description: The authenticated account has neither global ADMIN authority nor an ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -2892,7 +2898,7 @@ paths:
         - Quality Review
       summary: Record or revise the human quality conclusion for a video
       description: >-
-        Requires an ACTIVE ADMIN or MEMBER membership. The asset must be undeleted and INGESTED.
+        Requires global ADMIN authority or an ACTIVE ADMIN or MEMBER membership. The asset must be undeleted and INGESTED.
         expected_version is 0 for an unreviewed asset and must match the current review version for
         a revision. Repeating the same conclusion returns the current fact without another audit
         event. A changed conclusion is written atomically with an append-only audit event. A new or changed
@@ -2934,7 +2940,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "403":
-          description: The authenticated account has no ACTIVE membership in the project.
+          description: The authenticated account has neither global ADMIN authority nor an ACTIVE membership in the project.
           content:
             application/problem+json:
               schema:
@@ -3466,7 +3472,7 @@ paths:
       tags: [AI Candidates]
       summary: Read stored action candidates for a project capture group
       description: >-
-        Requires active project membership. When clip_asset_id is provided, returns candidates for
+        Requires global ADMIN authority or active project membership. When clip_asset_id is provided, returns candidates for
         that specific clip from the latest successful action job. When omitted, defaults to the
         annotation task's selected primary clip, or the lowest camera_index clip if no task exists.
         A newer unfinished job suppresses older results. Returns an empty list when no matching
@@ -3503,7 +3509,7 @@ paths:
       tags: [AI Candidates]
       summary: Read latest action candidate job status for a capture group
       description: >-
-        Requires active project membership. When clip_asset_id is provided, returns the latest
+        Requires global ADMIN authority or active project membership. When clip_asset_id is provided, returns the latest
         action candidate job for that specific clip, or 204 if none exists. When omitted, defaults
         to the task's selected primary clip or the lowest camera_index clip without a task.
       security: [{ sessionCookie: [] }]
@@ -3538,7 +3544,7 @@ paths:
       tags: [AI Candidates]
       summary: Manually queue or retry an action candidate job for a project capture group
       description: >-
-        Requires active project membership. Queues a new Qwen action candidate job
+        Requires global ADMIN authority or active project membership. Queues a new Qwen action candidate job
         targeting the task's selected primary clip, or the first camera-index clip without one.
         Uses the task's frozen schema when present, otherwise snapshots the published global schema.
         A human task, assignee and human quality approval are not dispatch prerequisites.
@@ -5621,9 +5627,7 @@ components:
         - created_by
         - status
         - can_submit
-        - can_select_primary
         - can_review
-        - can_recheck_capture_group_cleaning
         - annotation_revision
         - created_at
         - updated_at
@@ -5689,17 +5693,10 @@ components:
             - COMPLETED
         can_submit:
           type: boolean
-          description: True only when the current project member may submit a group revision now, all expected camera views are submitted or excluded, and at least one view is submitted.
-        can_select_primary:
-          type: boolean
-          deprecated: true
-          description: Historical compatibility field; current CaptureGroup tasks always return false because no camera is primary.
+          description: True only when the global ADMIN or current project member may submit a group revision now, all expected camera views are submitted or excluded, and at least one view is submitted.
         can_review:
           type: boolean
           description: Server-evaluated capability for the current authenticated account to review this submitted group revision.
-        can_recheck_capture_group_cleaning:
-          type: boolean
-          description: Server-evaluated capability for an administrator to re-evaluate CaptureGroup training eligibility against current facts.
         annotation_revision:
           anyOf:
             - $ref: "#/components/schemas/AnnotationRevisionSummary"
@@ -5746,7 +5743,7 @@ components:
           enum:
             - PROJECT
             - ASSIGNEE
-          description: PROJECT for all active project members. ASSIGNEE is retained only for historical response compatibility.
+          description: PROJECT for all global ADMIN accounts and active project members. ASSIGNEE is retained only for historical response compatibility.
         total:
           type: integer
           format: int64
