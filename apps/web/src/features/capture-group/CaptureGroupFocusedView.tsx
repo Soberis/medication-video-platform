@@ -1,4 +1,4 @@
-import { Button, Descriptions } from 'antd'
+import { Descriptions } from 'antd'
 import { Video } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -22,7 +22,6 @@ interface CaptureGroupFocusedViewProps {
   viewState: CaptureGroupViewState
   task?: AnnotationTask | null
   onSelectView: (clipAssetId: string) => void
-  onToggleExcludeView?: (clipAssetId: string) => Promise<void>
   onPlaybackTimeChange?: (timeMs: number | null) => void
   isCompleted?: boolean
   externalVideoRef?: React.RefObject<HTMLVideoElement | null>
@@ -35,7 +34,6 @@ export function CaptureGroupFocusedView({
   viewState,
   task = null,
   onSelectView,
-  onToggleExcludeView,
   onPlaybackTimeChange,
   isCompleted = false,
   externalVideoRef,
@@ -77,7 +75,16 @@ export function CaptureGroupFocusedView({
       const isKeyI = event.code === 'KeyI'
       const isKeyO = event.code === 'KeyO'
 
-      if (!isSpace && !isArrowLeft && !isArrowRight && !isKeyJ && !isKeyK && !isKeyL && !isKeyI && !isKeyO) {
+      if (
+        !isSpace &&
+        !isArrowLeft &&
+        !isArrowRight &&
+        !isKeyJ &&
+        !isKeyK &&
+        !isKeyL &&
+        !isKeyI &&
+        !isKeyO
+      ) {
         return
       }
 
@@ -173,7 +180,8 @@ export function CaptureGroupFocusedView({
               )
               const decision = viewReviews[stream?.clip_asset_id ?? ''] ?? null
               const cameraStatus = task ? getCameraProcessingStatus(view.cameraNumber, task) : null
-              const isExcluded = decision?.decision === 'REJECTED' || cameraStatus?.status === 'EXCLUDED'
+              const isExcluded =
+                decision?.decision === 'REJECTED' || cameraStatus?.status === 'EXCLUDED'
               const qualityLabel = stream
                 ? `机位质量 · ${isExcluded ? '已排除' : viewQualityLabels[decision?.decision ?? 'UNREVIEWED']}`
                 : null
@@ -237,14 +245,21 @@ export function CaptureGroupFocusedView({
                     }
                   }}
                 >
-                  <span className="capture-group-compare-thumbnail capture-group-compare-icon" aria-hidden="true">
+                  <span
+                    className="capture-group-compare-thumbnail capture-group-compare-icon"
+                    aria-hidden="true"
+                  >
                     <Video size={14} strokeWidth={1.75} />
                   </span>
                   <span className="capture-group-compare-name">机位 {view.cameraNumber}</span>
                   {cameraStatus && cameraStatus.status === 'SUBMITTED' ? (
-                    <span className="capture-group-compare-badge is-submitted" title="已提交">已提交</span>
+                    <span className="capture-group-compare-badge is-submitted" title="已提交">
+                      已提交
+                    </span>
                   ) : cameraStatus && cameraStatus.status === 'DRAFT' ? (
-                    <span className="capture-group-compare-badge is-draft" title="编辑中">编辑中</span>
+                    <span className="capture-group-compare-badge is-draft" title="编辑中">
+                      编辑中
+                    </span>
                   ) : isExcluded ? (
                     <span className="capture-group-compare-badge is-excluded">已排除</span>
                   ) : null}
@@ -258,7 +273,14 @@ export function CaptureGroupFocusedView({
             })}
           </div>
           {task && viewRows.length > 1 ? (
-            <div className="capture-group-compare-summary-pill" style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--app-color-foreground-secondary)' }}>
+            <div
+              className="capture-group-compare-summary-pill"
+              style={{
+                marginLeft: 'auto',
+                fontSize: '12px',
+                color: 'var(--app-color-foreground-secondary)',
+              }}
+            >
               {computeGroupCameraSummary(viewRows, task, {}).displayText}
             </div>
           ) : null}

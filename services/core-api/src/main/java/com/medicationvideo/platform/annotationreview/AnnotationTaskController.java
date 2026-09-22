@@ -87,8 +87,8 @@ class AnnotationTaskController {
 					required = false) @Pattern(regexp = REQUEST_ID_PATTERN) String requestId,
 			@Valid @RequestBody AnnotationRevisionRequest request, Authentication authentication) {
 		var response = this.service.submitRevision(projectId, annotationTaskId, requireActor(authentication).actorId(),
-				isPlatformAdministrator(authentication), idempotencyKey,
-				Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()), MDC.get("traceId"),
+				idempotencyKey, Optional.ofNullable(requestId).orElseGet(() -> UUID.randomUUID().toString()),
+				MDC.get("traceId"),
 				new AnnotationRevisionSubmitCommand(request.expectedTaskVersion(), request.expectedInputVersion(),
 						request.correspondences()
 							.stream()

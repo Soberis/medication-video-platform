@@ -1,9 +1,8 @@
-import { Alert, App as AntdApp, Button, Modal, Skeleton } from 'antd'
+import { Alert, Button, Modal, Skeleton } from 'antd'
 import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 
-import { recordQualityReview, type QualityReviewReasonCode } from '@/api/quality'
 import { paths } from '@/app/paths'
 import { useAuth } from '@/app/auth'
 import { PageHeader } from '@/components/PageHeader'
@@ -57,7 +56,6 @@ function CaptureGroupHeaderStatus({ group }: { group: CaptureGroup }) {
 export default function CaptureGroupDetailView() {
   const { projectId = '', captureGroupId = '' } = useParams()
   const { session } = useAuth()
-  const { message } = AntdApp.useApp()
   const location = useLocation()
   const navigate = useNavigate()
   const data = useCaptureGroupDetailData(projectId, captureGroupId)
@@ -202,7 +200,14 @@ export default function CaptureGroupDetailView() {
       video.currentTime = validMs / 1000
       void video.play().catch(() => undefined)
     },
-    [canPlay, data.selectedClipAssetId, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+    [
+      canPlay,
+      data.selectedClipAssetId,
+      isRequestingPlayback,
+      playbackGrant,
+      playbackState,
+      startPlayback,
+    ],
   )
 
   const handleSeekToMs = useCallback(
@@ -226,7 +231,14 @@ export default function CaptureGroupDetailView() {
       segmentStopListenerRef.current = null
       video.currentTime = Math.max(0, timeMs / 1000)
     },
-    [canPlay, data.selectedClipAssetId, isRequestingPlayback, playbackGrant, playbackState, startPlayback],
+    [
+      canPlay,
+      data.selectedClipAssetId,
+      isRequestingPlayback,
+      playbackGrant,
+      playbackState,
+      startPlayback,
+    ],
   )
 
   useEffect(() => {
@@ -302,33 +314,6 @@ export default function CaptureGroupDetailView() {
     startPlayback,
   ])
 
-  const handleDiscardVideo = useCallback(async () => {
-    await data.refresh()
-    void navigate(paths.captureGroups(projectId), { replace: true, state: location.state })
-  }, [data, location.state, navigate, projectId])
-
-  const handleToggleExcludeView = useCallback(
-    async (clipAssetId: string) => {
-      const currentReview = data.viewReviews[clipAssetId]
-      const isCurrentlyExcluded = currentReview?.decision === 'REJECTED'
-      const nextDecision = isCurrentlyExcluded ? 'QUALIFIED' : 'REJECTED'
-      const nextReason: QualityReviewReasonCode = isCurrentlyExcluded
-        ? 'MEETS_REQUIREMENTS'
-        : 'OTHER_QUALITY_FAILURE'
-      try {
-        await recordQualityReview(projectId, clipAssetId, {
-          decision: nextDecision,
-          reason_code: nextReason,
-          expected_version: currentReview?.version ?? 0,
-        })
-        void message.success(isCurrentlyExcluded ? '已恢复该机位' : '已排除该机位')
-        await data.refresh()
-      } catch (error) {
-        void message.error(error instanceof Error ? error.message : '机位状态更新失败，请重试')
-      }
-    },
-    [data, message, projectId],
-  )
   const eventIdentity = data.group?.capture_group_key ?? shortId(captureGroupId)
 
   const confirmReceiptFinalization = async () => {
@@ -392,7 +377,8 @@ export default function CaptureGroupDetailView() {
           onPlaySegment={handlePlaySegment}
           activeCameraNumber={activeCameraNumber}
           onSelectCamera={(cameraNumber) => {
-            const clipAssetId = viewRows.find((view) => view.cameraNumber === cameraNumber)?.stream?.clip_asset_id
+            const clipAssetId = viewRows.find((view) => view.cameraNumber === cameraNumber)?.stream
+              ?.clip_asset_id
             if (clipAssetId) handleSelectView(clipAssetId)
           }}
         />
@@ -424,7 +410,7 @@ export default function CaptureGroupDetailView() {
         activeCameraNumber={activeCameraNumber}
         activeClipAssetId={selectedStream?.clip_asset_id ?? null}
         assigneeActorId={session?.username ?? ''}
-        canPrepareTask={session?.role === 'ADMIN' && data.taskVisibility === 'visible'}
+        canPrepareTask={Boolean(session) && data.taskVisibility === 'visible'}
         currentPlaybackTimeMs={currentPlaybackTimeMs}
         totalDurationMs={totalDurationMs}
         hasNoHandDetected={
@@ -437,7 +423,6 @@ export default function CaptureGroupDetailView() {
         onDirtyChange={setHasUnsavedAnnotation}
         onTaskChange={data.setTask}
         onRefresh={data.refresh}
-        onDiscardVideo={handleDiscardVideo}
       />
     )
   }
@@ -571,7 +556,6 @@ export default function CaptureGroupDetailView() {
                   externalVideoRef={videoRef}
                   initialPlaybackTimeMs={preservedPlaybackTimeMs}
                   onSelectView={handleSelectView}
-                  onToggleExcludeView={handleToggleExcludeView}
                   onPlaybackTimeChange={handlePlaybackTimeChange}
                   isCompleted={humanTask?.status === 'COMPLETED'}
                 />

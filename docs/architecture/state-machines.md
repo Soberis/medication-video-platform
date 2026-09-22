@@ -206,8 +206,8 @@ PENDING → ASSIGNED → IN_PROGRESS → SUBMITTED → COMPLETED
 
 | 迁移 | 角色与守卫 |
 | --- | --- |
-| PENDING → ASSIGNED | 系统与 CaptureGroup 事件级质量准入在同一事务内完成；assignee 是当前质量确认人且具有 ACTIVE 项目权限；组、视图质量事实和任务范围均被锁定。管理员恢复仅可在当前事实仍满足且尚无任务时创建。 |
-| ASSIGNED → SUBMITTED | 当前 assignee；创建绑定 CaptureGroup 的不可变 revision；schema digest 与任务一致；基础校验通过 |
+| PENDING → ASSIGNED | ACTIVE 项目成员在当前质量准入有效时显式准备人工任务；已有任务直接复用。assignee 记录首次负责人，不限制后续成员读写；输入变化由管理员显式刷新。 |
+| ASSIGNED → SUBMITTED | ACTIVE 项目成员；全部机位已提交或排除后，创建绑定 CaptureGroup 的不可变 revision；schema digest 与任务一致；基础校验通过 |
 | SUBMITTED → COMPLETED | 当前 revision 获独立 `APPROVED`；同一事务生成绑定该 revision 的不可变 post-clean run/result |
 | SUBMITTED → ASSIGNED | 当前 revision 获 `REJECTED`；保留决定和旧 revision，下一次提交递增 revision number |
 
@@ -396,7 +396,7 @@ ASSIGNED → SUBMITTED → COMPLETED
               └──────→ ASSIGNED → next revision
 ```
 
-- `QUALIFIED` 质量结论会在同一事务内自动创建唯一任务并分配给质量确认人；仅 ACTIVE 项目成员中的任务受分配人可以提交，自动创建不等于可以代替受分配人提交。
+- `QUALIFIED` 质量结论不自动创建人工任务；ACTIVE 项目成员在人工提交路径显式准备或复用唯一任务，成员均可提交，管理员另可复核。AI 作业完成不等于人工提交。
 - 提交前 ClipAsset 必须仍为 `INGESTED`、未软删除，且当前人工质量结论为 `QUALIFIED`。
 - P0 每轮提交创建一条不可变 `annotation-document.v1` revision；相同幂等键和相同内容返回原 revision，不同内容或尚未退回的已提交任务拒绝。
 - P0 文档只包含一个或多个绑定不可变 P0 LabelSchema 的主 Step 时间段和可选说明。主 Step 可在边界相接但不得重叠；存在已验证 MediaReport 时，结束时间不得超过媒体时长。返工已启用，对象框仍在后续真实用例中启用。

@@ -204,65 +204,79 @@ describe('CaptureGroup Review and event cleaning', () => {
     expect(screen.queryByRole('button', { name: '退回修改' })).not.toBeInTheDocument()
   })
 
-  it('returns the same task to rework while keeping the rejected Revision visible', async () => {
-    const group = captureGroupFixture(groupId, {
-      expected: [1, 2],
-      received: [1, 2],
-      receipt: 'COMPLETE',
-    })
-    const viewSet = qualityFixture(group, 'QUALIFIED').confirmed_view_set
-    const submitted = submittedGroupTask(group, { confirmedViewSet: viewSet })
-    const reworked = rejectedGroupTask(group, {
-      confirmedViewSet: viewSet,
-      reviewNote: '请补充动作结束位置。',
-    })
-    const fetchMock = stubGroupDetail(group, {
-      task: submitted,
-      taskResponses: [submitted, reworked],
-      quality: qualityFixture(group, 'QUALIFIED'),
-      candidateStatus: 'NO_HAND_DETECTED',
-    })
-    const user = userEvent.setup()
-    renderCaptureGroup()
+  it.each([false, true])(
+    'returns a camera for rework while retaining the revision (excluded: %s)',
+    async (excluded) => {
+      const group = captureGroupFixture(groupId, {
+        expected: [1, 2],
+        received: [1, 2],
+        receipt: 'COMPLETE',
+      })
+      const viewSet = qualityFixture(group, 'QUALIFIED').confirmed_view_set
+      const submitted = submittedGroupTask(group, { confirmedViewSet: viewSet })
+      const reworked = rejectedGroupTask(group, {
+        confirmedViewSet: viewSet,
+        reviewNote: '请补充动作结束位置。',
+      })
+      if (
+        excluded &&
+        submitted.annotation_revision?.annotation_document.schema_version ===
+          'annotation-document.v2'
+      ) {
+        const view = submitted.annotation_revision.annotation_document.camera_views[0]!
+        view.included = false
+        view.exclusion_reason = '需要重新核对的排除决定'
+        view.segments = []
+      }
 
-    await markAllReviewCamerasAsReviewed(user)
-    await user.click(screen.getAllByRole('checkbox', { name: '退回此机位' })[0]!)
-    await user.click(await screen.findByRole('button', { name: '退回修改' }))
-    const dialog = await screen.findByRole('dialog')
-    await user.type(
-      within(dialog).getByRole('textbox', { name: '退回修改说明（可选）' }),
-      '请补充动作结束位置。',
-    )
-    await user.click(within(dialog).getByRole('button', { name: '退回修改' }))
+      const fetchMock = stubGroupDetail(group, {
+        task: submitted,
+        taskResponses: [submitted, reworked],
+        quality: qualityFixture(group, 'QUALIFIED'),
+        candidateStatus: 'NO_HAND_DETECTED',
+      })
+      const user = userEvent.setup()
+      renderCaptureGroup()
 
-    await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) =>
-            String(input).endsWith(
-              `/annotation-revisions/${submitted.annotation_revision?.annotation_revision_id}/review`,
-            ) && init?.method === 'POST',
-        ),
-      ).toBe(true)
-    })
-    const reviewCall = fetchMock.mock.calls.find(
-      ([input, init]) =>
-        String(input).endsWith(
-          `/annotation-revisions/${submitted.annotation_revision?.annotation_revision_id}/review`,
-        ) && init?.method === 'POST',
-    )
-    expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
-      decision: 'REJECTED',
-      review_note: '请补充动作结束位置。',
-      reviewed_camera_numbers: [1, 2],
-      return_camera_numbers: [1],
-    })
-    expect((await screen.findAllByText('待修改')).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)
-    expect(screen.queryByText('标注检查通过')).not.toBeInTheDocument()
-  })
+      await markAllReviewCamerasAsReviewed(user)
+      await user.click(screen.getAllByRole('checkbox', { name: '退回此机位' })[0]!)
+      await user.click(await screen.findByRole('button', { name: '退回修改' }))
+      const dialog = await screen.findByRole('dialog')
+      await user.type(
+        within(dialog).getByRole('textbox', { name: '退回修改说明（可选）' }),
+        '请补充动作结束位置。',
+      )
+      await user.click(within(dialog).getByRole('button', { name: '退回修改' }))
+
+      await waitFor(() => {
+        expect(
+          fetchMock.mock.calls.some(
+            ([input, init]) =>
+              String(input).endsWith(
+                `/annotation-revisions/${submitted.annotation_revision?.annotation_revision_id}/review`,
+              ) && init?.method === 'POST',
+          ),
+        ).toBe(true)
+      })
+      const reviewCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          String(input).endsWith(
+            `/annotation-revisions/${submitted.annotation_revision?.annotation_revision_id}/review`,
+          ) && init?.method === 'POST',
+      )
+      expect(JSON.parse(String(reviewCall?.[1]?.body))).toEqual({
+        decision: 'REJECTED',
+        review_note: '请补充动作结束位置。',
+        reviewed_camera_numbers: [2],
+        return_camera_numbers: [1],
+      })
+      expect((await screen.findAllByText('待修改')).length).toBeGreaterThan(0)
+      expect(screen.getAllByText('第 1 次正式修订').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('复核 · 已退回').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('请补充动作结束位置。').length).toBeGreaterThan(0)
+      expect(screen.queryByText('标注检查通过')).not.toBeInTheDocument()
+    },
+  )
 
   it('surfaces a server rejection when Group Quality was downgraded before Review', async () => {
     const group = captureGroupFixture(groupId, {

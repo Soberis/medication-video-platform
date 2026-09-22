@@ -33,7 +33,4 @@ interface AnnotationTaskRepository extends JpaRepository<AnnotationTask, UUID> {
 
 	List<AnnotationTask> findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId);
 
-	List<AnnotationTask> findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(UUID projectId,
-			String assigneeActorId);
-
 }

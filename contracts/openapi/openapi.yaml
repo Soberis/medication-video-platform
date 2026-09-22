@@ -48,7 +48,7 @@ tags:
   - name: Annotation Tasks
     description: >-
       Project-scoped human annotation queue containing exactly one task per admitted CaptureGroup.
-      Members can read only tasks assigned to themselves; ClipAsset remains evidence inside the group.
+      Active project members can read, edit and submit project tasks; only project administrators can review. ClipAsset remains evidence inside the group.
   - name: Camera Configuration
     description: >-
       Administrative server-side camera identities and immutable set versions. These resources are
@@ -2050,11 +2050,11 @@ paths:
         - Annotation
       summary: Explicitly assign an optional human-label task for a CaptureGroup
       description: >-
-        Requires an ACTIVE project administrator and an ACTIVE project member as the assignee.
+        An ACTIVE project member may prepare their own task; assigning another member requires a project administrator.
         The CaptureGroup must have a current admitting human-quality conclusion. This command is
         the explicit opt-in boundary for the human-label path; qualifying a CaptureGroup alone does
-        not create a task. Repeating the Idempotency-Key replays the same assignment. Reassigning an
-        existing task to a different member is rejected.
+        not create a task. Existing tasks are reused without changing their recorded assignee.
+        Refreshing a changed input snapshot still requires a project administrator.
       security:
         - sessionCookie: []
       parameters:
@@ -2657,8 +2657,8 @@ paths:
         - Annotation Tasks
       summary: List annotation tasks visible to the current project member
       description: >-
-        Requires an ACTIVE project membership. Project administrators receive the project queue;
-        ordinary members receive only tasks assigned to their own internal account. The response
+        Requires an ACTIVE project membership. All members receive the project queue; task assignee
+        is attribution, not an access restriction. Only administrators may review. The response
         includes mutually exclusive progress counts over exactly the same visible tasks and from
         the same consistent read; the browser does not calculate project workload from other pages.
       security:
@@ -2694,7 +2694,7 @@ paths:
         - Annotation Tasks
       summary: Submit one immutable group annotation revision for an assigned task
       description: >-
-        Requires an ACTIVE project membership and that the caller is the task assignee. The request
+        Requires an ACTIVE project membership; the caller need not be the recorded task assignee. The request
         freezes the already persisted camera states into annotation-document.v2; it does not accept
         a single shared segment list. Every expected camera slot, including missing cameras, must
         be SUBMITTED or EXCLUDED, at least one camera must be SUBMITTED, and no view may have an
@@ -5689,7 +5689,7 @@ components:
             - COMPLETED
         can_submit:
           type: boolean
-          description: True only when the assigned account may submit a group revision now, all expected camera views are submitted or excluded, and at least one view is submitted.
+          description: True only when the current project member may submit a group revision now, all expected camera views are submitted or excluded, and at least one view is submitted.
         can_select_primary:
           type: boolean
           deprecated: true
@@ -5746,7 +5746,7 @@ components:
           enum:
             - PROJECT
             - ASSIGNEE
-          description: PROJECT for an administrator queue; ASSIGNEE for an ordinary member queue.
+          description: PROJECT for all active project members. ASSIGNEE is retained only for historical response compatibility.
         total:
           type: integer
           format: int64
@@ -6234,7 +6234,7 @@ components:
           type: array
           uniqueItems: true
           items: { type: integer, minimum: 1, maximum: 64 }
-          description: REJECTED requires one or more revision cameras to reopen; APPROVED requires an empty list. For REJECTED, this and reviewed_camera_numbers must be disjoint and together cover every snapshot camera.
+          description: REJECTED requires one or more revision cameras to reopen, including excluded cameras whose disposition needs correction; APPROVED requires an empty list. For REJECTED, this and reviewed_camera_numbers must be disjoint and together cover every snapshot camera.
         review_note:
           type: string
           maxLength: 1000

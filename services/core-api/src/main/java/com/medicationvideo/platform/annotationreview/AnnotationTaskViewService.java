@@ -204,9 +204,9 @@ class AnnotationTaskViewService {
 				+ UUID.nameUUIDFromBytes(reviewIdempotencyKey.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 		for (var cameraNumber : cameraNumbers) {
 			var snapshot = snapshotsByCamera.get(cameraNumber);
-			if (snapshot == null || !Boolean.TRUE.equals(snapshot.get("included"))) {
+			if (snapshot == null) {
 				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
-						"Only submitted camera views can be restored for rework.", 400);
+						"Only camera views in the submitted revision can be restored for rework.", 400);
 			}
 			var view = this.repository.findForUpdate(task.getProjectId(), task.getAnnotationTaskId(), cameraNumber)
 				.orElseThrow(() -> new AnnotationTaskException("ANNOTATION_CAMERA_VIEW_NOT_FOUND",
@@ -227,16 +227,18 @@ class AnnotationTaskViewService {
 					segments.add(java.util.Collections.unmodifiableMap(segment));
 				}
 			}
-			var note = snapshot.get("note") instanceof String text ? text : "";
+			var included = Boolean.TRUE.equals(snapshot.get("included"));
+			var nextState = included ? AnnotationTaskViewState.DRAFT : AnnotationTaskViewState.PENDING;
+			var note = included && snapshot.get("note") instanceof String text ? text : "";
 			var draft = new LinkedHashMap<String, Object>();
 			draft.put("segments", List.copyOf(segments));
 			draft.put("note", note);
-			view.update(AnnotationTaskViewState.DRAFT, draft, null, now);
+			view.update(nextState, draft, null, now);
 			this.repository.saveAndFlush(view);
 			var snapshotDetails = new LinkedHashMap<String, Object>();
 			snapshotDetails.put("request",
-					Map.of("state", "DRAFT", "revision_id", revision.getAnnotationRevisionId().toString()));
-			snapshotDetails.put("state", "DRAFT");
+					Map.of("state", nextState.name(), "revision_id", revision.getAnnotationRevisionId().toString()));
+			snapshotDetails.put("state", nextState.name());
 			snapshotDetails.put("draft_document", view.getDraftDocument());
 			snapshotDetails.put("exclusion_reason", null);
 			snapshotDetails.put("view_version", view.getVersion());

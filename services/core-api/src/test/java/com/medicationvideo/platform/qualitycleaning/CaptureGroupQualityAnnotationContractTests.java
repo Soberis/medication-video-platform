@@ -159,18 +159,18 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void onlyAnAuthorizedHumanLabelIntentCanAssignAQualifiedGroup() throws Exception {
+	void membersCanPrepareTheirOwnTaskButCannotAssignAnotherMember() throws Exception {
 		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("explicit-intent-quality"))
 			.andExpect(status().isOk());
 		assertEquals(0,
 				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
 
-		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("unauthorized-intent"))
+		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.ADMIN_ACTOR, key("unauthorized-intent"))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.error_code").value("PROJECT_ACCESS_DENIED"));
 		var assignmentKey = key("explicit-intent-assignment");
-		var first = assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, assignmentKey)
+		var first = assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, assignmentKey)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.capture_group_id").value(group.captureGroupId().toString()))
 			.andExpect(jsonPath("$.assignee_actor_id").value(ProjectMembershipTestData.MEMBER_ACTOR))
@@ -181,6 +181,76 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.annotation_task_id").value(taskId.toString()));
 		assertEquals(1,
 				count("SELECT count(*) FROM annotation_task WHERE capture_group_id = ?", group.captureGroupId()));
+	}
+
+	@Test
+	void projectMembersCanSubmitAnotherOwnersTaskButOnlyAdministratorsCanReview() throws Exception {
+		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("member-access-quality"))
+			.andExpect(status().isOk());
+		var assigned = assignTask(group, ADMIN_TOKEN, ProjectMembershipTestData.ADMIN_ACTOR, key("admin-owner"))
+			.andExpect(status().isCreated())
+			.andReturn();
+		var taskId = UUID
+			.fromString(JsonPath.read(assigned.getResponse().getContentAsString(), "$.annotation_task_id"));
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.progress.scope").value("PROJECT"))
+			.andExpect(jsonPath("$.items[0].annotation_task_id").value(taskId.toString()))
+			.andExpect(jsonPath("$.items[0].can_review").value(false));
+		assignTask(group, MEMBER_TOKEN, ProjectMembershipTestData.MEMBER_ACTOR, key("reuse-existing"))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.annotation_task_id").value(taskId.toString()))
+			.andExpect(jsonPath("$.assignee_actor_id").value(ProjectMembershipTestData.ADMIN_ACTOR));
+		var submitted = submit(group, taskId, MEMBER_TOKEN, key("member-submit-other-owner"), 200)
+			.andExpect(status().isCreated())
+			.andReturn();
+		var revisionId = UUID
+			.fromString(JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + MEMBER_TOKEN)
+					.header("Idempotency-Key", key("member-cannot-review"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(reviewRequest(revisionId, "APPROVED", null)))
+			.andExpect(status().isForbidden());
+		this.mockMvc.perform(
+				post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID, revisionId)
+					.header("Authorization", "Bearer " + ADMIN_TOKEN)
+					.header("Idempotency-Key", key("admin-review-member"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(reviewRequest(revisionId, "APPROVED", null)))
+			.andExpect(status().isCreated());
+	}
+
+	@Test
+	void reviewCanReturnAnExcludedCameraWithoutReopeningOtherCameras() throws Exception {
+		var group = createGroup(PROJECT_ID, 2, 2, "COMPLETE", 1);
+		recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, key("excluded-return-quality"))
+			.andExpect(status().isOk());
+		var taskId = taskId(group);
+		var submitted = submit(group, taskId, MEMBER_TOKEN, key("excluded-return-submit"), 200)
+			.andExpect(status().isCreated())
+			.andReturn();
+		var revisionId = UUID
+			.fromString(JsonPath.read(submitted.getResponse().getContentAsString(), "$.annotation_revision_id"));
+		this.mockMvc.perform(post("/api/v1/projects/{projectId}/annotation-revisions/{revisionId}/review", PROJECT_ID,
+				revisionId)
+			.header("Authorization", "Bearer " + ADMIN_TOKEN)
+			.header("Idempotency-Key", key("excluded-return-review"))
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(
+					"{\"decision\":\"REJECTED\",\"reviewed_camera_numbers\":[1],\"return_camera_numbers\":[2],\"review_note\":\"Recheck exclusion\"}"))
+			.andExpect(status().isCreated());
+		this.mockMvc
+			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
+					"Bearer " + MEMBER_TOKEN))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].camera_views[0].state").value("SUBMITTED"))
+			.andExpect(jsonPath("$.items[0].camera_views[1].state").value("PENDING"))
+			.andExpect(jsonPath("$.items[0].camera_views[1].exclusion_reason").value(nullValue()));
 	}
 
 	@Test
@@ -717,7 +787,7 @@ class CaptureGroupQualityAnnotationContractTests {
 	}
 
 	@Test
-	void groupEndpointsEnforceAssigneeAuthorizationAndProjectIsolation() throws Exception {
+	void groupEndpointsAllowMembersAndAdministratorsButEnforceProjectIsolation() throws Exception {
 		var group = createGroup(PROJECT_ID, 1, 1, "COMPLETE", 1);
 		recordGroup(group, MEMBER_TOKEN, "QUALIFIED", BASE_REASON, 0, key("authorization-qualified"))
 			.andExpect(status().isOk());

@@ -4,39 +4,16 @@ import { basename, resolve, join } from 'node:path'
 import { homedir } from 'node:os'
 import { parseArgs } from 'node:util'
 import { randomUUID } from 'node:crypto'
-import { execSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
 import { SyntheticUploadClient, normalizeCameraNumbers, PlatformApiError } from './synthetic-upload-client/upload-client.mjs'
 import { SyntheticCaptureGroupWorkflowClient } from './synthetic-capture-group-client/workflow-client.mjs'
 
 const DEFAULT_BASE_URL = 'http://localhost:8080'
 const DEFAULT_WEB_URL = 'http://localhost:5173'
-const DEFAULT_PROJECT_ID = '00000000-0000-0000-0000-000000000001'
 const DEFAULT_DEV_TOKEN = 'synthetic-local-bearer-token-do-not-reuse'
 const DEFAULT_ADMIN_TOKEN = 'synthetic-local-admin-bearer-token-do-not-reuse'
-
-function syncLocalSyntheticMemberships() {
-  try {
-    execSync(
-      'docker exec medication-video-platform-postgres-1 psql -U medication_local -d medication_platform -c "' +
-        'INSERT INTO membership (membership_id, project_id, actor_id, role, status, created_by, created_at, updated_by, updated_at, row_version) ' +
-        "SELECT gen_random_uuid(), p.project_id, 'local-synthetic-admin', 'ADMIN', 'ACTIVE', 'local-synthetic-bootstrap', now(), 'local-synthetic-bootstrap', now(), 0 " +
-        'FROM project p ' +
-        "WHERE p.status = 'ACTIVE' AND NOT EXISTS ( " +
-        "  SELECT 1 FROM membership m WHERE m.project_id = p.project_id AND m.actor_id = 'local-synthetic-admin' " +
-        '); ' +
-        'INSERT INTO membership (membership_id, project_id, actor_id, role, status, created_by, created_at, updated_by, updated_at, row_version) ' +
-        "SELECT gen_random_uuid(), p.project_id, 'local-synthetic-uploader', 'MEMBER', 'ACTIVE', 'local-synthetic-bootstrap', now(), 'local-synthetic-bootstrap', now(), 0 " +
-        'FROM project p ' +
-        "WHERE p.status = 'ACTIVE' AND NOT EXISTS ( " +
-        "  SELECT 1 FROM membership m WHERE m.project_id = p.project_id AND m.actor_id = 'local-synthetic-uploader' " +
-        ');"',
-      { stdio: 'ignore', windowsHide: true },
-    )
-  } catch {
-    // 忽略 Docker 不可用或非本地容器运行的情况
-  }
-}
 
 async function autoDetectVideos(customDir) {
   const dir = customDir ? resolve(customDir) : join(homedir(), 'Downloads')
@@ -82,18 +59,16 @@ async function autoDetectVideos(customDir) {
 }
 
 function openBrowser(url) {
-  try {
-    const platform = process.platform
-    if (platform === 'win32') {
-      execSync(`start "" "${url}"`)
-    } else if (platform === 'darwin') {
-      execSync(`open "${url}"`)
-    } else {
-      execSync(`xdg-open "${url}"`)
-    }
-  } catch {
-    // 忽略打开浏览器失败
+  const parsed = new URL(url)
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('浏览器链接必须使用 HTTP 或 HTTPS。')
   }
+  const command = process.platform === 'win32'
+    ? ['rundll32.exe', ['url.dll,FileProtocolHandler', parsed.href]]
+    : process.platform === 'darwin' ? ['open', [parsed.href]] : ['xdg-open', [parsed.href]]
+  execFile(command[0], command[1], { windowsHide: true }, (error) => {
+    if (error) console.warn('未能自动打开浏览器，请使用上方链接。')
+  })
 }
 
 async function checkFileReadable(path, label) {
@@ -104,23 +79,21 @@ async function checkFileReadable(path, label) {
   }
 }
 
-async function resolveProject(baseUrl, token, requested) {
-  syncLocalSyntheticMemberships()
+export async function resolveProject(baseUrl, token, requested) {
   let items = []
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/v1/projects`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    if (res.ok) {
-      const data = await res.json()
-      items = Array.isArray(data.items) ? data.items : []
-    }
+    if (!res.ok) throw new Error(`项目列表读取失败（HTTP ${res.status}），请检查账号及项目权限。`)
+    const data = await res.json()
+    items = Array.isArray(data.items) ? data.items : []
   } catch (err) {
     throw new Error(`无法连接到平台 API (${baseUrl}): ${err.message}`)
   }
 
   if (items.length === 0) {
-    return { project_id: DEFAULT_PROJECT_ID, display_name: '默认测试项目' }
+    throw new Error('当前账号没有可访问的项目，请先由管理员添加项目成员。')
   }
 
   if (requested) {
@@ -133,8 +106,9 @@ async function resolveProject(baseUrl, token, requested) {
     if (byName) return byName
 
     // 3. Partial name match
-    const byPartial = items.find((p) => p.display_name.toLowerCase().includes(requested.toLowerCase()))
-    if (byPartial) return byPartial
+    const matches = items.filter((p) => p.display_name.toLowerCase().includes(requested.toLowerCase()))
+    if (matches.length === 1) return matches[0]
+    if (matches.length > 1) throw new Error('项目名称匹配多个结果，请指定完整项目名或 ID。')
 
     const available = items.map((p) => `"${p.display_name}" (ID: ${p.project_id})`).join('\n  - ')
     throw new Error(`未找到项目 "${requested}"。\n当前可用项目列表:\n  - ${available}`)
@@ -171,11 +145,11 @@ async function main() {
   const requestedProject = values.project || positionals[0] || process.env.DEV_PROJECT_ID
 
   let cameraInputs = [
-    { cameraNumber: 1, path: values.cam1, role: '主视角 (Primary View)' },
-    { cameraNumber: 2, path: values.cam2, role: '辅助机位 2 (Supporting View)' },
-    { cameraNumber: 3, path: values.cam3, role: '辅助机位 3 (Supporting View)' },
-    { cameraNumber: 4, path: values.cam4, role: '辅助机位 4 (Supporting View)' },
-    { cameraNumber: 5, path: values.cam5, role: '辅助机位 5 (Supporting View)' },
+    { cameraNumber: 1, path: values.cam1, role: '机位 1' },
+    { cameraNumber: 2, path: values.cam2, role: '机位 2' },
+    { cameraNumber: 3, path: values.cam3, role: '机位 3' },
+    { cameraNumber: 4, path: values.cam4, role: '机位 4' },
+    { cameraNumber: 5, path: values.cam5, role: '机位 5' },
   ].filter((cam) => Boolean(cam.path))
 
   // 如果未手动指定 --cam1，则自动从 Downloads 或 --dir 检测视频
@@ -186,7 +160,7 @@ async function main() {
       cameraInputs = videos.map((v) => ({
         cameraNumber: v.cameraNumber,
         path: v.path,
-        role: v.cameraNumber === 1 ? '主视角 (Primary View)' : `辅助机位 ${v.cameraNumber} (Supporting View)`,
+        role: `机位 ${v.cameraNumber}`,
       }))
       for (const cam of cameraInputs) {
         console.log(`  - 机位 ${cam.cameraNumber}: ${basename(cam.path)}`)
@@ -304,7 +278,7 @@ async function main() {
   console.log(`采集组 ID (CaptureGroup ID) : ${uploaded.captureGroupId}`)
   console.log(`包含机位                    : [${expectedCameraNumbers.join(', ')}]`)
   for (const view of uploaded.views) {
-    console.log(`  - 机位 ${view.cameraNumber} (${view.cameraNumber === 1 ? '主视角' : '辅助视角'}): ClipAsset ${view.clipAssetId}`)
+    console.log(`  - 机位 ${view.cameraNumber} : ClipAsset ${view.clipAssetId}`)
   }
 
   const webDetailUrl = `${values.webUrl.replace(/\/$/, '')}/projects/${targetProjectId}/capture-groups/${uploaded.captureGroupId}`
@@ -317,7 +291,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch((error) => {
   console.error('\n❌ 导入失败:')
   if (error instanceof PlatformApiError) {
     console.error(`HTTP ${error.status} (${error.errorCode}): ${error.message}`)

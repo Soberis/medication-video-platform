@@ -864,3 +864,114 @@ describe('CaptureGroup annotation workflow', () => {
     expect(video).toBeInTheDocument()
   })
 })
+
+describe('simple camera submission workflow', () => {
+  it('lets a project member exclude another owner’s camera and restore it with a clean draft', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1],
+      received: [1],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    task.assignee_actor_id = 'another-project-member'
+    task.camera_views = [cameraViewFixture(1, { state: 'DRAFT', note: 'old draft note' })]
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+    await user.click(await screen.findByRole('button', { name: '排除此机位' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox'), '测试镜头被遮挡')
+    await user.click(within(dialog).getByRole('button', { name: '确认排除' }))
+    await screen.findByText('本机位已排除')
+    const updates = () =>
+      fetchMock.mock.calls.filter(
+        ([input, init]) => String(input).includes('/camera-views/1') && init?.method === 'PUT',
+      )
+    expect(JSON.parse(String(updates()[0]?.[1]?.body))).toMatchObject({
+      state: 'EXCLUDED',
+      exclusion_reason: '测试镜头被遮挡',
+      segments: [],
+    })
+    await user.click(await screen.findByRole('button', { name: /恢复此机位/ }))
+    await waitFor(() => expect(updates()).toHaveLength(2))
+    expect(JSON.parse(String(updates()[1]?.[1]?.body))).toMatchObject({
+      state: 'PENDING',
+      segments: [],
+      note: '',
+      exclusion_reason: null,
+    })
+    expect(screen.queryByRole('button', { name: '废弃视频' })).not.toBeInTheDocument()
+  })
+
+  it('does not infer confirmed correspondence from equal labels and overlapping local times', async () => {
+    const group = captureGroupFixture(groupId, {
+      expected: [1, 2],
+      received: [1, 2],
+      receipt: 'COMPLETE',
+    })
+    const task = groupTask(groupId, true)
+    task.camera_views = [1, 2].map((camera) =>
+      cameraViewFixture(camera, {
+        state: 'SUBMITTED',
+        segments: [
+          {
+            segment_id: `segment-${camera}`,
+            start_ms: 0,
+            end_ms: 1000,
+            label: 'acquire_item',
+            source_candidate_ids: [],
+          },
+        ],
+      }),
+    )
+    const fetchMock = stubGroupDetail(group, {
+      task,
+      quality: qualityFixture(group, 'QUALIFIED'),
+      candidateStatus: 'NO_HAND_DETECTED',
+    })
+    const user = userEvent.setup()
+    renderRoute(<CaptureGroupDetailView />, {
+      path: '/projects/:projectId/capture-groups/:captureGroupId',
+      route: `/projects/${projectId}/capture-groups/${groupId}?focus=annotation`,
+      session: { username: 'reviewer', role: 'MEMBER' },
+    })
+    const submit = await screen.findByRole('button', { name: '提交整组标注' })
+    expect(submit).toBeDisabled()
+    await user.type(
+      screen.getByRole('textbox', { name: '跨机位对应未确认的原因' }),
+      '测试视频来自不同操作',
+    )
+    await user.click(submit)
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([input, init]) => String(input).endsWith('/revisions') && init?.method === 'POST',
+        ),
+      ).toBe(true),
+    )
+    const request = fetchMock.mock.calls.find(
+      ([input, init]) => String(input).endsWith('/revisions') && init?.method === 'POST',
+    )
+    const body = JSON.parse(String(request?.[1]?.body))
+    expect(body.correspondences).toHaveLength(2)
+    expect(body.correspondences).toEqual(
+      expect.arrayContaining(
+        [1, 2].map((camera) =>
+          expect.objectContaining({
+            status: 'UNCERTAIN',
+            reason: '测试视频来自不同操作',
+            segments: [{ camera_number: camera, segment_id: `segment-${camera}` }],
+          }),
+        ),
+      ),
+    )
+  })
+})

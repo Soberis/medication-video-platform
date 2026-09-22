@@ -72,14 +72,10 @@ class AnnotationTaskService {
 	AnnotationTaskListResponse list(UUID projectId, String actorId, boolean platformAdministrator) {
 		var role = this.projectAccessService.requireMember(projectId, actorId);
 		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
-		List<AnnotationTask> tasks = projectAdministrator
-				? this.repository.findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId)
-				: this.repository
-					.findAllByProjectIdAndAssigneeActorIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId, actorId);
+		var tasks = this.repository.findAllByProjectIdOrderByCreatedAtDescAnnotationTaskIdDesc(projectId);
 		if (tasks.isEmpty()) {
 			var items = List.<AnnotationTaskResponse>of();
-			return new AnnotationTaskListResponse(items,
-					AnnotationTaskProgressResponse.from(projectAdministrator, items));
+			return new AnnotationTaskListResponse(items, AnnotationTaskProgressResponse.from(items));
 		}
 		var tasksById = tasks.stream()
 			.collect(java.util.stream.Collectors.toMap(AnnotationTask::getAnnotationTaskId, task -> task));
@@ -116,8 +112,7 @@ class AnnotationTaskService {
 		var enrichedItems = items.stream()
 			.map(item -> item.withCameraViews(viewsByTask.getOrDefault(item.annotationTaskId(), List.of())))
 			.toList();
-		return new AnnotationTaskListResponse(enrichedItems,
-				AnnotationTaskProgressResponse.from(projectAdministrator, enrichedItems));
+		return new AnnotationTaskListResponse(enrichedItems, AnnotationTaskProgressResponse.from(enrichedItems));
 	}
 
 	@Transactional
@@ -174,10 +169,8 @@ class AnnotationTaskService {
 
 	@Transactional
 	AnnotationRevisionResponse submitRevision(UUID projectId, UUID annotationTaskId, String actorId,
-			boolean platformAdministrator, String idempotencyKey, String requestId, String traceId,
-			AnnotationRevisionSubmitCommand request) {
-		var role = this.projectAccessService.requireMember(projectId, actorId);
-		var projectAdministrator = platformAdministrator && role == ProjectRole.ADMIN;
+			String idempotencyKey, String requestId, String traceId, AnnotationRevisionSubmitCommand request) {
+		this.projectAccessService.requireMember(projectId, actorId);
 		var task = this.repository.findForUpdate(projectId, annotationTaskId)
 			.orElseThrow(AnnotationTaskService::taskNotFound);
 		var replay = this.revisionRepository
@@ -597,9 +590,8 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				null, null, task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(),
 				task.getConfirmedViewSet(), task.getGroupInputVersion(), task.getLabelSchemaId(),
 				task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
-				canSubmit(task, actorId, projectAdministrator, captureGroupQualityAdmitting),
-				canSelectPrimary(task, actorId, revision, captureGroupQualityAdmitting),
-				canReview(task, actorId, projectAdministrator, revision, review, captureGroupQualityAdmitting),
+				task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting, false,
+				canReview(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
 				// Kept as a false compatibility field; D1 removed the recheck capability.
 				false, AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
 				task.getUpdatedAt(), task.getVersion(), List.of(), AnnotationTaskCameraViewProgress.from(List.of()));
@@ -617,18 +609,8 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				this.createdAt, this.updatedAt, this.version, List.copyOf(views), progress);
 	}
 
-	private static boolean canSubmit(AnnotationTask task, String actorId, boolean projectAdministrator,
-			boolean captureGroupQualityAdmitting) {
-		return task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting;
-	}
-
-	private static boolean canSelectPrimary(AnnotationTask task, String actorId, AnnotationRevision revision,
-			boolean captureGroupQualityAdmitting) {
-		return false;
-	}
-
-	private static boolean canReview(AnnotationTask task, String actorId, boolean projectAdministrator,
-			AnnotationRevision revision, AnnotationReview review, boolean captureGroupQualityAdmitting) {
+	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
+			AnnotationReview review, boolean captureGroupQualityAdmitting) {
 		return task.getStatus() == AnnotationTaskStatus.SUBMITTED && projectAdministrator && revision != null
 				&& review == null && captureGroupQualityAdmitting;
 	}
@@ -641,7 +623,7 @@ record AnnotationTaskListResponse(List<AnnotationTaskResponse> items, Annotation
 record AnnotationTaskProgressResponse(String scope, long total, long awaitingSubmission, long reworkRequired,
 		long awaitingReview, long completed) {
 
-	static AnnotationTaskProgressResponse from(boolean projectAdministrator, List<AnnotationTaskResponse> items) {
+	static AnnotationTaskProgressResponse from(List<AnnotationTaskResponse> items) {
 		long awaitingSubmission = 0;
 		long reworkRequired = 0;
 		long awaitingReview = 0;
@@ -663,8 +645,8 @@ record AnnotationTaskProgressResponse(String scope, long total, long awaitingSub
 				default -> throw new IllegalStateException("Unsupported annotation task status: " + item.status());
 			}
 		}
-		return new AnnotationTaskProgressResponse(projectAdministrator ? "PROJECT" : "ASSIGNEE", items.size(),
-				awaitingSubmission, reworkRequired, awaitingReview, completed);
+		return new AnnotationTaskProgressResponse("PROJECT", items.size(), awaitingSubmission, reworkRequired,
+				awaitingReview, completed);
 	}
 }
 

@@ -85,7 +85,10 @@ class CaptureGroupAnnotationWorkflow {
 	@Transactional
 	AnnotationTaskResponse assignForHumanLabel(UUID projectId, UUID captureGroupId, String actorId,
 			String assigneeActorId, String idempotencyKey, String requestId, String traceId) {
-		this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		this.projectAccessService.lockAndRequireMember(projectId, actorId);
+		if (!actorId.equals(assigneeActorId)) {
+			this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
+		}
 		this.projectAccessService.lockAndRequireMember(projectId, assigneeActorId);
 		var current = this.captureGroupQualityQueryService.lockAndGetCurrentDecision(projectId, captureGroupId);
 		if (!current.isAdmitting()) {
@@ -95,9 +98,8 @@ class CaptureGroupAnnotationWorkflow {
 		var existing = this.taskRepository.findForUpdateByProjectIdAndCaptureGroupId(projectId, captureGroupId);
 		if (existing.isPresent()) {
 			var task = existing.get();
-			if (!task.getAssigneeActorId().equals(assigneeActorId)) {
-				throw new AnnotationTaskException("ANNOTATION_TASK_ALREADY_ASSIGNED",
-						"The CaptureGroup already has an annotation task assigned to another member.", 409);
+			if (!Objects.equals(task.getGroupInputVersion(), current.inputVersion())) {
+				this.projectAccessService.lockAndRequireAdministrator(projectId, actorId);
 			}
 			var previousStatus = task.getStatus();
 			var previousInputVersion = task.getGroupInputVersion();
@@ -132,7 +134,7 @@ class CaptureGroupAnnotationWorkflow {
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"CAPTURE_GROUP_ANNOTATION_TASK_ASSIGNED", "AnnotationTask", task.getAnnotationTaskId().toString(),
 				Long.toString(task.getVersion()), AuditOutcome.SUCCEEDED, "EXPLICIT_HUMAN_LABEL_ASSIGNMENT", requestId,
-				traceId, "PROJECT_MEMBERSHIP_ADMIN",
+				traceId, "PROJECT_MEMBERSHIP_MEMBER",
 				Map.of("capture_group_id", captureGroupId.toString(), "group_quality_review_id",
 						current.captureGroupQualityReviewId().toString(), "group_quality_revision",
 						Long.toString(current.revision()), "assignee_actor_id", task.getAssigneeActorId(), "created_by",
@@ -168,7 +170,7 @@ class CaptureGroupAnnotationWorkflow {
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_REVISION_SUBMITTED", "AnnotationRevision", revision.getAnnotationRevisionId().toString(),
 				Integer.toString(revision.getRevisionNumber()), AuditOutcome.SUCCEEDED, "MANUAL_ANNOTATION_SUBMITTED",
-				requestId, traceId, "ANNOTATION_TASK_ASSIGNEE", auditDetails));
+				requestId, traceId, "PROJECT_MEMBERSHIP_MEMBER", auditDetails));
 		return AnnotationRevisionResponse.from(revision);
 	}
 
@@ -218,7 +220,7 @@ class CaptureGroupAnnotationWorkflow {
 		this.auditRecorder.record(new AuditEventCommand(now, AuditActorType.USER, actorId, projectId,
 				"ANNOTATION_CAMERA_VIEW_UPDATED", "AnnotationTaskView", view.getAnnotationTaskViewId().toString(),
 				Long.toString(view.getVersion()), AuditOutcome.SUCCEEDED, "CAMERA_VIEW_" + view.getState().name(),
-				requestId, traceId, "ANNOTATION_TASK_ASSIGNEE",
+				requestId, traceId, "PROJECT_MEMBERSHIP_MEMBER",
 				Map.of("annotation_task_id", task.getAnnotationTaskId().toString(), "capture_group_id",
 						task.getCaptureGroupId().toString(), "camera_number", Integer.toString(view.getCameraNumber()),
 						"view_state", view.getState().name(), "camera_stream_version",
@@ -362,19 +364,7 @@ class CaptureGroupAnnotationWorkflow {
 						"A rejected revision needs non-overlapping reviewed and returned cameras from the revision.",
 						400);
 			}
-			var submittedCameras = new HashSet<Integer>();
-			if (revision.getAnnotationDocument().get("camera_views") instanceof List<?> views) {
-				for (var value : views) {
-					if (value instanceof Map<?, ?> view && Boolean.TRUE.equals(view.get("included"))
-							&& view.get("camera_number") instanceof Number camera) {
-						submittedCameras.add(camera.intValue());
-					}
-				}
-			}
-			if (!submittedCameras.containsAll(request.returnCameraNumbers())) {
-				throw new AnnotationTaskException("ANNOTATION_REVIEW_CAMERA_SCOPE_INVALID",
-						"Only submitted camera views can be returned for rework.", 400);
-			}
+
 		}
 	}
 

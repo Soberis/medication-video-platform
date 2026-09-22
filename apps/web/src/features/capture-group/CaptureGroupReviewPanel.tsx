@@ -187,7 +187,7 @@ export function CaptureGroupReviewPanel({
         </p>
       ) : (
         <div className="capture-group-review-confirmation">
-          <p>退回这次人工标签修订，任务将回到原执行人并等待下一次修订。</p>
+          <p>退回这次人工标签修订，选中的机位将重新开放编辑，其余机位结果保留。</p>
           <Input.TextArea
             aria-label="退回修改说明（可选）"
             maxLength={1000}
@@ -211,7 +211,10 @@ export function CaptureGroupReviewPanel({
             decision,
             reviewNote,
             {
-              reviewedCameraNumbers,
+              reviewedCameraNumbers:
+                decision === 'REJECTED'
+                  ? reviewedCameraNumbers.filter((number) => !returnCameraNumbers.includes(number))
+                  : reviewedCameraNumbers,
               returnCameraNumbers: decision === 'REJECTED' ? returnCameraNumbers : [],
             },
           )
@@ -376,7 +379,7 @@ export function CaptureGroupReviewPanel({
           {cameraNumbers.map((cameraNumber) => {
             const cameraView = cameraViews.find((view) => view.camera_number === cameraNumber)
             const state = cameraViewState(cameraNumber)
-            const canReturnLane = state === 'SUBMITTED'
+            const canReturnLane = state === 'SUBMITTED' || state === 'EXCLUDED'
             const laneStatus =
               state === 'SUBMITTED'
                 ? '已提交'
