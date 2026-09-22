@@ -13,7 +13,6 @@ export type CaptureGroupQualityResult =
   | 'QUALIFIED_WITH_EXCLUSIONS'
   | 'NEEDS_REVIEW'
   | 'REJECTED'
-export type CaptureGroupQualityCommandResult = Exclude<CaptureGroupQualityResult, 'UNREVIEWED'>
 
 export interface CaptureGroupSnapshotMember {
   camera_channel_id: string
@@ -256,29 +255,6 @@ export function listCaptureGroupQualityReviewHistory(
     `${path(projectId, captureGroupId)}/quality-review/history`,
     signal,
   )
-}
-
-export async function recordCaptureGroupQualityReview(
-  projectId: string,
-  captureGroupId: string,
-  result: CaptureGroupQualityCommandResult,
-  reason: string,
-  expectedRevision: number,
-) {
-  const response = await fetch(`${path(projectId, captureGroupId)}/quality-review`, {
-    method: 'PUT',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'Idempotency-Key': crypto.randomUUID(),
-      'X-Request-Id': crypto.randomUUID(),
-      ...csrfHeaders(),
-    },
-    body: JSON.stringify({ result, reason: reason.trim(), expected_revision: expectedRevision }),
-    cache: 'no-store',
-  })
-  if (response.ok) return (await response.json()) as CaptureGroupQualityReview
-  throw await toCaptureGroupError(response)
 }
 
 function path(projectId: string, captureGroupId: string) {

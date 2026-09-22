@@ -154,13 +154,12 @@ export function captureGroupTaskDestination(
     | 'primary_clip_asset_id'
     | 'status'
     | 'can_submit'
-    | 'can_select_primary'
     | 'can_review'
     | 'camera_views'
     | 'annotation_revision'
   >,
 ): CaptureGroupTaskDestination | null {
-  if (task.status === 'ASSIGNED' && (task.can_submit || task.can_select_primary)) {
+  if (task.status === 'ASSIGNED' && task.can_submit) {
     const hasStarted =
       task.camera_views?.some((view) => view.state === 'DRAFT' || view.state === 'SUBMITTED') ||
       Boolean(task.primary_clip_asset_id)
@@ -172,9 +171,7 @@ export function captureGroupTaskDestination(
           ? '修改标注'
           : hasStarted
             ? '继续标注'
-            : task.can_select_primary && !task.primary_clip_asset_id
-              ? '选择主视图'
-              : '开始标注',
+            : '开始标注',
     }
   }
 

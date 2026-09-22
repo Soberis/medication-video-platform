@@ -21,11 +21,6 @@ public final class CaptureMediaProjectionTestData {
 		return bind(jdbcTemplate, projectId, clipAssetId, createdAt, 0, "ASSEMBLING", "PENDING", "BOUND", "PENDING");
 	}
 
-	public static Projection bindEligible(JdbcTemplate jdbcTemplate, UUID projectId, UUID clipAssetId,
-			Instant createdAt) {
-		return bind(jdbcTemplate, projectId, clipAssetId, createdAt, 1, "COMPLETE", "PASS", "INGESTED", "PASS");
-	}
-
 	private static Projection bind(JdbcTemplate jdbcTemplate, UUID projectId, UUID clipAssetId, Instant createdAt,
 			int receivedCameraCount, String assemblyStatus, String sessionQualityStatus, String streamStatus,
 			String streamQualityStatus) {

@@ -122,7 +122,7 @@ class CaptureGroupAnnotationWorkflow {
 								task.getAssigneeActorId(), "created_by", task.getCreatedBy(),
 								"revision_chain_preserved", "true")));
 			}
-			return AnnotationTaskResponse.from(task, actorId, true, null, null, null, true);
+			return AnnotationTaskResponse.from(task, true, null, null, null, true);
 		}
 
 		var task = this.taskRepository
@@ -141,7 +141,7 @@ class CaptureGroupAnnotationWorkflow {
 						task.getCreatedBy(), "input_version", current.inputVersion(), "assignment_mode",
 						"EXPLICIT_HUMAN_LABEL", "label_schema_id", task.getLabelSchemaId().toString(),
 						"label_schema_digest", task.getLabelSchemaDigest())));
-		return AnnotationTaskResponse.from(task, actorId, true, null, null, null, true);
+		return AnnotationTaskResponse.from(task, true, null, null, null, true);
 	}
 
 	AnnotationRevisionResponse submitRevision(UUID projectId, AnnotationTask task, String actorId,

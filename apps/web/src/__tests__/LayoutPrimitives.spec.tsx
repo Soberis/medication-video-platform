@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AppShell, Inspector, Sidebar } from '@/components/layout/AppShell'
+import { AppShell, Sidebar } from '@/components/layout/AppShell'
 
 describe('layout primitives', () => {
   it('composes sidebar, workspace content, and an optional inspector', () => {
@@ -12,7 +12,7 @@ describe('layout primitives', () => {
             <nav aria-label="测试导航">导航</nav>
           </Sidebar>
         }
-        inspector={<Inspector ariaLabel="详情检查器">检查内容</Inspector>}
+        inspector={<aside aria-label="详情检查器">检查内容</aside>}
       >
         <h1>工作内容</h1>
       </AppShell>,

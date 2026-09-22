@@ -21,7 +21,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import com.medicationvideo.platform.assetcapture.AssetCatalogQueryService;
 import com.medicationvideo.platform.assetcapture.ClipAssetInputSummary;

@@ -6,7 +6,6 @@ import type {
   CaptureGroupStream,
 } from '@/api/capture-groups'
 import type { HandPoseCandidateResponse } from '@/api/catalog'
-import type { QualityReview } from '@/api/quality'
 import type { StatusIndicatorTone } from '@/components/status/StatusIndicator'
 import type { CandidateLoadState } from '@/features/catalog/hand-pose-candidate-state'
 
@@ -444,14 +443,6 @@ export function taskStatusTone(task: AnnotationTask): StatusIndicatorTone {
   if (task.status === 'COMPLETED') return 'success'
   if (task.annotation_revision?.review?.decision === 'REJECTED') return 'warning'
   return task.status === 'SUBMITTED' ? 'information' : 'neutral'
-}
-
-export function groupViewDecision(
-  view: GroupViewRow,
-  viewReviews: Record<string, QualityReview>,
-): 'UNREVIEWED' | 'QUALIFIED' | 'NEEDS_REVIEW' | 'REJECTED' {
-  if (!view.stream) return 'UNREVIEWED'
-  return viewReviews[view.stream.clip_asset_id]?.decision ?? 'UNREVIEWED'
 }
 
 export function currentGroupQualityAdmitting(quality: CaptureGroupQualityReview | null) {

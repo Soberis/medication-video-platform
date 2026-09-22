@@ -665,9 +665,7 @@ export function groupTask(
     created_by: 'system',
     status: options.revision ? 'COMPLETED' : 'ASSIGNED',
     can_submit: options.revision ? false : canSubmit,
-    can_select_primary: false,
     can_review: false,
-    can_recheck_capture_group_cleaning: Boolean(options.revision),
     annotation_revision: options.revision
       ? {
           annotation_revision_id: '47000000-0000-4000-8000-000000000001',
@@ -867,7 +865,6 @@ export function submittedGroupTask(
     status: 'SUBMITTED',
     can_submit: false,
     can_review: options.canReview ?? true,
-    can_recheck_capture_group_cleaning: false,
     confirmed_view_set: viewSet,
     camera_views: cameraViews,
     annotation_revision: {
@@ -1085,7 +1082,6 @@ export function approvedGroupTask(
   group: CaptureGroup,
   options: Parameters<typeof submittedGroupTask>[1] & {
     cleaning?: CaptureGroupCleaning
-    canRecheck?: boolean
   } = {},
 ): AnnotationTask {
   const submitted = submittedGroupTask(group, options)
@@ -1104,7 +1100,6 @@ export function approvedGroupTask(
     status: 'COMPLETED',
     can_submit: false,
     can_review: false,
-    can_recheck_capture_group_cleaning: options.canRecheck ?? false,
     annotation_revision: { ...revision, review, capture_group_cleaning: cleaning },
     version: 2,
   }

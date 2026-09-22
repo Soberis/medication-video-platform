@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -101,7 +100,7 @@ class AnnotationTaskService {
 						revisionsByTaskId.values().stream().map(AnnotationRevision::getAnnotationRevisionId).toList());
 		var items = tasks.stream().map(task -> {
 			var revision = revisionsByTaskId.get(task.getAnnotationTaskId());
-			return AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision,
+			return AnnotationTaskResponse.from(task, projectAdministrator, revision,
 					revision == null ? null : reviewsByRevisionId.get(revision.getAnnotationRevisionId()),
 					revision == null ? null : captureGroupCleaningByRevisionId.get(revision.getAnnotationRevisionId()),
 					currentGroupQualityById.getOrDefault(task.getCaptureGroupId(), false));
@@ -158,8 +157,7 @@ class AnnotationTaskService {
 			.getCurrentDecisions(projectId, List.of(task.getCaptureGroupId()))
 			.stream()
 			.anyMatch(decision -> decision.captureGroupId().equals(task.getCaptureGroupId()) && decision.isAdmitting());
-		var response = AnnotationTaskResponse.from(task, actorId, projectAdministrator, revision, review, cleaning,
-				admitting);
+		var response = AnnotationTaskResponse.from(task, projectAdministrator, revision, review, cleaning, admitting);
 		if (changed) {
 			this.captureGroupAnnotationWorkflow.recordCameraViewUpdated(projectId, task, view, actorId, requestId,
 					traceId);
@@ -564,10 +562,9 @@ record AnnotationReviewCommand(AnnotationReviewDecision decision, String reviewN
 record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captureGroupId, UUID primaryClipAssetId,
 		Integer primaryCameraNumber, UUID captureGroupQualityReviewId, long groupQualityRevision,
 		Map<String, Object> confirmedViewSet, String groupInputVersion, UUID labelSchemaId, String labelSchemaDigest,
-		String assigneeActorId, String createdBy, String status, boolean canSubmit, boolean canSelectPrimary,
-		boolean canReview, boolean canRecheckCaptureGroupCleaning, AnnotationRevisionSummary annotationRevision,
-		Instant createdAt, Instant updatedAt, long version, List<AnnotationTaskCameraViewResponse> cameraViews,
-		AnnotationTaskCameraViewProgress cameraViewProgress) {
+		String assigneeActorId, String createdBy, String status, boolean canSubmit, boolean canReview,
+		AnnotationRevisionSummary annotationRevision, Instant createdAt, Instant updatedAt, long version,
+		List<AnnotationTaskCameraViewResponse> cameraViews, AnnotationTaskCameraViewProgress cameraViewProgress) {
 
 	AnnotationTaskResponse {
 		Objects.requireNonNull(captureGroupId, "captureGroupId");
@@ -578,22 +575,16 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 		Objects.requireNonNull(cameraViewProgress, "cameraViewProgress");
 	}
 
-	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
-			AnnotationRevision revision, AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning) {
-		return from(task, actorId, projectAdministrator, revision, review, captureGroupCleaning, true);
-	}
-
-	static AnnotationTaskResponse from(AnnotationTask task, String actorId, boolean projectAdministrator,
-			AnnotationRevision revision, AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning,
+	static AnnotationTaskResponse from(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,
+			AnnotationReview review, CaptureGroupCleaningSummary captureGroupCleaning,
 			boolean captureGroupQualityAdmitting) {
 		return new AnnotationTaskResponse(task.getAnnotationTaskId(), task.getProjectId(), task.getCaptureGroupId(),
 				null, null, task.getCaptureGroupQualityReviewId(), task.getGroupQualityRevision(),
 				task.getConfirmedViewSet(), task.getGroupInputVersion(), task.getLabelSchemaId(),
 				task.getLabelSchemaDigest(), task.getAssigneeActorId(), task.getCreatedBy(), task.getStatus().name(),
-				task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting, false,
+				task.getStatus() == AnnotationTaskStatus.ASSIGNED && captureGroupQualityAdmitting,
 				canReview(task, projectAdministrator, revision, review, captureGroupQualityAdmitting),
-				// Kept as a false compatibility field; D1 removed the recheck capability.
-				false, AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
+				AnnotationRevisionSummary.from(revision, review, captureGroupCleaning), task.getCreatedAt(),
 				task.getUpdatedAt(), task.getVersion(), List.of(), AnnotationTaskCameraViewProgress.from(List.of()));
 	}
 
@@ -605,8 +596,8 @@ record AnnotationTaskResponse(UUID annotationTaskId, UUID projectId, UUID captur
 				this.primaryClipAssetId, this.primaryCameraNumber, this.captureGroupQualityReviewId,
 				this.groupQualityRevision, this.confirmedViewSet, this.groupInputVersion, this.labelSchemaId,
 				this.labelSchemaDigest, this.assigneeActorId, this.createdBy, this.status, this.canSubmit && ready,
-				this.canSelectPrimary, this.canReview, this.canRecheckCaptureGroupCleaning, this.annotationRevision,
-				this.createdAt, this.updatedAt, this.version, List.copyOf(views), progress);
+				this.canReview, this.annotationRevision, this.createdAt, this.updatedAt, this.version,
+				List.copyOf(views), progress);
 	}
 
 	private static boolean canReview(AnnotationTask task, boolean projectAdministrator, AnnotationRevision revision,

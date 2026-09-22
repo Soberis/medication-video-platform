@@ -1,7 +1,4 @@
-import { csrfHeaders } from '@/api/http'
-
 export type QualityReviewDecision = 'UNREVIEWED' | 'QUALIFIED' | 'REJECTED' | 'NEEDS_REVIEW'
-export type QualityReviewCommandDecision = Exclude<QualityReviewDecision, 'UNREVIEWED'>
 export type QualityReviewReasonCode =
   | 'MEETS_REQUIREMENTS'
   | 'SENSITIVE_CONTENT'
@@ -26,12 +23,6 @@ export interface QualityReview {
   version: number
 }
 
-export interface QualityReviewCommand {
-  decision: QualityReviewCommandDecision
-  reason_code: QualityReviewReasonCode
-  expected_version: number
-}
-
 export class QualityReviewApiError extends Error {
   readonly errorCode: string
 
@@ -52,25 +43,6 @@ export async function getQualityReview(
     headers: { Accept: 'application/json' },
     cache: 'no-store',
     signal,
-  })
-  return readResponse(response)
-}
-
-export async function recordQualityReview(
-  projectId: string,
-  clipAssetId: string,
-  command: QualityReviewCommand,
-) {
-  const response = await fetch(path(projectId, clipAssetId), {
-    method: 'PUT',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'X-Request-Id': crypto.randomUUID(),
-      ...csrfHeaders(),
-    },
-    body: JSON.stringify(command),
-    cache: 'no-store',
   })
   return readResponse(response)
 }

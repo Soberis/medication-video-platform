@@ -121,9 +121,7 @@ const assignedTask = {
   created_by: 'local-synthetic-admin',
   status: 'ASSIGNED',
   can_submit: true,
-  can_select_primary: false,
   can_review: false,
-  can_recheck_capture_group_cleaning: false,
   annotation_revision: null,
   created_at: '2026-07-23T01:00:00Z',
   updated_at: '2026-07-23T01:00:00Z',
@@ -134,7 +132,6 @@ const assignedGroupTask = {
   ...assignedTask,
   annotation_task_id: 'a0000000-0000-4000-8000-000000000010',
   clip_asset_id: null,
-  can_select_primary: true,
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -248,27 +245,6 @@ describe('annotation task list view', () => {
     })
   })
 
-  it('routes an assigned CaptureGroup task without a primary view to primary selection', async () => {
-    const task = {
-      ...assignedGroupTask,
-      annotation_task_id: 'a0000000-0000-4000-8000-000000000015',
-      primary_clip_asset_id: null,
-      can_submit: false,
-      can_select_primary: true,
-    }
-    stubTasks([task], labelSchema)
-    const { router } = renderView()
-    const user = userEvent.setup()
-
-    const taskRow = await screen.findByRole('listitem', { name: /采集记录 .*待标注/ })
-    await user.click(within(taskRow).getByRole('link', { name: /选择主视图/ }))
-
-    await waitFor(() => {
-      expect(router.state.location.pathname).toBe(paths.captureGroup(projectId, captureGroupId))
-      expect(router.state.location.search).toBe('?focus=annotation')
-    })
-  })
-
   it('routes a submitted CaptureGroup task to Review only when the server grants review', async () => {
     const reviewableGroupTask = {
       ...assignedGroupTask,
@@ -346,7 +322,6 @@ describe('annotation task list view', () => {
       annotation_task_id: 'a0000000-0000-4000-8000-000000000016',
       status: 'COMPLETED',
       can_submit: false,
-      can_select_primary: false,
       annotation_revision: {
         ...completedRevision,
         capture_group_id: captureGroupId,
@@ -371,7 +346,6 @@ describe('annotation task list view', () => {
       ...assignedGroupTask,
       annotation_task_id: 'a0000000-0000-4000-8000-000000000014',
       can_submit: false,
-      can_select_primary: false,
     }
     stubTasks([deniedGroupTask], labelSchema)
     renderView()
@@ -394,7 +368,6 @@ describe('annotation task list view', () => {
       annotation_task_id: `a0000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
       status: 'COMPLETED',
       can_submit: false,
-      can_recheck_capture_group_cleaning: true,
       annotation_revision: {
         ...completedRevision,
         annotation_revision_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
@@ -429,7 +402,6 @@ describe('annotation task list view', () => {
       ...assignedTask,
       status: 'COMPLETED',
       can_submit: false,
-      can_recheck_capture_group_cleaning: true,
       annotation_revision: {
         ...completedRevision,
         capture_group_cleaning: {
@@ -493,7 +465,6 @@ describe('annotation task list view', () => {
           assignee_actor_id: 'local-synthetic-admin',
           status: 'COMPLETED',
           can_submit: false,
-          can_recheck_capture_group_cleaning: true,
           annotation_revision: {
             ...completedRevision,
             submitted_by: 'local-synthetic-admin',
@@ -600,7 +571,6 @@ describe('annotation task list view', () => {
       annotation_revision: null,
       created_at: '2026-07-26T00:00:00Z',
       can_submit: true,
-      can_select_primary: true,
       can_review: false,
     }
     const taskB = {
@@ -613,7 +583,6 @@ describe('annotation task list view', () => {
       annotation_revision: null,
       created_at: '2026-07-26T00:01:00Z',
       can_submit: true,
-      can_select_primary: true,
       can_review: false,
     }
 

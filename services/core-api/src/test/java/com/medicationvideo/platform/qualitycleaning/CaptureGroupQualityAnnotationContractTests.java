@@ -136,12 +136,12 @@ class CaptureGroupQualityAnnotationContractTests {
 			.andExpect(jsonPath("$.items[0].confirmed_view_set.schema_version").value("capture-group-view-set.v1"))
 			.andExpect(jsonPath("$.items[0].group_input_version").value(startsWith("capture-group-view-set.v1:")))
 			.andExpect(jsonPath("$.items[0].can_submit").value(false))
-			.andExpect(jsonPath("$.items[0].can_select_primary").value(false));
+			.andExpect(jsonPath("$.items[0].can_select_primary").doesNotExist())
+			.andExpect(jsonPath("$.items[0].can_recheck_capture_group_cleaning").doesNotExist());
 		this.mockMvc
 			.perform(get("/api/v1/projects/{projectId}/annotation-tasks", PROJECT_ID).header("Authorization",
 					"Bearer " + ADMIN_TOKEN))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].can_select_primary").value(false));
+			.andExpect(status().isOk());
 
 		var replay = recordGroup(group, MEMBER_TOKEN, "QUALIFIED_WITH_EXCLUSIONS", BASE_REASON, 0, idempotencyKey)
 			.andExpect(status().isOk())

@@ -19,10 +19,7 @@ export interface AnnotationTask {
   created_by: string
   status: 'ASSIGNED' | 'SUBMITTED' | 'COMPLETED'
   can_submit: boolean
-  /** Legacy response field. Current group tasks do not expose primary-view selection. */
-  can_select_primary?: boolean
   can_review: boolean
-  can_recheck_capture_group_cleaning: boolean
   annotation_revision: AnnotationRevisionSummary | null
   created_at: string
   updated_at: string

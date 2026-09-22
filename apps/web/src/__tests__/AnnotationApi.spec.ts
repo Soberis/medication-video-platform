@@ -134,7 +134,6 @@ describe('annotation task API', () => {
               status: 'COMPLETED',
               can_submit: false,
               can_review: false,
-              can_recheck_capture_group_cleaning: true,
               camera_views: [
                 cameraViewFixture(1, {
                   version: 2,

@@ -28,10 +28,6 @@ public final class AiHandPoseResultFixture {
 	private AiHandPoseResultFixture() {
 	}
 
-	public static List<Observation> observations() {
-		return OBSERVATIONS;
-	}
-
 	/**
 	 * Returns a complete SUCCEEDED/HAND_DETECTED v2 envelope with four candidates across
 	 * three sampled frame timestamps.

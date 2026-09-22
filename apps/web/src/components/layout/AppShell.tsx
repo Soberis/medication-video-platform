@@ -79,16 +79,3 @@ export function Workspace({ children, inspector }: WorkspaceProps) {
     </div>
   )
 }
-
-export interface InspectorProps {
-  ariaLabel: string
-  children: ReactNode
-}
-
-export function Inspector({ ariaLabel, children }: InspectorProps) {
-  return (
-    <aside className="workspace-inspector" aria-label={ariaLabel}>
-      {children}
-    </aside>
-  )
-}

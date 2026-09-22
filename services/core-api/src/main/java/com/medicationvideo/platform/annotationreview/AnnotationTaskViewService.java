@@ -16,7 +16,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.medicationvideo.platform.aicandidate.ActionCandidateSource;
 import com.medicationvideo.platform.aicandidate.ActionCandidateSourceQueryPort;
 import com.medicationvideo.platform.assetcapture.CaptureGroupViewQueryService.CaptureGroupView;
 import com.medicationvideo.platform.mediaprivacy.MediaDurationQueryService;

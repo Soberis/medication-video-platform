@@ -118,9 +118,7 @@ type AnnotationTask = {
   created_by: string
   status: 'ASSIGNED' | 'COMPLETED'
   can_submit: boolean
-  can_select_primary: boolean
   can_review: false
-  can_recheck_capture_group_cleaning: boolean
   annotation_revision: AnnotationRevision | null
   created_at: string
   updated_at: string
@@ -550,9 +548,7 @@ function createTask(
     created_by: 'system',
     status,
     can_submit: !isCompleted,
-    can_select_primary: !isCompleted,
     can_review: false,
-    can_recheck_capture_group_cleaning: false,
     annotation_revision: revision,
     created_at: createdAt,
     updated_at: '2026-08-20T01:04:00Z',

@@ -78,10 +78,6 @@
   cursor: pointer;
 }
 
-.capture-group-supporting-warning {
-  margin-top: var(--app-space-12);
-}
-
 .capture-group-compare-strip {
   display: flex;
   align-items: center;
@@ -355,20 +351,6 @@
   background: transparent;
 }
 
-.capture-group-camera-annotation-progress {
-  display: grid;
-  gap: var(--app-space-12);
-  padding: var(--app-space-12);
-  border: 1px solid var(--app-color-border-subtle);
-  border-radius: var(--app-radius-md);
-  background: var(--app-color-surface-muted);
-}
-
-.capture-group-camera-annotation-progress-heading,
-.capture-group-camera-annotation-lane,
-.capture-group-camera-exclusion-control,
-.capture-group-correspondence-heading,
-.capture-group-correspondence-row-heading,
 .capture-group-review-camera-lane-heading {
   display: flex;
   align-items: center;
@@ -376,56 +358,12 @@
   gap: var(--app-space-8);
 }
 
-.capture-group-camera-annotation-progress-heading > div {
-  display: grid;
-  gap: var(--app-space-4);
-  min-width: 0;
-}
-
-.capture-group-camera-annotation-progress-heading strong,
-.capture-group-correspondence-heading h3,
 .capture-group-review-camera-lane-heading h4 {
   margin: 0;
   color: var(--app-color-foreground-secondary);
   font-size: var(--app-font-size-body);
 }
 
-.capture-group-camera-annotation-progress-heading p,
-.capture-group-camera-active-lane {
-  margin: 0;
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-}
-
-.capture-group-camera-annotation-lanes {
-  display: grid;
-  gap: var(--app-space-8);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.capture-group-camera-annotation-lane {
-  flex-wrap: wrap;
-  min-width: 0;
-  padding-top: var(--app-space-8);
-  border-top: 1px solid var(--app-color-border-subtle);
-}
-
-.capture-group-camera-annotation-lane > strong {
-  min-width: 5rem;
-}
-
-.capture-group-camera-exclusion-control {
-  width: min(100%, 32rem);
-  flex: 1 1 20rem;
-}
-
-.capture-group-camera-exclusion-control .ant-input {
-  min-width: 10rem;
-}
-
-.capture-group-correspondence-editor,
 .capture-group-review-camera-lanes {
   display: grid;
   gap: var(--app-space-12);
@@ -436,19 +374,12 @@
   background: var(--app-color-surface-muted);
 }
 
-.capture-group-correspondence-heading > div {
-  display: grid;
-  gap: var(--app-space-4);
-}
-
-.capture-group-correspondence-heading p,
 .capture-group-review-camera-lanes > .form-hint {
   margin: 0;
   color: var(--app-color-foreground-muted);
   font-size: var(--app-font-size-helper);
 }
 
-.capture-group-correspondence-row,
 .capture-group-review-camera-lane {
   display: grid;
   gap: var(--app-space-8);
@@ -456,19 +387,6 @@
   border: 1px solid var(--app-color-border-subtle);
   border-radius: var(--app-radius-sm);
   background: var(--app-color-surface);
-}
-
-.capture-group-correspondence-cameras {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  gap: var(--app-space-8);
-}
-
-.capture-group-correspondence-cameras label {
-  display: grid;
-  gap: var(--app-space-4);
-  color: var(--app-color-foreground-secondary);
-  font-size: var(--app-font-size-helper);
 }
 
 .capture-group-review-camera-lane-heading > div {
@@ -1281,12 +1199,6 @@
   grid-row: 2;
 }
 
-.capture-group-verdict-actions {
-  grid-column: 1;
-  grid-row: 2;
-  align-self: end;
-}
-
 .capture-group-note-field {
   display: flex;
   flex-direction: column;
@@ -1296,28 +1208,6 @@
 
 .capture-group-note-field .ant-input {
   width: 100% !important;
-}
-
-.capture-group-verdict-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--app-space-8);
-  width: 100%;
-  margin-top: var(--app-space-12);
-  padding-top: var(--app-space-12);
-  border-top: 1px dashed var(--app-color-border-subtle);
-}
-
-.capture-group-discard-btn {
-  color: var(--app-color-foreground-muted);
-  font-size: var(--app-font-size-helper);
-  padding: 0 var(--app-space-12);
-}
-
-.capture-group-discard-btn:hover {
-  color: var(--app-color-destructive);
-  background: var(--app-color-destructive-surface);
 }
 
 /* --- Active Camera Action Bar --- */
@@ -1968,13 +1858,16 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--app-space-12);
+  min-width: 0;
   margin-top: 0;
-  margin-bottom: var(--app-space-12);
+  margin-bottom: var(--app-space-16);
 }
 
 .capture-group-list-toolbar-filters {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: var(--app-space-8);
 }
 
@@ -1986,7 +1879,11 @@
 .capture-group-list-toolbar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: var(--app-space-12);
+  margin-left: auto;
 }
 
 .capture-group-search-icon {
@@ -2285,9 +2182,6 @@
 
   .capture-group-form-heading,
   .capture-group-task-banner,
-  .capture-group-camera-annotation-progress-heading,
-  .capture-group-camera-annotation-lane,
-  .capture-group-correspondence-heading,
   .capture-group-review-camera-lane-heading,
   .capture-group-list-row-header,
   .capture-group-list-row-footer {
@@ -2336,7 +2230,6 @@
   }
 
   .capture-group-note-field,
-  .capture-group-verdict-actions,
   .capture-group-annotation-form-actions > .ant-btn:first-child,
   .capture-group-annotation-form-actions > .ant-btn:last-child,
   .capture-group-annotation-form-actions > .ant-btn:only-child {
@@ -2378,8 +2271,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .capture-group-note-field,
-  .capture-group-verdict-actions {
+  .capture-group-note-field {
     grid-column: 1;
     grid-row: auto;
   }

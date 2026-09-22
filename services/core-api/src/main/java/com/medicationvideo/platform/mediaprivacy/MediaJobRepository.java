@@ -37,8 +37,4 @@ interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
 			@Param("clipAssetId") UUID clipAssetId, @Param("inputDigest") String inputDigest,
 			@Param("recipeDigest") String recipeDigest);
 
-	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	Optional<MediaJob> findTopByProjectIdAndClipAssetIdAndJobTypeOrderByCreatedAtDesc(UUID projectId, UUID clipAssetId,
-			MediaJobType jobType);
-
 }

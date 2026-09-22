@@ -429,17 +429,22 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--app-space-12);
+  min-width: 0;
   margin-bottom: var(--app-space-16);
 }
 
 .project-list-toolbar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: var(--app-space-12);
   margin-left: auto;
 }
 
-.project-count-summary {
+.project-count-summary,
+.capture-group-list-count {
   font-size: var(--app-font-size-helper);
   color: var(--app-color-foreground-muted);
   white-space: nowrap;
@@ -2443,8 +2448,4 @@
 
 .label-library-modal-hint {
   margin-bottom: var(--app-space-12);
-}
-
-.label-library-modal-alert {
-  margin-bottom: var(--app-space-16);
 }
